@@ -25,6 +25,10 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
+from fastdeploy.model_executor.graph_optimization.utils import (
+    profile_run_guard,
+    sot_warmup_guard,
+)
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
@@ -115,8 +119,10 @@ class GPUModelRunner(ModelRunnerBase):
         # self.kv_caches: list[paddle.Tensor] = []
 
         # Cuda Graph
+        self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
+        self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
@@ -146,10 +152,17 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Check whether prefill stage finished
         """
-        if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
-            return 1
+        if self.enable_mm:
+            # VL only support 1 batch to prefill
+            prefill_statue = (self.share_inputs["seq_lens_this_time"] != 0) & (
+                self.share_inputs["seq_lens_this_time"] != 1
+            )
+            return not paddle.any(prefill_statue).numpy()
         else:
-            return 0
+            if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
+                return 1
+            else:
+                return 0
 
     def _init_speculative_proposer(self):
         """
@@ -456,9 +469,6 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
-        if self.enable_mm:
-            self.share_inputs["free_list"] = paddle.to_tensor([], dtype="int32")
-            self.share_inputs["free_list_len"][0] = 0
         max_dec_len = expected_decode_len + 1
         full_length = min(
             num_tokens // batch_size,
@@ -699,7 +709,6 @@ class GPUModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
-            self.parallel_config.max_model_len,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
@@ -1110,6 +1119,17 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    @sot_warmup_guard(True)
+    def sot_warmup(self) -> None:
+        start_time = time.perf_counter()
+        for batch_size in self.sot_warmup_sizes:
+            self._dummy_run(
+                num_tokens=self.parallel_config.max_num_batched_tokens,
+                batch_size=batch_size,
+            )
+            logger.info(f"SOT warmup the model with the batch size:{batch_size}")
+        logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
+
     def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
         """
         Get the index of the request that needs to be skipped during execution.
@@ -1314,6 +1334,7 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
+    @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 

@@ -285,10 +285,12 @@ class PaddleDisWorkerProc:
             # The first worker detects whether there are tasks in the task queue
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
-                    if self.nnode > 1:
-                        self.task_queue.read_finish_flag.set(1)
-                    else:
-                        self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
+                    # VL only support 1 batch to prefill
+                    if not self.fd_config.model_config.enable_mm or self.worker.prefill_finished():
+                        if self.nnode > 1:
+                            self.task_queue.read_finish_flag.set(1)
+                        else:
+                            self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
@@ -344,8 +346,8 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts)
-
-            self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
+            if not self.fd_config.model_config.enable_mm:
+                self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -499,8 +501,8 @@ def parse_args():
     )
     parser.add_argument(
         "--speculative_benchmark_mode",
-        default=False,
-        type=bool,
+        default="False",
+        type=str,
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -632,6 +634,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             use_cudagraph=args.graph_optimization_config["use_cudagraph"],
             graph_opt_level=args.graph_optimization_config["graph_opt_level"],
             cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"],
+            sot_warmup_sizes=args.graph_optimization_config["sot_warmup_sizes"],
         )
 
     # Note(tangbinhan): used for load_checkpoint
