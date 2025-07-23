@@ -740,9 +740,9 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
     size_t num_candidate_configs_size = 4; //candidate_configs.size();
-    //for (size_t ii = 0; ii < num_candidate_configs_size; ++ii)
+    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii)
     {
-      size_t ii = 3;
+      //size_t ii = 3;
       try {
         for (int i = 0; i < warm_time; i++) {
           dispatch_to_arch<EpilogueTag>(A,
@@ -807,6 +807,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
     }
   }
 
+#if 1
   dispatch_to_arch<EpilogueTag>(A,
                                 B,
                                 weight_scales,
@@ -820,6 +821,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
                                 quant_args_B,
                                 chosen_config,
                                 stream);
+#endif
 }
 
 template <typename T, typename WeightQuantTraits>

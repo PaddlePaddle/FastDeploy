@@ -194,14 +194,6 @@ public:
     using FragmentCodeScaleZp = typename WarpDequantizer::FragmentCodeScaleZp;
     using FragmentLocalScale = typename WarpDequantizer::FragmentLocalScale;
 
-    /// channel-wise quant params
-    FragmentCodeScaleZp warp_frag_code_scale_;
-    FragmentCodeScaleZp warp_frag_code_zp_;
-    FragmentSuperScale warp_frag_super_scale_;
-
-    /// group-wise quant params
-    FragmentLocalScale warp_frag_local_scale_;
-
     /// Temporary accumulator to facilitate staged-accumulation
     FragmentC tmp_accum_;
 
@@ -209,8 +201,16 @@ public:
     WarpTransformedFragmentA warp_frag_A_[2];
 
     /// Pair of B fragments used to overlap shared memory loads and math instructions
-    WarpLoadedFragmentB warp_loaded_frag_B_;
+    WarpLoadedFragmentB warp_loaded_frag_B_[2];
     WarpTransformedFragmentB warp_frag_B_[2];
+
+    /// channel-wise quant params
+    FragmentCodeScaleZp warp_frag_code_scale_;
+    FragmentCodeScaleZp warp_frag_code_zp_;
+    FragmentSuperScale warp_frag_super_scale_;
+
+    /// group-wise quant params
+    FragmentLocalScale warp_frag_local_scale_;
   };
 
   using ElementA = typename IteratorA::Element;
@@ -676,17 +676,12 @@ public:
     int &gemm_k_iterations, ///< [in|out] number of threadblock mainloop iterations remaining
     int stage)
   {
-    int mma_stage = stage - Base::kStages + 1;
+    const int mma_stage = stage - Base::kStages + 1;
 
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
     for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations; ++warp_mma_k) {
       unsigned long long start = clock64();
-
-      // Load the next warp-tile's A fragment from shared memory
-      this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
-      this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
-      ++this->warp_tile_iterator_A_;
 
       int warp_k_compute_offset_B = warp_mma_k % Base::kWarpGemmIterationsPerLoadForB;
 
@@ -694,7 +689,7 @@ public:
         // Load the next warp-tile's B fragment from shared memory
         //this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k_for_B + 1) % Base::kWarpLoadIterationsForB);
         this->warp_tile_iterator_B_.set_kgroup_index(0);
-        this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
+        this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_[0]);
         ++this->warp_tile_iterator_B_;
       }
 
@@ -703,7 +698,29 @@ public:
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
       }
 
+      // Load the next warp-tile's A fragment from shared memory
+      this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+      this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
+      ++this->warp_tile_iterator_A_;
+
       unsigned long long load_smem = clock64();
+
+#if 1
+      //if (warp_mma_k != Base::kWarpGemmIterations - 2) {
+        // dequantizes next warp-tile
+        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                     pipe_state.warp_frag_code_scale_,
+                                     pipe_state.warp_frag_code_zp_,
+                                     pipe_state.warp_frag_super_scale_,
+                                     pipe_state.warp_loaded_frag_B_[0],
+                                     pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
+                                     ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
+                                     //mma_stage * Shape::kK,
+                                     (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
+      //}
+#endif
+
+      unsigned long long dequantize = clock64();
 
       // Execute the current warp-tile of MMA operations
       if (Detail::kStagedAccumulation) {
@@ -774,21 +791,24 @@ public:
         quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
       }
 
-      unsigned long long load_gmem = clock64();
-
-      // dequantizes next warp-tile
-      warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                   pipe_state.warp_frag_code_scale_,
-                                   pipe_state.warp_frag_code_zp_,
-                                   pipe_state.warp_frag_super_scale_,
-                                   pipe_state.warp_loaded_frag_B_,
-                                   pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
-                                   ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
-                                   (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
-
       unsigned long long end = clock64();
-      CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, mma: %llu, load_gmem: %llu, dequantize: %llu",
-          stage, warp_mma_k, load_smem - start, mma - load_smem, load_gmem - mma, end - load_gmem);
+      CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, dequantize: %llu, mma: %llu, load_gmem: %llu",
+          stage, warp_mma_k, load_smem - start, dequantize - load_smem, mma - dequantize, end - mma);
+
+#if 0
+      if (warp_mma_k == Base::kWarpGemmIterations - 1) {
+        // dequantizes next warp-tile
+        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                     pipe_state.warp_frag_code_scale_,
+                                     pipe_state.warp_frag_code_zp_,
+                                     pipe_state.warp_frag_super_scale_,
+                                     pipe_state.warp_loaded_frag_B_[0],
+                                     pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
+                                     //((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
+                                     (mma_stage + 1) * Shape::kK,
+                                     (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
+      }
+#endif
     }
   }
 
@@ -808,14 +828,9 @@ public:
     iterator_A.clear_mask(gemm_k_iterations == 0);
     iterator_B.clear_mask(gemm_k_iterations == 0);
 
-    // Load first warp-tile's A fragment from shared memory
-    this->warp_tile_iterator_A_.set_kgroup_index(0);
-    this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[0]);
-    ++this->warp_tile_iterator_A_;
-
     // Load first warp-tile's B fragment from shared memory
     this->warp_tile_iterator_B_.set_kgroup_index(0);
-    this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
+    this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_[0]);
     ++this->warp_tile_iterator_B_;
 
     warp_dequantizer_.load(pipe_state.warp_frag_code_scale_,
@@ -824,11 +839,17 @@ public:
 
     warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
 
+    // Load first warp-tile's A fragment from shared memory
+    this->warp_tile_iterator_A_.set_kgroup_index(0);
+    this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[0]);
+    ++this->warp_tile_iterator_A_;
+
+    // Dequantize B to in register
     warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
                                  pipe_state.warp_frag_code_scale_,
                                  pipe_state.warp_frag_code_zp_,
                                  pipe_state.warp_frag_super_scale_,
-                                 pipe_state.warp_loaded_frag_B_,
+                                 pipe_state.warp_loaded_frag_B_[0],
                                  pipe_state.warp_frag_B_[0],
                                  0,
                                  0);

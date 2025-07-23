@@ -197,16 +197,20 @@ public:
     /// Fragment to hold B data before Mma
     using FragmentInput = Array<ElementB, MmaOperator::FragmentB::kElements>;
 
-    /// Unpack 4 uint2b_t values compressed in a uint8_t to floating points
+    // This is the ratio of the load instruction vs the compute instruction.
+    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
+
+    static constexpr int kNumPacks = sizeof_bits<uint8_t>::value / sizeof_bits<ElementB>::value;
+    static constexpr int kUnpackFactor = MmaOperator::FragmentB::kElements / (kWarpIterationsAlongN * kNumPacks);
+    static constexpr int kUnpackInterval = kExpansionFactor / kUnpackFactor;
+
+    /// Unpack 4 uint2b_t values compreseed in a uint8_t to floating points.
     using Uint2Converter = FastInterleavedAndBiasedNumericArrayConverter<
-        ElementOperand, ElementB, MmaOperator::FragmentB::kElements>;
+        ElementOperand, ElementB, MmaOperator::FragmentB::kElements / kUnpackFactor>;
     using FragmentInputUnpack = typename Uint2Converter::result_type;
 
     /// Fragment to hold internal scales before Mma
     using FragmentScale = Array<ElementCompute, FragmentLocalScale::kElements>;
-
-    /// This is the ratio of the load instruction vs the compute instruction.
-    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
 
     /// Fragment of dequantized B
     using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements / kExpansionFactor>;
@@ -228,7 +232,7 @@ private:
     ElementCodeScaleZp* pointer_code_zp_;
     ElementSuperScale* pointer_super_scale_;
 
-    FragmentInputUnpack unpacked_frag_;
+    //FragmentInputUnpack unpacked_frag_;
     FragmentScale scale_frag_;
 
 public:
@@ -283,12 +287,30 @@ public:
 
         int stage = tb_offset_k / 64;
 
-        if (warp_k_compute_offset == 0) {
-            unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
-        }
+        //if (warp_k_compute_offset == 0) {
+        //    unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
+        //}
+
+        //if (warp_k_compute_offset % kUnpackInterval == 0)
+        //{
+            typename Uint2Converter::source_type source_frag;
+
+            int in_offset = warp_k_compute_offset * kUnpackInterval;
+
+            uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
+            uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
+
+            CUTLASS_PRAGMA_UNROLL
+            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+                ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
+            }
+
+            FragmentInputUnpack unpacked_frag_ = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
+        //}
 
         unsigned long long unpack_b = clock64();
 
+        // dequantize local_scale
         if (warp_k_compute_offset == 0) {
             // special for TileRows = 64
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
@@ -347,22 +369,24 @@ public:
 
         unsigned long long unpack_local_scale = clock64();
 
-        int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
-        const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
-
-        // reorder: [0, 2, 4, 6, 1, 3, 5, 7, 8, 10, 12, 14, 9, 11, 13, 15]
-        int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
+        // unscale
+        const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
 
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
+            int mapped_idx_base = mma_n_iter * kWarpIterationsAlongK;
 
             CUTLASS_PRAGMA_UNROLL
-            for (int j = 0; j < kOutputColumns; ++j) {
+            for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
                 // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
-                int mapped_idx = mma_n_iter * kExpansionFactor * kOutputColumns + offset + 2 * j + mapped_offset;
-                ElementCompute scaled_value =
-                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx]) * scale_frag_[mma_n_iter];
-                output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
+                // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
+                ElementCompute scaled_value_0 =
+                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx_base + mma_k_iter * 2]) * scale_frag_[mma_n_iter];
+                ElementCompute scaled_value_1 =
+                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx_base + mma_k_iter * 2 + 1]) * scale_frag_[mma_n_iter + 1];
+
+                output_frag[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = static_cast<ElementOperand>(scaled_value_0);
+                output_frag[(mma_n_iter + 1)* kWarpIterationsAlongK + mma_k_iter] = static_cast<ElementOperand>(scaled_value_1);
             }
         }
 
