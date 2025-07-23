@@ -340,7 +340,7 @@ class MTPProposer(Proposer):
                 self.model_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 prefill_token_num = self.max_draft_token_num + 1
                 self.model_inputs["draft_tokens"][idx : idx + 1, 0:1] = paddle.to_tensor(
-                    request.draft_token_ids[0:1], dtype="int64"
+                    request.draft_token_ids[1:2], dtype="int64"
                 )
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
