@@ -498,6 +498,8 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
     """
     Download pretrained model from MODELSCOPE, AIStudio or HUGGINGFACE automatically
     """
+    if os.path.exists(model_name_or_path):
+        return model_name_or_path
     model_source = envs.FD_MODEL_SOURCE
     local_path = envs.FD_MODEL_CACHE
     repo_id = model_name_or_path
@@ -506,7 +508,8 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             if repo_id.lower().strip().startswith("baidu"):
                 repo_id = "PaddlePaddle" + repo_id.strip()[5:]
             if local_path is None:
-                local_path = f'{os.getenv("HOME")}/{repo_id}'
+                    local_path = f'{os.getenv("HOME")}'
+            local_path = f'{local_path}/{repo_id}/{revision}'
             modelscope_download(repo_id=repo_id,
                             revision=revision,
                             local_dir=local_path)
@@ -520,7 +523,8 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             if repo_id.lower().strip().startswith("baidu"):
                 repo_id = "PaddlePaddle" + repo_id.strip()[5:]
             if local_path is None:
-                local_path = f'{os.getenv("HOME")}/{repo_id}'
+                    local_path = f'{os.getenv("HOME")}'
+            local_path = f'{local_path}/{repo_id}/{revision}'
             aistudio_download(repo_id=repo_id,
                             revision=revision,
                             local_dir=local_path)
@@ -537,7 +541,8 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             if repo_id.lower().strip().startswith("PaddlePaddle"):
                 repo_id = "baidu" + repo_id.strip()[12:]
             if local_path is None:
-                local_path = f'{os.getenv("HOME")}/{repo_id}'
+                local_path = f'{os.getenv("HOME")}'
+            local_path = f'{local_path}/{repo_id}/{revision}'
             huggingface_download(repo_id=repo_id,
                                 revision=revision,
                                 local_dir=local_path)
