@@ -19,6 +19,7 @@ import codecs
 import importlib
 import logging
 import os
+import random
 import re
 import socket
 import tarfile
@@ -27,8 +28,7 @@ from datetime import datetime
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
-import random
-import socket
+
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download
@@ -50,6 +50,7 @@ class EngineError(Exception):
 
 class ColoredFormatter(logging.Formatter):
     """自定义日志格式器，用于控制台输出带颜色"""
+
     COLOR_CODES = {
         logging.WARNING: 33,  # 黄色
         logging.ERROR: 31,  # 红色
@@ -58,8 +59,8 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record):
         color_code = self.COLOR_CODES.get(record.levelno, 0)
-        prefix = f'\033[{color_code}m'
-        suffix = '\033[0m'
+        prefix = f"\033[{color_code}m"
+        suffix = "\033[0m"
         message = super().format(record)
         if color_code:
             message = f"{prefix}{message}{suffix}"
@@ -71,13 +72,15 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
     like `logging.TimedRotatingFileHandler`, but this class support multi-process
     """
 
-    def __init__(self,
-                 filename,
-                 backupCount=0,
-                 encoding="utf-8",
-                 delay=False,
-                 utc=False,
-                 **kwargs):
+    def __init__(
+        self,
+        filename,
+        backupCount=0,
+        encoding="utf-8",
+        delay=False,
+        utc=False,
+        **kwargs,
+    ):
         """
             初始化 RotatingFileHandler 对象。
 
@@ -99,8 +102,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
         self.base_log_path = Path(filename)
         self.base_filename = self.base_log_path.name
         self.current_filename = self._compute_fn()
-        self.current_log_path = self.base_log_path.with_name(
-            self.current_filename)
+        self.current_log_path = self.base_log_path.with_name(self.current_filename)
         BaseRotatingHandler.__init__(self, filename, "a", encoding, delay)
 
     def shouldRollover(self, record):
@@ -120,8 +122,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
             self.stream = None
 
         self.current_filename = self._compute_fn()
-        self.current_log_path = self.base_log_path.with_name(
-            self.current_filename)
+        self.current_log_path = self.base_log_path.with_name(self.current_filename)
 
         if not self.delay:
             self.stream = self._open()
@@ -132,8 +133,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
         """
         Calculate the log file name corresponding current time
         """
-        return self.base_filename + "." + time.strftime(
-            self.suffix, time.localtime())
+        return self.base_filename + "." + time.strftime(self.suffix, time.localtime())
 
     def _open(self):
         """
@@ -142,13 +142,11 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
         if self.encoding is None:
             stream = open(str(self.current_log_path), self.mode)
         else:
-            stream = codecs.open(str(self.current_log_path), self.mode,
-                                 self.encoding)
+            stream = codecs.open(str(self.current_log_path), self.mode, self.encoding)
 
         if self.base_log_path.exists():
             try:
-                if (not self.base_log_path.is_symlink() or os.readlink(
-                        self.base_log_path) != self.current_filename):
+                if not self.base_log_path.is_symlink() or os.readlink(self.base_log_path) != self.current_filename:
                     os.remove(self.base_log_path)
             except OSError:
                 pass
@@ -179,16 +177,13 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
             result = []
         else:
             result.sort()
-            result = result[:len(result) - self.backup_count]
+            result = result[: len(result) - self.backup_count]
 
         for file_name in result:
             os.remove(str(self.base_log_path.with_name(file_name)))
 
 
-def get_logger(name,
-               file_name,
-               without_formater=False,
-               print_to_console=False):
+def get_logger(name, file_name, without_formater=False, print_to_console=False):
     """
     get logger
     """
@@ -205,12 +200,10 @@ def get_logger(name,
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
 
-    LOG_FILE = "{0}/{1}".format(log_dir, file_name)
+    LOG_FILE = f"{log_dir}/{file_name}"
     backup_count = int(envs.FD_LOG_BACKUP_COUNT)
     handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
-    formatter = ColoredFormatter(
-        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
-    )
+    formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
 
     console_handler = logging.StreamHandler()
     if not without_formater:
@@ -262,13 +255,15 @@ def download_file(url, save_path):
         response = requests.get(url, stream=True)
         response.raise_for_status()
 
-        total_size = int(response.headers.get('content-length', 0))
-        progress_bar = tqdm(total=total_size,
-                            unit='iB',
-                            unit_scale=True,
-                            desc=f"Downloading {os.path.basename(url)}")
+        total_size = int(response.headers.get("content-length", 0))
+        progress_bar = tqdm(
+            total=total_size,
+            unit="iB",
+            unit_scale=True,
+            desc=f"Downloading {os.path.basename(url)}",
+        )
 
-        with open(save_path, 'wb') as f:
+        with open(save_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:  # filter out keep-alive chunks
                     f.write(chunk)
@@ -279,7 +274,7 @@ def download_file(url, save_path):
     except Exception as e:
         if os.path.exists(save_path):
             os.remove(save_path)
-        raise RuntimeError(f"Download failed: {str(e)}")
+        raise RuntimeError(f"Download failed: {e!s}")
 
 
 def extract_tar(tar_path, output_dir):
@@ -293,7 +288,7 @@ def extract_tar(tar_path, output_dir):
                     pbar.update(1)
         print(f"Successfully extracted to: {output_dir}")
     except Exception as e:
-        raise RuntimeError(f"Extraction failed: {str(e)}")
+        raise RuntimeError(f"Extraction failed: {e!s}")
 
 
 def download_model(url, output_dir, temp_tar):
@@ -339,15 +334,13 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
     Extend argparse.ArgumentParser to support loading parameters from YAML files.
     """
 
-    def __init__(self, *args, config_arg='--config', sep='_', **kwargs):
+    def __init__(self, *args, config_arg="--config", sep="_", **kwargs):
         super().__init__(*args, **kwargs)
         self.sep = sep
 
         # Create parser to prase yaml file
         self.tmp_parser = argparse.ArgumentParser(add_help=False)
-        self.tmp_parser.add_argument(config_arg,
-                                     type=str,
-                                     help='Path to YAML config file')
+        self.tmp_parser.add_argument(config_arg, type=str, help="Path to YAML config file")
 
     def parse_args(self, args=None, namespace=None):
         tmp_ns, remaining_args = self.tmp_parser.parse_known_args(args=args)
@@ -355,16 +348,13 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
 
         config = {}
         if config_path:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 loaded_config = yaml.safe_load(f)
                 config = loaded_config
 
         # Get declared parameters
         defined_dests = {action.dest for action in self._actions}
-        filtered_config = {
-            k: v
-            for k, v in config.items() if k in defined_dests
-        }
+        filtered_config = {k: v for k, v in config.items() if k in defined_dests}
 
         # Set parameters
         if namespace is None:
@@ -373,6 +363,7 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
             setattr(namespace, key, value)
 
         return super().parse_args(args=remaining_args, namespace=namespace)
+
 
 def resolve_obj_from_strname(strname: str):
     module_name, obj_name = strname.rsplit(".", 1)
@@ -399,16 +390,14 @@ def check_unified_ckpt(model_dir):
 
     try:
         # check all the file exists
-        safetensors_num = int(
-            model_files[0].strip(".safetensors").split("-")[-1])
+        safetensors_num = int(model_files[0].strip(".safetensors").split("-")[-1])
         flags = [0] * safetensors_num
         for x in model_files:
             current_index = int(x.strip(".safetensors").split("-")[1])
             flags[current_index - 1] = 1
         assert sum(flags) == len(
             model_files
-        ), "Number of safetensor files should be {}, but now it's {}".format(
-            len(model_files), sum(flags))
+        ), f"Number of safetensor files should be {len(model_files)}, but now it's {sum(flags)}"
     except Exception as e:
         raise Exception(f"Failed to check unified checkpoint, details: {e}.")
     return is_unified_ckpt
@@ -422,15 +411,13 @@ def get_host_ip():
     return ip
 
 
-
-
 def get_random_port():
     while True:
         port = random.randint(49152, 65535)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                s.bind(("0.0.0.0", port)) 
-                return port 
+                s.bind(("0.0.0.0", port))
+                return port
             except OSError:
                 continue
 
@@ -441,12 +428,13 @@ def is_port_available(host, port):
     """
     import errno
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((host, port))
             return True
-        except socket.error as e:
+        except OSError as e:
             if e.errno == errno.EADDRINUSE:
                 return False
             return True
@@ -467,8 +455,9 @@ def singleton(cls):
 
 
 def print_gpu_memory_use(gpu_id: int, title: str) -> None:
-    """ Print memory usage """
+    """Print memory usage"""
     import pynvml
+
     pynvml.nvmlInit()
     handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
@@ -516,14 +505,10 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
         local_path = envs.FD_MODEL_CACHE
         if local_path is None:
             local_path = f'{os.getenv("HOME")}/{repo_id}'
-        snapshot_download(repo_id=repo_id,
-                          revision=revision,
-                          local_dir=local_path)
+        snapshot_download(repo_id=repo_id, revision=revision, local_dir=local_path)
         model_name_or_path = local_path
     except Exception:
-        raise Exception(
-            f"The setting model_name_or_path:{model_name_or_path} is not exist."
-        )
+        raise Exception(f"The setting model_name_or_path:{model_name_or_path} is not exist.")
     return model_name_or_path
 
 
@@ -554,19 +539,21 @@ def is_list_of(
 
     assert_never(check)
 
+
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    version_file_path = os.path.join(current_dir, 'version.txt')
+    version_file_path = os.path.join(current_dir, "version.txt")
 
     try:
-        with open(version_file_path, 'r') as f:
+        with open(version_file_path, "r") as f:
             content = f.read()
             print(content)
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
+
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
 data_processor_logger = get_logger("data_processor", "data_processor.log")

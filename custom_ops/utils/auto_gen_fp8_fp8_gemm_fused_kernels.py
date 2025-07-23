@@ -31,25 +31,26 @@ def get_candidate_tiles():
     """
     base_configs = [("<64, 64, 64>", "<32, 32, 64>", "<16, 8, 32>")]
 
-    base_configs.extend([
-        ("<32, 128, 64>", "<32, 32, 64>", "<16, 8, 32>"),
-        ("<64, 128, 64>", "<32, 64, 64>", "<16, 8, 32>"),
-        ("<64, 64, 128>", "<32, 64, 64>", "<16, 8, 32>"),
-        ("<64, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
-        ("<128, 64, 64>", "<64, 32, 64>", "<16, 8, 32>"),
-        ("<128, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
-        ("<128, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
-        ("<128, 128, 64>", "<128, 32, 64>", "<16, 8, 32>"),
-        ("<128, 256, 64>", "<64, 64, 64>", "<16, 8, 32>"),
-        ("<256, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
-        ("<16, 256, 128>", "<16, 64, 128>", "<16, 8, 32>"),
-    ])
+    base_configs.extend(
+        [
+            ("<32, 128, 64>", "<32, 32, 64>", "<16, 8, 32>"),
+            ("<64, 128, 64>", "<32, 64, 64>", "<16, 8, 32>"),
+            ("<64, 64, 128>", "<32, 64, 64>", "<16, 8, 32>"),
+            ("<64, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
+            ("<128, 64, 64>", "<64, 32, 64>", "<16, 8, 32>"),
+            ("<128, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
+            ("<128, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
+            ("<128, 128, 64>", "<128, 32, 64>", "<16, 8, 32>"),
+            ("<128, 256, 64>", "<64, 64, 64>", "<16, 8, 32>"),
+            ("<256, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
+            ("<16, 256, 128>", "<16, 64, 128>", "<16, 8, 32>"),
+        ]
+    )
 
     return base_configs
 
 
-def get_candidate_configs(sm, min_split_k, max_split_k, min_stages,
-                          max_stages):
+def get_candidate_configs(sm, min_split_k, max_split_k, min_stages, max_stages):
     """
     获取候选的gemm算子配置列表。
 
@@ -353,8 +354,7 @@ def parse_args():
     代码参数解析
     """
     parser = argparse.ArgumentParser(
-        description=
-        "The argument for generating the generic_mixed_gemm_kernelLauncher instance."
+        description="The argument for generating the generic_mixed_gemm_kernelLauncher instance."
     )
     parser.add_argument(
         "--cuda_arch",
@@ -448,8 +448,7 @@ def generate_source_cu(
                             "hasbias": hasbias,
                             "SM": sm,
                         }
-                        all_code += SubstituteTemplate(GemmSplitKDeclare,
-                                                       value_dict)
+                        all_code += SubstituteTemplate(GemmSplitKDeclare, value_dict)
 
     all_code += CommonTail
     return all_code
@@ -473,9 +472,7 @@ def generate_launch_gemm_cus(
     head_path = os.path.join(generate_dir, "launch_gemm_kernel.h")
     head_all_code = LaunchGemmHead
     for tile in tiles:
-        blocks, warps, mmas = [
-            s.replace(" ", "").strip("<>").split(",") for s in tile
-        ]
+        blocks, warps, mmas = [s.replace(" ", "").strip("<>").split(",") for s in tile]
         gemm_config = f"block{blocks[0]}x{blocks[1]}x{blocks[2]}_warp{warps[0]}x{warps[1]}x{warps[2]}_mma{mmas[0]}x{mmas[1]}x{mmas[2]}"
         for stage in stages:
             gemm_config_str = gemm_config + f"_stage{stage}"
@@ -489,9 +486,7 @@ def generate_launch_gemm_cus(
         f.close()
 
     for tile in tiles:
-        blocks, warps, mmas = [
-            s.replace(" ", "").strip("<>").split(",") for s in tile
-        ]
+        blocks, warps, mmas = [s.replace(" ", "").strip("<>").split(",") for s in tile]
         gemm_config = f"block{blocks[0]}x{blocks[1]}x{blocks[2]}_warp{warps[0]}x{warps[1]}x{warps[2]}_mma{mmas[0]}x{mmas[1]}x{mmas[2]}"
         for stage in stages:
             gemm_config_str = gemm_config + f"_stage{stage}"
@@ -517,17 +512,14 @@ def generate_launch_gemm_cus(
                                 "num_stages": str(stage),
                                 "SM": sm,
                             }
-                            source_all_code += SubstituteTemplate(
-                                LaunchGemmPart1, value_dict)
-                            split_k_code += SubstituteTemplate(
-                                LaunchGemmPart3, value_dict)
+                            source_all_code += SubstituteTemplate(LaunchGemmPart1, value_dict)
+                            split_k_code += SubstituteTemplate(LaunchGemmPart3, value_dict)
                             type_id += 1
             source_all_code += LaunchGemmPart2
             source_all_code += split_k_code
             source_all_code += LaunchGemmPart4
             code_map[gemm_config_str] = source_all_code
-            source_path = os.path.join(
-                generate_dir, f"launch_gemm_kernel_{gemm_config_str}.cu")
+            source_path = os.path.join(generate_dir, f"launch_gemm_kernel_{gemm_config_str}.cu")
             with open(source_path, "w") as f:
                 f.write(source_all_code)
                 f.close()
@@ -581,9 +573,7 @@ def generate_dispatch_gemm_cu(
     all_code += code_part4
     tile_id = 0
     for tile in tiles:
-        blocks, warps, mmas = [
-            s.replace(" ", "").strip("<>").split(",") for s in tile
-        ]
+        blocks, warps, mmas = [s.replace(" ", "").strip("<>").split(",") for s in tile]
         gemm_config = f"block{blocks[0]}x{blocks[1]}x{blocks[2]}_warp{warps[0]}x{warps[1]}x{warps[2]}_mma{mmas[0]}x{mmas[1]}x{mmas[2]}"
         for stage in stages:
             gemm_config_str = gemm_config + f"_stage{stage}"
@@ -593,10 +583,12 @@ def generate_dispatch_gemm_cu(
             }
             all_code += SubstituteTemplate(code_part5, value_dict)
             tile_id += 1
-    value_dict.update({
-        "min_split_k": str(min_split_k),
-        "max_split_k": str(max_split_k),
-    })
+    value_dict.update(
+        {
+            "min_split_k": str(min_split_k),
+            "max_split_k": str(max_split_k),
+        }
+    )
     all_code += SubstituteTemplate(code_part6, value_dict)
     return all_code
 
@@ -614,9 +606,7 @@ if __name__ == "__main__":
 
     for sm in archs:
         if sm == "89":
-            fuse_gemm_configs = get_candidate_configs(sm, min_split_k,
-                                                      max_split_k, min_stages,
-                                                      max_stages)
+            fuse_gemm_configs = get_candidate_configs(sm, min_split_k, max_split_k, min_stages, max_stages)
             for fuse_gemm_config in fuse_gemm_configs:
                 file_name = f"gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen/generic_gemm_kernel_sm{sm}_{fuse_gemm_config[3][0]}.cu"
                 all_code = generate_source_cu(
@@ -654,9 +644,7 @@ if __name__ == "__main__":
 
             # hard code for act_tag
 
-            file_name = (
-                "gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen/fp8_fp8_gemm_scale_bias_act.cu"
-            )
+            file_name = "gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen/fp8_fp8_gemm_scale_bias_act.cu"
             all_code = generate_dispatch_gemm_cu(
                 inputs_type,
                 outputs_type,

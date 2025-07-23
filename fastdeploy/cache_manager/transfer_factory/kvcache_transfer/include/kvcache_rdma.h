@@ -61,30 +61,30 @@ private:
                         uint32_t rkey, const std::string &ip,
                         const std::string &port);
 
-    bool execute_rdma_writes(struct RdmaContext* ctx, int layer_idx, 
-                           const std::vector<int64_t>& local_block_ids, 
-                           bool is_key, std::vector<uint64_t>& remote_addr, 
+    bool execute_rdma_writes(struct RdmaContext* ctx, int layer_idx,
+                           const std::vector<int64_t>& local_block_ids,
+                           bool is_key, std::vector<uint64_t>& remote_addr,
                            uint32_t rkey);
-    
-    void prepare_write_requests(struct ibv_sge* sge_list, 
+
+    void prepare_write_requests(struct ibv_sge* sge_list,
                                struct ibv_send_wr* send_wr_list,
-                               int layer_idx, 
+                               int layer_idx,
                                const std::vector<int64_t>& local_block_ids,
-                               bool is_key, 
-                               std::vector<uint64_t>& remote_addr, 
+                               bool is_key,
+                               std::vector<uint64_t>& remote_addr,
                                uint32_t rkey);
-    
-    bool execute_read_verification(struct RdmaContext* ctx, 
-                                 size_t block_idx, 
-                                 uint64_t remote_addr, 
+
+    bool execute_read_verification(struct RdmaContext* ctx,
+                                 size_t block_idx,
+                                 uint64_t remote_addr,
                                  uint32_t rkey,
                                  int layer_idx,
-                                 const std::string& ip, 
+                                 const std::string& ip,
                                  const std::string& port);
-    
-    bool post_send_with_retry(struct RdmaContext* ctx, 
-                            struct ibv_send_wr* wr_list, 
-                            size_t inflight_wr, 
+
+    bool post_send_with_retry(struct RdmaContext* ctx,
+                            struct ibv_send_wr* wr_list,
+                            size_t inflight_wr,
                             bool need_poll);
 
     // Connection management
@@ -119,7 +119,7 @@ private:
     std::map<std::string, struct RdmaContext*> conn_map;    // Active connections map
     std::mutex mutex_;                                      // Thread synchronization mutex
     int rdma_event_channel_epoll_fd;                        // Epoll file descriptor
-    struct ibv_pd *g_pd = NULL;                             // fd 
+    struct ibv_pd *g_pd = NULL;                             // fd
     int RDMACommunicator_status;                            // Communicator status flag
     bool start_client_listener = false;                     // Client listener flag
 };

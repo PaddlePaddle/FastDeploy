@@ -49,7 +49,7 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,

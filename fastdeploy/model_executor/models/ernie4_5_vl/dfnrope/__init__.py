@@ -18,5 +18,6 @@ from .configuration import DFNRopeVisionTransformerConfig
 from .modeling import DFNRopeVisionTransformerPretrainedModel
 
 __all__ = [
-    'DFNRopeVisionTransformerConfig', 'DFNRopeVisionTransformerPretrainedModel'
+    "DFNRopeVisionTransformerConfig",
+    "DFNRopeVisionTransformerPretrainedModel",
 ]

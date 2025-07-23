@@ -15,7 +15,7 @@ We provide two transmission methods for KV Cache, targeting intra-machine and in
 Uses cudaMemcpyPeer for KV Cache transmission between two GPUs within a single machine, offering low latency and high throughput.
 
 ### Inter-machine Transmission
-For transmission between multiple machines, uses high-speed RDMA network for KV Cache transmission. We provide the `rdma_comm` high-speed transmission network library for cross-machine KV Cache transmission. 
+For transmission between multiple machines, uses high-speed RDMA network for KV Cache transmission. We provide the `rdma_comm` high-speed transmission network library for cross-machine KV Cache transmission.
 
 ## PD Disaggregated Scheduling
 ![Splitwise Scheduler](./images/disaggregated.png)
@@ -60,7 +60,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --cache-queue-port 8187 \
        --tensor-parallel-size 4 \
        --quantization wint4 \
-       --innode-prefill-ports 8182 \ 
+       --innode-prefill-ports 8182 \
        --splitwise-role "decode"
 ```
 
@@ -72,7 +72,8 @@ Refer to the example code `offline_disaggregated_demo.py` in the `fastdeploy/dem
 ### Multi-machine Disaggregated Deployment
 
 #### Prerequisite: Redis
-- Installation via `conda`
+* Installation via `conda`
+
 ```bash
 # Install
 conda install redis
@@ -80,7 +81,8 @@ conda install redis
 nohup redis-server > redis.log 2>&1 &
 ```
 
-- Installation via `apt`
+* Installation via `apt`
+
 ```bash
 # Install
 sudo apt install redis-server -y
@@ -88,7 +90,8 @@ sudo apt install redis-server -y
 sudo systemctl start redis-server
 ```
 
-- Installation via `yum`
+* Installation via `yum`
+
 ```bash
 # Install
 sudo yum install redis -y

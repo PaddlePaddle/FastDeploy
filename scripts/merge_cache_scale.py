@@ -14,9 +14,10 @@
 # limitations under the License.
 """
 
-import os
-import json
 import argparse
+import json
+import os
+
 import numpy as np
 
 parser = argparse.ArgumentParser()

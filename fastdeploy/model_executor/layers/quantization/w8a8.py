@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 import paddle
@@ -30,8 +31,13 @@ class W8A8Config(QuantConfigBase):
     quantization config for weight 8bits and activation 8bits
     """
 
-    def __init__(self, weight_scale_dict, act_scale_dict, use_gemm_dequant,
-                 use_smooth_quant) -> None:
+    def __init__(
+        self,
+        weight_scale_dict,
+        act_scale_dict,
+        use_gemm_dequant,
+        use_smooth_quant,
+    ) -> None:
         super().__init__()
         self.weight_scale_dict = weight_scale_dict
         self.act_scale_dict = act_scale_dict
@@ -73,27 +79,22 @@ class W8A8LinearMethod(QuantMethodBase):
         layer.weight_dtype = "int8"
         if self.quant_config.use_smooth_quant:
             self.smooth_quant_method.create_weights(layer)
-        weight_scale = self.quant_config.weight_scale_dict.get(layer.prefix +
-                                                               ".weight_scale")
-        in_scale = self.quant_config.act_scale_dict.get(layer.prefix +
-                                                        ".activation_scale")
+        weight_scale = self.quant_config.weight_scale_dict.get(layer.prefix + ".weight_scale")
+        in_scale = self.quant_config.act_scale_dict.get(layer.prefix + ".activation_scale")
         self.skip_quant = False
         if weight_scale is None or in_scale is None:
             self.skip_quant = True
             return
 
         max_range = 127.0
-        linear_out_scale = paddle.to_tensor(
-            weight_scale /
-            (max_range * max_range * in_scale)).astype("float32")
+        linear_out_scale = paddle.to_tensor(weight_scale / (max_range * max_range * in_scale)).astype("float32")
         layer.linear_out_scale = layer.create_parameter(
             shape=[layer.embed_dim],
             dtype="float32",
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        layer.linear_out_scale.set_value(
-            convert_to_npu_dequant_scale(linear_out_scale))
+        layer.linear_out_scale.set_value(convert_to_npu_dequant_scale(linear_out_scale))
 
     def process_loaded_weights(self, layer, weights) -> None:
         if self.quant_config.use_smooth_quant:
@@ -113,11 +114,13 @@ class W8A8LinearMethod(QuantMethodBase):
             return linear_out
         if self.quant_config.use_gemm_dequant:
             linear_out = fastdeploy.model_executor.ops.gpu.gemm_dequant(
-                x, layer.weight, layer.linear_out_scale, layer._dtype)
+                x, layer.weight, layer.linear_out_scale, layer._dtype
+            )
         else:
             linear_out = paddle.matmul(x, layer.weight, False, True)
             linear_out = fastdeploy.model_executor.ops.gpu.dequant_int8(
-                linear_out, layer.linear_out_scale, layer._dtype)
+                linear_out, layer.linear_out_scale, layer._dtype
+            )
         return linear_out
 
 
@@ -149,8 +152,7 @@ class SmoothQuantLinearMethod(QuantMethodBase):
 
     def process_loaded_weights(self, layer, weights) -> None:
         if layer.shift_key in layer.state_dict:
-            shift_tensor = get_tensor(layer.state_dict.pop(
-                layer.shift_key)).astype(paddle.get_default_dtype())
+            shift_tensor = get_tensor(layer.state_dict.pop(layer.shift_key)).astype(paddle.get_default_dtype())
         else:
             shift_tensor = paddle.zeros(
                 shape=layer.linear_shift_shape,
@@ -158,8 +160,7 @@ class SmoothQuantLinearMethod(QuantMethodBase):
             )
         layer.linear_shift.set_value(shift_tensor)
         if layer.smooth_key in layer.state_dict:
-            smooth_tensor = get_tensor(layer.state_dict.pop(
-                layer.smooth_key)).astype(paddle.get_default_dtype())
+            smooth_tensor = get_tensor(layer.state_dict.pop(layer.smooth_key)).astype(paddle.get_default_dtype())
         else:
             smooth_tensor = paddle.ones(
                 shape=[layer.linear_smooth_shape],

@@ -1,0 +1,57 @@
+[tool.isort]
+profile = 'black'
+known_third_party = ["paddle"]
+
+
+[tool.black]
+line-length = 119
+target_version = ['py35', 'py36', 'py37', 'py38', 'py39', 'py310']
+exclude = ['.flake8']
+
+
+
+[tool.ruff]
+exclude = [
+    "./build",
+    "custom_ops/third_party",
+]
+line-length = 119
+target-version = "py39"
+
+[tool.ruff.format]
+# Prevent change to double quotes by some users use ruff format
+quote-style = "preserve"
+
+[tool.ruff.lint]
+ignore = [
+    # Whitespace before ‘,’, ‘;’, or ‘:’, it is not compatible with black
+    "E203",
+    # Module level import not at top of file
+    "E402",
+    # Line too long (82 > 79 characters)
+    "E501",
+    # Do not compare types, use `isinstance()`
+    "E721",
+    # Do not use bare except, specify exception instead
+    "E722",
+    # Do not assign a lambda expression, use a def
+    "E731",
+    # Do not use variables named ‘l’, ‘O’, or ‘I’
+    "E741",
+    # `name` may be undefined, or defined from star imports: `module`
+    "F405",
+    # Local variable name is assigned to but never used
+    "F841",
+    # It not met the "Explicit is better than implicit" rule
+    "UP015",
+    # It will cause the performance regression on python3.10
+    "UP038",
+    # collections.namedtuple can be quickly created a inlined class
+    "PYI024",
+    # `__all__.append` is a common pattern in Paddle
+    "PYI056",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore for re-export in __init__ files
+"__init__.py" = ["PLC0414"]

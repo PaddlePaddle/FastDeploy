@@ -30,11 +30,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --enable-mm
 ```
 
->💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```baidu/ERNIE-4.5-0.3B-Base-Paddle```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](../supported_models.md)。  
-```--max-model-len``` 表示当前部署的服务所支持的最长Token数量。  
-```--max-num-seqs``` 表示当前部署的服务所支持的最大并发处理数量。  
-```--reasoning-parser``` 指定思考内容解析器。  
-```--enable-mm``` 表示是否开启多模态支持。  
+>💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```baidu/ERNIE-4.5-0.3B-Base-Paddle```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](../supported_models.md)。
+```--max-model-len``` 表示当前部署的服务所支持的最长Token数量。
+```--max-num-seqs``` 表示当前部署的服务所支持的最大并发处理数量。
+```--reasoning-parser``` 指定思考内容解析器。
+```--enable-mm``` 表示是否开启多模态支持。
 
 **相关文档**
 
