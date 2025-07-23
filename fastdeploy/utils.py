@@ -542,6 +542,8 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             )
     elif model_source == "HUGGINGFACE":
         try:
+            if revision == "master":
+                revision = "main"
             repo_id = model_name_or_path
             if repo_id.lower().strip().startswith("PaddlePaddle"):
                 repo_id = "baidu" + repo_id.strip()[12:]
