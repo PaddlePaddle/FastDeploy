@@ -238,8 +238,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_this_time,
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
             metadata.block_tables,
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
@@ -254,7 +253,7 @@ class FlashAttentionBackend(AttentionBackend):
             getattr(layer, "cache_k_zp", None),
             getattr(layer, "cache_v_zp", None),
             metadata.kv_signal_data_list[layer.layer_id],
-            metadata.kv_token_num_cpu[0],
+            metadata.kv_token_num_cpu[0].item(),
             self.max_seq_len,
             getattr(layer, "cache_quant_type_str", "none"),
         )
