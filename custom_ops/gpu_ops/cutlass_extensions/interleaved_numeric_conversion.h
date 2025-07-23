@@ -455,50 +455,57 @@ struct FastInterleavedAndBiasedNumericArrayConverter<half_t, uint2b_t, 16>
 
     using ScaleComputeT = float;
 
-    static constexpr int32_t kWeightMask = 0x3F;
-    static constexpr int32_t kBZP = 32;
-
     CUTLASS_DEVICE
     static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
     {
         result_type result;
-        uint8_t const* in_ptr = reinterpret_cast<uint8_t const*>(&source);
-
-        int32_t decode_value0 =
-            static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[0]) * code_scale + code_zp + 0.5f));
-        int32_t decode_value1 =
-            static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[1]) * code_scale + code_zp + 0.5f));
-        int32_t decode_value2 =
-            static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[2]) * code_scale + code_zp + 0.5f));
-        int32_t decode_value3 =
-            static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[3]) * code_scale + code_zp + 0.5f));
+        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
 
         static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
+        // 2^23 = 8388608
+        static constexpr uint32_t FP32_BASE = 0x4B000000;
+
+        float fp32_intermediates[4];
+        uint32_t* fp32_intermediates_casted = reinterpret_cast<uint32_t*>(fp32_intermediates);
+        fp32_intermediates_casted[0] = __byte_perm(i8s, FP32_BASE, 0x7650);
+        fp32_intermediates_casted[1] = __byte_perm(i8s, FP32_BASE, 0x7651);
+        fp32_intermediates_casted[2] = __byte_perm(i8s, FP32_BASE, 0x7652);
+        fp32_intermediates_casted[3] = __byte_perm(i8s, FP32_BASE, 0x7653);
+
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[0]) : "r"(fp32_intermediates_casted[0]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
+
+        int32_t decode_value[4];
+        ScaleComputeT new_code_zp = code_zp + 0.5f;
+
+        decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale, new_code_zp));
+        decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale, new_code_zp));
+        decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale, new_code_zp));
+        decode_value[3] = __float2int_rd(fmaf(fp32_intermediates[3], code_scale, new_code_zp));
+
         static constexpr uint32_t MASK = 0x003F003F;
         // 2^10 = 1024
         static constexpr uint32_t EX = 0x64006400;
-        // 1024 + 32 = 1056
-        static constexpr uint32_t SUB = 0x64206420;
+
         uint32_t* h = reinterpret_cast<uint32_t*>(&result);
 
-        int32_t q;
-        q = (decode_value1 << 16) | (decode_value0 & 0xFFFF);
-        h[3] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[2] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[1] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[0] = lop3<immLut>(q, MASK, EX);
+        int32_t q0 = __byte_perm(decode_value[0], decode_value[1], 0x5410);
+        int32_t q1 = __byte_perm(decode_value[2], decode_value[3], 0x5410);
 
-        q = (decode_value3 << 16) | (decode_value2 & 0xFFFF);
-        h[7] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[6] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[5] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[4] = lop3<immLut>(q, MASK, EX);
+        h[0] = lop3<immLut>(q0 >> 9, MASK, EX);
+        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
+        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
+        h[3] = lop3<immLut>(q0, MASK, EX);
+
+        h[4] = lop3<immLut>(q1 >> 9, MASK, EX);
+        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
+        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
+        h[7] = lop3<immLut>(q1, MASK, EX);
+
+        // 1024 + 32 = 1056
+        static constexpr uint32_t SUB = 0x64206420;
 
         asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[0]) : "r"(h[0]), "r"(SUB));
         asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[1]) : "r"(h[1]), "r"(SUB));
@@ -509,6 +516,7 @@ struct FastInterleavedAndBiasedNumericArrayConverter<half_t, uint2b_t, 16>
         asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[5]) : "r"(h[5]), "r"(SUB));
         asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[6]) : "r"(h[6]), "r"(SUB));
         asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[7]) : "r"(h[7]), "r"(SUB));
+
         return result;
     }
 
@@ -566,15 +574,15 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         int32_t q0 = __byte_perm(decode_value[0], decode_value[1], 0x5410);
         int32_t q1 = __byte_perm(decode_value[2], decode_value[3], 0x5410);
 
-        h[3] = lop3<immLut>(q0, MASK, EX);
-        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
-        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
         h[0] = lop3<immLut>(q0 >> 9, MASK, EX);
+        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
+        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
+        h[3] = lop3<immLut>(q0, MASK, EX);
 
-        h[7] = lop3<immLut>(q1, MASK, EX);
-        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
-        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
         h[4] = lop3<immLut>(q1 >> 9, MASK, EX);
+        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
+        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
+        h[7] = lop3<immLut>(q1, MASK, EX);
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900) && defined(ENABLE_BF16))
         // 128 + 32 = 160
