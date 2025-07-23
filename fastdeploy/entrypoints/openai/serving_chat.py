@@ -20,7 +20,7 @@ import time
 import traceback
 import uuid
 from typing import List, Optional
-
+import numpy as np
 import msgpack
 import aiozmq
 from aiozmq import zmq
