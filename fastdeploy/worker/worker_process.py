@@ -632,6 +632,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             use_cudagraph=args.graph_optimization_config["use_cudagraph"],
             graph_opt_level=args.graph_optimization_config["graph_opt_level"],
             cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"],
+            sot_warmup_sizes=args.graph_optimization_config["sot_warmup_sizes"],
         )
 
     # Note(tangbinhan): used for load_checkpoint
