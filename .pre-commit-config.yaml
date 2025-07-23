@@ -3,6 +3,7 @@ default_install_hook_types:
   - commit-msg
 default_stages:
   - pre-commit # Run locally
+  - commit-msg
 #   - manual # Run in CI
 repos:
 -   repo: https://github.com/psf/black.git

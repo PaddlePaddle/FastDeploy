@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor
@@ -61,6 +61,7 @@ class LinearBase(nn.Layer):
             or current_platform.is_xpu()
             or current_platform.is_iluvatar()
             or current_platform.is_gcu()
+            or current_platform.is_dcu()
         ):
             self.forward = self.forward_cuda
         else:
