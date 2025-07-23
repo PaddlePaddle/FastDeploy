@@ -705,20 +705,15 @@ public:
 
       unsigned long long load_smem = clock64();
 
-#if 1
-      //if (warp_mma_k != Base::kWarpGemmIterations - 2) {
-        // dequantizes next warp-tile
-        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                     pipe_state.warp_frag_code_scale_,
-                                     pipe_state.warp_frag_code_zp_,
-                                     pipe_state.warp_frag_super_scale_,
-                                     pipe_state.warp_loaded_frag_B_[0],
-                                     pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
-                                     ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
-                                     //mma_stage * Shape::kK,
-                                     (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
-      //}
-#endif
+      // dequantizes next warp-tile
+      warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                   pipe_state.warp_frag_code_scale_,
+                                   pipe_state.warp_frag_code_zp_,
+                                   pipe_state.warp_frag_super_scale_,
+                                   pipe_state.warp_loaded_frag_B_[0],
+                                   pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
+                                   ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
+                                   (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
       unsigned long long dequantize = clock64();
 
@@ -794,21 +789,6 @@ public:
       unsigned long long end = clock64();
       CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, dequantize: %llu, mma: %llu, load_gmem: %llu",
           stage, warp_mma_k, load_smem - start, dequantize - load_smem, mma - dequantize, end - mma);
-
-#if 0
-      if (warp_mma_k == Base::kWarpGemmIterations - 1) {
-        // dequantizes next warp-tile
-        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                     pipe_state.warp_frag_code_scale_,
-                                     pipe_state.warp_frag_code_zp_,
-                                     pipe_state.warp_frag_super_scale_,
-                                     pipe_state.warp_loaded_frag_B_[0],
-                                     pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
-                                     //((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
-                                     (mma_stage + 1) * Shape::kK,
-                                     (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
-      }
-#endif
     }
   }
 

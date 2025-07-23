@@ -555,6 +555,8 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
     CUTLASS_DEVICE
     static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
     {
+        //unsigned long long start = clock64();
+
         uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
 
         // 2^23 = 8388608
@@ -572,20 +574,33 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
 
+        //unsigned long long convert_i8_f32 = clock64();
+
         int32_t decode_value[4];
         ScaleComputeT new_code_zp = code_zp + 0.5f;
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < 4; ++i) {
-            decode_value[i] = __float2int_rd(fmaf(fp32_intermediates[i], code_scale, new_code_zp));
-            // decode_value[i] = __float2int_rd(fp32_intermediates[i] * code_scale + new_code_zp);
-        }
 
-       return convert_impl(decode_value);
+        float scaled_value0 = fmaf(fp32_intermediates[0], code_scale, new_code_zp);
+        float scaled_value1 = fmaf(fp32_intermediates[1], code_scale, new_code_zp);
+        float scaled_value2 = fmaf(fp32_intermediates[2], code_scale, new_code_zp);
+        float scaled_value3 = fmaf(fp32_intermediates[3], code_scale, new_code_zp);
+
+        //unsigned long long code_dequant = clock64();
+
+        decode_value[0] = __float2int_rd(scaled_value0);
+        decode_value[1] = __float2int_rd(scaled_value1);
+        decode_value[2] = __float2int_rd(scaled_value2);
+        decode_value[3] = __float2int_rd(scaled_value3);
+
+        //unsigned long long convert_f32_i32 = clock64();
+
+        return convert_impl(decode_value);
     }
 
     CUTLASS_DEVICE
     static result_type convert(source_type const& source, code_type const& code_scale, code_type const& code_zp)
     {
+        //unsigned long long start = clock64();
+
         uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
 
         // 2^23 = 8388608
@@ -603,12 +618,23 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
 
+        //unsigned long long convert_i8_f32 = clock64();
+
         int32_t decode_value[4];
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < 4; ++i) {
-            decode_value[i] = __float2int_rd(fmaf(fp32_intermediates[i], code_scale[i], code_zp[i] + static_cast<ScaleComputeT>(0.5f)));
-            // decode_value[i] = __float2int_rd(fp32_intermediates[i] * code_scale + new_code_zp);
-        }
+
+        float scaled_value0 = fmaf(fp32_intermediates[0], code_scale[0], code_zp[0] + 0.5f);
+        float scaled_value1 = fmaf(fp32_intermediates[1], code_scale[1], code_zp[1] + 0.5f);
+        float scaled_value2 = fmaf(fp32_intermediates[2], code_scale[2], code_zp[2] + 0.5f);
+        float scaled_value3 = fmaf(fp32_intermediates[3], code_scale[3], code_zp[3] + 0.5f);
+
+        //unsigned long long code_dequant = clock64();
+
+        decode_value[0] = __float2int_rd(scaled_value0);
+        decode_value[1] = __float2int_rd(scaled_value1);
+        decode_value[2] = __float2int_rd(scaled_value2);
+        decode_value[3] = __float2int_rd(scaled_value3);
+
+        //unsigned long long convert_f32_i32 = clock64();
 
         return convert_impl(decode_value);
     }
@@ -616,35 +642,31 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
     CUTLASS_DEVICE
     static result_type convert_impl(int32_t* decode_value)
     {
+        //unsigned long long start = clock64();
 
         result_type result;
 
         static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
-
         static constexpr uint32_t MASK = 0x003F003F;
         // 2^7 = 128
         static constexpr uint32_t EX = 0x43004300;
 
         uint32_t* h = reinterpret_cast<uint32_t*>(&result);
-        int32_t q;
 
-        q = __byte_perm(decode_value[0], decode_value[1], 0x5410);
-        h[3] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[2] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[1] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[0] = lop3<immLut>(q, MASK, EX);
+        int32_t q0 = __byte_perm(decode_value[0], decode_value[1], 0x5410);
+        int32_t q1 = __byte_perm(decode_value[2], decode_value[3], 0x5410);
 
-        q = __byte_perm(decode_value[2], decode_value[3], 0x5410);
-        h[7] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[6] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[5] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[4] = lop3<immLut>(q, MASK, EX);
+        h[3] = lop3<immLut>(q0, MASK, EX);
+        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
+        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
+        h[0] = lop3<immLut>(q0 >> 9, MASK, EX);
+
+        h[7] = lop3<immLut>(q1, MASK, EX);
+        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
+        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
+        h[4] = lop3<immLut>(q1 >> 9, MASK, EX);
+
+        //unsigned long long lop3_instr = clock64();
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900) && defined(ENABLE_BF16))
         // 128 + 32 = 160
@@ -675,6 +697,11 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[6]) : "r"(h[6]), "r"(MUL), "r"(ADD));
         asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[7]) : "r"(h[7]), "r"(MUL), "r"(ADD));
 #endif
+
+        //unsigned long long end = clock64();
+        //CUTLASS_TRACE_DEVICE(" byte_perm: %llu, code_dequant: %llu, round_short: %llu, lop3_instr: %llu, fma: %llu, convert: %llu",
+        //    byte_perm - start, code_dequant - byte_perm, round_short - code_dequant, lop3_instr - round_short, end - lop3_instr, end - start);
+
         return result;
     }
 

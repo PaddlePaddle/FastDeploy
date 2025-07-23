@@ -177,9 +177,6 @@ public:
     using ElementB = typename MmaOperator::FragmentB::Element;
     static_assert(platform::is_same<ElementB, uint2b_t>::value, "ElementB must be uint2b_t");
 
-    /// Type of internal compute
-    using ElementCompute = ElementOperand;
-
     /// Type of the scales
     using ElementLocalScale = uint4b_t;
     using ElementSuperScale = ElementOperand;
@@ -210,7 +207,7 @@ public:
     using FragmentInputUnpack = typename Uint2Converter::result_type;
 
     /// Fragment to hold internal scales before Mma
-    using FragmentScale = Array<ElementCompute, FragmentLocalScale::kElements>;
+    using FragmentScale = Array<ElementOperand, FragmentLocalScale::kElements>;
 
     /// Fragment of dequantized B
     using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements / kExpansionFactor>;
@@ -287,26 +284,23 @@ public:
 
         int stage = tb_offset_k / 64;
 
-        //if (warp_k_compute_offset == 0) {
-        //    unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
-        //}
+        if constexpr (kUnpackInterval != 1) {
+            // unsupport now
+            arch::device_breakpoint();
+        }
 
-        //if (warp_k_compute_offset % kUnpackInterval == 0)
-        //{
-            typename Uint2Converter::source_type source_frag;
+        typename Uint2Converter::source_type source_frag;
 
-            int in_offset = warp_k_compute_offset * kUnpackInterval;
+        int in_offset = warp_k_compute_offset * kUnpackInterval;
 
-            uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
-            uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
+        uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
+        uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
 
-            CUTLASS_PRAGMA_UNROLL
-            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
-                ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
-            }
-
-            FragmentInputUnpack unpacked_frag_ = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
-        //}
+        CUTLASS_PRAGMA_UNROLL
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+            ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
+        }
+        FragmentInputUnpack unpacked_frag_ = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
 
         unsigned long long unpack_b = clock64();
 
@@ -315,7 +309,7 @@ public:
             // special for TileRows = 64
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
 
-            if constexpr (platform::is_same<ElementOperand_, bfloat16_t>::value) {
+            if constexpr (platform::is_same<ElementOperand, bfloat16_t>::value) {
                 constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
                 constexpr uint32_t MASK = 0x000f000f;
                 constexpr uint32_t I4s_TO_BF16s_MAGIC_NUM = 0x43004300;
@@ -332,14 +326,14 @@ public:
 
                 CUTLASS_PRAGMA_UNROLL
                 for (int i = 0; i < FragmentLocalScale::kElements / 4; ++i) {
-                    int i4s = local_scale_ptr[i];
+                    int i4s = local_scale_ptr[i] >> local_scale_shift;
 
-                    // unpack: 0, 2
-                    i4s >>= local_scale_shift;
-                    int32_t unpack0 = lop3<immLut>(i4s, MASK, I4s_TO_BF16s_MAGIC_NUM);
-                    // unpack: 1, 3
-                    i4s >>= 8;
-                    int32_t unpack1 = lop3<immLut>(i4s, MASK, I4s_TO_BF16s_MAGIC_NUM);
+                    // unpack: 0, 1
+                    int32_t low = __byte_perm(i4s, i4s, 0xF1F0);
+                    int32_t unpack0 = lop3<immLut>(low, MASK, I4s_TO_BF16s_MAGIC_NUM);
+                    // unpack: 2, 3
+                    int32_t high = __byte_perm(i4s, i4s, 0xF3F2);
+                    int32_t unpack1 = lop3<immLut>(high, MASK, I4s_TO_BF16s_MAGIC_NUM);
 
                     nv_bfloat162 scale0 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack0),
                                                   *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
@@ -347,11 +341,6 @@ public:
                     nv_bfloat162 scale1 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack1),
                                                   *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
                                                   *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
-
-                    // swap
-                    nv_bfloat16 tmp = scale0.y;
-                    scale0.y = scale1.x;
-                    scale1.x = tmp;
 
                     scale_ptr[2 * i] = __hmul2(scale0, super_scale_ptr[2 * i]);
                     scale_ptr[2 * i + 1] = __hmul2(scale1, super_scale_ptr[2 * i + 1]);
@@ -362,7 +351,7 @@ public:
                 CUTLASS_PRAGMA_UNROLL
                 for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
                     int32_t shifted_value = (static_cast<int32_t>(local_scale_frag[i]) >> local_scale_shift) & kLocalScaleMask;
-                    scale_frag_[i] = static_cast<ElementCompute>(shifted_value) * super_scale_frag[i];
+                    scale_frag_[i] = static_cast<ElementOperand>(shifted_value) * super_scale_frag[i];
                 }
             }
         }
@@ -372,21 +361,42 @@ public:
         // unscale
         const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
-            int mapped_idx_base = mma_n_iter * kWarpIterationsAlongK;
+        // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
+        // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
+        if constexpr (platform::is_same<ElementOperand, bfloat16_t>::value) {
+            __nv_bfloat16* output_ptr = reinterpret_cast<__nv_bfloat16 *>(&output_frag);
+            __nv_bfloat162 const* unpacked_ptr = reinterpret_cast<__nv_bfloat162 const*>(&unpacked_frag_);
+            __nv_bfloat162 const* scale_ptr = reinterpret_cast<__nv_bfloat162 const*>(&scale_frag_);
 
             CUTLASS_PRAGMA_UNROLL
-            for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
-                // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
-                // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
-                ElementCompute scaled_value_0 =
-                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx_base + mma_k_iter * 2]) * scale_frag_[mma_n_iter];
-                ElementCompute scaled_value_1 =
-                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx_base + mma_k_iter * 2 + 1]) * scale_frag_[mma_n_iter + 1];
+            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
+                int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
 
-                output_frag[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = static_cast<ElementOperand>(scaled_value_0);
-                output_frag[(mma_n_iter + 1)* kWarpIterationsAlongK + mma_k_iter] = static_cast<ElementOperand>(scaled_value_1);
+                __nv_bfloat162 scalex2 = scale_ptr[mma_n_iter / 2];
+
+                CUTLASS_PRAGMA_UNROLL
+                for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
+                    __nv_bfloat162 unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
+                    __nv_bfloat162 scaled_value = __hmul2(unpacked_valuex2, scalex2);
+                    output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value.x;
+                    output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
+                }
+            }
+        } else {
+            CUTLASS_PRAGMA_UNROLL
+            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
+                int mapped_idx_base = mma_n_iter * kWarpIterationsAlongK;
+
+                CUTLASS_PRAGMA_UNROLL
+                for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
+                    ElementOperand scaled_value_0 =
+                        unpacked_frag_[mapped_idx_base + mma_k_iter * 2] * scale_frag_[mma_n_iter];
+                    ElementOperand scaled_value_1 =
+                        unpacked_frag_[mapped_idx_base + mma_k_iter * 2 + 1] * scale_frag_[mma_n_iter + 1];
+
+                    output_frag[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value_0;
+                    output_frag[(mma_n_iter + 1)* kWarpIterationsAlongK + mma_k_iter] = scaled_value_1;
+                }
             }
         }
 
