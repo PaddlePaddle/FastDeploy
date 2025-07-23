@@ -369,12 +369,16 @@ class LLMEngine:
         def _fetch_request():
             nonlocal is_fetching
             is_fetching = True
+            num_prefill_batch = min(
+                int(self.resource_manager.available_batch()),
+                self.cfg.max_prefill_batch,
+            )
             tasks = self.scheduler.get_requests(
                 available_blocks=self.resource_manager.available_block_num(),
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
-                batch=self.resource_manager.available_batch(),
+                batch=num_prefill_batch,
             )
             # Fetch requests and add them to the scheduling queue
             for task in tasks:
@@ -386,7 +390,11 @@ class LLMEngine:
                 if self.engine_worker_queue.num_tasks() > 0:
                     time.sleep(0.001)
                     continue
-                if len(self.resource_manager.waiting) == 0 and (not is_fetching):
+                if (
+                    len(self.resource_manager.waiting) == 0
+                    and (not is_fetching)
+                    and self.exist_prefill_task_signal.value[0] == 0
+                ):
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
