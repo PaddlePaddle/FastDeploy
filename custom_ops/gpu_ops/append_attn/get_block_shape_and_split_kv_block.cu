@@ -291,6 +291,7 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     kv_num_blocks_x_cpu =
         GetEmptyTensor({0}, paddle::DataType::INT32, seq_lens_encoder.place());
   }
+
   if (max_just_dec_len_this_time > 0) {
     const uint32_t decoder_max_tile_size_per_bs_q =
         div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
@@ -319,17 +320,19 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
         GetEmptyTensor({0}, paddle::DataType::INT32, paddle::CPUPlace());
   }
 
-  return {encoder_batch_ids,
-          encoder_tile_ids_per_batch,
-          encoder_num_blocks_x_cpu, /*cpu*/
-          kv_batch_ids,
-          kv_tile_ids_per_batch,
-          kv_num_blocks_x_cpu, /*cpu*/
-          decoder_batch_ids,
-          decoder_tile_ids_per_batch,
-          decoder_num_blocks_x_cpu, /*cpu*/
-          max_len_kv_cpu /*cpu*/,
-          max_len_cpu};
+  return {
+    encoder_batch_ids,
+    encoder_tile_ids_per_batch,
+    encoder_num_blocks_x_cpu, /*cpu*/
+    kv_batch_ids,
+    kv_tile_ids_per_batch,
+    kv_num_blocks_x_cpu, /*cpu*/
+    decoder_batch_ids,
+    decoder_tile_ids_per_batch,
+    decoder_num_blocks_x_cpu, /*cpu*/
+    max_len_kv_cpu, /*cpu*/
+    max_len_cpu /*cpu*/
+  };
 }
 
 std::vector<paddle::DataType> GetBlockShapeAndSplitKVBlockInferDtype(

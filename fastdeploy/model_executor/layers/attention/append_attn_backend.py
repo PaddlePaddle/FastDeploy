@@ -66,8 +66,6 @@ class AppendAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: int = -1
-    decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
@@ -89,6 +87,8 @@ class AppendAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        encoder_block_shape_q: int,
+        decoder_block_shape_q: int,
     ) -> None:
         """
         AppendAttentionBackend __init__
@@ -113,6 +113,8 @@ class AppendAttentionBackend(AttentionBackend):
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 32768))
+        self.encoder_block_shape_q: int = encoder_block_shape_q
+        self.decoder_block_shape_q: int = decoder_block_shape_q
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 
@@ -126,8 +128,6 @@ class AppendAttentionBackend(AttentionBackend):
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = AppendAttentionMetadata()
-        metadata.encoder_block_shape_q = 64
-        metadata.decoder_block_shape_q = 16
         metadata.max_partition_size = self.max_partition_size
         metadata.encoder_max_partition_size = self.max_seq_len
         metadata._dtype = paddle.get_default_dtype()
@@ -157,8 +157,8 @@ class AppendAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            metadata.encoder_block_shape_q,
-            metadata.decoder_block_shape_q,
+            self.encoder_block_shape_q,
+            self.decoder_block_shape_q,
             self.num_heads // self.kv_num_heads,
             self.block_size,
             self.speculate_max_draft_token_num + 1,
@@ -275,8 +275,8 @@ class AppendAttentionBackend(AttentionBackend):
             getattr(layer, "quant_max_bound", 0.0),
             getattr(layer, "quant_min_bound", 0.0),
             getattr(layer, "out_scale", -1.0),
-            metadata.encoder_block_shape_q,
-            metadata.decoder_block_shape_q,
+            self.encoder_block_shape_q,
+            self.decoder_block_shape_q,
             metadata.max_partition_size,
             metadata.encoder_max_partition_size,
             self.speculate_max_draft_token_num + 1,
