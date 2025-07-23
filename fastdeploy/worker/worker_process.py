@@ -377,7 +377,7 @@ class PaddleDisWorkerProc():
             )
 
             # 3. Send IPCSignal
-            get_profile_block_num = np.zeros(shape=[self.ranks],
+            get_profile_block_num = np.zeros(shape=[min(self.ranks, self.max_chips_per_node)],
                                              dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",

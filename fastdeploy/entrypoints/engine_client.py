@@ -34,7 +34,7 @@ class EngineClient:
     """
 
     def __init__(self, tokenizer, max_model_len, tensor_parallel_size, pid, limit_mm_per_prompt, mm_processor_kwargs,
-                 enable_mm=False, reasoning_parser=None):
+                 enable_mm=False, reasoning_parser=None, data_parallel_size=1):
         input_processor = InputPreprocessor(tokenizer,
                                             reasoning_parser,
                                             limit_mm_per_prompt,
@@ -45,7 +45,9 @@ class EngineClient:
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.worker_healthy_live_recorded_time_array = np.zeros(shape=[tensor_parallel_size % max_chips_per_node], dtype=np.int32)
+        array_size = min(
+            max_chips_per_node, tensor_parallel_size * data_parallel_size)
+        self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(name="worker_healthy_live_signal",
                     array=self.worker_healthy_live_recorded_time_array,
                     dtype=np.int32,
