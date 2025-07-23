@@ -592,7 +592,7 @@ def parse_args():
     return args
 
 
-def initialize_fd_config(args, local_rank: int = 0) -> FDConfig:
+def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     """Initialize FDConfig from either RolloutModelConfig or argparse.Namespace
 
     Args:
@@ -723,7 +723,7 @@ def run_worker_proc() -> None:
     ranks, local_rank = init_distributed_environment()
 
     # Get fd_config
-    fd_config = initialize_fd_config(args, local_rank)
+    fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
     worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
