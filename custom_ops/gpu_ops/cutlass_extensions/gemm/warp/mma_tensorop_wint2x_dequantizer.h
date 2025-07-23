@@ -57,54 +57,71 @@ namespace cutlass {
 namespace gemm {
 namespace warp {
 
-namespace detail {
+template <typename T, int N, typename Enable = void>
+struct LocalScaleConverter {
+    using FragmentSource = Array<uint8_t, N>;
+    using FragmentResult = Array<T, N>;
 
-template <typename T, int InstructSize>
-struct Multiplier {
-    using Element = T;
-    using Fragment = Array<Element, InstructSize>;
-
-    template <int N>
     CUTLASS_DEVICE
-    static void Compute(Array<Element, N> const& operand_frag, Element scalar, Array<Element, N> &result_frag) {
-        arch::device_breakpoint();
-    }
-};
-
-template <>
-struct Multiplier<bfloat16_t, 2> {
-    using Element = bfloat16_t;
-    using Fragment = Array<Element, 2>;
-
-    template <int N>
-    CUTLASS_DEVICE
-    static void Compute(Array<Element, N> const& operand_frag, Element scalar, Array<Element, N> &result_frag) {
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
-
-        __nv_bfloat16 const* scalar_ptr = reinterpret_cast<__nv_bfloat16 const*>(&scalar);
-        Fragment const* operand_ptr = reinterpret_cast<Fragment const*>(&operand_frag);
-        Fragment* result_ptr = reinterpret_cast<Fragment *>(&result_frag);
-
-        __nv_bfloat162 scalarx2 = __bfloat162bfloat162(*scalar_ptr);
-        __nv_bfloat162 const* operand_bf16x2_ptr = reinterpret_cast<__nv_bfloat162 const*>(&operand_ptr);
-        __nv_bfloat162* result_bf16x2_ptr = reinterpret_cast<__nv_bfloat162*>(&result_ptr);
+    static void Apply(FragmentSource const& local_scale_frag,
+                      FragmentResult const& super_scale_frag,
+                      FragmentResult& scale_frag,
+                      int shift_bit) {
+        constexpr uint32_t kLocalScaleMask = 0xf;
 
         CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < N / 2; ++i) {
-            result_bf16x2_ptr[i] = __hmul2(operand_bf16x2_ptr[i], scalarx2);
+        for (int i = 0; i < N; ++i) {
+            int32_t shifted_value = (static_cast<int32_t>(local_scale_frag[i]) >> shift_bit) & kLocalScaleMask;
+            scale_frag[i] = static_cast<T>(shifted_value) * super_scale_frag[i];
         }
-
-#else
-        // Slow path not implemented here on purpose. If we need to do HMMA on
-        // older arch, scale conversion should happen before scales are stored
-        // to shared memory and we should use the fp16 dequantizer. This will
-        // avoid numerous conversion instructions in GEMM main loop.
-        arch::device_breakpoint();
-#endif
     }
 };
 
-} // namespace detail
+template <int N>
+struct LocalScaleConverter<bfloat16_t, N, typename platform::enable_if<N % 4 == 0>::type> {
+    using FragmentSource = Array<uint8_t, N>;
+    using FragmentResult = Array<bfloat16_t, N>;
+
+    CUTLASS_DEVICE
+    static void Apply(FragmentSource const& local_scale_frag,
+                      FragmentResult const& super_scale_frag,
+                      FragmentResult& scale_frag,
+                      int shift_bit) {
+        constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
+        constexpr uint32_t MASK = 0x000f000f;
+        constexpr uint32_t I4s_TO_BF16s_MAGIC_NUM = 0x43004300;
+
+        constexpr uint32_t BF16_BIAS = 0xC300C300;
+        constexpr uint32_t BF16_ONE = 0x3F803F80;
+
+        __nv_bfloat162* scale_ptr = reinterpret_cast<__nv_bfloat162 *>(&scale_frag);
+        __nv_bfloat162 const* super_scale_ptr = reinterpret_cast<__nv_bfloat162 const*>(&super_scale_frag);
+
+        uint32_t const* local_scale_ptr = reinterpret_cast<uint32_t const*>(&local_scale_frag);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / 4; ++i) {
+            int i4s = local_scale_ptr[i] >> shift_bit;
+
+            // unpack: 0, 1
+            int32_t low = __byte_perm(i4s, i4s, 0xF1F0);
+            int32_t unpack0 = lop3<immLut>(low, MASK, I4s_TO_BF16s_MAGIC_NUM);
+            // unpack: 2, 3
+            int32_t high = __byte_perm(i4s, i4s, 0xF3F2);
+            int32_t unpack1 = lop3<immLut>(high, MASK, I4s_TO_BF16s_MAGIC_NUM);
+
+            nv_bfloat162 scale0 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack0),
+                                          *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
+                                          *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
+            nv_bfloat162 scale1 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack1),
+                                          *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
+                                          *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
+
+            scale_ptr[2 * i] = __hmul2(scale0, super_scale_ptr[2 * i]);
+            scale_ptr[2 * i + 1] = __hmul2(scale1, super_scale_ptr[2 * i + 1]);
+        }
+    }
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -289,52 +306,8 @@ public:
         if (warp_k_compute_offset == 0) {
             // special for TileRows = 64
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
-
-            if constexpr (platform::is_same<ElementOperand, bfloat16_t>::value) {
-                constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
-                constexpr uint32_t MASK = 0x000f000f;
-                constexpr uint32_t I4s_TO_BF16s_MAGIC_NUM = 0x43004300;
-
-                constexpr uint32_t BF16_BIAS = 0xC300C300;
-                constexpr uint32_t BF16_ONE = 0x3F803F80;
-
-                __nv_bfloat162* scale_ptr = reinterpret_cast<__nv_bfloat162 *>(&scale_frag_);
-                __nv_bfloat162 const* super_scale_ptr = reinterpret_cast<__nv_bfloat162 const*>(&super_scale_frag);
-
-                uint32_t const* local_scale_ptr = reinterpret_cast<uint32_t const*>(&local_scale_frag);
-
-                static_assert(FragmentLocalScale::kElements % 4 == 0, "");
-
-                CUTLASS_PRAGMA_UNROLL
-                for (int i = 0; i < FragmentLocalScale::kElements / 4; ++i) {
-                    int i4s = local_scale_ptr[i] >> local_scale_shift;
-
-                    // unpack: 0, 1
-                    int32_t low = __byte_perm(i4s, i4s, 0xF1F0);
-                    int32_t unpack0 = lop3<immLut>(low, MASK, I4s_TO_BF16s_MAGIC_NUM);
-                    // unpack: 2, 3
-                    int32_t high = __byte_perm(i4s, i4s, 0xF3F2);
-                    int32_t unpack1 = lop3<immLut>(high, MASK, I4s_TO_BF16s_MAGIC_NUM);
-
-                    nv_bfloat162 scale0 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack0),
-                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
-                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
-                    nv_bfloat162 scale1 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack1),
-                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
-                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
-
-                    scale_ptr[2 * i] = __hmul2(scale0, super_scale_ptr[2 * i]);
-                    scale_ptr[2 * i + 1] = __hmul2(scale1, super_scale_ptr[2 * i + 1]);
-                }
-            } else {
-                constexpr uint32_t kLocalScaleMask = 0xf;
-
-                CUTLASS_PRAGMA_UNROLL
-                for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
-                    int32_t shifted_value = (static_cast<int32_t>(local_scale_frag[i]) >> local_scale_shift) & kLocalScaleMask;
-                    scale_frag_[i] = static_cast<ElementOperand>(shifted_value) * super_scale_frag[i];
-                }
-            }
+            LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>::Apply(
+                local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
         }
 
         unsigned long long unpack_local_scale = clock64();

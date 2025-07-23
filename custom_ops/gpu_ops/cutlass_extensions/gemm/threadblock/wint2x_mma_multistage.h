@@ -681,12 +681,7 @@ public:
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
     for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations; ++warp_mma_k) {
-      unsigned long long start = clock64();
-
-      // Load the next warp-tile's A fragment from shared memory
-      this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
-      this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
-      ++this->warp_tile_iterator_A_;
+      //unsigned long long start = clock64();
 
       int warp_k_compute_offset_B = warp_mma_k % Base::kWarpGemmIterationsPerLoadForB;
 
@@ -703,7 +698,12 @@ public:
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
       }
 
-      unsigned long long load_smem = clock64();
+      // Load the next warp-tile's A fragment from shared memory
+      this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
+      this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
+      ++this->warp_tile_iterator_A_;
+
+      //unsigned long long load_smem = clock64();
 
       // Execute the current warp-tile of MMA operations
       if (Detail::kStagedAccumulation) {
@@ -727,7 +727,7 @@ public:
           accum);
       }
 
-      unsigned long long mma = clock64();
+      //unsigned long long mma = clock64();
 
       // Except for the last warp-tile, all warp-tiles issue their share of
       // global->shared fragment copies
@@ -737,9 +737,6 @@ public:
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
         copy_tiles_and_advance_B(iterator_B, group_start_iteration_B, stage);
-        if (warp_mma_k == 0) {
-          quant_params_accessor_B_.copy_tiles_and_advance_per_stage<false>(mma_quant_args, stage);
-        }
       }
 
       // The second-to-last warp-tile also:
@@ -774,7 +771,11 @@ public:
         quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
       }
 
-      unsigned long long load_gmem = clock64();
+      if (warp_mma_k == Base::kWarpGemmIterations - 1) {
+        quant_params_accessor_B_.copy_tiles_and_advance_per_stage<false>(mma_quant_args, stage + 1);
+      }
+
+      //unsigned long long load_gmem = clock64();
 
       // dequantizes next warp-tile
       warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
@@ -786,9 +787,9 @@ public:
                                    ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
                                    (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
-      unsigned long long end = clock64();
-      CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, mma: %llu, load_gmem: %llu, dequantize: %llu",
-          stage, warp_mma_k, load_smem - start, mma - load_smem, load_gmem - mma, end - load_gmem);
+      //unsigned long long end = clock64();
+      //CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, mma: %llu, load_gmem: %llu, dequantize: %llu",
+      //    stage, warp_mma_k, load_smem - start, mma - load_smem, load_gmem - mma, end - load_gmem);
     }
   }
 
@@ -807,11 +808,7 @@ public:
     // Disable global fetching if done with global fetch iterations
     iterator_A.clear_mask(gemm_k_iterations == 0);
     iterator_B.clear_mask(gemm_k_iterations == 0);
-
-    // Load first warp-tile's A fragment from shared memory
-    this->warp_tile_iterator_A_.set_kgroup_index(0);
-    this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[0]);
-    ++this->warp_tile_iterator_A_;
+    quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
 
     // Load first warp-tile's B fragment from shared memory
     this->warp_tile_iterator_B_.set_kgroup_index(0);
@@ -823,6 +820,11 @@ public:
                            pipe_state.warp_frag_super_scale_);
 
     warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
+
+    // Load first warp-tile's A fragment from shared memory
+    this->warp_tile_iterator_A_.set_kgroup_index(0);
+    this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[0]);
+    ++this->warp_tile_iterator_A_;
 
     warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
                                  pipe_state.warp_frag_code_scale_,
@@ -838,6 +840,7 @@ public:
     }
 
     int stage = Base::kStages - 1;
+    quant_params_accessor_B_.copy_tiles_and_advance_per_stage<false>(mma_quant_args, stage);
 
     // Mainloop
     CUTLASS_GEMM_LOOP
