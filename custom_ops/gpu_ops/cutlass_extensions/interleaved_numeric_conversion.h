@@ -551,36 +551,30 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
 
         int32_t decode_value[4];
         ScaleComputeT new_code_zp = code_zp + 0.5f;
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < 4; ++i) {
-            decode_value[i] = __float2int_rd(fmaf(fp32_intermediates[i], code_scale, new_code_zp));
-            // decode_value[i] = __float2int_rd(fp32_intermediates[i] * code_scale + new_code_zp);
-        }
+
+        decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale, new_code_zp));
+        decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale, new_code_zp));
+        decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale, new_code_zp));
+        decode_value[3] = __float2int_rd(fmaf(fp32_intermediates[3], code_scale, new_code_zp));
 
         static constexpr uint32_t MASK = 0x003F003F;
         // 2^7 = 128
         static constexpr uint32_t EX = 0x43004300;
 
         uint32_t* h = reinterpret_cast<uint32_t*>(&result);
-        int32_t q;
 
-        q = __byte_perm(decode_value[0], decode_value[1], 0x5410);
-        h[3] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[2] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[1] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[0] = lop3<immLut>(q, MASK, EX);
+        int32_t q0 = __byte_perm(decode_value[0], decode_value[1], 0x5410);
+        int32_t q1 = __byte_perm(decode_value[2], decode_value[3], 0x5410);
 
-        q = __byte_perm(decode_value[2], decode_value[3], 0x5410);
-        h[7] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[6] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[5] = lop3<immLut>(q, MASK, EX);
-        q >>= 3;
-        h[4] = lop3<immLut>(q, MASK, EX);
+        h[3] = lop3<immLut>(q0, MASK, EX);
+        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
+        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
+        h[0] = lop3<immLut>(q0 >> 9, MASK, EX);
+
+        h[7] = lop3<immLut>(q1, MASK, EX);
+        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
+        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
+        h[4] = lop3<immLut>(q1 >> 9, MASK, EX);
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900) && defined(ENABLE_BF16))
         // 128 + 32 = 160
@@ -611,6 +605,7 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[6]) : "r"(h[6]), "r"(MUL), "r"(ADD));
         asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[7]) : "r"(h[7]), "r"(MUL), "r"(ADD));
 #endif
+
         return result;
     }
 
