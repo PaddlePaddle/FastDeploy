@@ -68,7 +68,7 @@ export FD_SAMPLING_CLASS=rejection
 
 ### Min-p 采样
 
-在发送请求时，指定以下参数：
+如果你希望在 top_p 或 top_k_top_p 采样之前使用 min_p 采样，在发送请求时指定以下参数：
 
 ```json
     {

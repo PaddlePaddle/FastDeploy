@@ -67,7 +67,7 @@ export FD_SAMPLING_CLASS=rejection
 
 ### Min-p Sampling
 
-When sending a request, specify the following parameters:
+If you want to use min-p sampling before top-p or top-k_top-p sampling, specify the following parameters when sending a request:
 
 ```json
 {
