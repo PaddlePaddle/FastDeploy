@@ -716,6 +716,32 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
     }
 
     CUTLASS_DEVICE
+    static result_type convert(source_type const& source, Array<float, N / 4> const& code_scale, Array<float, N / 4> const& code_zp)
+    {
+        using scalar_result_type = typename result_type::Element;
+        using scalar_source_type = typename source_type::Element;
+        using Converter = FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, kVecWidth>;
+
+        result_type result;
+        using vec_result = typename Converter::result_type;
+        using vec_source = typename Converter::source_type;
+        using vec_code = typename Converter::code_type;
+
+        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+        vec_code const* code_scale_ptr = reinterpret_cast<vec_code const*>(&code_scale);
+        vec_code const* code_zp_ptr = reinterpret_cast<vec_code const*>(&code_zp);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / kVecWidth; ++i)
+        {
+            result_ptr[i] = Converter::convert(source_ptr[i], code_scale_ptr[i], code_zp_ptr[i]);
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
     result_type operator()(source_type const& s, code_type const& code_scale, code_type const& code_zp)
     {
         return convert(s, code_scale, code_zp);
