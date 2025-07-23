@@ -18,7 +18,7 @@ import asyncio
 import time
 import uuid
 from typing import List
-
+import numpy as np
 import aiozmq
 import msgpack
 from aiozmq import zmq
@@ -37,11 +37,17 @@ from fastdeploy.utils import api_server_logger, get_host_ip
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, dist_init_ip):
+    def __init__(self, engine_client, pid, ips):
         self.engine_client = engine_client
         self.pid = pid
-        self.master_ip = dist_init_ip
+        self.master_ip = ips
         self.host_ip = get_host_ip()
+        if self.master_ip is not None:
+            if isinstance(self.master_ip, list):
+                self.master_ip = self.master_ip[0]
+            else:
+                self.master_ip = self.master_ip.split(",")[0]
+
 
     def _check_master(self):
         if self.master_ip is None:
@@ -97,7 +103,10 @@ class OpenAIServingCompletion:
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                 try:
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_batched_token_ids.append(self.engine_client.format_and_add_data(current_req_dict))
+                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                    if isinstance(prompt_token_ids, np.ndarray):
+                        prompt_token_ids = prompt_token_ids.tolist()
+                    prompt_batched_token_ids.append(prompt_token_ids)
                 except Exception as e:
                     return ErrorResponse(message=str(e), code=400)
 
