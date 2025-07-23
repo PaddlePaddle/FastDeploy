@@ -491,13 +491,6 @@ class MTPProposer(Proposer):
         """
         for substep in range(self.max_draft_token_num):
             if self.model_inputs["not_need_stop"]:
-                if substep != 0:
-                    target_hidden_states = eagle_get_self_hidden_states(
-                        hidden_states,
-                        self.last_seq_lens_this_time,
-                        self.model_inputs["seq_lens_this_time"],
-                        self.model_inputs["step_idx"],
-                    )
                 self.model_inputs["substep"] = substep
                 # Remove padding
                 (
@@ -574,6 +567,21 @@ class MTPProposer(Proposer):
                     paddle.distributed.broadcast(sampled_token_ids, 0)
 
                 self._post_process(sampled_token_ids)
+
+                if substep != self.max_draft_token_num - 1:
+                    target_hidden_states = self._get_self_hidden_states(hidden_states)
+
+    def _get_self_hidden_states(self, hidden_states):
+        target_hidden_states = eagle_get_self_hidden_states(
+            hidden_states,
+            self.last_seq_lens_this_time,
+            self.model_inputs["seq_lens_this_time"],
+            self.model_inputs["step_idx"],
+        )
+        if isinstance(target_hidden_states, list):
+            target_hidden_states = target_hidden_states[0]
+
+        return target_hidden_states
 
     def update_task_chunk_prefill(self, task):
         """
