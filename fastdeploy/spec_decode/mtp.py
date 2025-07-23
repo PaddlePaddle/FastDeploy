@@ -502,7 +502,6 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
-                    self.parallel_config.max_model_len,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,

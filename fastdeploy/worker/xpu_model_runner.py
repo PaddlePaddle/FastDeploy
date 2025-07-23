@@ -41,7 +41,6 @@ logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
 
 
 def xpu_pre_process(
-    max_len: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: int,
     share_inputs: Dict,
@@ -51,6 +50,7 @@ def xpu_pre_process(
     seq_lens_decoder: Optional[paddle.Tensor] = None,
 ) -> XPUForwardMeta:
     """ """
+    max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
     from fastdeploy.model_executor.ops.xpu import (
@@ -458,7 +458,6 @@ class XPUModelRunner(ModelRunnerBase):
     def _prepare_inputs(self) -> None:
         """prepare the model inputs"""
         self.forward_meta = xpu_pre_process(
-            self.parallel_config.max_model_len,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs,
