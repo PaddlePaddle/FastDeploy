@@ -55,6 +55,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                     layer.ep_size,
                     layer.ep_rank,
+                    layer.fd_config.model_config.redundant_experts_num,
                 )
             else:
                 from .ep import EPPrefillRunner
@@ -65,6 +66,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.num_experts,
                     layer.ep_size,
                     layer.ep_rank,
+                    layer.fd_config.model_config.redundant_experts_num,
                 )
 
     def process_loaded_weights(self, layer, weights) -> None:
