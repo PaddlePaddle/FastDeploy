@@ -29,7 +29,7 @@ for i in range(bs):
     ids_len = seq_lens[i, 0]
     input_ids[i, 0:ids_len] = np.random.randint(1, 10, seq_lens[i, 0], "int64")
 
-x_remove_padding, cum_offsets_out, padding_offset, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
+(x_remove_padding, cum_offsets_out, padding_offset, cu_seqlens_q, cu_seqlens_k,) = get_padding_offset(
     paddle.to_tensor(input_ids),
     paddle.to_tensor(cum_offset),
     paddle.to_tensor(token_num),
@@ -46,19 +46,14 @@ print("padding_offset:\n", padding_offset)
 print("cu_seqlens_q:\n", cu_seqlens_q)
 print("cu_seqlens_k:\n", cu_seqlens_k)
 
-ref_x_remove_padding = np.array([8, 7, 8, 2, 4, 5, 5, 7, 6, 1, 7, 2, 6],
-                                "int64")
+ref_x_remove_padding = np.array([8, 7, 8, 2, 4, 5, 5, 7, 6, 1, 7, 2, 6], "int64")
 ref_cum_offsets_out = np.array([0, 6, 13], "int32")
-ref_padding_offset = np.array([0, 0, 0, 0, 6, 6, 6, 13, 13, 13, 13, 13, 13],
-                              "int32")
+ref_padding_offset = np.array([0, 0, 0, 0, 6, 6, 6, 13, 13, 13, 13, 13, 13], "int32")
 ref_cu_seqlens_q = np.array([0, 4, 7, 13], "int32")
 ref_cu_seqlens_k = np.array([0, 4, 7, 13], "int32")
 
-assert sum(ref_x_remove_padding -
-           x_remove_padding) == 0, 'Check x_remove_padding failed.'
-assert sum(ref_cum_offsets_out -
-           cum_offsets_out) == 0, 'Check cum_offsets_out failed.'
-assert sum(ref_padding_offset -
-           padding_offset) == 0, 'Check padding_offset failed.'
-assert sum(ref_cu_seqlens_q - cu_seqlens_q) == 0, 'Check cu_seqlens_q failed.'
-assert sum(ref_cu_seqlens_k - cu_seqlens_k) == 0, 'Check cu_seqlens_k failed.'
+assert sum(ref_x_remove_padding - x_remove_padding) == 0, "Check x_remove_padding failed."
+assert sum(ref_cum_offsets_out - cum_offsets_out) == 0, "Check cum_offsets_out failed."
+assert sum(ref_padding_offset - padding_offset) == 0, "Check padding_offset failed."
+assert sum(ref_cu_seqlens_q - cu_seqlens_q) == 0, "Check cu_seqlens_q failed."
+assert sum(ref_cu_seqlens_k - cu_seqlens_k) == 0, "Check cu_seqlens_k failed."

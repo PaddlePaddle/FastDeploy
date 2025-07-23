@@ -737,7 +737,7 @@ void MoeFastHardamardWrapper(const T *x_data,
   bool FLAGS_hardamard_use_diagonal_block_matrix = true;
 
   static const char* FLAGS_hardamard_moe_block_size = std::getenv("FLAGS_hardamard_moe_block_size");
-  static const int32_t hardamard_moe_block_size = FLAGS_hardamard_moe_block_size != nullptr ? 
+  static const int32_t hardamard_moe_block_size = FLAGS_hardamard_moe_block_size != nullptr ?
     stoi(std::string(FLAGS_hardamard_moe_block_size)) : 512;
   constexpr int kThreads = 128;
   if (FLAGS_hardamard_use_diagonal_block_matrix) {

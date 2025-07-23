@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 import paddle
@@ -49,7 +50,7 @@ def scaled_fp8_quant(
             scaling factor.
     """
     # This code assumes batch_dim and num_tokens are flattened
-    assert (input.ndim == 2)
+    assert input.ndim == 2
     shape = input.shape
     if num_token_padding:
         shape = (max(num_token_padding, input.shape[0]), shape[1])
@@ -58,18 +59,21 @@ def scaled_fp8_quant(
     if scale is None:
         if use_per_token_if_dynamic:
             scale = paddle.empty([shape[0], 1], dtype=paddle.float32)
-            from fastdeploy.model_executor.ops.gpu import \
-                dynamic_per_token_scaled_fp8_quant
+            from fastdeploy.model_executor.ops.gpu import (
+                dynamic_per_token_scaled_fp8_quant,
+            )
+
             dynamic_per_token_scaled_fp8_quant(output, input, scale, scale_ub)
         else:
             scale = paddle.zeros([1], dtype=paddle.float32)
-            from fastdeploy.model_executor.ops.gpu import \
-                dynamic_scaled_fp8_quant
+            from fastdeploy.model_executor.ops.gpu import dynamic_scaled_fp8_quant
+
             dynamic_scaled_fp8_quant(output, input, scale)
     else:
         # num_token_padding not implemented for this case
         # assert (scale.numel() == 1 or num_token_padding is None)
         from fastdeploy.model_executor.ops.gpu import static_scaled_fp8_quant
+
         static_scaled_fp8_quant(output, input, scale)
 
     return output, scale

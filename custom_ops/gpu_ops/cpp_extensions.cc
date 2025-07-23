@@ -54,7 +54,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor &value_cache, const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &padding_offsets, const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &batch_id_per_token, const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_tables, const paddle::Tensor &encoder_batch_ids,
     const paddle::Tensor &encoder_tile_ids_per_batch,
     const paddle::Tensor &encoder_num_blocks,
@@ -94,7 +94,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &seq_lens_this_time,
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &padding_offsets,
+    const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &block_tables, const paddle::Tensor &kv_batch_ids,
     const paddle::Tensor &kv_tile_ids, const paddle::Tensor &kv_num_blocks,
     const paddle::Tensor &cache_batch_ids, const paddle::Tensor &cache_tile_ids,
@@ -234,7 +234,7 @@ paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
 std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time, const paddle::Tensor &cum_offsets,
+    const paddle::Tensor &seq_lens_this_time,
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int group_size, const int block_size,
     const int decoder_step_token_num);
@@ -330,7 +330,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
@@ -343,7 +343,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
@@ -369,7 +369,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& encoder_batch_ids,
     const paddle::Tensor& encoder_tile_ids_per_batch,
@@ -680,6 +680,12 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
                                 const paddle::Tensor& base_model_seq_lens_this_time,
                                 const paddle::Tensor& base_model_seq_lens_encoder,
                                 const int actual_draft_token_num);
+
+std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
+                    const paddle::Tensor& input,
+                    const paddle::Tensor& last_seq_lens_this_time,
+                    const paddle::Tensor& seq_lens_this_time,
+                    const paddle::Tensor& step_idx);
 
 void MTPStepPaddle(
     const paddle::Tensor &base_model_stop_flags,
@@ -1062,6 +1068,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("draft_model_update",&DraftModelUpdate, "draft_model_update function");
 
   m.def("eagle_get_hidden_states",&EagleGetHiddenStates, "eagle_get_hidden_states function");
+
+  m.def("eagle_get_self_hidden_states", &EagleGetSelfHiddenStates, "eagle_get_self_hidden_states function");
 
   m.def("mtp_step_paddle",&MTPStepPaddle, "mtp_step_paddle function");
 

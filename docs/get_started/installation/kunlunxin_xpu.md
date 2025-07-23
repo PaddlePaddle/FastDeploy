@@ -118,5 +118,5 @@ python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 
 If all the above steps execute successfully, FastDeploy is installed correctly.
 
-## How to deploy services on kunlunxin XPU
-Refer to [**Supported Models and Service Deployment**](../../usage/kunlunxin_xpu_deployment.md) for the details about the supported models and the way to deploy services on kunlunxin XPU.
+## How to deploy services on Kunlunxin XPU
+Refer to [**Supported Models and Service Deployment**](../../usage/kunlunxin_xpu_deployment.md) for the details about the supported models and the way to deploy services on Kunlunxin XPU.

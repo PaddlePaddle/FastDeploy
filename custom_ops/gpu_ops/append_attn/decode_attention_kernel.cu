@@ -317,7 +317,7 @@ void MultiQueryDecoderAttention(
   const paddle::optional<paddle::Tensor>& smooth_weight,
   const paddle::Tensor &seq_lens_q,
   const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &padding_offsets,
+  const paddle::Tensor &batch_id_per_token,
   const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   const int max_seq_len,
@@ -483,7 +483,7 @@ void DecodeMLAAttentionKernel(
   const paddle::optional<paddle::Tensor>& smooth_weight,
   const paddle::Tensor &seq_lens_q, // q_seq_len is 1
   const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &padding_offsets,
+  const paddle::Tensor &batch_id_per_token,
   const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   int max_seq_len,
@@ -513,7 +513,7 @@ void DecodeMLAAttentionKernel(
           {DISPATCH_BLOCK_SIZE(block_size, BLOCK_SIZE,
               {DISPATCH_DEAL_EACH_TIME(deal_each_time, DEAL_EACH_TIME,
                   {MultiQueryDecoderAttention<T, GROUP_SIZE, HEAD_DIM_QK, HEAD_DIM_V, BLOCK_SIZE, CAUSAL, 2, 16, DEAL_EACH_TIME>(
-                  meta_data, stream, q, cache_k, cache_v, attn_mask, shift_bias, smooth_weight, seq_lens_q, seq_lens_kv, padding_offsets, cu_seqlens_q,
+                  meta_data, stream, q, cache_k, cache_v, attn_mask, shift_bias, smooth_weight, seq_lens_q, seq_lens_kv, batch_id_per_token, cu_seqlens_q,
                   block_table, max_seq_len, max_dec_len, rope_scale, rope_theta, softmax_scale, in_scale, out);})})})})})});
 }
 
@@ -527,7 +527,7 @@ template void DecodeMLAAttentionKernel<paddle::bfloat16>(
   const paddle::optional<paddle::Tensor>& smooth_weight,
   const paddle::Tensor &seq_lens_q, // q_seq_len is 1
   const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &padding_offsets,
+  const paddle::Tensor &batch_id_per_token,
   const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   int max_seq_len,
@@ -548,7 +548,7 @@ template void DecodeMLAAttentionKernel<paddle::float16>(
   const paddle::optional<paddle::Tensor>& smooth_weight,
   const paddle::Tensor &seq_lens_q, // q_seq_len is 1
   const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &padding_offsets,
+  const paddle::Tensor &batch_id_per_token,
   const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   int max_seq_len,

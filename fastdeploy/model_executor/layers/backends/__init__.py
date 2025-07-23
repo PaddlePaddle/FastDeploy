@@ -22,24 +22,29 @@ __all__ = []
 
 if current_platform.is_xpu():
     from . import xpu
-    from .xpu import *
-    if hasattr(xpu, '__all__'):
+
+    # fix: F403 `from .xpu import *` used; unable to detect undefined names
+    if hasattr(xpu, "__all__"):
+        globals().update({name: getattr(xpu, name) for name in xpu.__all__})
         __all__.extend(xpu.__all__)
 
 if current_platform.is_npu():
     from . import npu
-    from .npu import *
-    if hasattr(npu, '__all__'):
+
+    if hasattr(npu, "__all__"):
+        globals().update({name: getattr(npu, name) for name in npu.__all__})
         __all__.extend(npu.__all__)
 
 if current_platform.is_gcu():
     from . import gcu
-    from .gcu import *
-    if hasattr(gcu, '__all__'):
+
+    if hasattr(gcu, "__all__"):
+        globals().update({name: getattr(gcu, name) for name in gcu.__all__})
         __all__.extend(gcu.__all__)
 
 if current_platform.is_dcu():
-    from .dcu import *
     from . import dcu
-    if hasattr(dcu, '__all__'):
+
+    if hasattr(dcu, "__all__"):
+        globals().update({name: getattr(dcu, name) for name in dcu.__all__})
         __all__.extend(dcu.__all__)

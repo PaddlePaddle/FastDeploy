@@ -20,9 +20,10 @@ import paddle
 
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda() and not current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import \
-        append_attention as append_attention_gpu
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        append_attention as append_attention_gpu,
+    )
 
 
 def append_attention(
@@ -32,7 +33,7 @@ def append_attention(
     seq_lens_encoder: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
-    padding_offsets: paddle.Tensor,
+    batch_id_per_token: paddle.Tensor,
     cu_seqlens_q: paddle.Tensor,
     block_tables: paddle.Tensor,
     encoder_batch_ids: paddle.Tensor,
@@ -86,7 +87,7 @@ def append_attention(
             seq_lens_encoder,
             seq_lens_decoder,
             seq_lens_this_time,
-            padding_offsets,
+            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             encoder_batch_ids,
@@ -131,4 +132,4 @@ def append_attention(
         )
         return out
     else:
-        raise NotImplementedError()
+        raise NotImplementedError

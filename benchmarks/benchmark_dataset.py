@@ -26,9 +26,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, Callable, Optional, Union
-from PIL import Image
+from typing import Any, Optional, Union
 
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ class SampleRequest:
     """
     Represents a single inference request for benchmarking.
     """
+
     no: int
     prompt: Union[str, Any]
     history_QA: Union[str, Any]
@@ -48,6 +49,7 @@ class SampleRequest:
 
 class BenchmarkDataset(ABC):
     """BenchmarkDataset"""
+
     DEFAULT_SEED = 0
     IS_MULTIMODAL = False
 
@@ -68,8 +70,7 @@ class BenchmarkDataset(ABC):
         self.dataset_path = dataset_path
         # Set the random seed, ensuring that a None value is replaced with the
         # default seed.
-        self.random_seed = (random_seed
-                            if random_seed is not None else self.DEFAULT_SEED)
+        self.random_seed = random_seed if random_seed is not None else self.DEFAULT_SEED
         self.data = None
         self.hyperparameter_path = hyperparameter_path
         self.hyperparameters = {}
@@ -85,8 +86,7 @@ class BenchmarkDataset(ABC):
             NotImplementedError: If a subclass does not implement this method.
         """
         # TODO (jenniferzhao): add support for downloading data
-        raise NotImplementedError(
-            "load_data must be implemented in subclasses.")
+        raise NotImplementedError("load_data must be implemented in subclasses.")
 
     @abstractmethod
     def sample(self, num_requests: int) -> list[SampleRequest]:
@@ -105,8 +105,7 @@ class BenchmarkDataset(ABC):
         """
         raise NotImplementedError("sample must be implemented in subclasses.")
 
-    def maybe_oversample_requests(self, requests: list[SampleRequest],
-                                  num_requests: int) -> None:
+    def maybe_oversample_requests(self, requests: list[SampleRequest], num_requests: int) -> None:
         """
         Oversamples the list of requests if its size is less than the desired
         number.
@@ -117,11 +116,9 @@ class BenchmarkDataset(ABC):
         """
         if len(requests) < num_requests:
             random.seed(self.random_seed)
-            additional = random.choices(requests,
-                                        k=num_requests - len(requests))
+            additional = random.choices(requests, k=num_requests - len(requests))
             requests.extend(additional)
-            logger.info("Oversampled requests to reach %d total samples.",
-                        num_requests)
+            logger.info("Oversampled requests to reach %d total samples.", num_requests)
 
 
 def is_valid_sequence(
@@ -141,14 +138,12 @@ def is_valid_sequence(
     """
     # Check for invalid conditions
     prompt_too_short = prompt_len < min_len
-    output_too_short = (not skip_min_output_len_check) and (output_len
-                                                            < min_len)
+    output_too_short = (not skip_min_output_len_check) and (output_len < min_len)
     prompt_too_long = prompt_len > max_prompt_len
     combined_too_long = (prompt_len + output_len) > max_total_len
 
     # Return True if none of the invalid conditions are met
-    return not (prompt_too_short or output_too_short or prompt_too_long
-                or combined_too_long)
+    return not (prompt_too_short or output_too_short or prompt_too_long or combined_too_long)
 
 
 def process_image(image: Any) -> Mapping[str, Any]:
@@ -171,28 +166,25 @@ def process_image(image: Any) -> Mapping[str, Any]:
     Raises:
         ValueError: If the input is not a supported type.
     """
-    if isinstance(image, dict) and 'bytes' in image:
-        image = Image.open(BytesIO(image['bytes']))
+    if isinstance(image, dict) and "bytes" in image:
+        image = Image.open(BytesIO(image["bytes"]))
     if isinstance(image, Image.Image):
         image = image.convert("RGB")
         with io.BytesIO() as image_data:
             image.save(image_data, format="JPEG")
-            image_base64 = base64.b64encode(
-                image_data.getvalue()).decode("utf-8")
+            image_base64 = base64.b64encode(image_data.getvalue()).decode("utf-8")
         return {
             "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{image_base64}"
-            },
+            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
         }
 
     if isinstance(image, str):
-        image_url = (image if image.startswith(
-            ("http://", "file://")) else f"file://{image}")
+        image_url = image if image.startswith(("http://", "file://")) else f"file://{image}"
         return {"type": "image_url", "image_url": {"url": image_url}}
 
-    raise ValueError(f"Invalid image input {image}. Must be a PIL.Image.Image"
-                     " or str or dictionary with raw image bytes.")
+    raise ValueError(
+        f"Invalid image input {image}. Must be a PIL.Image.Image" " or str or dictionary with raw image bytes."
+    )
 
 
 class EBDataset(BenchmarkDataset):
@@ -243,8 +235,7 @@ class EBDataset(BenchmarkDataset):
             new_output_len = int(entry["max_dec_len"])
 
             if enable_multimodal_chat:
-                prompt = self.apply_multimodal_chat_transformation(
-                    prompt, None)
+                prompt = self.apply_multimodal_chat_transformation(prompt, None)
             samples.append(
                 SampleRequest(
                     no=cnt,
@@ -252,17 +243,20 @@ class EBDataset(BenchmarkDataset):
                     prompt_len=self.prompt_len,
                     history_QA=[],
                     expected_output_len=new_output_len,
-                ))
+                )
+            )
             cnt += 1
 
         self.maybe_oversample_requests(samples, num_requests)
         return samples
+
 
 class EBChatDataset(BenchmarkDataset):
     """
     Implements the ShareGPT dataset.  Loads data from a JSON file and generates
     sample requests based on conversation turns.
     """
+
     prompt_len: int
 
     def __init__(self, **kwargs) -> None:
@@ -296,8 +290,7 @@ class EBChatDataset(BenchmarkDataset):
             new_output_len = int(entry.get("max_tokens", 12288))
 
             if enable_multimodal_chat:
-                prompt = self.apply_multimodal_chat_transformation(
-                    prompt, None)
+                prompt = self.apply_multimodal_chat_transformation(prompt, None)
             samples.append(
                 SampleRequest(
                     no=cnt,
@@ -306,9 +299,9 @@ class EBChatDataset(BenchmarkDataset):
                     prompt_len=0,
                     history_QA=history_QA,
                     expected_output_len=new_output_len,
-                ))
+                )
+            )
             cnt += 1
 
         self.maybe_oversample_requests(samples, num_requests)
         return samples
-
