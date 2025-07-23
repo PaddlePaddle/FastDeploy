@@ -681,6 +681,7 @@ public:
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
     for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations; ++warp_mma_k) {
+      unsigned long long start = clock64();
 
       // Load the next warp-tile's A fragment from shared memory
       this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
@@ -701,6 +702,8 @@ public:
       if (warp_mma_k == Base::kWarpGemmIterations - 1) {
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
       }
+
+      unsigned long long load_smem = clock64();
 
       // Execute the current warp-tile of MMA operations
       if (Detail::kStagedAccumulation) {
@@ -723,6 +726,8 @@ public:
           pipe_state.warp_frag_B_[warp_mma_k % 2],
           accum);
       }
+
+      unsigned long long mma = clock64();
 
       // Except for the last warp-tile, all warp-tiles issue their share of
       // global->shared fragment copies
@@ -769,6 +774,8 @@ public:
         quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
       }
 
+      unsigned long long load_gmem = clock64();
+
       // dequantizes next warp-tile
       warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
                                    pipe_state.warp_frag_code_scale_,
@@ -778,6 +785,10 @@ public:
                                    pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
                                    ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
                                    (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
+
+      unsigned long long end = clock64();
+      CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, mma: %llu, load_gmem: %llu, dequantize: %llu",
+          stage, warp_mma_k, load_smem - start, mma - load_smem, load_gmem - mma, end - load_gmem);
     }
   }
 
