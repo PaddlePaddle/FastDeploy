@@ -110,7 +110,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
         self.head_dim = fd_config.model_config.head_dim
-        self.hidden_size = fd_config.model_config.hidden_size
+        self.hidden_size = self.num_heads * self.head_dim
         self.block_size = fd_config.parallel_config.block_size
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
