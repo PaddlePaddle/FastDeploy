@@ -146,9 +146,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.local_rank + int(self.parallel_config.engine_worker_queue_port)
         )
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        Check whether prefill stage finished
+        check whether prefill stage exist
         """
         if self.enable_mm:
             # VL only support 1 batch to prefill
