@@ -19,9 +19,10 @@ import time
 import traceback
 import uuid
 from typing import List, Optional
-import numpy as np
+
 import aiozmq
 import msgpack
+import numpy as np
 from aiozmq import zmq
 
 from fastdeploy.entrypoints.openai.protocol import (

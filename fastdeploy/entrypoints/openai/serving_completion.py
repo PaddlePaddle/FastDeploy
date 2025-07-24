@@ -18,9 +18,10 @@ import asyncio
 import time
 import uuid
 from typing import List
-import numpy as np
+
 import aiozmq
 import msgpack
+import numpy as np
 from aiozmq import zmq
 
 from fastdeploy.engine.request import RequestOutput
@@ -47,7 +48,6 @@ class OpenAIServingCompletion:
                 self.master_ip = self.master_ip[0]
             else:
                 self.master_ip = self.master_ip.split(",")[0]
-
 
     def _check_master(self):
         if self.master_ip is None:
