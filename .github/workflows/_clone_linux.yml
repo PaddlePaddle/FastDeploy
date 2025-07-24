@@ -22,8 +22,8 @@ jobs:
       - name: Clone FastDeploy
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' 
-                && github.event.pull_request.base.ref 
+          ref: ${{ github.event_name == 'pull_request'
+                && github.event.pull_request.base.ref
                 || github.ref_name }}
           submodules: 'recursive'
           fetch-depth: 1000
@@ -37,7 +37,7 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/head:pr/${{ github.event.pull_request.number }}
           git merge --no-ff pr/${{ github.event.pull_request.number }}
           echo "PR Branch log "
-          git log --oneline -n 5 pr/${{ github.event.pull_request.number }} 
+          git log --oneline -n 5 pr/${{ github.event.pull_request.number }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -68,7 +68,7 @@ jobs:
             branch_name=${{ github.ref_name }}
             target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}
           fi
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py 
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
           ls
