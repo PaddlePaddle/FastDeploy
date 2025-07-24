@@ -36,8 +36,7 @@ __global__ void RebuildPaddingKernel(T *output_data,
         if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
         // if encoder, get last token; just decoder, get first token.
         if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
-        const int ori_token_idx =
-            bi * max_input_length - cum_offsets[bi] + seq_id;
+        const int ori_token_idx = cum_offsets[bi] + seq_id;
         const int src_offset = ori_token_idx * dim_embed + bias_idx;
         Load<T, VecSize>(&input_data[src_offset], &src_vec);
         Store<T, VecSize>(src_vec, &output_data[i]);
@@ -87,6 +86,14 @@ std::vector<paddle::Tensor> rebuild_padding(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::optional<paddle::Tensor> &output_padding_offset,
     int max_input_length) {
+
+    auto shape = seq_len_this_time.shape();
+    std::cout << "seq_len_this_time shape: [";
+    for (size_t i = 0; i < shape.size(); ++i) {
+        std::cout << shape[i];
+        if (i < shape.size() - 1) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
     typedef PDTraits<D> traits_;
     typedef typename traits_::DataType DataType_;
     typedef typename traits_::data_t data_t;
@@ -100,7 +107,7 @@ std::vector<paddle::Tensor> rebuild_padding(
     std::vector<int64_t> tmp_out_shape = tmp_out.shape();
     const int token_num = tmp_out_shape[0];
     const int dim_embed = tmp_out_shape[1];
-    const int bsz = cum_offsets.shape()[0];
+    const int bsz = seq_len_this_time.shape()[0];
 
     paddle::Tensor out;
     if (output_padding_offset) {

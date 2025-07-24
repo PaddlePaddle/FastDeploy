@@ -202,6 +202,7 @@ class Qwen3Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
+
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
@@ -227,6 +228,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             fd_config (FDConfig): Configurations for the LLM model.
         """
         super(Qwen3ForCausalLM, self).__init__(fd_config)
+        self.ii = 1
 
         self.model = Qwen3Model(fd_config=fd_config)
 
@@ -274,8 +276,8 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         """ """
-        hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
+        hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         return hidden_states
 
 

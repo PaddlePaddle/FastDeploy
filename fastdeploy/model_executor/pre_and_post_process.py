@@ -96,6 +96,7 @@ def pre_process(
     """
     # Remove padding
     max_len = input_ids.shape[1]
+
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
     output_padding_offset = None
@@ -138,6 +139,7 @@ def pre_process(
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+        # print("ids_remove_padding",ids_remove_padding)
     return (
         ids_remove_padding,
         cum_offsets,
@@ -157,6 +159,7 @@ def post_process_normal(
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     # handle vl:
+
     if model_output.enable_thinking:
         exists_think_end = sampler_output.sampled_token_ids == model_output.think_end_id
         paddle.assign(

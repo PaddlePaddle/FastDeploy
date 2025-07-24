@@ -111,6 +111,7 @@ class SamplerProcessor:
 
     def apply_token_mask(self, logits: paddle.Tensor, skip_idx_list: List[int] = []):
         """apply token mask to logits"""
+
         if len(self.logits_processor) == 0 or self.token_bitmask is None:
             return logits
 

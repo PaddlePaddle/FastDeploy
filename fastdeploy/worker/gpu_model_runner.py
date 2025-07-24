@@ -488,7 +488,6 @@ class GPUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
-        self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -586,8 +585,12 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, num_running_requests=None) -> None:
         """Prepare the model inputs"""
+
+        def slice_if_needed(tensor, num=num_running_requests):
+            return tensor[:num] if num is not None else tensor
+
         # Remove padding
         (
             ids_remove_padding,
@@ -598,16 +601,15 @@ class GPUModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
-            self.share_inputs["input_ids"],
-            self.share_inputs["seq_lens_this_time"],
+            slice_if_needed(self.share_inputs["input_ids"]),
+            slice_if_needed(self.share_inputs["seq_lens_this_time"]),
             self.speculative_decoding,
-            (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
-            self.share_inputs["seq_lens_encoder"],
-            self.share_inputs["seq_lens_decoder"],
+            draft_tokens=slice_if_needed(self.share_inputs["draft_tokens"]) if self.speculative_decoding else None,
+            seq_lens_encoder=slice_if_needed(self.share_inputs["seq_lens_encoder"]),
+            seq_lens_decoder=slice_if_needed(self.share_inputs["seq_lens_decoder"]),
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -686,6 +688,9 @@ class GPUModelRunner(ModelRunnerBase):
             block_tables=self.share_inputs["block_tables"],
             caches=self.share_inputs["caches"],
         )
+        # print("self.forward_meta",self.forward_meta.input_ids)
+        # print("self.forward_meta",self.forward_meta.ids_remove_padding)
+        # print("rotary_embs",self.forward_meta.rotary_embs)
 
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
@@ -694,6 +699,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
+            # print("self.forward_meta",self.forward_meta)
             attn_backend.init_attention_metadata(self.forward_meta)
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
@@ -824,7 +830,7 @@ class GPUModelRunner(ModelRunnerBase):
 
                 hidden_states = rebuild_padding(
                     model_output,
-                    self.share_inputs["cum_offsets"],
+                    self.share_inputs["cu_seqlens_q"],
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["seq_lens_encoder"],
@@ -1031,8 +1037,7 @@ class GPUModelRunner(ModelRunnerBase):
         return skip_idx_list
 
     def execute_model(
-        self,
-        model_forward_batch: Optional[List[Request]] = None,
+        self, model_forward_batch: Optional[List[Request]] = None, num_running_requests=None
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -1062,24 +1067,24 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
-            hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cum_offsets"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.parallel_config.max_model_len,
-            )
 
         # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hidden_states)
+        logits = self.model.compute_logits(model_output)
+
+        rebuild_padding(
+            logits,
+            self.share_inputs["cu_seqlens_q"],
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["seq_lens_encoder"],
+            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+            self.parallel_config.max_model_len,
+        )
 
         if not self.speculative_decoding:
             set_value_by_flags_and_idx(
