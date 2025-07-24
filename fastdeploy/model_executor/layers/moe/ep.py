@@ -143,7 +143,13 @@ class DeepEPEngine:
             event: the event after executing the kernel (valid only if `async_finish` is set).
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
-        (packed_recv_x, recv_expert_count, handle, _, dispatch_hook,) = self.deepep_engine.low_latency_dispatch(
+        (
+            packed_recv_x,
+            recv_expert_count,
+            handle,
+            _,
+            dispatch_hook,
+        ) = self.deepep_engine.low_latency_dispatch(
             hidden_states,
             topk_idx,
             expertwise_scale,

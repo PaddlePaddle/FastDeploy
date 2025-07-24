@@ -559,8 +559,8 @@ class EngineArgs:
             "--ips",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.ips,
-            help=
-            "IP addresses of all nodes participating in distributed inference.")
+            help="IP addresses of all nodes participating in distributed inference.",
+        )
 
         # Performance tuning parameters group
         perf_group = parser.add_argument_group("Performance Tuning")

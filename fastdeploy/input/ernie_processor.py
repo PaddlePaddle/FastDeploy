@@ -99,8 +99,7 @@ class ErnieProcessor(BaseDataProcessor):
 
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is None and request.messages is None:
-                raise ValueError(
-                    f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
+                raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
             if request.prompt is not None:
                 prompt = request.prompt if request.prompt is not None else request.messages[0]
                 prompt = prompt[0] if isinstance(prompt, list) else prompt
@@ -164,8 +163,8 @@ class ErnieProcessor(BaseDataProcessor):
                 req_id = request.get("request_id", None)
                 data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
-                request['prompt_token_ids'] = self.messages2ids(request)
-        if len(request['prompt_token_ids']) == 0:
+                request["prompt_token_ids"] = self.messages2ids(request)
+        if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
 
         # truncate prompts that exceed the length limit
@@ -246,8 +245,7 @@ class ErnieProcessor(BaseDataProcessor):
         if is_end:
             full_text = previous_texts + delta_text
             if enable_thinking and self.reasoning_parser:
-                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                    full_text, response_dict)
+                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:

@@ -125,7 +125,7 @@ class FusedMoE(nn.Layer):
             self.init_moe_weights()
 
         logger.info(
-            f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset+self.num_local_experts}), \
+            f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
         {top_k=}, hidden_size={self.hidden_size}, {moe_intermediate_size=}, \
             , ep_size={self.ep_size}, \
             tp_size={self.tp_size}."
@@ -232,17 +232,21 @@ class FusedMoE(nn.Layer):
                 up_gate_proj_expert_weight_key_name = up_gate_proj_expert_weight_key.format(expert_idx)
                 up_gate_proj_weights.append(
                     get_tensor(
-                        state_dict.pop(up_gate_proj_expert_weight_key_name)
-                        if up_gate_proj_expert_weight_key_name in state_dict
-                        else up_gate_proj_expert_weight_key_name,
+                        (
+                            state_dict.pop(up_gate_proj_expert_weight_key_name)
+                            if up_gate_proj_expert_weight_key_name in state_dict
+                            else up_gate_proj_expert_weight_key_name
+                        ),
                         self.fd_config.parallel_config.model_name_or_path,
                     )
                 )
                 down_proj_weights.append(
                     get_tensor(
-                        state_dict.pop(down_proj_expert_weight_key_name)
-                        if down_proj_expert_weight_key_name in state_dict
-                        else down_proj_expert_weight_key_name,
+                        (
+                            state_dict.pop(down_proj_expert_weight_key_name)
+                            if down_proj_expert_weight_key_name in state_dict
+                            else down_proj_expert_weight_key_name
+                        ),
                         self.fd_config.parallel_config.model_name_or_path,
                     )
                 )
@@ -255,23 +259,29 @@ class FusedMoE(nn.Layer):
                 up_expert_weight_key_name = up_expert_weight_key.format(expert_idx)
                 down_proj_expert_weight_key_name = down_proj_expert_weight_key.format(expert_idx)
                 gate = get_tensor(
-                    state_dict.pop(gate_expert_weight_key_name)
-                    if gate_expert_weight_key_name in state_dict
-                    else gate_expert_weight_key_name,
+                    (
+                        state_dict.pop(gate_expert_weight_key_name)
+                        if gate_expert_weight_key_name in state_dict
+                        else gate_expert_weight_key_name
+                    ),
                     self.fd_config.parallel_config.model_name_or_path,
                 )
                 up = get_tensor(
-                    state_dict.pop(up_expert_weight_key_name)
-                    if up_expert_weight_key_name in state_dict
-                    else up_expert_weight_key_name,
+                    (
+                        state_dict.pop(up_expert_weight_key_name)
+                        if up_expert_weight_key_name in state_dict
+                        else up_expert_weight_key_name
+                    ),
                     self.fd_config.parallel_config.model_name_or_path,
                 )
                 up_gate_proj_weights.append(paddle.concat([gate, up], axis=-1))
                 down_proj_weights.append(
                     get_tensor(
-                        state_dict.pop(down_proj_expert_weight_key_name)
-                        if down_proj_expert_weight_key_name in state_dict
-                        else down_proj_expert_weight_key_name,
+                        (
+                            state_dict.pop(down_proj_expert_weight_key_name)
+                            if down_proj_expert_weight_key_name in state_dict
+                            else down_proj_expert_weight_key_name
+                        ),
                         self.fd_config.parallel_config.model_name_or_path,
                     )
                 )
