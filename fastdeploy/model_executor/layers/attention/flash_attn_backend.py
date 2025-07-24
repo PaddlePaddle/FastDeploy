@@ -136,16 +136,25 @@ class FlashAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: str = None,
     ):
         """
         Caculate kv cache shape
         """
-        return (
-            max_num_blocks,
-            self.kv_num_heads,
-            self.block_size,
-            self.head_dim,
-        )
+        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
+            return (
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim // 2,
+            )
+        else:
+            return (
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim,
+            )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashAttentionMetadata()
