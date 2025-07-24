@@ -286,7 +286,7 @@ class PaddleDisWorkerProc:
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-                    if not self.fd_config.model_config.enable_mm or not self.worker.prefill_finished():
+                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
                         if self.nnode > 1:
                             self.task_queue.read_finish_flag.set(1)
                         else:
@@ -346,7 +346,7 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts)
-            self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
+            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many

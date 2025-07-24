@@ -148,9 +148,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.local_rank + int(self.parallel_config.engine_worker_queue_port)
         )
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        Check whether prefill stage finished
+        check whether prefill stage exist
         """
         if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
             return 1
