@@ -826,8 +826,9 @@ def main(args: argparse.Namespace):
             num_requests=args.num_prompts,
             output_len=args.sharegpt_output_len,
         ),
-        "EBChat": lambda: EBChatDataset(random_seed=args.seed, dataset_path=args.dataset_path,
-                                        shuffle=args.shuffle).sample(
+        "EBChat": lambda: EBChatDataset(
+            random_seed=args.seed, dataset_path=args.dataset_path, shuffle=args.shuffle
+        ).sample(
             num_requests=args.num_prompts,
             output_len=args.sharegpt_output_len,
         ),
