@@ -118,6 +118,7 @@ class FusedMoE(nn.Layer):
             # now, no quant method(w_fp16 a_fp16) can't get from quant_config, we will optimize it in future
             self.quant_method = get_moe_method()
 
+        self.redundant_table_manger = None
         if self.ep_size > 1:
             if fd_config.model_config.enable_redundant_experts is True:
                 self.redundant_table_manger = RedundantExpertManger(
@@ -126,8 +127,6 @@ class FusedMoE(nn.Layer):
                     redundant_experts_num=fd_config.model_config.redundant_experts_num,
                     ep_size=self.ep_size,
                 )
-            else:
-                self.redundant_table_manger = None
             self.quant_method.init_ep(self)
 
         if fd_config.load_config.dynamic_load_weight:
