@@ -62,7 +62,7 @@ parser.add_argument("--metrics-port", default=8001, type=int, help="port for met
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
-args.model = retrive_model_from_server(args.model)
+args.model = retrive_model_from_server(args.model, args.revision)
 
 llm_engine = None
 

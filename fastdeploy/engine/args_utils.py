@@ -46,6 +46,10 @@ class EngineArgs:
     """
     The name or path of the model to be used.
     """
+    revision: Optional[str] = "master"
+    """
+    The revision for downloading models.
+    """
     model_config_name: Optional[str] = "config.json"
     """
     The name of the model configuration file.
@@ -339,6 +343,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.model,
             help="Model name or path to be used.",
+        )
+        model_group.add_argument(
+            "--revision",
+            type=nullable_str,
+            default=EngineArgs.revision,
+            help="Revision for downloading models",
         )
         model_group.add_argument(
             "--model-config-name",
