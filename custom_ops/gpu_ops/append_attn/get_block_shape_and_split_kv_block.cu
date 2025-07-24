@@ -199,7 +199,7 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const int group_size, const int block_size,
     const int decoder_step_token_num) {
   auto stream = seq_lens_encoder.stream();
-  int bsz = seq_lens_encoder.shape()[0];
+  int bsz = seq_lens_this_time.shape()[0];
   auto max_len_tensor =
       GetEmptyTensor({8}, paddle::DataType::INT32, seq_lens_encoder.place());
   GetMaxLen(seq_lens_decoder, seq_lens_this_time, seq_lens_encoder,

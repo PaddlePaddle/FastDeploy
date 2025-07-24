@@ -1130,6 +1130,10 @@ __global__ void append_speculate_cache_int4_rope_kernel(
     LoadOutScaleT out_scale_vec;
     LoadEmbT cos_emb_vec;
     LoadEmbT sin_emb_vec;
+#pragma unroll
+    for (int v_i = 0; v_i < VecSize; v_i++) {
+      bias_vec[v_i] = 0;
+    }
     const InT* qkv_now = quant_qkv + token_id * hidden_size;
     T* qkv_out_now = qkv_out + token_id * hidden_size;
 #pragma unroll
@@ -1137,8 +1141,8 @@ __global__ void append_speculate_cache_int4_rope_kernel(
          head_bias += 32 * VecSize) {
       const int bias_idx = head_idx * HeadDim + head_bias;
       Load<InT, VecSize>(&qkv_now[bias_idx], &src_vec);
-      Load<T, VecSize>(&qkv_biases[bias_idx], &bias_vec);
-      Load<float, VecSize>(&qkv_out_scales[bias_idx], &out_scale_vec);
+      // Load<T, VecSize>(&qkv_biases[bias_idx], &bias_vec);
+      // Load<float, VecSize>(&qkv_out_scales[bias_idx], &out_scale_vec);
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
       Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
@@ -1148,10 +1152,10 @@ __global__ void append_speculate_cache_int4_rope_kernel(
         // dequant + add_bias + rope
         float input_left = static_cast<float>(src_vec[2 * i]);
         float input_right = static_cast<float>(src_vec[2 * i + 1]);
-        input_left = input_left * out_scale_vec[2 * i] +
-                     static_cast<float>(bias_vec[2 * i]);
-        input_right = input_right * out_scale_vec[2 * i + 1] +
-                      static_cast<float>(bias_vec[2 * i + 1]);
+        // input_left = input_left * out_scale_vec[2 * i] +
+        //              static_cast<float>(bias_vec[2 * i]);
+        // input_right = input_right * out_scale_vec[2 * i + 1] +
+        //               static_cast<float>(bias_vec[2 * i + 1]);
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         bias_vec[2 * i] =
@@ -1167,6 +1171,35 @@ __global__ void append_speculate_cache_int4_rope_kernel(
     using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
     const uint32_t kv_head_idx = (head_idx - num_heads) % gqa_group_size;
 
+    if (block_offset == 0) {
+      // pad zero for this kv_head_idx for this block
+      LoadPadKVT pad_cache_vec;
+      *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+      if (head_idx < num_heads + gqa_group_size) {
+        constexpr int num_vecs_per_head_dim = half_head_size / KV_VEC_SIZE;
+        constexpr int num_token_each_time = 32 / num_vecs_per_head_dim;
+        const uint32_t tgt_idx = (block_idx * gqa_group_size + kv_head_idx) *
+                                     block_size * half_head_size +
+                                 lane_id % num_vecs_per_head_dim * KV_VEC_SIZE;
+        for (int block_i = lane_id / num_vecs_per_head_dim;
+             block_i < block_size;
+             block_i += num_token_each_time) {
+          Store<uint8_t, KV_VEC_SIZE>(
+              pad_cache_vec, &key_cache[tgt_idx + block_i * half_head_size]);
+        }
+      } else {
+        const int num_vecs_per_head_dim = half_block_size / KV_VEC_SIZE;
+        const int num_token_each_time = 32 / num_vecs_per_head_dim;
+        const uint32_t tgt_idx = (block_idx * gqa_group_size + kv_head_idx) *
+                                     HeadDim * half_block_size +
+                                 lane_id % num_vecs_per_head_dim * KV_VEC_SIZE;
+        for (int block_i = lane_id / num_vecs_per_head_dim; block_i < HeadDim;
+             block_i += num_token_each_time) {
+          Store<uint8_t, KV_VEC_SIZE>(
+              pad_cache_vec, &value_cache[tgt_idx + block_i * half_block_size]);
+        }
+      }
+    }
     constexpr int K_VEC_SIZE = 4;
     constexpr int HALF_K_VEC_SIZE = 2;
     using LoadKVResT = AlignedVector<uint8_t, K_VEC_SIZE>;
@@ -1182,7 +1215,11 @@ __global__ void append_speculate_cache_int4_rope_kernel(
     LoadScaleT zp_vec1, zp_vec2;
     LoadEmbT cos_emb_vec1, cos_emb_vec2;
     LoadEmbT sin_emb_vec1, sin_emb_vec2;
-
+#pragma unroll
+    for (int v_i = 0; v_i < HALF_K_VEC_SIZE; v_i++) {
+      bias_vec1[v_i] = 0;
+      bias_vec2[v_i] = 0;
+    }
     const InT* qkv_now = quant_qkv + token_id * hidden_size;
     const int head_bias = lane_id / 4 * 16 + lane_id % 4 * 2;
     //////////
@@ -1191,11 +1228,11 @@ __global__ void append_speculate_cache_int4_rope_kernel(
     Load<InT, HALF_K_VEC_SIZE>(&qkv_now[bias_idx], &src_vec1);
     Load<InT, HALF_K_VEC_SIZE>(&qkv_now[bias_idx + 8], &src_vec2);
     /////
-    Load<T, HALF_K_VEC_SIZE>(&qkv_biases[bias_idx], &bias_vec1);
-    Load<T, HALF_K_VEC_SIZE>(&qkv_biases[bias_idx + 8], &bias_vec2);
-    Load<float, HALF_K_VEC_SIZE>(&qkv_out_scales[bias_idx], &out_scale_vec1);
-    Load<float, HALF_K_VEC_SIZE>(&qkv_out_scales[bias_idx + 8],
-                                 &out_scale_vec2);
+    // Load<T, HALF_K_VEC_SIZE>(&qkv_biases[bias_idx], &bias_vec1);
+    // Load<T, HALF_K_VEC_SIZE>(&qkv_biases[bias_idx + 8], &bias_vec2);
+    // Load<float, HALF_K_VEC_SIZE>(&qkv_out_scales[bias_idx], &out_scale_vec1);
+    // Load<float, HALF_K_VEC_SIZE>(&qkv_out_scales[bias_idx + 8],
+    //                              &out_scale_vec2);
     if (head_idx < num_heads + gqa_group_size) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
       Load<float, 1>(&cos_emb[emb_idx], &cos_emb_vec1);
@@ -1215,10 +1252,10 @@ __global__ void append_speculate_cache_int4_rope_kernel(
 
     float input_left = static_cast<float>(src_vec1[0]);
     float input_right = static_cast<float>(src_vec1[1]);
-    input_left =
-        input_left * out_scale_vec1[0] + static_cast<float>(bias_vec1[0]);
-    input_right =
-        input_right * out_scale_vec1[1] + static_cast<float>(bias_vec1[1]);
+    // input_left =
+    //     input_left * out_scale_vec1[0] + static_cast<float>(bias_vec1[0]);
+    // input_right =
+    //     input_right * out_scale_vec1[1] + static_cast<float>(bias_vec1[1]);
     if (head_idx < num_heads + gqa_group_size) {
       float cos_tmp = cos_emb_vec1[0];
       float sin_tmp = sin_emb_vec1[0];
@@ -1233,10 +1270,10 @@ __global__ void append_speculate_cache_int4_rope_kernel(
 
     input_left = static_cast<float>(src_vec2[0]);
     input_right = static_cast<float>(src_vec2[1]);
-    input_left =
-        input_left * out_scale_vec2[0] + static_cast<float>(bias_vec2[0]);
-    input_right =
-        input_right * out_scale_vec2[1] + static_cast<float>(bias_vec2[1]);
+    // input_left =
+    //     input_left * out_scale_vec2[0] + static_cast<float>(bias_vec2[0]);
+    // input_right =
+    //     input_right * out_scale_vec2[1] + static_cast<float>(bias_vec2[1]);
     if (head_idx < num_heads + gqa_group_size) {
       float cos_tmp = cos_emb_vec2[0];
       float sin_tmp = sin_emb_vec2[0];

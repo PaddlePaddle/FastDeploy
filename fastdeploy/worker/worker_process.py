@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import List
+from typing import Tuple
 
 import numpy as np
 import paddle
@@ -74,7 +74,7 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
-def init_distributed_environment(seed: int = 20) -> List[int]:
+def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
     ranks = dist.get_world_size()
@@ -122,9 +122,9 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
 
 class PaddleDisWorkerProc:
     """
-    Paddle Distrubuted wrapper for fastdeploy.worker.Worker,
+    Paddle Distributed wrapper for fastdeploy.worker.Worker,
         for handling single-node multi-GPU tensor parallel.
-    The wrapper internally executea an event loop that continuously executes requests
+    The wrapper internally executes an event loop that continuously executes requests
         in the task queue. Control flow is transmitted by IPC.
     """
 
@@ -285,10 +285,12 @@ class PaddleDisWorkerProc:
             # The first worker detects whether there are tasks in the task queue
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
-                    if self.nnode > 1:
-                        self.task_queue.read_finish_flag.set(1)
-                    else:
-                        self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
+                    # VL only support 1 batch to prefill
+                    if not self.fd_config.model_config.enable_mm or not self.worker.prefill_finished():
+                        if self.nnode > 1:
+                            self.task_queue.read_finish_flag.set(1)
+                        else:
+                            self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
@@ -344,7 +346,6 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts)
-
             self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
 
     def initialize_kv_cache(self) -> None:

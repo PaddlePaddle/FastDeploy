@@ -61,9 +61,10 @@ else:
         speculate_step_system_cache,
         speculate_update_v3,
         step_paddle,
-        step_reschedule,
         step_system_cache,
         update_inputs,
+        step_reschedule,
+        update_inputs_v1,
     )
 
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
@@ -72,7 +73,6 @@ DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
 def pre_process(
-    max_len: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: int,
     speculative_decoding: bool,
@@ -83,7 +83,6 @@ def pre_process(
     """
     Preprocessing before embedding.
     Args:
-        max_len:
         input_ids:
         seq_lens_this_time:
         speculative_decoding:
@@ -97,6 +96,7 @@ def pre_process(
         cu_seqlens_k:
     """
     # Remove padding
+    max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
     output_padding_offset = None
@@ -153,6 +153,8 @@ def pre_process(
 def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
+    share_inputs: Dict[str, paddle.Tensor],
+    block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
 ) -> ModelRunnerOutput:
@@ -220,17 +222,35 @@ def post_process_normal(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        update_inputs(
-            model_output.stop_flags,
-            model_output.not_need_stop,
-            model_output.seq_lens_this_time,
-            model_output.seq_lens_encoder,
-            model_output.seq_lens_decoder,
-            model_output.input_ids,
-            model_output.stop_nums,
-            sampler_output.sampled_token_ids,
-            model_output.is_block_step,
-        )
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            update_inputs_v1(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                share_inputs["step_seq_lens_decoder"],
+                share_inputs["prompt_lens"],
+                sampler_output.sampled_token_ids,
+                model_output.input_ids,
+                share_inputs["block_tables"],
+                model_output.stop_nums,
+                model_output.next_tokens,
+                model_output.is_block_step,
+                block_size,
+            )
+        else:
+            update_inputs(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                model_output.input_ids,
+                model_output.stop_nums,
+                sampler_output.sampled_token_ids,
+                model_output.is_block_step,
+            )
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -296,6 +316,8 @@ def post_process_specualate(model_output, save_each_rank: bool = False, skip_sav
 def post_process(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
+    share_inputs: Dict[str, paddle.Tensor],
+    block_size: int = 64,
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
     skip_save_output: bool = False,
@@ -304,7 +326,7 @@ def post_process(
     if speculative_decoding:
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
-        post_process_normal(sampler_output, model_output, save_each_rank, skip_save_output)
+        post_process_normal(sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output)
 
 
 def step_cuda(
@@ -490,6 +512,7 @@ def rebuild_padding(
         )
     elif current_platform.is_dcu():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
+
         hidden_states = rebuild_padding(
             tmp_out,
             cum_offsets,
