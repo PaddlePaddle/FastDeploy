@@ -76,15 +76,6 @@ class MoEMethodBase(QuantMethodBase):
                         layer.fd_config.parallel_config.splitwise_role,
                         layer.ep_size, layer.ep_rank)
 
-                self.ep_prefill_runner = EPPrefillRunner(
-                    layer.top_k,
-                    layer.hidden_size,
-                    layer.num_experts,
-                    layer.ep_size,
-                    layer.ep_rank,
-                    layer.fd_config.model_config.redundant_experts_num,
-                )
-
     def process_loaded_weights(self, layer, weights) -> None:
         """
         process_loaded_weights

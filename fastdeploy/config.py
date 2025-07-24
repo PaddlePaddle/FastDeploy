@@ -156,7 +156,7 @@ class ParallelConfig:
     ):
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
-        self.moe_phase = MoEPhase.PREFILL  # Generation phase
+        self.moe_phase = MoEPhase("prefill")  # Generation phase
         self.msg_queue_id = 1  # mesage queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID

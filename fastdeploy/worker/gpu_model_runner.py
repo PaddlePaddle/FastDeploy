@@ -475,7 +475,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(batch_size):
             idx = i
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            # self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
@@ -794,8 +794,16 @@ class GPUModelRunner(ModelRunnerBase):
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
         is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
+        
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            is_decode_batch_list = []
+            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
+            is_decode_batch = all(is_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+        
         self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
-
+        
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
@@ -1163,15 +1171,10 @@ class GPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                        > 1).sum() > 0)
-
-        # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            is_decode_batch_list = []
-            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
-            is_decode_batch = all(is_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+        # 1. Prepare inputs of model and sampler.
+        skip_idx_list = self._get_skip_idx(model_forward_batch)
+        self._prepare_inputs()
+        self.sampler.pre_process(skip_idx_list)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
@@ -1179,11 +1182,6 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.not_need_stop():
             self._execute_empty_input()
             return None
-
-        # 1. Prepare inputs of model and sampler.
-        skip_idx_list = self._get_skip_idx(model_forward_batch)
-        self._prepare_inputs()
-        self.sampler.pre_process(skip_idx_list)
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
