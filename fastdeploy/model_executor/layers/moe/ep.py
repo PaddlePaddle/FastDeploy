@@ -194,7 +194,21 @@ class DeepEPEngine:
         Return:
             combined_hidden_states: [num_tokens, hidden]
         """
-
+        # TODO(@wufeisheng): Delete them when deepep in PaddlePaddle is fixed 
+        (
+            src_info,
+            layout_range,
+            num_max_dispatch_tokens_per_rank,
+            num_experts,
+        ) = handle
+        handle = (
+            src_info,
+            layout_range,
+            num_max_dispatch_tokens_per_rank,
+            None,
+            num_experts,
+        )
+        
         combined_hidden_states, _, combine_hook = self.decode_deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
