@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
@@ -34,6 +33,7 @@ class MoEPhase:
     """
     The generation phase of the moe.
     """
+
     def __init__(self, phase="prefill"):
         self._phase = phase
 

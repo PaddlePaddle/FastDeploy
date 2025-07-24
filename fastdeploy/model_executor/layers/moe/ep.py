@@ -74,7 +74,7 @@ class DeepEPEngine:
         self.ep_config = Config(24, 6, 256)
         self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
 
-        # In mixed EP mode on a single node, we dynamically switch between 
+        # In mixed EP mode on a single node, we dynamically switch between
         # high throughput and low latency modes.
         if splitwise_role == "mixed":
             # decode engine
@@ -88,7 +88,7 @@ class DeepEPEngine:
                 low_latency_mode=False,
                 num_qps_per_rank=1,
             )
-        # In disaggregated mode on mutiple nodes, we either use 
+        # In disaggregated mode on mutiple nodes, we either use
         # high throughput mode or low latency mode.
         else:
             if moe_phase.phase == "decode":
@@ -104,7 +104,6 @@ class DeepEPEngine:
                 )
             else:
                 raise ValueError(f"Unknown generation phase {moe_phase}")
-
 
     def get_low_latency_buffer(self):
         """
@@ -194,7 +193,7 @@ class DeepEPEngine:
         Return:
             combined_hidden_states: [num_tokens, hidden]
         """
-        # TODO(@wufeisheng): Delete them when deepep in PaddlePaddle is fixed 
+        # TODO(@wufeisheng): Delete them when deepep in PaddlePaddle is fixed
         (
             src_info,
             layout_range,
@@ -208,7 +207,7 @@ class DeepEPEngine:
             None,
             num_experts,
         )
-        
+
         combined_hidden_states, _, combine_hook = self.decode_deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,

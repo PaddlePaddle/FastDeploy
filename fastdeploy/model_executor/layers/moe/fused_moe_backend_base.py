@@ -19,8 +19,6 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.config import MoEPhase
-
 from ..quantization.quant_base import QuantMethodBase
 
 
@@ -46,11 +44,16 @@ class MoEMethodBase(QuantMethodBase):
         """
         if layer.ep_size > 1:
             if layer.fd_config.parallel_config.splitwise_role == "mixed":
-                from .ep import EPPrefillRunner, EPDecoderRunner
+                from .ep import EPDecoderRunner, EPPrefillRunner
+
                 self.ep_prefill_runner = EPPrefillRunner(
-                    layer.top_k, layer.hidden_size, layer.num_experts,
+                    layer.top_k,
+                    layer.hidden_size,
+                    layer.num_experts,
                     layer.fd_config.parallel_config.splitwise_role,
-                    layer.ep_size, layer.ep_rank)
+                    layer.ep_size,
+                    layer.ep_rank,
+                )
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k,
                     layer.hidden_size,
@@ -64,17 +67,27 @@ class MoEMethodBase(QuantMethodBase):
             else:
                 if layer.fd_config.parallel_config.moe_phase == "prefill":
                     from .ep import EPPrefillRunner
+
                     self.ep_prefill_runner = EPPrefillRunner(
-                        layer.top_k, layer.hidden_size, layer.num_experts,
+                        layer.top_k,
+                        layer.hidden_size,
+                        layer.num_experts,
                         layer.fd_config.parallel_config.splitwise_role,
-                        layer.ep_size, layer.ep_rank)
+                        layer.ep_size,
+                        layer.ep_rank,
+                    )
                 else:
                     from .ep import EPDecoderRunner
+
                     self.ep_decoder_runner = EPDecoderRunner(
-                        layer.top_k, layer.hidden_size, layer.num_experts,
+                        layer.top_k,
+                        layer.hidden_size,
+                        layer.num_experts,
                         layer.moe_config.num_max_dispatch_tokens_per_rank,
                         layer.fd_config.parallel_config.splitwise_role,
-                        layer.ep_size, layer.ep_rank)
+                        layer.ep_size,
+                        layer.ep_rank,
+                    )
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
@@ -150,10 +163,7 @@ class MoEMethodBase(QuantMethodBase):
         if layer.ep_size > 1:
             if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
                 return self.apply_ep_prefill(layer, x, gate_out)
-            elif layer.fd_config.parallel_config.moe_phase.phase == "decode":
-                return self.apply_ep_decode(layer, x, gate_out)
             else:
-                logger.error(
-                    f"invalid value of moe_phase={layer.fd_config.parallel_config.moe_phase.phase}")
+                return self.apply_ep_decode(layer, x, gate_out)
         else:
             return self.apply_tp(layer, x, gate_out)
