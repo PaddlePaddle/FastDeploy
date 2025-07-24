@@ -49,11 +49,13 @@ class MoEMethodBase(QuantMethodBase):
                 from .ep import EPPrefillRunner, EPDecoderRunner
                 self.ep_prefill_runner = EPPrefillRunner(
                     layer.top_k, layer.hidden_size, layer.num_experts,
+                    layer.fd_config.parallel_config.splitwise_role,
                     layer.ep_size, layer.ep_rank)
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k,
                     layer.hidden_size,
                     layer.num_experts,
+                    layer.fd_config.parallel_config.splitwise_role,
                     layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                     layer.ep_size,
                     layer.ep_rank,
@@ -64,12 +66,14 @@ class MoEMethodBase(QuantMethodBase):
                     from .ep import EPPrefillRunner
                     self.ep_prefill_runner = EPPrefillRunner(
                         layer.top_k, layer.hidden_size, layer.num_experts,
+                        layer.fd_config.parallel_config.splitwise_role,
                         layer.ep_size, layer.ep_rank)
                 else:
                     from .ep import EPDecoderRunner
                     self.ep_decoder_runner = EPDecoderRunner(
                         layer.top_k, layer.hidden_size, layer.num_experts,
                         layer.moe_config.num_max_dispatch_tokens_per_rank,
+                        layer.fd_config.parallel_config.splitwise_role,
                         layer.ep_size, layer.ep_rank)
 
                 self.ep_prefill_runner = EPPrefillRunner(

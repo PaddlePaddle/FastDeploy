@@ -45,6 +45,8 @@ class DeepEPEngine:
         num_experts: int,
         ep_size: int,
         ep_rank: int,
+        splitwise_role: str,
+        moe_phase: MoEPhase,
         async_finish: bool = False,
     ):
         """
@@ -69,21 +71,40 @@ class DeepEPEngine:
         self.prefill_deepep_engine = None
         self.decode_deepep_engine = None
 
-        if moe_phase == MoEPhase.DECODER:
+        self.ep_config = Config(24, 6, 256)
+        self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
+
+        # In mixed EP mode on a single node, we dynamically switch between 
+        # high throughput and low latency modes.
+        if splitwise_role == "mixed":
+            # decode engine
             logger.info("Initializing Low Latency Buffer")
-            self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
             self.get_low_latency_buffer()
-        elif moe_phase == MoEPhase.PREFILL:
-            self.deepep_engine = deep_ep.Buffer(
+            # prefill engine
+            self.prefill_deepep_engine = deep_ep.Buffer(
                 self.group,
-                int(5e8),
+                int(1e9),
                 0,
                 low_latency_mode=False,
                 num_qps_per_rank=1,
             )
-            self.ep_config = Config(24, 6, 256)
+        # In disaggregated mode on mutiple nodes, we either use 
+        # high throughput mode or low latency mode.
         else:
-            raise ValueError(f"Unknown generation phase {moe_phase}")
+            if moe_phase.phase == "decode":
+                logger.info("Initializing Low Latency Buffer")
+                self.get_low_latency_buffer()
+            elif moe_phase.phase == "prefill":
+                self.prefill_deepep_engine = deep_ep.Buffer(
+                    self.group,
+                    int(1e9),
+                    0,
+                    low_latency_mode=False,
+                    num_qps_per_rank=1,
+                )
+            else:
+                raise ValueError(f"Unknown generation phase {moe_phase}")
+
 
     def get_low_latency_buffer(self):
         """
@@ -196,8 +217,11 @@ class DeepEPEngine:
         """
         barrier_all
         """
-        self.prefill_deepep_engine.barrier_all()
-        self.decode_deepep_engine.barrier_all()
+        if self.prefill_deepep_engine is not None:
+            self.prefill_deepep_engine.barrier_all()
+
+        if self.decode_deepep_engine is not None:
+            self.decode_deepep_engine.barrier_all()
 
 
 class EPRunner:
@@ -210,6 +234,8 @@ class EPRunner:
         top_k: int,
         hidden: int,
         num_experts: int,
+        splitwise_role: str,
+        moe_phase: MoEPhase,
         num_max_dispatch_tokens_per_rank: int = 1,
         ep_size: int = 1,
         ep_rank: int = 0,
@@ -225,6 +251,8 @@ class EPRunner:
             moe_phase=moe_phase,
             ep_size=ep_size,
             ep_rank=ep_rank,
+            splitwise_role=splitwise_role,
+            moe_phase=moe_phase,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
@@ -285,14 +313,18 @@ class EPPrefillRunner(EPRunner):
         top_k: int,
         hidden: int,
         num_experts: int,
+        splitwise_role: str,
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
+        moe_phase: MoEPhase = MoEPhase("prefill"),
     ):
         super().__init__(
             top_k,
             hidden,
             num_experts,
+            splitwise_role,
+            moe_phase,
             num_max_dispatch_tokens_per_rank=256,
             ep_size=ep_size,
             ep_rank=ep_rank,
@@ -356,16 +388,19 @@ class EPDecoderRunner(EPRunner):
         top_k: int,
         hidden: int,
         num_experts: int,
+        splitwise_role: str,
         num_max_dispatch_tokens_per_rank: int,
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
+        moe_phase: MoEPhase = MoEPhase("decode"),
     ):
         super().__init__(
             top_k,
             hidden,
             num_experts,
-            MoEPhase.DECODER,
+            splitwise_role,
+            moe_phase,
             num_max_dispatch_tokens_per_rank,
             ep_size=ep_size,
             ep_rank=ep_rank,

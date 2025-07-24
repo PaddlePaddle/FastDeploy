@@ -1163,11 +1163,15 @@ class GPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
-        # NOTE(wufeisheng): For Expert Parallelism
-        is_decode_batch = paddle.to_tensor(not ((self.share_inputs["seq_lens_this_time"]
-                        > 1).sum() > 0))
-        paddle.distributed.broadcast(is_decode_batch, src=0)
-        self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
+                        > 1).sum() > 0)
+
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            is_decode_batch_list = []
+            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
+            is_decode_batch = all(is_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
