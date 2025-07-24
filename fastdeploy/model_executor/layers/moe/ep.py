@@ -83,7 +83,7 @@ class DeepEPEngine:
             # prefill engine
             self.prefill_deepep_engine = deep_ep.Buffer(
                 self.group,
-                int(1e9),
+                int(5e8),
                 0,
                 low_latency_mode=False,
                 num_qps_per_rank=1,
@@ -97,7 +97,7 @@ class DeepEPEngine:
             elif moe_phase.phase == "prefill":
                 self.prefill_deepep_engine = deep_ep.Buffer(
                     self.group,
-                    int(1e9),
+                    int(5e8),
                     0,
                     low_latency_mode=False,
                     num_qps_per_rank=1,
@@ -261,7 +261,6 @@ class EPRunner:
             num_max_dispatch_tokens_per_rank=num_max_dispatch_tokens_per_rank,
             hidden=hidden,
             num_experts=num_experts + redundant_experts_num,
-            moe_phase=moe_phase,
             ep_size=ep_size,
             ep_rank=ep_rank,
             splitwise_role=splitwise_role,

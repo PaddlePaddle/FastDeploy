@@ -53,6 +53,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.fd_config.parallel_config.splitwise_role,
                     layer.ep_size,
                     layer.ep_rank,
+                    layer.fd_config.model_config.redundant_experts_num,
                 )
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k,
@@ -75,6 +76,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.fd_config.parallel_config.splitwise_role,
                         layer.ep_size,
                         layer.ep_rank,
+                        layer.fd_config.model_config.redundant_experts_num,
                     )
                 else:
                     from .ep import EPDecoderRunner
@@ -87,6 +89,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.fd_config.parallel_config.splitwise_role,
                         layer.ep_size,
                         layer.ep_rank,
+                        layer.fd_config.model_config.redundant_experts_num,
                     )
 
     def process_loaded_weights(self, layer, weights) -> None:
