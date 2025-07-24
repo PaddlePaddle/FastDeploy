@@ -346,8 +346,7 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts)
-            if not self.fd_config.model_config.enable_mm:
-                self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
