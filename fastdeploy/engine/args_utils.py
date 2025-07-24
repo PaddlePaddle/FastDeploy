@@ -29,7 +29,7 @@ from fastdeploy.engine.config import (
     TaskOption,
 )
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import FlexibleArgumentParser
+from fastdeploy.utils import FlexibleArgumentParser, DeprecatedOptionWarning
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -390,7 +390,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--enable-mm",
-            action="store_true",
+            action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
             help="Flag to enable multi-modal model.",
         )
@@ -881,7 +881,7 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            enable_mm=self.enable_mm,
+            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,

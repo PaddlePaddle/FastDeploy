@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from fastdeploy import envs
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import (
@@ -649,7 +650,7 @@ class Config:
         engine_worker_queue_port: int = 8002,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        enable_mm: bool = False,
+        # enable_mm: bool = False,
         splitwise_role: str = "mixed",
         innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
@@ -721,7 +722,7 @@ class Config:
         self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
-        self.enable_mm = enable_mm
+        # self.enable_mm = enable_mm
         self.speculative_config = speculative_config
         self.use_warmup = use_warmup
         self.splitwise_role = splitwise_role
@@ -737,11 +738,17 @@ class Config:
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
+        architectures = self.model_config.architectures
+        if MultimodalRegistry.contains_model(architectures):
+            self.enable_mm = True
+        else:
+            self.enable_mm = False
+
         # TODO
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if enable_mm:
+        if self.enable_mm:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
