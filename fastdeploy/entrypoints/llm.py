@@ -66,11 +66,10 @@ class LLM:
     def __init__(
         self,
         model: str,
-        revision: Optional[str] = "master",
         tokenizer: Optional[str] = None,
         **kwargs,
     ):
-        model = retrive_model_from_server(model, revision)
+        model = retrive_model_from_server(model)
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,
