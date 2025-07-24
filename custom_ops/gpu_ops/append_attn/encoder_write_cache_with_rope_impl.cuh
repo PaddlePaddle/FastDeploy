@@ -906,6 +906,7 @@ __global__ void append_write_cache_kv_c8_qkv(
   const uint32_t end_len = start_len + seq_len_this_time;
 
   const uint32_t tile_start = start_len_pad + tile_id * num_rows_per_block;
+  int block_id = __ldg(&block_table_now[tile_start / BLOCK_SIZE]);
   uint32_t chunk_start = tile_start + wid * num_frags_z * 16 + tid / 8;
 
   const uint32_t start_token_idx = cu_seqlens_q[batch_id];
@@ -913,7 +914,38 @@ __global__ void append_write_cache_kv_c8_qkv(
   const uint32_t kv_h_stride = HEAD_DIM;
   __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
   __shared__ T v_smem_ori[num_rows_per_block * HEAD_DIM];
+  if (tile_start >= start_len) {
+    constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
+    using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
+    int lane_id = wid * 32 + tid;
+    // pad zero for this kv_head_idx for this block
+    LoadPadKVT pad_cache_vec;
+    *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+    // reset k
+    constexpr int num_vecs_per_head_k = HEAD_DIM / KV_VEC_SIZE;
+    constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k;
+    uint32_t tgt_idx =
+        (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE * HEAD_DIM +
+        lane_id % num_vecs_per_head_k * KV_VEC_SIZE;
+    for (int block_i = lane_id / num_vecs_per_head_k;
+          block_i < BLOCK_SIZE;
+          block_i += num_token_each_time_k) {
+      Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
+                                  &cache_k[tgt_idx + block_i * HEAD_DIM]);
+    }
 
+    // reset v
+    const int num_vecs_per_head_v = BLOCK_SIZE / KV_VEC_SIZE;
+    const int num_token_each_time_v = 32 / num_vecs_per_head_v;
+    tgt_idx =
+        (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE +
+        lane_id % num_vecs_per_head_v * KV_VEC_SIZE;
+    for (int block_i = lane_id / num_vecs_per_head_v; block_i < HEAD_DIM;
+          block_i += num_token_each_time_v) {
+      Store<uint8_t, KV_VEC_SIZE>(
+          pad_cache_vec, &cache_v[tgt_idx + block_i * BLOCK_SIZE]);
+    }
+  }
   smem_t k_smem(k_smem_ori);
   smem_t v_smem(v_smem_ori);
 
@@ -976,7 +1008,6 @@ __global__ void append_write_cache_kv_c8_qkv(
 
   uint32_t chunk_start_k = tile_start + wid * num_frags_z * 16 + tid / 4;
   uint32_t kv_frag[4];
-  int block_id = __ldg(&block_table_now[tile_start / BLOCK_SIZE]);
   const uint32_t write_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
   const uint32_t write_h_stride = BLOCK_SIZE * HEAD_DIM;
   const uint32_t write_b_stride = HEAD_DIM;
@@ -1147,6 +1178,44 @@ __global__ void append_write_cache_kv_c4_qkv(
   const uint32_t start_token_idx = cu_seqlens_q[batch_id];
   const uint32_t kv_batch_stride = (num_heads + 2 * kv_num_heads) * HEAD_DIM;
   const uint32_t kv_h_stride = HEAD_DIM;
+  int block_id = __ldg(&block_table_now[tile_start / BLOCK_SIZE]);
+
+  const uint32_t HEAD_DIM_HALF = HEAD_DIM / 2;
+  const uint32_t BLOCK_SIZE_HALF = BLOCK_SIZE / 2;
+
+  if (tile_start >= start_len) {
+    constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
+    using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
+    int lane_id = wid * 32 + tid;
+    // pad zero for this kv_head_idx for this block
+    LoadPadKVT pad_cache_vec;
+    *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+    // reset k
+    constexpr int num_vecs_per_head_k = HEAD_DIM_HALF / KV_VEC_SIZE;
+    constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k;
+    uint32_t tgt_idx =
+        (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE * HEAD_DIM_HALF +
+        lane_id % num_vecs_per_head_k * KV_VEC_SIZE;
+    for (int block_i = lane_id / num_vecs_per_head_k;
+          block_i < BLOCK_SIZE;
+          block_i += num_token_each_time_k) {
+      Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
+                                  &cache_k[tgt_idx + block_i * HEAD_DIM_HALF]);
+    }
+
+    // reset v
+    const int num_vecs_per_head_v = BLOCK_SIZE_HALF / KV_VEC_SIZE;
+    const int num_token_each_time_v = 32 / num_vecs_per_head_v;
+    tgt_idx =
+        (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE_HALF +
+        lane_id % num_vecs_per_head_v * KV_VEC_SIZE;
+    for (int block_i = lane_id / num_vecs_per_head_v; block_i < HEAD_DIM;
+          block_i += num_token_each_time_v) {
+      Store<uint8_t, KV_VEC_SIZE>(
+          pad_cache_vec, &cache_v[tgt_idx + block_i * BLOCK_SIZE_HALF]);
+    }
+  }
+
   __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
   __shared__ T v_smem_ori[num_rows_per_block * HEAD_DIM];
   __shared__ T k_scale_smem[HEAD_DIM];
@@ -1257,7 +1326,6 @@ __global__ void append_write_cache_kv_c4_qkv(
 
   uint32_t chunk_start_k = tile_start + wid * num_frags_z * 16 + tid / 4;
   uint32_t kv_frag[4];
-  int block_id = __ldg(&block_table_now[tile_start / BLOCK_SIZE]);
   const uint32_t write_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM / 2;
   const uint32_t write_h_stride = BLOCK_SIZE * HEAD_DIM / 2;
   const uint32_t write_b_stride = HEAD_DIM / 2;

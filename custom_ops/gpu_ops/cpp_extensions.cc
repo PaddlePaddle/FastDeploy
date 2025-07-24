@@ -284,6 +284,32 @@ void UpdateInputes(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &next_tokens,
                    const paddle::Tensor &is_block_step);
 
+void UpdateInputesV1(const paddle::Tensor &stop_flags,
+                   const paddle::Tensor &not_need_stop,  // only on cpu
+                   const paddle::Tensor &seq_lens_this_time,
+                   const paddle::Tensor &seq_lens_encoder,
+                   const paddle::Tensor &seq_lens_decoder,
+                   const paddle::Tensor &step_seq_lens_decoder,
+                   const paddle::Tensor &prompt_lens,
+                   const paddle::Tensor &topk_ids,
+                   const paddle::Tensor &input_ids,
+                   const paddle::Tensor &block_tables,
+                   const paddle::Tensor &stop_nums,
+                   const paddle::Tensor &next_tokens,
+                   const paddle::Tensor &is_block_step,
+                   const int block_size);
+
+void RecoverDecodeTask(const paddle::Tensor &stop_flags,
+                   const paddle::Tensor &seq_lens_this_time,
+                   const paddle::Tensor &seq_lens_encoder,
+                   const paddle::Tensor &seq_lens_decoder,
+                   const paddle::Tensor &step_seq_lens_decoder,
+                   const paddle::Tensor &block_tables,
+                   const paddle::Tensor &is_block_step,
+                   const int block_size);
+
+
+
 paddle::Tensor
 GroupSwigluWithMasked(const paddle::Tensor &fc1_out_tensor,
                       const paddle::Tensor &token_nums_per_expert);
@@ -940,6 +966,18 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * update_inputs
    */
   m.def("update_inputs", &UpdateInputes, "update_inputs function");
+
+   /**
+   * update_inputs_v1.cu
+   * update_inputs_v1
+   */
+  m.def("update_inputs_v1", &UpdateInputesV1, "update inputs for scheduler v1 function");
+
+     /**
+   * recover_decode_task.cu
+   * recover_decode_task
+   */
+  m.def("recover_decode_task", &RecoverDecodeTask, "recover decode task for scheduler v1 function");
 
   /**
    * extract_text_token_output.cu

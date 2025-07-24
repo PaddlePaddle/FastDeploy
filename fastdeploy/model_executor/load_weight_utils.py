@@ -32,6 +32,20 @@ from fastdeploy.model_executor.models.tp_utils import (
 from fastdeploy.platforms import current_platform
 
 
+def load_reordered_experts(model_path: str, key_name: str):
+    from safetensors import safe_open
+
+    with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
+        weight_list = json.load(f)["weight_map"]
+    safetensor_path = os.path.join(model_path, weight_list[key_name])
+    with safe_open(safetensor_path, framework="np", device="cpu") as f:
+        if key_name in f.keys():
+            weight = f.get_tensor(key_name)
+            weight = paddle.Tensor(weight, zero_copy=True)
+            weight = weight._copy_to(paddle.framework._current_expected_place(), False)
+            return weight
+
+
 def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool = False):
     """
     load ep checkpoint
