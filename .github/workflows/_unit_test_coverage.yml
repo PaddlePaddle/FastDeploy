@@ -1,0 +1,135 @@
+name: Run FastDeploy Unit Tests and Coverage
+description: "Run FastDeploy Unit Tests and Coverage"
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      FASTDEPLOY_WHEEL_URL:
+        description: "URL of the FastDeploy Wheel."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  run_tests_with_coverage:
+    runs-on: [self-hosted, GPU-h1z1-4Cards]
+    steps:
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+            set -x
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            BASE_BRANCH="${{ github.base_ref }}"
+
+            # Clean the repository directory before starting
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            -e "REPO_NAME=${REPO_NAME}" \
+            ${docker_image} /bin/bash -c '
+              if [ -d ${REPO_NAME} ]; then
+                echo "Directory ${REPO_NAME} exists, removing it..."
+                rm -rf ${REPO_NAME}*
+              fi
+            '
+
+            wget -q ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git log -n 3 --oneline
+      - name: Run FastDeploy Unit Tests and Coverage
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
+          CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+            set -x
+            runner_name="${{ runner.name }}"
+            CARD_ID=$(echo "${runner_name}" | cut -d'-' -f2)
+            gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+
+            CACHE_DIR=${CACHE_DIR:-${{ github.workspace }}}
+            echo "CACHE_DIR is set to ${CACHE_DIR}"
+            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+              touch "${CACHE_DIR}/gitconfig"
+            fi
+            PARENT_DIR=$(dirname "$WORKSPACE")
+            echo "PARENT_DIR:$PARENT_DIR"
+            docker run --rm --net=host \
+            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
+            -v $(pwd):/workspace -w /workspace \
+            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+            -v "${CACHE_DIR}/.cache:/root/.cache" \
+            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+            -e TZ="Asia/Shanghai" \
+            -e "fd_wheel_url=${fd_wheel_url}" \
+            -e "BASE_REF=${BASE_REF}" \
+            --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+
+            git config --global --add safe.directory /workspace/FastDeploy
+            cd FastDeploy
+            pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
+            pip config set install.trusted-host  pip.baidu.com
+            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+            python -m pip install coverage
+            python -m pip install diff-cover
+            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            python -m pip install ${fd_wheel_url}
+            export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
+            export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+            TEST_EXIT_CODE=0
+            bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
+            git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+            echo "EXIT_CODE=${TEST_EXIT_CODE}" > exit_code.env
+            coverage combine coveragedata/
+            coverage xml -o python_coverage_all.xml
+            COVERAGE_EXIT_CODE=0
+            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=90 || COVERAGE_EXIT_CODE=9
+            echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" > exit_code.env
+            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+            '
+            if [ -f FastDeploy/exit_code.env ]; then
+              cat FastDeploy/exit_code.env >> $GITHUB_ENV
+            fi
+      - name: Upload diff coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./FastDeploy/diff_coverage.xml
+          name: python diff coverage
+          verbose: true
+      - name: Determine Unit Succ and whether the coverage rate reaches 90%
+        shell: bash
+        run: |
+          if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            echo "Unit tests failed (exit code 8)"
+            exit "$TEST_EXIT_CODE"
+          fi
+
+          if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
+            echo "Coverage generation failed (exit code 9)"
+            exit "$COVERAGE_EXIT_CODE"
+          fi
+          echo "All tests and coverage passed"
+          exit 0
