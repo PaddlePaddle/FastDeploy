@@ -18,9 +18,10 @@ import asyncio
 import time
 import uuid
 from typing import List
-import numpy as np
+
 import aiozmq
 import msgpack
+import numpy as np
 from aiozmq import zmq
 
 from fastdeploy.engine.request import RequestOutput
@@ -47,7 +48,6 @@ class OpenAIServingCompletion:
                 self.master_ip = self.master_ip[0]
             else:
                 self.master_ip = self.master_ip.split(",")[0]
-
 
     def _check_master(self):
         if self.master_ip is None:
@@ -238,7 +238,9 @@ class OpenAIServingCompletion:
                 model=model_name,
                 choices=choices,
             )
-            enable_return_token_ids = request.return_token_ids or (request.extra_body is not None and request.extra_body.get('return_token_ids', False))
+            enable_return_token_ids = request.return_token_ids or (
+                request.extra_body is not None and request.extra_body.get("return_token_ids", False)
+            )
             current_waiting_time = 0
             while num_choices > 0:
                 try:
@@ -267,12 +269,16 @@ class OpenAIServingCompletion:
                                 id=request_id,
                                 created=created_time,
                                 model=model_name,
-                                choices=[CompletionResponseStreamChoice(
-                                    index=idx,
-                                    text="",
-                                    prompt_token_ids=list(prompt_batched_token_ids[idx]) if enable_return_token_ids else None,
-                                    completion_token_ids=None,
-                                )]
+                                choices=[
+                                    CompletionResponseStreamChoice(
+                                        index=idx,
+                                        text="",
+                                        prompt_token_ids=(
+                                            list(prompt_batched_token_ids[idx]) if enable_return_token_ids else None
+                                        ),
+                                        completion_token_ids=None,
+                                    )
+                                ],
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         first_iteration[idx] = False
@@ -286,15 +292,17 @@ class OpenAIServingCompletion:
 
                     output = res["outputs"]
 
-                    choices.append(CompletionResponseStreamChoice(
-                        index=idx,
-                        text=output["text"],
-                        prompt_token_ids=None,
-                        completion_token_ids=output.get("token_ids") if enable_return_token_ids else None,
-                        tool_calls=output.get("tool_call_content"),
-                        reasoning_content=output.get("reasoning_content"),
-                        arrival_time=arrival_time
-                    ))
+                    choices.append(
+                        CompletionResponseStreamChoice(
+                            index=idx,
+                            text=output["text"],
+                            prompt_token_ids=None,
+                            completion_token_ids=(output.get("token_ids") if enable_return_token_ids else None),
+                            tool_calls=output.get("tool_call_content"),
+                            reasoning_content=output.get("reasoning_content"),
+                            arrival_time=arrival_time,
+                        )
+                    )
                     if res["finished"]:
                         if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
                             chunk.choices[0].finish_reason = "stop"
@@ -353,12 +361,14 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
-        completion_batched_token_ids: list()
+        completion_batched_token_ids: list(),
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
-        enable_return_token_ids = request.return_token_ids or (request.extra_body is not None and request.extra_body.get('return_token_ids', False))
+        enable_return_token_ids = request.return_token_ids or (
+            request.extra_body is not None and request.extra_body.get("return_token_ids", False)
+        )
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -385,8 +395,8 @@ class OpenAIServingCompletion:
                 index=len(choices),
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-                completion_token_ids=completion_token_ids if enable_return_token_ids else None,
-                reasoning_content=output.get('reasoning_content'),
+                completion_token_ids=(completion_token_ids if enable_return_token_ids else None),
+                reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=None,
                 finish_reason=None,

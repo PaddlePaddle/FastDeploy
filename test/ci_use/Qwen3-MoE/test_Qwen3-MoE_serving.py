@@ -294,4 +294,6 @@ def test_non_thinking_prompt(api_url, headers):
         assert False, f"Response is not valid JSON: {e}"
 
     content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").lower()
-    assert not any(x in content for x in ["根据", "我认为", "推测", "可能"]), "Expected no reasoning in non-thinking response"
+    assert not any(
+        x in content for x in ["根据", "我认为", "推测", "可能"]
+    ), "Expected no reasoning in non-thinking response"
