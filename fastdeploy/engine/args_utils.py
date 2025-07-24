@@ -130,6 +130,11 @@ class EngineArgs:
     Ratio of tokens to process in a block.
     """
 
+    prealloc_dec_block_slot_num_threshold: int = 5
+    """
+    Token slot threshold for preallocating decoder blocks.
+    """
+
     dist_init_ip: Optional[str] = None
     """
     The master node ip of multinode deployment
@@ -525,10 +530,14 @@ class EngineArgs:
         )
 
         cache_group.add_argument(
-            "--swap-space",
-            type=float,
-            default=EngineArgs.swap_space,
-            help="The amount of CPU memory to offload to.",
+            "--swap-space", type=float, default=EngineArgs.swap_space, help="The amount of CPU memory to offload to."
+        )
+
+        cache_group.add_argument(
+            "--prealloc-dec-block-slot-num-threshold",
+            type=int,
+            default=5,
+            help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 
         cache_group.add_argument(
@@ -784,6 +793,7 @@ class EngineArgs:
             gpu_memory_utilization=self.gpu_memory_utilization,
             num_gpu_blocks_override=self.num_gpu_blocks_override,
             kv_cache_ratio=self.kv_cache_ratio,
+            prealloc_dec_block_slot_num_threshold=self.prealloc_dec_block_slot_num_threshold,
             enable_prefix_caching=self.enable_prefix_caching,
             swap_space=self.swap_space,
             cache_queue_port=self.cache_queue_port,

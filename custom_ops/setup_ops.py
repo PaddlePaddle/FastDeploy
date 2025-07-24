@@ -262,6 +262,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/stop_generation_multi_ends.cu",
         "gpu_ops/stop_generation_multi_stop_seqs.cu",
         "gpu_ops/set_flags.cu",
+        "gpu_ops/update_inputs_v1.cu",
+        "gpu_ops/recover_decode_task.cu",
         "gpu_ops/step.cu",
         "gpu_ops/step_reschedule.cu",
         "gpu_ops/fused_get_rope.cu",
