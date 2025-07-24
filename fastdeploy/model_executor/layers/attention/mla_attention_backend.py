@@ -223,7 +223,11 @@ class MLAAttentionBackend(AttentionBackend):
         """get_attntion_meta"""
         return self.attention_metadata
 
-    def get_kv_cache_shape(self, max_num_blocks: int) -> Tuple[int, int, int, int]:
+    def get_kv_cache_shape(
+        self,
+        max_num_blocks: int,
+        kv_cache_quant_type: str = None,
+    ) -> Tuple[int, int, int, int]:
         """
         Calculate kv cache shape for MLA
         """

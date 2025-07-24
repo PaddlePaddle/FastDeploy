@@ -831,7 +831,7 @@ void AppendCacheKV(
           kv_num_heads
     );
   } else if (cache_quant_type == "cache_int4_zp") {
-    const uint32_t smem_size = BLOCK_SIZE * HEAD_DIM * sizeof(uint8_t) * 2;
+    const uint32_t smem_size = BLOCK_SIZE * HEAD_DIM * sizeof(uint8_t) + 4 * HEAD_DIM * sizeof(T);
 
     auto kernel_func = append_cache_kv_c4<NV_TYPE, uint8_t, HEAD_DIM, BLOCK_SIZE, NUM_WARPS>;
 
