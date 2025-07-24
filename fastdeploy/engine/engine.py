@@ -1000,7 +1000,10 @@ class LLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
-            "FLAGS_hardamard_moe_block_size": 128,
+            "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
+            "FLAGS_hardamard_use_diagonal_block_matrix": int(
+                os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
+            ),
         }
         # environment variables needed by Dy2St
         variables.update(
