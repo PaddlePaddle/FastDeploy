@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import List
+from typing import Tuple
 
 import numpy as np
 import paddle
@@ -74,7 +74,7 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
-def init_distributed_environment(seed: int = 20) -> List[int]:
+def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
     ranks = dist.get_world_size()
@@ -122,9 +122,9 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
 
 class PaddleDisWorkerProc:
     """
-    Paddle Distrubuted wrapper for fastdeploy.worker.Worker,
+    Paddle Distributed wrapper for fastdeploy.worker.Worker,
         for handling single-node multi-GPU tensor parallel.
-    The wrapper internally executea an event loop that continuously executes requests
+    The wrapper internally executes an event loop that continuously executes requests
         in the task queue. Control flow is transmitted by IPC.
     """
 
