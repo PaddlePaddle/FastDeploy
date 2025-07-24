@@ -37,7 +37,6 @@ if current_platform.is_cuda() and current_platform.available():
             "And ensure the Paddle version supports FastDeploy's custom operators"
         )
 
-import re
 
 from fastdeploy import envs
 
@@ -107,7 +106,7 @@ def _set_var_distributed(var: Tensor, split_axis: int):
         main_block._find_var_recursive(var.name).is_distributed = True
 
 
-def get_tensor(input: Union[paddle.Tensor, np.ndarray, str]) -> paddle.Tensor:
+def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) -> paddle.Tensor:
     """
     Return a corresponding PaddlePaddle tensor based on the type and content of the input.
 
@@ -125,28 +124,9 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str]) -> paddle.Tensor:
     elif isinstance(input, np.ndarray):
         return paddle.to_tensor(input)
     elif isinstance(input, str):
-        if ".safetensors" in input:
-            match = re.match(r"\[(.*?)\](.*)", input)
-            if match:
-                key_name = match.group(1)
-                model_path = match.group(2)
-            from safetensors import safe_open
+        from fastdeploy.model_executor.load_weight_utils import load_reordered_experts
 
-            with safe_open(model_path, framework="np", device="cpu") as f:
-                if key_name in f.keys():
-                    weight = f.get_tensor(key_name)
-                    weight = paddle.Tensor(weight, zero_copy=True)
-                    weight = weight._copy_to(paddle.framework._current_expected_place(), False)
-                    return weight
-                else:
-                    return None
-        else:
-            if cache_params != "none":
-                tmp_key = input.split("/")[-1]
-                if tmp_key in c8_state_dict:
-                    print(f"Loading {tmp_key} in extra C8_state_dict")
-                    return paddle.to_tensor(c8_state_dict.pop(tmp_key))
-            return paddle.load(input)
+        return load_reordered_experts(model_path, input)
     else:
         return input
 
@@ -376,6 +356,7 @@ def create_and_set_parameter(layer: nn.Layer, name: str, tensor: paddle.Tensor):
         ),
     )
     getattr(layer, name).set_value(tensor)
+
 
 @functools.cache
 def create_empty_tensor(shape: Tuple[int, ...], dtype: Union[paddle.dtype, str]) -> paddle.Tensor:
