@@ -255,10 +255,9 @@ class PaddleDisWorkerProc:
                 )
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts)
-
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model()
+            self.worker.execute_model(num_running_requests)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
@@ -334,7 +333,7 @@ class PaddleDisWorkerProc:
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts,)
 
             if not self.worker.model_runner.not_need_stop():
                 if self.ranks > 1:
@@ -345,7 +344,7 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model(req_dicts)
+            self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
 
     def initialize_kv_cache(self) -> None:

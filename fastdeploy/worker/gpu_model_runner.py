@@ -678,18 +678,24 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self) -> None:
+   
+
+    def _prepare_inputs(self, num_running_requests=None) -> None:
         """Prepare the model inputs"""
+
+        def slice_if_needed(tensor, num=num_running_requests):
+            return tensor[:num] if num is not None else tensor
+
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             recover_decode_task(
-                self.share_inputs["stop_flags"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["step_seq_lens_decoder"],
-                self.share_inputs["block_tables"],
-                self.share_inputs["is_block_step"],
-                self.parallel_config.block_size,
+                slice_if_needed(self.share_inputs["stop_flags"]),
+                slice_if_needed(self.share_inputs["seq_lens_this_time"]),
+                slice_if_needed(self.share_inputs["seq_lens_encoder"]),
+                slice_if_needed(self.share_inputs["seq_lens_decoder"]),
+                slice_if_needed(self.share_inputs["step_seq_lens_decoder"]),
+                slice_if_needed(self.share_inputs["block_tables"]),
+                slice_if_needed(self.share_inputs["is_block_step"]),
+                slice_if_needed(self.parallel_config.block_size),
             )
 
         # Remove padding
@@ -702,13 +708,14 @@ class GPUModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
-            self.share_inputs["input_ids"],
-            self.share_inputs["seq_lens_this_time"],
+            slice_if_needed(self.share_inputs["input_ids"]),
+            slice_if_needed(self.share_inputs["seq_lens_this_time"]),
             self.speculative_decoding,
-            (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
-            self.share_inputs["seq_lens_encoder"],
-            self.share_inputs["seq_lens_decoder"],
+            draft_tokens=slice_if_needed(self.share_inputs["draft_tokens"]) if self.speculative_decoding else None,
+            seq_lens_encoder=slice_if_needed(self.share_inputs["seq_lens_encoder"]),
+            seq_lens_decoder=slice_if_needed(self.share_inputs["seq_lens_decoder"]),
         )
+        print("ids_remove_padding",ids_remove_padding)
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
@@ -724,22 +731,24 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize forward meta data
         self.initialize_forward_meta()
 
+        # print("self.share_inputs[promot_ids]",self.share_inputs["prompt_ids"])
+
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
-            temperature=self.share_inputs["temperature"],
-            top_p=self.share_inputs["top_p"],
-            top_k=self.share_inputs["top_k"],
-            min_p=self.share_inputs["min_p"],
-            step_idx=self.share_inputs["step_idx"],
-            pre_token_ids=self.share_inputs["pre_ids"],
-            prompt_ids=self.share_inputs["prompt_ids"],
-            prompt_lens=self.share_inputs["prompt_lens"],
-            frequency_penalties=self.share_inputs["frequency_score"],
-            presence_penalties=self.share_inputs["presence_score"],
-            repetition_penalties=self.share_inputs["penalty_score"],
-            min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"],
-            eos_token_ids=self.share_inputs["eos_token_id"],
+            temperature=slice_if_needed(self.share_inputs["temperature"]),
+            top_p=slice_if_needed(self.share_inputs["top_p"]),
+            top_k=slice_if_needed(self.share_inputs["top_k"]),
+            min_p=slice_if_needed(self.share_inputs["min_p"]),
+            step_idx=slice_if_needed(self.share_inputs["step_idx"]),
+            pre_token_ids=slice_if_needed(self.share_inputs["pre_ids"]),
+            prompt_ids=slice_if_needed(self.share_inputs["prompt_ids"]),
+            prompt_lens=slice_if_needed(self.share_inputs["prompt_lens"]),
+            frequency_penalties=slice_if_needed(self.share_inputs["frequency_score"]),
+            presence_penalties=slice_if_needed(self.share_inputs["presence_score"]),
+            repetition_penalties=slice_if_needed(self.share_inputs["penalty_score"]),
+            min_dec_lens=slice_if_needed(self.share_inputs["min_dec_len"]),
+            bad_words_token_ids=slice_if_needed(self.share_inputs["bad_tokens"]),
+            eos_token_ids=slice_if_needed(self.share_inputs["eos_token_id"]),
             max_num_logprobs=20 if self.enable_logprob else None,
         )
 
@@ -1150,6 +1159,7 @@ class GPUModelRunner(ModelRunnerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests:int = None,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -1166,7 +1176,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
-        self._prepare_inputs()
+        self._prepare_inputs(num_running_requests)
         self.sampler.pre_process(skip_idx_list)
 
         # 2. Padding inputs for cuda graph
@@ -1185,6 +1195,12 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+            # print("model_output",model_output)
+            # print("self.share_inputs[cum_offsets]",self.share_inputs["cum_offsets"])
+            # print("self.share_inputs[seq_lens_this_time]",self.share_inputs["seq_lens_this_time"])
+            # print("self.share_inputs[seq_lens_decoder]",self.share_inputs["seq_lens_decoder"])
+            # print("self.share_inputs[seq_lens_encoder]",self.share_inputs["seq_lens_encoder"])
+            # print("self.parallel_config.max_model_len",self.parallel_config.max_model_len)
             hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cum_offsets"],
@@ -1194,6 +1210,7 @@ class GPUModelRunner(ModelRunnerBase):
                 (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
                 self.parallel_config.max_model_len,
             )
+
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)

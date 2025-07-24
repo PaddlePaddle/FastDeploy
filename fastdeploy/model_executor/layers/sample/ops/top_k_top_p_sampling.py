@@ -133,6 +133,9 @@ def rejection_top_p_sampling(
         )
 
         if paddle.count_nonzero(top_k) == 0:
+            print("x",x)
+            print("top_p",top_p)
+            print("seed",seed)
             ids = rejection_top_p_sampling(
                 x,
                 top_p,

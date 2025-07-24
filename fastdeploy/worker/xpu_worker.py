@@ -138,9 +138,10 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests:int=None
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch)
+        output = self.model_runner.execute_model(model_forward_batch,num_running_requests)
         return output
 
     def prefill_finished(self):

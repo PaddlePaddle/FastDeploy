@@ -455,34 +455,36 @@ class XPUModelRunner(ModelRunnerBase):
             dtype="int32",
         )
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self,num_running_requests=None) -> None:
         """prepare the model inputs"""
+        def slice_if_needed(tensor,num=num_running_requests):
+            return tensor[:num] if num is not None else tensor
         self.forward_meta = xpu_pre_process(
-            self.share_inputs["input_ids"],
-            self.share_inputs["seq_lens_this_time"],
-            self.share_inputs,
+            slice_if_needed(self.share_inputs["input_ids"]),
+            slice_if_needed(self.share_inputs["seq_lens_this_time"]),
+            slice_if_needed(self.share_inputs),
             use_speculate_method=False,
             draft_tokens=None,
-            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_encoder=slice_if_needed(self.share_inputs["seq_lens_encoder"]),
+            seq_lens_decoder=slice_if_needed(self.share_inputs["seq_lens_decoder"]),
         )
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
-            temperature=self.share_inputs["temperature"],
-            top_p=self.share_inputs["top_p"],
-            top_k=self.share_inputs["top_k"],
-            min_p=self.share_inputs["min_p"],
-            step_idx=self.share_inputs["step_idx"],
-            pre_token_ids=self.share_inputs["pre_ids"],
-            frequency_penalties=self.share_inputs["frequency_score"],
-            presence_penalties=self.share_inputs["presence_score"],
-            repetition_penalties=self.share_inputs["penalty_score"],
-            min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"],
-            eos_token_ids=self.share_inputs["eos_token_id"],
+            temperature=slice_if_needed(self.share_inputs["temperature"]),
+            top_p=slice_if_needed(self.share_inputs["top_p"]),
+            top_k=slice_if_needed(self.share_inputs["top_k"]),
+            min_p=slice_if_needed(self.share_inputs["min_p"]),
+            step_idx=slice_if_needed(self.share_inputs["step_idx"]),
+            pre_token_ids=slice_if_needed(self.share_inputs["pre_ids"]),
+            frequency_penalties=slice_if_needed(self.share_inputs["frequency_score"]),
+            presence_penalties=slice_if_needed(self.share_inputs["presence_score"]),
+            repetition_penalties=slice_if_needed(self.share_inputs["penalty_score"]),
+            min_dec_lens=slice_if_needed(self.share_inputs["min_dec_len"]),
+            bad_words_token_ids=slice_if_needed(self.share_inputs["bad_tokens"]),
+            eos_token_ids=slice_if_needed(self.share_inputs["eos_token_id"]),
         )
 
     def load_model(self) -> None:
@@ -640,6 +642,7 @@ class XPUModelRunner(ModelRunnerBase):
         self,
         model_forward_batch: Optional[List[Request]] = None,
         is_dummy_run: bool = False,
+        num_running_requests:int = None,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -650,7 +653,7 @@ class XPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
         """
         # 1. Prepare inputs of model and decoder.
-        self._prepare_inputs()
+        self._prepare_inputs(num_running_requests)
 
         # 2. Padding inputs for cuda grph
 
