@@ -6,7 +6,7 @@ FastDeploy目前支持模型列表如下，在FastDeploy部署时，指定 ``mod
 - 2. [ModelScope/PaddlePaddle](https://www.modelscope.cn/models?name=PaddlePaddle&page=1&tabKey=task) 搜索相应Paddle后缀ERNIE模型，如ERNIE-4.5-0.3B-Paddle
 - 3. [HuggingFace/baidu/models](https://huggingface.co/baidu/models) 下载Paddle后缀ERNIE模型，如baidu/ERNIE-4.5-0.3B-Paddle
 
-使用自动下载时，默认从AIStudio下载，默认下载路径为 ``~/``(即用户主目录)，用户可以分别通过配置环境变量 ``FD_MODEL_SOURCE``修改默认下载来源，``FD_MODEL_CACHE``修改默认下载的路径，例如
+使用自动下载时，默认从AIStudio下载，用户可以通过配置环境变量 ``FD_MODEL_SOURCE``修改默认下载来源，可取值"AISTUDIO"，"MODELSCOPE"或"HUGGINGFACE"；默认下载路径为 ``~/``(即用户主目录)，用户可以通过配置环境变量 ``FD_MODEL_CACHE``修改默认下载的路径，例如
 
 ```
 export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
