@@ -127,15 +127,19 @@ class MTPProposer(Proposer):
 
         cache_type = self.parallel_config.dtype
 
+        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_type = "uint8"
+            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=self.num_gpu_blocks)
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
         if not self.parallel_config.do_profile and (
             self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
         ):
@@ -340,7 +344,7 @@ class MTPProposer(Proposer):
                 self.model_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 prefill_token_num = self.max_draft_token_num + 1
                 self.model_inputs["draft_tokens"][idx : idx + 1, 0:1] = paddle.to_tensor(
-                    request.draft_token_ids[0:1], dtype="int64"
+                    request.draft_token_ids[1:2], dtype="int64"
                 )
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
@@ -502,7 +506,6 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
-                    self.parallel_config.max_model_len,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,

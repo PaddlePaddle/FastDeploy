@@ -1,0 +1,174 @@
+name: FastDeploy Linux GPU Build Task
+description: "FastDeploy packages build and upload"
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      COMPILE_ARCH:
+        description: "Build GPU Archs"
+        required: true
+        type: string
+        default: "80,90"
+      WITH_NIGHTLY_BUILD:
+        description: "Enable nightly build mode (e.g. add date suffix to version)"
+        required: false
+        type: string
+        default: "ON"
+      FD_VERSION:
+        description: "FastDeploy Package Version"
+        required: false
+        type: string
+        default: ""
+      UPLOAD:
+        description: "Upload Package"
+        required: false
+        type: string
+        default: "ON"
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      wheel_path:
+        description: "Output path of the generated wheel"
+        value: ${{ jobs.fd-build.outputs.wheel_path }}
+jobs:
+  fd-build:
+    runs-on: [self-hosted, GPU-h1z1-4Cards]
+    outputs:
+      wheel_path: ${{ steps.set_output.outputs.wheel_path }}
+    steps:
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+            set -x
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            BASE_BRANCH="${{ github.base_ref }}"
+
+            # Clean the repository directory before starting
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            -e "REPO_NAME=${REPO_NAME}" \
+            ${docker_image} /bin/bash -c '
+              if [ -d ${REPO_NAME} ]; then
+                echo "Directory ${REPO_NAME} exists, removing it..."
+                rm -rf ${REPO_NAME}*
+              fi
+            '
+
+            wget -q ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git log -n 3 --oneline
+      - name: FastDeploy Build
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          compile_arch: ${{ inputs.COMPILE_ARCH }}
+          fd_version: ${{ inputs.FD_VERSION }}
+          CACHE_DIR: ${{ inputs.CACHE_DIR }}
+        run: |
+            set -x
+            runner_name="${{ runner.name }}"
+            CARD_ID=$(echo "${runner_name}" | cut -d'-' -f2)
+            gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+
+            CACHE_DIR=${CACHE_DIR:-${{ github.workspace }}}
+            echo "CACHE_DIR is set to ${CACHE_DIR}"
+            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+              touch "${CACHE_DIR}/gitconfig"
+            fi
+            PARENT_DIR=$(dirname "$WORKSPACE")
+            echo "PARENT_DIR:$PARENT_DIR"
+            docker run --rm --net=host \
+            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
+            -v $(pwd):/workspace -w /workspace \
+            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+            -v "${CACHE_DIR}/.cache:/root/.cache" \
+            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+            -e TZ="Asia/Shanghai" \
+            -e "COMPILE_ARCH=${compile_arch}" \
+            -e "FD_VERSION=${fd_version}" \
+            -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+            --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+            if [[ -n "${FD_VERSION}" ]]; then
+              export FASTDEPLOY_VERSION=${FD_VERSION}
+              echo "Custom FastDeploy version: ${FASTDEPLOY_VERSION}"
+            fi
+
+            git config --global --add safe.directory /workspace/FastDeploy
+            cd FastDeploy
+            if [[ "${WITH_NIGHTLY_BUILD}" == "ON" ]];then
+              GIT_COMMIT_TIME=$(git --no-pager show -s --format=%ci HEAD)
+              DATE_ONLY=$(echo $GIT_COMMIT_TIME | sed "s/ .*//;s/-//g")
+              echo "Git Commit Time: $GIT_COMMIT_TIME"
+              echo "Date Only: $DATE_ONLY"
+              export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
+            fi
+            pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
+            pip config set install.trusted-host  pip.baidu.com
+            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+            python -m pip install --upgrade pip
+            python -m pip install -r requirements.txt
+            python -m pip install wheel
+            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            # 编译RDMA
+            export ENABLE_FD_RDMA=1
+            bash build.sh 1 python false [${COMPILE_ARCH}]
+            ls ./dist/*.whl
+            '
+      - name: Package Upload
+        id: set_output
+        env:
+          compile_arch: ${{ inputs.COMPILE_ARCH }}
+        run: |
+            set -x
+            if [[ "${{ github.event_name }}" == "pull_request" ]];then
+              commit_id=${{ github.event.pull_request.head.sha }}
+              pr_num=${{ github.event.pull_request.number }}
+              target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
+            elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+              commit_id=${{ github.sha }}
+              tag_name=${{ github.ref_name }}
+              target_path=paddle-github-action/TAG/FastDeploy/${tag_name}/${commit_id}/SM${compile_arch//,/_}
+            else
+              commit_id=${{ github.sha }}
+              branch_name=${{ github.ref_name }}
+              target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}/SM${compile_arch//,/_}
+            fi
+            wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+            push_file=$(realpath bos_tools.py)
+            python --version
+            python -m pip install bce-python-sdk==0.9.29
+            cd FastDeploy/dist/
+            matches=($(ls fastdeploy*.whl))
+            if [ ${#matches[@]} -ne 1 ]; then
+              echo "Error: Found ${#matches[@]} matching files, expected exactly 1"
+              exit 1
+            fi
+            fd_wheel_name=${matches[0]}
+            echo "Found: $fd_wheel_name"
+            tree -L 3
+            python ${push_file} fastdeploy*.whl ${target_path}
+            target_path_stripped="${target_path#paddle-github-action/}"
+            WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+            echo "wheel_path=${WHEEL_PATH}" >> $GITHUB_OUTPUT

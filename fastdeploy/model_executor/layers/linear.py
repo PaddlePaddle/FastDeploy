@@ -500,7 +500,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 k_bias = get_tensor(state_dict.pop(k_bias_key))
                 v_bias = get_tensor(state_dict.pop(v_bias_key))
                 qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
-            self.bias.set_value(qkv_bias)
+                self.bias.set_value(qkv_bias)
 
 
 class RowParallelLinear(LinearBase):

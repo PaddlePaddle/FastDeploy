@@ -210,8 +210,16 @@ class PrefixCacheManager:
         update cache config
         """
         self.cache_config = cache_config
-        self.num_gpu_blocks = cache_config.prefill_kvcache_block_num
-        self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))  # 服务端管理的GPU上剩余的block id
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.num_gpu_blocks = cache_config.total_block_num
+            self.gpu_free_block_list = list(
+                range(self.num_gpu_blocks - 1, -1, -1)
+            )  # All gpu blocks are managed by cache manager
+        else:
+            self.num_gpu_blocks = cache_config.prefill_kvcache_block_num
+            self.gpu_free_block_list = list(
+                range(self.num_gpu_blocks - 1, -1, -1)
+            )  # Only block table divided for prefill managed by server
 
         heapq.heapify(self.gpu_free_block_list)
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
@@ -230,6 +238,15 @@ class PrefixCacheManager:
         # 开启获取传输任务结果的监听线程
         self.transfer_recv_thread = threading.Thread(target=self.recv_data_transfer_result)
         self.transfer_recv_thread.start()
+
+    def can_allocate_gpu_blocks(self, num_blocks: int):
+        """
+        Check if num_blocks gpu blocks can be allocated.
+        """
+        if len(self.gpu_free_block_list) < num_blocks:
+            return False
+        else:
+            return True
 
     def allocate_gpu_blocks(self, num_blocks):
         """

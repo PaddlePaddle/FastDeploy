@@ -30,6 +30,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DEBUG": lambda: os.getenv("FD_DEBUG", "0"),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
+    # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
+    "FD_MODEL_SOURCE": lambda: os.getenv("FD_MODEL_SOURCE", "MODELSCOPE"),
     # Model download cache directory.
     "FD_MODEL_CACHE": lambda: os.getenv("FD_MODEL_CACHE", None),
     # Maximum number of stop sequences.
@@ -76,6 +78,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "EXPORTER_OTLP_ENDPOINT": lambda: os.getenv("EXPORTER_OTLP_ENDPOINT"),
     # set traec exporter_otlp_headers.
     "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
+    # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
+    "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")),
 }
 
 

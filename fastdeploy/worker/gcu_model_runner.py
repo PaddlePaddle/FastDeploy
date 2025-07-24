@@ -449,7 +449,6 @@ class GCUModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
-            self.parallel_config.max_model_len,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
@@ -569,15 +568,19 @@ class GCUModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
 
+        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_type = "uint8"
+            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+        )
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         if not profile and (
