@@ -57,6 +57,7 @@ class BenchmarkDataset(ABC):
         self,
         dataset_path: Optional[str] = None,
         random_seed: int = DEFAULT_SEED,
+        shuffle: bool = False,
         hyperparameter_path: Optional[str] = None,
     ) -> None:
         """
@@ -72,6 +73,7 @@ class BenchmarkDataset(ABC):
         # default seed.
         self.random_seed = random_seed if random_seed is not None else self.DEFAULT_SEED
         self.data = None
+        self.shuffle = shuffle
         self.hyperparameter_path = hyperparameter_path
         self.hyperparameters = {}
 
@@ -211,6 +213,10 @@ class EBDataset(BenchmarkDataset):
         with open(self.dataset_path, encoding="utf-8") as f:
             self.data = [json.loads(i.strip()) for i in f.readlines()]
 
+        if self.shuffle:
+            random.seed(self.random_seed)
+            random.shuffle(self.data)
+
     def sample(
         self,
         num_requests: int,
@@ -269,6 +275,10 @@ class EBChatDataset(BenchmarkDataset):
 
         with open(self.dataset_path, encoding="utf-8") as f:
             self.data = [json.loads(i.strip()) for i in f.readlines()]
+
+        if self.shuffle:
+            random.seed(self.random_seed)
+            random.shuffle(self.data)
 
     def sample(
         self,
