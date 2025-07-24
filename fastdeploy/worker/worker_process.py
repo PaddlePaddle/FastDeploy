@@ -149,7 +149,7 @@ class PaddleDisWorkerProc:
             self.parallel_config.pod_ip,
             self.parallel_config.engine_worker_queue_port,
         )
-
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.task_queue = TaskQueue(
             address=task_address,
             is_server=False,
@@ -193,7 +193,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.engine_pid,
             create=False,
         )
-        self.worker_healthy_live_signal.value[self.local_rank % 8] = int(time.time())
+        self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
         # init model_weights_status
         workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
@@ -388,7 +388,7 @@ class PaddleDisWorkerProc:
                 dist.all_reduce(num_blocks_local, op=dist.ReduceOp.MIN)
                 num_blocks_local = num_blocks_local.item()
 
-            if self.local_rank == 0:
+            if self.local_rank % self.max_chips_per_node == 0:
                 # 3. Send IPCSignal
                 get_profile_block_num = np.zeros(shape=[1], dtype=np.int32)
                 self.get_profile_block_num_signal = IPCSignal(
