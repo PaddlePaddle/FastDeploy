@@ -342,9 +342,11 @@ def test_streaming(openai_client, capsys):
         output.append(chunk.choices[0].text)
     assert len(output) > 0
 
+
 # ==========================
 # OpenAI Client additional chat/completions test
 # ==========================
+
 
 def test_non_streaming_with_stop_str(openai_client):
     """
@@ -423,12 +425,12 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
         extra_body={"return_token_ids": True},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'prompt_token_ids')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
     assert isinstance(response.choices[0].message.prompt_token_ids, list)
-    assert hasattr(response.choices[0].message, 'completion_token_ids')
+    assert hasattr(response.choices[0].message, "completion_token_ids")
     assert isinstance(response.choices[0].message.completion_token_ids, list)
 
     #  disable return_token_ids
@@ -440,12 +442,12 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
         extra_body={"return_token_ids": False},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'prompt_token_ids')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
     assert response.choices[0].message.prompt_token_ids is None
-    assert hasattr(response.choices[0].message, 'completion_token_ids')
+    assert hasattr(response.choices[0].message, "completion_token_ids")
     assert response.choices[0].message.completion_token_ids is None
 
 
@@ -464,11 +466,11 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
     )
     is_first_chunk = True
     for chunk in response:
-        assert hasattr(chunk, 'choices')
+        assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], 'delta')
-        assert hasattr(chunk.choices[0].delta, 'prompt_token_ids')
-        assert hasattr(chunk.choices[0].delta, 'completion_token_ids')
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
         if is_first_chunk:
             is_first_chunk = False
             assert isinstance(chunk.choices[0].delta.prompt_token_ids, list)
@@ -487,12 +489,12 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         stream=True,
     )
     for chunk in response:
-        assert hasattr(chunk, 'choices')
+        assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], 'delta')
-        assert hasattr(chunk.choices[0].delta, 'prompt_token_ids')
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
         assert chunk.choices[0].delta.prompt_token_ids is None
-        assert hasattr(chunk.choices[0].delta, 'completion_token_ids')
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
         assert chunk.choices[0].delta.completion_token_ids is None
 
 
@@ -509,11 +511,11 @@ def test_non_streaming_completion_with_return_token_ids(openai_client, capsys):
         extra_body={"return_token_ids": True},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'prompt_token_ids')
+    assert hasattr(response.choices[0], "prompt_token_ids")
     assert isinstance(response.choices[0].prompt_token_ids, list)
-    assert hasattr(response.choices[0], 'completion_token_ids')
+    assert hasattr(response.choices[0], "completion_token_ids")
     assert isinstance(response.choices[0].completion_token_ids, list)
 
     # disable return_token_ids
@@ -525,11 +527,11 @@ def test_non_streaming_completion_with_return_token_ids(openai_client, capsys):
         extra_body={"return_token_ids": False},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'prompt_token_ids')
+    assert hasattr(response.choices[0], "prompt_token_ids")
     assert response.choices[0].prompt_token_ids is None
-    assert hasattr(response.choices[0], 'completion_token_ids')
+    assert hasattr(response.choices[0], "completion_token_ids")
     assert response.choices[0].completion_token_ids is None
 
 
@@ -548,10 +550,10 @@ def test_streaming_completion_with_return_token_ids(openai_client, capsys):
     )
     is_first_chunk = True
     for chunk in response:
-        assert hasattr(chunk, 'choices')
+        assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], 'prompt_token_ids')
-        assert hasattr(chunk.choices[0], 'completion_token_ids')
+        assert hasattr(chunk.choices[0], "prompt_token_ids")
+        assert hasattr(chunk.choices[0], "completion_token_ids")
         if is_first_chunk:
             is_first_chunk = False
             assert isinstance(chunk.choices[0].prompt_token_ids, list)
@@ -570,11 +572,11 @@ def test_streaming_completion_with_return_token_ids(openai_client, capsys):
         stream=True,
     )
     for chunk in response:
-        assert hasattr(chunk, 'choices')
+        assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], 'prompt_token_ids')
+        assert hasattr(chunk.choices[0], "prompt_token_ids")
         assert chunk.choices[0].prompt_token_ids is None
-        assert hasattr(chunk.choices[0], 'completion_token_ids')
+        assert hasattr(chunk.choices[0], "completion_token_ids")
         assert chunk.choices[0].completion_token_ids is None
 
 
@@ -587,13 +589,13 @@ def test_non_streaming_chat_with_prompt_token_ids(openai_client, capsys):
         messages=[],
         temperature=1,
         max_tokens=5,
-        extra_body={"prompt_token_ids": [5209,626,274,45954,1071,3265,3934,1869,93937]},
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response, 'usage')
-    assert hasattr(response.usage, 'prompt_tokens')
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "prompt_tokens")
     assert response.usage.prompt_tokens == 9
 
 
@@ -606,17 +608,17 @@ def test_streaming_chat_with_prompt_token_ids(openai_client, capsys):
         messages=[],
         temperature=1,
         max_tokens=5,
-        extra_body={"prompt_token_ids": [5209,626,274,45954,1071,3265,3934,1869,93937]},
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
         stream=True,
         stream_options={"include_usage": True},
     )
     for chunk in response:
-        assert hasattr(chunk, 'choices')
-        assert hasattr(chunk, 'usage')
+        assert hasattr(chunk, "choices")
+        assert hasattr(chunk, "usage")
         if len(chunk.choices) > 0:
             assert chunk.usage is None
         else:
-            assert hasattr(chunk.usage, 'prompt_tokens')
+            assert hasattr(chunk.usage, "prompt_tokens")
             assert chunk.usage.prompt_tokens == 9
 
 
@@ -629,13 +631,13 @@ def test_non_streaming_completion_with_prompt_token_ids(openai_client, capsys):
         prompt="",
         temperature=1,
         max_tokens=5,
-        extra_body={"prompt_token_ids": [5209,626,274,45954,1071,3265,3934,1869,93937]},
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response, 'usage')
-    assert hasattr(response.usage, 'prompt_tokens')
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "prompt_tokens")
     assert response.usage.prompt_tokens == 9
 
 
@@ -648,16 +650,15 @@ def test_streaming_completion_with_prompt_token_ids(openai_client, capsys):
         prompt="",
         temperature=1,
         max_tokens=5,
-        extra_body={"prompt_token_ids": [5209,626,274,45954,1071,3265,3934,1869,93937]},
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
         stream=True,
         stream_options={"include_usage": True},
     )
     for chunk in response:
-        assert hasattr(chunk, 'choices')
-        assert hasattr(chunk, 'usage')
+        assert hasattr(chunk, "choices")
+        assert hasattr(chunk, "usage")
         if len(chunk.choices) > 0:
             assert chunk.usage is None
         else:
-            assert hasattr(chunk.usage, 'prompt_tokens')
+            assert hasattr(chunk.usage, "prompt_tokens")
             assert chunk.usage.prompt_tokens == 9
-

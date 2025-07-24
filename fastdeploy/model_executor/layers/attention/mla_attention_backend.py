@@ -217,8 +217,7 @@ class MLAAttentionBackend(AttentionBackend):
         self.attention_metadata: AttentionMetadata = metadata
 
         forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
-        forward_meta.decoder_tile_ids_per_batch.copy_(
-            metadata.decoder_tile_ids_per_batch, False)
+        forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""

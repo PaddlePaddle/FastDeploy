@@ -21,8 +21,8 @@ import paddle.nn.layer
 from paddle.device.cuda import graphs
 
 from fastdeploy.config import FDConfig
-from fastdeploy.utils import get_logger
 from fastdeploy.distributed.communication import capture_custom_allreduce
+from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
 
@@ -99,7 +99,7 @@ class CudaGraphPiecewiseBackend:
                 entry.runnable(**kwargs)
                 logger.debug(
                     f"[CUDA GRAPH] Warm up for batch size {padding_batch_size}, "
-                    f"finished ({n+1}/{entry.num_finished_warmup}) times"
+                    f"finished ({n + 1}/{entry.num_finished_warmup}) times"
                 )
 
             # Store input addresses for debug
@@ -114,7 +114,6 @@ class CudaGraphPiecewiseBackend:
                 new_grpah.capture_begin()
                 output = entry.runnable(**kwargs)
                 new_grpah.capture_end()
-            
 
             # Store output buffer
             entry.cuda_graph = new_grpah

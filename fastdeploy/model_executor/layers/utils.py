@@ -300,7 +300,13 @@ def speculate_remove_padding(
     if current_platform.is_cuda():
         cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
         token_num = paddle.sum(seq_lens_this_time)
-        (ids_remove_padding, cum_offsets, padding_offset, cu_seqlens_q, cu_seqlens_k,) = speculate_get_padding_offset(
+        (
+            ids_remove_padding,
+            cum_offsets,
+            padding_offset,
+            cu_seqlens_q,
+            cu_seqlens_k,
+        ) = speculate_get_padding_offset(
             input_ids,
             draft_tokens,
             cum_offsets_now,

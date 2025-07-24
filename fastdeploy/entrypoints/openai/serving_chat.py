@@ -144,7 +144,9 @@ class OpenAIServingChat:
             if request.metadata is not None:
                 enable_thinking = request.metadata.get("enable_thinking")
                 include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
-            enable_return_token_ids = request.return_token_ids or (request.extra_body is not None and request.extra_body.get('return_token_ids', False))
+            enable_return_token_ids = request.return_token_ids or (
+                request.extra_body is not None and request.extra_body.get("return_token_ids", False)
+            )
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -186,13 +188,13 @@ class OpenAIServingChat:
                             choice = ChatCompletionResponseStreamChoice(
                                 index=i,
                                 delta=DeltaMessage(
-                                    role="assistant", 
-                                    content="", 
-                                    reasoning_content="", 
+                                    role="assistant",
+                                    content="",
+                                    reasoning_content="",
                                     tool_calls=None,
                                     prompt_token_ids=None,
                                     completion_token_ids=None,
-                                )
+                                ),
                             )
                             if enable_return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
@@ -231,10 +233,10 @@ class OpenAIServingChat:
 
                     previous_num_tokens += len(output["token_ids"])
                     delta_message = DeltaMessage(
-                        content=delta_text, 
-                        reasoning_content=output.get("reasoning_content"), \
+                        content=delta_text,
+                        reasoning_content=output.get("reasoning_content"),
                         prompt_token_ids=None,
-                        completion_token_ids=None, 
+                        completion_token_ids=None,
                         tool_calls=output.get("tool_call_content", []),
                     )
 
@@ -322,7 +324,9 @@ class OpenAIServingChat:
         final_res = None
         enable_thinking = None
         include_stop_str_in_output = False
-        enable_return_token_ids = request.return_token_ids or (request.extra_body is not None and request.extra_body.get('return_token_ids', False))
+        enable_return_token_ids = request.return_token_ids or (
+            request.extra_body is not None and request.extra_body.get("return_token_ids", False)
+        )
         try:
             dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
             dealer.write([b"", request_id.encode("utf-8")])
@@ -396,7 +400,7 @@ class OpenAIServingChat:
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
             prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-            completion_token_ids=completion_token_ids if enable_return_token_ids else None,
+            completion_token_ids=(completion_token_ids if enable_return_token_ids else None),
         )
         logprobs_full_res = None
         if logprob_contents:
