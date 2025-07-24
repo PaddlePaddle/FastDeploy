@@ -541,6 +541,10 @@ public:
         ++last_smem_iterator_A;
       }
 
+      if (threadIdx.x >= IteratorB::ThreadMap::kThreads) {
+        return;
+      }
+
       /// Iterator to write threadblock-scoped tile of B operand to shared memory
       SmemIteratorB last_smem_iterator_B(this->smem_iterator_B_);
       typename IteratorB::AccessType zero_B;

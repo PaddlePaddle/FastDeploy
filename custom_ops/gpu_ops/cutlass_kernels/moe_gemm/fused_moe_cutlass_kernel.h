@@ -809,7 +809,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
     CUTLASS_DEVICE
     static MmaQuantArguments prepare_quant_args(
         Params const& params, cutlass::gemm::GemmCoord const& threadblock_offset,
-        int32_t problem_idx, const int32_t gemm_k, const int32_t gemm_n, const int thread_idx) {
+        int64_t problem_idx, const int32_t gemm_k, const int32_t gemm_n, const int thread_idx) {
       // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
       cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
       cutlass::MatrixCoord tb_offset_local_scale{0, threadblock_offset.n() * 2};
@@ -823,7 +823,9 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
           tb_offset_scale);
 
       int local_scale_pointer_offset = ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
-      uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + problem_idx * gemm_k * gemm_n / 128);
+      int64_t offset_in_bytes = problem_idx * gemm_k * gemm_n / 128;
+      uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + offset_in_bytes);
+
       typename Mma::QuantParamsAccessor::IteratorLocalScale iterator_local_scale(
           Mma::QuantParamsAccessor::LayoutLocalScale(gemm_n * 2),
           local_scale_ptr,
