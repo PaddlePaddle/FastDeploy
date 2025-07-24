@@ -87,8 +87,8 @@ class InputPreprocessor:
                     reasoning_parser_obj=reasoning_parser_obj,
                 )
         else:
-            if not architectures.startswith("Ernie4_5_VLMoeForConditionalGeneration"):
-                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe model.")
+            if not ErnieArchitectures.contains_ernie_arch(architectures):
+                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VL model.")
             else:
                 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 

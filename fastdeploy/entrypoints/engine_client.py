@@ -19,9 +19,11 @@ import uuid
 
 import numpy as np
 
+from fastdeploy.engine.config import ModelConfig
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.utils import EngineError, api_server_logger
 
 
@@ -32,26 +34,32 @@ class EngineClient:
 
     def __init__(
         self,
+        model_name_or_path,
         tokenizer,
         max_model_len,
         tensor_parallel_size,
         pid,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        enable_mm=False,
+        # enable_mm=False,
         reasoning_parser=None,
     ):
+        architectures = ModelConfig(model_name_or_path).architectures
+        if MultimodalRegistry.contains_model(architectures):
+            self.enable_mm = True
+        else:
+            self.enable_mm = False
+
         input_processor = InputPreprocessor(
             tokenizer,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            enable_mm,
+            self.enable_mm,
         )
-        self.enable_mm = enable_mm
-        self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
+        self.reasoning_parser = reasoning_parser
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",

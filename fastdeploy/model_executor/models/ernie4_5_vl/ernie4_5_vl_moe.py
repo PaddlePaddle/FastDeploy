@@ -29,6 +29,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
@@ -483,6 +484,7 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@MultimodalRegistry.register_model()
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration

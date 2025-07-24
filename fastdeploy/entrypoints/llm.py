@@ -30,7 +30,7 @@ from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
 
 # from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
-from fastdeploy.utils import llm_logger, retrive_model_from_server
+from fastdeploy.utils import llm_logger, retrive_model_from_server, deprecated_kwargs_warning
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
@@ -69,6 +69,8 @@ class LLM:
         tokenizer: Optional[str] = None,
         **kwargs,
     ):
+        deprecated_kwargs_warning(**kwargs)
+        
         model = retrive_model_from_server(model)
         engine_args = EngineArgs(
             model=model,
