@@ -132,8 +132,9 @@ class FlashAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
         if self.flash_attn_func is None:
-            _num_sms = paddle.device.cuda.get_device_properties().multi_processor_count
-            is_current_sm_supported = _num_sms >= 90
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            is_current_sm_supported = cc >= 90
             is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
             if is_current_sm_supported and is_paddle_supported:
                 self.flash_attn_func = flash_attention_v3_varlen
