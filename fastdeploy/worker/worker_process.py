@@ -648,15 +648,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if getattr(model_config, "num_hidden_layers", None) is None:
         raise ValueError("num_hidden_layers is None")
-    # Set MoE phase based on splitwise role
-    if parallel_config.splitwise_role == "mixed":
-        parallel_config.moe_phase.phase = "prefill"
-    elif parallel_config.splitwise_role == "prefill":
-        parallel_config.moe_phase = "prefill"
-    elif parallel_config.splitwise_role == "decode":
-        parallel_config.moe_phase = "decode"
-    elif parallel_config.splitwise_role is not None:
-        raise NotImplementedError
 
     quantization_config = model_config.quantization_config
     if not model_config.is_quantized:
