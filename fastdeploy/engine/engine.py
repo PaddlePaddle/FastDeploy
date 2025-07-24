@@ -379,13 +379,13 @@ class LLMEngine:
             is_fetching = True
             num_prefill_batch = min(
                 int(self.resource_manager.available_batch()),
-                self.cfg.max_prefill_batch,
+                self.cfg.parallel_config.max_prefill_batch,
             )
             tasks = self.scheduler.get_requests(
                 available_blocks=self.resource_manager.available_block_num(),
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                max_num_batched_tokens=self.cfg.max_model_len,
+                max_num_batched_tokens=self.cfg.scheduler_config.max_model_len,
                 batch=num_prefill_batch,
             )
             # Fetch requests and add them to the scheduling queue
