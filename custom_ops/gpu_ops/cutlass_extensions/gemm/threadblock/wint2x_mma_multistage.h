@@ -400,6 +400,10 @@ public:
 
   CUTLASS_DEVICE
   void copy_tiles_and_advance_B(IteratorB &iterator_B, int group_start_B = 0, int stage = 0) {
+    if (threadIdx.x >= IteratorB::ThreadMap::kThreads) {
+      return;
+    }
+
     iterator_B.set_iteration_index(group_start_B *
                                    IteratorB::kAccessesPerVector);
     this->smem_iterator_B_.set_iteration_index(group_start_B);
@@ -506,6 +510,10 @@ public:
   template <bool InitStage>
   CUTLASS_DEVICE
   void copy_tiles_and_advance_per_stage_B(IteratorB &iterator_B, int stage) {
+    if (threadIdx.x >= IteratorB::ThreadMap::kThreads) {
+      return;
+    }
+
     iterator_B.set_iteration_index(0);
     this->smem_iterator_B_.set_iteration_index(0);
 

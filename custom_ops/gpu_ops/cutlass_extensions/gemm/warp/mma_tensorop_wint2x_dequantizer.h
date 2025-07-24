@@ -95,6 +95,56 @@ struct LocalScaleConverter {
 };
 
 template <int N>
+struct LocalScaleConverter<half_t, N, typename platform::enable_if<N % 4 == 0>::type> {
+    using FragmentSource = Array<uint8_t, N>;
+    using FragmentResult = Array<half_t, N>;
+
+    CUTLASS_DEVICE
+    static void Apply(FragmentSource const& local_scale_frag,
+                      FragmentResult const& super_scale_frag,
+                      FragmentResult& scale_frag,
+                      int shift_bit) {
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && defined(ENABLE_BF16))
+        constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
+        constexpr uint32_t MASK = 0x000f000f;
+        // 2^10 = 1024
+        constexpr uint32_t I4s_TO_FP16s_MAGIC_NUM = 0x64006400;
+
+        // -2^10 = -1024
+        constexpr uint32_t FP16_BIAS = 0xE400E400;
+        // 1.0
+        constexpr uint32_t FP16_ONE = 0x3C003C00;
+
+        __half2* scale_ptr = reinterpret_cast<__half2 *>(&scale_frag);
+        __half2 const* super_scale_ptr = reinterpret_cast<__half2 const*>(&super_scale_frag);
+
+        uint32_t const* local_scale_ptr = reinterpret_cast<uint32_t const*>(&local_scale_frag);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / 4; ++i) {
+            int i4s = local_scale_ptr[i] >> shift_bit;
+
+            // unpack: 0, 1
+            int32_t low = __byte_perm(i4s, i4s, 0xF1F0);
+            int32_t unpack0 = lop3<immLut>(low, MASK, I4s_TO_FP16s_MAGIC_NUM);
+            // unpack: 2, 3
+            int32_t high = __byte_perm(i4s, i4s, 0xF3F2);
+            int32_t unpack1 = lop3<immLut>(high, MASK, I4s_TO_FP16s_MAGIC_NUM);
+
+            __half2 scale0 = __hfma2(*reinterpret_cast<__half2*>(&unpack0),
+                                     *reinterpret_cast<const __half2*>(&FP16_ONE),
+                                     *reinterpret_cast<const __half2*>(&FP16_BIAS));
+            __half2 scale1 = __hfma2(*reinterpret_cast<__half2*>(&unpack1),
+                                     *reinterpret_cast<const __half2*>(&FP16_ONE),
+                                     *reinterpret_cast<const __half2*>(&FP16_BIAS));
+
+            scale_ptr[2 * i] = __hmul2(scale0, super_scale_ptr[2 * i]);
+            scale_ptr[2 * i + 1] = __hmul2(scale1, super_scale_ptr[2 * i + 1]);
+        }
+    }
+};
+
+template <int N>
 struct LocalScaleConverter<bfloat16_t, N, typename platform::enable_if<N % 4 == 0>::type> {
     using FragmentSource = Array<uint8_t, N>;
     using FragmentResult = Array<bfloat16_t, N>;
@@ -104,8 +154,8 @@ struct LocalScaleConverter<bfloat16_t, N, typename platform::enable_if<N % 4 == 
                       FragmentResult const& super_scale_frag,
                       FragmentResult& scale_frag,
                       int shift_bit) {
-        constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
-        constexpr uint32_t MASK = 0x000f000f;
+        constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
+        constexpr uint32_t MASK = 0x000F000F;
         constexpr uint32_t I4s_TO_BF16s_MAGIC_NUM = 0x43004300;
 
         constexpr uint32_t BF16_BIAS = 0xC300C300;
@@ -137,6 +187,12 @@ struct LocalScaleConverter<bfloat16_t, N, typename platform::enable_if<N % 4 == 
             scale_ptr[2 * i] = __hmul2(scale0, super_scale_ptr[2 * i]);
             scale_ptr[2 * i + 1] = __hmul2(scale1, super_scale_ptr[2 * i + 1]);
         }
+#else
+        // Slow path not implemented here on purpose. If we need to do HMMA on older arch, scale conversion should
+        // happen before scales are stored to shared memory and we should use the fp16 dequantizer. This will avoid
+        // numerous conversion instructions in GEMM main loop.
+        arch::device_breakpoint();
+#endif
     }
 };
 

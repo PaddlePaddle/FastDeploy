@@ -19,6 +19,7 @@
 
 #include "cutlass_extensions/arch/mma.h"
 #include "cutlass_extensions/gemm/threadblock/default_dq_mma.h"
+#include "cutlass_extensions/gemm/threadblock/default_mma_core.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_mma_multistage.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_params_accessor.h"
 
