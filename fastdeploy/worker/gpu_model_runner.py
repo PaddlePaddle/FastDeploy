@@ -23,7 +23,7 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, MoEPhase
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
@@ -475,7 +475,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(batch_size):
             idx = i
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            # self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
