@@ -20,7 +20,7 @@ import time
 import traceback
 import uuid
 from typing import List, Optional
-
+import numpy as np
 import msgpack
 import aiozmq
 from aiozmq import zmq
@@ -75,6 +75,8 @@ class OpenAIServingChat:
             current_req_dict = request.to_dict_for_infer(request_id)
             current_req_dict["arrival_time"] = time.time()
             prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+            if isinstance(prompt_token_ids, np.ndarray):
+                prompt_token_ids = prompt_token_ids.tolist()
         except Exception as e:
             return ErrorResponse(code=400, message=str(e))
 
