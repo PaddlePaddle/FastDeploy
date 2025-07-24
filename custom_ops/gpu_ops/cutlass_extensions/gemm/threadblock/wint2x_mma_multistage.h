@@ -201,7 +201,7 @@ public:
     WarpTransformedFragmentA warp_frag_A_[2];
 
     /// Pair of B fragments used to overlap shared memory loads and math instructions
-    WarpLoadedFragmentB warp_loaded_frag_B_[2];
+    WarpLoadedFragmentB warp_loaded_frag_B_;
     WarpTransformedFragmentB warp_frag_B_[2];
 
     /// channel-wise quant params
@@ -249,12 +249,6 @@ public:
   /// Shared memory read stage index
   int smem_read_stage_idx_;
 
-  ElementA* smem_ptr_A_;
-  ElementA* ptr_A_;
-
-  uint8_t* smem_ptr_B_;
-  uint8_t* ptr_B_;
-
 public:
 
   /// Construct from tensor references
@@ -292,35 +286,11 @@ public:
     int warp_idx_m = warp_idx_mn % Base::WarpCount::kM;
     int warp_idx_n = warp_idx_mn / Base::WarpCount::kM;
 
-    //CUTLASS_TRACE_DEVICE(" Shape: {%d, %d, %d}, IteratorB::Shape: {%d, %d}, kInterleave: %d",
-    //    Shape::kM, Shape::kN, Shape::kK, IteratorB::Shape::kRow, IteratorB::Shape::kColumn, kInterleave);
-    //CUTLASS_TRACE_DEVICE(" kPartitionsK=%d, kWarpGemmIterations=%d, WarpCount={%d, %d}, warp_idx_m=%d, warp_idx_n=%d, warp_idx_k=%d",
-    //    Policy::kPartitionsK, Base::kWarpGemmIterations,
-    //    Base::WarpCount::kM, Base::WarpCount::kN, warp_idx_m, warp_idx_n, warp_idx_k);
-
     // Add per-warp offsets in units of warp-level tiles
     this->warp_tile_iterator_A_.add_tile_offset(
         {warp_idx_m, Base::kWarpGemmIterations * warp_idx_k});
     this->warp_tile_iterator_B_.add_tile_offset(
         {Base::kWarpGemmIterations * warp_idx_k, warp_idx_n});
-
-    //CUTLASS_TRACE_DEVICE(" Policy::SmemPaddingA: {%d, %d}; Policy::SmemPaddingB: {%d, %d}",
-    //    Policy::SmemPaddingA::kRow, Policy::SmemPaddingA::kColumn, Policy::SmemPaddingB::kRow, Policy::SmemPaddingB::kColumn);
-    //CUTLASS_TRACE_DEVICE(" operand_A_ptr=%p, kRow=%d, kColumn=%d, %d bytes;  kElementsPerAccess=%d, sizeof(AccessType)=%d, AsyncCopyIterationsPerStageA=%d, kAccessesPerVectorA=%d",
-    //    shared_storage.operand_A.data(),
-    //    static_cast<int>(Base::SharedStorage::ShapeA::kRow), static_cast<int>(Base::SharedStorage::ShapeA::kColumn),
-    //    static_cast<int>(sizeof(shared_storage.operand_A)),
-    //    static_cast<int>(IteratorA::ThreadMap::kElementsPerAccess), static_cast<int>(sizeof(typename IteratorA::AccessType)),
-    //    static_cast<int>(Detail::AsyncCopyIterationsPerStageA), static_cast<int>(IteratorA::kAccessesPerVector));
-    //CUTLASS_TRACE_DEVICE(" operand_B_ptr=%p, kRow=%d, kColumn=%d, %d bytes; kElementsPerAccess=%d, sizeof(AccessType)=%d, AsyncCopyIterationsPerStageB=%d, kAccessesPerVectorA=%d",
-    //    shared_storage.operand_B.data(),
-    //    static_cast<int>(Base::SharedStorage::ShapeB::kRow), static_cast<int>(Base::SharedStorage::ShapeB::kColumn),
-    //    static_cast<int>(sizeof(shared_storage.operand_B)),
-    //    static_cast<int>(IteratorB::ThreadMap::kElementsPerAccess), static_cast<int>(sizeof(typename IteratorB::AccessType)),
-    //    static_cast<int>(Detail::AsyncCopyIterationsPerStageB), static_cast<int>(IteratorB::kAccessesPerVector));
-
-    smem_ptr_A_ = reinterpret_cast<ElementA*>(shared_storage.operand_A.data());
-    smem_ptr_B_ = reinterpret_cast<uint8_t*>(shared_storage.operand_B.data());
   }
 
   /// Advance shared memory read-iterators to the next stage
@@ -399,9 +369,11 @@ public:
   }
 
   CUTLASS_DEVICE
-  void copy_tiles_and_advance_B(IteratorB &iterator_B, int group_start_B = 0, int stage = 0) {
-    if (threadIdx.x >= IteratorB::ThreadMap::kThreads) {
-      return;
+  void copy_tiles_and_advance_B(IteratorB &iterator_B, int group_start_B = 0) {
+    if constexpr (SharedMemoryClear == SharedMemoryClearOption::kZfill) {
+      if (threadIdx.x >= IteratorB::ThreadMap::kThreads) {
+        return;
+      }
     }
 
     iterator_B.set_iteration_index(group_start_B *
@@ -423,21 +395,14 @@ public:
         CUTLASS_PRAGMA_UNROLL
         for (int v = 0; v < IteratorB::kAccessesPerVector; ++v) {
           auto gmem_ptr = iterator_B.get();
-
-#if 0
-          if (j == 0 && v == 0) {
-            CUTLASS_TRACE_DEVICE(" [stage=%d] gmem_ptr=%p, smem_ptr=%p, %d bytes, group_start_B=%d, valid=%d",
-                stage, reinterpret_cast<void*>(gmem_ptr), reinterpret_cast<void*>(dst_ptr),
-                kSrcBytes, group_start_B, static_cast<int>(iterator_B.valid()));
-          }
-#endif
+          bool is_valid = (threadIdx.x < IteratorB::ThreadMap::kThreads) ? iterator_B.valid() : false;
 
           if (SharedMemoryClear == SharedMemoryClearOption::kZfill) {
             cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpB>(
-                dst_ptr + v, gmem_ptr, iterator_B.valid());
+                dst_ptr + v, gmem_ptr, is_valid);
           } else {
             cutlass::arch::cp_async<kSrcBytes, kCacheOpB>(
-                dst_ptr + v, gmem_ptr, iterator_B.valid());
+                dst_ptr + v, gmem_ptr, is_valid);
           }
 
           ++iterator_B;
@@ -449,7 +414,7 @@ public:
   }
 
   CUTLASS_DEVICE
-  void copy_tiles_and_advance_per_stage_A(IteratorA &iterator_A, int stage) {
+  void copy_tiles_and_advance_per_stage_A(IteratorA &iterator_A) {
     iterator_A.set_iteration_index(0);
     this->smem_iterator_A_.set_iteration_index(0);
 
@@ -469,34 +434,6 @@ public:
             IteratorA::ThreadMap::kElementsPerAccess /
             IteratorA::kAccessesPerVector / 8;
 
-        int src_bytes = (iterator_A.valid() ? kSrcBytes : 0);
-
-#if 0
-        if (v == 0) {
-          int gmem_offset = reinterpret_cast<int>(gmem_ptr) - reinterpret_cast<int>(ptr_A_);
-          int gmem_k = 8192;
-          int gmem_m = 16;
-          int gmem_row = gmem_offset / gmem_k;
-          int gmem_col = gmem_offset % gmem_k;
-
-          int smem_offset = reinterpret_cast<int>(dst_ptr) - reinterpret_cast<int>(smem_ptr_A_);
-          int smem_k = Shape::kK;
-          int smem_m = Shape::kM;
-          int smem_row = smem_offset / smem_k;
-          int smem_col = smem_offset % smem_k;
-
-          ElementA* gmem_element_A_ptr = reinterpret_cast<ElementA*>(gmem_ptr);
-          CUTLASS_TRACE_DEVICE(" [stage=%d] gmem_ptr=%p, smem_ptr=%p, bytes=%d; gmem: %dx%d, {%d, %d}, [%f, %f, %f, %f, %f, %f, %f, %f]; smem: {%d, %d};",
-              stage, reinterpret_cast<void*>(gmem_ptr), reinterpret_cast<void*>(dst_ptr), kSrcBytes,
-              gmem_m, gmem_k, gmem_row, gmem_col,
-              static_cast<float>(gmem_element_A_ptr[0]), static_cast<float>(gmem_element_A_ptr[1]),
-              static_cast<float>(gmem_element_A_ptr[2]), static_cast<float>(gmem_element_A_ptr[3]),
-              static_cast<float>(gmem_element_A_ptr[4]), static_cast<float>(gmem_element_A_ptr[5]),
-              static_cast<float>(gmem_element_A_ptr[6]), static_cast<float>(gmem_element_A_ptr[7]),
-              smem_row, smem_col);
-        }
-#endif
-
         cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpA>(
             dst_ptr + v, iterator_A.get(), iterator_A.valid());
 
@@ -507,9 +444,8 @@ public:
     }
   }
 
-  template <bool InitStage>
   CUTLASS_DEVICE
-  void copy_tiles_and_advance_per_stage_B(IteratorB &iterator_B, int stage) {
+  void copy_tiles_and_advance_per_stage_B(IteratorB &iterator_B) {
     if (threadIdx.x >= IteratorB::ThreadMap::kThreads) {
       return;
     }
@@ -533,45 +469,8 @@ public:
             IteratorB::ThreadMap::kElementsPerAccess /
             IteratorB::kAccessesPerVector / 8;
 
-#if 0
-        if (v == 0) {
-          int gmem_offset = reinterpret_cast<int>(gmem_ptr) - reinterpret_cast<int>(ptr_B_);
-          int gmem_k = 8192 * kInterleave / 4;
-          int gmem_n = 1792 / kInterleave;
-          int gmem_row = gmem_offset / gmem_k;
-          int gmem_col = gmem_offset % gmem_k;
-
-          int smem_offset = reinterpret_cast<int>(dst_ptr) - reinterpret_cast<int>(smem_ptr_B_);
-          int smem_k = Shape::kK * kInterleave / 4;
-          int smem_n = Shape::kN / kInterleave;
-          int smem_row = smem_offset / smem_k;
-          int smem_col = smem_offset % smem_k;
-
-          uint8_t* gmem_uint8_ptr = reinterpret_cast<uint8_t*>(gmem_ptr);
-
-          CUTLASS_TRACE_DEVICE(" [stage=%d] gmem_ptr=%p, smem_ptr=%p, bytes=%d, valid=%d; gmem: %dx%d, {%d, %d}, [%d, %d, %d, %d, %d, %d, %d, %d]; smem: {%d, %d};",
-              stage, reinterpret_cast<void*>(gmem_ptr), reinterpret_cast<void*>(dst_ptr), kSrcBytes,
-              static_cast<int>(iterator_B.valid()), gmem_n, gmem_k, gmem_row, gmem_col,
-              static_cast<int>(gmem_uint8_ptr[0]), static_cast<int>(gmem_uint8_ptr[1]),
-              static_cast<int>(gmem_uint8_ptr[2]), static_cast<int>(gmem_uint8_ptr[3]),
-              static_cast<int>(gmem_uint8_ptr[4]), static_cast<int>(gmem_uint8_ptr[5]),
-              static_cast<int>(gmem_uint8_ptr[6]), static_cast<int>(gmem_uint8_ptr[7]),
-              smem_row, smem_col);
-        }
-#endif
-
-        if (InitStage) {
-          cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpB>(
-              dst_ptr + v, iterator_B.get(), iterator_B.valid());
-        } else {
-          if (SharedMemoryClear == SharedMemoryClearOption::kZfill) {
-            cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpB>(
-                dst_ptr + v, gmem_ptr, iterator_B.valid());
-          } else {
-            cutlass::arch::cp_async<kSrcBytes, kCacheOpB>(
-                dst_ptr + v, gmem_ptr, iterator_B.valid());
-          }
-        }
+        cutlass::arch::cp_async_zfill<kSrcBytes, kCacheOpB>(
+            dst_ptr + v, iterator_B.get(), iterator_B.valid());
 
         ++iterator_B;
       }
@@ -598,10 +497,10 @@ public:
       iterator_B.clear_mask(gemm_k_iterations == 0);
 
       // Async copy zipped B to shared memory.
-      copy_tiles_and_advance_per_stage_A(iterator_A, 0);
+      copy_tiles_and_advance_per_stage_A(iterator_A);
 
       // Async copy zipped B to shared memory.
-      copy_tiles_and_advance_per_stage_B<true>(iterator_B, stage);
+      copy_tiles_and_advance_per_stage_B(iterator_B);
 
       // Async copy other quantized params to shared memory, local_scale, code_scale, code_zp, super_scale.
       if (stage == 0) {
@@ -689,15 +588,13 @@ public:
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
     for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations; ++warp_mma_k) {
-      unsigned long long start = clock64();
 
       int warp_k_compute_offset_B = warp_mma_k % Base::kWarpGemmIterationsPerLoadForB;
 
       if (warp_k_compute_offset_B == Base::kWarpGemmIterationsPerLoadForB - 1) {
         // Load the next warp-tile's B fragment from shared memory
-        //this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k_for_B + 1) % Base::kWarpLoadIterationsForB);
-        this->warp_tile_iterator_B_.set_kgroup_index(0);
-        this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_[0]);
+        this->warp_tile_iterator_B_.set_kgroup_index(((warp_mma_k + 1) % Base::kWarpGemmIterations) / Base::kWarpLoadIterationsForB);
+        this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
         ++this->warp_tile_iterator_B_;
       }
 
@@ -711,22 +608,18 @@ public:
       this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
       ++this->warp_tile_iterator_A_;
 
-      unsigned long long load_smem = clock64();
-
       // dequantizes next warp-tile
       warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
                                    pipe_state.warp_frag_code_scale_,
                                    pipe_state.warp_frag_code_zp_,
                                    pipe_state.warp_frag_super_scale_,
-                                   pipe_state.warp_loaded_frag_B_[0],
+                                   pipe_state.warp_loaded_frag_B_,
                                    pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
                                    ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
                                    (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
-      unsigned long long dequantize = clock64();
-
       // Execute the current warp-tile of MMA operations
-      if (Detail::kStagedAccumulation) {
+      if constexpr (Detail::kStagedAccumulation) {
         warp_mma_(
           pipe_state.tmp_accum_,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
@@ -747,8 +640,6 @@ public:
           accum);
       }
 
-      unsigned long long mma = clock64();
-
       // Except for the last warp-tile, all warp-tiles issue their share of
       // global->shared fragment copies
       if (warp_mma_k < Base::kWarpGemmIterations - 1) {
@@ -756,7 +647,7 @@ public:
         int group_start_iteration_B = warp_mma_k * Detail::kAccessesPerGroupB;
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
-        copy_tiles_and_advance_B(iterator_B, group_start_iteration_B, stage);
+        copy_tiles_and_advance_B(iterator_B, group_start_iteration_B);
 
         if (warp_mma_k == 0) {
           quant_params_accessor_B_.copy_tiles_and_advance_per_stage<false>(mma_quant_args, stage);
@@ -768,11 +659,15 @@ public:
       //   - moves to the next global fetch stage
       if (warp_mma_k + 2 == Base::kWarpGemmIterations) {
         // Performs the last warp-tile's share of global->shared fragment copies
-        int group_start_iteration_A = (warp_mma_k + 1) * Detail::kAccessesPerGroupA;
-        int group_start_iteration_B = (warp_mma_k + 1) * Detail::kAccessesPerGroupB;
+        if constexpr (Detail::AsyncCopyIterationsPerStageA >= Base::kWarpGemmIterations) {
+          int group_start_iteration_A = (warp_mma_k + 1) * Detail::kAccessesPerGroupA;
+          copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
+        }
 
-        copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
-        copy_tiles_and_advance_B(iterator_B, group_start_iteration_B, stage);
+        if constexpr (Detail::AsyncCopyIterationsPerStageB >= Base::kWarpGemmIterations) {
+          int group_start_iteration_B = (warp_mma_k + 1) * Detail::kAccessesPerGroupB;
+          copy_tiles_and_advance_B(iterator_B, group_start_iteration_B);
+        }
 
         // Inserts a memory fence between stages of cp.async instructions.
         cutlass::arch::cp_async_fence();
@@ -794,10 +689,6 @@ public:
         iterator_B.clear_mask(gemm_k_iterations == 0);
         quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
       }
-
-      unsigned long long end = clock64();
-      CUTLASS_TRACE_DEVICE(" [stage=%d - %d] load_smem: %llu, dequantize: %llu, mma: %llu, load_gmem: %llu",
-          stage, warp_mma_k, load_smem - start, dequantize - load_smem, mma - dequantize, end - mma);
     }
   }
 
@@ -820,7 +711,7 @@ public:
 
     // Load first warp-tile's B fragment from shared memory
     this->warp_tile_iterator_B_.set_kgroup_index(0);
-    this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_[0]);
+    this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
     ++this->warp_tile_iterator_B_;
 
     warp_dequantizer_.load(pipe_state.warp_frag_code_scale_,
@@ -839,12 +730,12 @@ public:
                                  pipe_state.warp_frag_code_scale_,
                                  pipe_state.warp_frag_code_zp_,
                                  pipe_state.warp_frag_super_scale_,
-                                 pipe_state.warp_loaded_frag_B_[0],
+                                 pipe_state.warp_loaded_frag_B_,
                                  pipe_state.warp_frag_B_[0],
                                  0,
                                  0);
 
-    if (Detail::kStagedAccumulation) {
+    if constexpr (Detail::kStagedAccumulation) {
       pipe_state.tmp_accum_.clear();
     }
 
@@ -853,9 +744,6 @@ public:
     // Mainloop
     CUTLASS_GEMM_LOOP
     for (; gemm_k_iterations > (-Base::kStages + 1);) {
-      if (stage > Base::kStages + 0) {
-        //break;
-      }
       mac_loop_iter(
         pipe_state,
         accum,
@@ -867,7 +755,7 @@ public:
       stage += 1;
     }
 
-    if (Detail::kStagedAccumulation) {
+    if constexpr (Detail::kStagedAccumulation) {
       plus<FragmentC> plus_accum;
       accum = plus_accum(accum, pipe_state.tmp_accum_);
     }
@@ -927,9 +815,6 @@ public:
       QuantArguments mma_quant_args,
       ///< initial value of accumulator
       FragmentC const &src_accum) {
-
-    ptr_A_ = reinterpret_cast<ElementA*>(iterator_A.get_origin_pointer());
-    ptr_B_ = reinterpret_cast<uint8_t*>(iterator_B.get_origin_pointer());
 
     // Prologue (start fetching iterations of global fragments into shared memory)
     prologue(iterator_A, iterator_B, mma_quant_args, gemm_k_iterations);

@@ -824,8 +824,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
 
       int local_scale_pointer_offset = ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
       uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + problem_idx * gemm_k * gemm_n / 128);
-      //CUTLASS_TRACE_DEVICE(" local_scale_ptr=%p, extent={%d, %d}, tb_offset={%d, %d}, local_scale_pointer_offset=%d",
-      //    local_scale_ptr, gemm_k / 128, gemm_n * 2, tb_offset_local_scale.row(), tb_offset_local_scale.column(), local_scale_pointer_offset);
       typename Mma::QuantParamsAccessor::IteratorLocalScale iterator_local_scale(
           Mma::QuantParamsAccessor::LayoutLocalScale(gemm_n * 2),
           local_scale_ptr,
@@ -898,13 +896,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         int32_t problem_idx = problem_visitor.problem_index();
         int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
 
-        if (problem_idx > 2) {
-          //break;
-        }
-
-        //CUTLASS_TRACE_DEVICE(" problem_idx: %d, cta_idx: %d, problem_size: {%d, %d, %d}",
-        //    problem_idx, cta_idx, static_cast<int>(problem_size.m()), static_cast<int>(problem_size.n()), static_cast<int>(problem_size.k()));
-
         GemmCoord grid_shape = problem_visitor.grid_shape(problem_size);
 
         // threadblock_offset of C
@@ -944,9 +935,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         // the begin threadblock_offset of B, which holds the same column id with C
         cutlass::MatrixCoord tb_offset_B{0, threadblock_offset.n() / kInterleave};
         cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
-
-        //CUTLASS_TRACE_DEVICE(" ptr_B: %p, ldm_B: %d, tb_offset_B: {%d, %d}, extent_B: {%d, %d}",
-        //    ptr_B, static_cast<int>(ldm_B), tb_offset_B.row(), tb_offset_B.column(), extent_B.row(), extent_B.column());
 
         // Compute position within threadblock
         int thread_idx = threadIdx.x;

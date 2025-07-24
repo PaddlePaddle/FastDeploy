@@ -452,14 +452,7 @@ public:
 
     /// Ctor
     CUTLASS_DEVICE
-    MmaTensorOpComputeBWithF16() {
-        CUTLASS_TRACE_DEVICE(" SharedMemoryInstructionShape={%d, %d, %d}",
-            SharedMemoryInstructionShape::kM, SharedMemoryInstructionShape::kN, SharedMemoryInstructionShape::kK);
-        CUTLASS_TRACE_DEVICE(" ArchMmaOperator::FragmentB::kElements=%d", ArchMmaOperator::FragmentB::kElements);
-        CUTLASS_TRACE_DEVICE(" FragmentB::kElements=%d", FragmentB::kElements);
-        CUTLASS_TRACE_DEVICE(" kExpansionFactor=%d", kExpansionFactor);
-        CUTLASS_TRACE_DEVICE(" FragmentB::kElements / kExpansionFactor=%d", FragmentB::kElements / kExpansionFactor);
-    }
+    MmaTensorOpComputeBWithF16() {}
 
     /// Performs a warp-level matrix multiply-accumulate operation
     CUTLASS_DEVICE

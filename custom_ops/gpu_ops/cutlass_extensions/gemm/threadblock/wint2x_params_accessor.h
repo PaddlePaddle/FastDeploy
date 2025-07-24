@@ -261,9 +261,6 @@ public:
         ++quant_args.iterator_local_scale;
       }
       ++this->smem_iterator_local_scale_;
-
-      //CUTLASS_TRACE_DEVICE(" [stage=%d][LocalScale] Shape: {%d, %d}, kLocalScaleRows=%d",
-      //    stage, IteratorLocalScale::Shape::kRow, IteratorLocalScale::Shape::kColumn, kLocalScaleRows);
     }
   }
 
@@ -287,7 +284,6 @@ public:
       smem_iterator_local_scale_.add_pointer_offset(pointer_offset);
       smem_write_stage_idx_ = 0;
     }
-    //CUTLASS_TRACE_DEVICE(" smem_write_stage_idx_=%d", smem_write_stage_idx_);
   }
 
   CUTLASS_DEVICE
@@ -304,7 +300,7 @@ public:
       smem_read_stage_idx_ = 0;
       byte_offset = - (kStages - 1) * kLocalScaleRows * kSmemColumns;
     }
-    //CUTLASS_TRACE_DEVICE(" smem_read_stage_idx_=%d, byte_offset=%d", smem_read_stage_idx_, byte_offset);
+
     return byte_offset;
   }
 

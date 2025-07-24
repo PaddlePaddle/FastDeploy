@@ -20,8 +20,6 @@
 #include "moe/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
 
-#define _GROUP_GEMM_ONLY 1
-
 template <typename DataT, typename NvType, typename WeightSavedT, cutlass::WintQuantMethod QuantMethod>
 void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
                   const paddle::Tensor& tokens_expert_prefix_sum,
@@ -68,11 +66,7 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         reinterpret_cast<const WeightType*>(ffn1_weight.data<WeightSavedT>()),
         reinterpret_cast<const NvType*>(ffn1_super_scale ? ffn1_super_scale->data<DataT>() : nullptr),
         reinterpret_cast<const NvType*>(ffn1_bias ? ffn1_bias->data<DataT>() : nullptr),
-#if _GROUP_GEMM_ONLY
-        reinterpret_cast<NvType*>(ffn_out.data<DataT>()),
-#else
         reinterpret_cast<NvType*>(fc1_out.data<DataT>()),
-#endif
         const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
         total_rows_in_ll_else_minus1,
         actual_total_rows,
@@ -83,12 +77,9 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         "none",
         stream);
 
-#if _GROUP_GEMM_ONLY
-    // do nothing
-#else
     paddle::Tensor act_out;
     if (used_in_ep_low_latency) {
-        //act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
+        act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
     } else {
         act_out = paddle::experimental::swiglu(fc1_out, nullptr);
     }
@@ -106,7 +97,6 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         num_experts,
         ffn2_quant_args,
         stream);
-#endif
 }
 
 template <paddle::DataType T>
@@ -209,14 +199,7 @@ paddle::Tensor MoeExpertFFNWint2Func(
     const bool used_in_ep_low_latency) {
 
     const auto dtype = permute_input.dtype();
-#if _GROUP_GEMM_ONLY
-    auto place = permute_input.place();
-    int64_t expanded_active_expert_rows = permute_input.dims()[0];
-    int64_t inter_size = ffn1_scale.get().dims()[1];
-    auto ffn_out = GetEmptyTensor({expanded_active_expert_rows, inter_size}, dtype, place);
-#else
     auto ffn_out = paddle::empty_like(permute_input, dtype);
-#endif
 
     switch (dtype) {
         case paddle::DataType::BFLOAT16:
@@ -307,14 +290,7 @@ std::vector<std::vector<int64_t>> MoeExpertFFNWint2InferShape(
     const paddle::optional<std::vector<int64_t>>& ffn2_code_zp_shape,
     const bool used_in_ep_low_latency) {
 
-#if _GROUP_GEMM_ONLY
-    int64_t expanded_active_expert_rows = permute_input_shape[0];
-    int64_t inter_size = ffn1_scale_shape.get()[1];
-    std::cout << "expanded_active_expert_rows: " << expanded_active_expert_rows << ", inter_size: " << inter_size << std::endl;
-    return {std::vector<int64_t>{expanded_active_expert_rows, inter_size}};
-#else
     return {permute_input_shape};
-#endif
 }
 
 std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(

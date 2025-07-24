@@ -148,12 +148,6 @@ void generic_moe_gemm_kernelLauncher(const T* A,
                                        ElementAccumulator,
                                        EpilogueTag>::Op;
 
-  CUTLASS_TRACE_HOST("Stages: " << Stages);
-
-  //std::cout << "-- ThreadblockShape: {" << ThreadblockShape::kM << ", " << ThreadblockShape::kN << ", " << ThreadblockShape::kK
-  //          << "}, WarpShape: {" << WarpShape::kM << ", " << WarpShape::kN << ", " << WarpShape::kK
-  //          << "}, Stages: " << Stages << std::endl;
-
   // Finally, set up the kernel.
   using BaseGemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
       ElementType,
@@ -193,7 +187,6 @@ void generic_moe_gemm_kernelLauncher(const T* A,
         "GroupedGEMM kernel");
   }
   const int threadblock_count = multi_processor_count * occupancy;
-  CUTLASS_TRACE_HOST("kernel_occupancy: " << kernel_occupancy << ", occupancy: " << occupancy << ", threadblock_count: " << threadblock_count << ", multi_processor_count: " << multi_processor_count);
 
   typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
@@ -450,7 +443,6 @@ void dispatch_gemm_config(const T* A,
 #define dispatch_gemm_config_macro(AA, BB, CC, DD, EE, FF)      \
   case CutlassTileConfig::                                      \
       CtaShape##AA##x##BB##x##CC##_WarpShape##DD##x##EE##x##FF: \
-    CUTLASS_TRACE_HOST("ThreadblockShape<" << AA << "," << BB << "," << CC << ">, WarpShape<" << DD << "," << EE << "," << FF << ">"); \
     dispatch_gemm_config<T,                                     \
                          WeightQuantTraits,                     \
                          arch,                                  \
@@ -571,16 +563,16 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   } else {
     switch (gemm_config.tile_config) {
       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-      //dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
-      //dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
-      //dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-      //dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
-      //dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
-      //dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
-      //dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
-      //dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
-      //dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
-      //dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
+      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+      dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
+      dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
+      dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
+      dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
+      dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
       case CutlassTileConfig::Undefined:
         throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
         break;
@@ -739,10 +731,8 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         std::min(gemmConfigManager.nextPowerOfTwo(actual_total_rows),
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
-    size_t num_candidate_configs_size = 4; //candidate_configs.size();
-    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii)
-    {
-      //size_t ii = 3;
+    size_t num_candidate_configs_size = candidate_configs.size();
+    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
       try {
         for (int i = 0; i < warm_time; i++) {
           dispatch_to_arch<EpilogueTag>(A,
@@ -807,7 +797,6 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
     }
   }
 
-#if 1
   dispatch_to_arch<EpilogueTag>(A,
                                 B,
                                 weight_scales,
@@ -821,7 +810,6 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
                                 quant_args_B,
                                 chosen_config,
                                 stream);
-#endif
 }
 
 template <typename T, typename WeightQuantTraits>

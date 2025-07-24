@@ -372,10 +372,6 @@ public:
                     FragmentOutput& output_frag,
                     int tb_offset_k,
                     int warp_k_compute_offset) {
-        unsigned long long start = clock64();
-
-        int stage = tb_offset_k / 64;
-
         if constexpr (kUnpackInterval != 1) {
             // unsupport now
             arch::device_breakpoint();
@@ -394,8 +390,6 @@ public:
         }
         FragmentInputUnpack unpacked_frag = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
 
-        unsigned long long unpack_b = clock64();
-
         // dequantize local_scale
         if (warp_k_compute_offset == 0) {
             using LocalScaleConverter = detail::LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>;
@@ -404,8 +398,6 @@ public:
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
             LocalScaleConverter::Apply(local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
         }
-
-        unsigned long long unpack_local_scale = clock64();
 
         // unscale
         // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
@@ -433,10 +425,6 @@ public:
                 output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
             }
         }
-
-        unsigned long long end = clock64();
-        CUTLASS_TRACE_DEVICE(" unpack_B: %llu, dequant_local_scale: %llu, unscale: %llu, dequantize: %llu",
-            unpack_b - start, unpack_local_scale - unpack_b, end - unpack_local_scale, end - start);
     }
 
     /// Add an offset to pointer in units of elements.
