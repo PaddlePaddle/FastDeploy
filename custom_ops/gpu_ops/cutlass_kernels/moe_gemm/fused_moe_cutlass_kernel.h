@@ -51,15 +51,6 @@ namespace cutlass {
 namespace gemm {
 namespace kernel {
 
-template <typename Layout> std::string GetCutlassLayoutString() {
-  if (std::is_same<Layout, cutlass::layout::RowMajor>::value) {
-    return "cutlass::layout::RowMajor";
-  } else if (std::is_same<Layout, cutlass::layout::ColumnMajor>::value) {
-    return "cutlass::layout::ColumnMajor";
-  }
-  return "unknown";
-}
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // This section exists to that we can use the same kernel code for regular gemm
 // and dequantizing gemms. It will dispatch to the dequantizing gemm if the Mma
@@ -290,27 +281,6 @@ struct MoeFCGemm {
           platform::is_same<uint4b_t, ElementB>::value) {
         assert(weight_scales);
       }
-
-      CUTLASS_TRACE_HOST("[Arguments] problem_count: " << problem_count << ", threadblock_count: " << threadblock_count << ", gemm_n: " << gemm_n << ", gemm_k: " << gemm_k);
-      CUTLASS_TRACE_HOST("[Arguments] ptr_A: " << static_cast<void const*>(ptr_A));
-      CUTLASS_TRACE_HOST("[Arguments] ptr_B: " << static_cast<void const*>(ptr_B));
-      CUTLASS_TRACE_HOST("[Arguments] ptr_C: " << static_cast<void const*>(ptr_C));
-      CUTLASS_TRACE_HOST("[Arguments] ptr_D: " << static_cast<void*>(ptr_D));
-      CUTLASS_TRACE_HOST("[Arguments] weight_scales: " << static_cast<void const*>(weight_scales));
-      CUTLASS_TRACE_HOST("[Arguments] total_rows_before_expert: " << static_cast<void*>(total_rows_before_expert));
-      CUTLASS_TRACE_HOST("[Arguments] local_scale: " << static_cast<void const*>(local_scale));
-      CUTLASS_TRACE_HOST("[Arguments] code_scale: " << static_cast<void const*>(code_scale));
-      CUTLASS_TRACE_HOST("[Arguments] code_zp: " << static_cast<void const*>(code_zp));
-      CUTLASS_TRACE_HOST("[Arguments] quant_method: " << static_cast<int>(quant_method));
-      CUTLASS_TRACE_HOST("[Arguments] LayoutA: " << GetCutlassLayoutString<LayoutA>());
-      CUTLASS_TRACE_HOST("[Arguments] LayoutB: " << GetCutlassLayoutString<LayoutB>());
-      CUTLASS_TRACE_HOST("[Arguments] LayoutC: " << GetCutlassLayoutString<LayoutC>());
-      CUTLASS_TRACE_HOST("[Arguments] Mma::IteratorA::AccessType::kElements:" << Mma::IteratorA::AccessType::kElements);
-      CUTLASS_TRACE_HOST("[Arguments] Mma::IteratorB::AccessType::kElements:" << Mma::IteratorB::AccessType::kElements);
-      CUTLASS_TRACE_HOST("[Arguments] SharedStorage Information:");
-      CUTLASS_TRACE_HOST(" - ProblemVisitor::SharedStorage: " << sizeof(typename ProblemVisitor::SharedStorage) << " bytes");
-      CUTLASS_TRACE_HOST(" - Mma::SharedStorage: " << sizeof(typename Mma::SharedStorage) << " bytes");
-      CUTLASS_TRACE_HOST(" - Epilogue::SharedStorage: " << sizeof(typename Epilogue::SharedStorage) << " bytes");
     }
   };
 

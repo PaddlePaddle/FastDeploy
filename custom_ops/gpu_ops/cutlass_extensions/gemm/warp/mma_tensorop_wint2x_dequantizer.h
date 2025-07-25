@@ -304,8 +304,6 @@ public:
     /// Fragment of dequantized B
     using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements / kExpansionFactor>;
 
-    //using Multiplier = detail::Multiplier<ElementOperand, 2>;
-
     /// TensorRef type for loading element from a tensor
     using SuperTensorRef = cutlass::TensorRef<ElementSuperScale, Layout>;
     using LocalTensorRef = cutlass::TensorRef<ElementLocalScale, Layout>;

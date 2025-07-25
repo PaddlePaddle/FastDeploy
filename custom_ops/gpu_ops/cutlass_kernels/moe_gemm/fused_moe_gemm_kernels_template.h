@@ -493,8 +493,8 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   int* occupancy = nullptr) {
   switch (gemm_config.tile_config) {
     dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-    //dispatch_gemm_config_macro(64, 128, 64, 32, 64, 64);
-    //dispatch_gemm_config_macro(128, 128, 64, 64, 32, 64);
+    dispatch_gemm_config_macro(64, 128, 64, 32, 64, 64);
+    dispatch_gemm_config_macro(128, 128, 64, 64, 32, 64);
     case CutlassTileConfig::Undefined:
       throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
       break;
@@ -540,8 +540,8 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   if constexpr (std::is_same<arch, cutlass::arch::Sm70>::value) {
     if constexpr (WeightQuantTraits::kQuantMethod != cutlass::WintQuantMethod::kWeightOnlyInt2) {
       switch (gemm_config.tile_config) {
-        //dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-        //dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+        dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+        dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
         case CutlassTileConfig::Undefined:
           throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
           break;
@@ -564,8 +564,8 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
     switch (gemm_config.tile_config) {
       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
       dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
-      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
       dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
+      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
       dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
       dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
       dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
@@ -614,7 +614,7 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   cudaStream_t stream,
                                   int* occupancy = nullptr) {
   switch (gemm_config.tile_config) {
-    //dispatch_gemm_config_macro(128, 128, 8, 64, 64, 8);
+    dispatch_gemm_config_macro(128, 128, 8, 64, 64, 8);
     case CutlassTileConfig::Undefined:
       throw std::runtime_error(
           "[dispatch_moe_gemm_to_cutlass][SIMT] gemm config "
@@ -776,7 +776,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
         check_cuda_error(cudaEventDestroy(start));
         check_cuda_error(cudaEventDestroy(stop));
-        // std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
+        //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
         if (elapsed < best_time) {
           best_id = ii;
           best_time = elapsed;
@@ -789,7 +789,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
       }
     }
     if (find_one) {
-      // std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
+      //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
       gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
       chosen_config = best_config;
     } else {
