@@ -96,6 +96,6 @@ class WorkerBase(ABC):
         """Basic health check (override for device-specific checks)."""
         return NotImplementedError
 
-    def prefill_finished(self):
-        """check whether prefill stage finished."""
+    def exist_prefill(self):
+        """check whether prefill stage exist."""
         return True

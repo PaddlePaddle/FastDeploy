@@ -239,9 +239,7 @@ class DataProcessor(BaseDataProcessor):
                 task["enable_thinking"] = kwargs.get("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
-                raise ValueError(
-                    f"The request should have `input_ids`, `text` or `messages`: {request}."
-                )
+                raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
         if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         if request.get("max_tokens") is None:
@@ -281,18 +279,16 @@ class DataProcessor(BaseDataProcessor):
 
         data_processor_logger.info(f"Processing request {request}")
         # processing prompt_token_ids
-        if not request.get('prompt_token_ids'):
-            if 'prompt' in request:
-                request['prompt_token_ids'] = self.text2ids(request['prompt'], max_model_len).tolist()
-            elif 'messages' in request:
+        if not request.get("prompt_token_ids"):
+            if "prompt" in request:
+                request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len).tolist()
+            elif "messages" in request:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
-                raise ValueError(
-                    f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}"
-                )
-        if len(request['prompt_token_ids']) == 0:
+                raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
+        if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
@@ -357,8 +353,7 @@ class DataProcessor(BaseDataProcessor):
         if is_end:
             full_text = previous_texts + delta_text
             if enable_thinking and self.reasoning_parser:
-                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                    full_text, response_dict)
+                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:

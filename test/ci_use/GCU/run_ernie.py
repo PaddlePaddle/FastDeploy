@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-dcu backend methods
-"""
+import openai
 
-from .fused_moe_triton_backends import DCUTritonWeightOnlyMoEMethod
-from .top_p_sampling import native_top_p_sampling
-from .weight_only import DCUWeightOnlyLinearMethod
+ip = "0.0.0.0"
+service_http_port = "8188"  # 服务配置的
+client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
 
-__all__ = [
-    "DCUTritonWeightOnlyMoEMethod",
-    "DCUWeightOnlyLinearMethod",
-    "native_top_p_sampling",
-]
+# 非流式对话
+response = client.chat.completions.create(
+    model="default",
+    messages=[
+        {"role": "user", "content": "The largest ocean is"},
+    ],
+    temperature=1,
+    top_p=0,
+    max_tokens=64,
+    stream=False,
+)
+print(response)

@@ -29,7 +29,13 @@ for i in range(bs):
     ids_len = seq_lens[i, 0]
     input_ids[i, 0:ids_len] = np.random.randint(1, 10, seq_lens[i, 0], "int64")
 
-(x_remove_padding, cum_offsets_out, padding_offset, cu_seqlens_q, cu_seqlens_k,) = get_padding_offset(
+(
+    x_remove_padding,
+    cum_offsets_out,
+    padding_offset,
+    cu_seqlens_q,
+    cu_seqlens_k,
+) = get_padding_offset(
     paddle.to_tensor(input_ids),
     paddle.to_tensor(cum_offset),
     paddle.to_tensor(token_num),

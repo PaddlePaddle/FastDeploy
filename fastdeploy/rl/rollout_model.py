@@ -153,14 +153,14 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
         # Helper function to add layer mappings
         def _add_layer_mappings(layer_idx: int):
             # MoE specific mappings
-            self.infer_to_train_mapping[
-                f"{base_name}.{layer_idx}.mlp.fused_moe.gate_weight"
-            ] = f"{base_name}.{layer_idx}.mlp.gate.weight"
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_weight"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.weight"
+            )
 
             if self.fd_config.model_config.moe_use_aux_free:
-                self.infer_to_train_mapping[
-                    f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"
-                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = (
+                    f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                )
 
             # MoE experts mappings
             for expert_idx in range(self.fd_config.model_config.moe_num_experts):
@@ -184,7 +184,8 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
         assert isinstance(self.fd_config.model_config.moe_layer_start_index, int)
         # Process MoE layers
         for layer_idx in range(
-            self.fd_config.model_config.moe_layer_start_index, self.fd_config.model_config.num_hidden_layers
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
         ):
             _add_layer_mappings(layer_idx)
 
@@ -226,9 +227,9 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
         def _add_expert_mappings(layer_idx: int, moe_tag: str, expert_start: int):
             # MoE specific mappings
             gate_suffix = "" if moe_tag == "text" else "_1"
-            self.infer_to_train_mapping[
-                f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_weight"
-            ] = f"{base_name}.{layer_idx}.mlp.gate.weight{gate_suffix}"
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_weight"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.weight{gate_suffix}"
+            )
 
             if self.fd_config.model_config.moe_use_aux_free:
                 self.infer_to_train_mapping[
@@ -245,7 +246,10 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
 
             expert_mappings = defaultdict(list)
             for expert_idx in _generate_ranges(
-                expert_start, total_moe_num, expert_num_per_rank * 2, expert_num_per_rank
+                expert_start,
+                total_moe_num,
+                expert_num_per_rank * 2,
+                expert_num_per_rank,
             ):
                 for ph in place_holders:
                     expert_mappings[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.up_gate_proj_weight"].append(
@@ -323,9 +327,9 @@ class Qwen2ForCausalLMRL(Qwen2ForCausalLM, BaseRLModel):
         def _add_layer_mappings(layer_idx):
             # FFN mappings
             for ph in place_holders:
-                self.infer_to_train_mapping[
-                    f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"
-                ] = f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"] = (
+                    f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                )
 
         for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
             _add_layer_mappings(layer_idx)
@@ -368,14 +372,14 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
         # Helper function to add layer mappings
         def _add_layer_mappings(layer_idx: int):
             # MoE specific mappings
-            self.infer_to_train_mapping[
-                f"{base_name}.{layer_idx}.mlp.gate_weight"
-            ] = f"{base_name}.{layer_idx}.mlp.gate.weight"
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate_weight"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.weight"
+            )
 
             if self.fd_config.moe_config.moe_use_aux_free:
-                self.infer_to_train_mapping[
-                    f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"
-                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = (
+                    f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                )
 
             # MoE experts mappings
             for expert_idx in range(self.fd_config.moe_config.num_experts):

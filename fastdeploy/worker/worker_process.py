@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import List
+from typing import Tuple
 
 import numpy as np
 import paddle
@@ -75,7 +75,7 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
-def init_distributed_environment(seed: int = 20) -> List[int]:
+def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
     ranks = dist.get_world_size()
@@ -123,9 +123,9 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
 
 class PaddleDisWorkerProc:
     """
-    Paddle Distrubuted wrapper for fastdeploy.worker.Worker,
+    Paddle Distributed wrapper for fastdeploy.worker.Worker,
         for handling single-node multi-GPU tensor parallel.
-    The wrapper internally executea an event loop that continuously executes requests
+    The wrapper internally executes an event loop that continuously executes requests
         in the task queue. Control flow is transmitted by IPC.
     """
 
@@ -150,7 +150,7 @@ class PaddleDisWorkerProc:
             self.parallel_config.pod_ip,
             self.parallel_config.engine_worker_queue_port,
         )
-
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.task_queue = TaskQueue(
             address=task_address,
             is_server=False,
@@ -194,7 +194,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.engine_pid,
             create=False,
         )
-        self.worker_healthy_live_signal.value[self.local_rank % 8] = int(time.time())
+        self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
         # init model_weights_status
         workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
@@ -287,7 +287,7 @@ class PaddleDisWorkerProc:
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-                    if not self.fd_config.model_config.enable_mm or not self.worker.prefill_finished():
+                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
                         if self.nnode > 1:
                             self.task_queue.read_finish_flag.set(1)
                         else:
@@ -347,7 +347,7 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts)
-            self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
+            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -389,7 +389,7 @@ class PaddleDisWorkerProc:
                 dist.all_reduce(num_blocks_local, op=dist.ReduceOp.MIN)
                 num_blocks_local = num_blocks_local.item()
 
-            if self.local_rank == 0:
+            if self.local_rank % self.max_chips_per_node == 0:
                 # 3. Send IPCSignal
                 get_profile_block_num = np.zeros(shape=[1], dtype=np.int32)
                 self.get_profile_block_num_signal = IPCSignal(

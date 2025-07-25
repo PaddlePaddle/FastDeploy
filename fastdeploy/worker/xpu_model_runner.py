@@ -520,14 +520,19 @@ class XPUModelRunner(ModelRunnerBase):
 
         cache_type = self.parallel_config.dtype
 
+        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_type = "uint8"
+            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
+        # Get kv cache shape
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+        )
 
         for i in range(self.model_config.num_hidden_layers):
             cache_kvs[f"key_caches_{i}"] = paddle.full(
@@ -579,9 +584,9 @@ class XPUModelRunner(ModelRunnerBase):
         logger.warn("XPU not support cuda graph currently")
         pass
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        check whether prefill stage finished
+        check whether prefill stage exist
         """
         if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
             return 1

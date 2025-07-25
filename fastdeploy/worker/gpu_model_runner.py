@@ -153,9 +153,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.local_rank + int(self.parallel_config.engine_worker_queue_port)
         )
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        Check whether prefill stage finished
+        check whether prefill stage exist
         """
         if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
             return 1
@@ -800,6 +800,14 @@ class GPUModelRunner(ModelRunnerBase):
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
         is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
+
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            is_decode_batch_list = []
+            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
+            is_decode_batch = all(is_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+
         self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
 
         # Initialzie attention meta data
@@ -816,15 +824,19 @@ class GPUModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
 
+        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_type = "uint8"
+            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+        )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         if not profile and (
@@ -1165,15 +1177,17 @@ class GPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
-        # NOTE(wufeisheng): For Expert Parallelism
-        if not self.not_need_stop():
-            self._execute_empty_input()
-            return None
-
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # when there is data on other runner, the current runner is required to execute part of the model.
+        if not self.not_need_stop():
+            self._execute_empty_input()
+            return None
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()

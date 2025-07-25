@@ -478,7 +478,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     min_p: Optional[float] = None
-    user: Optional[str] = None  
+    user: Optional[str] = None
     metadata: Optional[dict] = None
     extra_body: Optional[dict] = None
     return_token_ids: Optional[bool] = False
