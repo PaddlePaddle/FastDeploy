@@ -679,11 +679,11 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     )
     assert hasattr(enabled_response, "choices")
     assert len(enabled_response.choices) > 0
-    
+
     # from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
     # tokenizer = ErnieBotTokenizer.from_pretrained("PaddlePaddle/ERNIE-4.5-0.3B-Paddle", trust_remote_code=True)
     # prompt = tokenizer.apply_chat_template([{"role": "user", "content": "Hello, how are you?"}], tokenize=False)
-    prompt="<|begin_of_sentence|>User: Hello, how are you?\nAssistant: "
+    prompt = "<|begin_of_sentence|>User: Hello, how are you?\nAssistant: "
     disabled_response = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": prompt}],
@@ -696,4 +696,3 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     assert hasattr(disabled_response, "choices")
     assert len(disabled_response.choices) > 0
     assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
-    
