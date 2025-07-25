@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
@@ -30,13 +29,24 @@ from fastdeploy.utils import get_logger
 logger = get_logger("config", "config.log")
 
 
-class MoEPhase(Enum):
+class MoEPhase:
     """
     The generation phase of the moe.
     """
 
-    PREFILL = 1
-    DECODER = 2
+    def __init__(self, phase="prefill"):
+        self._phase = phase
+
+    @property
+    def phase(self):
+        return self._phase
+
+    @phase.setter
+    def phase(self, value):
+        if value not in ["prefill", "decode"]:
+            raise ValueError(f"The moe_phase is invalid, only support prefill and decode, but got {value}")
+        else:
+            self._phase = value
 
 
 class ErnieArchitectures:
@@ -146,7 +156,7 @@ class ParallelConfig:
     ):
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
-        self.moe_phase = MoEPhase.PREFILL  # Generation phase
+        self.moe_phase = MoEPhase("prefill")  # Generation phase
         self.msg_queue_id = 1  # mesage queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
@@ -210,11 +220,11 @@ class ParallelConfig:
                 setattr(self, key, value)
         self.use_ep = args["expert_parallel_size"] > 1
         if self.splitwise_role == "mixed":
-            self.moe_phase = MoEPhase.PREFILL
+            self.moe_phase = MoEPhase(phase="prefill")
         elif self.splitwise_role == "prefill":
-            self.moe_phase = MoEPhase.PREFILL
+            self.moe_phase = MoEPhase(phase="prefill")
         elif self.splitwise_role == "decode":
-            self.moe_phase = MoEPhase.DECODER
+            self.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
 
