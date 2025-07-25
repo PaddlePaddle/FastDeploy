@@ -58,14 +58,10 @@ def xpu_pre_process(
     seq_lens_decoder: Optional[paddle.Tensor] = None,
 ) -> XPUForwardMeta:
     """ """
-    print(f"输入数据前处理 : {input_ids}, seq_lens_this_time : {seq_lens_this_time}")
-    # if seq_lens_this_time[0] == 0:
-    #     seq_lens_this_time[0] = 1
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
 
-    # print(f"vvvvvvvv input_ids : {input_ids}")
     (
         ids_remove_padding,
         cum_offsets,
@@ -73,7 +69,6 @@ def xpu_pre_process(
         cu_seqlens_q,
         cu_seqlens_k,
     ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
-    # print(f"input_ids : {input_ids}")
 
     share_inputs["ids_remove_padding"] = None  # set this after adjust batch
     share_inputs["cum_offsets"] = cum_offsets
@@ -120,17 +115,6 @@ def xpu_pre_process(
 
     # Adjust batch
 
-    # print(f"ids_remove_padding : {ids_remove_padding}")
-    # print(f"cum_offsets : {cum_offsets}")
-    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
-    # print(f"xpu_forward_meta.encoder_batch_idx : {xpu_forward_meta.encoder_batch_idx}")
-    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
-    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
-    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.enc_batch}")
-    # print(f"xpu_forward_meta.dec_batch : {xpu_forward_meta.dec_batch}")
-
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
         cum_offsets,
@@ -145,17 +129,6 @@ def xpu_pre_process(
         None,  # output_padding_offset
         -1,  # max_input_length
     )
-
-    # print(f"ids_remove_padding : {ids_remove_padding}")
-    # print(f"cum_offsets : {cum_offsets}")
-    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
-    # print(f"xpu_forward_meta.encoder_batch_idx : {xpu_forward_meta.encoder_batch_idx}")
-    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
-    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
-    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.enc_batch}")
-    # print(f"xpu_forward_meta.dec_batch : {xpu_forward_meta.dec_batch}")
 
     adjusted_input = adjusted_input.squeeze(1)
 
