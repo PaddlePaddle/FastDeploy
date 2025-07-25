@@ -89,6 +89,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         """
         Apply default value for parameters in request
         """
+
         def set_value(req, key, value):
             value = getattr(self.generation_config, key, value)
             if isinstance(req, dict):
