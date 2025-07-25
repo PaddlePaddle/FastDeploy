@@ -2,7 +2,9 @@ name: Codestyle-Check
 
 on:
   pull_request:
-    branches: ["develop"]
+    branches:
+      - develop
+      - 'release/*'
 
 jobs:
   pre-commit:
@@ -11,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PR_ID: ${{ github.event.pull_request.number }}
-      BRANCH: develop
+      BRANCH: ${{ github.event.pull_request.base.ref }}
 
     steps:
       - name: Cleanup
