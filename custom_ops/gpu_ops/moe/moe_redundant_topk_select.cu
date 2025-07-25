@@ -254,7 +254,7 @@ std::vector<paddle::DataType> MoERedundantTopKSelectKernelInferDtype(
 }
 
 
-PD_BUILD_OP(moe_redundant_topk_select)
+PD_BUILD_STATIC_OP(moe_redundant_topk_select)
     .Inputs({"gating_logits", "expert_id_to_ep_rank_array", "expert_in_rank_num_list", "tokens_per_expert_stats_list", paddle::Optional("bias")})
     .Outputs({"topk_ids",
               "topk_weights",
