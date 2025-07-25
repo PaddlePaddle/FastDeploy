@@ -37,7 +37,7 @@ class RedundantExpertManger:
         ep_size: int,
     ) -> None:
         """Initialize a redundant expert manager"""
-        self.num_expert = n_routed_experts
+        self.num_expert = n_routed_experts if isinstance(n_routed_experts, int) else n_routed_experts[0]
         self.redundant_experts_num = redundant_experts_num
         self.num_hidden_layers = num_hidden_layers
 

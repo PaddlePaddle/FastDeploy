@@ -143,11 +143,11 @@ class XpuWorker(WorkerBase):
         output = self.model_runner.execute_model(model_forward_batch)
         return output
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        check whether prefill stage finished
+        check whether prefill stage exist
         """
-        return self.model_runner.prefill_finished()
+        return self.model_runner.exist_prefill()
 
     def preprocess_new_task(self, req_dicts: List[Request]) -> None:
         """Process new requests and then start the decode loop

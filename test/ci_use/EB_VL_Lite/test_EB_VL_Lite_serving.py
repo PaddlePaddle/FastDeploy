@@ -325,10 +325,10 @@ def test_streaming_chat(openai_client, capsys):
     assert len(output) > 2
 
 
-
 # ==========================
 # OpenAI Client additional chat/completions test
 # ==========================
+
 
 def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
     """
@@ -340,35 +340,33 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
-            }
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
         ],
         temperature=1,
         max_tokens=53,
         extra_body={"return_token_ids": True},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'prompt_token_ids')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
     assert isinstance(response.choices[0].message.prompt_token_ids, list)
-    assert hasattr(response.choices[0].message, 'completion_token_ids')
+    assert hasattr(response.choices[0].message, "completion_token_ids")
     assert isinstance(response.choices[0].message.completion_token_ids, list)
 
     # 不设定 return_token_ids
@@ -377,35 +375,33 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
-            }
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
         ],
         temperature=1,
         max_tokens=53,
         extra_body={"return_token_ids": False},
         stream=False,
     )
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'prompt_token_ids')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
     assert response.choices[0].message.prompt_token_ids is None
-    assert hasattr(response.choices[0].message, 'completion_token_ids')
+    assert hasattr(response.choices[0].message, "completion_token_ids")
     assert response.choices[0].message.completion_token_ids is None
 
 
@@ -419,23 +415,21 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
-            }
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
         ],
         temperature=1,
         max_tokens=53,
@@ -444,11 +438,11 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
     )
     is_first_chunk = True
     for chunk in response:
-        assert hasattr(chunk, 'choices')
+        assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], 'delta')
-        assert hasattr(chunk.choices[0].delta, 'prompt_token_ids')
-        assert hasattr(chunk.choices[0].delta, 'completion_token_ids')
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
         if is_first_chunk:
             is_first_chunk = False
             assert isinstance(chunk.choices[0].delta.prompt_token_ids, list)
@@ -463,23 +457,21 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
-            }
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
         ],
         temperature=1,
         max_tokens=53,
@@ -487,10 +479,10 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         stream=True,
     )
     for chunk in response:
-        assert hasattr(chunk, 'choices')
+        assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], 'delta')
-        assert hasattr(chunk.choices[0].delta, 'prompt_token_ids')
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
         assert chunk.choices[0].delta.prompt_token_ids is None
-        assert hasattr(chunk.choices[0].delta, 'completion_token_ids')
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
         assert chunk.choices[0].delta.completion_token_ids is None

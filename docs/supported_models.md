@@ -1,14 +1,15 @@
 # Supported Models
 
-FastDeploy currently supports the following models, which can be downloaded via three methods:
+FastDeploy currently supports the following models, which can be downloaded automatically during FastDeploy deployment.Specify the ``model`` parameter as the model name in the table below to automatically download model weights (all supports resumable downloads). The following three download sources are supported:
 
-- 1. During FastDeploy deployment, specify the ``model`` parameter as the model name in the table below to automatically download model weights from AIStudio (supports resumable downloads)
+- 1. Search for corresponding Paddle-version ERNIE models on [AIStudio/PaddlePaddle](https://aistudio.baidu.com/modelsoverview), e.g., `ERNIE-4.5-0.3B-Paddle`
 - 2. Download Paddle-version ERNIE models from [HuggingFace/baidu/models](https://huggingface.co/baidu/models), e.g., `baidu/ERNIE-4.5-0.3B-Paddle`
 - 3. Search for corresponding Paddle-version ERNIE models on [ModelScope/PaddlePaddle](https://www.modelscope.cn/models?name=PaddlePaddle&page=1&tabKey=task), e.g., `ERNIE-4.5-0.3B-Paddle`
 
-For the first method (auto-download), the default download path is ``~/`` (user home directory). Users can modify this path by setting the ``FD_MODEL_CACHE`` environment variable, e.g.:
+When using automatic download, the default download source is AIStudio. Users can modify the default download source by setting the ``FD_MODEL_SOURCE`` environment variable, which can be set to “AISTUDIO”, ‘MODELSCOPE’ or “HUGGINGFACE”. The default download path is ``~/`` (i.e., the user's home directory). Users can modify the default download path by setting the ``FD_MODEL_CACHE`` environment variable, e.g.:
 
 ```bash
+export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
 export FD_MODEL_CACHE=/ssd1/download_models
 ```
 

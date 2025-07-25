@@ -584,9 +584,9 @@ class XPUModelRunner(ModelRunnerBase):
         logger.warn("XPU not support cuda graph currently")
         pass
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        check whether prefill stage finished
+        check whether prefill stage exist
         """
         if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
             return 1
