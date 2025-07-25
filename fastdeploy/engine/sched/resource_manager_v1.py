@@ -138,18 +138,19 @@ class ResourceManagerV1(ResourceManager):
             else:
                 grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
 
+        image_patch_id = inputs["image_patch_id"]
         grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
         if request.multimodal_img_boundaries is None:
             from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
             request.multimodal_img_boundaries = get_img_boundaries(
-                task_input_ids=input_ids, grid_thw=grid_thw, image_token_id=request.image_patch_id
+                task_input_ids=input_ids, grid_thw=grid_thw, image_token_id=image_patch_id
             ).numpy()
 
         grid_thw = grid_thw.numpy().reshape([-1, 3])
         old_end_idx = request.num_computed_tokens
         new_end_idx = old_end_idx + num_new_tokens
-        if new_end_idx < request.prompt_token_ids_len and inputs["input_ids"][new_end_idx] == request.image_patch_id:
+        if new_end_idx < request.prompt_token_ids_len and inputs["input_ids"][new_end_idx] == image_patch_id:
             boundary_idx = np.searchsorted(request.multimodal_img_boundaries, new_end_idx, side="left").item()
             if boundary_idx == len(request.multimodal_img_boundaries):
                 new_end_idx = request.multimodal_img_boundaries[-1].item()
@@ -158,7 +159,7 @@ class ResourceManagerV1(ResourceManager):
 
         num_new_tokens = new_end_idx - old_end_idx
 
-        image_mask = inputs["input_ids"][old_end_idx:new_end_idx] == request.image_patch_id
+        image_mask = inputs["input_ids"][old_end_idx:new_end_idx] == image_patch_id
         request.with_image = image_mask.any()
         if request.with_image:
             request.num_image_start = get_image_num(grid_thw, old_end_idx)

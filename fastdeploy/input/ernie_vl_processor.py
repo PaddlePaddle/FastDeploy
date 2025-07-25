@@ -89,9 +89,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         """
         Apply default value for parameters in request
         """
-
-        request.image_patch_id = self.image_patch_id
-
         def set_value(req, key, value):
             value = getattr(self.generation_config, key, value)
             if isinstance(req, dict):
@@ -262,6 +259,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             outs["grid_thw"] = np.vstack(outs["grid_thw"])
             outs["image_type_ids"] = np.array(outs["image_type_ids"])
 
+        outs["image_patch_id"] = self.image_patch_id
         # Convert lists to arrays
         outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
         outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
