@@ -156,7 +156,6 @@ class ResourceManagerV1(ResourceManager):
                 new_end_idx = request.multimodal_img_boundaries[-1].item()
             else:
                 new_end_idx = request.multimodal_img_boundaries[boundary_idx].item()
-
         num_new_tokens = new_end_idx - old_end_idx
 
         image_mask = inputs["input_ids"][old_end_idx:new_end_idx] == image_patch_id
@@ -164,10 +163,8 @@ class ResourceManagerV1(ResourceManager):
         if request.with_image:
             request.num_image_start = get_image_num(grid_thw, old_end_idx)
             request.num_image_end = get_image_num(grid_thw, new_end_idx)
-
             request.image_type_ids_start = np.sum(grid_thw[: request.num_image_start, 0])
             request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
-
             request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
             request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
 
