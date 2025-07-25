@@ -104,7 +104,6 @@ struct LocalScaleConverter<half_t, N, typename platform::enable_if<N % 4 == 0>::
                       FragmentResult const& super_scale_frag,
                       FragmentResult& scale_frag,
                       int shift_bit) {
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && defined(ENABLE_BF16))
         constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
         constexpr uint32_t MASK = 0x000f000f;
         // 2^10 = 1024
@@ -154,6 +153,7 @@ struct LocalScaleConverter<bfloat16_t, N, typename platform::enable_if<N % 4 == 
                       FragmentResult const& super_scale_frag,
                       FragmentResult& scale_frag,
                       int shift_bit) {
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && defined(ENABLE_BF16))
         constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
         constexpr uint32_t MASK = 0x000F000F;
         constexpr uint32_t I4s_TO_BF16s_MAGIC_NUM = 0x43004300;

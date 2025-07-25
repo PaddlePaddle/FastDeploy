@@ -357,7 +357,7 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
  * Note:
  * - Low latency mode uses specialized grouped SwiGLU implementation
  */
-PD_BUILD_OP(moe_expert_ffn_wint2)
+PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
     .Inputs({"permute_input",
              "tokens_expert_prefix_sum",
              "ffn1_weight",

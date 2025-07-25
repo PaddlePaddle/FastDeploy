@@ -776,7 +776,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
         check_cuda_error(cudaEventDestroy(start));
         check_cuda_error(cudaEventDestroy(stop));
-        std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
+        // std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
         if (elapsed < best_time) {
           best_id = ii;
           best_time = elapsed;
@@ -789,7 +789,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
       }
     }
     if (find_one) {
-      std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
+      // std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
       gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
       chosen_config = best_config;
     } else {
