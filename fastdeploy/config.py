@@ -88,9 +88,6 @@ class ModelConfig:
         self,
         args,
     ):
-        self.max_stop_seqs_num = 5
-        self.stop_seqs_max_len = 8
-
         # NOTE(gongshaotain): form _load_model_init_val()
         self.top_p = 1.0
         self.temperature = 1.0
@@ -106,6 +103,9 @@ class ModelConfig:
         self.dtype = ""
         self.enable_logprob = False
         self.enable_mm = False
+
+        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
 
         for key, value in args.items():
             if hasattr(self, key):
