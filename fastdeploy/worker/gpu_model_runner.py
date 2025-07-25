@@ -804,7 +804,11 @@ class GPUModelRunner(ModelRunnerBase):
             self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
         if prefill_exists is None:
             prefill_exists = self.exist_prefill()
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and only_decode_batch and not prefill_exists
+        self.forward_meta.step_use_cudagraph = (
+            self.use_cudagraph
+            and only_decode_batch
+            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
+        )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
