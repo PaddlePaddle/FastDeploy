@@ -723,15 +723,11 @@ class XPUModelRunner(ModelRunnerBase):
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int):
         """Set dummy prefill inputs to share_inputs"""
-        print(f"dummy_prefile num_tokens : {num_tokens}")
-        print(f"self.parallel_config.max_model_len : {self.parallel_config.max_model_len}")
         full_length = min(num_tokens // batch_size, self.parallel_config.max_model_len - 10)
         input_length = int(full_length - 512)
         block_num = (
             input_length + self.parallel_config.block_size - 1
         ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
-        print(f"input_length : {input_length}")
-        print(f"block_num : {block_num}")
 
         for i in range(batch_size):
             idx = i
