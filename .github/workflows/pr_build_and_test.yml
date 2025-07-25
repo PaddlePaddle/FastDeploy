@@ -46,7 +46,7 @@ jobs:
   logprob_test:
     name: Run FastDeploy LogProb Tests
     needs: [build]
-    uses: ./.github/workflows/_logprob_test.yml
+    uses: ./.github/workflows/_logprob_test_linux.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
       PADDLETEST_ARCHIVE_URL: ${{ vars.PADDLETEST_ARCHIVE_URL }}
