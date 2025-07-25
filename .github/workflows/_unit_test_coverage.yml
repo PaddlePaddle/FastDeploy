@@ -26,6 +26,9 @@ on:
 jobs:
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-4Cards]
+    outputs:
+      diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
+      unittest_failed_url: ${{ steps.unittest_failed.outputs.unittest_failed_url }}
     steps:
       - name: Code Prepare
         shell: bash
@@ -113,12 +116,24 @@ jobs:
             if [ -f FastDeploy/exit_code.env ]; then
               cat FastDeploy/exit_code.env >> $GITHUB_ENV
             fi
-      - name: Upload diff coverage report
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./FastDeploy/diff_coverage.xml
-          name: python diff coverage
-          verbose: true
+      - name: Upload unit resule and diff coverage to bos
+        id: cov_upload
+        shell: bash
+        run: |
+          cd FastDeploy
+          commit_id=${{ github.event.pull_request.head.sha }}
+          pr_num=${{ github.event.pull_request.number }}
+          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}/CoverageData
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          diff_cov_file="diff_coverage.xml"
+          if [ -f ${diff_cov_file} ];then
+            python ${push_file} ${diff_cov_file} ${target_path}
+            target_path_stripped="${target_path#paddle-github-action/}"
+            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
+            echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
+          fi
       - name: Determine Unit Succ and whether the coverage rate reaches 90%
         shell: bash
         run: |
@@ -133,3 +148,26 @@ jobs:
           fi
           echo "All tests and coverage passed"
           exit 0
+
+  diff_coverage_report:
+    needs: run_tests_with_coverage
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: coverage diff file download
+        shell: bash
+        env:
+          diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
+        run: |
+          if [ -z "${diff_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+            exit 0
+          fi
+          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+      - name: Upload diff coverage report
+        if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./diff_coverage.xml
+          name: python diff coverage
+          verbose: true
