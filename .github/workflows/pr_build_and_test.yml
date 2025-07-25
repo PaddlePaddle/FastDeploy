@@ -49,6 +49,6 @@ jobs:
     uses: ./.github/workflows/_logprob_test_linux.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
-      PADDLETEST_ARCHIVE_URL: ${{ vars.PADDLETEST_ARCHIVE_URL }}
+      PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelCache"
