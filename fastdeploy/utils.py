@@ -485,6 +485,18 @@ def ceil_div(x: int, y: int) -> int:
     return (x + y - 1) // y
 
 
+def get_image_num(grid_thw, end_idx):
+    image_num = 0
+    last_img_token_sum = 0
+    for i, one in enumerate(grid_thw):
+        last_img_token_sum += one[1] * one[2] // 4
+        if last_img_token_sum <= end_idx:
+            image_num += 1
+        else:
+            break
+    return image_num
+
+
 def none_or_str(value):
     """
     Keep parameters None, not the string "None".

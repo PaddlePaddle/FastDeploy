@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import threading
 import time
 from collections import deque
@@ -6,9 +22,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Union
 
+import numpy as np
+import paddle
+
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import get_image_num, llm_logger
 
 
 @dataclass
@@ -98,6 +117,61 @@ class ResourceManagerV1(ResourceManager):
                 break
         return can_schedule
 
+    def _get_num_new_tokens(self, request, token_budget):
+        num_new_tokens = request.prompt_token_ids_len - request.num_computed_tokens
+        num_new_tokens = min(num_new_tokens, token_budget)
+
+        if not self.config.enable_mm:
+            return num_new_tokens
+
+        inputs = request.multimodal_inputs
+        request.with_image = False
+        # Compatible with scenarios without images and videos.
+        if inputs["images"] is None:
+            return num_new_tokens
+
+        input_ids = paddle.to_tensor(inputs["input_ids"], dtype="int64")
+        grid_thw = []
+        for one in inputs["grid_thw"]:
+            if one[0] == 1:
+                grid_thw.append(one)
+            else:
+                grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
+
+        grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
+        if request.multimodal_img_boundaries is None:
+            from fastdeploy.model_executor.ops.gpu import get_img_boundaries
+
+            request.multimodal_img_boundaries = get_img_boundaries(
+                task_input_ids=input_ids, grid_thw=grid_thw, image_token_id=request.image_patch_id
+            ).numpy()
+
+        grid_thw = grid_thw.numpy().reshape([-1, 3])
+        old_end_idx = request.num_computed_tokens
+        new_end_idx = old_end_idx + num_new_tokens
+        if new_end_idx < request.prompt_token_ids_len and inputs["input_ids"][new_end_idx] == request.image_patch_id:
+            boundary_idx = np.searchsorted(request.multimodal_img_boundaries, new_end_idx, side="left").item()
+            if boundary_idx == len(request.multimodal_img_boundaries):
+                new_end_idx = request.multimodal_img_boundaries[-1].item()
+            else:
+                new_end_idx = request.multimodal_img_boundaries[boundary_idx].item()
+
+        num_new_tokens = new_end_idx - old_end_idx
+
+        image_mask = inputs["input_ids"][old_end_idx:new_end_idx] == request.image_patch_id
+        request.with_image = image_mask.any()
+        if request.with_image:
+            request.num_image_start = get_image_num(grid_thw, old_end_idx)
+            request.num_image_end = get_image_num(grid_thw, new_end_idx)
+
+            request.image_type_ids_start = np.sum(grid_thw[: request.num_image_start, 0])
+            request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
+
+            request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
+            request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
+
+        return num_new_tokens
+
     def schedule(self):
         with self.lock:
             scheduled_reqs: list[Request] = []
@@ -145,8 +219,7 @@ class ResourceManagerV1(ResourceManager):
                     llm_logger.debug(
                         f"scheduler prefill task: {request} request.prompt_token_ids_len {request.prompt_token_ids_len} request.num_computed_tokens {request.num_computed_tokens}"
                     )
-                    num_new_tokens = request.prompt_token_ids_len - request.num_computed_tokens
-                    num_new_tokens = min(num_new_tokens, token_budget)
+                    num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
@@ -170,8 +243,7 @@ class ResourceManagerV1(ResourceManager):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
-                        num_new_tokens = request.num_total_tokens - request.num_computed_tokens
-                        num_new_tokens = min(num_new_tokens, token_budget)
+                        num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
@@ -192,8 +264,7 @@ class ResourceManagerV1(ResourceManager):
                         else:
                             break
                     elif request.status == RequestStatus.PREEMPTED:
-                        num_new_tokens = request.num_total_tokens - request.num_computed_tokens
-                        num_new_tokens = min(num_new_tokens, token_budget)
+                        num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):

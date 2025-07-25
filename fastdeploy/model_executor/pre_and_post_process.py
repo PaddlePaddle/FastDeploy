@@ -221,6 +221,17 @@ def post_process_normal(
     )  # multi ends
 
     # 2. Update the input buffer of the model
+
+    print("stop_flags\n", model_output.stop_flags)
+    print("not_need_stop\n", model_output.not_need_stop)
+    print("seq_lens_this_time\n", model_output.seq_lens_this_time)
+    print("seq_lens_encoder\n", model_output.seq_lens_encoder)
+    print("seq_lens_decoder\n", model_output.seq_lens_decoder)
+    print("input_ids\n", model_output.input_ids)
+    print("stop_nums\n", model_output.stop_nums)
+    print("sampled_token_ids\n", sampler_output.sampled_token_ids)
+    print("is_block_step\n", model_output.is_block_step)
+
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
