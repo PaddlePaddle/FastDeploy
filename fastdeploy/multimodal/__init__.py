@@ -14,4 +14,4 @@
 # limitations under the License.
 """
 
-import fastdeploy.model_executor.models # noqa: F401
+import fastdeploy.model_executor.models  # noqa: F401

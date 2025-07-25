@@ -16,10 +16,11 @@
 
 from typing import Callable
 
+
 class MultimodalRegistry:
     """
     A registry for multimodal models
-    """ 
+    """
 
     mm_models: set[str] = set()
 
@@ -28,6 +29,7 @@ class MultimodalRegistry:
         """
         Register model with the given name, class name is used if name is not provided.
         """
+
         def _register(model):
             nonlocal name
             if len(name) == 0:
@@ -36,14 +38,12 @@ class MultimodalRegistry:
                 raise ValueError(f"multimodal model {name} is already registered")
             cls.mm_models.add(name)
             return model
-        
+
         return _register
-    
+
     @classmethod
     def contains_model(cls, name: str) -> bool:
         """
         Check if the given name exists in registry.
         """
         return name in cls.mm_models
-        
-

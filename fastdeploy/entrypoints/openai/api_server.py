@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI):
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
     engine_client = EngineClient(
-        args.model, 
+        args.model,
         args.tokenizer,
         args.max_model_len,
         args.tensor_parallel_size,

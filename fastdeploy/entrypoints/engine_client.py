@@ -23,8 +23,8 @@ from fastdeploy.engine.config import ModelConfig
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.platforms import current_platform
 from fastdeploy.multimodal.registry import MultimodalRegistry
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, api_server_logger
 
 

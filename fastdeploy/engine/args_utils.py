@@ -29,7 +29,7 @@ from fastdeploy.engine.config import (
     TaskOption,
 )
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import FlexibleArgumentParser, DeprecatedOptionWarning
+from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
 
 
 def nullable_str(x: str) -> Optional[str]:

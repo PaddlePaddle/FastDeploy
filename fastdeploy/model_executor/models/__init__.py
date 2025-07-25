@@ -48,4 +48,5 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
         except ImportError:
             raise ImportError(f"{module_file=} import error")
 
+
 auto_models_registry(os.path.dirname(__file__))
