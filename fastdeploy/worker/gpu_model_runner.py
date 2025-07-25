@@ -82,6 +82,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_early_stop = fd_config.early_stop_config.enable_early_stop
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -108,10 +109,14 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
-
+        self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         #  Sampler
         if not self.speculative_decoding:
             self.sampler = Sampler()
+            if self.enable_early_stop:
+                self.sampler.repetition_early_stopper.initialize(
+                    self.parallel_config.max_num_seqs, self.fd_config.early_stop_config
+                )
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
@@ -741,6 +746,7 @@ class GPUModelRunner(ModelRunnerBase):
             bad_words_token_ids=self.share_inputs["bad_tokens"],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=20 if self.enable_logprob else None,
+            enable_early_stop=self.enable_early_stop,
         )
 
     def load_model(self) -> None:

@@ -27,6 +27,7 @@ from paddle.distributed import fleet
 from fastdeploy.config import (
     DecodingConfig,
     DeviceConfig,
+    EarlyStopConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -587,6 +588,12 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
+    parser.add_argument(
+        "--early_stop_config",
+        type=json.loads,
+        default=None,
+        help="Configation of early stop.",
+    )
 
     args = parser.parse_args()
     return args
@@ -634,6 +641,14 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             graph_opt_level=args.graph_optimization_config["graph_opt_level"],
             cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"],
             sot_warmup_sizes=args.graph_optimization_config["sot_warmup_sizes"],
+        )
+
+    early_stop_config = EarlyStopConfig()
+    if args.early_stop_config is not None:
+        early_stop_config = EarlyStopConfig(
+            enable_early_stop=args.early_stop_config["enable_early_stop"],
+            window_size=args.early_stop_config["window_size"],
+            threshold=args.early_stop_config["threshold"],
         )
 
     # Note(tangbinhan): used for load_checkpoint
@@ -707,6 +722,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
+        early_stop_config=early_stop_config,
     )
     update_fd_config_for_mm(fd_config)
 

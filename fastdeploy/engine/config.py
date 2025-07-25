@@ -505,6 +505,72 @@ class GraphOptimizationConfig:
             argument = self.use_cudagraph
 
 
+class EarlyStopConfig:
+    def __init__(
+        self,
+        enable_early_stop: Optional[bool] = None,
+        window_size: Optional[int] = 3000,
+        threshold: Optional[float] = 0.99,
+        **kwargs,
+    ):
+        """
+        Early Stop Configuration class.
+
+        Attributes:
+            window_size: size of the window
+            threshold: trigger early stop when the ratio of probs exceeds the threshold
+        """
+        self.check_legality_parameters(enable_early_stop, window_size, threshold, **kwargs)
+        self.enable_early_stop = enable_early_stop
+        self.window_size = window_size
+        self.threshold = threshold
+
+    def to_json_string(self):
+        """
+        Convert early_stop_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
+    def __str__(self) -> str:
+        return self.to_json_string()
+
+    def check_legality_parameters(
+        self,
+        enable_early_stop: Optional[bool] = False,
+        window_size: Optional[int] = 3000,
+        threshold: Optional[float] = 0.99,
+        **kwargs,
+    ) -> None:
+        """Check the legality of parameters passed in from the command line"""
+        if enable_early_stop is not None:
+            assert isinstance(enable_early_stop, bool), "In early stop config, type of enable_early_stop must is bool."
+        if window_size is not None:
+            assert isinstance(window_size, int), "In early stop config, type of window_size must be int."
+            assert window_size > 0, "window_size must large than 0"
+        if threshold is not None:
+            assert isinstance(threshold, float), "In early stop config, type of threshold must be float."
+            assert threshold >= 0 and threshold <= 1, "threshold must between 0 and 1"
+
+        for key, value in kwargs.items():
+            raise ValueError(f"Invalid --early-stop-config parameter {key}")
+
+    def update_enable_early_stop(self, argument: bool):
+        """
+        Unified user specifies the enable_early_stop parameter through two methods,
+        '--enable-early-stop' and '--early-stop-config'
+        """
+        if self.enable_early_stop is None:
+            # User only set '--enable-early-stop'
+            self.enable_early_stop = argument
+        else:
+            # User both set '--enable-early-stop' and '--early-stop-config'
+            if self.enable_early_stop is False and argument is True:
+                raise ValueError(
+                    "Invalid parameter: Cannot set ---enable-early-stop and --early-stop-config '{\"enable_early_stop\":false}' simultaneously."
+                )
+            argument = self.enable_early_stop
+
+
 class ParallelConfig:
     """
     Configuration for parallelism.
@@ -663,6 +729,7 @@ class Config:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_logprob: bool = False,
+        early_stop_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the Config class.
@@ -691,6 +758,8 @@ class Config:
             guided_decoding_backend(str): Guided decoding backend. Default is None.
             disable_any_whitespace(bool): Disable any whitespace when using guided decoding.
                 Default is False.
+            enable_logprob(bool): Enable logprob. Default is False.
+            early_stop_config (Optional[Dict[str, Any]]): Early stop configuration. Default is None.
         """
         self.model_config = model_config
         self.cache_config = cache_config
@@ -725,6 +794,7 @@ class Config:
         self.long_prefill_token_threshold = long_prefill_token_threshold
         self.reasoning_parser = reasoning_parser
         self.graph_optimization_config = graph_optimization_config
+        self.early_stop_config = early_stop_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)

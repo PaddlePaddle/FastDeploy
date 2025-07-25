@@ -398,6 +398,17 @@ class GraphOptimizationConfig:
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
 
+@dataclass
+class EarlyStopConfig:
+    """enable to use early stop"""
+
+    enable_early_stop: bool = False
+    """ the maximum length of verify window for early stop """
+    window_size: int = 3000
+    """ the probs threshold for early stop """
+    threshold: float = 0.99
+
+
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
@@ -464,6 +475,7 @@ class FDConfig:
     load_config: LoadConfig = field(default=None, init=True)
     quant_config: Optional[QuantConfigBase] = None
     graph_opt_config: Optional[GraphOptimizationConfig] = None
+    early_stop_config: Optional[EarlyStopConfig] = None
     decoding_config: DecodingConfig = field(default=None, init=True)  # type: ignore
     kv_cache_config: KVCacheConfig = field(default=None, init=True)  # type: ignore
 

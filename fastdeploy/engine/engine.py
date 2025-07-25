@@ -1090,6 +1090,7 @@ class LLMEngine:
             f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
         )
 
         worker_append_flag = {

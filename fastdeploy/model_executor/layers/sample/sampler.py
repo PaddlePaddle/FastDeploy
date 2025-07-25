@@ -22,7 +22,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import EarlyStopConfig, FDConfig
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
 )
@@ -160,6 +160,77 @@ class SamplerProcessor:
         # self.async_step = self.executor.submit(self.update_vocab_mask)
 
 
+class RepetitionEarlyStopper:
+    def initialize(self, batch_size: int, cfg: EarlyStopConfig):
+        print(f"______________init stopper___________: {batch_size=}\n{cfg=}")
+        self.early_stop_cfg = cfg
+        self.window_size = cfg.window_size
+        self.threshold = cfg.threshold
+        self.trunc_scores = paddle.zeros((batch_size, self.window_size), dtype="float32")
+
+    def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+        """
+        args:
+            - probs: [batch_size, vocab_size], the probs of every sample
+            - next_tokens: [batch_size, 1], the token index of every chosen sample
+            - eos_token_id: int, the eos token id
+        return:
+            - next_tokens: [batch_size, 1], stop part will be replaced by eos_token_id
+        """
+        # It will use naive execute if there is no triton support, otherwise use triton
+        try:
+            return self.process_triton(probs, next_tokens, eos_token_id)
+        except Exception:
+            return self.process_normal(probs, next_tokens, eos_token_id)
+
+    def process_normal(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+        # Get the probability score corresponding to next_tokens in this step
+        next_scores = paddle.index_sample(probs, next_tokens)
+
+        # Sliding window: Move left one grid and insert new score
+        self.trunc_scores[:, :-1] = self.trunc_scores[:, 1:]
+        self.trunc_scores[:, -1:] = next_scores
+
+        # Determine which samples need to be terminated: all trunc_scores are greater than threshold
+        need_trunc_all = paddle.all(self.trunc_scores > self.threshold, axis=-1)
+
+        # Replace the next_tokens corresponding to these samples with eos_token_id
+        eos_ids = paddle.full_like(next_tokens, eos_token_id)
+        next_tokens = paddle.where(need_trunc_all.unsqueeze(-1), eos_ids, next_tokens)
+
+        # Reset trunc_scores of truncated samples to 0 to avoid false triggering in the next step
+        reset_mask = need_trunc_all.unsqueeze(-1).tile([1, self.window_size])
+        self.trunc_scores = paddle.where(reset_mask, paddle.zeros_like(self.trunc_scores), self.trunc_scores)
+
+        return next_tokens
+
+    def process_triton(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+        import triton
+
+        from fastdeploy.model_executor.ops.triton_ops import (
+            repetition_early_stopper_kernel,
+        )
+
+        B, W = self.trunc_scores.shape
+        V = probs.shape[1]
+        BLOCK_W = triton.next_power_of_2(W)
+        grid = (B,)
+        repetition_early_stopper_kernel[grid](
+            self.trunc_scores,
+            probs,
+            next_tokens,
+            eos_token_id,
+            self.threshold,
+            B,
+            W,
+            V,
+            self.trunc_scores.shape[1],
+            probs.shape[1],
+            BLOCK_W=BLOCK_W,
+        )
+        return next_tokens
+
+
 class Sampler(nn.Layer):
     """
     Sampler for normal generation.
@@ -180,6 +251,7 @@ class Sampler(nn.Layer):
             raise NotImplementedError
 
         self.processor = SamplerProcessor()
+        self.repetition_early_stopper = RepetitionEarlyStopper()
 
     def apply_logits_processor(
         self,
@@ -275,6 +347,10 @@ class Sampler(nn.Layer):
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
         )
+        if sampling_metadata.enable_early_stop:
+            next_tokens = self.repetition_early_stopper.process(
+                probs, next_tokens, sampling_metadata.eos_token_ids.numpy().flatten()[0]
+            )
 
         self.processor.update_output_tokens(next_tokens, skip_idx_list)
 

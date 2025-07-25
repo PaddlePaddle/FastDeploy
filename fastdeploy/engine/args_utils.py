@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from fastdeploy.engine.config import (
     CacheConfig,
     Config,
+    EarlyStopConfig,
     GraphOptimizationConfig,
     ModelConfig,
     ParallelConfig,
@@ -320,6 +321,16 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    enable_early_stop: bool = False
+    """
+    Flag to enable early stop. Default is False (disabled).
+    """
+
+    early_stop_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for early stop.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -464,6 +475,18 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--enable-early-stop",
+            action="store_true",
+            default=EngineArgs.enable_early_stop,
+            help="Enable early stopping during generation.",
+        )
+        model_group.add_argument(
+            "--early-stop-config",
+            type=json.loads,
+            default=EngineArgs.early_stop_config,
+            help="",
         )
 
         # Parallel processing parameters group
@@ -856,6 +879,15 @@ class EngineArgs:
         else:
             return GraphOptimizationConfig()
 
+    def create_early_stop_config(self) -> EarlyStopConfig:
+        """
+        Create and retuan a EarlyStopConfig object based on the current settings.
+        """
+        if self.early_stop_config is not None:
+            return EarlyStopConfig(**self.early_stop_config)
+        else:
+            return EarlyStopConfig()
+
     def create_engine_config(self) -> Config:
         """
         Create and return a Config object based on the current settings.
@@ -872,6 +904,9 @@ class EngineArgs:
         speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
+
+        early_stop_cfg = self.create_early_stop_config()
+        early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
         assert not (
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
@@ -907,4 +942,5 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob=self.enable_logprob,
+            early_stop_config=early_stop_cfg,
         )
