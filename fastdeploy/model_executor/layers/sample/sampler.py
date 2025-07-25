@@ -162,7 +162,6 @@ class SamplerProcessor:
 
 class RepetitionEarlyStopper:
     def initialize(self, batch_size: int, cfg: EarlyStopConfig):
-        print(f"______________init stopper___________: {batch_size=}\n{cfg=}")
         self.early_stop_cfg = cfg
         self.window_size = cfg.window_size
         self.threshold = cfg.threshold
