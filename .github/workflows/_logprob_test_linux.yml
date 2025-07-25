@@ -22,7 +22,6 @@ on:
         description: "Cache Dir Use"
         required: false
         type: string
-        default: ""
       MODEL_CACHE_DIR:
         description: "Cache Dir Use"
         required: false
@@ -69,10 +68,10 @@ jobs:
             DEVICES="0"
           fi
 
-          FLASK_PORT=$((9160 + gpu_id * 100))
-          FD_API_PORT=$((9180 + gpu_id * 100))
-          FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))
-          FD_METRICS_PORT=$((9170 + gpu_id * 100))
+          FLASK_PORT=$((9160 + DEVICES * 100))
+          FD_API_PORT=$((9180 + DEVICES * 100))
+          FD_ENGINE_QUEUE_PORT=$((9150 + DEVICES * 100))
+          FD_METRICS_PORT=$((9170 + DEVICES * 100))
 
           CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
           echo "CACHE_DIR is set to ${CACHE_DIR}"
@@ -135,10 +134,9 @@ jobs:
           if [ -f exit_code.env ]; then
             cat exit_code.env >> $GITHUB_ENV
           fi
-
       - name: logprob test result
-      if: ${{ env.LOGPROB_EXIT_CODE != 0 }}
-      shell: bash
-      run: |
-        echo "logprob test failed with exit code ${{ env.LOGPROB_EXIT_CODE }}"
-        exit 8
+        if: ${{ env.LOGPROB_EXIT_CODE != 0 }}
+        shell: bash
+        run: |
+          echo "logprob test failed with exit code ${{ env.LOGPROB_EXIT_CODE }}"
+          exit 8
