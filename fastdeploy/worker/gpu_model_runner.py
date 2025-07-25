@@ -794,13 +794,17 @@ class GPUModelRunner(ModelRunnerBase):
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
         only_decode_batch = True
+        prefill_exists = None
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
             only_decode_batch_list = []
-            paddle.distributed.all_gather_object(only_decode_batch_list, not self.exist_prefill())
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
             only_decode_batch = all(only_decode_batch_list)
             self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and only_decode_batch and not self.exist_prefill()
+        if prefill_exists == None:
+            prefill_exists = self.exist_prefill()
+        self.forward_meta.step_use_cudagraph = self.use_cudagraph and only_decode_batch and not prefill_exists
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
