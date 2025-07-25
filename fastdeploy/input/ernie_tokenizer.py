@@ -19,19 +19,14 @@
 import os
 import re
 from shutil import copyfile
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
-import sentencepiece as spm
-
 import paddle
-
-
-from paddleformers.utils.log import logger
+import sentencepiece as spm
 from paddleformers.transformers import PretrainedTokenizer
-from paddleformers.transformers.tokenizer_utils_base import (
-    PaddingStrategy,
-    TextInput,
-)
+from paddleformers.transformers.tokenizer_utils_base import PaddingStrategy, TextInput
+from paddleformers.utils.log import logger
 
 
 class ErnieBotTokenizer(PretrainedTokenizer):
@@ -47,7 +42,12 @@ class ErnieBotTokenizer(PretrainedTokenizer):
     pretrained_init_configuration = {
         "ernie-bot-10b": {},
     }
-    model_input_names = ["input_ids", "position_ids", "attention_mask", "labels"]
+    model_input_names = [
+        "input_ids",
+        "position_ids",
+        "attention_mask",
+        "labels",
+    ]
     padding_side = "right"
 
     def __init__(
@@ -82,6 +82,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         self.vocab_file = vocab_file
         self.sp_model = spm.SentencePieceProcessor()
         self.sp_model.Load(vocab_file)
+        # pre-process map-type all spec token for decode accelerate.
 
     @property
     def space_token(self):
@@ -136,14 +137,19 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         """doc"""
         return self.sp_model.id_to_piece(id)
 
+    def spec_init(self):
+        if not hasattr(self, "all_spec_tok"):
+            self.all_spec_tok = set(self.all_special_tokens)
+
     def convert_tokens_to_string(self, tokens):
         """Converts a sequence of tokens (string) in a single string."""
+        self.spec_init()
         current_sub_tokens = []
         out_string = ""
         # prev_is_special = False
         for token in tokens:
             # make sure that special tokens are not decoded using sentencepiece model
-            if token in self.all_special_tokens:
+            if token in self.all_spec_tok:
                 # if not prev_is_special:
                 #     out_string += " "
                 out_string += self.sp_model.decode(current_sub_tokens) + token
@@ -210,14 +216,13 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         #     if isinstance(t, AddedToken)
         # )
 
+        self.spec_init()
         text, kwargs = self.prepare_for_tokenization(text, **kwargs)
 
         # TODO: should this be in the base class?
         if hasattr(self, "do_lower_case") and self.do_lower_case:
             # convert non-special tokens to lowercase
-            escaped_special_toks = [
-                re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_special_tokens)
-            ]
+            escaped_special_toks = [re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_spec_tok)]
             pattern = r"(" + r"|".join(escaped_special_toks) + r")|" + r"(.+?)"
             text = re.sub(pattern, lambda m: m.groups()[0] or m.groups()[1].lower(), text)
 
@@ -296,7 +301,12 @@ class ErnieBotTokenizer(PretrainedTokenizer):
                 elif not isinstance(attention_mask, np.ndarray):
                     raise ValueError(f"Unexpected type {type(attention_mask)} of attention_mask, ")
             else:
-                attention_mask = np.tril(np.ones((len(required_input), len(required_input)), dtype=np.int64))
+                attention_mask = np.tril(
+                    np.ones(
+                        (len(required_input), len(required_input)),
+                        dtype=np.int64,
+                    )
+                )
                 attention_mask = np.expand_dims(attention_mask, axis=0)
             if needs_to_be_padded:
                 difference = max_length - len(required_input)

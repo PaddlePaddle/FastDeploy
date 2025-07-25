@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "helper.h"
 #include "paddle/extension.h"
-
 
 #define CEILDIV(a,b) (((a+b-1)/b))
 
@@ -189,7 +189,7 @@ std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(const paddle::Tensor& to
     return {sorted_ids, expert_ids, num_tokens_post_pad};
 }
 
-PD_BUILD_OP(tritonmoe_preprocess)
+PD_BUILD_STATIC_OP(tritonmoe_preprocess)
     .Inputs({"topk_ids"})
     .Attrs({"num_experts: int64_t", "GEMM_BLOCK_SIZE_M: int64_t"})
     .Outputs({"sorted_ids", "expert_ids", "num_tokens_post_pad"})

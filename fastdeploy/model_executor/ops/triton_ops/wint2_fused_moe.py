@@ -21,7 +21,10 @@ from paddle.base.framework import OpProtoHolder
 from paddle.framework import in_dynamic_or_pir_mode
 
 from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
-    get_dtype_str, paddle_use_triton, rendering_common_template)
+    get_dtype_str,
+    paddle_use_triton,
+    rendering_common_template,
+)
 
 BLOCK_SIZE_M = 16
 
@@ -51,8 +54,11 @@ def invoke_fused_moe_kernel(
     sstride_am, sstride_ak = A.shape[1], 1
     sstride_be, sstride_bk, sstride_bn = B.shape[1] * B.shape[2], B.shape[2], 1
     sstride_cm, sstride_cn = C.shape[-1], 1
-    sstride_bse, sstride_bsk, sstride_bsn = B_scale.shape[1] * B_scale.shape[
-        2], B_scale.shape[2], 1
+    sstride_bse, sstride_bsk, sstride_bsn = (
+        B_scale.shape[1] * B_scale.shape[2],
+        B_scale.shape[2],
+        1,
+    )
     sstride_bce, sstride_bck, sstride_bcn = B_code_scale.shape[1], 1, 1
 
     ddouble_quant = B_super_scale is not None
@@ -124,9 +130,7 @@ def invoke_fused_moe_kernel(
             prepare_attr_for_triton_kernel,
             prepare_ptr_for_triton_kernel,
         )
-        grid = (
-            "(EM+BLOCK_SIZE_M-1)/BLOCK_SIZE_M * ((N+BLOCK_SIZE_N-1)/BLOCK_SIZE_N)",
-        )
+        grid = ("(EM+BLOCK_SIZE_M-1)/BLOCK_SIZE_M * ((N+BLOCK_SIZE_N-1)/BLOCK_SIZE_N)",)
 
         moe_wint2_ffn_kernel[(op_name, template_used, grid, configs)](
             A,
@@ -142,8 +146,8 @@ def invoke_fused_moe_kernel(
             num_tokens_post_padded,
             NN,
             KK,
-            -1,  #EEM,
-            -1,  #nnum_valid_tokens,
+            -1,  # EEM,
+            -1,  # nnum_valid_tokens,
             sstride_am,
             sstride_ak,
             sstride_be,
@@ -185,7 +189,9 @@ def invoke_fused_moe_kernel(
         return outs[0]
 
 
-@paddle_use_triton(key=["1"], )
+@paddle_use_triton(
+    key=["1"],
+)
 def moe_wint2_ffn_kernel(
     # Pointers to matrices
     a_ptr,
@@ -291,17 +297,14 @@ def moe_wint2_ffn_kernel(
     # offs_k = tl.arange(0, BLOCK_SIZE_K)
     offs_bk = tl.arange(0, real_k_size)
 
-    a_ptrs = a_ptr + (offs_token[:, None] // top_k * stride_am +
-                      offs_bk[None, :] * pack_num * stride_ak)
+    a_ptrs = a_ptr + (offs_token[:, None] // top_k * stride_am + offs_bk[None, :] * pack_num * stride_ak)
 
     off_experts = tl.load(expert_ids_ptr + pid_m)
-    b_ptrs = b_ptr + off_experts * stride_be + (offs_bk[:, None] * stride_bk +
-                                                offs_bn[None, :] * stride_bn)
+    b_ptrs = b_ptr + off_experts * stride_be + (offs_bk[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
 
     accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
 
-    bs_ptrs = bs_ptr + off_experts * stride_bse + offs_bn[
-        None, :] * stride_bsn  # group-wise, need advanced
+    bs_ptrs = bs_ptr + off_experts * stride_bse + offs_bn[None, :] * stride_bsn  # group-wise, need advanced
 
     off_set = off_experts * stride_bce + offs_bn[None, :] * stride_bcn
     # load channel-wise scale & zero-point
@@ -324,8 +327,7 @@ def moe_wint2_ffn_kernel(
             bs = ((bs >> s_shift_bits) & 0xF) * super_bs
 
         # reverse to int16
-        b = tl.floor((b.to(tl.float32) * code_bs + code_bzp) + 0.5).to(
-            tl.int16)
+        b = tl.floor((b.to(tl.float32) * code_bs + code_bzp) + 0.5).to(tl.int16)
         # dequant
         b1 = (((b >> 9) & w_mask) - bzp) * bs
         a = tl.load(
@@ -369,36 +371,33 @@ def moe_wint2_ffn_kernel(
             bs_ptrs += stride_bsk
 
     if MUL_ROUTED_WEIGHT:
-        moe_weight = tl.load(topk_weights_ptr + offs_token,
-                             mask=token_mask,
-                             other=0)
+        moe_weight = tl.load(topk_weights_ptr + offs_token, mask=token_mask, other=0)
         accumulator = accumulator * moe_weight[:, None]
 
     accumulator = accumulator.to(compute_type)
     # -----------------------------------------------------------
     # Write back the block of the output
     offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
-    c_ptrs = c_ptr + stride_cm * offs_token[:, None] + stride_cn * offs_cn[
-        None, :]
+    c_ptrs = c_ptr + stride_cm * offs_token[:, None] + stride_cn * offs_cn[None, :]
     c_mask = token_mask[:, None] & (offs_cn[None, :] < N)
     tl.store(c_ptrs, accumulator, mask=c_mask)
 
 
 def fused_moe_wint2_impl(
     hidden_states,
-    ffn1_quant_weight,
-    ffn2_quant_weight,
+    up_gate_proj_quant_weight,
+    down_proj_quant_weight,
     topk_weights,
     topk_ids,
     # inplace: bool = False,
-    ffn1_weight_scale=None,
-    ffn2_weight_scale=None,
-    ffn1_super_scales=None,
-    ffn2_super_scales=None,
-    ffn1_code_scale=None,
-    ffn2_code_scale=None,
-    ffn1_code_zp=None,
-    ffn2_code_zp=None,
+    up_gate_proj_weight_scale=None,
+    down_proj_weight_scale=None,
+    up_gate_proj_super_scales=None,
+    down_proj_super_scales=None,
+    up_gate_proj_code_scale=None,
+    down_proj_code_scale=None,
+    up_gate_proj_code_zp=None,
+    down_proj_code_zp=None,
     group_size=64,
     bit="wint2",
 ):
@@ -408,22 +407,20 @@ def fused_moe_wint2_impl(
     # Check constraints.
     # A: [M, K]
     # B: [E, K, N]
-    # assert hidden_states.shape[1] == ffn1_weight_scale.shape[1],
-    # f"Hidden size mismatch, {hidden_states.shape[1]} != {ffn1_quant_weight.shape[1]}"
+    # assert hidden_states.shape[1] == up_gate_proj_weight_scale.shape[1],
+    # f"Hidden size mismatch, {hidden_states.shape[1]} != {up_gate_proj_quant_weight.shape[1]}"
     assert topk_weights.shape == topk_ids.shape, "topk shape mismatch"
     assert hidden_states.is_contiguous(), "Hidden_states must be contiguous"
-    assert ffn1_quant_weight.is_contiguous(
-    ), "Expert weights1 must be contiguous"
-    assert ffn2_quant_weight.is_contiguous(
-    ), "Expert weights2 must be contiguous"
+    assert up_gate_proj_quant_weight.is_contiguous(), "Expert weights1 must be contiguous"
+    assert down_proj_quant_weight.is_contiguous(), "Expert weights2 must be contiguous"
     assert group_size > 0, "Group size must be greater than 0"
 
     num_tokens, K = hidden_states.shape
-    E, _, N = ffn1_quant_weight.shape
+    E, _, N = up_gate_proj_quant_weight.shape
     M = num_tokens
 
     if group_size < 0:
-        group_size = K // ffn1_weight_scale.shape[1]
+        group_size = K // up_gate_proj_weight_scale.shape[1]
 
     top_k = topk_ids.shape[1]
 
@@ -442,18 +439,16 @@ def fused_moe_wint2_impl(
 
     from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 
-    sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
-        topk_ids, E, BLOCK_SIZE_M)
-
+    sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(topk_ids, E, BLOCK_SIZE_M)
 
     invoke_fused_moe_kernel(
         A=hidden_states,
-        B=ffn1_quant_weight,
+        B=up_gate_proj_quant_weight,
         C=intermediate_cache1,
-        B_scale=ffn1_weight_scale,
-        B_super_scale=ffn1_super_scales,
-        B_code_scale=ffn1_code_scale,
-        B_code_zp=ffn1_code_zp,
+        B_scale=up_gate_proj_weight_scale,
+        B_super_scale=up_gate_proj_super_scales,
+        B_code_scale=up_gate_proj_code_scale,
+        B_code_zp=up_gate_proj_code_zp,
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         sorted_token_ids=sorted_token_ids,
@@ -464,17 +459,16 @@ def fused_moe_wint2_impl(
         group_size=group_size,
     )
 
-    intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
-        intermediate_cache1.reshape([-1, N]))
+    intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1.reshape([-1, N]))
 
     invoke_fused_moe_kernel(
         A=intermediate_cache2,
-        B=ffn2_quant_weight,
+        B=down_proj_quant_weight,
         C=intermediate_cache3,
-        B_scale=ffn2_weight_scale,
-        B_super_scale=ffn2_super_scales,
-        B_code_scale=ffn2_code_scale,
-        B_code_zp=ffn2_code_zp,
+        B_scale=down_proj_weight_scale,
+        B_super_scale=down_proj_super_scales,
+        B_code_scale=down_proj_code_scale,
+        B_code_zp=down_proj_code_zp,
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         sorted_token_ids=sorted_token_ids,
@@ -491,37 +485,37 @@ def fused_moe_wint2_impl(
 
 def fused_moe_wint2_triton(
     hidden_states,
-    ffn1_quant_weight,
-    ffn2_quant_weight,
+    up_gate_proj_quant_weight,
+    down_proj_quant_weight,
     scores,
     gate_correction_bias,
     topk,
-    ffn1_weight_scale,
-    ffn2_weight_scale,
-    ffn1_super_scales,
-    ffn2_super_scales,
-    ffn1_code_scale,
-    ffn2_code_scale,
-    ffn1_code_zp,
-    ffn2_code_zp,
+    up_gate_proj_weight_scale,
+    down_proj_weight_scale,
+    up_gate_proj_super_scales,
+    down_proj_super_scales,
+    up_gate_proj_code_scale,
+    down_proj_code_scale,
+    up_gate_proj_code_zp,
+    down_proj_code_zp,
 ):
     """
     Fuse MoE with WINT2 quantization scheme and Triton backend.
     Args:
         hidden_states: input tensor.
-        ffn1_quant_weight: ffn1 weight matrix for experts.
-        ffn2_quant_weight: ffn2 weight matrix for experts.
+        up_gate_proj_quant_weight: up_gate_proj weight matrix for experts.
+        down_proj_quant_weight: down_proj weight matrix for experts.
         scores: gate scores.
         gate_correction_bias: bias correction for gates.
         topk: number of experts to use.
-        ffn1_weight_scale: scaling factor for ffn1_quant_weight.
-        ffn2_weight_scale: scaling factor for ffn2_quant_weight.
-        ffn1_super_scales: super scaling factor for ffn1_scale.
-        ffn2_super_scales: super scaling factor for ffn2_weight_scale.
-        ffn1_code_scale: code scaling factor for ffn1_quant_weight.
-        ffn2_code_scale: code scaling factor for ffn2_quant_weight.
-        ffn1_code_zp: code zero point for ffn1_quant_weight.
-        ffn2_code_zp: code zero point for ffn2_quant_weight.
+        up_gate_proj_weight_scale: scaling factor for up_gate_proj_quant_weight.
+        down_proj_weight_scale: scaling factor for down_proj_quant_weight.
+        up_gate_proj_super_scales: super scaling factor for up_gate_proj_scale.
+        down_proj_super_scales: super scaling factor for down_proj_weight_scale.
+        up_gate_proj_code_scale: code scaling factor for up_gate_proj_quant_weight.
+        down_proj_code_scale: code scaling factor for down_proj_quant_weight.
+        up_gate_proj_code_zp: code zero point for up_gate_proj_quant_weight.
+        down_proj_code_zp: code zero point for down_proj_quant_weight.
     Returns:
         output tensor.
     """
@@ -533,17 +527,17 @@ def fused_moe_wint2_triton(
 
     return fused_moe_wint2_impl(
         hidden_states,
-        ffn1_quant_weight,
-        ffn2_quant_weight,
+        up_gate_proj_quant_weight,
+        down_proj_quant_weight,
         topk_weights,
         topk_ids,
-        ffn1_weight_scale,
-        ffn2_weight_scale,
-        ffn1_super_scales,
-        ffn2_super_scales,
-        ffn1_code_scale,
-        ffn2_code_scale,
-        ffn1_code_zp,
-        ffn2_code_zp,
+        up_gate_proj_weight_scale,
+        down_proj_weight_scale,
+        up_gate_proj_super_scales,
+        down_proj_super_scales,
+        up_gate_proj_code_scale,
+        down_proj_code_scale,
+        up_gate_proj_code_zp,
+        down_proj_code_zp,
         bit="wint2",
     )

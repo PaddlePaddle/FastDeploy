@@ -9,6 +9,9 @@ The following installation methods are available when your environment meets the
 - Linux X86_64
 
 ## 1. Pre-built Docker Installation (Recommended)
+
+**Notice**: The pre-built image only supports SM80/90 GPU(e.g. H800/A800)，if you are deploying on SM86/89GPU(L40/4090/L20), please reinstall ```fastdpeloy-gpu``` after you create the container.
+
 ```shell
 docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.0.0
 ```
@@ -22,7 +25,7 @@ python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn
 
 Then install fastdeploy. **Do not install from PyPI**. Use the following methods instead:
 
-For SM80/90 architecture GPUs(e.g A100/H100):
+For SM80/90 architecture GPUs(e.g A30/A100/H100/):
 ```
 # Install stable release
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -31,7 +34,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
-For SM86/89 architecture GPUs(e.g 4090/L20/L40):
+For SM86/89 architecture GPUs(e.g A10/4090/L20/L40):
 ```
 # Install stable release
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple

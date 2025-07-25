@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -25,8 +26,8 @@ from fastdeploy.worker.output import ModelRunnerOutput
 
 class WorkerBase(ABC):
     """
-        Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
-        Worker interface that allows inference framwork to cleanly separate implementations for different harware.
+    Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
+    Worker interface that allows inference framwork to cleanly separate implementations for different harware.
     """
 
     def __init__(
@@ -59,18 +60,17 @@ class WorkerBase(ABC):
 
     @abstractmethod
     def init_device(self) -> None:
-        """ Initialize the device state."""
+        """Initialize the device state."""
         raise NotImplementedError
 
     @abstractmethod
-    def initialize_cache(self, num_gpu_blocks: int,
-                         num_cpu_blocks: int) -> None:
+    def initialize_cache(self, num_gpu_blocks: int) -> None:
         """Initizlize the KV Cache with the given size in blocks."""
         raise NotImplementedError
 
     @abstractmethod
     def get_model(self) -> nn.Layer:
-        """ Get the model loaded by worker."""
+        """Get the model loaded by worker."""
         raise NotImplementedError
 
     @abstractmethod
@@ -96,6 +96,6 @@ class WorkerBase(ABC):
         """Basic health check (override for device-specific checks)."""
         return NotImplementedError
 
-    def prefill_finished(self):
-        """check whether prefill stage finished."""
+    def exist_prefill(self):
+        """check whether prefill stage exist."""
         return True

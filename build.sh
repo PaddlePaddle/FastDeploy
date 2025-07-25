@@ -18,6 +18,9 @@ BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
 FD_CPU_USE_BF16=${3:-"false"}
+# FD_BUILDING_ARCS: Specify target CUDA architectures for custom ops, e.g., "[80, 90, 100]".
+# For SM90 (Hopper), use 90. For SM100 (Blackwell), use 100.
+# These will be translated to 90a / 100a in setup_ops.py for specific features.
 FD_BUILDING_ARCS=${4:-""}
 
 
@@ -74,8 +77,10 @@ function copy_ops(){
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
+      mkdir -p ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
-      echo -e "ROCM ops have been copy to fastdeploy"
+      echo -e "BASE and ROCM ops have been copy to fastdeploy"
       return
     fi
     mkdir -p ../fastdeploy/model_executor/ops/base
@@ -101,6 +106,23 @@ function copy_ops(){
       DEVICE_TYPE="npu"
       cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/npu
       echo -e "npu ops have been copy to fastdeploy"
+      return
+    fi
+
+    if_corex=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))"`
+    if [ "$if_corex" = "True" ]; then
+      DEVICE_TYPE="iluvatar-gpu"
+      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/iluvatar
+      echo -e "BASE and Iluvatar ops have been copy to fastdeploy"
+      return
+    fi
+
+    is_gcu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('gcu'))"`
+    if [ "$is_gcu" = "True" ]; then
+      DEVICE_TYPE="gcu"
+      cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gcu
+      echo -e "gcu ops have been copy to fastdeploy"
       return
     fi
 
@@ -163,17 +185,24 @@ function build_and_install() {
     exit 1
   fi
   echo -e "${BLUE}[build]${NONE} ${GREEN}build fastdeploy wheel success${NONE}\n"
+}
 
-  echo -e "${BLUE}[install]${NONE} installing fastdeploy..."
-  cd $DIST_DIR
-  find . -name "fastdeploy*.whl" | xargs ${python} -m pip install
-  if [ $? -ne 0 ]; then
-    cd ..
-    echo -e "${RED}[FAIL]${NONE} install fastdeploy wheel failed"
-    exit 1
+function version_info() {
+  output_file="fastdeploy/version.txt"
+  fastdeploy_git_commit_id=$(git rev-parse HEAD)
+  paddle_version=$(${python} -c "import paddle; print(paddle.__version__)")
+  paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.__git_commit__)")
+  cuda_version="nvcc-not-installed"
+  if command -v nvcc &> /dev/null; then
+    cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
   fi
-  echo -e "${BLUE}[install]${NONE} ${GREEN}fastdeploy install success${NONE}\n"
-  cd ..
+  cxx_version=$(g++ --version | head -n 1 | grep -Po "(?<=\) )[\d.]+")
+
+  echo "fastdeploy GIT COMMIT ID: $fastdeploy_git_commit_id" > $output_file
+  echo "Paddle version: $paddle_version" >> $output_file
+  echo "Paddle GIT COMMIT ID: $paddle_git_commit_id" >> $output_file
+  echo "CUDA version: $cuda_version" >> $output_file
+  echo "CXX compiler version: $cxx_version" >> $output_file
 }
 
 function cleanup() {
@@ -207,6 +236,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   set -e
 
   init
+  version_info
   build_and_install_ops
   build_and_install
   cleanup
@@ -237,6 +267,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
 else
   init
   build_and_install_ops
+  version_info
   rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
 fi

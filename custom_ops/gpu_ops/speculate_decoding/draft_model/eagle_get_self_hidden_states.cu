@@ -72,7 +72,7 @@ __global__ void computeOrderKernel(
     output_token_num[0] = out_offset;
 #ifdef DEBUG_EAGLE_KERNEL
     printf("position map output_token_num%d:\n", output_token_num[0]);
-    for (int i = 0; i < output_token_num[0]; i++) { 
+    for (int i = 0; i < output_token_num[0]; i++) {
       printf("%d ", src_map[i]);
     }
     printf("\n");

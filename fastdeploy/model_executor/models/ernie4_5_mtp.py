@@ -25,12 +25,12 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
-from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.worker.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
@@ -47,14 +47,13 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         return None
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
         """
         get_tensor_parallel_mappings
         """
         logger.info("erine inference model _get_tensor_parallel_mappings")
 
-        from paddleformers.transformers.conversion_utils import \
-            split_or_merge_func
+        from paddleformers.transformers.conversion_utils import split_or_merge_func
 
         fn = split_or_merge_func(
             is_split=is_split,
@@ -71,10 +70,8 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
             num_key_value_heads,
             head_dim,
         ):
-
             def get_shape(tensor):
-                return (tensor.get_shape()
-                        if hasattr(tensor, "get_shape") else tensor.shape)
+                return tensor.get_shape() if hasattr(tensor, "get_shape") else tensor.shape
 
             def slice_tensor(tensor, start, end):
                 shape = get_shape(tensor)
@@ -96,11 +93,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
                 size = shape[-1]
                 block_size = size // degree
                 if hasattr(tensor, "get_shape"):
-                    return [
-                        slice_tensor(tensor, i * block_size,
-                                     (i + 1) * block_size)
-                        for i in range(degree)
-                    ]
+                    return [slice_tensor(tensor, i * block_size, (i + 1) * block_size) for i in range(degree)]
                 else:
                     return np.split(tensor, degree, axis=-1)
 
@@ -109,10 +102,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
             v_list = split_tensor(v, tensor_parallel_degree)
 
             if tensor_parallel_rank is None:
-                return [
-                    np.concatenate([q_i, k_i, v_i], axis=-1)
-                    for q_i, k_i, v_i in zip(q_list, k_list, v_list)
-                ]
+                return [np.concatenate([q_i, k_i, v_i], axis=-1) for q_i, k_i, v_i in zip(q_list, k_list, v_list)]
             else:
                 return np.concatenate(
                     [
@@ -123,8 +113,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
                     axis=-1,
                 )
 
-        def gqa_qkv_merge_func(weight_list, num_attention_heads,
-                               num_key_value_heads, head_dim):
+        def gqa_qkv_merge_func(weight_list, num_attention_heads, num_key_value_heads, head_dim):
             tensor_parallel_degree = len(weight_list)
             num_attention_heads = num_attention_heads // tensor_parallel_degree
             num_key_value_heads = num_key_value_heads // tensor_parallel_degree
@@ -132,8 +121,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
             is_paddle_tensor = not isinstance(weight_list[0], np.ndarray)
 
             def get_shape(tensor):
-                return (tensor.get_shape()
-                        if hasattr(tensor, "get_shape") else tensor.shape)
+                return tensor.get_shape() if hasattr(tensor, "get_shape") else tensor.shape
 
             def slice_tensor(tensor, start, end):
                 if len(get_shape(tensor)) == 1:
@@ -166,8 +154,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
             else:
                 return np.concatenate(merged, axis=-1)
 
-        if (config.num_key_value_heads is not None
-                and config.num_key_value_heads != config.num_attention_heads):
+        if config.num_key_value_heads is not None and config.num_key_value_heads != config.num_attention_heads:
             if is_split:
                 qkv_fn = partial(
                     gqa_qkv_split_func,
@@ -187,8 +174,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         else:
             qkv_fn = partial(fn, is_column=True)
 
-        def get_tensor_parallel_split_mappings(num_layers, moe_num_experts,
-                                               moe_layer_start_index):
+        def get_tensor_parallel_split_mappings(num_layers, moe_num_experts, moe_layer_start_index):
             """
             get tensor from parallel-split-mappings
             """
@@ -197,38 +183,32 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
 
             base_actions = {}
 
-            base_actions["ernie.mtp_linear_proj.0.weight"] = partial(
-                fn, is_column=True)
-            base_actions[
-                f"{base_model_prefix}.0.self_attn.qkv_proj.weight"] = qkv_fn
-            base_actions[
-                f"{base_model_prefix}.0.self_attn.o_proj.weight"] = partial(
-                    fn, is_column=False)
-            base_actions[
-                f"{base_model_prefix}.0.mlp.up_gate_proj.weight"] = partial(
-                    fn, is_column=True, is_naive_2fuse=True)
-            base_actions[f"{base_model_prefix}.0.mlp.down_proj.weight"] = (
-                partial(fn, is_column=False))
+            base_actions["ernie.mtp_linear_proj.0.weight"] = partial(fn, is_column=True)
+            base_actions[f"{base_model_prefix}.0.self_attn.qkv_proj.weight"] = qkv_fn
+            base_actions[f"{base_model_prefix}.0.self_attn.o_proj.weight"] = partial(fn, is_column=False)
+            base_actions[f"{base_model_prefix}.0.mlp.up_gate_proj.weight"] = partial(
+                fn, is_column=True, is_naive_2fuse=True
+            )
+            base_actions[f"{base_model_prefix}.0.mlp.down_proj.weight"] = partial(fn, is_column=False)
 
             for expert_idx in range(moe_num_experts):
                 base_actions[
-                    f"{base_model_prefix}.{moe_layer_start_index}"
-                    f".mlp.experts.{expert_idx}.up_gate_proj.weight"] = partial(
-                        fn, is_column=True, is_naive_2fuse=True)
+                    f"{base_model_prefix}.{moe_layer_start_index}" f".mlp.experts.{expert_idx}.up_gate_proj.weight"
+                ] = partial(fn, is_column=True, is_naive_2fuse=True)
                 base_actions[
-                    f"{base_model_prefix}.{moe_layer_start_index}"
-                    f".mlp.experts.{expert_idx}.down_proj.weight"] = partial(
-                        fn, is_column=False)
+                    f"{base_model_prefix}.{moe_layer_start_index}" f".mlp.experts.{expert_idx}.down_proj.weight"
+                ] = partial(fn, is_column=False)
 
             for key, action in base_actions.items():
-                if (f"{base_model_prefix}.0.mlp.up_gate_proj.weight" in key or
-                        f"{base_model_prefix}.0.mlp.down_proj.weight" in key):
+                if (
+                    f"{base_model_prefix}.0.mlp.up_gate_proj.weight" in key
+                    or f"{base_model_prefix}.0.mlp.down_proj.weight" in key
+                ):
                     for i in range(moe_layer_start_index):
                         final_actions[key.replace("0.", f"{i}.")] = action
                 elif f"{moe_layer_start_index}.mlp.experts." in key:
                     for i in range(moe_layer_start_index, num_layers):
-                        final_actions[key.replace(f"{moe_layer_start_index}.",
-                                                  f"{i}.")] = action
+                        final_actions[key.replace(f"{moe_layer_start_index}.", f"{i}.")] = action
                 elif f"{base_model_prefix}.0." in key:
                     for i in range(num_layers):
                         final_actions[key.replace("0.", f"{i}.")] = action
@@ -237,7 +217,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
 
         moe_num_experts = 0
         mappings = get_tensor_parallel_split_mappings(
-            config.num_layers,
+            config.num_hidden_layers,
             moe_num_experts,
             config.moe_layer_start_index,
         )
@@ -262,31 +242,34 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        self.embeddings = fd_config.speculative_config.sharing_model.model.embeddings
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        self.embed_tokens = fd_config.speculative_config.sharing_model.ernie.embed_tokens
 
-        self.hidden_layers = [
-            Ernie4_5_DecoderLayer(
-                fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.{i}")
-            for i in range(self.num_layers)
-        ]
+        self.layers = nn.LayerList(
+            [
+                Ernie4_5_DecoderLayer(
+                    fd_config=fd_config,
+                    prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.{i}",
+                )
+                for i in range(self.num_layers)
+            ]
+        )
 
         self.enorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix="ernie.mtp_emb_norm.0",
         )
 
         self.hnorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix="ernie.mtp_hidden_norm.0",
         )
 
-        self.eh_proj = ParallelLMHead(
+        self.eh_proj = ParallelEHProjection(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.hidden_size,
             embedding_dim=fd_config.model_config.hidden_size * 2,
@@ -302,13 +285,13 @@ class Ernie4_5_MTPModel(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        # self.embeddings.load_state_dict(state_dict)
+        # self.embed_tokens.load_state_dict(state_dict)
         self.enorm.load_state_dict(state_dict)
         self.hnorm.load_state_dict(state_dict)
         self.eh_proj.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.hidden_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -319,18 +302,15 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         forward
         """
-        inputs_embedding = self.embeddings(
-            ids_remove_padding=ids_remove_padding)
+        inputs_embedding = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         inputs_embedding = paddle.concat(
-            [self.enorm(inputs_embedding),
-             self.hnorm(previous_hidden_states)],
-            axis=-1)
+            [self.enorm(inputs_embedding), self.hnorm(previous_hidden_states)],
+            axis=-1,
+        )
         hidden_states = self.eh_proj(inputs_embedding)
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.hidden_layers[i](forward_meta,
-                                                            hidden_states,
-                                                            residual)
+            hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         hidden_states = hidden_states + residual
 
@@ -349,7 +329,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         super(Ernie4_5_MTPForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
-        self.model = Ernie4_5_MTPModel(fd_config=fd_config)
+        self.ernie = Ernie4_5_MTPModel(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -358,13 +338,11 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
 
     @classmethod
     def name(self):
-        """
-        """
+        """ """
         return "Ernie4_5_MTPForCausalLM"
 
     @paddle.no_grad()
-    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray,
-                                                         paddle.Tensor]]):
+    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
         Load model parameters from a given state dictionary.
 
@@ -373,10 +351,10 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
+        self.ernie.load_state_dict(state_dict)
         # if self.tie_word_embeddings:
-        #     self.lm_head.out_linear.weight.set_value(
-        #         self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
+        #     self.lm_head.linear.weight.set_value(
+        #         self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         # else:
         #     self.lm_head.load_state_dict(state_dict)
 
@@ -386,7 +364,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
-        logits[:, self.ori_vocab_size:] = -float("inf")
+        logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
 
@@ -398,9 +376,11 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(self.fd_config.moe_config.moe_layer_start_index,
-                       self.fd_config.model_config.num_layers):
-            self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
         self,
@@ -411,7 +391,6 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         forward
         """
-        hidden_states = self.model(ids_remove_padding, previous_hidden_states,
-                                   forward_meta)
+        hidden_states = self.ernie(ids_remove_padding, previous_hidden_states, forward_meta)
 
         return hidden_states

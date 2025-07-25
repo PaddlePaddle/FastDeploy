@@ -13,21 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import importlib
 import inspect
 import os
 from pathlib import Path
 
 from .model_base import ModelForCasualLM, ModelRegistry
-
-inference_runner_supported_models = [
-    "Ernie4_5_MoeForCausalLM",
-    "Ernie4_5_MTPForCausalLM",
-    "Qwen2ForCausalLM",
-    "Qwen3MoeForCausalLM",
-    "Ernie4_5_ForCausalLM",
-    "Qwen3ForCausalLM",
-]
 
 
 def _find_py_files(root_dir):
@@ -37,29 +29,24 @@ def _find_py_files(root_dir):
         rel_path = py_file.relative_to(root_dir)
         if "__init__" in str(py_file):
             continue
-        dotted_path = str(rel_path).replace("/", ".").replace("\\",
-                                                              ".").replace(
-                                                                  ".py", "")
+        dotted_path = str(rel_path).replace("/", ".").replace("\\", ".").replace(".py", "")
         py_files.append(dotted_path)
     return py_files
 
 
-def auto_models_registry():
+def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.models"):
     """
     auto registry all models in this folder
     """
-    for module_file in _find_py_files(os.path.dirname(__file__)):
+    for module_file in _find_py_files(dir_path):
         try:
-            module = importlib.import_module(
-                f'fastdeploy.model_executor.models.{module_file}')
+            module = importlib.import_module(f"{register_path}.{module_file}")
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if inspect.isclass(attr) and issubclass(
-                        attr,
-                        ModelForCasualLM) and attr is not ModelForCasualLM:
+                if inspect.isclass(attr) and issubclass(attr, ModelForCasualLM) and attr is not ModelForCasualLM:
                     ModelRegistry.register(attr)
         except ImportError:
             raise ImportError(f"{module_file=} import error")
 
 
-auto_models_registry()
+auto_models_registry(os.path.dirname(__file__))

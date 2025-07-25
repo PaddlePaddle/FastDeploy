@@ -18,6 +18,8 @@ import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
 from ..utils import create_and_set_parameter, get_tensor
@@ -38,16 +40,16 @@ class Wint2MoeMethod(QuantMethodBase):
         """
         pass
 
-    def check(self, layer: nn.Layer, ffn1_weights, ffn2_weights):
+    def check(self, layer: nn.Layer, up_gate_proj_weights, down_proj_weights):
         """
         check layer is valid for this method
         """
-        assert len(
-            ffn1_weights
-        ) == layer.num_local_experts, "ffn1_weights length should be equal to num_local_experts."
-        assert len(
-            ffn2_weights
-        ) == layer.num_local_experts, "ffn2_weights length should be equal to num_local_experts."
+        assert (
+            len(up_gate_proj_weights) == layer.num_local_experts
+        ), "up_gate_proj_weights length should be equal to num_local_experts."
+        assert (
+            len(down_proj_weights) == layer.num_local_experts
+        ), "down_proj_weights length should be equal to num_local_experts."
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -56,7 +58,7 @@ class Wint2MoeMethod(QuantMethodBase):
         pass
 
 
-class TritonWint2FusedMoeMethod(Wint2MoeMethod):
+class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
     """
     Use Triton Group Gemm to compute Fused MoE.
     """
@@ -75,96 +77,75 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         """
         Paddle cutlass process prequanted weights.
         """
-        ffn1_expert_weight_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_key", None)
-        ffn2_expert_weight_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_key", None)
-        ffn1_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_scale_key", None)
-        ffn2_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_scale_key", None)
-        ffn1_expert_super_scales_key = layer.weight_key_map.get(
-            "ffn1_expert_super_scales_key", None)
-        ffn2_expert_super_scales_key = layer.weight_key_map.get(
-            "ffn2_expert_super_scales_key", None)
-        ffn1_expert_code_scale_key = layer.weight_key_map.get(
-            "ffn1_expert_code_scale_key", None)
-        ffn2_expert_code_scale_key = layer.weight_key_map.get(
-            "ffn2_expert_code_scale_key", None)
-        ffn1_expert_code_zp_key = layer.weight_key_map.get(
-            "ffn1_expert_code_zp_key", None)
-        ffn2_expert_code_zp_key = layer.weight_key_map.get(
-            "ffn2_expert_code_zp_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
+        up_gate_proj_expert_super_scales_key = layer.weight_key_map.get("up_gate_proj_expert_super_scales_key", None)
+        down_proj_expert_super_scales_key = layer.weight_key_map.get("down_proj_expert_super_scales_key", None)
+        up_gate_proj_expert_code_scale_key = layer.weight_key_map.get("up_gate_proj_expert_code_scale_key", None)
+        down_proj_expert_code_scale_key = layer.weight_key_map.get("down_proj_expert_code_scale_key", None)
+        up_gate_proj_expert_code_zp_key = layer.weight_key_map.get("up_gate_proj_expert_code_zp_key", None)
+        down_proj_expert_code_zp_key = layer.weight_key_map.get("down_proj_expert_code_zp_key", None)
 
-        ffn1_weights, ffn2_weights = layer.load_experts_weight(
-            state_dict, ffn1_expert_weight_key, ffn2_expert_weight_key)
-        # self.check(layer, ffn1_weights, ffn2_weights)
+        up_gate_proj_weights, down_proj_weights, _ = layer.load_experts_weight(
+            state_dict,
+            up_gate_proj_expert_weight_key,
+            down_proj_expert_weight_key,
+        )
+        # self.check(layer, up_gate_proj_weights, down_proj_weights)
 
-        ffn1_weight_scale = []
-        ffn2_weight_scale = []
-        ffn1_super_scales = []
-        ffn2_super_scales = []
-        ffn1_code_scale = []
-        ffn2_code_scale = []
-        ffn1_code_zp = []
-        ffn2_code_zp = []
+        up_gate_proj_weight_scale = []
+        down_proj_weight_scale = []
+        up_gate_proj_super_scales = []
+        down_proj_super_scales = []
+        up_gate_proj_code_scale = []
+        down_proj_code_scale = []
+        up_gate_proj_code_zp = []
+        down_proj_code_zp = []
         for i in range(layer.num_experts):
             expert_idx = layer.expert_id_offset + i
-            ffn1_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn1_expert_weight_scale_key.format(expert_idx))))
-            ffn2_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn2_expert_weight_scale_key.format(expert_idx))))
-            ffn1_super_scales.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn1_expert_super_scales_key.format(expert_idx))))
-            ffn2_super_scales.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn2_expert_super_scales_key.format(expert_idx))))
-            ffn1_code_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn1_expert_code_scale_key.format(expert_idx))))
-            ffn2_code_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn2_expert_code_scale_key.format(expert_idx))))
-            ffn1_code_zp.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn1_expert_code_zp_key.format(expert_idx))))
-            ffn2_code_zp.append(
-                get_tensor(
-                    state_dict.pop(
-                        ffn2_expert_code_zp_key.format(expert_idx))))
+            up_gate_proj_weight_scale.append(
+                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+            )
+            down_proj_weight_scale.append(
+                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+            )
+            up_gate_proj_super_scales.append(
+                get_tensor(state_dict.pop(up_gate_proj_expert_super_scales_key.format(expert_idx)))
+            )
+            down_proj_super_scales.append(
+                get_tensor(state_dict.pop(down_proj_expert_super_scales_key.format(expert_idx)))
+            )
+            up_gate_proj_code_scale.append(
+                get_tensor(state_dict.pop(up_gate_proj_expert_code_scale_key.format(expert_idx)))
+            )
+            down_proj_code_scale.append(get_tensor(state_dict.pop(down_proj_expert_code_scale_key.format(expert_idx))))
+            up_gate_proj_code_zp.append(get_tensor(state_dict.pop(up_gate_proj_expert_code_zp_key.format(expert_idx))))
+            down_proj_code_zp.append(get_tensor(state_dict.pop(down_proj_expert_code_zp_key.format(expert_idx))))
 
-        ffn1_weight = paddle.stack(ffn1_weights, axis=0)
-        ffn2_weight = paddle.stack(ffn2_weights, axis=0)
-        ffn1_weight_scale = paddle.stack(ffn1_weight_scale, axis=0)
-        ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0)
-        ffn1_super_scales = paddle.stack(ffn1_super_scales, axis=0)
-        ffn2_super_scales = paddle.stack(ffn2_super_scales, axis=0)
-        ffn1_code_scale = paddle.stack(ffn1_code_scale, axis=0)
-        ffn2_code_scale = paddle.stack(ffn2_code_scale, axis=0)
-        ffn1_code_zp = paddle.stack(ffn1_code_zp, axis=0)
-        ffn2_code_zp = paddle.stack(ffn2_code_zp, axis=0)
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0)
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0)
+        up_gate_proj_super_scales = paddle.stack(up_gate_proj_super_scales, axis=0)
+        down_proj_super_scales = paddle.stack(down_proj_super_scales, axis=0)
+        up_gate_proj_code_scale = paddle.stack(up_gate_proj_code_scale, axis=0)
+        down_proj_code_scale = paddle.stack(down_proj_code_scale, axis=0)
+        up_gate_proj_code_zp = paddle.stack(up_gate_proj_code_zp, axis=0)
+        down_proj_code_zp = paddle.stack(down_proj_code_zp, axis=0)
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
-            "moe_ffn1_weight_scale": ffn1_weight_scale,
-            "moe_ffn2_weight_scale": ffn2_weight_scale,
-            "moe_ffn1_super_scales": ffn1_super_scales,
-            "moe_ffn2_super_scales": ffn2_super_scales,
-            "moe_ffn1_code_scale": ffn1_code_scale,
-            "moe_ffn2_code_scale": ffn2_code_scale,
-            "moe_ffn1_code_zp": ffn1_code_zp,
-            "moe_ffn2_code_zp": ffn2_code_zp
+            "up_gate_proj_weight": up_gate_proj_weight,
+            "down_proj_weight": down_proj_weight,
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
+            "down_proj_weight_scale": down_proj_weight_scale,
+            "up_gate_proj_super_scales": up_gate_proj_super_scales,
+            "down_proj_super_scales": down_proj_super_scales,
+            "up_gate_proj_code_scale": up_gate_proj_code_scale,
+            "down_proj_code_scale": down_proj_code_scale,
+            "up_gate_proj_code_zp": up_gate_proj_code_zp,
+            "down_proj_code_zp": down_proj_code_zp,
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
@@ -186,6 +167,7 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         """
 
         from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
+
         (
             permute_input,
             token_nums_per_expert,
@@ -197,8 +179,9 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
             x,
             gate_out,
             layer.gate_correction_bias,
-            (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
-             else None),  # if set, permute_input will be int8_t
+            (
+                layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+            ),  # if set, permute_input will be int8_t
             layer.top_k,
             False,
             topk_only_mode=False,
@@ -207,17 +190,17 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         ffn_out = fastdeploy.model_executor.ops.gpu.moe_expert_ffn_wint2(
             permute_input,
             token_nums_per_expert,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
             None,
-            layer.moe_ffn1_super_scales,
-            layer.moe_ffn2_super_scales,
-            layer.moe_ffn1_weight_scale,
-            layer.moe_ffn1_code_scale,
-            layer.moe_ffn1_code_zp,
-            layer.moe_ffn2_weight_scale,
-            layer.moe_ffn2_code_scale,
-            layer.moe_ffn2_code_zp,
+            layer.up_gate_proj_super_scales,
+            layer.down_proj_super_scales,
+            layer.up_gate_proj_weight_scale,
+            layer.up_gate_proj_code_scale,
+            layer.up_gate_proj_code_zp,
+            layer.down_proj_weight_scale,
+            layer.down_proj_code_scale,
+            layer.down_proj_code_zp,
             False,
         )
 
@@ -232,5 +215,178 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
             norm_topk_prob=True,
             routed_scaling_factor=1.0,
         )
+
+        if layer.tp_size > 1:
+            tensor_model_parallel_all_reduce(fused_moe_out)
+
+        return fused_moe_out
+
+
+class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
+    def __init__(self, quant_config):
+        super().__init__(quant_config)
+        self.moe_quant_type = quant_config.moe_quant_type
+
+    def apply(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate_out: paddle.Tensor,
+    ) -> paddle.Tensor:
+        """
+        Use Wint2 Triton Fusedmoe compute Fused MoE.
+        """
+
+        from fastdeploy.model_executor.ops.triton_ops import moe_wint2_ffn_kernel
+
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            layer.top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
+
+        num_tokens, K = x.shape
+        E, _, N = layer.up_gate_proj_weight.shape
+        M = num_tokens
+
+        top_k = topk_ids.shape[1]
+
+        intermediate_cache1 = paddle.empty(
+            [M, top_k, N],
+            dtype=x.dtype,
+        )
+        intermediate_cache3 = paddle.empty(
+            (M, top_k, K),
+            dtype=x.dtype,
+        )
+
+        double_quant = True
+        num_valid_tokens = topk_ids.shape[0] * topk_ids.shape[1]
+
+        config = {
+            "BLOCK_SIZE_M": 16,
+            "BLOCK_SIZE_N": 512,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 1,
+            "num_warps": 4,
+            "num_stages": 16,
+        }
+        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
+
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
+            topk_ids, E, config["BLOCK_SIZE_M"]
+        )
+
+        max_possible_num_post_padded = sorted_token_ids.shape[0]
+        grid = (ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) * ceil_div(N, config["BLOCK_SIZE_N"]),)
+
+        moe_wint2_ffn_kernel[grid](
+            x,
+            layer.up_gate_proj_weight,
+            intermediate_cache1,
+            layer.up_gate_proj_weight_scale,
+            layer.up_gate_proj_super_scales,
+            layer.up_gate_proj_code_scale,
+            layer.up_gate_proj_code_zp,
+            topk_weights,
+            sorted_token_ids,
+            expert_ids,
+            num_tokens_post_padded,
+            num_valid_tokens,
+            max_possible_num_post_padded,
+            # Matrix dimensions
+            N=layer.up_gate_proj_weight.shape[-1],
+            K=x.shape[-1],
+            # The stride variables represent how much to increase the ptr by when
+            # moving by 1 element in a particular dimension. E.g. `stride_am` is
+            # how much to increase `a_ptr` by to get the element one row down
+            # (A has M rows).
+            stride_am=x.strides[0],
+            stride_ak=x.strides[1],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
+            stride_bn=1,
+            stride_cm=intermediate_cache1.strides[-2],
+            stride_cn=1,
+            stride_bse=layer.up_gate_proj_weight_scale.strides[0],
+            stride_bsk=layer.up_gate_proj_weight_scale.strides[1],
+            stride_bsn=1,
+            stride_bce=layer.up_gate_proj_code_scale.strides[0],
+            stride_bck=1,
+            stride_bcn=1,
+            BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=config["GROUP_SIZE_M"],
+            MUL_ROUTED_WEIGHT=False,
+            USE_DOUBLE_QUANT=double_quant,
+            top_k=top_k,
+        )
+
+        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1.reshape([-1, N]))
+
+        config = {
+            "BLOCK_SIZE_M": 16,
+            "BLOCK_SIZE_N": 128,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 2,
+            "num_warps": 4,
+            "num_stages": 8,
+        }
+
+        grid = (
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"])
+            * ceil_div(layer.down_proj_weight.shape[-1], config["BLOCK_SIZE_N"]),
+        )
+
+        moe_wint2_ffn_kernel[grid](
+            intermediate_cache2,
+            layer.down_proj_weight,
+            intermediate_cache3,
+            layer.down_proj_weight_scale,
+            layer.down_proj_super_scales,
+            layer.down_proj_code_scale,
+            layer.down_proj_code_zp,
+            topk_weights,
+            sorted_token_ids,
+            expert_ids,
+            num_tokens_post_padded,
+            num_valid_tokens,
+            max_possible_num_post_padded,
+            # Matrix dimensions
+            N=layer.down_proj_weight.shape[-1],
+            K=intermediate_cache2.shape[-1],
+            # The stride variables represent how much to increase the ptr by when
+            # moving by 1 element in a particular dimension. E.g. `stride_am` is
+            # how much to increase `a_ptr` by to get the element one row down
+            # (A has M rows).
+            stride_am=intermediate_cache2.strides[0],
+            stride_ak=1,
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
+            stride_bn=1,
+            stride_cm=intermediate_cache3.strides[-2],
+            stride_cn=1,
+            stride_bse=layer.down_proj_weight_scale.strides[0],
+            stride_bsk=layer.down_proj_weight_scale.strides[1],
+            stride_bsn=1,
+            stride_bce=layer.down_proj_code_scale.strides[0],
+            stride_bck=1,
+            stride_bcn=1,
+            BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=config["GROUP_SIZE_M"],
+            MUL_ROUTED_WEIGHT=True,
+            USE_DOUBLE_QUANT=double_quant,
+            top_k=1,
+        )
+
+        fused_moe_out = paddle.sum(intermediate_cache3, axis=1)
+
+        if layer.tp_size > 1:
+            tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out

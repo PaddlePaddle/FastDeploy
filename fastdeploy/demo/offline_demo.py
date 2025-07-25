@@ -22,8 +22,6 @@ model_name_or_path = "./models/llama-7b"
 # 超参设置
 sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
 llm = LLM(model=model_name_or_path, tensor_parallel_size=1)
-output = llm.generate(prompts="who are you？",
-                      use_tqdm=True,
-                      sampling_params=sampling_params)
+output = llm.generate(prompts="who are you？", use_tqdm=True, sampling_params=sampling_params)
 
 print(output)

@@ -32,8 +32,7 @@ class NgramProposer(Proposer):
     def __init__(self, cfg: FDConfig):
         super().__init__(cfg)
         self.max_ngram_size = self.speculative_config.max_ngram_size
-        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1],
-                                          dtype="int64").cpu()
+        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
 
     def update(self, bid: int, seq_len: int):
         """

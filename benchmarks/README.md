@@ -41,7 +41,10 @@ python -m pip install -r requirements.txt
 --metric-percentiles 80,95,99,99.9,99.95,99.99：性能结果中展示的性能指标分位值
 --num-prompts 1：总计发送多少条请求
 --max-concurrency 1：压测并发数
---save-result：开启结果保存，结果文件会存入json
+--save-result：开启结果保存，结果文件会存入json，默认False不保存
+--debug：开启debug模式，逐条打印payload和output内容，默认False
+--shuffle：是否打乱数据集，默认False不打乱
+--seed：打乱数据集时的随机种子，默认0
 ```
 
 ##### /v1/chat/completions接口压测单条数据调试
@@ -105,3 +108,30 @@ python benchmark_serving.py \
   --save-result > infer_log.txt 2>&1 &
 ```
 
+### 投机解码性能测试工具
+
+#### 使用方式：
+
+```bash
+python benchmarks/benchmark_mtp.py \
+  --host 127.0.0.1 --port 8000 \
+  --max-concurrency 16 32 64 96 --num-prompts 256 \
+  --acceptance-rate 0.8 --draft-token-steps 1 2 3 \
+  --s_itl-base-model 15.88 22.84 16.47 16.93 \
+  --dataset-name EBChat \
+  --dataset-path ./filtered_sharedgpt_2000_input_1136_output_200_fd.json
+```
+
+#### 参数说明
+
+```bash
+--host：服务ip地址，用于组url
+--port：服务HTTP端口，用于组url
+--max-concurrency：测试并发数
+--num-prompts：总计发送多少条请求
+--acceptance-rate：投机解码的模拟接受率
+--draft-token-steps：投机解码的步数
+--s_itl-base-model：主模型的解码延迟，可由上述的性能压测工具获得，与batch-size一一对应
+--dataset-name：指定数据集类，指定为"EBChat"可读取转存的FD格式数据集
+--dataset-path：测试数据集路径
+```

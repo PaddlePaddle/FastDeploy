@@ -19,7 +19,7 @@ from typing import Optional
 
 import paddle
 from paddle import nn
-from paddle.incubate.nn.functional import fused_bias_act
+from paddle.incubate.nn.functional import fused_bias_act, swiglu
 
 from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
@@ -63,8 +63,15 @@ class SiluAndMul(nn.Layer):
         """
         super().__init__()
 
-        if current_platform.is_cuda() or current_platform.is_xpu():
+        if (
+            current_platform.is_cuda()
+            or current_platform.is_xpu()
+            or current_platform.is_iluvatar()
+            or current_platform.is_dcu()
+        ):
             self.forward = self.forward_cuda
+        elif current_platform.is_gcu():
+            self.forward = self.forward_gcu
         else:
             raise NotImplementedError
 
@@ -90,8 +97,10 @@ class SiluAndMul(nn.Layer):
         elif self._dtype == "float32":
             self._fuse_kernel_compute_dtype = "fp32"
         else:
-            raise ValueError(f"Just support float32, float16 and \
-                    bfloat16 as default dtype, but received {self._dtype}")
+            raise ValueError(
+                f"Just support float32, float16 and \
+                    bfloat16 as default dtype, but received {self._dtype}"
+            )
 
         # fp8 is not support smooth quantization
         if fd_config.quant_config and "fp8" in fd_config.quant_config.name():
@@ -122,3 +131,18 @@ class SiluAndMul(nn.Layer):
             quant_max_bound=self.quant_max_bound,
             quant_min_bound=self.quant_min_bound,
         )
+
+    def forward_gcu(self, x):
+        """
+        Forward propagation of the custom activation layer.
+
+        Args:
+            x (Tensor): Input tensor to the activation layer.
+
+        Returns:
+            Tensor: Output tensor.
+        """
+        out = swiglu(x)
+        if self.bias is not None:
+            out = out + self.bias
+        return out

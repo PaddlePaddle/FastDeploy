@@ -17,18 +17,23 @@
 import os
 
 import numpy as np
-import re
-from fastdeploy.input.mm_processor import DataProcessor, IDS_TYPE_FLAG
-from fastdeploy.input.ernie_processor import ErnieProcessor
+
 from fastdeploy.engine.request import Request
-from fastdeploy.entrypoints.chat_utils import parse_chat_messages
+from fastdeploy.input.ernie_processor import ErnieProcessor
+from fastdeploy.input.mm_processor import IDS_TYPE_FLAG, DataProcessor
 from fastdeploy.utils import data_processor_logger
 
 
 class ErnieMoEVLProcessor(ErnieProcessor):
     """The processor class for ERNIE MoE VL models."""
-    def __init__(self, model_name_or_path, limit_mm_per_prompt=None, mm_processor_kwargs=None, 
-        reasoning_parser_obj=None):
+
+    def __init__(
+        self,
+        model_name_or_path,
+        limit_mm_per_prompt=None,
+        mm_processor_kwargs=None,
+        reasoning_parser_obj=None,
+    ):
         self.use_hf_tokenizer = False
 
         if "merge_llm_model" in model_name_or_path:
@@ -37,11 +42,11 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         tokenizer_path = model_name_or_path
         preprocessor_path = model_name_or_path
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
-        
+
         self.ernie_processor = DataProcessor(
             tokenizer_name=tokenizer_path,
             image_preprocessor_name=preprocessor_path,
-            **processor_kwargs
+            **processor_kwargs,
         )
         self.ernie_processor.eval()
         self.image_patch_id = self.ernie_processor.image_patch_id
@@ -73,12 +78,12 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
         task = request.to_dict()
-        task['enable_thinking'] = kwargs.get("enable_thinking", True)
+        task["enable_thinking"] = kwargs.get("enable_thinking", True)
         self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
 
         return request
-    
+
     def _parse_processor_kwargs(self, kwargs):
         """解析多模态处理器参数配置"""
         if not kwargs:
@@ -101,13 +106,14 @@ class ErnieMoEVLProcessor(ErnieProcessor):
                 "video_frames_sample": str,
                 "video_max_frames": int,
                 "video_min_frames": int,
-                "video_fps": int
+                "video_fps": int,
             }
 
             for key, value in kwargs.items():
                 if key in expected_types and not isinstance(value, expected_types[key]):
                     raise ValueError(
-                        f"Invalid type for {key}: expected {expected_types[key].__name__}, got {type(value).__name__}")
+                        f"Invalid type for {key}: expected {expected_types[key].__name__}, got {type(value).__name__}"
+                    )
 
             return kwargs
 
@@ -117,11 +123,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
     def _parse_limits(self, limits):
         """解析多模态限制配置"""
-        DEFAULT_LIMITS = {
-            "image": 1,
-            "video": 1,
-            "audio": 1
-        }
+        DEFAULT_LIMITS = {"image": 1, "video": 1, "audio": 1}
 
         if not limits:
             return DEFAULT_LIMITS
@@ -141,10 +143,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             mm_data = item
         else:
             # 请求包含messages
-            mm_data = {
-                "image": [],
-                "video": []
-            }
+            mm_data = {"image": [], "video": []}
 
             for message in item:
                 if isinstance(message.get("content"), list):
@@ -153,15 +152,12 @@ class ErnieMoEVLProcessor(ErnieProcessor):
                             mm_data["image"].append(part)
                         elif part.get("type") == "video":
                             mm_data["video"].append(part)
-            
+
         for modality, data in mm_data.items():
             if modality in self.limit_mm_per_prompt:
                 limit = self.limit_mm_per_prompt[modality]
                 if len(data) > limit:
-                    raise ValueError(
-                        f"Too many {modality} items in prompt, "
-                        f"got {len(data)} but limit is {limit}"
-                    )
+                    raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
     def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
@@ -178,7 +174,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
-                multimodal_data = {} 
+                multimodal_data = {}
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
@@ -189,7 +185,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             outputs = self.ernie_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
-        
+
         metadata = request.get("metadata")
         # 如果metadata包含之前输出的token，将这些token添加到input_ids末尾
         if metadata and metadata.get("generated_token_ids"):
@@ -200,20 +196,17 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         request["multimodal_inputs"] = outputs
 
         # 截断超过长度限制的prompt
-        if max_model_len is not None and len(
-                request['prompt_token_ids']) > max_model_len:
-            request['prompt_token_ids'] = request[
-                'prompt_token_ids'][:max_model_len - 1]
+        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
+            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(
-                1, max_model_len - len(request['prompt_token_ids']))
+            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         data_processor_logger.info(f"Processed request {request}")
-        
+
         return request
 
     def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
         "append already generated tokens"
-        
+
         num_tokens = len(generated_token_ids)
         multimodal_inputs["input_ids"].extend(generated_token_ids)
         multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)

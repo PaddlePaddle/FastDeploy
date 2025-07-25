@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from abc import ABC, abstractmethod
 from typing import Dict, Union
 
@@ -25,18 +26,19 @@ class ModelRegistry:
     """
     Used to register and retrieve model classes.
     """
+
     _registry = {}
 
     @classmethod
     def register(cls, model_class):
-        if issubclass(
-                model_class,
-                ModelForCasualLM) and model_class is not ModelForCasualLM:
+        """register model class"""
+        if issubclass(model_class, ModelForCasualLM) and model_class is not ModelForCasualLM:
             cls._registry[model_class.name()] = model_class
         return model_class
 
     @classmethod
     def get_class(cls, name):
+        """get model class"""
         if name not in cls._registry:
             raise ValueError(f"Model '{name}' is not registered!")
         return cls._registry[name]
@@ -51,13 +53,13 @@ class ModelForCasualLM(nn.Layer, ABC):
         """
         Args:
             configs (dict): Configurations including parameters such as max_dec_len, min_dec_len, decode_strategy,
-                ori_vocab_size, use_topp_sampling, etc.
+                vocab_size, use_topp_sampling, etc.
         """
         super(ModelForCasualLM, self).__init__()
+        self.fd_config = configs
 
     @abstractmethod
-    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray,
-                                                         paddle.Tensor]]):
+    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
         Load model parameters from a given state dictionary.
 

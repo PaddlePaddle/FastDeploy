@@ -13,9 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-"""
-cuda platform file
-"""
 
 import paddle
 
@@ -28,6 +25,7 @@ class CUDAPlatform(Platform):
     """
     cuda platform class
     """
+
     device_name = "gpu"
 
     @classmethod
@@ -42,23 +40,29 @@ class CUDAPlatform(Platform):
             logger.warning(
                 "You are using GPU version PaddlePaddle, but there is no GPU "
                 "detected on your machine. Maybe CUDA devices is not set properly."
-                f"\n Original Error is {e}")
+                f"\n Original Error is {e}"
+            )
             return False
 
     @classmethod
-    def get_attention_backend_cls(cls, selected_backend):
+    def get_attention_backend_cls(cls, selected_backend: _Backend):
         """
         get_attention_backend_cls
         """
         if selected_backend == _Backend.NATIVE_ATTN:
             logger.info("Using NATIVE ATTN backend.")
-            return (
-                "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
-            )
+            return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using APPEND ATTN backend.")
-            return (
-                "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
-            )
+            return "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
+        elif selected_backend == _Backend.MLA_ATTN:
+            logger.info("Using MLA ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.MLAAttentionBackend"
+        elif selected_backend == _Backend.FLASH_ATTN:
+            logger.info("Using FLASH ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"
         else:
-            logger.warning("Other backends are not supported for now.")
+            raise ValueError(
+                "Invalid attention backend you specified.\n"
+                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN] in cuda place."
+            )

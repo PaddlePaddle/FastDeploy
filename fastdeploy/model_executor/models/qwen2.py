@@ -24,22 +24,25 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, ModelConfig
-from fastdeploy.model_executor.graph_optimization.decorator import \
-    support_graph_optimization
+from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.decorator import (
+    support_graph_optimization,
+)
 from fastdeploy.model_executor.layers.activation import SiluAndMul
-from fastdeploy.model_executor.layers.attention import Attention
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
-    MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
+    RowParallelLinear,
+)
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.worker.forward_meta import ForwardMeta
 
 
 class Qwen2MLP(nn.Layer):
-    """
-    """
+    """ """
 
     def __init__(
         self,
@@ -47,87 +50,77 @@ class Qwen2MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.ffn_hidden_size * 2,
+            output_size=fd_config.model_config.intermediate_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
-            use_fast_ffn=True,
         )
 
         self.down_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=(fd_config.model_config.ffn_hidden_size // self.nranks),
+            input_size=fd_config.model_config.intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
 
         self.act_fn = SiluAndMul(
             fd_config=fd_config,
-            bias=getattr(self.gate_up_proj, "linear_bias", None),
+            bias=getattr(self.up_gate_proj, "bias", None),
             act_method=fd_config.model_config.hidden_act,
         )
 
     def load_state_dict(self, state_dict):
-        """
-        """
-        self.gate_up_proj.load_state_dict(state_dict)
+        """ """
+        self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
     def forward(self, x):
-        """
-        """
-        gate_up_out = self.gate_up_proj(x)
+        """ """
+        gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)
         return down_out
 
 
 class Qwen2Attention(nn.Layer):
-    """
-    """
+    """ """
 
-    def __init__(self,
-                 fd_config: FDConfig,
-                 layer_id: int,
-                 prefix: str = "") -> None:
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
         super().__init__()
 
-        nranks = fd_config.parallel_config.tensor_parallel_degree
-
-        self.qkv_proj = QKVParallelLinear(fd_config=fd_config,
-                                          prefix=f"{prefix}.qkv_proj",
-                                          with_bias=True)
+        self.qkv_proj = QKVParallelLinear(fd_config=fd_config, prefix=f"{prefix}.qkv_proj", with_bias=True)
 
         self.o_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
-            input_size=(fd_config.model_config.hidden_size // nranks),
+            input_size=fd_config.model_config.hidden_size,
             output_size=fd_config.model_config.hidden_size,
         )
 
-        self.attn = Attention(fd_config=fd_config,
-                              layer_id=layer_id,
-                              prefix=prefix,
-                              use_neox_rotary_style=True)
+        self.attn = Attention(
+            fd_config=fd_config,
+            layer_id=layer_id,
+            prefix=prefix,
+            use_neox_rotary_style=True,
+        )
 
     def load_state_dict(self, state_dict):
-        """
-        """
+        """ """
         self.qkv_proj.load_state_dict(state_dict)
         self.o_proj.load_state_dict(state_dict)
+        self.attn.load_state_dict(state_dict)
 
     def forward(
         self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        """
-        """
+        """ """
         qkv_out = self.qkv_proj(hidden_states)
 
         atten_out = self.attn(
@@ -139,8 +132,7 @@ class Qwen2Attention(nn.Layer):
 
 
 class Qwen2DecoderLayer(nn.Layer):
-    """
-    """
+    """ """
 
     def __init__(
         self,
@@ -148,7 +140,7 @@ class Qwen2DecoderLayer(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        layer_id = int(prefix.split(sep='.')[-1])
+        layer_id = int(prefix.split(sep=".")[-1])
 
         self.self_attn = Qwen2Attention(
             fd_config=fd_config,
@@ -164,20 +156,19 @@ class Qwen2DecoderLayer(nn.Layer):
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
         )
 
         self.post_attention_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
 
     def load_state_dict(self, state_dict):
-        """
-        """
+        """ """
         self.self_attn.load_state_dict(state_dict)
         self.mlp.load_state_dict(state_dict)
         self.input_layernorm.load_state_dict(state_dict)
@@ -189,15 +180,13 @@ class Qwen2DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        """
-        """
+        """ """
         # Self Attention
         if residual is None:
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
         else:
-            hidden_states, residual = self.input_layernorm(
-                hidden_states, residual)
+            hidden_states, residual = self.input_layernorm(hidden_states, residual)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -205,8 +194,7 @@ class Qwen2DecoderLayer(nn.Layer):
         )
 
         # Fully Connected
-        hidden_states, residual = self.post_attention_layernorm(
-            hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
         hidden_states = self.mlp(hidden_states)
 
@@ -215,8 +203,7 @@ class Qwen2DecoderLayer(nn.Layer):
 
 @support_graph_optimization
 class Qwen2Model(nn.Layer):
-    """
-    """
+    """ """
 
     def __init__(
         self,
@@ -230,29 +217,32 @@ class Qwen2Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        fd_config.model_config.prefix_name = "qwen2"
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        fd_config.model_config.pretrained_config.prefix_name = "qwen2"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
-        self.layers = nn.LayerList([
-            Qwen2DecoderLayer(
-                fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
-            for i in range(self.num_layers)
-        ])
+        self.layers = nn.LayerList(
+            [
+                Qwen2DecoderLayer(
+                    fd_config=fd_config,
+                    prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}",
+                )
+                for i in range(self.num_layers)
+            ]
+        )
 
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -264,7 +254,7 @@ class Qwen2Model(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
@@ -275,16 +265,14 @@ class Qwen2Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """
-        """
+        """ """
 
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
 
         for i in range(self.num_layers):
-            hidden_states, residual = self.layers[i](forward_meta,
-                                                     hidden_states, residual)
+            hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         hidden_states = hidden_states + residual
 
@@ -305,7 +293,8 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         """
         super(Qwen2ForCausalLM, self).__init__(fd_config)
 
-        self.model = Qwen2Model(fd_config=fd_config)
+        self.fd_config = fd_config
+        self.qwen2 = Qwen2Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -318,8 +307,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
 
     @classmethod
     def name(self):
-        """
-        """
+        """ """
         return "Qwen2ForCausalLM"
 
     @paddle.no_grad()
@@ -332,15 +320,14 @@ class Qwen2ForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
+        self.qwen2.load_state_dict(state_dict)
         self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
-        """
-        """
+        """ """
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
-        logits[:, self.ori_vocab_size:] = -float("inf")
+        logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
 
@@ -349,10 +336,8 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """
-        """
-        hidden_states = self.model(ids_remove_padding=ids_remove_padding,
-                                   forward_meta=forward_meta)
+        """ """
+        hidden_states = self.qwen2(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
 
@@ -373,8 +358,7 @@ class Qwen2PretrainedModel(PretrainedModel):
     @classmethod
     def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
 
-        from paddleformers.transformers.conversion_utils import \
-            split_or_merge_func
+        from paddleformers.transformers.conversion_utils import split_or_merge_func
 
         fn = split_or_merge_func(
             is_split=is_split,
@@ -390,45 +374,34 @@ class Qwen2PretrainedModel(PretrainedModel):
                 "lm_head.weight": partial(fn, is_column=True),
                 # Row Linear
                 "embed_tokens.weight": partial(fn, is_column=False),
-                "layers.0.self_attn.o_proj.weight": partial(fn,
-                                                            is_column=False),
+                "layers.0.self_attn.o_proj.weight": partial(fn, is_column=False),
                 "layers.0.mlp.down_proj.weight": partial(fn, is_column=False),
             }
 
             # Column Linear
             if config.fuse_attention_qkv:
-                base_actions["layers.0.self_attn.qkv_proj.weight"] = partial(
-                    fn, is_column=True)
+                base_actions["layers.0.self_attn.qkv_proj.weight"] = partial(fn, is_column=True)
             else:
-                base_actions["layers.0.self_attn.q_proj.weight"] = partial(
-                    fn, is_column=True)
-                base_actions["layers.0.self_attn.q_proj.bias"] = partial(
-                    fn, is_column=True)
+                base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
+                base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
                 # if we have enough num_key_value_heads to split, then split it.
                 if config.num_key_value_heads % config.tensor_parallel_degree == 0:
-                    base_actions["layers.0.self_attn.k_proj.weight"] = partial(
-                        fn, is_column=True)
-                    base_actions["layers.0.self_attn.v_proj.weight"] = partial(
-                        fn, is_column=True)
-                    base_actions["layers.0.self_attn.k_proj.bias"] = partial(
-                        fn, is_column=True)
-                    base_actions["layers.0.self_attn.v_proj.bias"] = partial(
-                        fn, is_column=True)
+                    base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
+                    base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
+                    base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
+                    base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
 
-            base_actions["layers.0.mlp.gate_proj.weight"] = partial(
-                fn, is_column=True)
-            base_actions["layers.0.mlp.up_proj.weight"] = partial(
-                fn, is_column=True)
+            base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
 
             for key, action in base_actions.items():
                 if "layers.0." in key:
                     for i in range(num_layers):
-                        final_actions[key.replace("layers.0.",
-                                                  f"layers.{i}.")] = action
+                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
                 final_actions[key] = action
 
             return final_actions
 
-        mappings = get_tensor_parallel_split_mappings(config.num_layers)
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
 
         return mappings

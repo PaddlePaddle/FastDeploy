@@ -14,7 +14,9 @@
 
 #pragma once
 
+#ifndef PADDLE_WITH_COREX
 #include "glog/logging.h"
+#endif
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,20 +37,35 @@ namespace cub = hipcub;
 #else
 #include <cub/cub.cuh>
 #endif
+#ifndef PADDLE_WITH_COREX
 #include "nlohmann/json.hpp"
+#endif
 #include <fstream>
 #include <iostream>
 
+#include "env.h"
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+#include "paddle/phi/backends/custom/custom_context.h"
+#else
 #include "paddle/phi/core/cuda_stream.h"
+#endif
 #include "paddle/phi/core/dense_tensor.h"
+#include "paddle/phi/backends/gpu/gpu_info.h"
 
+#ifdef PADDLE_WITH_COREX
+#define WARP_SIZE 64
+#else
+#define WARP_SIZE 32
+#endif
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
+#ifndef PADDLE_WITH_COREX
 using json = nlohmann::json;
+#endif
 
 #define CUDA_CHECK(call)                                                       \
   do {                                                                         \
@@ -197,11 +214,19 @@ HOSTDEVICE inline void Store(const AlignedVector<T, Size> &vec, T *addr) {
   *addr_vec = vec;
 }
 
+#ifdef PADDLE_WITH_HIP
+template <int Size>
+HOSTDEVICE inline void Store(const AlignedVector<hip_bfloat16, Size> &vec,
+                             int8_t *addr) {
+    printf("Error: Store hip_bfloat16 to int8_t is not supported!");
+}
+#else
 template <int Size>
 HOSTDEVICE inline void Store(const AlignedVector<__nv_bfloat16, Size> &vec,
                              int8_t *addr) {
   printf("Error: Store __nv_bfloat16 to int8_t is not supported!");
 }
+#endif
 
 template <int Size>
 HOSTDEVICE inline void Store(const AlignedVector<half, Size> &vec,
@@ -235,6 +260,7 @@ inline int GetBlockSize(int vocab_size) {
   }
 }
 
+#ifndef PADDLE_WITH_COREX
 inline json readJsonFromFile(const std::string &filePath) {
   std::ifstream file(filePath);
   if (!file.is_open()) {
@@ -245,6 +271,7 @@ inline json readJsonFromFile(const std::string &filePath) {
   file >> j;
   return j;
 }
+#endif
 
 #define cudaCheckError()                                                       \
   {                                                                            \
@@ -416,6 +443,7 @@ inline std::string base64_decode(const std::string &encoded_string) {
   return ret;
 }
 
+#ifndef PADDLE_WITH_COREX
 template <typename T>
 inline T get_relative_best(nlohmann::json *json_data,
                            const std::string &target_key,
@@ -428,6 +456,7 @@ inline T get_relative_best(nlohmann::json *json_data,
     return default_value;
   }
 }
+#endif
 
 __device__ inline bool is_in_end(const int64_t id, const int64_t *end_ids,
                                  int length) {
@@ -457,7 +486,12 @@ template <typename T>
 static void PrintMatrix3(const T *mat_d, int num, std::string name) {
 
   std::vector<T> tmp(num);
+#ifdef PADDLE_WITH_HIP
+  hipMemcpy(tmp.data(), mat_d, sizeof(T) * num, hipMemcpyDeviceToHost);
+#else
   cudaMemcpy(tmp.data(), mat_d, sizeof(T) * num, cudaMemcpyDeviceToHost);
+#endif
+
 
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -474,6 +508,7 @@ static void PrintMatrix3(const T *mat_d, int num, std::string name) {
   outfile.close();
 }
 
+#ifndef PADDLE_WITH_HIP
 __forceinline__ __device__ uint32_t ld_flag_acquire(uint32_t *flag_addr,
                                                     int mode = 0) {
   uint32_t flag;
@@ -512,4 +547,12 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
   cudaDeviceGetAttribute(&max_shared_mem_per_block_opt_in,
                          cudaDevAttrMaxSharedMemoryPerBlockOptin, device);
   return max_shared_mem_per_block_opt_in;
+}
+#endif
+
+inline int GetSMVersion() {
+  static int sm_version = phi::backends::gpu::GetGPUComputeCapability(
+      phi::backends::gpu::GetCurrentDeviceId());
+  return sm_version;
+
 }

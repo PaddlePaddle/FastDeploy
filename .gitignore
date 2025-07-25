@@ -162,3 +162,5 @@ custom_ops/tmp*
 build
 
 .ccls-cache
+
+third_party

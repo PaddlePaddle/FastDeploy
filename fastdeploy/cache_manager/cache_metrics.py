@@ -14,39 +14,36 @@
 # limitations under the License.
 """
 
-
 from fastdeploy.utils import get_logger
 
 logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
 
 
-
-
 class CacheMetrics:
     """
-     Cache Metrics used to record the cache hit time, token num, request num, etc.
+    Cache Metrics used to record the cache hit time, token num, request num, etc.
     """
+
     def __init__(self):
-        self.total_match_time = 0.0 
-        self.avg_match_time = 0.0 
+        self.total_match_time = 0.0
+        self.avg_match_time = 0.0
         self.min_match_time = 1e9
         self.max_match_time = 0.0
 
         # request level
-        self.req_count = 0 
-        self.hit_req_count = 0 
-        self.hit_req_ratio = 0.0  
+        self.req_count = 0
+        self.hit_req_count = 0
+        self.hit_req_ratio = 0.0
 
         # token level
-        self.total_gpu_matched_token_num = 0  
+        self.total_gpu_matched_token_num = 0
         self.total_cpu_matched_token_num = 0
 
         self.matched_token_num = 0
-        self.total_token_num = 0  
-        self.hit_token_ratio = 0.0 
+        self.total_token_num = 0
+        self.hit_token_ratio = 0.0
         self.cpu_hit_token_ratio = 0.0
         self.gpu_hit_token_ratio = 0.0
-
 
     def _update_history_hit_metrics(self):
         """
@@ -54,12 +51,8 @@ class CacheMetrics:
         """
         self.hit_req_ratio = self.hit_req_count / self.req_count
         self.hit_token_ratio = self.matched_token_num / self.total_token_num
-        self.cpu_hit_token_ratio = (
-            self.total_cpu_matched_token_num / self.total_token_num
-        )
-        self.gpu_hit_token_ratio = (
-            self.total_gpu_matched_token_num / self.total_token_num
-        )
+        self.cpu_hit_token_ratio = self.total_cpu_matched_token_num / self.total_token_num
+        self.gpu_hit_token_ratio = self.total_gpu_matched_token_num / self.total_token_num
 
         logger.info(
             f"Metrics for all requests: req_count {self.req_count} hit_req_count {self.hit_req_count}"
@@ -82,31 +75,17 @@ class CacheMetrics:
         """
         calculate hit metrics for current query
         """
-        
-        cpu_cache_match_ratio = (
-            current_query_cpu_match_token_num / current_query_token_num
-        )
-        gpu_cache_match_ratio = (
-            current_query_gpu_match_token_num / current_query_token_num
-        )
 
-        total_match_ratio = (
-            cpu_cache_match_ratio + gpu_cache_match_ratio
-        )
+        cpu_cache_match_ratio = current_query_cpu_match_token_num / current_query_token_num
+        gpu_cache_match_ratio = current_query_gpu_match_token_num / current_query_token_num
 
-        
-        self.total_cpu_matched_token_num += (
-            current_query_cpu_match_token_num  
-        )
-        self.total_gpu_matched_token_num += (
-            current_query_gpu_match_token_num  
-        )
+        total_match_ratio = cpu_cache_match_ratio + gpu_cache_match_ratio
 
-        self.matched_token_num += (
-            current_query_cpu_match_token_num
-            + current_query_gpu_match_token_num
-        )  
-        self.total_token_num += current_query_token_num 
+        self.total_cpu_matched_token_num += current_query_cpu_match_token_num
+        self.total_gpu_matched_token_num += current_query_gpu_match_token_num
+
+        self.matched_token_num += current_query_cpu_match_token_num + current_query_gpu_match_token_num
+        self.total_token_num += current_query_token_num
         logger.info(
             f"Metrics for req_id {req_id}: token_num {current_query_token_num}"
             + f" cpu_cache_match_ratio {cpu_cache_match_ratio}"

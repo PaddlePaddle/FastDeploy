@@ -15,24 +15,31 @@
 platform interface file
 """
 
-import paddle
 import enum
+
+import paddle
+
+
 class _Backend(enum.Enum):
     NATIVE_ATTN = enum.auto()
     APPEND_ATTN = enum.auto()
+    MLA_ATTN = enum.auto()
+    FLASH_ATTN = enum.auto()
+    BLOCK_ATTN = enum.auto()
 
 
 class Platform:
     """
     Platform base class, all device class will be derived from it
     """
+
     device_name: str
 
     def is_cuda(self) -> bool:
         """
         whether platform is cuda
         """
-        return paddle.is_compiled_with_cuda()
+        return paddle.is_compiled_with_cuda() and not paddle.is_compiled_with_rocm()
 
     def is_npu(self) -> bool:
         """
@@ -58,6 +65,18 @@ class Platform:
         """
         return paddle.is_compiled_with_rocm()
 
+    def is_iluvatar(self) -> bool:
+        """
+        whether platform is iluvatar gpu
+        """
+        return paddle.is_compiled_with_custom_device("iluvatar_gpu")
+
+    def is_gcu(self) -> bool:
+        """
+        whether platform is gcu
+        """
+        return paddle.is_compiled_with_custom_device("gcu")
+
     @classmethod
     def get_attention_backend_cls(self, selected_backend):
         """Get the attention backend"""
@@ -69,10 +88,7 @@ class Platform:
         Verify whether the quantization is supported by the current platform.
         """
         if self.supported_quantization and quant not in self.supported_quantization:
-            raise ValueError(
-                f"{quant} quantization is currently not supported in "
-                f"{self.device_name}."
-            )
+            raise ValueError(f"{quant} quantization is currently not supported in " f"{self.device_name}.")
 
     @classmethod
     def available(self):

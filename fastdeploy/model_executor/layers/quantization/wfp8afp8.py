@@ -13,14 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 import paddle
 
 from fastdeploy.model_executor.layers.quantization.ops import (
-    cutlass_scaled_mm, scaled_fp8_quant)
+    cutlass_scaled_mm,
+    scaled_fp8_quant,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import (
-    QuantConfigBase, QuantMethodBase)
+    QuantConfigBase,
+    QuantMethodBase,
+)
 
 
 class WFP8AFP8Config(QuantConfigBase):
@@ -37,21 +42,18 @@ class WFP8AFP8Config(QuantConfigBase):
         self.quant_round_type = 1
 
     def name(self) -> str:
-        """
-        """
+        """ """
         return "wfp8afp8"
 
     @classmethod
     def from_config(cls, config: dict) -> "WFP8AFP8Config":
-        """
-        """
+        """ """
         weight_scale_dict = config.get("weight_scale_dict", None)
         act_scale_dict = config.get("act_scale_dict", None)
         return cls(weight_scale_dict, act_scale_dict)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
-        """
-        """
+        """ """
         return WFP8AFP8LinearMethod(self)
 
 
@@ -68,13 +70,12 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer):
-        """
-        """
-        layer.linear_weight_shape.reverse()
+        """ """
+        layer.weight_shape.reverse()
         layer.weight_dtype = "float8_e4m3fn"
         # TODO(YuanRisheng): set weight logic should be moved to process_loaded_weights func
         self.skip_quant = False
-        layer.linear_weight_scale = layer.create_parameter(
+        layer.weight_scale = layer.create_parameter(
             shape=[1],
             dtype="float32",
             is_bias=False,
@@ -82,11 +83,10 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
         )
 
     def process_loaded_weights(self, layer, weights) -> None:
-        """
-        """
+        """ """
         if self.skip_quant:
             weight_tensor = weights.cast(layer._dtype)
-            layer.linear_weight.set_value(weight_tensor)
+            layer.weight.set_value(weight_tensor)
             return
         if weights.dtype != paddle.float8_e4m3fn:
             self.use_per_token_if_dynamic = True
@@ -95,22 +95,25 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
             weight_tensor,
             use_per_token_if_dynamic=False,
         )
-        layer.linear_weight.copy_(qweight, False)
-        layer.linear_weight_scale.set_value(weight_scale)
+        layer.weight.copy_(qweight, False)
+        layer.weight_scale.set_value(weight_scale)
 
     def apply(self, layer, x):
-        """
-        """
+        """ """
         if self.skip_quant:
-            linear_out = paddle.matmul(x, layer.linear_weight, False, True)
+            linear_out = paddle.matmul(x, layer.weight, False, True)
             return linear_out
         if self.use_per_token_if_dynamic:
             out_type = x.dtype
-            a_q, a_scales = scaled_fp8_quant(
-                x, use_per_token_if_dynamic=self.use_per_token_if_dynamic)
-            linear_out = cutlass_scaled_mm(a_q, layer.linear_weight, a_scales,
-                                           layer.linear_weight_scale, out_type,
-                                           layer.linear_bias)
+            a_q, a_scales = scaled_fp8_quant(x, use_per_token_if_dynamic=self.use_per_token_if_dynamic)
+            linear_out = cutlass_scaled_mm(
+                a_q,
+                layer.weight,
+                a_scales,
+                layer.weight_scale,
+                out_type,
+                layer.bias,
+            )
         else:
             raise NotImplementedError
         return linear_out

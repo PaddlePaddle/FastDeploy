@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/extension.h"
+#include "helper.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -33,7 +34,7 @@ __global__ void RemovePadding(int64_t *output_data,
     }
 }
 
-__global__ void GetPaddingOffsetKernel(int *padding_offset,
+__global__ void GetPaddingOffsetKernel(int *batch_id_per_token,
                                        int *cum_offsets_out,
                                        int *cu_seqlens_q,
                                        int *cu_seqlens_k,
@@ -45,7 +46,7 @@ __global__ void GetPaddingOffsetKernel(int *padding_offset,
     const int ti = threadIdx.x;
     int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
     for (int i = ti; i < seq_lens[bi]; i += blockDim.x) {
-        padding_offset[bi * max_seq_len - cum_offset + i] = cum_offset;
+        batch_id_per_token[bi * max_seq_len - cum_offset + i] = bi;
     }
     if (ti == 0) {
         cum_offsets_out[bi] = cum_offset;
@@ -59,7 +60,12 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
                                              const paddle::Tensor &cum_offsets,
                                              const paddle::Tensor &token_num,
                                              const paddle::Tensor &seq_len) {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(input_ids.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = input_ids.stream();
+#endif
     std::vector<int64_t> input_ids_shape = input_ids.shape();
     const int bsz = seq_len.shape()[0];
     const int seq_length = input_ids_shape[1];
@@ -69,15 +75,19 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
     const int token_num_data = cpu_token_num.data<int64_t>()[0];
     auto x_remove_padding = paddle::empty(
         {token_num_data}, paddle::DataType::INT64, input_ids.place());
-    auto padding_offset = paddle::empty(
+    auto batch_id_per_token = paddle::empty(
         {token_num_data}, paddle::DataType::INT32, input_ids.place());
     auto cu_seqlens_q =
         paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
     auto cu_seqlens_k =
         paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
-    int blockSize = min((token_num_data + 32 - 1) / 32 * 32, 128);
+#ifdef PADDLE_WITH_COREX
+    int blockSize = std::min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
+#else
+    int blockSize = min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
+#endif
     GetPaddingOffsetKernel<<<bsz, 128, 0, cu_stream>>>(
-        padding_offset.data<int>(),
+        batch_id_per_token.data<int>(),
         cum_offsets_out.data<int>(),
         cu_seqlens_q.data<int>(),
         cu_seqlens_k.data<int>(),
@@ -92,7 +102,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
         seq_length);
     return {x_remove_padding,
             cum_offsets_out,
-            padding_offset,
+            batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k};  // , enc_token_num, dec_token_num};
 }
@@ -123,7 +133,7 @@ PD_BUILD_STATIC_OP(get_padding_offset)
     .Inputs({"input_ids", "token_num", "cum_offsets", "seq_len"})
     .Outputs({"x_remove_padding",
               "cum_offsets_out",
-              "padding_offset",
+              "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})
     .SetKernelFn(PD_KERNEL(GetPaddingOffset))
