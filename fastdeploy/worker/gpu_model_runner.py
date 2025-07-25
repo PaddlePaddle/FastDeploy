@@ -802,8 +802,7 @@ class GPUModelRunner(ModelRunnerBase):
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
             only_decode_batch = all(only_decode_batch_list)
             self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
-        if prefill_exists is None:
-            prefill_exists = self.exist_prefill()
+
         self.forward_meta.step_use_cudagraph = (
             self.use_cudagraph
             and only_decode_batch
