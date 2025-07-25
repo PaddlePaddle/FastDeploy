@@ -20,6 +20,7 @@ from typing import List, Optional
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
@@ -154,7 +155,10 @@ class XpuWorker(WorkerBase):
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+        else:
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
 
     def check_health(self) -> bool:
         """ """

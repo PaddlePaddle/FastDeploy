@@ -1,0 +1,110 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+// #include <stdio.h>
+// using namespace std;
+
+#include "xpu/kernel/xtdk_io.h"
+#include "xpu/kernel/xtdk.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void update_inputs_v1(bool *not_need_stop,
+                                     int *seq_lens_this_time,
+                                     int *seq_lens_encoder,
+                                     int *seq_lens_decoder,
+                                     int *step_seq_lens_decoder,
+                                     int64_t *prompt_lens,
+                                     int64_t *topk_ids,
+                                     int64_t *input_ids,
+                                     int *block_tables,
+                                     const int64_t *stop_nums,
+                                     bool *stop_flags,
+                                     bool *is_block_step,
+                                     const int64_t *next_tokens,
+                                     const int bsz,
+                                     const int max_bsz,
+                                     const int input_ids_stride,
+                                     const int block_num_per_seq,
+                                     const int block_size) {
+
+
+  // std::cout << "seq_lens_this_time " << seq_lens_this_time[0] << std::endl;
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+  int thread_idx = clusterid * ncores + cid;
+  if (clusterid != 0) return;
+
+  bool stop_flag_now = false;
+  int64_t stop_flag_now_int = 0;
+  int64_t stop_flag_local_sum = 0;
+  for (;thread_idx < max_bsz; thread_idx += nclusters * ncores) {
+    if (thread_idx < bsz) {
+        stop_flag_now = stop_flags[thread_idx];
+        stop_flag_now_int = static_cast<int64_t>(stop_flag_now);
+    } else {
+        stop_flag_now_int = 1;
+    }
+
+    if (thread_idx < bsz) {
+        if(stop_flag_now) {
+            seq_lens_this_time[thread_idx] = 0; // stop at next step
+            seq_lens_decoder[thread_idx] = 0;
+            seq_lens_encoder[thread_idx] = 0;
+        } else {
+            if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] >= prompt_lens[thread_idx]) {
+                // decoding
+                seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx] + seq_lens_this_time[thread_idx];
+                seq_lens_this_time[thread_idx] = 1;
+
+                seq_lens_encoder[thread_idx] = 0;
+                input_ids[thread_idx * input_ids_stride] = next_tokens[thread_idx];
+
+                // to judge whether block is not enough
+                if (seq_lens_this_time[thread_idx] != 0 && block_tables[thread_idx * block_num_per_seq + seq_lens_decoder[thread_idx] / block_size] == -1) {
+                    // should be scheduled by server
+                    is_block_step[thread_idx] = true;
+                    seq_lens_this_time[thread_idx]= 0;
+                    stop_flags[thread_idx] = true;
+                    step_seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx];
+                    seq_lens_decoder[thread_idx] = 0;
+                    stop_flag_now_int = 1;
+                }
+            } else
+            {
+                stop_flags[thread_idx] = true;
+                seq_lens_this_time[thread_idx] = 0;
+                seq_lens_decoder[thread_idx] = 0;
+                seq_lens_encoder[thread_idx] = 0;
+                topk_ids[thread_idx] = -1;
+                stop_flag_now_int = 1;
+            }
+        }
+    }
+
+    stop_flag_local_sum += stop_flag_now_int;
+  }
+  // sync_all();
+
+  __shared__ int64_t stop_flags_sum_sm[64];
+  stop_flags_sum_sm[cid] = 0;
+  stop_flags_sum_sm[cid] = stop_flag_local_sum;
+
+  mfence();
+  sync_all();
+
+  // reduce sum
+  for (int shulff = ncores / 2; shulff >= 1; shulff /= 2) {
+    if (cid < shulff) {
+      stop_flags_sum_sm[cid] += stop_flags_sum_sm[cid + shulff];
+    }
+    mfence();
+    sync_all();
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3
