@@ -428,15 +428,15 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            self.parallel_config.max_model_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list
         free_list = list(
             range(
                 self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -598,8 +598,8 @@ class XPUModelRunner(ModelRunnerBase):
         full_length = min(num_tokens // batch_size, self.parallel_config.max_model_len - 10)
         input_length = int(full_length - 512)
         block_num = (
-            input_length + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            input_length + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -707,8 +707,8 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         step_paddle(
             self.share_inputs,
-            self.parallel_config.block_size,
-            self.parallel_config.enc_dec_block_num,
+            self.cache_config.block_size,
+            self.cache_config.enc_dec_block_num,
         )
 
         return None
@@ -764,7 +764,7 @@ class XPUModelRunner(ModelRunnerBase):
         required_memory = (
             byte_of_dtype
             * 2  # k + v
-            * (self.parallel_config.block_size * hidden_dim)
+            * (self.cache_config.block_size * hidden_dim)
             * self.model_config.num_hidden_layers
         )
         return required_memory
@@ -784,7 +784,7 @@ class XPUModelRunner(ModelRunnerBase):
         free_list = list(
             range(
                 self.num_gpu_blocks - 1,
-                int(self.num_gpu_blocks * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.num_gpu_blocks * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
