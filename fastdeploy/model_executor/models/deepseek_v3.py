@@ -420,6 +420,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         # NOTE(Ryan):Make sure kv_b_proj_bmm loaded before kv_b_proj,
         # The same weight key will be poped after kv_b_proj.
         self.o_proj.load_state_dict(state_dict)
+        self.mla_attn.load_state_dict(state_dict)
 
 
 class DeepSeekV3DecoderLayer(nn.Layer):
