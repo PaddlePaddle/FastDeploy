@@ -793,23 +793,14 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
-        is_decode_batch = None
-
-        if self.use_cudagraph:
-            is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
-
+        only_decode_batch = True
+        # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            # 如果use_cudagraph为False，还没算过is_decode_batch，这里再算一次
-            if is_decode_batch is None:
-                is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
-            is_decode_batch_list = []
-            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
-            is_decode_batch = all(is_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
-
-        self.forward_meta.step_use_cudagraph = (
-            (self.use_cudagraph and is_decode_batch) if is_decode_batch is not None else False
-        )
+            only_decode_batch_list = []
+            paddle.distributed.all_gather_object(only_decode_batch_list, not self.exist_prefill())
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+        self.forward_meta.step_use_cudagraph = self.use_cudagraph and only_decode_batch and not self.exist_prefill()
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
