@@ -27,7 +27,6 @@ on:
         description: "Cache Dir Use"
         required: false
         type: string
-        default: ""
 
 jobs:
   run_tests_with_coverage:
