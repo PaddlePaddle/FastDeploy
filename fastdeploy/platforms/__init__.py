@@ -25,6 +25,7 @@ from .gcu import GCUPlatform
 from .iluvatar import IluvatarPlatform
 from .npu import NPUPlatform
 from .xpu import XPUPlatform
+from .maca import MACAPlatform
 
 _current_platform = None
 
@@ -46,6 +47,8 @@ def __getattr__(name: str):
                 _current_platform = IluvatarPlatform()
             elif paddle.is_compiled_with_custom_device("gcu"):
                 _current_platform = GCUPlatform()
+            elif paddle.is_compiled_with_custom_device("metax_gpu"):
+                _current_platform = MACAPlatform()
             else:
                 _current_platform = CPUPlatform()
         return _current_platform

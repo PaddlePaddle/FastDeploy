@@ -157,7 +157,7 @@ def load_requirements():
 
 
 def get_device_type():
-    """Get the device type (rocm/gpu/xpu/npu/cpu) that paddle is compiled with."""
+    """Get the device type (rocm/gpu/xpu/npu/cpu/metax-gpu) that paddle is compiled with."""
     if paddle.is_compiled_with_rocm():
         return "rocm"
     elif paddle.is_compiled_with_cuda():
@@ -170,6 +170,8 @@ def get_device_type():
         return "iluvatar-gpu"
     elif paddle.is_compiled_with_custom_device("gcu"):
         return "gcu"
+    elif paddle.device.is_compiled_with_custom_device('metax_gpu'):
+        return "metax-gpu"
     else:
         return "cpu"
 
