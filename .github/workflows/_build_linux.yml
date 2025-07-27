@@ -88,7 +88,7 @@ jobs:
         run: |
             set -x
             runner_name="${{ runner.name }}"
-            CARD_ID=$(echo "${runner_name}" | cut -d'-' -f2)
+            CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
             gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
 
             CACHE_DIR=${CACHE_DIR:-${{ github.workspace }}}
