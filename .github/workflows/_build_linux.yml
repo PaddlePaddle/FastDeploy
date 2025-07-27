@@ -91,7 +91,7 @@ jobs:
             CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
             gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
 
-            CACHE_DIR=${CACHE_DIR:-${{ github.workspace }}}
+            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
             echo "CACHE_DIR is set to ${CACHE_DIR}"
             if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
               touch "${CACHE_DIR}/gitconfig"
