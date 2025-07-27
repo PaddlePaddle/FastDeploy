@@ -101,12 +101,18 @@ jobs:
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
+          pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
+          pip config set install.trusted-host  pip.baidu.com
+          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
           wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
           chmod +x ./llm-deploy-linux-amd64
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
           -model_path /MODELDATA \
           --skip install
+
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install ${fastdeploy_wheel_url}
 
           cd PaddleTest/framework/ServeTest
           python3.10 deploy.py > dd.log 2>&1 &
