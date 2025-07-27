@@ -104,15 +104,16 @@ jobs:
           pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
           pip config set install.trusted-host  pip.baidu.com
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install ${fastdeploy_wheel_url}
+
           wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
           chmod +x ./llm-deploy-linux-amd64
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
           -model_path /MODELDATA \
           --skip install
-
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-          python -m pip install ${fastdeploy_wheel_url}
 
           cd PaddleTest/framework/ServeTest
           python3.10 deploy.py > dd.log 2>&1 &
@@ -121,7 +122,7 @@ jobs:
           curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
               -H "Content-Type: application/json" \
               -d '{
-                  "--model": "/ssd3/model/ERNIE-4.5-0.3B-Paddle"
+                  "--model": "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
               }'
 
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
