@@ -31,7 +31,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 
 if TYPE_CHECKING:
-    from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from paddleformers.utils.log import logger
 
@@ -44,15 +44,12 @@ class GCUFlashAttnMetadata(AttentionMetadata):
     GCUFlashAttnMetadata
     """
 
-    forward_mode: ForwardMode = ForwardMode.MIXED
-
     _dtype: paddle.dtype = paddle.bfloat16
 
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None
     seq_lens_this_time: Optional[paddle.Tensor] = None
-    cum_offsets: Optional[paddle.Tensor] = None
-    padding_offset: Optional[paddle.Tensor] = None
+    batch_id_per_token: Optional[paddle.Tensor] = None
 
     cu_seqlens_q: Optional[paddle.Tensor] = None
     cu_seqlens_k: Optional[paddle.Tensor] = None
@@ -118,8 +115,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         metadata.seq_lens_encoder = forward_meta.seq_lens_encoder
         metadata.seq_lens_decoder = forward_meta.seq_lens_decoder
         metadata.seq_lens_this_time = forward_meta.seq_lens_this_time
-        metadata.cum_offsets = forward_meta.cum_offsets
-        metadata.padding_offset = forward_meta.padding_offset
+        metadata.batch_id_per_token = forward_meta.batch_id_per_token
 
         metadata.cu_seqlens_q = forward_meta.cu_seqlens_q
         metadata.cu_seqlens_k = forward_meta.cu_seqlens_k

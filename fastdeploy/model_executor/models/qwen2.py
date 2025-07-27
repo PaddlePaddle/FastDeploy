@@ -113,6 +113,7 @@ class Qwen2Attention(nn.Layer):
         """ """
         self.qkv_proj.load_state_dict(state_dict)
         self.o_proj.load_state_dict(state_dict)
+        self.attn.load_state_dict(state_dict)
 
     def forward(
         self,

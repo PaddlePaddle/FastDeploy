@@ -1,0 +1,35 @@
+name: PR Build and Test
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+permissions: read-all
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  clone:
+    name: FD-Clone-Linux
+    uses: ./.github/workflows/_clone_linux.yml
+
+  build:
+    name: FD-Build-Linux
+    needs: clone
+    uses: ./.github/workflows/_build_linux.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+
+  resultshow:
+    name: Use Build Output
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print wheel path
+        run: |
+          echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"

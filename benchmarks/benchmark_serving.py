@@ -317,6 +317,7 @@ async def benchmark(
     selected_percentile_metrics: list[str],
     selected_percentiles: list[float],
     ignore_eos: bool,
+    debug: bool,
     goodput_config_dict: dict[str, float],
     max_concurrency: Optional[int],
     lora_modules: Optional[Iterable[str]],
@@ -348,6 +349,7 @@ async def benchmark(
         output_len=test_output_len,
         logprobs=logprobs,
         ignore_eos=ignore_eos,
+        debug=debug,
         extra_body=extra_body,
     )
 
@@ -435,6 +437,7 @@ async def benchmark(
             api_url=api_url,
             output_len=output_len,
             logprobs=logprobs,
+            debug=debug,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
         )
@@ -819,11 +822,13 @@ def main(args: argparse.Namespace):
 
     # For datasets that follow a similar structure, use a mapping.
     dataset_mapping = {
-        "EB": lambda: EBDataset(random_seed=args.seed, dataset_path=args.dataset_path).sample(
+        "EB": lambda: EBDataset(random_seed=args.seed, dataset_path=args.dataset_path, shuffle=args.shuffle).sample(
             num_requests=args.num_prompts,
             output_len=args.sharegpt_output_len,
         ),
-        "EBChat": lambda: EBChatDataset(random_seed=args.seed, dataset_path=args.dataset_path).sample(
+        "EBChat": lambda: EBChatDataset(
+            random_seed=args.seed, dataset_path=args.dataset_path, shuffle=args.shuffle
+        ).sample(
             num_requests=args.num_prompts,
             output_len=args.sharegpt_output_len,
         ),
@@ -883,6 +888,7 @@ def main(args: argparse.Namespace):
             selected_percentile_metrics=args.percentile_metrics.split(","),
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
             ignore_eos=args.ignore_eos,
+            debug=args.debug,
             goodput_config_dict=goodput_config_dict,
             max_concurrency=args.max_concurrency,
             lora_modules=args.lora_modules,
@@ -1072,6 +1078,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--shuffle",
+        action="store_true",
+        help="shuffle dataset",
+    )
+    parser.add_argument(
         "--trust-remote-code",
         action="store_true",
         help="Trust remote code from huggingface",
@@ -1090,6 +1101,11 @@ if __name__ == "__main__":
         "--save-result",
         action="store_true",
         help="Specify to save benchmark results to a json file",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="print debug information (output)",
     )
     parser.add_argument(
         "--save-detailed",

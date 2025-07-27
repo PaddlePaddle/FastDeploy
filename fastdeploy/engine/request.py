@@ -60,6 +60,7 @@ class Request:
         preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
+        disable_chat_template: bool = False,
         disaggregate_info: Optional[dict] = None,
         draft_token_ids: Optional[list[int]] = None,
         guided_json: Optional[Any] = None,
@@ -87,6 +88,7 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
         # speculative method in disaggregate-mode
@@ -136,6 +138,7 @@ class Request:
             preprocess_end_time=d.get("preprocess_end_time"),
             multimodal_inputs=d.get("multimodal_inputs"),
             multimodal_data=d.get("multimodal_data"),
+            disable_chat_template=d.get("disable_chat_template"),
             disaggregate_info=d.get("disaggregate_info"),
             draft_token_ids=d.get("draft_token_ids"),
             guided_json=d.get("guided_json", None),
@@ -180,6 +183,7 @@ class Request:
             "preprocess_end_time": self.preprocess_end_time,
             "multimodal_inputs": self.multimodal_inputs,
             "multimodal_data": self.multimodal_data,
+            "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
