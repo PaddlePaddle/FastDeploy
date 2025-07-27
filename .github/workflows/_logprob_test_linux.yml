@@ -30,7 +30,7 @@ on:
         default: ""
 
 jobs:
-  run_tests_with_coverage:
+  run_tests_logprob:
     runs-on: [self-hosted, GPU-h20-1Cards]
     steps:
       - name: Code Prepare
@@ -87,7 +87,7 @@ jobs:
 
           PARENT_DIR=$(dirname "$WORKSPACE")
 
-          docker run  --ipc=host -it --net=host \
+          docker run --ipc=host -i --net=host \
           -v $(pwd):/workspace \
           -w /workspace \
           -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
