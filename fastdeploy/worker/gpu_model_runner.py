@@ -1048,9 +1048,21 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
         """
         # NOTE(wufeisheng): For Expert Parallelism
-        if not self.not_need_stop():
-            self._execute_empty_input()
+        rank = paddle.distributed.get_rank()
+        a = paddle.to_tensor(self.not_need_stop().item())
+        tmp = []
+        paddle.distributed.all_gather(tmp, a)
+        has_job = tmp[0].item()
+
+        if has_job == False:
             return None
+
+        if rank > 0:
+            if has_job:
+                self._execute_empty_input()
+                return None
+            else:
+                return None
 
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)

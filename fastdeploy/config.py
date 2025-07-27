@@ -208,7 +208,7 @@ class ParallelConfig:
                 setattr(self, key, value)
         self.use_ep = args["expert_parallel_size"] > 1
         if self.splitwise_role == "mixed":
-            self.moe_phase = MoEPhase.PREFILL
+            self.moe_phase = MoEPhase.DECODER
         elif self.splitwise_role == "prefill":
             self.moe_phase = MoEPhase.PREFILL
         elif self.splitwise_role == "decode":

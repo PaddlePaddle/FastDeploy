@@ -702,8 +702,8 @@ class Config:
         if self.dist_init_ip is None:
             self.master_ip = "0.0.0.0"
         else:
-            self.master_ip = self.dist_init_ip
-            self.dist_init_addr = f"{self.dist_init_ip}:{get_random_port()}"
+            self.master_ip = "0.0.0.0"
+            self.dist_init_addr = f"{self.dist_init_ip}:{36677}"
 
         self.max_model_len = max_model_len
         self.max_num_seqs = max_num_seqs

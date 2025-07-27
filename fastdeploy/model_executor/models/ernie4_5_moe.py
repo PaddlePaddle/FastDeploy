@@ -361,7 +361,64 @@ class Ernie4_5_Model(nn.Layer):
     ):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
+        all_hidden_states = []
+        bs = forward_meta.seq_lens_encoder.shape[0]
+
+        mc_bs = bs // 3
+        forward_metas = []
+        for i in range(0, bs, mc_bs):
+            from copy import copy
+            forward_meta_copy = copy(forward_meta)
+            
+            start_bs = i
+            end_bs = i + mc_bs
+            end_bs = min(end_bs, bs)
+
+            start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
+            end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
+
+            if end_token_id == start_token_id:
+                continue
+
+            forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
+            forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
+            forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
+
+            forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
+            forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
+            forward_meta_copy.cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs:end_bs+1] - start_token_id
+
+            forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
+
+            forward_metas.append(forward_meta_copy)
+            all_hidden_states.append(hidden_states[start_token_id:end_token_id])
+
+        for mc_id, mc_forward_meta in enumerate(forward_metas):
+            hidden_states = all_hidden_states[mc_id]
+
+            mc_forward_meta.attn_backend.init_attention_metadata(mc_forward_meta)
+
+            residual = None
+            for i in range(self.num_layers):
+                hidden_states, residual = self.layers[i](mc_forward_meta,
+                                                                hidden_states,
+                                                                residual)
+
+            hidden_states = hidden_states + residual
+            all_hidden_states[mc_id] = hidden_states
+        hidden_states = paddle.concat(all_hidden_states, axis=0)
+        out = self.norm(hidden_states)
+        return out
+
+    def forward1(
+        self,
+        ids_remove_padding: paddle.Tensor,
+        forward_meta: ForwardMeta,
+    ):
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        forward_meta.attn_backend.init_attention_metadata(forward_meta)
         residual = None
+        logger.info(ids_remove_padding.shape)
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
@@ -428,7 +485,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         empty_input_forward
         """
         fake_hidden_states = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
+            shape=[1, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         for i in range(

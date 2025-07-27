@@ -368,3 +368,131 @@ class EPDecoderRunner(EPRunner):
             combine_hook()
 
         return combined_hidden_states
+
+
+@singleton
+class EPMegaRunner:
+
+    def __init__(self):
+        rank = paddle.distributed.get_rank()
+        num_ranks = paddle.distributed.get_world_size()
+        
+        self.group = paddle.distributed.new_group(range(num_ranks))
+        
+
+        self.a_start_rank = 0
+        self.a_num_ranks = 8
+        self.e_start_rank = self.a_start_rank + self.a_num_ranks
+        self.e_num_ranks = num_ranks - self.a_num_ranks
+
+
+        self.hidden = 8192 
+        self.top_k = 8
+        self.num_experts = 64
+        self.num_max_tokens = 256
+        self.use_fp8 = False 
+        self.rank = paddle.distributed.get_rank()
+
+        num_rdma_ranks = num_ranks // 8
+        self.num_ranks = num_ranks
+        num_rdma_bytes = deep_ep.M2NBuffer.get_low_latency_rdma_size_hint_two_stage(
+            self.num_max_tokens, self.hidden, self.num_ranks, self.a_num_ranks, self.e_num_ranks, self.num_experts, self.top_k
+        )
+        
+       
+        num_nvl_bytes = deep_ep.M2NBuffer.get_low_latency_nvl_size_hint_two_stage(
+            self.num_max_tokens, self.hidden, self.num_ranks, self.a_num_ranks, self.e_num_ranks, self.num_experts, self.top_k, self.use_fp8
+        )
+
+        paddle.distributed.barrier()
+
+        self.buffer = deep_ep.M2NBuffer(
+                self.group,
+                self.a_start_rank,
+                self.a_num_ranks,
+                self.e_start_rank,
+                self.e_num_ranks,
+                num_nvl_bytes=num_nvl_bytes,
+                num_rdma_bytes=num_rdma_bytes,
+                low_latency_mode=True,
+                num_qps_per_rank=num_rdma_ranks)
+
+    def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
+        """
+        moe_select
+        """
+        topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            self.top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
+        return topk_idx, topk_weights
+
+    def dispatch(
+        self,
+        x: paddle.Tensor,
+        topk_idx: paddle.Tensor,
+        topk_weights: paddle.Tensor,
+        *args,
+        **kwargs,
+    ):  
+        result = None
+        if self.rank < self.a_num_ranks:
+            packed_recv_x, handle, event, req = self.buffer.a2e_isend_two_stage(
+                x,
+                topk_idx,
+                topk_weights,
+                self.num_max_tokens,
+                self.num_experts,
+                use_fp8=self.use_fp8,
+            )
+            req.wait()
+            # hanlde在combine中需要使用！
+            result = None,None,handle
+        else:
+            (
+                packed_recv_x,
+                packed_recv_count,
+                rdma_send_flags,
+                handle,
+                event,
+                req,
+            ) = self.buffer.a2e_irecv_two_stage(
+                self.hidden,
+                self.top_k,
+                self.num_max_tokens,
+                self.num_experts,
+                False,
+            )
+            req.wait()
+            result =  packed_recv_x, packed_recv_count, handle
+        #paddle.distributed.barrier()
+        return result
+
+    def combine(self, ffn_out, topk_idx, topk_weights, handle):
+        result = None
+        if self.rank < self.a_num_ranks:
+            e2a_x, event, req = self.buffer.e2a_irecv_two_stage(
+                topk_idx,
+                topk_weights,
+                handle,
+                dispatch_use_fp8=self.use_fp8,
+                out=None,
+            )
+            req.wait()
+            result = e2a_x
+        else:
+            event, req = self.buffer.e2a_isend_two_stage(
+                ffn_out, 
+                self.top_k,
+                handle,
+                dispatch_use_fp8=False,
+                out=None,
+            )
+            req.wait()
+        #paddle.distributed.barrier()      
+        return result
+
+
