@@ -194,7 +194,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         return self.guided_backend.get_logits_processor(schemata_key=schemata_key), schemata_key
 
-    def insert_tasks_v1(self, req_dicts: List[Request]):
+    def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
         """
@@ -224,7 +224,7 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                self.tmp_seq_lens_this_time[idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
@@ -246,7 +246,7 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 0
+                self.tmp_seq_lens_this_time[idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
@@ -283,6 +283,8 @@ class GPUModelRunner(ModelRunnerBase):
                 )
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
+
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -1313,10 +1315,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.speculative_config,
                 self.parallel_config.enable_prefix_caching,
             )
-            self.tmp_seq_lens_this_time[:num_running_requests] = copy.deepcopy(self.share_inputs["seq_lens_this_time"])
-
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
+        self.tmp_seq_lens_this_time[:num_running_requests] = copy.deepcopy(self.share_inputs["seq_lens_this_time"])
         return None
 
     def _add_cache(self, model_forward_batch) -> None:

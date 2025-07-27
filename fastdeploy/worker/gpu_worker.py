@@ -187,7 +187,7 @@ class GpuWorker(WorkerBase):
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
         else:
             self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
