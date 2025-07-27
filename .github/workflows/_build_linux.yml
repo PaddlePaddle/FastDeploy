@@ -44,7 +44,7 @@ on:
         value: ${{ jobs.fd-build.outputs.wheel_path }}
 jobs:
   fd-build:
-    runs-on: [self-hosted, GPU-h1z1-4Cards]
+    runs-on: [self-hosted, GPU-Build]
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
     steps:
