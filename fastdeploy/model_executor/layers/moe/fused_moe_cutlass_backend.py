@@ -436,7 +436,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
-        up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids = layer.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,
@@ -444,8 +444,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
-        for i in range(layer.num_local_experts):
-            expert_idx = layer.expert_id_offset + i
+        for expert_idx in logical_expert_ids:
             up_gate_proj_weight_scale.append(
                 get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
             )

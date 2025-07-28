@@ -39,18 +39,25 @@
 #include "cutlass/array.h"
 #include "cutlass/half.h"
 #include "cutlass/numeric_types.h"
+#include "cutlass/trace.h"
 
-namespace cutlass
-{
+namespace cutlass {
+
+template <int lut>
+__device__ inline int lop3(int a, int b, int c) {
+  int res;
+  asm volatile("lop3.b32 %0, %1, %2, %3, %4;\n"
+               : "=r"(res)
+               : "r"(a), "r"(b), "r"(c), "n"(lut));
+  return res;
+}
 
 // This converter is meant to be used with data interleaved in a 32-bit register where the even elements are in the low
 // bits and the odd elemeents are in the high bits of the register. In addition, it assumes elements were originally
 // signed and had a bias of 2**(b-1) added (where b is the number of bits in the type) to make all numbers unsigned.
 // This converter will uninterleave the data and subtract the bias while converting to the result type.
 template <typename T, typename S, int N>
-struct FastInterleavedAndBiasedNumericArrayConverter
-{
-};
+struct FastInterleavedAndBiasedNumericArrayConverter;
 
 template <>
 struct FastInterleavedAndBiasedNumericArrayConverter<half_t, uint8_t, 4>
@@ -437,6 +444,329 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint4b_t, N>
     result_type operator()(source_type const& s)
     {
         return convert(s);
+    }
+};
+
+template <>
+struct FastInterleavedAndBiasedNumericArrayConverter<half_t, uint2b_t, 16>
+{
+    using result_type = Array<half_t, 16>;
+    using source_type = Array<uint2b_t, 16>;
+
+    using ScaleComputeT = float;
+    using code_type = Array<ScaleComputeT, 4>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
+    {
+        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
+
+        // 2^23 = 8388608
+        static constexpr uint32_t FP32_BASE = 0x4B000000;
+
+        float fp32_intermediates[4];
+        uint32_t* fp32_intermediates_casted = reinterpret_cast<uint32_t*>(fp32_intermediates);
+        fp32_intermediates_casted[0] = __byte_perm(i8s, FP32_BASE, 0x7650);
+        fp32_intermediates_casted[1] = __byte_perm(i8s, FP32_BASE, 0x7651);
+        fp32_intermediates_casted[2] = __byte_perm(i8s, FP32_BASE, 0x7652);
+        fp32_intermediates_casted[3] = __byte_perm(i8s, FP32_BASE, 0x7653);
+
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[0]) : "r"(fp32_intermediates_casted[0]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
+
+        int32_t decode_value[4];
+        ScaleComputeT new_code_zp = code_zp + 0.5f;
+
+        decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale, new_code_zp));
+        decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale, new_code_zp));
+        decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale, new_code_zp));
+        decode_value[3] = __float2int_rd(fmaf(fp32_intermediates[3], code_scale, new_code_zp));
+
+        return convert_impl(decode_value);
+    }
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, code_type const& code_scale, code_type const& code_zp)
+    {
+        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
+
+        // 2^23 = 8388608
+        static constexpr uint32_t FP32_BASE = 0x4B000000;
+
+        float fp32_intermediates[4];
+        uint32_t* fp32_intermediates_casted = reinterpret_cast<uint32_t*>(fp32_intermediates);
+        fp32_intermediates_casted[0] = __byte_perm(i8s, FP32_BASE, 0x7650);
+        fp32_intermediates_casted[1] = __byte_perm(i8s, FP32_BASE, 0x7651);
+        fp32_intermediates_casted[2] = __byte_perm(i8s, FP32_BASE, 0x7652);
+        fp32_intermediates_casted[3] = __byte_perm(i8s, FP32_BASE, 0x7653);
+
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[0]) : "r"(fp32_intermediates_casted[0]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
+
+        int32_t decode_value[4];
+
+        decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale[0], code_zp[0] + 0.5f));
+        decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale[1], code_zp[1] + 0.5f));
+        decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale[2], code_zp[2] + 0.5f));
+        decode_value[3] = __float2int_rd(fmaf(fp32_intermediates[3], code_scale[3], code_zp[3] + 0.5f));
+
+        return convert_impl(decode_value);
+    }
+
+    CUTLASS_DEVICE
+    static result_type convert_impl(int32_t* decode_value)
+    {
+        result_type result;
+        static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
+
+        static constexpr uint32_t MASK = 0x003F003F;
+        // 2^10 = 1024
+        static constexpr uint32_t EX = 0x64006400;
+
+        uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+
+        int32_t q0 = __byte_perm(decode_value[0], decode_value[1], 0x5410);
+        int32_t q1 = __byte_perm(decode_value[2], decode_value[3], 0x5410);
+
+        h[0] = lop3<immLut>(q0 >> 9, MASK, EX);
+        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
+        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
+        h[3] = lop3<immLut>(q0, MASK, EX);
+
+        h[4] = lop3<immLut>(q1 >> 9, MASK, EX);
+        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
+        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
+        h[7] = lop3<immLut>(q1, MASK, EX);
+
+        // 1024 + 32 = 1056
+        static constexpr uint32_t SUB = 0x64206420;
+
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[0]) : "r"(h[0]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[1]) : "r"(h[1]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[2]) : "r"(h[2]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[3]) : "r"(h[3]), "r"(SUB));
+
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[4]) : "r"(h[4]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[5]) : "r"(h[5]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[6]) : "r"(h[6]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[7]) : "r"(h[7]), "r"(SUB));
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s, ScaleComputeT code_scale, ScaleComputeT code_zp)
+    {
+        return convert(s, code_scale, code_zp);
+    }
+};
+
+template <>
+struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
+{
+    using result_type = Array<bfloat16_t, 16>;
+    using source_type = Array<uint2b_t, 16>;
+
+    using ScaleComputeT = float;
+    using code_type = Array<ScaleComputeT, 4>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
+    {
+        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
+
+        // 2^23 = 8388608
+        static constexpr uint32_t FP32_BASE = 0x4B000000;
+
+        float fp32_intermediates[4];
+        uint32_t* fp32_intermediates_casted = reinterpret_cast<uint32_t*>(fp32_intermediates);
+        fp32_intermediates_casted[0] = __byte_perm(i8s, FP32_BASE, 0x7650);
+        fp32_intermediates_casted[1] = __byte_perm(i8s, FP32_BASE, 0x7651);
+        fp32_intermediates_casted[2] = __byte_perm(i8s, FP32_BASE, 0x7652);
+        fp32_intermediates_casted[3] = __byte_perm(i8s, FP32_BASE, 0x7653);
+
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[0]) : "r"(fp32_intermediates_casted[0]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
+
+        int32_t decode_value[4];
+        ScaleComputeT new_code_zp = code_zp + 0.5f;
+
+        decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale, new_code_zp));
+        decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale, new_code_zp));
+        decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale, new_code_zp));
+        decode_value[3] = __float2int_rd(fmaf(fp32_intermediates[3], code_scale, new_code_zp));
+
+        return convert_impl(decode_value);
+    }
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, code_type const& code_scale, code_type const& code_zp)
+    {
+        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
+
+        // 2^23 = 8388608
+        static constexpr uint32_t FP32_BASE = 0x4B000000;
+
+        float fp32_intermediates[4];
+        uint32_t* fp32_intermediates_casted = reinterpret_cast<uint32_t*>(fp32_intermediates);
+        fp32_intermediates_casted[0] = __byte_perm(i8s, FP32_BASE, 0x7650);
+        fp32_intermediates_casted[1] = __byte_perm(i8s, FP32_BASE, 0x7651);
+        fp32_intermediates_casted[2] = __byte_perm(i8s, FP32_BASE, 0x7652);
+        fp32_intermediates_casted[3] = __byte_perm(i8s, FP32_BASE, 0x7653);
+
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[0]) : "r"(fp32_intermediates_casted[0]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
+
+        int32_t decode_value[4];
+
+        decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale[0], code_zp[0] + 0.5f));
+        decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale[1], code_zp[1] + 0.5f));
+        decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale[2], code_zp[2] + 0.5f));
+        decode_value[3] = __float2int_rd(fmaf(fp32_intermediates[3], code_scale[3], code_zp[3] + 0.5f));
+
+        return convert_impl(decode_value);
+    }
+
+    CUTLASS_DEVICE
+    static result_type convert_impl(int32_t* decode_value)
+    {
+        result_type result;
+
+        static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
+        static constexpr uint32_t MASK = 0x003F003F;
+        // 2^7 = 128
+        static constexpr uint32_t EX = 0x43004300;
+
+        uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+
+        int32_t q0 = __byte_perm(decode_value[0], decode_value[1], 0x5410);
+        int32_t q1 = __byte_perm(decode_value[2], decode_value[3], 0x5410);
+
+        h[0] = lop3<immLut>(q0 >> 9, MASK, EX);
+        h[1] = lop3<immLut>(q0 >> 6, MASK, EX);
+        h[2] = lop3<immLut>(q0 >> 3, MASK, EX);
+        h[3] = lop3<immLut>(q0, MASK, EX);
+
+        h[4] = lop3<immLut>(q1 >> 9, MASK, EX);
+        h[5] = lop3<immLut>(q1 >> 6, MASK, EX);
+        h[6] = lop3<immLut>(q1 >> 3, MASK, EX);
+        h[7] = lop3<immLut>(q1, MASK, EX);
+
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900) && defined(ENABLE_BF16))
+        // 128 + 32 = 160
+        static constexpr uint32_t SUB = 0x43204320;
+
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[0]) : "r"(h[0]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[1]) : "r"(h[1]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[2]) : "r"(h[2]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[3]) : "r"(h[3]), "r"(SUB));
+
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[4]) : "r"(h[4]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[5]) : "r"(h[5]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[6]) : "r"(h[6]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[7]) : "r"(h[7]), "r"(SUB));
+#else
+        // 1.0
+        static constexpr uint32_t MUL = 0x3F803F80;
+        // -160
+        static constexpr uint32_t ADD = 0xC320C320;
+
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[0]) : "r"(h[0]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[1]) : "r"(h[1]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[2]) : "r"(h[2]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[3]) : "r"(h[3]), "r"(MUL), "r"(ADD));
+
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[4]) : "r"(h[4]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[5]) : "r"(h[5]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[6]) : "r"(h[6]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[7]) : "r"(h[7]), "r"(MUL), "r"(ADD));
+#endif
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s, ScaleComputeT code_scale, ScaleComputeT code_zp)
+    {
+        return convert(s, code_scale, code_zp);
+    }
+};
+
+template <typename T, int N>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
+{
+    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value,
+        "T must be fp16 or bf16");
+
+    static constexpr int kVecWidth = 16;
+    static_assert(!(N % kVecWidth), "N must be multiple of 16.");
+
+    using result_type = Array<T, N>;
+    using source_type = Array<uint2b_t, N>;
+    using code_type = Array<float, N / kVecWidth>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, code_type const& code_scale, code_type const& code_zp)
+    {
+        using scalar_result_type = typename result_type::Element;
+        using scalar_source_type = typename source_type::Element;
+        FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, kVecWidth>
+            convert_vector_;
+
+        result_type result;
+        using vec_result = Array<scalar_result_type, kVecWidth>;
+        using vec_source = Array<scalar_source_type, kVecWidth>;
+
+        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / kVecWidth; ++i)
+        {
+            result_ptr[i] = convert_vector_(source_ptr[i], code_scale[i], code_zp[i]);
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, Array<float, N / 4> const& code_scale, Array<float, N / 4> const& code_zp)
+    {
+        using scalar_result_type = typename result_type::Element;
+        using scalar_source_type = typename source_type::Element;
+        using Converter = FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, kVecWidth>;
+
+        result_type result;
+        using vec_result = typename Converter::result_type;
+        using vec_source = typename Converter::source_type;
+        using vec_code = typename Converter::code_type;
+
+        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+        vec_code const* code_scale_ptr = reinterpret_cast<vec_code const*>(&code_scale);
+        vec_code const* code_zp_ptr = reinterpret_cast<vec_code const*>(&code_zp);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / kVecWidth; ++i)
+        {
+            result_ptr[i] = Converter::convert(source_ptr[i], code_scale_ptr[i], code_zp_ptr[i]);
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s, code_type const& code_scale, code_type const& code_zp)
+    {
+        return convert(s, code_scale, code_zp);
     }
 };
 

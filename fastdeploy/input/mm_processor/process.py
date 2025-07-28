@@ -507,5 +507,6 @@ class DataProcessor:
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         data_processor_logger.info(
-            f"req_id:{request.get('request_id', ''),} tokens: {tokens}, token_ids: {token_ids}")
+            f"req_id:{request.get('request_id', ''), } tokens: {tokens}, token_ids: {token_ids}"
+        )
         return token_ids

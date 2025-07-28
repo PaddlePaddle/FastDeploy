@@ -765,7 +765,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * moe/fused_moe/moe_redundant_topk_select.cu
    * moe_redundant_topk_select
    */
-  m.def("f_moe_redundant_topk_select", &MoERedundantTopKSelectKernel,
+  m.def("moe_redundant_topk_select", &MoERedundantTopKSelectKernel,
         py::arg("gating_logits"), py::arg("expert_id_to_ep_rank_array"),
         py::arg("expert_in_rank_num_list"),
         py::arg("tokens_per_expert_stats_list"), py::arg("bias"),

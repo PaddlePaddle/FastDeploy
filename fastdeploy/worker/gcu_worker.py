@@ -69,11 +69,11 @@ class GcuWorker(WorkerBase):
             local_rank=self.local_rank,
         )
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        check whether prefill stage finished
+        check whether prefill stage exist
         """
-        return self.model_runner.prefill_finished()
+        return self.model_runner.exist_prefill()
 
     def determine_available_memory(self) -> int:
         """

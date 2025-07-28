@@ -994,10 +994,6 @@ class LLMEngine:
         配置环境变量
         """
         variables = {
-            "PADDLE_TRAINER_ID": 0,
-            "PADDLE_TRAINERS_NUM": 1,
-            "TRAINER_INSTANCES_NUM": 1,
-            "TRAINER_INSTANCES": "0.0.0.0",
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
             "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.device_ids.split(",")),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
@@ -1107,11 +1103,7 @@ class LLMEngine:
             if value:
                 arguments = arguments + f" --{worker_flag}"
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + (
-                f" --master {self.cfg.dist_init_addr}"
-                f" --nnodes {self.cfg.nnode!s}"
-                f" --rank {self.cfg.node_rank!s}"
-            )
+            pd_cmd = pd_cmd + f" --ips {','.join(self.cfg.ips)} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(

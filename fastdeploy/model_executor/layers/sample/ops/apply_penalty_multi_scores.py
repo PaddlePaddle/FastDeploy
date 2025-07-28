@@ -54,8 +54,8 @@ def apply_penalty_multi_scores(
             eos_token_ids,
         )
     elif current_platform.is_dcu():
-        from fastdeploy.model_executor.ops.gpu import \
-            get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
+
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
             prompt_ids,

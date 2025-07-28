@@ -22,6 +22,7 @@ from typing import List, Optional
 
 import aiozmq
 import msgpack
+import numpy as np
 from aiozmq import zmq
 
 from fastdeploy.entrypoints.openai.protocol import (
@@ -48,12 +49,17 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, dist_init_ip, enable_logprob):
+    def __init__(self, engine_client, pid, ips, enable_logprob):
         self.engine_client = engine_client
         self.pid = pid
-        self.master_ip = dist_init_ip
+        self.master_ip = ips
         self.host_ip = get_host_ip()
         self.enable_logprob = enable_logprob
+        if self.master_ip is not None:
+            if isinstance(self.master_ip, list):
+                self.master_ip = self.master_ip[0]
+            else:
+                self.master_ip = self.master_ip.split(",")[0]
 
     def _check_master(self):
         if self.master_ip is None:
@@ -118,6 +124,8 @@ class OpenAIServingChat:
             current_req_dict = request.to_dict_for_infer(request_id)
             current_req_dict["arrival_time"] = time.time()
             prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+            if isinstance(prompt_token_ids, np.ndarray):
+                prompt_token_ids = prompt_token_ids.tolist()
         except Exception as e:
             return ErrorResponse(code=400, message=str(e))
 
@@ -424,7 +432,7 @@ class OpenAIServingChat:
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
             prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-            completion_token_ids=completion_token_ids if enable_return_token_ids else None,
+            completion_token_ids=(completion_token_ids if enable_return_token_ids else None),
         )
         logprobs_full_res = None
         if logprob_contents:
