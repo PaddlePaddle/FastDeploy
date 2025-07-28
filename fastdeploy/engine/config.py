@@ -20,8 +20,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from fastdeploy import envs
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.config import CacheConfig
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import (
