@@ -207,7 +207,7 @@ class GPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
-                logger.debug(f"Handle prefill request {request} at idx {idx}")
+                logger.debug(f"Handle prefill request {request.request_id} at idx {idx}")
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
