@@ -486,7 +486,7 @@ class EngineArgs:
             "--early-stop-config",
             type=json.loads,
             default=EngineArgs.early_stop_config,
-            help="",
+            help="the config for early stop.",
         )
 
         # Parallel processing parameters group
@@ -846,7 +846,7 @@ class EngineArgs:
 
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
-        Create and retuan a EarlyStopConfig object based on the current settings.
+        Create and retuan an EarlyStopConfig object based on the current settings.
         """
         if self.early_stop_config is not None:
             return EarlyStopConfig(**self.early_stop_config)

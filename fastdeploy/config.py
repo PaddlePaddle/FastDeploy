@@ -407,6 +407,8 @@ class EarlyStopConfig:
     """enable to use early stop"""
 
     enable_early_stop: bool = False
+    """strategy for early stop, the strategy lists are ['repetition']"""
+    strategy: str = "repetition"
     """ the maximum length of verify window for early stop """
     window_size: int = 3000
     """ the probs threshold for early stop """

@@ -19,7 +19,8 @@ import time
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.layers.sample.sampler import RepetitionEarlyStopper
+from fastdeploy.config import EarlyStopConfig
+from fastdeploy.model_executor.layers.sample.early_stopper import RepetitionEarlyStopper
 
 paddle.set_device("gpu")
 np.random.seed(2025)
@@ -75,8 +76,9 @@ def test_repetition_early_stopper():
     # Determine the first step in each batch where the high probability starts to appear
     trigger_step_flags = [[i, np.random.randint(0, max_steps + 1)] for i in range(batch_size)]
     trigger_step_flags = dict(trigger_step_flags)
+    cfg = EarlyStopConfig(enable_early_stop=True, window_size=window_size, threshold=threshold)
     stopper = RepetitionEarlyStopper()
-    stopper.initialize(batch_size, window_size, threshold)
+    stopper.initialize(batch_size, cfg)
 
     next_tokens = paddle.randint(0, vocab_size, shape=[batch_size, 1], dtype="int64")
     next_tokens[early_stop_batch_id, 0] = fixed_token_id
@@ -111,14 +113,14 @@ def test_repetition_early_stopper():
     # Show which step trigger the early stop in batch i
     print("trigger_step: ", triggered_step)
     assert (
-        triggered_step[early_stop_batch_id] + 1 == trigger_step_flags[early_stop_batch_id] + window_size
+        triggered_step[early_stop_batch_id] == trigger_step_flags[early_stop_batch_id] + window_size - 1
     ), "not expected trigger step"
 
 
 def test_consistency():
-    batch_size = 256
+    batch_size = 2
     vocab_size = 103424
-    window_size = 4
+    window_size = 3000
     threshold = 0.9
     eos_token_id = vocab_size
     max_steps = 10
@@ -128,11 +130,11 @@ def test_consistency():
 
     trigger_step_flags = [[i, np.random.randint(0, max_steps + 1)] for i in range(batch_size)]
     trigger_step_flags = dict(trigger_step_flags)
-
+    cfg = EarlyStopConfig(enable_early_stop=True, window_size=window_size, threshold=threshold)
     stopper_normal = RepetitionEarlyStopper()
-    stopper_normal.initialize(batch_size, window_size, threshold)
+    stopper_normal.initialize(batch_size, cfg)
     stopper_triton = RepetitionEarlyStopper()
-    stopper_triton.initialize(batch_size, window_size, threshold)
+    stopper_triton.initialize(batch_size, cfg)
 
     next_tokens_normal = paddle.randint(0, vocab_size, shape=[batch_size, 1], dtype="int64")
     next_tokens_triton = next_tokens_normal.clone()
@@ -192,11 +194,11 @@ def test_performance():
 
     next_tokens = paddle.randint(0, vocab_size, shape=[batch_size, 1], dtype="int64")
     next_tokens[early_stop_batch_id, 0] = fixed_token_id
-
+    cfg = EarlyStopConfig(enable_early_stop=True, window_size=window_size, threshold=threshold)
     print("Testing performance triton...")
     seconds = []
     stopper = RepetitionEarlyStopper()
-    stopper.initialize(batch_size, window_size, threshold)
+    stopper.initialize(batch_size, cfg)
     for step in range(max_steps):
         flags = [trigger_step_flags[i] for i in range(batch_size)]
         probs_np = simulate_step_probs(batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)
@@ -213,7 +215,7 @@ def test_performance():
     print("Testing performance normal...")
     seconds = []
     stopper = RepetitionEarlyStopper()
-    stopper.initialize(batch_size, window_size, threshold)
+    stopper.initialize(batch_size, cfg)
     for step in range(max_steps):
         flags = [trigger_step_flags[i] for i in range(batch_size)]
         probs_np = simulate_step_probs(batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)

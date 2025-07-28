@@ -344,6 +344,7 @@ class EarlyStopConfig:
     def __init__(
         self,
         enable_early_stop: Optional[bool] = None,
+        strategy: str = "repetition",
         window_size: Optional[int] = 3000,
         threshold: Optional[float] = 0.99,
         **kwargs,
@@ -355,8 +356,9 @@ class EarlyStopConfig:
             window_size: size of the window
             threshold: trigger early stop when the ratio of probs exceeds the threshold
         """
-        self.check_legality_parameters(enable_early_stop, window_size, threshold, **kwargs)
+        self.check_legality_parameters(enable_early_stop, strategy, window_size, threshold, **kwargs)
         self.enable_early_stop = enable_early_stop
+        self.strategy = strategy
         self.window_size = window_size
         self.threshold = threshold
 
@@ -372,6 +374,7 @@ class EarlyStopConfig:
     def check_legality_parameters(
         self,
         enable_early_stop: Optional[bool] = False,
+        strategy: str = "repetition",
         window_size: Optional[int] = 3000,
         threshold: Optional[float] = 0.99,
         **kwargs,

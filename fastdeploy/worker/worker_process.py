@@ -594,7 +594,7 @@ def parse_args():
         "--early_stop_config",
         type=json.loads,
         default=None,
-        help="Configation of early stop.",
+        help="Configuration of early stop.",
     )
 
     args = parser.parse_args()
