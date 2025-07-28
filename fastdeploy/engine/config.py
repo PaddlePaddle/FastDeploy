@@ -627,6 +627,7 @@ class Config:
         splitwise_role (str): Splitwise role.
         innode_prefill_ports (Optional[List[int]]): Innode prefill ports.
             Temporary configuration, will be removed in the future.
+        load_format(str):The format of the model weights to load. .Default is default
     """
 
     def __init__(
@@ -659,6 +660,7 @@ class Config:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_logprob: bool = False,
+        load_format: str = "default",
     ):
         """
         Initialize the Config class.
@@ -687,6 +689,7 @@ class Config:
             guided_decoding_backend(str): Guided decoding backend. Default is None.
             disable_any_whitespace(bool): Disable any whitespace when using guided decoding.
                 Default is False.
+            load_format(str):The format of the model weights to load. .Default is default
         """
         self.model_config = model_config
         self.cache_config = cache_config
@@ -734,6 +737,7 @@ class Config:
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
+        self.load_format = load_format
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 

@@ -40,8 +40,74 @@ from paddleformers.utils.env import (
 from paddleformers.utils.log import logger
 from tqdm import tqdm
 
+from fastdeploy.model_executor.layers.utils import get_tensor
+
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
+
+
+def tp_slice(weight, tensor_parallel_degree, tensor_parallel_rank=None, is_column=True):
+    dim = -1 if is_column else 0
+    size = weight.get_shape()[dim]
+    block_size = size // tensor_parallel_degree
+
+    if tensor_parallel_rank is None:
+        begin, end, step = 0, tensor_parallel_degree, 1
+    else:
+        begin, end, step = tensor_parallel_rank, tensor_parallel_rank + 1, 1
+
+    splited = []
+    for rank in range(begin, end, step):
+        start = rank * block_size
+        stop = (rank + 1) * block_size
+
+        if dim == 0 or len(weight.get_shape()) == 1:
+            tensor = weight[start:stop]
+        elif dim == -1:
+            tensor = weight[:, start:stop]
+        else:
+            raise NotImplementedError("Let's make that generic when needed")
+        if tensor_parallel_rank is not None:
+            return tensor
+
+        splited.append(tensor)
+
+    return splited
+
+
+def set_param_attr(param, param_attr_map):
+    if param_attr_map is None:
+        return
+    for key, value in param_attr_map.items():
+        setattr(param, key, value)
+
+
+def default_weight_loader(fd_config) -> None:
+    """Default weight loader"""
+
+    def fn(param, loaded_weight, shard_id=None):
+        """fn"""
+        try:
+            is_column = getattr(param, "is_column", None)
+            if is_column is not None:
+                loaded_weight = tp_slice(
+                    loaded_weight,
+                    fd_config.parallel_config.tensor_parallel_size,
+                    fd_config.parallel_config.tensor_parallel_rank,
+                    is_column=is_column,
+                )
+
+            loaded_weight = get_tensor(loaded_weight)
+
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+
+            param.copy_(loaded_weight, False)
+        except Exception:
+            raise
+
+    return fn
 
 
 class LayerIdPlaceholder(str, enum.Enum):

@@ -19,6 +19,7 @@ from paddle import nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.models.utils import default_weight_loader, set_param_attr
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor
@@ -107,6 +108,15 @@ class LinearBase(nn.Layer):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
+        set_param_attr(
+            self.weight,
+            {
+                "weight_loader": (
+                    self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+                )
+            },
+        )
+
         self.bias = None
         if self.with_bias:
             self.bias = self.create_parameter(
@@ -114,6 +124,15 @@ class LinearBase(nn.Layer):
                 dtype=self._dtype,
                 is_bias=True,
             )
+
+        set_param_attr(
+            self.weight,
+            {
+                "weight_loader": (
+                    self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+                )
+            },
+        )
 
         # smooth quant
         self.linear_shift = None
@@ -273,6 +292,7 @@ class ColumnParallelLinear(LinearBase):
             add_bias=add_bias,
             skip_quant=skip_quant,
         )
+        self.fd_config = fd_config
         self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.input_size = input_size
         self.output_size = divide(output_size, self.nranks)  # Split the output_size using TP inference.
@@ -300,6 +320,15 @@ class ColumnParallelLinear(LinearBase):
         if self.nranks > 0:
             # col parallel
             _set_var_distributed(self.weight, split_axis=1)
+            set_param_attr(
+                self.weight,
+                {
+                    "is_column": True,
+                    "weight_loader": (
+                        self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+                    ),
+                },
+            )
 
         self.bias = None
         if self.with_bias:
@@ -311,6 +340,17 @@ class ColumnParallelLinear(LinearBase):
             if self.nranks > 0:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
+                set_param_attr(
+                    self.weight,
+                    {
+                        "is_column": True,
+                        "weight_loader": (
+                            self.weight_loader
+                            if hasattr(self, "weight_loader")
+                            else default_weight_loader(self.fd_config)
+                        ),
+                    },
+                )
 
         # smooth quant
         self.linear_shift = None
@@ -354,6 +394,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         self.activation = activation
         self.hidden_size = fd_config.model_config.hidden_size
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.output_size = output_size
+        self.local_rank = fd_config.parallel_config.tensor_parallel_rank
 
         super().__init__(
             fd_config=fd_config,
@@ -364,6 +406,21 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             add_bias=add_bias,
             skip_quant=skip_quant,
         )
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id):
+
+        # split gate up
+        assert loaded_shard_id in ["gate", "up"]
+        is_column = getattr(param, "is_column", None)
+        if is_column is not None:
+            from fastdeploy.model_executor.models.utils import tp_slice
+
+            loaded_weight = tp_slice(loaded_weight, self.nranks, self.local_rank, is_column=is_column)
+            loaded_weight = get_tensor(loaded_weight)
+            if loaded_shard_id == "gate":
+                param[:, : self.output_size // 2] = loaded_weight
+            elif loaded_shard_id == "up":
+                param[:, self.output_size // 2 :] = loaded_weight
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -415,6 +472,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.local_rank = fd_config.parallel_config.tensor_parallel_rank
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
         if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
             self.kv_num_heads_per_rank = 1
@@ -431,6 +489,27 @@ class QKVParallelLinear(ColumnParallelLinear):
             with_bias=with_bias,
             add_bias=add_bias,
         )
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id):
+        # split q k v
+        assert loaded_shard_id in ["q", "k", "v"]
+        is_column = getattr(param, "is_column", None)
+        if is_column is not None:
+            from fastdeploy.model_executor.models.utils import tp_slice
+
+            loaded_weight = tp_slice(loaded_weight, self.nranks, self.local_rank, is_column=is_column)
+            loaded_weight = get_tensor(loaded_weight)
+            if loaded_shard_id == "q":
+                param[:, : self.num_heads_per_rank * self.head_dim] = loaded_weight
+            elif loaded_shard_id == "k":
+                param[
+                    :,
+                    self.num_heads_per_rank
+                    * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
+                    * self.head_dim,
+                ] = loaded_weight
+            elif loaded_shard_id == "v":
+                param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :] = loaded_weight
 
     def load_weight(self, state_dict: dict):
         """
@@ -588,6 +667,18 @@ class RowParallelLinear(LinearBase):
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
+        if self.nranks > 0:
+            # row parallel
+            set_param_attr(
+                self.weight,
+                {
+                    "is_column": False,
+                    "weight_loader": (
+                        self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+                    ),
+                },
+            )
+            _set_var_distributed(self.weight, split_axis=0)
 
         self.bias = None
         if self.with_bias:
@@ -596,10 +687,18 @@ class RowParallelLinear(LinearBase):
                 dtype=self._dtype,
                 is_bias=True,
             )
-
-        if self.nranks > 0:
-            # row parallel
-            _set_var_distributed(self.weight, split_axis=0)
+            if self.nranks > 0:
+                set_param_attr(
+                    self.bias,
+                    {
+                        "is_column": False,
+                        "weight_loader": (
+                            self.weight_loader
+                            if hasattr(self, "weight_loader")
+                            else default_weight_loader(self.fd_config)
+                        ),
+                    },
+                )
 
         # smooth quant
         self.linear_shift = None

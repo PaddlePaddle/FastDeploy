@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from enum import Enum
+from typing import Literal, Optional, Union
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -410,6 +411,13 @@ class GraphOptimizationConfig:
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
 
+class LoadFormat(str, Enum):
+    """LoadFormat"""
+
+    DEFAULT = "default"
+    DEFAULT_V1 = "default_v1"
+
+
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
@@ -426,6 +434,7 @@ class LoadConfig:
         self,
         args,
     ):
+        self.load_format: Union[str, LoadFormat] = LoadFormat.DEFAULT.value
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None

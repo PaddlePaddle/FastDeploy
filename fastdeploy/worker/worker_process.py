@@ -588,6 +588,13 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
 
+    parser.add_argument(
+        "--load_format",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/default_v1.",
+    )
+
     args = parser.parse_args()
     return args
 

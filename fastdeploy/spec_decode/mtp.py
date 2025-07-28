@@ -84,9 +84,10 @@ class MTPProposer(Proposer):
         """
         Load MTP Layer
         """
-        from fastdeploy.model_executor.model_loader import get_model_from_loader
+        from fastdeploy.model_executor.model_loader import get_model_loader
 
-        self.model = get_model_from_loader(self.cfg)
+        model_loader = get_model_loader(load_config=self.cfg.load_config)
+        self.model = model_loader.load_model(fd_config=self.cfg)
 
     def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""

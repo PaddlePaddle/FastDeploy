@@ -22,6 +22,7 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.models.utils import set_param_attr
 
 from .utils import get_tensor
 
@@ -83,6 +84,7 @@ class ParallelLMHead(nn.Layer):
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_param_attr(self.linear.weight, {"is_column": True})
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
@@ -93,6 +95,7 @@ class ParallelLMHead(nn.Layer):
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_param_attr(self.linear.weight, {"is_column": False})
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """

@@ -314,6 +314,14 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    load_format: str = "default"
+    """The format of the model weights to load.
+        Options include:
+        - "default": default loader.
+        -"load_time_quantization": Quantization applied during model loading, \
+            such as INT8, INT4, or FP8 formats.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -517,6 +525,16 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
+        )
+
+        # Load group
+        load_group = parser.add_argument_group("Load Configuration")
+        load_group.add_argument(
+            "--load_format",
+            type=str,
+            default=EngineArgs.load_format,
+            help="The format of the model weights to load.\
+                 default/load_time_quantization.",
         )
 
         # CacheConfig parameters group
@@ -892,4 +910,5 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob=self.enable_logprob,
+            load_format=self.load_format,
         )
