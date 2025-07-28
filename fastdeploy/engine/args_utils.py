@@ -19,15 +19,13 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
-from fastdeploy.config import CacheConfig
-from fastdeploy.engine.config import (
-    Config,
+from fastdeploy.config import (
+    CacheConfig,
     GraphOptimizationConfig,
-    ModelConfig,
-    ParallelConfig,
     SpeculativeConfig,
     TaskOption,
 )
+from fastdeploy.engine.config import Config, ModelConfig, ParallelConfig
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import FlexibleArgumentParser
 
@@ -772,10 +770,12 @@ class EngineArgs:
 
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
+        speculative_args = asdict(self)
         if self.speculative_config is not None:
-            return SpeculativeConfig(**self.speculative_config)
-        else:
-            return SpeculativeConfig()
+            for k, v in self.speculative_config.items():
+                speculative_args[k] = v
+
+        return SpeculativeConfig(speculative_args)
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
@@ -816,10 +816,11 @@ class EngineArgs:
         """
         Create and retuan a GraphOptimizationConfig object based on the current settings.
         """
+        graph_optimization_args = asdict(self)
         if self.graph_optimization_config is not None:
-            return GraphOptimizationConfig(**self.graph_optimization_config)
-        else:
-            return GraphOptimizationConfig()
+            for k, v in self.graph_optimization_config.items():
+                graph_optimization_args[k] = v
+        return GraphOptimizationConfig(graph_optimization_args)
 
     def create_engine_config(self) -> Config:
         """
