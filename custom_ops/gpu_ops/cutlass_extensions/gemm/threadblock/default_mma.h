@@ -18,14 +18,12 @@
 
 #include "cutlass_extensions/gemm/threadblock/default_dq_mma_multistage.h"
 #include "cutlass_extensions/gemm/threadblock/default_dq_mma_pipelined.h"
+#include "cutlass_extensions/gemm/threadblock/default_wint2x_mma.h"
 #include "cutlass_extensions/gemm/threadblock/default_mma_bf16.h"
 
-namespace cutlass
-{
-namespace gemm
-{
-namespace threadblock
-{
+namespace cutlass {
+namespace gemm {
+namespace threadblock {
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -378,38 +376,23 @@ template <
 struct DefaultMma<cutlass::half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, ElementAccumulator,
     layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, 2, Operator>
 {
-    static cutlass::arch::CacheOperation::Kind const CacheOpA =
-        ((sizeof_bits<half_t>::value * kAlignmentA) == 128) ? cutlass::arch::CacheOperation::Global
-            : cutlass::arch::CacheOperation::Always;
+private:
+    using Mma = DefaultWint2xMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB,
+        ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
+        WarpShape, InstructionShape, 2, Operator>;
 
-    static cutlass::arch::CacheOperation::Kind const CacheOpB =
-        ((sizeof_bits<half_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
-            : cutlass::arch::CacheOperation::Always;
-
+public:
     // Define the MmaCore components
-    using MmaCore =
-        typename cutlass::gemm::threadblock::DefaultMmaCore<ThreadblockShape, WarpShape, InstructionShape, half_t,
-            LayoutA, half_t, LayoutB, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, 3, Operator,
-            false, CacheOpA, CacheOpB>;
+    using MmaCore = typename Mma::MmaCore;
 
     // Define iterators over tiles from the A operand
-    using ThreadMapA = typename MmaCore::IteratorThreadMapA;
-    using AccessTypeA = cutlass::Array<half_t, kAlignmentA>;
-    using IteratorA = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-          cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>, half_t, LayoutA, 1, ThreadMapA,
-        AccessTypeA>;
+    using IteratorA = typename Mma::IteratorA;
 
     // Define iterators over tiles from the B operand
-    using ThreadMapB = typename MmaCore::IteratorThreadMapB;
-    using AccessTypeB = cutlass::Array<half_t, kAlignmentB>;
-    using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, half_t, LayoutB, 0, ThreadMapB,
-        AccessTypeB>;
+    using IteratorB = typename Mma::IteratorB;
 
     // Define the threadblock-scoped multistage matrix multiply
-    using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<typename MmaCore::Shape, IteratorA,
-        typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
-        MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy, 2>;
+    using ThreadblockMma = typename Mma::ThreadblockMma;
 };
 
 template <
@@ -441,38 +424,23 @@ struct DefaultMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, 
     layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, kStages, Operator,
     false, SharedMemoryClear>
 {
-    static cutlass::arch::CacheOperation::Kind const CacheOpA =
-        ((sizeof_bits<half_t>::value * kAlignmentA) == 128) ? cutlass::arch::CacheOperation::Global
-            : cutlass::arch::CacheOperation::Always;
+private:
+    using Mma = DefaultWint2xMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB,
+        ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
+        WarpShape, InstructionShape, kStages, Operator, SharedMemoryClear>;
 
-    static cutlass::arch::CacheOperation::Kind const CacheOpB =
-        ((sizeof_bits<half_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
-            : cutlass::arch::CacheOperation::Always;
-
+public:
     // Define the MmaCore components
-    using MmaCore =
-        typename cutlass::gemm::threadblock::DefaultMmaCore<ThreadblockShape, WarpShape, InstructionShape, half_t,
-            LayoutA, half_t, LayoutB, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, kStages, Operator,
-            false, CacheOpA, CacheOpB>;
+    using MmaCore = typename Mma::MmaCore;
 
     // Define iterators over tiles from the A operand
-    using ThreadMapA = typename MmaCore::IteratorThreadMapA;
-    using AccessTypeA = cutlass::Array<half_t, kAlignmentA>;
-    using IteratorA = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-          cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>, half_t, LayoutA, 1, ThreadMapA,
-        AccessTypeA>;
+    using IteratorA = typename Mma::IteratorA;
 
     // Define iterators over tiles from the B operand
-    using ThreadMapB = typename MmaCore::IteratorThreadMapB;
-    using AccessTypeB = cutlass::Array<half_t, kAlignmentB>;
-    using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, half_t, LayoutB, 0, ThreadMapB,
-        AccessTypeB>;
+    using IteratorB = typename Mma::IteratorB;
 
     // Define the threadblock-scoped multistage matrix multiply
-    using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<typename MmaCore::Shape, IteratorA,
-        typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
-        MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy, kStages, SharedMemoryClear>;
+    using ThreadblockMma = typename Mma::ThreadblockMma;
 };
 
 } // namespace threadblock

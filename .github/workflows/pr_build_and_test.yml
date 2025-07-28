@@ -33,3 +33,12 @@ jobs:
       - name: Print wheel path
         run: |
           echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
+
+  unittest_coverage:
+    name: Run FastDeploy Unit Tests and Coverage
+    needs: [clone,build]
+    uses: ./.github/workflows/_unit_test_coverage.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
