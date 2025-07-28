@@ -647,6 +647,8 @@ class GPUModelRunner(ModelRunnerBase):
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
+        self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
+        self.share_inputs["max_len_tensor_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -846,6 +848,8 @@ class GPUModelRunner(ModelRunnerBase):
             attn_backend=self.attn_backends[0],
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
+            decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
+            max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
@@ -958,6 +962,8 @@ class GPUModelRunner(ModelRunnerBase):
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([decode_buffer_shape, 1], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([decode_buffer_shape, 1], 0, dtype="int32")
+        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -1542,12 +1548,8 @@ class GPUModelRunner(ModelRunnerBase):
         Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
         In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
         """
-        # TODO(gongshaotian): Use more efficient implementation
-        if self.forward_meta.step_use_cudagraph:
-            num_empty_batch = (self.forward_meta.seq_lens_this_time == 0).sum()
-            for i in range(1, num_empty_batch + 1):
-                self.forward_meta.decoder_batch_ids[-i] = 0
-                self.forward_meta.decoder_tile_ids_per_batch[-i] = 0
+        # In init_attention_metadata, the decode buffer has already been cleared
+        return
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
