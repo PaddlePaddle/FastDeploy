@@ -38,14 +38,13 @@ class MoEPhase(Enum):
     PREFILL = 1
     DECODER = 2
 
-
 class ErnieArchitectures:
     """Helper class for ERNIE architecture check."""
 
     ARCHITECTURES = {
         "Ernie4_5_ForCausalLM",
-        "Ernie4_5_MoeForCausalLM",
-        "Ernie4_5_VLMoeForConditionalGeneration",
+        "Ernie4_5_MoeForCausalLM", 
+        "Ernie4_5_VLMoeForConditionalGeneration"
     }
 
     @classmethod

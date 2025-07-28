@@ -15,3 +15,4 @@ for chunk in response:
     if chunk.choices[0].delta:
         print(chunk.choices[0].delta.content, end='')
 print('\n')
+
