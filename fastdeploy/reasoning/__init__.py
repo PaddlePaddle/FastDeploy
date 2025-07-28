@@ -17,10 +17,12 @@
 from .abs_reasoning_parsers import ReasoningParser, ReasoningParserManager
 from .ernie_vl_reasoning_parsers import ErnieVLReasoningParser
 from .qwen3_reasoning_parsers import Qwen3ReasoningParser
+from .qwen2_5_vl_reasoning_parsers import Qwen25VLReasoningParser
 
 __all__ = [
-    "ReasoningParser",
+    "ReasoningParser", 
     "ReasoningParserManager",
     "ErnieVLReasoningParser",
     "Qwen3ReasoningParser",
+    "Qwen25VLReasoningParser",
 ]
