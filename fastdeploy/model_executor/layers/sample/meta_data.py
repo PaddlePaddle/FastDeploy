@@ -15,7 +15,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 
 import paddle
 
@@ -35,9 +35,6 @@ class SamplingMetadata:
     repetition_penalties: paddle.Tensor
 
     min_dec_lens: paddle.Tensor
-
-    bad_words_token_ids: paddle.Tensor
-
     step_idx: paddle.Tensor
 
     top_p: paddle.Tensor
@@ -46,3 +43,4 @@ class SamplingMetadata:
     max_num_logprobs: Optional[int] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
+    bad_words_token_ids: Optional[List[list[int]]] = None

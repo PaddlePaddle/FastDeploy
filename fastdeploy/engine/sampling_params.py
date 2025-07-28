@@ -96,6 +96,7 @@ class SamplingParams:
     min_tokens: int = 1
     logprobs: Optional[int] = None
     bad_words: Optional[List[str]] = None
+    _bad_words_token_ids: Optional[List[int]] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -204,7 +205,39 @@ class SamplingParams:
         # TODO: Implement stop tokens and bad words support
         # Currently stop tokens and bad words are not supported yet
         """
-        pass
+        if self.bad_words is None:
+            return
+        self._bad_words_token_ids = []
+        for bad_word in self.bad_words:
+            # To prohibit words both at the beginning
+            # and in the middle of text
+            # (related to add_prefix_space tokenizer parameter)
+            for add_prefix_space in [False, True]:
+                prefix = " " if add_prefix_space else ""
+                prompt = prefix + bad_word.lstrip()
+                print(prompt)
+                prompt_token_ids = tokenizer.encode(text=prompt, add_special_tokens=False)["input_ids"]
+                print(prompt_token_ids)
+                assert len(prompt_token_ids) == 1, f"Bad word '{bad_word}' is not a single token."
+
+                if (not add_prefix_space) or (add_prefix_space and prompt_token_ids != self._bad_words_token_ids[-1]):
+                    self._bad_words_token_ids.extend(prompt_token_ids)
+
+        invalid_token_ids = [
+            token_id for token_id in self._bad_words_token_ids if token_id < 0 or token_id > tokenizer.vocab_size - 1
+        ]
+        if len(invalid_token_ids) > 0:
+            raise ValueError(
+                f"The model vocabulary size is {tokenizer.vocab_size},"
+                f" but the following tokens"
+                f" were specified as bad: {invalid_token_ids}."
+                f" All token id values should be integers satisfying:"
+                f" 0 <= token_id < {tokenizer.vocab_size}."
+            )
+
+    @property
+    def bad_words_token_ids(self) -> Optional[List[list[int]]]:
+        return self._bad_words_token_ids
 
 
 @dataclass
