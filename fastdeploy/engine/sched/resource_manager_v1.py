@@ -296,8 +296,6 @@ class ResourceManagerV1(ResourceManager):
                             break
                     elif request.status == RequestStatus.PREEMPTED:
                         num_new_tokens = self._get_num_new_tokens(request, token_budget, True)
-                        if num_new_tokens < 0:
-                            break
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
