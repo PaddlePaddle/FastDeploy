@@ -64,32 +64,32 @@ def get_moe_scores(
     return scores
 
 
+from fastdeploy.model_executor.models.utils import set_param_attr
+
+
 class CutlassMoEMethod(MoEMethodBase):
     """
     Use Cutlass Group Gemm to compute Fused MoE.
     This method is the oldest way to compute MoE in Paddle.
     """
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, state_dict=None):
         """
-        Paddle cutlass create weight process.
+        Paddle cutlass create weight process. #bf16
         """
-        # bf16
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
-        stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
-        stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
-            weight_name = self.added_weight_attrs[idx]
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            getattr(layer, weight_name).set_value(weight_tensor)
+
+        layer.moe_ffn1_weight = layer.create_parameter(
+            shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+            dtype="bfloat16",
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.moe_ffn2_weight = layer.create_parameter(
+            shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+            dtype="bfloat16",
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        set_param_attr(layer.moe_ffn1_weight, {"weight_loader": layer.weight_loader})
+        set_param_attr(layer.moe_ffn2_weight, {"weight_loader": layer.weight_loader})
 
     def compute_ffn(
         self,

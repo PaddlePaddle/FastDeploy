@@ -88,6 +88,48 @@ class Qwen3MLP(nn.Layer):
         return down_out
 
 
+class Qwen3MoeBlock(nn.Layer):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        layer_id: int,
+        prefix: str = "",
+    ) -> None:
+        super().__init__()
+        weight_key_map = {
+            "gate_weight_key": f"{prefix}.mlp.gate.weight",
+            "ffn1_expert_weight_key": f"{prefix}.mlp.experts.{{}}.up_gate_proj.weight",
+            "ffn2_expert_weight_key": f"{prefix}.mlp.experts.{{}}.down_proj.weight",
+        }
+        self.experts = FusedMoE(
+            fd_config,
+            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
+            num_experts=fd_config.model_config.num_experts,
+            top_k=fd_config.model_config.num_experts_per_tok,
+            layer_idx=layer_id,
+            weight_key_map=weight_key_map,
+        )
+
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.num_experts,
+            with_bias=False,
+            weight_dtype="float32",
+        )
+
+    def forward(self, x):
+        gate_out = self.gate(x.cast("float32"))
+        out = self.experts(x, gate_out)
+        return out
+    def load_state_dict(self, state_dict):
+        """ """
+        pass
+        # self.gate.load_state_dict(state_dict)
+        # self.experts.load_state_dict(state_dict)
+
+
 class Qwen3DecoderLayer(nn.Layer):
     """ """
 
@@ -104,25 +146,10 @@ class Qwen3DecoderLayer(nn.Layer):
             layer_id=layer_id,
             prefix=f"{prefix}.self_attn",
         )
-        weight_key_map = {
-            "gate_weight_key": f"{prefix}.mlp.gate.weight",
-            "up_gate_proj_expert_weight_key": f"{prefix}.mlp.experts.{{}}.up_gate_proj.weight",
-            "down_proj_expert_weight_key": f"{prefix}.mlp.experts.{{}}.down_proj.weight",
-        }
 
-        if (
-            fd_config.model_config.moe_num_experts is not None
-            and layer_id >= fd_config.model_config.moe_layer_start_index
-        ):
+        if fd_config.model_config.num_experts is not None and layer_id >= fd_config.model_config.moe_layer_start_index:
+            self.mlp = Qwen3MoeBlock(fd_config, layer_id, prefix=f"{prefix}.mlp")
 
-            self.mlp = FusedMoE(
-                fd_config,
-                moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
-                num_experts=fd_config.model_config.moe_num_experts,
-                top_k=fd_config.model_config.moe_topk,
-                layer_idx=layer_id,
-                weight_key_map=weight_key_map,
-            )
         else:
             self.mlp = Qwen3MLP(
                 fd_config,
@@ -282,8 +309,20 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         """ """
         return "Qwen3MoeForCausalLM"
 
+    def get_expert_mapping(
+        self,
+    ) -> list[tuple[str, str, int, str]]:
+        # Params for weights, fp8 weight scales, fp8 activation scales
+        # (param_name, weight_name, expert_id, shard_id)
+        return FusedMoE.make_expert_params_mapping(
+            ckpt_gate_proj_name="gate_proj",
+            ckpt_down_proj_name="down_proj",
+            ckpt_up_proj_name="up_proj",
+            num_experts=self.fd_config.model_config.num_experts,
+        )
+
     @paddle.no_grad()
-    def set_state_dict(self, state_dict):
+    def set_state_dict(self, weights_iterator, tensor_parallel_filtered_map):
         """
         Load model parameters from a given state dictionary.
 
@@ -292,8 +331,98 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
-        self.lm_head.load_state_dict(state_dict)
+        from fastdeploy.model_executor.models.utils import default_weight_loader
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("gate_up_proj", "gate_proj", 0),
+            ("gate_up_proj", "up_proj", 1),
+        ]
+        import numpy as np
+
+        from fastdeploy.model_executor.layers.utils import get_tensor
+
+        params_dict = dict(self.named_parameters())
+        # for k,v in params_dict.items():
+        #     print(k)
+        #     print(v)
+        # import pdb;pdb.set_trace()
+        expert_params_mapping = self.get_expert_mapping()
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                if "mlp.experts" in loaded_weight_name:
+                    continue
+                bh_name = loaded_weight_name.replace(weight_name, param_name)
+                if bh_name not in params_dict:
+                    continue
+                param = params_dict[bh_name]
+                if loaded_weight_name in tensor_parallel_filtered_map:
+                    action = tensor_parallel_filtered_map.pop(loaded_weight_name)
+                    loaded_weight = np.ascontiguousarray(action(loaded_weight))
+
+                weight_loader = param.weight_loader
+                weight_loader(param, get_tensor(np.ascontiguousarray(loaded_weight)), shard_id)
+                if "PySafeSlice" in str(type(loaded_weight)):
+                    weight_loader(param, get_tensor(loaded_weight.get()), shard_id)
+                else:
+                    weight_loader(param, get_tensor(loaded_weight), shard_id)
+                break
+            else:
+                for mapping in expert_params_mapping:
+                    param_name, weight_name, expert_id, shard_id = mapping
+                    if weight_name not in loaded_weight_name:
+                        continue
+                    bh_name = loaded_weight_name.replace(weight_name, param_name)
+                    # print("bh_name:",bh_name)
+                    # print("weight_name:",weight_name)
+                    # print("param_name:",param_name)
+                    if bh_name not in params_dict:
+                        print("bh_name:", bh_name)
+                        continue
+                    param = params_dict[bh_name]
+                    if loaded_weight_name in tensor_parallel_filtered_map:
+                        action = tensor_parallel_filtered_map.pop(loaded_weight_name)
+                        loaded_weight = np.ascontiguousarray(action(loaded_weight))
+                    weight_loader = param.weight_loader
+                    if "PySafeSlice" in str(type(loaded_weight)):
+                        weight_loader(param, get_tensor(loaded_weight.get()), shard_id=shard_id, expert_id=expert_id)
+                    else:
+                        weight_loader(param, get_tensor(loaded_weight), shard_id=shard_id, expert_id=expert_id)
+                    break
+                else:
+                    if loaded_weight_name not in params_dict:
+                        continue
+                    param = params_dict[loaded_weight_name]
+                    if loaded_weight_name in tensor_parallel_filtered_map:
+                        action = tensor_parallel_filtered_map.pop(loaded_weight_name)
+                        loaded_weight = np.ascontiguousarray(action(loaded_weight))
+
+                    weight_loader = getattr(param, "weight_loader", default_weight_loader)
+                    if "PySafeSlice" in str(type(loaded_weight)):
+                        tensor = get_tensor(loaded_weight.get())
+                    else:
+                        tensor = get_tensor(loaded_weight)
+                    if "mlp.gate" in loaded_weight_name:
+                        tensor = tensor.cast("float32")
+                    weight_loader(param, tensor)
+
+    # @paddle.no_grad()
+    # def set_state_dict(self, state_dict):
+    #     """
+    #     Load model parameters from a given state dictionary.
+
+    #     Args:
+    #         state_dict (dict[str, np.ndarray | paddle.Tensor]):
+    #             A dictionary containing model parameters, where keys are parameter names
+    #             and values are NumPy arrays or PaddlePaddle tensors.
+    #     """
+    #     self.model.load_state_dict(state_dict)
+    #     self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
@@ -339,6 +468,13 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )
+        if config.num_key_value_heads % config.tensor_parallel_degree != 0:
+            other_fc = split_or_merge_func(
+                is_split=is_split,
+                tensor_parallel_degree=config.tensor_parallel_degree // 2,
+                tensor_parallel_rank=config.tensor_parallel_rank,
+                num_attention_heads=config.num_attention_heads,
+            )
 
         def get_tensor_parallel_split_mappings(num_layers, num_experts):
             final_actions = {}
@@ -363,6 +499,11 @@ class Qwen3MoePretrainedModel(PretrainedModel):
                     base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
+                else:
+                    base_actions["layers.0.self_attn.k_proj.weight"] = partial(other_fc, is_column=True)
+                    base_actions["layers.0.self_attn.v_proj.weight"] = partial(other_fc, is_column=True)
+                    base_actions["layers.0.self_attn.k_proj.bias"] = partial(other_fc, is_column=True)
+                    base_actions["layers.0.self_attn.v_proj.bias"] = partial(other_fc, is_column=True)
 
             for key, action in base_actions.items():
                 if "layers.0." in key:
@@ -386,10 +527,10 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             return final_actions
 
         num_experts = 0
-        if isinstance(config.moe_num_experts, list):
-            num_experts = sum(config.moe_num_experts)
-        elif isinstance(config.moe_num_experts, int):
-            num_experts = config.moe_num_experts
+        if isinstance(config.num_experts, list):
+            num_experts = sum(config.num_experts)
+        elif isinstance(config.num_experts, int):
+            num_experts = config.num_experts
         else:
             raise ValueError(f"Not support type of num_experts [{type(config.moe_num_experts)}]")
 

@@ -132,6 +132,8 @@ class FusedMoE(nn.Layer):
         if fd_config.load_config.dynamic_load_weight:
             # It's for RL to build model
             self.init_moe_weights()
+        
+        # self.quant_method.create_weights(self)
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
@@ -139,6 +141,59 @@ class FusedMoE(nn.Layer):
             , ep_size={self.ep_size}, \
             tp_size={self.tp_size}."
         )
+
+    def weight_loader(self, param, loaded_weight, shard_id, expert_id):
+        assert shard_id in ["gate", "down", "up"]
+        expert_param = param[expert_id]
+        SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
+        self._load_expert_weight(
+            expert_param=expert_param,
+            shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+            loaded_weight=loaded_weight,
+            shard_id=shard_id,
+        )
+
+    def _load_expert_weight(
+        self,
+        expert_param,
+        shard_dim,
+        loaded_weight,
+        shard_id,
+    ):
+        tensor_size = expert_param.shape[shard_dim] // 2
+
+        if shard_id == "gate":
+            expert_param = expert_param[..., :tensor_size]
+        elif shard_id == "up":
+            expert_param = expert_param[..., tensor_size:]
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        expert_param=loaded_weight
+
+    @classmethod
+    def make_expert_params_mapping(
+        cls, ckpt_gate_proj_name: str, ckpt_down_proj_name: str, ckpt_up_proj_name: str, num_experts: int
+    ) -> list[tuple[str, str, int, str]]:
+        return [
+            # (param_name, weight_name, expert_id, shard_id)
+            (
+                (
+                    "experts.moe_ffn1_"
+                    if weight_name in [ckpt_gate_proj_name, ckpt_up_proj_name]
+                    else "experts.moe_ffn2_"
+                ),
+                f"experts.{expert_id}.{weight_name}.",
+                expert_id,
+                shard_id,
+            )
+            for expert_id in range(num_experts)
+            for shard_id, weight_name in [
+                ("gate", ckpt_gate_proj_name),
+                ("down", ckpt_down_proj_name),
+                ("up", ckpt_up_proj_name),
+            ]
+        ]
 
     def init_moe_weights(self):
         """
@@ -389,7 +444,7 @@ class FusedMoE(nn.Layer):
         else:
             self.quant_method.create_weights(self, state_dict)
 
-    def forward(self, x: paddle.Tensor):
+    def forward(self, x: paddle.Tensor, gate_out):
         """
         Defines the forward computation of the moe layer.
 
@@ -400,6 +455,5 @@ class FusedMoE(nn.Layer):
             Tensor: Output tensor.s
 
         """
-        gate_out = paddle.matmul(x.cast("float32"), self.gate_weight)
         out = self.quant_method.apply(self, x, gate_out)
         return out
