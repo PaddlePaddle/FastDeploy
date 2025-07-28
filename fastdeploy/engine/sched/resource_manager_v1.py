@@ -195,8 +195,8 @@ class ResourceManagerV1(ResourceManager):
             request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
         return num_new_tokens
 
-    def exist_prefill(self):
-        for request in self.running:
+    def exist_prefill(self, scheduled_reqs):
+        for request in scheduled_reqs:
             if request.task_type == RequestType.PREFILL:
                 return True
         return False
@@ -270,7 +270,7 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if self.config.enable_mm and self.exist_prefill():
+                    if self.config.enable_mm and self.exist_prefill(scheduled_reqs):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
