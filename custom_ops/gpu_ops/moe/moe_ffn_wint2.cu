@@ -49,12 +49,13 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
     typename WeightOnlyTraits::Arguments up_gate_proj_quant_args;
     typename WeightOnlyTraits::Arguments down_proj_quant_args;
     if constexpr (QuantMethod == cutlass::WintQuantMethod::kWeightOnlyInt2) {
-        up_gate_proj_quant_args.local_scale_ptr = up_gate_proj_local_scale->data<uint8_t>();
-        up_gate_proj_quant_args.code_scale_ptr = up_gate_proj_code_scale->data<float>();
-        up_gate_proj_quant_args.code_zp_ptr = up_gate_proj_code_zp->data<float>();
-        down_proj_quant_args.local_scale_ptr = down_proj_local_scale->data<uint8_t>();
-        down_proj_quant_args.code_scale_ptr = down_proj_code_scale->data<float>();
-        down_proj_quant_args.code_zp_ptr = down_proj_code_zp->data<float>();
+        up_gate_proj_quant_args.local_scale_ptr = const_cast<uint8_t*>(up_gate_proj_local_scale->data<uint8_t>());
+        up_gate_proj_quant_args.code_scale_ptr = const_cast<float*>(up_gate_proj_code_scale->data<float>());
+        up_gate_proj_quant_args.code_zp_ptr = const_cast<float*>(up_gate_proj_code_zp->data<float>());
+
+        down_proj_quant_args.local_scale_ptr = const_cast<uint8_t*>(down_proj_local_scale->data<uint8_t>());
+        down_proj_quant_args.code_scale_ptr = const_cast<float*>(down_proj_code_scale->data<float>());
+        down_proj_quant_args.code_zp_ptr = const_cast<float*>(down_proj_code_zp->data<float>());
     }
 
     auto moe_gemm_runner = MoeGemmRunner<NvType, WeightOnlyTraits>();
