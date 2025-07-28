@@ -31,7 +31,7 @@ from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import Qwen2PretrainedModel
 from fastdeploy.model_executor.models.qwen3 import Qwen3PretrainedModel
 from fastdeploy.model_executor.models.qwen3moe import Qwen3MoePretrainedModel
-# from fastdeploy.model_executor.models.qwen2_5_vl.modeling_qwen2_5_vl.py import Qwen2_5_VLPretrainedModel
+from fastdeploy.model_executor.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLPreTrainedModel
 from fastdeploy.platforms import current_platform
 
 MODEL_CLASSES = {
@@ -43,7 +43,7 @@ MODEL_CLASSES = {
     "Ernie4_5_ForCausalLM": Ernie4_5_PretrainedModel,
     "DeepseekV3ForCausalLM": DeepSeekV3PretrainedModel,
     "Ernie4_5_VLMoeForConditionalGeneration": Ernie4_5_VLPretrainedModel,
-    # "Qwen2_5_VLMoeForConditionalGeneration": Qwen2_5_VLPretrainedModel,
+    "Qwen2_5_VLMoeForConditionalGeneration": Qwen2_5_VLPreTrainedModel,
 }
 
 
