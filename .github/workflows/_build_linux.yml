@@ -44,7 +44,7 @@ on:
         value: ${{ jobs.fd-build.outputs.wheel_path }}
 jobs:
   fd-build:
-    runs-on: [self-hosted, GPU-h1z1-4Cards]
+    runs-on: [self-hosted, GPU-Build]
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
     steps:
@@ -88,10 +88,10 @@ jobs:
         run: |
             set -x
             runner_name="${{ runner.name }}"
-            CARD_ID=$(echo "${runner_name}" | cut -d'-' -f2)
+            CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
             gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
 
-            CACHE_DIR=${CACHE_DIR:-${{ github.workspace }}}
+            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
             echo "CACHE_DIR is set to ${CACHE_DIR}"
             if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
               touch "${CACHE_DIR}/gitconfig"

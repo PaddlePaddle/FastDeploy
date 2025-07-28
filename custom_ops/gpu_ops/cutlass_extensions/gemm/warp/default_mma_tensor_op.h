@@ -41,12 +41,9 @@
 #include "cutlass_extensions/arch/mma.h"
 #include "cutlass_extensions/gemm/warp/mma_tensorop_compute_B_with_f16.h"
 
-namespace cutlass
-{
-namespace gemm
-{
-namespace warp
-{
+namespace cutlass {
+namespace gemm {
+namespace warp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,7 +78,7 @@ private:
     // Shape for computing the FP16s
     using ComputeInstructionShape = InstructionShape_;
 
-    // Chosen so we get K=16 for int8 and K=32 for int4.
+    // Chosen so we get K=16 for int8, K=32 for int4, K=64 for int2.
     static constexpr int LoadInstructionK = 128 / sizeof_bits<ElementB>::value;
 
     // Shape for loading the narrow data type from shared memory
