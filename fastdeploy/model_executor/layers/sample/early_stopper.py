@@ -105,7 +105,7 @@ class RepetitionEarlyStopper(EarlyStopper):
             self.trunc_scores,
             probs,
             next_tokens,
-            eos_token_id,
+            int(eos_token_id),
             self.threshold,
             B,
             W,
