@@ -292,7 +292,12 @@ class XPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
     def process_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
-        """Process inputs for prefill tasks and update share_inputs buffer"""
+        """
+        Process inputs for prefill tasks and update share_inputs buffer
+        req_dict: A list of Request dict
+        num_running_requests: batch_size
+
+        """
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]
@@ -656,6 +661,8 @@ class XPUModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
+            num_running_requests: number of running requests in current batch
+            num_running_requests: batch_size
             intermediate_tensors:
         """
         # 1. Prepare inputs of model and decoder.
