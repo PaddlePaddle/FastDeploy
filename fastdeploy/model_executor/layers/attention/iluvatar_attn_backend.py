@@ -94,8 +94,8 @@ class IluvatarAttnBackend(AttentionBackend):
     ):
         super().__init__()
         self.attention_metadata = IluvatarAttentionMetadata()
-        self.attention_metadata.block_size = llm_config.parallel_config.block_size
-        assert llm_config.parallel_config.enc_dec_block_num == 0, "Iluvatar does not support yet"
+        self.attention_metadata.block_size = llm_config.cache_config.block_size
+        assert llm_config.cache_config.enc_dec_block_num == 0, "Iluvatar does not support yet"
 
         self.attention_metadata.max_context_len = llm_config.parallel_config.max_model_len
         self.attention_metadata.causal = getattr(llm_config.model_config, "causal", True)
