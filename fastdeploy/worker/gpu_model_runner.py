@@ -283,6 +283,7 @@ class GPUModelRunner(ModelRunnerBase):
                 )
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
