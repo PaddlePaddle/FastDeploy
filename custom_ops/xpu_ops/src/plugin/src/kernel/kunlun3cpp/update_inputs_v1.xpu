@@ -38,71 +38,92 @@ __global__ void update_inputs_v1(bool *not_need_stop,
   int thread_idx = clusterid * ncores + cid;
   if (clusterid != 0) return;
 
-  bool stop_flag_now = false;
-  int64_t stop_flag_now_int = 0;
-  int64_t stop_flag_local_sum = 0;
-  for (;thread_idx < max_bsz; thread_idx += nclusters * ncores) {
-    if (thread_idx < bsz) {
-        stop_flag_now = stop_flags[thread_idx];
-        stop_flag_now_int = static_cast<int64_t>(stop_flag_now);
-    } else {
-        stop_flag_now_int = 1;
-    }
-
-    if (thread_idx < bsz) {
-        if(stop_flag_now) {
-            seq_lens_this_time[thread_idx] = 0; // stop at next step
-            seq_lens_decoder[thread_idx] = 0;
-            seq_lens_encoder[thread_idx] = 0;
-        } else {
-            if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] >= prompt_lens[thread_idx]) {
-                // decoding
-                seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx] + seq_lens_this_time[thread_idx];
-                seq_lens_this_time[thread_idx] = 1;
-
-                seq_lens_encoder[thread_idx] = 0;
-                input_ids[thread_idx * input_ids_stride] = next_tokens[thread_idx];
-
-                // to judge whether block is not enough
-                if (seq_lens_this_time[thread_idx] != 0 && block_tables[thread_idx * block_num_per_seq + seq_lens_decoder[thread_idx] / block_size] == -1) {
-                    // should be scheduled by server
-                    is_block_step[thread_idx] = true;
-                    seq_lens_this_time[thread_idx]= 0;
-                    stop_flags[thread_idx] = true;
-                    step_seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx];
-                    seq_lens_decoder[thread_idx] = 0;
-                    stop_flag_now_int = 1;
-                }
-            } else
-            {
-                stop_flags[thread_idx] = true;
-                seq_lens_this_time[thread_idx] = 0;
-                seq_lens_decoder[thread_idx] = 0;
-                seq_lens_encoder[thread_idx] = 0;
-                topk_ids[thread_idx] = -1;
-                stop_flag_now_int = 1;
-            }
-        }
-    }
-
-    stop_flag_local_sum += stop_flag_now_int;
+  const int max_bs = 1024;
+  __shared__ bool stop_flags_sm[max_bs];
+  __shared__ int stop_flags_int_sm[max_bs];
+  if(cid == 0){
+    GM2SM(stop_flags, stop_flags_sm, sizeof(bool) * bsz);
   }
-  // sync_all();
-
-  __shared__ int64_t stop_flags_sum_sm[64];
-  stop_flags_sum_sm[cid] = 0;
-  stop_flags_sum_sm[cid] = stop_flag_local_sum;
-
-  mfence();
   sync_all();
 
-  // reduce sum
-  for (int shulff = ncores / 2; shulff >= 1; shulff /= 2) {
-    if (cid < shulff) {
-      stop_flags_sum_sm[cid] += stop_flags_sum_sm[cid + shulff];
+  for(int i = cid; i < bsz; i+= ncores){
+    if(i < bsz){
+        stop_flags_sm[i] = stop_flags[i];
+        stop_flags_int_sm[i] = static_cast<int64_t>(stop_flags_sm[i]);
+    }else{
+        stop_flags_sm[i] = true;
+        stop_flags_int_sm[i] = 1;
     }
-    mfence();
-    sync_all();
+    if(i<bsz){
+        int seq_len_this_time_update = 0;
+        int seq_len_decoder_update = 0;
+        int seq_lens_encoder_update = 0;
+        if(stop_flags_sm[i]){
+            LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+            LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+            LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
+        }else{
+            GM2LM(seq_lens_this_time+i, &seq_len_this_time_update, sizeof(int));
+            GM2LM(seq_lens_decoder+i, &seq_len_decoder_update, sizeof(int));
+            GM2LM(seq_lens_encoder+i, &seq_lens_encoder_update, sizeof(int));
+            int sum_of_seq_lens_this_time_and_seq_lens_decoder = seq_len_this_time_update + seq_len_decoder_update;
+            int prompt_lens_update = 0;
+            GM2LM(prompt_lens+i, &prompt_lens_update, sizeof(int64_t));
+            // decoding
+            if(sum_of_seq_lens_this_time_and_seq_lens_decoder >= prompt_lens_update){
+                seq_len_decoder_update = seq_len_this_time_update + seq_len_decoder_update;
+                LM2GM(&seq_len_decoder_update, seq_lens_decoder+i, sizeof(int));
+                seq_len_this_time_update = 1;
+                LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+                seq_lens_encoder_update = 0;
+                LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
+                int64_t input_ids_update;
+                GM2LM(next_tokens + i, &input_ids_update, sizeof(int64_t));
+                LM2GM(&input_ids_update, input_ids + i * input_ids_stride, sizeof(int64_t));
+                // to judge whether block is not enough
+                if(seq_len_this_time_update != 0 && block_tables[i * block_num_per_seq + seq_len_decoder_update/block_size] == -1){
+                    is_block_step[i] = true;
+                    seq_len_this_time_update = 0;
+                    LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+                    stop_flags_sm[i] = true;
+                    SM2GM(stop_flags_sm+i, stop_flags+i, sizeof(bool));
+                    LM2GM(&seq_len_decoder_update, step_seq_lens_decoder+i, sizeof(int));
+                    seq_len_decoder_update = 0;
+                    LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+                    seq_len_decoder_update = 0;
+                    LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+                    stop_flags_int_sm[i] = 1;
+                }
+            }else{
+                stop_flags_sm[i] = true;
+                SM2GM(stop_flags_sm+i, stop_flags+i, sizeof(bool));
+                seq_len_this_time_update = 0;
+                LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+                seq_len_decoder_update = 0;
+                seq_lens_encoder_update = 0;
+                LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+                LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
+                int64_t topk_ids_update = -1;
+                LM2GM(&topk_ids_update, topk_ids + i, sizeof(int64_t));
+                stop_flags_int_sm[i] = 1;
+            }
+
+        }
+    }
+  }
+  sync_all();
+  sync_cluster();
+  int stop_sum = 0;
+  if (cid == 0) {
+    for (int i = 0; i < max_bsz; i++) {
+      stop_sum += stop_flags_int_sm[i];
+    }
+    // printf("stop_sum : %d\n", stop_sum);
+    int64_t stop_num;
+    GM2LM(stop_nums, &stop_num, sizeof(int64_t));
+    bool not_need_stop_update = stop_sum < static_cast<int>(stop_num);
+    mfence_lm();
+    LM2GM(&not_need_stop_update, not_need_stop, sizeof(bool));
   }
 }
 

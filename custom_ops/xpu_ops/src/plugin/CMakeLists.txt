@@ -181,7 +181,7 @@ macro(
       ${XPU_CLANG} -std=c++11 ${OPT_LEVEL} ${arg_device_o_extra_flags} -c
       ${kernel_path} -D ${xpu_n_macro} --target=${TARGET_ARCH} ${HOST_XPU_FLAGS}
       --basename ${kernel_name} -fno-builtin --xpu-arch=${xpu_n} -fPIC
-      -Wno-int-to-void-pointer-cast -Wno-int-to-pointer-cast -Werror -mllvm -fix-mfence=all -mllvm
+      -Wno-int-to-void-pointer-cast -Wno-int-to-pointer-cast -Werror -mllvm
       --xpu-inline-cost -mllvm --xpu-inline-hot-call -I${XDNN_INC_DIR} -I${XRE_INC_DIR}
       -fxpu-launch-return
       -I${CMAKE_CURRENT_SOURCE_DIR}/include -I${CMAKE_CURRENT_SOURCE_DIR}/src

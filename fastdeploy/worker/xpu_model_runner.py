@@ -114,6 +114,17 @@ def xpu_pre_process(
     ) = get_infer_param(seq_lens_encoder, seq_lens_decoder)
 
     # Adjust batch
+    # print(f"=========================adjust_batch 更新前=========================")
+    # print(f"ids_remove_padding : {ids_remove_padding}")
+    # print(f"cum_offsets : {cum_offsets}")
+    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
+    # print(f"xpu_forward_meta.encoder_batch_idx: {xpu_forward_meta.encoder_batch_idx}")
+    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
+    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
+    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.encoder_batch_map}")
+    # print(f"xpu_forward_meta.dec_batch : {xpu_forward_meta.decoder_batch_map}")
 
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
@@ -129,6 +140,16 @@ def xpu_pre_process(
         None,  # output_padding_offset
         -1,  # max_input_length
     )
+    # print(f"=========================adjust_batch 更新后=========================")
+    # print(f"ids_remove_padding : {ids_remove_padding}")
+    # print(f"cum_offsets : {cum_offsets}")
+    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
+    # print(f"xpu_forward_meta.encoder_batch_idx: {xpu_forward_meta.encoder_batch_idx}")
+    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
+    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
+    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.encoder_batch_map}")
 
     adjusted_input = adjusted_input.squeeze(1)
 
@@ -202,6 +223,22 @@ def xpu_post_process(
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER and not skip_save_output:
+
+            # print(f"============================================update_inputs_v1 更新前=========================================")
+            # print(f"model_output.stop_flags : {model_output.stop_flags}")
+            # print(f"model_output.not_need_stop : {model_output.not_need_stop}")
+            # print(f"model_output.seq_lens_this_time : {model_output.seq_lens_this_time}")
+            # print(f"model_output.seq_lens_encoder : {model_output.seq_lens_encoder}")
+            # print(f"model_output.seq_lens_decoder : {model_output.seq_lens_decoder}")
+            # print(f"share_inputs['step_seq_lens_decoder'] : {share_inputs['step_seq_lens_decoder']}")
+            # print(f"share_inputs['prompt_lens'] : {share_inputs['prompt_lens']}")
+            # print(f"sampled_token_ids : {sampled_token_ids}")
+            # print(f"model_output.input_ids : {model_output.input_ids}")
+            # print(f"model_output.stop_nums : {model_output.stop_nums}")
+            # print(f"model_output.next_tokens : {model_output.next_tokens}")
+            # print(f"model_output.is_block_step : {model_output.is_block_step}")
+            # print(f"share_inputs['block_tables'] : {share_inputs['block_tables']}")
+            # print(f"block_size : {block_size}")
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,
@@ -218,6 +255,21 @@ def xpu_post_process(
                 model_output.is_block_step,
                 block_size,
             )
+            # print(f"============================================update_inputs_v1 更新后=========================================")
+            # print(f"model_output.stop_flags : {model_output.stop_flags}")
+            # print(f"model_output.not_need_stop : {model_output.not_need_stop}")
+            # print(f"model_output.seq_lens_this_time : {model_output.seq_lens_this_time}")
+            # print(f"model_output.seq_lens_encoder : {model_output.seq_lens_encoder}")
+            # print(f"model_output.seq_lens_decoder : {model_output.seq_lens_decoder}")
+            # print(f"share_inputs['step_seq_lens_decoder'] : {share_inputs['step_seq_lens_decoder']}")
+            # print(f"share_inputs['prompt_lens'] : {share_inputs['prompt_lens']}")
+            # print(f"sampled_token_ids : {sampled_token_ids}")
+            # print(f"model_output.input_ids : {model_output.input_ids}")
+            # print(f"model_output.stop_nums : {model_output.stop_nums}")
+            # print(f"model_output.next_tokens : {model_output.next_tokens}")
+            # print(f"model_output.is_block_step : {model_output.is_block_step}")
+            # print(f"share_inputs['block_tables'] : {share_inputs['block_tables']}")
+            # print(f"block_size : {block_size}")
         else:
             update_inputs(
                 model_output.stop_flags,
