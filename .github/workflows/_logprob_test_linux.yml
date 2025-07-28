@@ -117,13 +117,10 @@ jobs:
 
           cd PaddleTest/framework/ServeTest
           python3.10 deploy.py > dd.log 2>&1 &
-
           sleep 3
           curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
               -H "Content-Type: application/json" \
-              -d \'{
-                  "--model": "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
-              }\'
+              -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
 
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
           set +e
