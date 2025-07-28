@@ -164,14 +164,19 @@ class Ernie4_5_MoE(nn.Layer):
                 intermediate_size=shared_experts_hidden_dim,
                 prefix=f"{prefix}.shared_experts",
             )
+        self.fd_config = fd_config
 
     def load_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict)
+        if self.fd_config.parallel_config.ep_rank >= 0:
+            self.fused_moe.load_state_dict(state_dict)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
-        out = self.fused_moe(hidden_states)
+        if self.fd_config.parallel_config.ep_rank >= 0:
+            out = self.fused_moe(hidden_states)
+        else:
+            out = hidden_states
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -435,7 +440,8 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
+            pass
+            #self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
         self,

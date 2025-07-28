@@ -166,6 +166,10 @@ class ParallelConfig:
         self.tensor_parallel_size = 1  # TP degree
         self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
+        import paddle
+        self.moe_ep_group = paddle.distributed.new_group([8, 9, 10, 11, 12, 13, 14, 15])
+        self.ep_rank = paddle.distributed.get_rank(self.moe_ep_group)
+
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
         # but hidden_size can, we can consider split embedding weight by column.

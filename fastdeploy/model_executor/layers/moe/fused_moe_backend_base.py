@@ -66,7 +66,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.fd_config.model_config.redundant_experts_num,
                 )
             else:
-                if layer.fd_config.parallel_config.moe_phase == "prefill":
+                if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
                     from .ep import EPPrefillRunner
 
                     self.ep_prefill_runner = EPPrefillRunner(
@@ -164,7 +164,7 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
+            if layer.fd_config.parallel_config.moe_phase.phase == "prefill" and False:
                 return self.apply_ep_prefill(layer, x, gate_out)
             else:
                 return self.apply_ep_decode(layer, x, gate_out)

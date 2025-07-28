@@ -613,18 +613,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     parallel_config.tensor_parallel_size = args.tensor_parallel_size
     parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
     parallel_config.expert_parallel_size = args.expert_parallel_size
+    
+    # Note(ZKK):
+    # moe_ep_group indicates which cards we need to run MoE on
+    # at now moe_ep_group equals world!
+    ep_rank = parallel_config.ep_rank
+
     # config for EP
-    if args.expert_parallel_size > 1:
-        expert_parallel_rank = int(local_rank / args.tensor_parallel_size)
+    if args.expert_parallel_size > 1 and ep_rank >= 0:
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
 
         num_experts_per_rank = num_experts // args.expert_parallel_size
-        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        num_experts_start_offset = ep_rank * num_experts_per_rank
 
-        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.expert_parallel_rank = ep_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 

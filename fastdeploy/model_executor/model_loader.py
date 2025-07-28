@@ -116,6 +116,19 @@ class DefaultModelLoader(BaseModelLoader):
             fd_config,
             return_numpy=True,
         )
+
+        # for key in list(state_dict.keys()):
+        #     for j in range(5,100):
+        #         name = f"ernie.layers.{j}."
+        #         if name in key:
+        #             state_dict.pop(key)     
+
+        rank = paddle.distributed.get_rank()
+        # paddle.save(state_dict, f'/root/paddlejob/workspace/env_run/output/tmp_{rank}')
+        # exit(0)
+        # state_dict = paddle.load(f'/root/paddlejob/workspace/env_run/output/tmp_{rank}', return_numpy=False)
+
+
         model.set_state_dict(state_dict)
         self.clean_memory_fragments(state_dict)
         return model

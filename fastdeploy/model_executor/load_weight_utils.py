@@ -92,6 +92,14 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
         return base_range
 
     for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
+
+
+        moe_ep_group = paddle.distributed.new_group([8, 9, 10, 11, 12, 13, 14, 15])
+        ep_rank = paddle.distributed.get_rank(moe_ep_group)
+        if ep_rank < 0:
+            num_local_ffn_keys = []
+            continue
+
         for j in get_expert_ranges(fd_config):
             up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
             down_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight"
