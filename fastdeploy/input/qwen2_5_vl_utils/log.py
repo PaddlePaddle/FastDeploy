@@ -17,7 +17,6 @@ import functools
 import logging
 import threading
 import time
-
 import colorlog
 
 loggers = {}

@@ -20,7 +20,6 @@ PPMIX_HOME              -->  the root directory for storing PaddleMIX related da
 """
 import os
 import random
-
 import numpy as np
 import paddle
 import paddle.distributed as dist

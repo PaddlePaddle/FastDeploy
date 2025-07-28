@@ -16,7 +16,6 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 
-
 def disabled_train(mode="train"):
     return
 

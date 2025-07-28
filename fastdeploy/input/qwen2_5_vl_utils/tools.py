@@ -15,6 +15,7 @@
 import paddle
 
 
+
 def compare_version(version, pair_version):
     """
     Args:

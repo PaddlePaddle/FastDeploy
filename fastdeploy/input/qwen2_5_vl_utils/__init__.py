@@ -16,7 +16,6 @@ import contextlib
 
 import paddle
 
-
 @contextlib.contextmanager
 def device_guard(device="cpu", dev_id=0):
     origin_device = paddle.device.get_device()

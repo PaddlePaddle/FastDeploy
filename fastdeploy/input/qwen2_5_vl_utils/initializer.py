@@ -17,7 +17,6 @@ Ths copyright of pytorch/pytorch is a BSD-style license, as found in the LICENSE
 """
 
 import math
-
 import numpy as np
 import paddle
 import paddle.nn as nn

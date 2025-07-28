@@ -52,6 +52,7 @@ from paddleformers.transformers.tokenizer_utils_base import (
     TextInput,
     TruncationStrategy,
 )
+
 from PIL import Image
 
 # from ppdiffusers.utils import logging
