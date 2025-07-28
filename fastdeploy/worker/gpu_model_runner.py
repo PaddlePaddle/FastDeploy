@@ -1318,7 +1318,9 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
-        self.tmp_seq_lens_this_time[:num_running_requests] = copy.deepcopy(self.share_inputs["seq_lens_this_time"])
+        self.tmp_seq_lens_this_time[:num_running_requests].copy_(
+            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+        )
         return None
 
     def _add_cache(self, model_forward_batch) -> None:

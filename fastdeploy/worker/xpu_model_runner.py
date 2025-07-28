@@ -714,7 +714,9 @@ class XPUModelRunner(ModelRunnerBase):
             self.cache_config.block_size,
             self.cache_config.enc_dec_block_num,
         )
-        self.tmp_seq_lens_this_time[:num_running_requests] = copy.deepcopy(self.share_inputs["seq_lens_this_time"])
+        self.tmp_seq_lens_this_time[:num_running_requests].copy_(
+            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+        )
 
         return None
 

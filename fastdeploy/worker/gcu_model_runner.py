@@ -280,9 +280,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts)
-        self.share_inputs["seq_lens_this_time"][:num_running_requests] = self.tmp_seq_lens_this_time[
-            :num_running_requests
-        ]
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
@@ -1016,7 +1014,9 @@ class GCUModelRunner(ModelRunnerBase):
 
         self._update_chunked_prefill(model_forward_batch)
         self._add_cache(model_forward_batch)
-        self.tmp_seq_lens_this_time[:num_running_requests] = copy.deepcopy(self.share_inputs["seq_lens_this_time"])
+        self.tmp_seq_lens_this_time[:num_running_requests].copy_(
+            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+        )
         return None
 
     def _add_cache(self, model_forward_batch) -> None:
