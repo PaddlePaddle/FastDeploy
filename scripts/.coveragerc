@@ -1,0 +1,16 @@
+[run]
+source = fastdeploy
+parallel = True
+
+[paths]
+source =
+    fastdeploy
+    */site-packages/fastdeploy
+    */lib/python3.10/site-packages/fastdeploy
+    */fastdeploy
+
+[report]
+omit =
+    */site-packages/*/tests/*
+    */site-packages/setuptools/*
+    */dist-packages/*

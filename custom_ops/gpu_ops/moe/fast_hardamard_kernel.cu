@@ -718,7 +718,6 @@ void MoeFastHardamardImplWrapper(const T *x,
     dim,
     reinterpret_cast<out_type*>(out)
   );
-  CUDA_CHECK(cudaDeviceSynchronize());
 }
 
 template <typename T, typename OutT>

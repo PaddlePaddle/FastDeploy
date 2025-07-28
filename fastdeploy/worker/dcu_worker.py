@@ -89,9 +89,7 @@ class DcuWorker(GpuWorker):
         paddle.device.cuda.empty_cache()
         paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
         available_kv_cache_memory = (
-            total_gpu_memory * self.parallel_config.gpu_memory_utilization
-            - after_used_gpu_memory
-            - paddle_peak_increase
+            total_gpu_memory * self.cache_config.gpu_memory_utilization - after_used_gpu_memory - paddle_peak_increase
         )
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 

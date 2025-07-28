@@ -113,7 +113,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.num_heads = num_heads
         self.head_dim = fd_config.model_config.head_dim
         self.attn_outputsize_tp = self.num_heads * self.head_dim
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         self.speculative_method = fd_config.speculative_config.method
