@@ -41,7 +41,7 @@ from .tools import get_env_device
 from .activations import ACT2FN
 from .configuration_qwen2_5_vl import Qwen2_5_VLConfig, Qwen2_5_VLVisionConfig
 
-from .logging import get_logger
+from fastdeploy.logging import get_logger
 logger = get_logger(__name__)
 
 flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()

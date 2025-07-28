@@ -15,7 +15,7 @@
 import paddle
 
 # import log
-from .logging import get_logger
+from fastdeploy.logging import get_logger
 logger = get_logger(__name__)
 
 
