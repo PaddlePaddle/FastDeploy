@@ -63,10 +63,10 @@ class RepetitionEarlyStopper(EarlyStopper):
             - next_tokens: [batch_size, 1], stop part will be replaced by eos_token_id
         """
         # It will use naive execute if there is no triton support, otherwise use triton
-        # try:
-        return self.process_triton(probs, next_tokens, eos_token_id)
-        # except Exception:
-        #     return self.process_normal(probs, next_tokens, eos_token_id)
+        try:
+            return self.process_triton(probs, next_tokens, eos_token_id)
+        except Exception:
+            return self.process_normal(probs, next_tokens, eos_token_id)
 
     def process_normal(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
         # Get the probability score corresponding to next_tokens in this step

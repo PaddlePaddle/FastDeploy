@@ -361,8 +361,7 @@ async def benchmark(
 
     if not test_output.success:
         raise ValueError(
-            "Initial test run failed - Please make sure benchmark arguments "
-            f"are correctly specified. Error: {test_output.error}"
+            f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
         )
     else:
         print("Initial test run completed. Starting main benchmark run...")
