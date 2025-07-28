@@ -630,14 +630,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     load_config = LoadConfig(vars(args))
 
-    graph_opt_config = GraphOptimizationConfig()
-    if args.graph_optimization_config is not None:
-        graph_opt_config = GraphOptimizationConfig(
-            use_cudagraph=args.graph_optimization_config["use_cudagraph"],
-            graph_opt_level=args.graph_optimization_config["graph_opt_level"],
-            cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"],
-            sot_warmup_sizes=args.graph_optimization_config["sot_warmup_sizes"],
-        )
+    graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
