@@ -659,7 +659,7 @@ class XPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
         """
         # 1. Prepare inputs of model and decoder.
-        self._prepare_inputs(num_running_requests)
+        self._prepare_inputs()
 
         # 2. Padding inputs for cuda grph
 
