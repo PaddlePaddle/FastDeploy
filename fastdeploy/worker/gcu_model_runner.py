@@ -317,7 +317,7 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-            self.share_inputs["seq_lens_this_time"] = self.tmp_seq_lens_this_time
+        self.share_inputs["seq_lens_this_time"] = self.tmp_seq_lens_this_time
 
     def _init_share_inputs(self, max_num_seqs: int):
         """
