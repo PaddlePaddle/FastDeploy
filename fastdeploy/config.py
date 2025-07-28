@@ -186,12 +186,8 @@ class ParallelConfig:
         self.dtype: str = "bfloat16"
         # Encoder's decoder num
         self.enc_dec_block_num: int = 1
-        # KV cache ratio for input
-        self.kv_cache_ratio: float = 0.7
         # First token id
         self.first_token_id: int = 1
-        # Gpu memory utilization
-        self.gpu_memory_utilization: float = 0.9
         # Process ID of engine
         self.engine_pid: Optional[int] = None
         # Do profile or not
@@ -200,12 +196,8 @@ class ParallelConfig:
         self.pad_token_id: int = -1
         #
         self.eos_tokens_lens: int = 2
-        # Enable chunked prefill
-        self.enable_chunked_prefill: bool = False
 
         self.max_num_batched_tokens: int = 2048
-        # enable prefix cache
-        self.enable_prefix_caching = None
         # splitwise role
         self.splitwise_role: str = "mixed"
         # guided decoding backend
@@ -440,10 +432,153 @@ class LoRAConfig:
     pass
 
 
-class KVCacheConfig:
-    """KV Cache Config"""
+class CacheConfig:
+    """
+    Configuration for the KV cache.
 
-    cache_quant_dtype: str = "none"
+    Attributes:
+        block_size (int): Size of a cache block in number of tokens.
+        gpu_memory_utilization (float): Fraction of GPU memory to use for model execution.
+        cache_dtype (str): Data type for kv cache storage. Default is 'bfloat16'.
+        num_gpu_blocks_override (Optional[int]): Number of GPU blocks to use.
+        Overrides profiled num_gpu_blocks if provided.
+        kv_cache_ratio (float): Ratio for calculating the maximum block number.
+        enc_dec_block_num (int): Number of encoder-decoder blocks.
+        prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
+        enable_prefix_caching (bool): Flag to enable prefix caching.
+    """
+
+    def __init__(self, args):
+        """
+        Initialize the CacheConfig class.
+
+        Args:
+            block_size (int): Size of a cache block in number of tokens.
+            gpu_memory_utilization (float): Fraction of GPU memory to use.
+            cache_dtype (str): Data type for cache storage. Default is 'bfloat16'.
+            num_gpu_blocks_override (Optional[int]): Override for number of GPU blocks.
+            num_cpu_blocks (Optional[int]): Number of CPU blocks.
+            kv_cache_ratio (float): Ratio for max block calculation.
+            enc_dec_block_num (int): Number of encoder-decoder blocks.
+            prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
+            enable_prefix_caching (bool): Enable prefix caching.
+        """
+        self.block_size = 64
+        self.gpu_memory_utilization = 0.9
+        self.num_gpu_blocks_override = None
+        self.kv_cache_ratio = 0.75
+        self.enc_dec_block_num = 2
+        self.prealloc_dec_block_slot_num_threshold = 5
+        self.cache_dtype = "bfloat16"
+        self.model_cfg = None
+        self.enable_chunked_prefill = False
+        self.rdma_comm_ports = None
+        self.cache_transfer_protocol = None
+        self.pd_comm_port = None
+        self.enable_prefix_caching = False
+        self.enable_ssd_cache = False
+        self.cache_queue_port = None
+        self.swap_space = None
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+        if self.rdma_comm_ports is not None and isinstance(self.rdma_comm_ports, str):
+            self.rdma_comm_ports = self.rdma_comm_ports.split(",")
+
+        if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
+            self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
+
+        if self.swap_space is None:
+            self.enable_hierarchical_cache = False
+        else:
+            self.enable_hierarchical_cache = True
+
+        if self.model_cfg is not None:
+            if hasattr(self.model_cfg, "quantization_config"):
+                self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
+            if (
+                hasattr(self.model_cfg, "num_key_value_heads")
+                and hasattr(self.model_cfg, "num_key_value_heads")
+                and self.model_cfg.num_key_value_heads is not None
+                and int(self.model_cfg.num_key_value_heads) > 0
+            ):
+                kv_num_head = int(self.model_cfg.num_key_value_heads)
+            else:
+                kv_num_head = self.model_cfg.num_attention_heads
+            self.model_cfg.kv_num_head = kv_num_head
+            # TODO check name
+            if "int4" in self.cache_dtype.lower() or "float4" in self.cache_dtype.lower():
+                byte_size = 0.5
+                self.cache_dtype = "uint8"
+            elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
+                self.cache_dtype = "uint8"
+                byte_size = 1
+            else:
+                byte_size = 2
+            self.each_token_cache_space = int(
+                self.model_cfg.num_layers * kv_num_head * self.model_cfg.head_dim * byte_size
+            )
+            self.bytes_per_block = int(self.each_token_cache_space * self.block_size)
+            self.bytes_per_layer_per_block = int(
+                self.block_size
+                * self.model_cfg.kv_num_head
+                * self.model_cfg.head_dim
+                // args["tensor_parallel_size"]
+                * byte_size
+            )
+
+        if self.swap_space is None:
+            self.num_cpu_blocks = 0
+        else:
+            self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+        self._verify_args()
+
+    def metrics_info(self):
+        """Convert cache_config to dict(key: str, value: str) for prometheus metrics info."""
+        return {key: str(value) for key, value in self.__dict__.items()}
+
+    def _verify_args(self):
+        if self.gpu_memory_utilization > 1.0:
+            raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
+        if self.kv_cache_ratio > 1.0:
+            raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
+
+    def postprocess(self, num_total_tokens, number_of_tasks):
+        """
+        calculate block num
+        """
+        self.dec_token_num = self.enc_dec_block_num * self.block_size
+        if self.num_gpu_blocks_override is not None:
+            self.total_block_num = self.num_gpu_blocks_override
+            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+        else:
+            length = num_total_tokens // number_of_tasks
+            block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
+            self.total_block_num = block_num * number_of_tasks
+            self.prefill_kvcache_block_num = self.total_block_num
+            logger.info(f"Doing profile, the total_block_num:{self.total_block_num}")
+
+    def reset(self, num_gpu_blocks):
+        """
+        reset gpu block number
+        """
+        self.total_block_num = num_gpu_blocks
+        self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+        logger.info(
+            f"Reset block num, the total_block_num:{self.total_block_num},"
+            f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
+        )
+
+    def print(self):
+        """
+        print all config
+
+        """
+        logger.info("Cache Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class DecodingConfig:
@@ -477,7 +612,7 @@ class FDConfig:
     quant_config: Optional[QuantConfigBase] = None
     graph_opt_config: Optional[GraphOptimizationConfig] = None
     decoding_config: DecodingConfig = field(default=None, init=True)  # type: ignore
-    kv_cache_config: KVCacheConfig = field(default=None, init=True)  # type: ignore
+    cache_config: CacheConfig = field(default=None, init=True)  # type: ignore
 
     def __post_init__(self):
         # Initialize cuda graph capture list

@@ -25,6 +25,7 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 
 from fastdeploy.config import (
+    CacheConfig,
     DecodingConfig,
     DeviceConfig,
     ErnieArchitectures,
@@ -140,6 +141,7 @@ class PaddleDisWorkerProc:
         self.local_rank = local_rank
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
+        self.cache_config = fd_config.cache_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -404,7 +406,7 @@ class PaddleDisWorkerProc:
 
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
-        if self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
                 name="launched_cache_manager_signal",
@@ -607,6 +609,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(vars(args))
     parallel_config = ParallelConfig(vars(args))
+    cache_config = CacheConfig(vars(args))
     parallel_config.tensor_parallel_size = args.tensor_parallel_size
     parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
     parallel_config.expert_parallel_size = args.expert_parallel_size
@@ -707,6 +710,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
+        cache_config=cache_config,
     )
     update_fd_config_for_mm(fd_config)
 

@@ -104,7 +104,7 @@ class XpuWorker(WorkerBase):
         self.model_runner.prepare_profile()
         self.model_runner.profile_run()
 
-        total_available_memory = int(total_memory * self.parallel_config.gpu_memory_utilization)
+        total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
         used_memory = xpu_get_used_global_memory(self.local_rank)
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
