@@ -15,8 +15,8 @@
 import paddle
 
 # import log
-
-# logger = log.get_logger(__name__)
+from .logging import get_logger
+logger = get_logger(__name__)
 
 
 # test if flash attention is available

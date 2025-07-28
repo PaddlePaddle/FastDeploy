@@ -37,12 +37,12 @@ from .bert_padding import (
     unpad_input,
 )
 from .tools import get_env_device
-# import log
 
 from .activations import ACT2FN
 from .configuration_qwen2_5_vl import Qwen2_5_VLConfig, Qwen2_5_VLVisionConfig
 
-# logger = log.get_logger(__name__)
+from .logging import get_logger
+logger = get_logger(__name__)
 
 flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()
 
@@ -240,10 +240,10 @@ class Qwen2_5_VLRotaryEmbedding(nn.Layer):
         # TODO (joao): remove the `if` below, only used for BC
         self.rope_kwargs = {}
         if config is None:
-            # logger.warning_once(
-            #     "`Qwen2_5_VLRotaryEmbedding` can now be fully parameterized by passing the model config through the "
-            #     "`config` argument. All other arguments will be removed in v4.46"
-            # )
+            logger.warning_once(
+                "`Qwen2_5_VLRotaryEmbedding` can now be fully parameterized by passing the model config through the "
+                "`config` argument. All other arguments will be removed in v4.46"
+            )
             self.rope_kwargs = {
                 "rope_type": rope_type,
                 "factor": scaling_factor,
@@ -773,12 +773,11 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
         self.config = config
         self.layer_idx = layer_idx
         if layer_idx is None:
-            # logger.warning_once(
-            #     f"Instantiating {self.__class__.__name__} without passing `layer_idx` is not recommended and will "
-            #     "to errors during the forward call, if caching is used. Please make sure to provide a `layer_idx` "
-            #     "when creating this class."
-            # )
-            pass
+            logger.warning_once(
+                f"Instantiating {self.__class__.__name__} without passing `layer_idx` is not recommended and will "
+                "to errors during the forward call, if caching is used. Please make sure to provide a `layer_idx` "
+                "when creating this class."
+            )
 
         self.hidden_size = config.hidden_size
         self.num_heads = config.num_attention_heads
@@ -1201,9 +1200,9 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
         position_embeddings: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         if output_attentions:
-            # logger.warning_once(
-            #     'Qwen2_5_VLModel is using Qwen2_5_VLSdpaAttention, but `paddle.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to the manual attention implementation, but specifying the manual implementation will be required from Transformers version v5.0.0 onwards. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
-            # )
+            logger.warning_once(
+                'Qwen2_5_VLModel is using Qwen2_5_VLSdpaAttention, but `paddle.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to the manual attention implementation, but specifying the manual implementation will be required from Transformers version v5.0.0 onwards. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
+            )
             return super().forward(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
@@ -1313,11 +1312,11 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
         self.hidden_size = config.hidden_size
         # use_sliding_window false
         if config.use_sliding_window and config.attn_implementation != "flash_attention_2":
-            # logger.warning_once(
-            #     f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
-            #     "unexpected results may be encountered."
-            # )
-            pass
+            logger.warning_once(
+                f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
+                "unexpected results may be encountered."
+            )
+
         self.self_attn = QWEN2_5_VL_ATTENTION_CLASSES[config._attn_implementation](config, layer_idx)
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -1899,7 +1898,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
     @classmethod
     def _get_tensor_parallel_mappings(cls, config: Qwen2_5_VLConfig, is_split=True):
 
-        # logger.info("Qwen2 inference model _get_tensor_parallel_mappings")
+        logger.info("Qwen2 inference model _get_tensor_parallel_mappings")
 
         from paddlenlp.transformers.conversion_utils import split_or_merge_func
 
