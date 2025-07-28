@@ -131,7 +131,7 @@ jobs:
           if [ -f ${diff_cov_file} ];then
             python ${push_file} ${diff_cov_file} ${target_path}
             target_path_stripped="${target_path#paddle-github-action/}"
-            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
+            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${diff_cov_file}
             echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
           fi
       - name: Determine Unit Succ and whether the coverage rate reaches 90%
