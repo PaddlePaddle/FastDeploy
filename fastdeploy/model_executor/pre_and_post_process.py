@@ -19,7 +19,7 @@ from typing import Dict, Optional
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.engine.config import SpeculativeConfig
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
