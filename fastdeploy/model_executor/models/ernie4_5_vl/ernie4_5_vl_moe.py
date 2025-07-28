@@ -472,15 +472,13 @@ class Ernie4_5_VLModel(nn.Layer):
 
         # -----------------------
         max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
-        score_text = hidden_states[~image_mask].cast("float32")
-
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
             image_token_num.cast("int32"),
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
-            score_text,
+            hidden_states.cast("float32"),
         ).cast(self._dtype)
         # -----------------------
 
