@@ -40,7 +40,7 @@ std::vector<paddle::Tensor> MobaAttention(
         const int moba_use_decoder_seq_limit,
         const bool moba_use_mlp,
         const std::string &cache_quant_type_str) {
-    
+
     paddle::Tensor out = paddle::empty({qkv.dims()[0], head_num * head_dim}, qkv.dtype(), qkv.place());
     if (max_dec_len_this_time > 0) {
         gqa_attention::WriteDecoderCacheKV(
@@ -48,7 +48,7 @@ std::vector<paddle::Tensor> MobaAttention(
             q_input,
             cu_seq_q,
             cu_seq_k,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             key_cache,
             value_cache,
@@ -71,7 +71,7 @@ std::vector<paddle::Tensor> MobaAttention(
         auto qk_gate_weight = moba::MobaQKGemm(
             q_input,
             k_block_means,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             cu_seq_k,
@@ -85,7 +85,7 @@ std::vector<paddle::Tensor> MobaAttention(
 
         auto qk_gate_topk_idx = moba::QkSortDecoder(
             qk_gate_weight,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             head_num,
             kv_head_num,
@@ -96,7 +96,7 @@ std::vector<paddle::Tensor> MobaAttention(
 
         gqa_attention::GqaAttention(
             q_input,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             key_cache,
@@ -130,7 +130,7 @@ std::vector<paddle::Tensor> MobaAttention(
             k_input,
             v_input,
             rope_sin_cos,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             cu_seq_k,
@@ -148,7 +148,7 @@ std::vector<paddle::Tensor> MobaAttention(
             k_input,
             v_input,
             cu_seq_k,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             key_cache,
             value_cache,
@@ -170,7 +170,7 @@ std::vector<paddle::Tensor> MobaAttention(
             k_input,
             v_input,
             cu_seq_k,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             key_cache,
             value_cache,
@@ -193,7 +193,7 @@ std::vector<paddle::Tensor> MobaAttention(
             paddle::Tensor k_gate_mlp = moba::MobaMlpEinsum(
                 k_input,
                 attn_gate_weight.get(),
-                seq_len_encoder, 
+                seq_len_encoder,
                 seq_len_decoder,
                 cu_seq_k,
                 max_seq_len,
@@ -205,7 +205,7 @@ std::vector<paddle::Tensor> MobaAttention(
         auto qk_gate_weight = moba::MobaQKGemm(
             q_input,
             k_block_means,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             cu_seq_k,
@@ -220,7 +220,7 @@ std::vector<paddle::Tensor> MobaAttention(
 
         auto qk_gate_topk_idx = moba::QkSortEncoder(
             qk_gate_weight,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             cu_seq_k,
@@ -242,7 +242,7 @@ std::vector<paddle::Tensor> MobaAttention(
             cu_seq_q,
             cu_seq_k,
             cu_seq_q_pack,
-            seq_len_encoder, 
+            seq_len_encoder,
             seq_len_decoder,
             out,
             max_enc_len_this_time,
@@ -299,12 +299,12 @@ PD_BUILD_OP(moba_attention)
         "moba_use_mlp: bool",
         "cache_quant_type_str: std::string"})
     .Outputs({
-        "out", 
-        "q_input_out", 
-        "k_input_out", 
-        "v_input_out", 
-        "key_cache_out", 
-        "value_cache_out", 
+        "out",
+        "q_input_out",
+        "k_input_out",
+        "v_input_out",
+        "key_cache_out",
+        "value_cache_out",
         "k_block_means_out"})
     .SetInplaceMap({{"q_input", "q_input_out"},
                     {"k_input", "k_input_out"},

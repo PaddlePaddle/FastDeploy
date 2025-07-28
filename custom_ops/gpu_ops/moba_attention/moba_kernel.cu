@@ -15,7 +15,7 @@ std::vector<paddle::Tensor> DispatchQkSortDecoder(
         const int top_k_left,
         const int top_k_right,
         const int use_moba_seq_limit) {
-    
+
     constexpr int kMobaBlockSize = 128;
     constexpr int kMaxN = 1024;
 
@@ -47,33 +47,33 @@ std::vector<paddle::Tensor> QkSortDecoder(
         const int top_k_left,
         const int top_k_right,
         const int use_moba_seq_limit) {
-    
+
     if (qk_gate_weight.dtype() == paddle::DataType::FLOAT16) {
         return std::move(
             DispatchQkSortDecoder<phi::dtype::float16>(
-                qk_gate_weight, 
-                seq_len_encoder, 
-                seq_len_decoder, 
-                head_num, 
-                kv_head_num, 
-                top_k_left, 
-                top_k_right, 
+                qk_gate_weight,
+                seq_len_encoder,
+                seq_len_decoder,
+                head_num,
+                kv_head_num,
+                top_k_left,
+                top_k_right,
                 use_moba_seq_limit)
         );
     } else if (qk_gate_weight.dtype() == paddle::DataType::BFLOAT16) {
         return std::move(
             DispatchQkSortDecoder<phi::dtype::bfloat16>(
-                qk_gate_weight, 
-                seq_len_encoder, 
-                seq_len_decoder, 
-                head_num, 
-                kv_head_num, 
-                top_k_left, 
-                top_k_right, 
+                qk_gate_weight,
+                seq_len_encoder,
+                seq_len_decoder,
+                head_num,
+                kv_head_num,
+                top_k_left,
+                top_k_right,
                 use_moba_seq_limit)
         );
     }
-    
+
 }
 
 
@@ -179,14 +179,14 @@ std::vector<paddle::Tensor> QkSortEncoder(
                 use_moba_seq_limit
             )
         );
-    }       
+    }
 }
 
 template <typename T>
 std::vector<paddle::Tensor> DispatchMobaQKGemm(
         const paddle::Tensor& q_input,
         const paddle::Tensor& k_block_means,
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cu_seq_k,
@@ -196,7 +196,7 @@ std::vector<paddle::Tensor> DispatchMobaQKGemm(
         const int kv_head_num,
         const bool is_split_kv,
         const int use_moba_seq_limit) {
-    
+
     constexpr int kMobaBlockSize = 128;
     constexpr int kMaxN = 1024;
     const int batch_size = seq_len_encoder.dims()[0];
@@ -247,7 +247,7 @@ std::vector<paddle::Tensor> DispatchMobaQKGemm(
 std::vector<paddle::Tensor> MobaQKGemm(
         const paddle::Tensor& q_input,
         const paddle::Tensor& k_block_means,
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cu_seq_k,
@@ -257,7 +257,7 @@ std::vector<paddle::Tensor> MobaQKGemm(
         const int kv_head_num,
         const bool is_split_kv,
         const int use_moba_seq_limit) {
-    
+
     if (q_input.dtype() == paddle::DataType::FLOAT16) {
         return std::move(
             DispatchMobaQKGemm<phi::dtype::float16>(
@@ -303,8 +303,8 @@ PD_BUILD_OP(moba_qk_gemm)
         "k_block_means",
         "seq_len_encoder",
         "seq_len_decoder",
-        "cu_seq_q", 
-        "cu_seq_k", 
+        "cu_seq_q",
+        "cu_seq_k",
         "max_seq_q",
         "max_seq_k"})
     .Attrs({
@@ -320,7 +320,7 @@ PD_BUILD_OP(moba_qk_sort_encoder)
         "qk_gate_weight",
         "seq_len_encoder",
         "seq_len_decoder",
-        "cu_seq_q", 
+        "cu_seq_q",
         "cu_seq_k",
         "cu_seq_q_pack",
         "q_pack_tokens",

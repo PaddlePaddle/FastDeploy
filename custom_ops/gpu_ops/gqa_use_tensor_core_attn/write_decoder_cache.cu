@@ -22,7 +22,7 @@ __global__ void write_decoder_cachekv_c16(
         const int kv_head_num,
         const int max_blocks_per_seq,
         const int max_input_length) {
-    
+
     int bidh = blockIdx.x;
     const int bidb = blockIdx.y;
     const int tidx = threadIdx.x;
@@ -55,7 +55,7 @@ __global__ void write_decoder_cachekv_c16(
         sin.load_from(sin_rope);
         cos.load_from(cos_rope);
         moba::apply_rotary_embedding<T, kPackSize>(src, cos, sin);
-        
+
         src.store_to(q_input + cu_seq_q[bidb] * head_num * kHeadDim + bias_idx);
     } else if (bidh < head_num + kv_head_num) {
         bidh -= head_num;
@@ -100,7 +100,7 @@ void WriteDecoderCacheKV(
         const paddle::Tensor& q_input,
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cu_seq_k,
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& cache_k,
         const paddle::Tensor& cache_v,
@@ -119,7 +119,7 @@ void WriteDecoderCacheKV(
         const int head_dim,
         const int max_input_length,
         const std::string &cache_quant_type_str) {
-    
+
     constexpr int kThreads = 32;
     constexpr int kHeadDim = 128;
     constexpr int kMobaBlockSize = 128;
@@ -180,11 +180,11 @@ PD_BUILD_OP(gqa_attention_write_decoder_cache_kv)
         "qkv_out",
         "q_input",
         "cu_seq_q",
-        "cu_seq_k",   
+        "cu_seq_k",
         "seq_len_encoder",
         "seq_len_decoder",
-        "cache_k", 
-        "cache_v", 
+        "cache_k",
+        "cache_v",
         "block_tables",
         "rope_sin_cos",
         "k_block_means",
@@ -205,5 +205,3 @@ PD_BUILD_OP(gqa_attention_write_decoder_cache_kv)
     .SetInplaceMap({{"cache_k", "cache_k_out"},
                     {"cache_v", "cache_v_out"}})
     .SetKernelFn(PD_KERNEL(gqa_attention::WriteDecoderCacheKV));
-
-

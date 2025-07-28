@@ -70,12 +70,12 @@ struct CollectiveMainloopFwd {
                                                make_stride(get<1>(TileShape_MNK{}), _1{}, Int<size(SmemLayoutV{}(_, _, _0{}))>{}))));
     using SmemLayoutO = typename Ktraits::SmemLayoutO;
     using SmemCopyAtomO = typename Ktraits::SmemCopyAtomO;
-    
+
     using TMA_Q = decltype(make_tma_copy(
         GmemTiledCopyQ{},
         make_tensor(
-            make_gmem_ptr(static_cast<Element const*>(nullptr)), 
-            repeat_like(StrideT{}, int32_t(0)), 
+            make_gmem_ptr(static_cast<Element const*>(nullptr)),
+            repeat_like(StrideT{}, int32_t(0)),
             StrideT{}
         ),
         SmemLayoutQ{},
@@ -85,8 +85,8 @@ struct CollectiveMainloopFwd {
     using TMA_KV = decltype(make_tma_copy(
         GmemTiledCopyKV{},
         make_tensor(
-            make_gmem_ptr(static_cast<Element const*>(nullptr)), 
-            repeat_like(StrideT{}, int32_t(0)), 
+            make_gmem_ptr(static_cast<Element const*>(nullptr)),
+            repeat_like(StrideT{}, int32_t(0)),
             StrideT{}
         ),
         take<0, 2>(SmemLayoutK{}),
@@ -166,20 +166,20 @@ struct CollectiveMainloopFwd {
 
     template <typename MTensor, typename Shape>
     CUTLASS_DEVICE auto get_local_tile_tensor(
-        const MTensor &m_tensor, 
+        const MTensor &m_tensor,
         const Shape &tile_shape,
         const int *cu_seq_len,
-        const int bidh, 
+        const int bidh,
         const int bidb,
         const int actual_seq_len) const {
         auto g_offset = local_tile(
-            m_tensor(_, _, bidh), 
-            cute::make_shape(1, get<1>(tile_shape)), 
+            m_tensor(_, _, bidh),
+            cute::make_shape(1, get<1>(tile_shape)),
             make_coord(cu_seq_len[bidb], _0{}));
         auto g_sequence = make_tensor(
-            g_offset.data(), 
+            g_offset.data(),
             make_layout(
-                cute::make_shape(actual_seq_len, get<1>(tile_shape)), 
+                cute::make_shape(actual_seq_len, get<1>(tile_shape)),
                 g_offset.stride()
             ));
         auto g_tensor = local_tile(g_sequence, tile_shape, make_coord(_, _0{}));
@@ -215,17 +215,17 @@ struct CollectiveMainloopFwd {
         int bidh_kv = mainloop_params.qhead_per_khead_divmod.divide(bidh);
 
         Tensor gQ = get_local_tile_tensor(
-            mQ, select<0, 2>(TileShape_MNK{}), cu_seq_q, bidh, bidb, seq_len_q)(_, _, m_block); 
+            mQ, select<0, 2>(TileShape_MNK{}), cu_seq_q, bidh, bidb, seq_len_q)(_, _, m_block);
         Tensor gK = get_local_tile_tensor(
-            mK, select<1, 2>(TileShape_MNK{}), cu_seq_k, bidh_kv, bidb, seq_len_k); 
+            mK, select<1, 2>(TileShape_MNK{}), cu_seq_k, bidh_kv, bidb, seq_len_k);
         Tensor gV = get_local_tile_tensor(
             mV, select<1, 2>(TileShape_MNK{}), cu_seq_k, bidh_kv, bidb, seq_len_k);
 
         Tensor sQ_x = make_tensor(sQ.data(), make_layout(sQ.layout(), Layout<_1>{}));
         Tensor gQ_x = make_tensor(gQ.data(), make_layout(gQ.layout(), Layout<_1>{}));
-        auto [tQgQ, tQsQ] = tma_partition(mainloop_params.tma_load_Q, _0{}, Layout<_1>{},group_modes<0, 2>(sQ_x), group_modes<0, 2>(gQ_x)); 
-        auto [tKgK, tKsK] = tma_partition(mainloop_params.tma_load_K, _0{}, Layout<_1>{},group_modes<0, 2>(sK), group_modes<0, 2>(gK));  
-        auto [tVgV, tVsV] = tma_partition(mainloop_params.tma_load_V, _0{}, Layout<_1>{},group_modes<0, 2>(sV), group_modes<0, 2>(gV));  
+        auto [tQgQ, tQsQ] = tma_partition(mainloop_params.tma_load_Q, _0{}, Layout<_1>{},group_modes<0, 2>(sQ_x), group_modes<0, 2>(gQ_x));
+        auto [tKgK, tKsK] = tma_partition(mainloop_params.tma_load_K, _0{}, Layout<_1>{},group_modes<0, 2>(sK), group_modes<0, 2>(gK));
+        auto [tVgV, tVsV] = tma_partition(mainloop_params.tma_load_V, _0{}, Layout<_1>{},group_modes<0, 2>(sV), group_modes<0, 2>(gV));
 
         uint16_t mcast_mask_kv = 0;
 
@@ -253,9 +253,9 @@ struct CollectiveMainloopFwd {
                 int pre_idx = 1;
                 if constexpr (UseMoba) {
                     pre_idx = qk_gate_topk_idx[idx];
-                } 
+                }
                 copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write_k), mcast_mask_kv), tKgK(_, n_block - pre_idx), tKsK(_, smem_pipe_write_k.index()));
-                
+
                 ++smem_pipe_write_k;
                 pipeline_v.producer_acquire(smem_pipe_write_v);
                 copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write_v), mcast_mask_kv), tVgV(_, n_block), tVsV(_, smem_pipe_write_v.index()));
@@ -364,7 +364,7 @@ struct CollectiveMainloopFwd {
         Tensor tScS = threadMma0.partition_C(cS);
         #pragma unroll
         for (int i = 0; i < size(tSrS); ++i) {
-            if (int(get<1>(tScS(i))) >= 
+            if (int(get<1>(tScS(i))) >=
                 std::min(seq_len_k - n_block * kBlockN, col_limit_causal(int(get<0>(tScS(i))), n_block))) {
                 tSrS(i) = -INFINITY;
             }
@@ -403,13 +403,13 @@ struct CollectiveMainloopFwd {
                 n_block -= 1;
             }
         }
-  
+
         softmax.rescale_o(tOrO, scores_scale);
         consumer_wait(pipeline_v, smem_pipe_read_v);
         gemm</*zero_init=*/false, /*wg_wait=*/-1>(tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
         cute::copy(softmax.finalize(mainloop_params.softmax_scale_log2), scores_scale);
         warpgroup_wait<0>();
-        pipeline_v.consumer_release(smem_pipe_read_v);  
+        pipeline_v.consumer_release(smem_pipe_read_v);
         ++smem_pipe_read_v;
 
         softmax.rescale_o(tOrO, scores_scale);
@@ -431,25 +431,25 @@ struct CollectiveMainloopFwd {
         auto smem_thr_copy_O = smem_tiled_copy_O.get_thread_slice(thread_idx);
 
         Tensor tOrO_out = convert_type<Element>(tOrO);
-        Tensor taccOrO = smem_thr_copy_O.retile_S(tOrO_out); 
-        Tensor taccOsO = smem_thr_copy_O.partition_D(sO); 
-          
+        Tensor taccOrO = smem_thr_copy_O.retile_S(tOrO_out);
+        Tensor taccOsO = smem_thr_copy_O.partition_D(sO);
+
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(FwdNamedBarriers::ValueEmpty) /*id*/);
         cute::copy(smem_tiled_copy_O, taccOrO, taccOsO);
         cutlass::arch::fence_view_async_shared(); // ensure smem writes are visible to TMA
         cutlass::arch::NamedBarrier::arrive(NumMmaThreads + cutlass::NumThreadsPerWarp,cutlass::arch::ReservedNamedBarriers::EpilogueBarrier);
-        
+
         Tensor gO = make_tensor(make_gmem_ptr(out_ptr),
             Shape<Int<kBlockM>, Int<kHeadDim>>{},
             make_stride(o_head_stride, _1{}));
-        
+
         GmemTiledCopyO gmem_tiled_copy_O;
         auto gmem_thr_copy_O = gmem_tiled_copy_O.get_thread_slice(thread_idx);
 
-        Tensor tOsO = gmem_thr_copy_O.partition_S(sO); 
+        Tensor tOsO = gmem_thr_copy_O.partition_S(sO);
         Tensor tOgO = gmem_thr_copy_O.partition_D(gO);
 
-        Tensor cO = make_identity_tensor(Shape<Int<kBlockM>, Int<kHeadDim>>{});  
+        Tensor cO = make_identity_tensor(Shape<Int<kBlockM>, Int<kHeadDim>>{});
 
         Tensor tOcO = gmem_thr_copy_O.partition_S(cO);
 

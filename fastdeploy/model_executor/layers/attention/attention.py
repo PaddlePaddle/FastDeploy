@@ -28,8 +28,11 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethod
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
+
 import os
+
 from fastdeploy import envs
+
 
 class Attention(nn.Layer):
     """
@@ -110,21 +113,23 @@ class Attention(nn.Layer):
             moba_max_seq_length = int(envs.FD_MOBA_MAX_SEQ_LENGTH)
             if self.moba_use_mlp:
                 if self.layer_id < fd_config.model_config.num_hidden_layers - 1:
-                    temp_weight = paddle.load(
-                        f'{mlp_weight_path}/attn_gate.pdparams')
-                    
+                    temp_weight = paddle.load(f"{mlp_weight_path}/attn_gate.pdparams")
+
                     self.attn_gate_weight = temp_weight[
-                        f"ernie.layers.{self.layer_id}.self_attn.attn_gate.weight"].astype(paddle.get_default_dtype())[
-                            fd_config.parallel_config.tensor_parallel_rank * self.kv_num_heads:
-                            (fd_config.parallel_config.tensor_parallel_rank + 1) * self.kv_num_heads
-                        ]
+                        f"ernie.layers.{self.layer_id}.self_attn.attn_gate.weight"
+                    ].astype(paddle.get_default_dtype())[
+                        fd_config.parallel_config.tensor_parallel_rank
+                        * self.kv_num_heads : (fd_config.parallel_config.tensor_parallel_rank + 1)
+                        * self.kv_num_heads
+                    ]
                     assert self.attn_gate_weight.shape[1] % moba_block_size == 0
 
-            self.cache_k_block_means = paddle.zeros([
-                fd_config.parallel_config.max_num_seqs,
-                moba_max_seq_length // moba_block_size,
-                self.kv_num_heads,
-                self.head_dim
+            self.cache_k_block_means = paddle.zeros(
+                [
+                    fd_config.parallel_config.max_num_seqs,
+                    moba_max_seq_length // moba_block_size,
+                    self.kv_num_heads,
+                    self.head_dim,
                 ],
                 dtype=paddle.get_default_dtype(),
             )

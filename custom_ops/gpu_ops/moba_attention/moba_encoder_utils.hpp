@@ -7,7 +7,7 @@
 #endif
 
 #include <cute/tensor.hpp>
-#include <cute/arch/cluster_sm90.hpp> 
+#include <cute/arch/cluster_sm90.hpp>
 
 #include <cutlass/array.h>
 #include <cutlass/cutlass.h>
@@ -18,7 +18,7 @@
 using namespace cute;
 namespace moba {
 
-template <typename paddle_type> 
+template <typename paddle_type>
 struct cuteType;
 
 template <>
@@ -201,7 +201,7 @@ inline __device__ void apply_rotary_embedding(Vec<T, PackSize>& vec, Vec<float, 
 template <bool Is_even_MN=true, typename TiledCopy, typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Engine2, typename Layout2>
 __forceinline__ __device__ void copy(
         TiledCopy tiled_copy, Tensor<Engine0, Layout0> const &S,
-        Tensor<Engine1, Layout1> &D, 
+        Tensor<Engine1, Layout1> &D,
         Tensor<Engine2, Layout2> const &identity_MN,
         const int max_MN = 0) {
     CUTE_STATIC_ASSERT_V(rank(S) == Int<3>{});
@@ -230,20 +230,20 @@ void cp_async_wait() {
 
 template<bool A_in_regs=false, bool B_in_regs=false, typename Tensor0, typename Tensor1,
          typename Tensor2, typename Tensor3, typename Tensor4,
-         typename TiledMma, typename ThrCopy0, typename ThrCopy1, 
+         typename TiledMma, typename ThrCopy0, typename ThrCopy1,
          typename TiledCopy0, typename TiledCopy1>
 inline __device__ void gemm(
         Tensor0 &acc, Tensor1 &tCrA, Tensor2 &tCrB, Tensor3 const& tCsA,
         Tensor4 const& tCsB, TiledMma tiled_mma,
         ThrCopy0 &smem_thr_copy_A, ThrCopy1 &smem_thr_copy_B,
         TiledCopy0 &smem_tiled_copy_A, TiledCopy1 &smem_tiled_copy_B) {
-    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));                    
-    CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));                     
-    CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));                    
+    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
+    CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
+    CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));
     Tensor tCrA_copy_view = smem_thr_copy_A.retile_D(tCrA);
-    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCrA_copy_view));            
+    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCrA_copy_view));
     Tensor tCrB_copy_view = smem_thr_copy_B.retile_D(tCrB);
-    CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<1>(tCrB_copy_view));    
+    CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<1>(tCrB_copy_view));
 
     if (!A_in_regs) { copy(smem_tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{})); }
     if (!B_in_regs) { copy(smem_tiled_copy_B, tCsB(_, _, _0{}), tCrB_copy_view(_, _, _0{})); }

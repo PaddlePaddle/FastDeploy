@@ -16,21 +16,16 @@
 
 from __future__ import annotations
 
-import math
-import os
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Tuple
-
-from fastdeploy import envs
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import paddle
+
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda() and not current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import (
-        get_cur_cu_seq_len_k,
-        MobaAttention
-    )
+    from fastdeploy.model_executor.ops.gpu import MobaAttention, get_cur_cu_seq_len_k
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -38,13 +33,17 @@ if TYPE_CHECKING:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
+    AttentionBackend,
+    AttentionMetadata,
+)
+
 
 @dataclass
 class MobaAttentionMetadata(AttentionMetadata):
     """
     AppendAttentionMetadata
     """
+
     moba_max_lengths: int = int(envs.FD_MOBA_MAX_SEQ_LENGTH)
     q_input: paddle.Tensor = None
     k_input: paddle.Tensor = None
@@ -55,14 +54,14 @@ class MobaAttentionMetadata(AttentionMetadata):
     max_enc_len_this_time: int = 0
     max_dec_len_this_time: int = 0
 
+
 class MobaAttentionBackend(AttentionBackend):
     """
     The backend class that uses paddle native attention implementation.
     Which is used only for testing purpose.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int):
+    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
         if not current_platform.is_cuda():
             raise NotImplementedError()
         super().__init__()
@@ -81,19 +80,19 @@ class MobaAttentionBackend(AttentionBackend):
         self.moba_use_encoder_seq_limit = int(envs.FD_MOBA_USE_ENCODER_SEQ_LIMIT)
         if self.moba_use_encoder_seq_limit == 0:
             self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
-        
+
         self.moba_decoder_top_k_left = int(envs.FD_MOBA_DECODER_TOP_K_LEFT)
         self.moba_decoder_top_k_right = int(envs.FD_MOBA_DECODER_TOP_K_RIGHT)
         self.moba_use_decoder_seq_limit = int(envs.FD_MOBA_USE_DECODER_SEQ_LIMIT)
         if self.moba_use_decoder_seq_limit == 0:
             self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
 
-        assert self.moba_encoder_top_k_left >= 0 
-        assert self.moba_encoder_top_k_right >= 0 
+        assert self.moba_encoder_top_k_left >= 0
+        assert self.moba_encoder_top_k_right >= 0
         assert self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
 
-        assert self.moba_decoder_top_k_left >= 0 
-        assert self.moba_decoder_top_k_right >= 0 
+        assert self.moba_decoder_top_k_left >= 0
+        assert self.moba_decoder_top_k_right >= 0
         assert self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
 
         assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
@@ -103,27 +102,28 @@ class MobaAttentionBackend(AttentionBackend):
         """Init the metadata for a forward pass."""
         metadata = MobaAttentionMetadata()
         metadata._dtype = paddle.get_default_dtype()
-        metadata.cu_seq_q_pack, metadata.cu_seqlens_k, metadata.q_pack_tokens \
-            = get_cur_cu_seq_len_k(
+        metadata.cu_seq_q_pack, metadata.cu_seqlens_k, metadata.q_pack_tokens = get_cur_cu_seq_len_k(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            int(self.attn_block_m))
+            int(self.attn_block_m),
+        )
         metadata.max_enc_len_this_time = forward_meta.seq_lens_encoder.max().cpu()
         metadata.max_dec_len_this_time = forward_meta.seq_lens_decoder.max().cpu()
         batch_size = forward_meta.seq_lens_encoder.shape[0]
         q_token_num = int(forward_meta.cu_seqlens_q[batch_size])
         k_token_num = int(metadata.cu_seqlens_k[batch_size])
-        metadata.q_input = paddle.zeros([q_token_num + self.attn_block_m, self.num_heads * self.head_dim], dtype=metadata._dtype)
+        metadata.q_input = paddle.zeros(
+            [q_token_num + self.attn_block_m, self.num_heads * self.head_dim], dtype=metadata._dtype
+        )
         metadata.k_input = paddle.zeros(
-            [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], 
-            dtype=metadata._dtype)
+            [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], dtype=metadata._dtype
+        )
         metadata.v_input = paddle.zeros(
-            [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], 
-            dtype=metadata._dtype)
+            [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], dtype=metadata._dtype
+        )
         self.attention_metadata = metadata
         assert self.max_seq_len <= self.attention_metadata.moba_max_lengths
-
 
     def get_kv_cache_shape(
         self,
@@ -156,7 +156,7 @@ class MobaAttentionBackend(AttentionBackend):
             attention_metadata.v_input,
             forward_meta.cu_seqlens_q,
             attention_metadata.cu_seqlens_k,
-            attention_metadata.cu_seq_q_pack, 
+            attention_metadata.cu_seq_q_pack,
             attention_metadata.q_pack_tokens,
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
@@ -186,6 +186,6 @@ class MobaAttentionBackend(AttentionBackend):
             self.moba_decoder_top_k_right,
             self.moba_use_decoder_seq_limit,
             layer.moba_use_mlp,
-            getattr(layer, "cache_quant_type_str", "none")
+            getattr(layer, "cache_quant_type_str", "none"),
         )[0]
         return out

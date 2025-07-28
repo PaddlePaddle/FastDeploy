@@ -21,14 +21,14 @@ export FD_MOBA_USE_DECODER_SEQ_LIMIT=15360
 export FD_MOBA_MLP_WEIGHT_PATH=$MLP_PATH
 
 python -m fastdeploy.entrypoints.openai.api_server
-	--model baidu/ERNIE-4.5-300B-A47B-Paddle  \
-	--port 8188 \
-	--tensor-parallel-size 4 \
-	--quantization wint4 \
-	--enable-chunked-prefill \
-	--max-num-batched-tokens 8192 \
-	--max-model-len 131072 \
-	--max-num-seqs 32
+    --model baidu/ERNIE-4.5-300B-A47B-Paddle  \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --quantization wint4 \
+    --enable-chunked-prefill \
+    --max-num-batched-tokens 8192 \
+    --max-model-len 131072 \
+    --max-num-seqs 32
 ```
 ## Environmental Variables Description
 

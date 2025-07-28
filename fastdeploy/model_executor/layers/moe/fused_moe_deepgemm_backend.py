@@ -85,17 +85,21 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             up_gate_proj_weight_scale.append(
                 get_tensor(
-                    state_dict.pop(up_gate_proj_expert_weight_scale_key_name)
-                    if up_gate_proj_expert_weight_scale_key_name in state_dict
-                    else up_gate_proj_expert_weight_scale_key_name,
+                    (
+                        state_dict.pop(up_gate_proj_expert_weight_scale_key_name)
+                        if up_gate_proj_expert_weight_scale_key_name in state_dict
+                        else up_gate_proj_expert_weight_scale_key_name
+                    ),
                     layer.fd_config.parallel_config.model_name_or_path,
                 )
             )
             down_proj_weight_scale.append(
                 get_tensor(
-                    state_dict.pop(down_proj_expert_weight_scale_key_name)
-                    if down_proj_expert_weight_scale_key_name in state_dict
-                    else down_proj_expert_weight_scale_key_name,
+                    (
+                        state_dict.pop(down_proj_expert_weight_scale_key_name)
+                        if down_proj_expert_weight_scale_key_name in state_dict
+                        else down_proj_expert_weight_scale_key_name
+                    ),
                     layer.fd_config.parallel_config.model_name_or_path,
                 )
             )

@@ -16,8 +16,8 @@ inline __device__ void softmax_rescale_o(Tensor0 &scores, Tensor1 &acc_o, const 
             const float scores_scale = expf((scores_max_prev[mi] - scores_max[mi]) * softmax_scale);
             scores_sum[mi] *= scores_scale;
             #pragma unroll
-            for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) { 
-                acc_o_rowcol(mi, ni) *= scores_scale; 
+            for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) {
+                acc_o_rowcol(mi, ni) *= scores_scale;
             }
         }
         scale_apply_exp2<kMiLen>(scores, scores_max, scores_sum, softmax_scale);
@@ -51,12 +51,12 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     const int32_t q_head_idx = kv_head_idx * kGqaGroupSize;
     // +1 是因为 decoder 的kv已经写入cache kv
     const int32_t seq_len = params.seq_lens_decoder[bi] == 0 ? 0 : params.seq_lens_decoder[bi] + 1;
-    
+
     const int32_t head_num = params.head_num;
     const int32_t kv_head_num = params.kv_head_num;
-    
-    const int32_t partition_num = (seq_len + kBlockN - 1) / kBlockN; 
-    
+
+    const int32_t partition_num = (seq_len + kBlockN - 1) / kBlockN;
+
     if (seq_len == 0 || partition_idx >= partition_num) {
         return;
     }
@@ -69,37 +69,37 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     const int q_bias_offset = q_head_idx * kHeadDim;
 
     cuteType * q_input = reinterpret_cast<cuteType *>(params.q_input) + params.cu_seq_q[bi] * head_num * kHeadDim;
-    
+
     Tensor gQ = make_tensor(
-        make_gmem_ptr(reinterpret_cast<const cuteType *>(q_input) + q_bias_offset), 
+        make_gmem_ptr(reinterpret_cast<const cuteType *>(q_input) + q_bias_offset),
         Shape<Int<kBlockM>, Int<kHeadDim>>{},
         Stride<Int<kHeadDim>, _1>{});
 
     const int32_t block_idx = partition_idx * kTileN;
     const int* block_table = params.block_table + bi * params.max_num_blocks_per_seq + block_idx;
     const int32_t physical_block_number = block_table[0];
-    
+
     const int32_t cache_offset = (physical_block_number * kv_head_num + kv_head_idx) * kBlockSize * kHeadDimKV;
 
     Tensor gK = make_tensor(
-        make_gmem_ptr(reinterpret_cast<const cuteType *>(params.cache_k) + cache_offset), 
+        make_gmem_ptr(reinterpret_cast<const cuteType *>(params.cache_k) + cache_offset),
         Shape<Int<kBlockSize>, Int<kHeadDimKV>>{},
         Stride<Int<kHeadDimKV>, _1>{});
 
     Tensor gV = make_tensor(
-        make_gmem_ptr(reinterpret_cast<const cuteType *>(params.cache_v) + cache_offset), 
+        make_gmem_ptr(reinterpret_cast<const cuteType *>(params.cache_v) + cache_offset),
         Shape<Int<kBlockSize>, Int<kHeadDimKV>>{},
         Stride<Int<kHeadDimKV>, _1>{});
-    
+
     // Shared memory.
     extern __shared__ char smem_[];
     Tensor sQ = make_tensor(
-        make_smem_ptr(reinterpret_cast<cuteType *>(smem_)), 
+        make_smem_ptr(reinterpret_cast<cuteType *>(smem_)),
         typename Kernel_traits::SmemLayoutQ{});
     Tensor sQK = make_tensor(
         sQ.data() + size(sQ),
         typename Kernel_traits::SmemLayoutQK{});
-    
+
     Tensor sK = make_tensor(sQK.data() + size(sQK), typename Kernel_traits::SmemLayoutKV{});
     Tensor sV = make_tensor(sK.data() + size(sK), typename Kernel_traits::SmemLayoutKV{});
     Tensor sVt = make_tensor(sV.data(), typename Kernel_traits::SmemLayoutVtransposed{});
@@ -108,10 +108,10 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
 
     auto gmem_tiled_copy_Q = typename Kernel_traits::GmemTiledCopyQ{};
     auto gmem_thr_copy_Q = gmem_tiled_copy_Q.get_thread_slice(tidx);
-    
+
     auto gmem_tiled_copy_KV = typename Kernel_traits::GmemTiledCopyKV{};
     auto gmem_thr_copy_KV = gmem_tiled_copy_KV.get_thread_slice(tidx);
-    
+
     Tensor tQgQ = gmem_thr_copy_Q.partition_S(gQ);
     Tensor tQsQ = gmem_thr_copy_Q.partition_D(sQ);
 
@@ -121,10 +121,10 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     Tensor tVsV = gmem_thr_copy_KV.partition_D(sV);
 
     Tensor cQ = make_identity_tensor(make_shape(kBlockM, kHeadDim));
-    Tensor tQcQ = gmem_thr_copy_Q.partition_S(cQ); 
+    Tensor tQcQ = gmem_thr_copy_Q.partition_S(cQ);
 
     Tensor cKV = make_identity_tensor(make_shape(kBlockSize, kHeadDim));
-    Tensor tKVcKV = gmem_thr_copy_KV.partition_S(cKV); 
+    Tensor tKVcKV = gmem_thr_copy_KV.partition_S(cKV);
 
     typename Kernel_traits::TiledMma tiled_mma;
 
@@ -138,28 +138,28 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     auto smem_thr_copy_V = smem_tiled_copy_V.get_thread_slice(tidx);
     auto smem_tiled_copy_O = make_tiled_copy_C(typename Kernel_traits::SmemCopyAtomO{}, tiled_mma);
     auto smem_thr_copy_O = smem_tiled_copy_O.get_thread_slice(tidx);
-    
+
     Tensor tSsQ = smem_thr_copy_Q.partition_S(sQ);
-    Tensor tSrQ  = thr_mma.partition_fragment_A(sQ); 
-    
+    Tensor tSrQ  = thr_mma.partition_fragment_A(sQ);
+
     Tensor tSsQK = smem_thr_copy_Q.partition_S(sQK);
     Tensor tSrQK = thr_mma.partition_fragment_A(sQK);
-    
-    Tensor tSsK = smem_thr_copy_K.partition_S(sK);                    
-    Tensor tSrK  = thr_mma.partition_fragment_B(sK); 
+
+    Tensor tSsK = smem_thr_copy_K.partition_S(sK);
+    Tensor tSrK  = thr_mma.partition_fragment_B(sK);
     Tensor tOsVt = smem_thr_copy_V.partition_S(sVt);
     Tensor tOrVt  = thr_mma.partition_fragment_B(sVtNoSwizzle);
 
-    moba::copy<false>(gmem_tiled_copy_Q, tQgQ, tQsQ, tQcQ, kGqaGroupSize); 
-    
+    moba::copy<false>(gmem_tiled_copy_Q, tQgQ, tQsQ, tQcQ, kGqaGroupSize);
+
 
     cute::cp_async_fence();
     moba::cp_async_wait<0>();
 
     const int32_t remain_seq_len = seq_len - partition_idx * kTileN * kBlockSize;
 
-    moba::copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);  
-    
+    moba::copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);
+
     cute::cp_async_fence();
 
     const int32_t warp_id = tidx / 32;
@@ -201,11 +201,11 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     #pragma unroll
     for (int n = 0; n < kTileN; ++n) {
         const int cur_remain_seq_len = remain_seq_len - n * kBlockSize;
-        
+
         if (cur_remain_seq_len <= 0) {
             break;
         }
-        
+
         clear(acc_s);
         moba::cp_async_wait<0>();
         __syncthreads();
@@ -213,7 +213,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         if (n > 0) {
             tVgV.data() = tVgV.data() + (block_table[n] - block_table[n - 1]) * cache_offset_step;
         }
-        
+
         moba::copy(gmem_tiled_copy_KV, tVgV, tVsV, tKVcKV);
 
         cute::cp_async_fence();
@@ -245,7 +245,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         for (int mi = 0; mi < kMiLen; ++mi) {
             scores_max_prev[mi] = scores_max[mi];
         }
-    
+
         reduce_max<kMiLen>(scores, scores_max);
 
         if (col == 0) {
@@ -273,7 +273,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
 
         if (cur_remain_seq_len > kBlockSize && n < kTileN - 1) {
             tKgK.data() = tKgK.data() + (block_table[n + 1] - block_table[n]) * cache_offset_step;
-            moba::copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);  
+            moba::copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);
             cute::cp_async_fence();
         }
 
@@ -290,7 +290,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
 
         Tensor rS = moba::convert_type<cuteType>(acc_s);
 
-        Tensor trQK = smem_thr_copy_O.retile_S(rS);   
+        Tensor trQK = smem_thr_copy_O.retile_S(rS);
         Tensor tsQK = smem_thr_copy_O.partition_D(sQK);
         cute::copy(smem_tiled_copy_O, trQK, tsQK);
 
@@ -320,7 +320,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         scores_sum[mi] = Allreduce<4>::run(scores_sum[mi], sum_op);
     }
     __syncthreads();
-    
+
     if (col == 0) {
         scores_warp[warp_id][row] = scores_sum[0];
         if constexpr (kMiLen > 1) {
@@ -330,7 +330,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
 
 
     Tensor rO = moba::convert_type<cuteType>(acc_o);
-    Tensor taccOrO = smem_thr_copy_O.retile_S(rO); 
+    Tensor taccOrO = smem_thr_copy_O.retile_S(rO);
     Tensor taccOsO = smem_thr_copy_O.partition_D(sQ);
 
     cute::copy(smem_tiled_copy_O, taccOrO, taccOsO);
@@ -345,22 +345,22 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         }
         scores_warp[0][tidx] = cur_sum;
     }
-    
+
     Tensor gO = make_tensor(
         make_gmem_ptr(reinterpret_cast<cuteType *>(params.partition_attn_out) + ((bi * params.max_num_partitions + partition_idx) * head_num  + q_head_idx)* kHeadDim),
                             Shape<Int<kBlockM>, Int<kHeadDim>>{},
                             Stride<Int<kHeadDim>, _1>{});
-    
+
     auto gmem_tiled_copy_O = typename Kernel_traits::GmemTiledCopyO{};
     auto gmem_thr_copy_O = gmem_tiled_copy_O.get_thread_slice(tidx);
-    Tensor tOsO = gmem_thr_copy_O.partition_S(sQ);   
+    Tensor tOsO = gmem_thr_copy_O.partition_S(sQ);
     Tensor tOgO = gmem_thr_copy_O.partition_D(gO);
     constexpr int32_t copy_size = kGqaGroupSize * 16;
     __syncthreads();
 
     if (tidx < copy_size) {
         cute::copy(gmem_tiled_copy_O, tOsO(_, 0, _), tOgO(_, 0, _));
-    } 
+    }
 
     if constexpr (kMiLen > 1) {
         if (tidx < copy_size - 128) {
@@ -455,7 +455,7 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
         }
         share_max.store_to(share_sum_scale + idx);
     }
-    
+
 
     // 剩下的不足packsize的元素
     idx = packed_data_num + tidx;
@@ -467,20 +467,20 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
                 float exp_sub_max = expf(share_max - global_max_logit);
                 float rescaled_exp_sum = exp_sums_ptr[idx] * exp_sub_max;
                 global_exp_sum += rescaled_exp_sum;
-                share_sum_scale[idx] = exp_sub_max; 
+                share_sum_scale[idx] = exp_sub_max;
             }
         } else {
             float share_max = shared_max_logits[idx];
             float exp_sub_max = expf(share_max - global_max_logit);
             float rescaled_exp_sum = exp_sums_ptr[idx] * exp_sub_max;
             global_exp_sum += rescaled_exp_sum;
-            share_sum_scale[idx] = exp_sub_max; 
+            share_sum_scale[idx] = exp_sub_max;
         }
     }
     __syncthreads();
 
     global_exp_sum = moba::BlockAllReduce<float, moba::SumOp<float>, kNReduceThreads>(global_exp_sum);
-    
+
     const float inv_global_exp_sum = fdividef(1.0f, global_exp_sum + 1e-6f);
     return inv_global_exp_sum;
 }
@@ -503,14 +503,14 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     const int32_t head_num = params.head_num;
     using pack_half = typename moba::PackedHalf<cuteType>::Type;
 
-    
+
     if (params.seq_lens_decoder[bi] == 0) {
         return;
     }
 
     extern __shared__ char shared_mem[];
 
-    const int32_t partition_num = (seq_len + kBlockN - 1) / kBlockN; 
+    const int32_t partition_num = (seq_len + kBlockN - 1) / kBlockN;
     const int32_t pack_max_partition_num = (params.max_num_partitions + kNFloatPacksize - 1) / kNFloatPacksize * kNFloatPacksize;
 
     float* share_sum_scale = reinterpret_cast<float*>(shared_mem + sizeof(float) * pack_max_partition_num);
@@ -523,7 +523,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
 
 
     using T_vec = moba::Vec<cuteType, kNReducePacksize>;
-    
+
     cuteType* partition_attn_out = reinterpret_cast<cuteType*>(params.partition_attn_out) + bi * head_num * params.max_num_partitions * kHeadDim + head_idx * kHeadDim + headdim_idx;
 
     moba::Vec<float, kNReducePacksize> acc;
@@ -540,9 +540,9 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
             acc.data.elt[k] += static_cast<float>(sub_logits.data.elt[k]) * scale;
         }
     }
-    
+
     __syncthreads();
-    
+
     T_vec out;
     #pragma unroll
     for (int k = 0; k < kNReducePacksize; ++k) {
@@ -572,7 +572,7 @@ void run_block_attn(ParamType &params, cudaStream_t stream) {
     if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
     }
-    kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params); 
+    kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params);
 
     // cudaDeviceSynchronize();
     // auto err = cudaGetLastError();
@@ -600,7 +600,7 @@ void run_block_attn(ParamType &params, cudaStream_t stream) {
 }
 
 
-template<typename cute_type, int kCacheBits, int kBlockN, int kMaxN, typename ParamType> 
+template<typename cute_type, int kCacheBits, int kBlockN, int kMaxN, typename ParamType>
 void run_block_attn_hdim128(ParamType &params, cudaStream_t stream) {
     const int gqaGroupSize = params.head_num / params.kv_head_num;
     using CacheKVTraits = CacheKV_quant_traits<cute_type, kCacheBits>;
@@ -618,14 +618,14 @@ void run_block_attn_hdim128(ParamType &params, cudaStream_t stream) {
             PADDLE_THROW(phi::errors::Unimplemented(
             "DecoderBlockAttention not implemented for gqaGroupSize = %d", gqaGroupSize));
         }
-    }        
+    }
 }
 
 
 template <typename T>
 void DispatchGqaAttention(
-        const paddle::Tensor& q_input, 
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& q_input,
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cache_k,
@@ -657,13 +657,13 @@ void DispatchGqaAttention(
     constexpr int max_seq_per_block = kMobaBlockSize;
     Block_attn_params<cute_type> params;
     memset(&params, 0, sizeof(params));
-    const uint32_t max_num_partitions = (max_seq_k + max_seq_per_block) / max_seq_per_block; 
+    const uint32_t max_num_partitions = (max_seq_k + max_seq_per_block) / max_seq_per_block;
     assert(head_dim == 128);
 
     paddle::Tensor maxs = paddle::empty({batch_size, head_num, (max_num_partitions + 3) / 4 * 4}, paddle::DataType::FLOAT32, q_input.place());
     paddle::Tensor sums = paddle::empty({batch_size, head_num, (max_num_partitions + 3) / 4 * 4}, paddle::DataType::FLOAT32, q_input.place());
     paddle::Tensor partition_attn_out = paddle::empty({batch_size, max_num_partitions, head_num, head_dim}, q_input.dtype(), q_input.place());
-    
+
     params.q_input = reinterpret_cast<cute_type *>(const_cast<T*>(q_input.data<T>()));
     params.attn_out = reinterpret_cast<cute_type *>(const_cast<T*>(out.data<T>()));
     params.seq_lens_encoder = const_cast<int*>(seq_len_encoder.data<int>());
@@ -682,8 +682,8 @@ void DispatchGqaAttention(
     params.qk_gate_topk_idx_ptr = const_cast<int*>(qk_gate_topk_idx.data<int>());
     params.use_moba_seq_limit = use_moba_seq_limit;
     params.cu_seq_q = const_cast<int*>(cu_seq_q.data<int>());
-    
-    
+
+
     if (cache_quant_type_str == "none") {
         params.cache_k = reinterpret_cast<cute_type *>(const_cast<T*>(cache_k.data<T>()));
         params.cache_v = reinterpret_cast<cute_type *>(const_cast<T*>(cache_v.data<T>()));
@@ -709,8 +709,8 @@ void DispatchGqaAttention(
 }
 
 void GqaAttention(
-        const paddle::Tensor& q_input, 
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& q_input,
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cache_k,
@@ -733,12 +733,12 @@ void GqaAttention(
         const int max_seq_q,
         const int max_seq_k,
         const std::string &cache_quant_type_str) {
-    
+
     const int batch_size = block_tables.dims()[0];
     if (q_input.dtype() == paddle::DataType::FLOAT16) {
         return DispatchGqaAttention<phi::dtype::float16>(
-            q_input, 
-            seq_len_encoder, 
+            q_input,
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             cache_k,
@@ -764,8 +764,8 @@ void GqaAttention(
             cache_quant_type_str);
     } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
         return DispatchGqaAttention<phi::dtype::bfloat16>(
-            q_input, 
-            seq_len_encoder, 
+            q_input,
+            seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
             cache_k,
@@ -797,12 +797,12 @@ void GqaAttention(
 
 PD_BUILD_OP(gqa_attention)
     .Inputs({
-        "q_input",    
+        "q_input",
         "seq_len_encoder",
         "seq_len_decoder",
         "cu_seq_q",
-        "cache_k", 
-        "cache_v", 
+        "cache_k",
+        "cache_v",
         "block_tables",
         "k_block_means",
         "out",

@@ -69,9 +69,9 @@ template<>
 struct HalfMax<cutlass::half_t> {
     inline __device__ __half2 operator()(const __half2 x, const __half2 y) {
         __half2 res;
-        asm volatile("max.f16x2 %0, %1, %2;\n" : 
-            "=r"(*reinterpret_cast<uint32_t*>(&res)) : 
-            "r"(*reinterpret_cast<const uint32_t*>(&x)), 
+        asm volatile("max.f16x2 %0, %1, %2;\n" :
+            "=r"(*reinterpret_cast<uint32_t*>(&res)) :
+            "r"(*reinterpret_cast<const uint32_t*>(&x)),
             "r"(*reinterpret_cast<const uint32_t*>(&y)));
         return res;
     }
@@ -81,9 +81,9 @@ template<>
 struct HalfMax<cutlass::bfloat16_t> {
     inline __device__ nv_bfloat162 operator()(const nv_bfloat162 x, const nv_bfloat162 y) {
         nv_bfloat162 res;
-        asm volatile("max.bf16x2 %0, %1, %2;\n" : 
-            "=r"(*reinterpret_cast<uint32_t*>(&res)) : 
-            "r"(*reinterpret_cast<const uint32_t*>(&x)), 
+        asm volatile("max.bf16x2 %0, %1, %2;\n" :
+            "=r"(*reinterpret_cast<uint32_t*>(&res)) :
+            "r"(*reinterpret_cast<const uint32_t*>(&x)),
             "r"(*reinterpret_cast<const uint32_t*>(&y)));
         return res;
     }
@@ -96,9 +96,9 @@ template<>
 struct HalfMin<cutlass::half_t> {
     inline __device__ __half2 operator()(const __half2 x, const __half2 y) {
         __half2 res;
-        asm volatile("min.f16x2 %0, %1, %2;\n" : 
-            "=r"(*reinterpret_cast<uint32_t*>(&res)) : 
-            "r"(*reinterpret_cast<const uint32_t*>(&x)), 
+        asm volatile("min.f16x2 %0, %1, %2;\n" :
+            "=r"(*reinterpret_cast<uint32_t*>(&res)) :
+            "r"(*reinterpret_cast<const uint32_t*>(&x)),
             "r"(*reinterpret_cast<const uint32_t*>(&y)));
         return res;
     }
@@ -108,9 +108,9 @@ template<>
 struct HalfMin<cutlass::bfloat16_t> {
     inline __device__ nv_bfloat162 operator()(const nv_bfloat162 x, const nv_bfloat162 y) {
         nv_bfloat162 res;
-        asm volatile("min.bf16x2 %0, %1, %2;\n" : 
-            "=r"(*reinterpret_cast<uint32_t*>(&res)) : 
-            "r"(*reinterpret_cast<const uint32_t*>(&x)), 
+        asm volatile("min.bf16x2 %0, %1, %2;\n" :
+            "=r"(*reinterpret_cast<uint32_t*>(&res)) :
+            "r"(*reinterpret_cast<const uint32_t*>(&x)),
             "r"(*reinterpret_cast<const uint32_t*>(&y)));
         return res;
     }
@@ -144,7 +144,7 @@ inline __device__ static void convert_c8_2_half(uint32_t *src, T *dst, const T *
         half_result_ptr[0] = __byte_perm(*src, head_for_fp16, 0x7150);
         half_result_ptr[1] = __byte_perm(*src, head_for_fp16, 0x7352);
     }
-    
+
     using pack_half = typename moba::PackedHalf<T>::Type;
     #pragma unroll
     for (int i = 0; i < 2; i++){
@@ -161,7 +161,7 @@ inline __device__ static void convert_c8_2_half(uint32_t *src, T *dst, const T *
             HalfSub<T>()(half_result_ptr + i, *reinterpret_cast<const uint32_t*>(&bias));
             HalfMul<T>()(half_result_ptr + i, *reinterpret_cast<const uint32_t*>(&scale));
         }
-    } 
+    }
 }
 
 template<typename T, bool Is_K>
@@ -209,25 +209,25 @@ template<typename CacheKV_traits, typename T, int kHeadDim, int kDataNumPer2Byte
          typename TiledMma, typename ThrCopy0, typename TiledCopy0>
 inline __device__ void gemm_qk_quant(
         Tensor0 &acc, Tensor1 &tCrA, Tensor2 &tCsA, Tensor3 &tCrB,
-        Tensor4 const& sB, TiledMma tiled_mma, 
+        Tensor4 const& sB, TiledMma tiled_mma,
         ThrCopy0 smem_thr_copy_A,
         TiledCopy0 smem_tiled_copy_A,
         const int32_t tidx,
         const T * cache_scale, const T * cache_zp) {
-    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));                     
-    CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));                     
+    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
+    CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
     Tensor tCrA_copy_view = smem_thr_copy_A.retile_D(tCrA);
-    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCrA_copy_view));    
+    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCrA_copy_view));
     if (!A_in_regs) {
-        copy(smem_tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{})); 
+        copy(smem_tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{}));
     }
     uint32_t *sBdata = reinterpret_cast<uint32_t *>(sB.data().get()) + tidx * (kDataNumPer2Byte / 4);
-    
+
     #pragma unroll
     for (int i = 0; i < size<2>(tCrA); ++i) {
         if (i < size<2>(tCrA) - 1) {
-            if (!A_in_regs) { 
-                copy(smem_tiled_copy_A, tCsA(_, _, i + 1), tCrA_copy_view(_, _, i + 1)); 
+            if (!A_in_regs) {
+                copy(smem_tiled_copy_A, tCsA(_, _, i + 1), tCrA_copy_view(_, _, i + 1));
             }
         }
         if constexpr (kDataNumPer2Byte == 4) {
@@ -236,7 +236,7 @@ inline __device__ void gemm_qk_quant(
             convert_c8_2_half<T, true>(sBdata + i * (kHeadDim * 2), tCrB.data(), cache_scale + i * 4, cache_zp + i * 4);
             convert_c8_2_half<T, true>(sBdata + i * (kHeadDim * 2) + 1, tCrB.data() + 4, cache_scale + i * 4, cache_zp + i * 4);
         }
-        
+
         cute::gemm(tiled_mma, tCrA(_, _, i), tCrB, acc);
     }
 }
@@ -246,17 +246,17 @@ template<typename CacheKV_traits, typename T, int kHeadDim, int kDataNumPer2Byte
          typename TiledMma, typename ThrCopy0, typename TiledCopy0>
 inline __device__ void gemm_value_quant(
         Tensor0 &acc, Tensor1 &tCrA, Tensor2 &tCsA, Tensor3 &tCrB,
-        Tensor4 const& sB, TiledMma tiled_mma, 
+        Tensor4 const& sB, TiledMma tiled_mma,
         ThrCopy0 smem_thr_copy_A,
         TiledCopy0 smem_tiled_copy_A,
         int32_t tidx,
         const T * cache_scale, const T * cache_zp) {
-    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));                     
-    CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));                     
+    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
+    CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
     Tensor tCrA_copy_view = smem_thr_copy_A.retile_D(tCrA);
-    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCrA_copy_view));    
+    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(tCrA_copy_view));
     if (!A_in_regs) {
-        copy(smem_tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{})); 
+        copy(smem_tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{}));
     }
     uint32_t *sBdata = reinterpret_cast<uint32_t *>(sB.data().get()) + tidx * (2 * kDataNumPer2Byte / 4);
 
@@ -265,8 +265,8 @@ inline __device__ void gemm_value_quant(
         const int cur_idx = i * kHeadDim * (2 * kDataNumPer2Byte / 4);
 
         if (i < size<2>(tCrA) - 1) {
-            if (!A_in_regs) { 
-                copy(smem_tiled_copy_A, tCsA(_, _, i + 1), tCrA_copy_view(_, _, i + 1)); 
+            if (!A_in_regs) {
+                copy(smem_tiled_copy_A, tCsA(_, _, i + 1), tCrA_copy_view(_, _, i + 1));
             }
         }
         if constexpr (kDataNumPer2Byte == 4) {
@@ -323,7 +323,7 @@ struct Allreduce {
 
 template<>
 struct Allreduce<2> {
-template<typename T, typename Operator> 
+template<typename T, typename Operator>
 static __device__ inline T run(T x, Operator &op) {
     x = op(x, __shfl_xor_sync(uint32_t(-1), x, 1));
     return x;

@@ -21,7 +21,7 @@ __global__ void fused_block_mean_and_rope_kernel(
         const int head_num,
         const int kv_head_num,
         const int max_input_length) {
-        
+
     constexpr int kPackSize = 16 / sizeof(input_type);
     constexpr int kHeadDim = 128;
 
@@ -54,7 +54,7 @@ __global__ void fused_block_mean_and_rope_kernel(
     const int col_idx = tidx % (kHeadDim / kPackSize);
 
     const int bias_idx = bidh * kHeadDim + col_idx * kPackSize;
-    
+
     src_type src, src_bias;
     rope_type sin, cos;
 
@@ -68,7 +68,7 @@ __global__ void fused_block_mean_and_rope_kernel(
         const int cur_token = bidt_q + row_idx;
         const float * cos_rope = rope_sin_cos + (cur_token + seq_len_start) * (kHeadDim / 2) + col_idx * (kPackSize / 2);
         const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
-            
+
         if (cur_token < seq_len) {
             src.load_from(qkv_input + cu_seq_q[bidb] * hidden + bias_idx + cur_token * hidden);
 
@@ -87,7 +87,7 @@ __global__ void fused_block_mean_and_rope_kernel(
             const int cur_token = bidt_k + row_idx;
             const float * cos_rope = rope_sin_cos + (cur_token + seq_len_start) * (kHeadDim / 2) + col_idx * (kPackSize / 2);
             const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
-                
+
             if (cur_token < seq_len) {
                 src.load_from(qkv_input + cu_seq_q[bidb] * hidden + bias_idx + cur_token * hidden);
 
@@ -131,9 +131,9 @@ __global__ void fused_block_mean_and_rope_kernel(
                     local_sum.add(src);
                 }
             }
-            
+
             src_type neighbor;
-            
+
             #pragma unroll
             for (int i = 0; i < kPackSize; i+=2) {
                 *reinterpret_cast<int32_t*>(neighbor.data.elt + i) = __shfl_down_sync(0xffffffff, *reinterpret_cast<int32_t*>(local_sum.data.elt + i), 16);
@@ -148,10 +148,10 @@ __global__ void fused_block_mean_and_rope_kernel(
             __syncthreads();
 
             pack_half * local_sum_mem_half = reinterpret_cast<pack_half*>(local_sum_mem);
-                
+
             pack_half local_sum_half = local_sum_mem_half[tidx];
 
-                    
+
             if (tidx < kHeadDim / 2) {
 
                 #pragma unroll
@@ -164,7 +164,7 @@ __global__ void fused_block_mean_and_rope_kernel(
                 local_sum_half *= float_2_half2<input_type>(inv_tokens_sum);
 
                 const int store_mean_idx = ((bidb * kMaxN + blockIdx.z + seq_len_start / moba_block_size) * kv_head_num * kHeadDim + (bidh - head_num) * kHeadDim) / 2 + tidx;
-            
+
                 reinterpret_cast<pack_half*>(k_gate_mean)[store_mean_idx] = local_sum_half;
             }
         }
@@ -176,7 +176,7 @@ __global__ void fused_block_mean_and_rope_kernel(
             if (need_add_bias) {
                 src.add(src_bias);
             }
- 
+
             src.store_to(v_input + (cu_seq_k[bidb] + cur_token) * kv_head_num * kHeadDim + bias_idx - (head_num + kv_head_num) * kHeadDim);
         }
     }
@@ -202,7 +202,7 @@ void fused_block_mean_and_rope(
         const int bsz,
         const int max_input_length,
         cudaStream_t stream) {
-    
+
     static_assert(moba_block_size >= 64, "moba_block_size must be at least 64");
     constexpr int kPackSize = 16 / sizeof(input_type);
     constexpr int kHeadDim = 128;
@@ -273,7 +273,7 @@ void FusedBlockMeanAndRope(
         const int max_seq_q,
         const int max_seq_k,
         const std::string &cache_quant_type_str) {
-    
+
     constexpr int kBlockM = 128;
     constexpr int kBlockN = 128;
     constexpr int kMobaBlockSize = 128;
@@ -300,7 +300,7 @@ void FusedBlockMeanAndRope(
             kv_head_num,
             seq_len_encoder.dims()[0],
             max_input_length,
-            qkv_out.stream()); 
+            qkv_out.stream());
     } else if (k_input.dtype() == paddle::DataType::BFLOAT16) {
         using T = phi::dtype::bfloat16;
         using cute_type = typename cuteType<T>::type;
@@ -322,7 +322,7 @@ void FusedBlockMeanAndRope(
             kv_head_num,
             seq_len_encoder.dims()[0],
             max_input_length,
-            qkv_out.stream()); 
+            qkv_out.stream());
     }
 }
 
@@ -342,7 +342,7 @@ __global__ void get_kv_from_cache_c16_kernel(
         const int batch_size,
         const int max_input_length,
         const int max_blocks_per_seq) {
-    
+
     const int block_idx = blockIdx.x;
     int bidh = blockIdx.y;
     const int bidb = blockIdx.z;
@@ -353,16 +353,16 @@ __global__ void get_kv_from_cache_c16_kernel(
     if (base_token_idx >= seq_len || seq_len_encoder[bidb] == 0) {
         return;
     }
-    
+
     constexpr int kPackSize = 16 / sizeof(T);
-    
+
     const int row_idx = tidx / (kHeadDim / kPackSize);
     const int col_idx = tidx % (kHeadDim / kPackSize) * kPackSize;
     const int physical_block_number = block_tables[bidb * max_blocks_per_seq + block_idx];
-    
-    
+
+
     const int ramian_tokens = seq_len - base_token_idx;
-    
+
     if (bidh < kv_head_num) {
         const int cache_offset = physical_block_number * kv_head_num * kBlockSize * kHeadDim + bidh * kBlockSize * kHeadDim + col_idx;
         const int base_store_idx = (base_token_idx + cu_seq_k[bidb]) * kv_head_num * kHeadDim + bidh * kHeadDim + col_idx;
@@ -407,7 +407,7 @@ void get_kv_from_cache(
         const int max_blocks_per_seq,
         const std::string &cache_quant_type_str,
         cudaStream_t stream) {
-    
+
     constexpr int kThreads = 128;
     constexpr int kHeadDim = 128;
     assert(kHeadDim == head_dim);
@@ -456,7 +456,7 @@ void GetKVFromCache(
         const int max_input_length,
         const int max_seq_k,
         const std::string &cache_quant_type_str) {
-    
+
     if (k_input.dtype() == paddle::DataType::FLOAT16) {
         using T = phi::dtype::float16;
         using cute_type = typename cuteType<T>::type;
@@ -517,18 +517,18 @@ __global__ void get_cur_cu_seq_len_k_kernel(
         int* __restrict__ q_pack_tokens,
         const int pack_size,
         const int bsz) {
-    
+
     int total_tokens = 0;
     cu_seqlens_k[0] = 0;
     cu_seq_q_pack[0] = 0;
-    
+
     for (uint32_t bid = 0; bid < bsz; bid++) {
         int cache_len = seq_lens_decoder[bid];
         const int q_len = seq_lens_encoder[bid];
         if (q_len <= 0) {
             cache_len = 0;
         }
-        total_tokens += (cache_len + q_len); 
+        total_tokens += (cache_len + q_len);
         cu_seqlens_k[bid + 1] = total_tokens;
         cu_seq_q_pack[bid + 1] = cu_seq_q_pack[bid] + (q_len + pack_size -1) / pack_size * pack_size;
     }
@@ -537,7 +537,7 @@ __global__ void get_cur_cu_seq_len_k_kernel(
 
 std::vector<paddle::Tensor> GetCurCuSeqLenk(
         const paddle::Tensor& seq_lens_encoder,
-        const paddle::Tensor& seq_lens_decoder, 
+        const paddle::Tensor& seq_lens_decoder,
         const paddle::Tensor& seq_lens_this_time,
         const int pack_size) {
     auto stream = seq_lens_decoder.stream();
@@ -564,7 +564,7 @@ std::vector<paddle::Tensor> GetCurCuSeqLenk(
 }
 
 
-template <typename T, int moba_block_size, int kHeadDim, int kMaxN> 
+template <typename T, int moba_block_size, int kHeadDim, int kMaxN>
 __global__ void moba_mlp_einsum_kernel(
         const T * src_data,
         const T * weight_data,
@@ -618,9 +618,9 @@ __global__ void moba_mlp_einsum_kernel(
         weight.load_from(weight_data + weight_base_idx + i * kHeadDim);
         sums.fma(src, weight);
     }
-    
+
     SrcType neighbor;
-        
+
     #pragma unroll
     for (int i = 0; i < kPackSize; i+=2) {
         *reinterpret_cast<int32_t*>(neighbor.data.elt + i) = __shfl_down_sync(0xffffffff, *reinterpret_cast<int32_t*>(sums.data.elt + i), 16);
@@ -635,7 +635,7 @@ __global__ void moba_mlp_einsum_kernel(
     __syncthreads();
     using pack_half = std::conditional_t<std::is_same<T, phi::dtype::float16>::value, __half2, nv_bfloat162>;
     pack_half * local_sum_mem_half = reinterpret_cast<pack_half*>(local_sum_mem);
-    
+
     if (tidx < kHeadDim / 2) {
         pack_half local_sum_half = local_sum_mem_half[tidx];
         #pragma unroll
@@ -658,7 +658,7 @@ __global__ void moba_mlp_einsum_kernel(
 }
 
 
-template <typename T, int kHeadDim, int kMaxN> 
+template <typename T, int kHeadDim, int kMaxN>
 void moba_mlp_einsum(
         const T * src_data,
         const T * weight_data,
@@ -671,7 +671,7 @@ void moba_mlp_einsum(
         const int head_num,
         const int batch_size,
         cudaStream_t stream) {
-    
+
     dim3 grid_dims;
     grid_dims.x = (max_seq_len + moba_block_size - 1) / moba_block_size;
     grid_dims.y = head_num;
@@ -690,7 +690,7 @@ void moba_mlp_einsum(
         PADDLE_THROW(phi::errors::Unimplemented(
             "MobaMlpEinsum not implemented for moba_block_size = %d", moba_block_size));
     }
-    
+
 }
 
 
@@ -698,11 +698,11 @@ std::vector<paddle::Tensor> MobaMlpEinsum(
         const paddle::Tensor& k_input,
         const paddle::Tensor& attn_gate_weight,
         const paddle::Tensor& seq_lens_encoder,
-        const paddle::Tensor& seq_lens_decoder, 
+        const paddle::Tensor& seq_lens_decoder,
         const paddle::Tensor& cu_seq_k,
         const int max_seq_len,
         const int kv_head_num) {
-    
+
     const int kHeadDim = 128;
     const int kMaxN = 1024;
     const int moba_block_size = attn_gate_weight.dims()[1];
@@ -777,12 +777,12 @@ PD_BUILD_OP(fused_block_mean_and_rope)
 PD_BUILD_OP(get_kv_from_cache)
     .Inputs({
         "k_input",
-        "v_input", 
-        "cu_seq_k",  
-        "seq_len_encoder", 
+        "v_input",
+        "cu_seq_k",
+        "seq_len_encoder",
         "seq_len_decoder",
-        "cache_k", 
-        "cache_v", 
+        "cache_k",
+        "cache_v",
         "block_tables",
         paddle::Optional("cache_k_dequant_scale"),
         paddle::Optional("cache_v_dequant_scale"),

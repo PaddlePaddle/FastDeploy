@@ -43,7 +43,7 @@ static void PrintFrontNPerLine(const T *a,
 template <int kHeadDim>
 auto get_gmem_layout(int token_num, int head_num) {
     return make_layout(
-        make_shape(token_num, kHeadDim, head_num), 
+        make_shape(token_num, kHeadDim, head_num),
         make_stride(head_num * kHeadDim, _1{}, kHeadDim));
 }
 
@@ -95,7 +95,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         reinterpret_cast<int4*>(qk_gate_topk_idx)[i] = reinterpret_cast<const int4*>(qk_gate_idx_cur_offset)[i];
     }
 
-    
+
     const int n_block_max = min(cute::ceil_div((m_block + 1) * kBlockM + seq_len_k - seq_len_q, kBlockN), cute::ceil_div(seq_len_k, kBlockN));
 
     if (m_block * kBlockM >= seq_len_q) {
@@ -132,32 +132,32 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     CollectiveMainloop collective_mainloop;
 
-    if (warp_group_idx == 0) { 
+    if (warp_group_idx == 0) {
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 8 ? 56 : 24>();
 
         int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-        if (warp_idx_in_warpgroup == 0) { 
+        if (warp_idx_in_warpgroup == 0) {
             PipelineState smem_pipe_write_k = cutlass::make_producer_start_state<MainloopPipeline>();
             PipelineState smem_pipe_write_v = cutlass::make_producer_start_state<MainloopPipeline>();
 
             collective_mainloop.load<Ktraits::UseMoba>(
-                mainloop_params, 
-                pipeline_k, 
-                pipeline_v, 
-                smem_pipe_write_k, 
+                mainloop_params,
+                pipeline_k,
+                pipeline_v,
+                smem_pipe_write_k,
                 smem_pipe_write_v,
-                shared_storage, 
+                shared_storage,
                 qk_gate_topk_idx,
-                n_block_max, 
-                m_block, 
-                bidh, 
+                n_block_max,
+                m_block,
+                bidh,
                 bidb,
                 data_params.cu_seq_q,
                 data_params.cu_seq_k,
                 seq_len_q,
                 seq_len_k);
         }
-    } else {  
+    } else {
         cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 8 ? 256 : 240>();
         typename Ktraits::TiledMma1 tiled_mma1;
 
@@ -169,34 +169,34 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         Softmax<2 * (2 * kBlockM / NumMmaThreads)> softmax;
 
         collective_mainloop.mma<Ktraits::UseMoba>(
-            mainloop_params, 
-            pipeline_k, 
-            pipeline_v, 
-            smem_pipe_read_k, 
+            mainloop_params,
+            pipeline_k,
+            pipeline_v,
+            smem_pipe_read_k,
             smem_pipe_read_v,
-            tOrO, 
-            softmax, 
+            tOrO,
+            softmax,
             qk_gate_topk_idx,
-            n_block_max, 
-            threadIdx.x - NumCopyThreads, 
-            m_block, 
+            n_block_max,
+            threadIdx.x - NumCopyThreads,
+            m_block,
             seq_len_q,
             seq_len_k,
             shared_storage);
-            
+
         const int o_head_stride = data_params.head_num * kHeadDim;
         const int store_offset = (data_params.cu_seq_q[bidb] + m_block * kBlockM) * o_head_stride + bidh * kHeadDim;
 
         const int real_seq = seq_len_q - m_block * kBlockM;
-        
+
         collective_mainloop.store<NumMmaThreads>(
-            mainloop_params, 
-            tOrO, 
-            shared_storage, 
+            mainloop_params,
+            tOrO,
+            shared_storage,
             tiled_mma1,
-            threadIdx.x - NumCopyThreads, 
-            o_head_stride, 
-            real_seq, 
+            threadIdx.x - NumCopyThreads,
+            o_head_stride,
+            real_seq,
             reinterpret_cast<Element*>(data_params.o_ptr) + store_offset);
     }
 
@@ -254,21 +254,21 @@ void flash_attn_headdim128(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 128;
     constexpr static int kNWarps = kBlockM / 16 + 4;
     constexpr static int kStages = 2;
-    
+
     using Ktraits = Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, kMaxN, true, InputType>;
-    run_flash_fwd<Ktraits>(params, stream); 
+    run_flash_fwd<Ktraits>(params, stream);
 }
 
 template <typename T>
 void DispatchEncoderAttention(
         const paddle::Tensor& q_input,
         const paddle::Tensor& k_input,
-        const paddle::Tensor& v_input, 
+        const paddle::Tensor& v_input,
         const paddle::Tensor& qk_gate_topk_idx,
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cu_seq_k,
         const paddle::Tensor& cu_seq_q_pack,
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& out,
         const int max_seq_q,
@@ -278,7 +278,7 @@ void DispatchEncoderAttention(
         const int head_dim,
         const int batch_size,
         const int max_input_length) {
-    
+
     constexpr int kBlockM = 128;
     constexpr int kBlockN = 128;
     constexpr int kMobaBlockSize = 128;
@@ -318,7 +318,7 @@ void EncoderAttention(
         const paddle::Tensor& cu_seq_q,
         const paddle::Tensor& cu_seq_k,
         const paddle::Tensor& cu_seq_q_pack,
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& out,
         const int max_seq_q,
@@ -330,7 +330,7 @@ void EncoderAttention(
 
     const int batch_size = seq_len_encoder.dims()[0];
     if (q_input.dtype() == paddle::DataType::FLOAT16) {
-        return 
+        return
             DispatchEncoderAttention<phi::dtype::float16>(
                 q_input,
                 k_input,
@@ -339,7 +339,7 @@ void EncoderAttention(
                 cu_seq_q,
                 cu_seq_k,
                 cu_seq_q_pack,
-                seq_len_encoder, 
+                seq_len_encoder,
                 seq_len_decoder,
                 out,
                 max_seq_q,
@@ -350,7 +350,7 @@ void EncoderAttention(
                 batch_size,
                 max_input_length);
     } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
-        return 
+        return
             DispatchEncoderAttention<phi::dtype::bfloat16>(
                 q_input,
                 k_input,
@@ -359,7 +359,7 @@ void EncoderAttention(
                 cu_seq_q,
                 cu_seq_k,
                 cu_seq_q_pack,
-                seq_len_encoder, 
+                seq_len_encoder,
                 seq_len_decoder,
                 out,
                 max_seq_q,
@@ -381,9 +381,9 @@ PD_BUILD_OP(encoder_moba_attention)
         "k_input",
         "v_input",
         "qk_gate_topk_idx",
-        "cu_seq_q", 
-        "cu_seq_k", 
-        "cu_seq_q_pack",  
+        "cu_seq_q",
+        "cu_seq_k",
+        "cu_seq_q_pack",
         "seq_len_encoder",
         "seq_len_decoder",
         "out",

@@ -33,21 +33,21 @@ __global__ void qk_gemm_kernel(
 
     using SmemLayoutAtomQ = decltype(
         cutlass::gemm::collective::detail::ss_smem_selector<
-            GMMA::Major::K, input_type, 
-            decltype(cute::get<0>(TileShape_MNK{})), 
+            GMMA::Major::K, input_type,
+            decltype(cute::get<0>(TileShape_MNK{})),
             decltype(cute::get<2>(TileShape_MNK{}))>());
     using SmemLayoutQ = decltype(tile_to_shape(SmemLayoutAtomQ{}, select<0, 2>(TileShape_MNK{})));
 
     using SmemLayoutAtomK = decltype(
         cutlass::gemm::collective::detail::ss_smem_selector<
-            GMMA::Major::K, input_type, decltype(cute::get<1>(TileShape_MNK{})), 
+            GMMA::Major::K, input_type, decltype(cute::get<1>(TileShape_MNK{})),
             decltype(cute::get<2>(TileShape_MNK{}))>());
     using SmemLayoutK = decltype(tile_to_shape(SmemLayoutAtomK{}, select<1, 2>(TileShape_MNK{})));
 
     using SmemLayoutAtomQK = decltype(
         cutlass::gemm::collective::detail::ss_smem_selector<
         GMMA::Major::K, input_type,
-        decltype(cute::get<0>(TileShape_MNK{})), 
+        decltype(cute::get<0>(TileShape_MNK{})),
         decltype(cute::get<1>(TileShape_MNK{}))>());
 
     using SmemLayoutQK = decltype(tile_to_shape(SmemLayoutAtomQK{}, select<0, 1>(TileShape_MNK{})));
@@ -83,7 +83,7 @@ __global__ void qk_gemm_kernel(
     constexpr int kThreadPerValue = 16 / sizeof(input_type);
     constexpr int kThreadsPerRow = kHeadDim / kThreadPerValue;
     constexpr int kThreadsPerRowQK = kBlockN / kThreadPerValue;
-    
+
     using GmemLayoutAtom = Layout<
         Shape <Int<kNThreads / kThreadsPerRow>, Int<kThreadsPerRow>>,
         Stride<Int<kThreadsPerRow>, _1>>;
@@ -97,7 +97,7 @@ __global__ void qk_gemm_kernel(
     using GmemLayoutAtomQK = Layout<
         Shape <Int<kNThreads / kThreadsPerRowQK>, Int<kThreadsPerRowQK>>,
         Stride<Int<kThreadsPerRowQK>, _1>>;
-        
+
     using GmemTiledCopyQK = decltype(
         make_tiled_copy(Copy_Atom<
             UniversalCopy<cutlass::uint128_t>, input_type>{},
@@ -185,14 +185,14 @@ __global__ void qk_gemm_kernel(
 
 
     Tensor cQ = make_identity_tensor(make_shape(kBlockM, kHeadDim));
-    Tensor tQcQ = gmem_thr_copy.partition_S(cQ); 
+    Tensor tQcQ = gmem_thr_copy.partition_S(cQ);
 
     Tensor cK = make_identity_tensor(make_shape(kBlockN, kHeadDim));
-    Tensor tKcK = gmem_thr_copy.partition_S(cK); 
+    Tensor tKcK = gmem_thr_copy.partition_S(cK);
 
     Tensor cQK = make_identity_tensor(make_shape(kBlockM, kBlockN));
-    Tensor tQKcQK = gmem_thr_copy.partition_S(cQK); 
-    
+    Tensor tQKcQK = gmem_thr_copy.partition_S(cQK);
+
     if (remain_q_seq >= kBlockM) {
         copy(gmem_tiled_copy, tQgQ, tQsQ, tQcQ);
     } else {
@@ -350,12 +350,12 @@ __global__ void qk_gate_sort_encoder_kernel(
         const int kGqaGroupSize,
         const int top_k_left,
         const int top_k_right) {
-    
+
     const int bidt = blockIdx.x * kBlockM;
     const int bidh = blockIdx.y;
     const int bidb = blockIdx.z;
     const int tidx = threadIdx.x;
-    
+
     constexpr int kPackSize = kBlockMaxN / knthreads;
 
     static_assert(kBlockMaxN % knthreads == 0);
@@ -422,7 +422,7 @@ __global__ void qk_gate_sort_encoder_kernel(
 
         float mid_limit;
         int count;
-        
+
         if (right_limit == left_limit) {
             mid_limit = (left_limit + right_limit) * 0.5f;
         } else {
@@ -497,7 +497,7 @@ void qk_gate_sort_encoder(
         const int top_k_left,
         const int top_k_right,
         cudaStream_t stream) {
-    
+
     constexpr int kPackSize = 16 / sizeof(T);
 
     const int gqa_group_size = head_num / kv_head_num;
@@ -512,7 +512,7 @@ void qk_gate_sort_encoder(
     constexpr auto kernel = qk_gate_sort_encoder_kernel<T, knthreads, moba_block_size, kBlockM, kMaxN, searchtimes>;
 
     kernel<<<grid_dims, knthreads, 0, stream>>>(
-        qk_gate_weight, 
+        qk_gate_weight,
         qk_gate_topk_idx,
         seq_len_encoder,
         seq_len_decoder,
@@ -540,7 +540,7 @@ __global__ void qk_gate_sort_decoder_kernel(
         const int top_k_left,
         const int top_k_right,
         const int use_moba_seq_limit) {
-    
+
     const int bidb = blockIdx.x;
     const int bidh = blockIdx.y;
     const int tidx = threadIdx.x;
@@ -570,7 +570,7 @@ __global__ void qk_gate_sort_decoder_kernel(
     const int load_offset = bidb * head_num * kBlockMaxN + bidh * kBlockMaxN + tidx * kPackSize;
 
     src.load_from(qk_gate_weight + load_offset);
-    
+
     float max_global = -FLT_MAX;
     float min_global = FLT_MAX;
 
@@ -597,7 +597,7 @@ __global__ void qk_gate_sort_decoder_kernel(
 
     float mid_limit;
     int count;
-    
+
     #pragma unroll
     for (int i = 0; i < searchtimes; i++) {
         mid_limit = (left_limit + right_limit) * 0.5f;
@@ -651,7 +651,7 @@ void qk_gate_sort_decoder(
     constexpr auto kernel = qk_gate_sort_decoder_kernel<T, knthreads, moba_block_size, kBlockMaxN, searchtimes>;
 
     kernel<<<grid_dims, knthreads, 0, 0>>>(
-            qk_gate_weight, 
+            qk_gate_weight,
             qk_gate_topk_idx,
             decoder_seq_lens,
             head_num,

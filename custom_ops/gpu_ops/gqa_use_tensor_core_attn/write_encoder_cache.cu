@@ -15,7 +15,7 @@ __global__ void write_encoder_cachekv_c16(
         const int * block_tables,
         const int kv_head_num,
         const int max_blocks_per_seq) {
-    
+
     constexpr int kPackSize = 16 / sizeof(T);
     const int block_idx = blockIdx.x * kBlockSize;
     int bidh = blockIdx.y;
@@ -24,7 +24,7 @@ __global__ void write_encoder_cachekv_c16(
     const int row_idx = tidx / (kHeadDim / kPackSize);
     const int col_idx = tidx % (kHeadDim / kPackSize) * kPackSize;
     const int seq_len = seq_len_encoder[bidb];
-    
+
     if (seq_len == 0) return;
 
     const int ramian_tokens = seq_len - block_idx;
@@ -35,7 +35,7 @@ __global__ void write_encoder_cachekv_c16(
     if (bidh < kv_head_num) {
         T * cache = cache_k + physical_block_number * kv_head_num * kBlockSize * kHeadDim + bidh * kBlockSize * kHeadDim + col_idx;
         const int base_load_idx = (block_idx + cu_seq_k[bidb]) * kv_head_num * kHeadDim + bidh * kHeadDim + col_idx;
-        
+
         #pragma unroll
         for (int i = row_idx; i < kBlockSize; i += 128 / (kHeadDim / kPackSize)) {
             if (i < ramian_tokens) {
@@ -46,7 +46,7 @@ __global__ void write_encoder_cachekv_c16(
         bidh -= kv_head_num;
         const int base_load_idx = (block_idx + cu_seq_k[bidb]) * kv_head_num * kHeadDim + bidh * kHeadDim + col_idx;
         T * cache = cache_v + physical_block_number * kv_head_num * kBlockSize * kHeadDim + bidh * kBlockSize * kHeadDim + col_idx;
-        
+
         #pragma unroll
         for (int i = row_idx; i < kBlockSize; i += 128 / (kHeadDim / kPackSize)) {
             if (i < ramian_tokens) {
@@ -61,7 +61,7 @@ void WriteEncoderCacheKV(
         const paddle::Tensor& k_input,
         const paddle::Tensor& v_input,
         const paddle::Tensor& cu_seq_k,
-        const paddle::Tensor& seq_len_encoder, 
+        const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
         const paddle::Tensor& cache_k,
         const paddle::Tensor& cache_v,
@@ -77,7 +77,7 @@ void WriteEncoderCacheKV(
         const int head_dim,
         const int max_seq_q,
         const std::string &cache_quant_type_str) {
-    
+
     constexpr int kThreads = 128;
     constexpr int kHeadDim = 128;
     assert(kHeadDim == head_dim);
@@ -125,11 +125,11 @@ PD_BUILD_OP(gqa_attention_write_encoder_cache_kv)
     .Inputs({
         "k_input",
         "v_input",
-        "cu_seq_k",   
+        "cu_seq_k",
         "seq_len_encoder",
         "seq_len_decoder",
-        "cache_k", 
-        "cache_v", 
+        "cache_k",
+        "cache_v",
         "block_tables",
         paddle::Optional("cache_k_quant_scale"),
         paddle::Optional("cache_v_quant_scale"),
@@ -147,5 +147,3 @@ PD_BUILD_OP(gqa_attention_write_encoder_cache_kv)
     .SetInplaceMap({{"cache_k", "cache_k_out"},
                     {"cache_v", "cache_v_out"}})
     .SetKernelFn(PD_KERNEL(gqa_attention::WriteEncoderCacheKV));
-
-

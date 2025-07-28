@@ -29,9 +29,9 @@ struct Block_attn_params {
     int * seq_lens_encoder;
     int * seq_lens_decoder;
     int * block_table;
-    int max_input_length; 
+    int max_input_length;
     int max_seq_len;
-    int head_num; 
+    int head_num;
     int kv_head_num;
     int max_num_blocks_per_seq;
     float scale_softmax;
@@ -54,13 +54,13 @@ struct CacheKV_quant_traits {
     using SmemLayoutAtomQ = decltype(
         composition(Swizzle<3, 3, 3>{},
                     Layout<
-                        Shape<Int<8>, Int<kBlockKSmem>>, 
+                        Shape<Int<8>, Int<kBlockKSmem>>,
                         Stride<Int<kBlockKSmem>, _1>>{}));
-    
+
     using SmemLayoutKV = decltype(tile_to_shape(
         SmemLayoutAtomQ{},
         Shape<Int<kBlockSize>, Int<kHeadDim>>{}));
-    
+
     static constexpr int kNWarps = 4;
     static constexpr int kNThreads = kNWarps * 32;
 
@@ -127,15 +127,15 @@ struct Block_attn_kernel_traits {
     static constexpr int kBlockSize = CacheKV_traits::kBlockSize;
     static_assert(kGqaGroupSize <= 16);
     static constexpr int32_t kNWarps = CacheKV_traits::kNWarps;
-    
+
      // 这个值不能超64，否则会有bank flict
     static constexpr int kBlockKSmem = CacheKV_traits::kBlockKSmem;
     static constexpr int kBlockKVSmem = kHeadDimKV <= 64 ? kHeadDimKV : 64;
     static_assert(kHeadDim % kBlockKSmem == 0);
     static constexpr int kNReduceWarps = 4;
     static constexpr int kNReduceThreads = kNReduceWarps * 32;
-    
-    
+
+
     using SmemLayoutAtomQ = typename CacheKV_traits::SmemLayoutAtomQ;
 
     using SmemLayoutQ = decltype(tile_to_shape(
@@ -149,13 +149,13 @@ struct Block_attn_kernel_traits {
     using SmemLayoutAtomKV = decltype(
         composition(Swizzle<3, 3, 3>{},
                     Layout<
-                        Shape<Int<8>, Int<kBlockKVSmem>>, 
+                        Shape<Int<8>, Int<kBlockKVSmem>>,
                         Stride<Int<kBlockKVSmem>, _1>>{}));
 
     using SmemLayoutKV_ = decltype(tile_to_shape(
         SmemLayoutAtomKV{},
         Shape<Int<kBlockSize>, Int<kHeadDimKV>>{}));
-    
+
     using SmemLayoutKV = std::conditional_t<
         kDataBits == 16,
         SmemLayoutKV_,
@@ -193,8 +193,8 @@ struct Block_attn_kernel_traits {
         make_tiled_copy(Copy_Atom<SM80_CP_ASYNC_CACHEGLOBAL<cute::uint128_t>, cuteType>{},
                         GmemKVLayoutAtom{},
                         Layout<Shape<_1, Int<kThreadPerValue>>>{}));
-    
-    
+
+
     using SmemCopyAtomTransposed = typename CacheKV_traits::SmemCopyAtomTransposed;
 
     using GmemTiledCopyO = decltype(
@@ -206,7 +206,7 @@ struct Block_attn_kernel_traits {
     using SmemLayoutAtomO = decltype(
         composition(Swizzle<3, 3, 3>{},
                     Layout<
-                        Shape<Int<8>, Int<kBlockKSmem>>, 
+                        Shape<Int<8>, Int<kBlockKSmem>>,
                         Stride<Int<kBlockKSmem>, _1>>{}));
 
     using SmemLayoutO = decltype(tile_to_shape(
