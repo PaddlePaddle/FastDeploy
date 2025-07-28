@@ -197,6 +197,8 @@ class GPUModelRunner(ModelRunnerBase):
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
+        req_dict: A list of Request dict
+        num_running_requests: batch_size
         """
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
@@ -288,6 +290,8 @@ class GPUModelRunner(ModelRunnerBase):
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
+        req_dict: A list of Request dict
+        num_running_requests: batch_size
         TODO(gongshaotian): Refactor this func
         """
 
@@ -1178,6 +1182,7 @@ class GPUModelRunner(ModelRunnerBase):
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
+            num_running_requests: batch_size
         """
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)

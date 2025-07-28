@@ -150,6 +150,8 @@ class GCUModelRunner(ModelRunnerBase):
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
+        req_dict: A list of Request dict
+        num_running_requests: batch_size
         """
 
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
@@ -889,6 +891,7 @@ class GCUModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
+            num_running_requests: batch_size
             intermediate_tensors:
         """
         # If `not_need_stop`` is False, it means the current worker is in an idle state.

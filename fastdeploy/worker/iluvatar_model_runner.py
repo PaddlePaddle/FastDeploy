@@ -140,6 +140,7 @@ class IluvatarModelRunner(ModelRunnerBase):
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
+        num_running_requests: batch_size
         TODO(gongshaotian): Refactor this func
         """
 
@@ -844,6 +845,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
+            num_running_requests: batch_size
             intermediate_tensors:
         """
         # Note(@wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
