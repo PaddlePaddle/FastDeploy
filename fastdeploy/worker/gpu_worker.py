@@ -137,7 +137,7 @@ class GpuWorker(WorkerBase):
         pynvml.nvmlShutdown()
 
         available_kv_cache_memory = (
-            after_run_meminfo.total * self.parallel_config.gpu_memory_utilization
+            after_run_meminfo.total * self.cache_config.gpu_memory_utilization
             - after_run_meminfo.used
             - paddle_peak_increase
         )

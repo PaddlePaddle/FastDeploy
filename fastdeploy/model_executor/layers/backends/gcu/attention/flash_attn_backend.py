@@ -82,7 +82,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: GCUFlashAttnMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
         self.max_num_seqs = fd_config.parallel_config.max_num_seqs
 
