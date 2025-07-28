@@ -576,8 +576,9 @@ class GCUModelRunner(ModelRunnerBase):
         )
 
         # Update Batch type for cuda graph
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
+        self.forward_meta.step_use_cudagraph = self.use_cudagraph and (
+            not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
+        )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
