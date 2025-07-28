@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -272,6 +272,7 @@ class SpeculativeConfig:
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
 
+        self.num_extra_cache_layer = 0
         # TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
         # We temperately add the name map here and will delete it in future.
         name_map = {
@@ -287,6 +288,8 @@ class SpeculativeConfig:
                 if key == "speculative_benchmark_mode":
                     value = True if value.lower() == "true" else False
                 setattr(self, name_map[key], value)
+        self.read_model_config()
+        self.reset()
 
     def read_model_config(self):
         """
@@ -427,6 +430,8 @@ class GraphOptimizationConfig:
                 if hasattr(self, key):
                     setattr(self, key, value)
 
+        self.check_legality_parameters()
+
     def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
@@ -483,31 +488,26 @@ class GraphOptimizationConfig:
 
     def check_legality_parameters(
         self,
-        graph_opt_level: Optional[int] = None,
-        use_cudagraph: Optional[bool] = None,
-        cudagraph_capture_sizes: Optional[List[int]] = None,
-        **kwargs,
     ) -> None:
         """Check the legality of parameters passed in from the command line"""
 
-        if graph_opt_level is not None:
-            assert graph_opt_level in [
+        if self.graph_opt_level is not None:
+            assert self.graph_opt_level in [
                 0,
                 1,
                 2,
             ], "In graph optimization config, graph_opt_level can only take the values of 0, 1 and 2."
-        if use_cudagraph is not None:
-            assert type(use_cudagraph) is bool, "In graph optimization config, type of use_cudagraph must is bool."
-        if cudagraph_capture_sizes is not None:
+        if self.use_cudagraph is not None:
             assert (
-                type(cudagraph_capture_sizes) is list
+                type(self.use_cudagraph) is bool
+            ), "In graph optimization config, type of use_cudagraph must is bool."
+        if self.cudagraph_capture_sizes is not None:
+            assert (
+                type(self.cudagraph_capture_sizes) is list
             ), "In graph optimization config, type of cudagraph_capture_sizes must is list."
             assert (
-                len(cudagraph_capture_sizes) > 0
+                len(self.cudagraph_capture_sizes) > 0
             ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
-
-        for key, value in kwargs.items():
-            raise ValueError(f"Invalid --graph-optimization-config parameter {key}")
 
     def update_use_cudagraph(self, argument: bool):
         """
