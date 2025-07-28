@@ -684,7 +684,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self, num_running_requests: int = None) -> None:
+    def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             recover_decode_task(
@@ -1181,7 +1181,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
-        self._prepare_inputs(num_running_requests)
+        self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
