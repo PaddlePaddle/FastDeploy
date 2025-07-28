@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import os
 import time
 from typing import List, Optional
@@ -136,7 +137,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             schemata_key,
         )
 
-    def insert_prefill_inputs(self, req_dicts: List[Request]):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
         TODO(gongshaotian): Refactor this func
@@ -170,7 +171,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
+                self.tmp_seq_lens_this_time[idx : idx + 1] = 1
                 self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = length
                 self.share_inputs["prompt_lens"][idx : idx + 1] = length
@@ -182,7 +183,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                         request.draft_token_ids[0:num_prefill_send_token],
                         dtype="int64",
                     )
-                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = num_prefill_send_token
+                    self.tmp_seq_lens_this_time[idx : idx + 1] = num_prefill_send_token
             else:
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -193,7 +194,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                     request.set("chunk_idx", 1)
                     logger.info(f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
-                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                    self.tmp_seq_lens_this_time[idx : idx + 1] = token_chunk_size
                     self.share_inputs["input_ids"][idx, :token_chunk_size] = np.array(
                         request.prompt_token_ids[:token_chunk_size]
                     )
@@ -205,7 +206,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 else:
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                    self.tmp_seq_lens_this_time[idx : idx + 1] = length
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
@@ -267,7 +268,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.tmp_seq_lens_this_time[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -283,6 +284,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+        self.share_inputs["seq_lens_this_time"] = self.tmp_seq_lens_this_time
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -328,7 +330,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["max_dec_len"] = paddle.full([max_num_seqs, 1], self.model_config.max_length, dtype="int64")
         self.share_inputs["min_length"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
         self.share_inputs["max_length"] = paddle.full([max_num_seqs, 1], self.model_config.max_length, dtype="int64")
-        self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.tmp_seq_lens_this_time = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -833,6 +835,7 @@ class IluvatarModelRunner(ModelRunnerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -960,6 +963,7 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         self._update_chunked_prefill(model_forward_batch)
         self._add_cache(model_forward_batch)
+        self.tmp_seq_lens_this_time[:num_running_requests] = copy.deepcopy(self.share_inputs["seq_lens_this_time"])
         return None
 
     def _add_cache(self, model_forward_batch) -> None:
