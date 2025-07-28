@@ -756,8 +756,48 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
-PYBIND11_MODULE(fastdeploy_ops, m) {
 
+std::vector<paddle::Tensor> MobaAttention(
+        const paddle::Tensor& qkv,
+        const paddle::Tensor& q_input,
+        const paddle::Tensor& k_input,
+        const paddle::Tensor& v_input,
+        const paddle::Tensor& cu_seq_q,
+        const paddle::Tensor& cu_seq_k,
+        const paddle::Tensor& cu_seq_q_pack,
+        const paddle::Tensor& q_pack_tokens,
+        const paddle::Tensor& seq_len_encoder,
+        const paddle::Tensor& seq_len_decoder,
+        const paddle::Tensor& key_cache,
+        const paddle::Tensor& value_cache,
+        const paddle::Tensor& block_tables,
+        const paddle::Tensor& rope_sin_cos,
+        const paddle::Tensor& k_block_means,
+        const paddle::optional<paddle::Tensor>& attn_gate_weight,
+        const paddle::optional<paddle::Tensor>& qkv_bias,
+        const paddle::optional<paddle::Tensor>& cache_k_quant_scale,
+        const paddle::optional<paddle::Tensor>& cache_v_quant_scale,
+        const paddle::optional<paddle::Tensor>& cache_k_dequant_scale,
+        const paddle::optional<paddle::Tensor>& cache_v_dequant_scale,
+        const paddle::optional<paddle::Tensor>& cache_k_zero_points,
+        const paddle::optional<paddle::Tensor>& cache_v_zero_points,
+        const int head_num,
+        const int kv_head_num,
+        const int head_dim,
+        const int max_seq_len,
+        const int max_enc_len_this_time,
+        const int max_dec_len_this_time,
+        const int moba_encoder_top_k_left,
+        const int moba_encoder_top_k_right,
+        const int moba_use_encoder_seq_limit,
+        const int moba_decoder_top_k_left,
+        const int moba_decoder_top_k_right,
+        const int moba_use_decoder_seq_limit,
+        const bool moba_use_mlp,
+        const std::string &cache_quant_type_str);
+
+PYBIND11_MODULE(fastdeploy_ops, m) {
+  m.def("MobaAttention", &MobaAttention, "MobaAttention");
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
         py::arg("num_experts"), "get expert token num");
 

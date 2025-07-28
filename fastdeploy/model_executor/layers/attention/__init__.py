@@ -22,6 +22,7 @@ from .iluvatar_attn_backend import IluvatarAttnBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
 from .xpu_attn_backend import XPUAttentionBackend
+from .moba_attention_backend import MobaAttentionBackend
 
 __all__ = [
     "AttentionBackend",
@@ -34,4 +35,5 @@ __all__ = [
     "IluvatarAttnBackend",
     "BlockAttentionBackend",
     "Attention",
+    "MobaAttentionBackend"
 ]
