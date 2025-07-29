@@ -215,9 +215,7 @@ class SamplingParams:
             for add_prefix_space in [False, True]:
                 prefix = " " if add_prefix_space else ""
                 prompt = prefix + bad_word.lstrip()
-                print(prompt)
                 prompt_token_ids = tokenizer.encode(text=prompt, add_special_tokens=False)["input_ids"]
-                print(prompt_token_ids)
                 assert len(prompt_token_ids) == 1, f"Bad word '{bad_word}' is not a single token."
 
                 if (not add_prefix_space) or (add_prefix_space and prompt_token_ids != self._bad_words_token_ids[-1]):

@@ -251,16 +251,12 @@ class Sampler(nn.Layer):
 
         logits = self.processor.apply_token_mask(logits, skip_idx_list)
 
-        print("bad_words_token_ids:", sampling_metadata.bad_words_token_ids)
-
         bad_words_token_ids = sampling_metadata.bad_words_token_ids
         max_bad_token_ids = max(len(bad_token_ids) for bad_token_ids in bad_words_token_ids)
         bad_words_token_ids_padded = [
             bad_token_ids + [-1] * (max_bad_token_ids - len(bad_token_ids)) for bad_token_ids in bad_words_token_ids
         ]
         bad_words_token_ids_tensor = paddle.to_tensor(bad_words_token_ids_padded, dtype=paddle.int64)
-
-        print("bad_words_token_ids_tensor:", bad_words_token_ids_tensor)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
