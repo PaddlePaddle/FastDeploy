@@ -757,6 +757,7 @@ void SpeculateStepPaddle(
     const int max_draft_tokens);
 
 
+#ifdef CUTE_ARCH_MMA_SM90A_ENABLED
 std::vector<paddle::Tensor> MobaAttention(
         const paddle::Tensor& qkv,
         const paddle::Tensor& q_input,
@@ -795,9 +796,12 @@ std::vector<paddle::Tensor> MobaAttention(
         const int moba_use_decoder_seq_limit,
         const bool moba_use_mlp,
         const std::string &cache_quant_type_str);
+#endif
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
+  #ifdef CUTE_ARCH_MMA_SM90A_ENABLED
   m.def("MobaAttention", &MobaAttention, "MobaAttention");
+  #endif
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
         py::arg("num_experts"), "get expert token num");
 
