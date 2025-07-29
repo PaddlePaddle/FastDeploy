@@ -116,6 +116,8 @@ def setup_and_run_server():
         "0.71",
         "--quantization",
         "wint4",
+        "--reasoning-parser",
+        "ernie-45-vl",
     ]
 
     # Start subprocess in new process group
@@ -476,53 +478,52 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         assert chunk.choices[0].delta.completion_token_ids is None
 
 
-# ###### Commented out because current ci does not enable thinking
-# def test_chat_with_thinking(openai_client, capsys):
-#     """
-#     Test enable_thinking & reasoning_max_tokens option in non-streaming chat functionality with the local service
-#     """
-#     # enable thinking, non-streaming
-#     response = openai_client.chat.completions.create(
-#         model="default",
-#         messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-#         temperature=1,
-#         stream=False,
-#         max_tokens=10,
-#         extra_body={"enable_thinking": True},
-#     )
-#     assert response.choices[0].message.reasoning_content is not None
+def test_chat_with_thinking(openai_client, capsys):
+    """
+    Test enable_thinking & reasoning_max_tokens option in non-streaming chat functionality with the local service
+    """
+    # enable thinking, non-streaming
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=10,
+        extra_body={"enable_thinking": True},
+    )
+    assert response.choices[0].message.reasoning_content is not None
 
-#     # disable thinking, non-streaming
-#     response = openai_client.chat.completions.create(
-#         model="default",
-#         messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-#         temperature=1,
-#         stream=False,
-#         max_tokens=10,
-#         extra_body={"enable_thinking": False},
-#     )
-#     assert response.choices[0].message.reasoning_content is None
+    # disable thinking, non-streaming
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=10,
+        extra_body={"enable_thinking": False},
+    )
+    assert response.choices[0].message.reasoning_content is None
 
-#     # enable thinking, streaming
-#     reasoning_max_tokens = 3
-#     response = openai_client.chat.completions.create(
-#         model="default",
-#         messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-#         temperature=1,
-#         extra_body={"enable_thinking": True, "reasoning_max_tokens": reasoning_max_tokens, "return_token_ids": True},
-#         stream=True,
-#         max_tokens=10,
-#     )
-#     completion_tokens = reasoning_tokens = 1
-#     total_tokens = 0
-#     for chunk_id, chunk in enumerate(response):
-#         if chunk_id == 0:  # the first chunk is an extra chunk
-#             continue
-#         delta_message = chunk.choices[0].delta
-#         if delta_message.content != "" and delta_message.reasoning_content == "":
-#             completion_tokens += len(delta_message.completion_token_ids)
-#         elif delta_message.reasoning_content != "" and delta_message.content == "":
-#             reasoning_tokens += len(delta_message.completion_token_ids)
-#         total_tokens += len(delta_message.completion_token_ids)
-#     assert completion_tokens + reasoning_tokens == total_tokens
-#     assert reasoning_tokens <= reasoning_max_tokens
+    # enable thinking, streaming
+    reasoning_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={"enable_thinking": True, "reasoning_max_tokens": reasoning_max_tokens, "return_token_ids": True},
+        stream=True,
+        max_tokens=10,
+    )
+    completion_tokens = reasoning_tokens = 1
+    total_tokens = 0
+    for chunk_id, chunk in enumerate(response):
+        if chunk_id == 0:  # the first chunk is an extra chunk
+            continue
+        delta_message = chunk.choices[0].delta
+        if delta_message.content != "" and delta_message.reasoning_content == "":
+            completion_tokens += len(delta_message.completion_token_ids)
+        elif delta_message.reasoning_content != "" and delta_message.content == "":
+            reasoning_tokens += len(delta_message.completion_token_ids)
+        total_tokens += len(delta_message.completion_token_ids)
+    assert completion_tokens + reasoning_tokens == total_tokens
+    assert reasoning_tokens <= reasoning_max_tokens
