@@ -41,12 +41,43 @@
 export FD_SAMPLING_CLASS=rejection  # base, base_non_truncated, or air
 ```
 
-2. 在发送请求时，指定以下参数：
+2. 在发送请求时，指定top_p参数：
 
-```json
-    {
-      "top_p": 0.8,
-    }
+* 使用 curl 命令发送用户请求示例如下：
+
+```bash
+
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "top_p": 0.8
+}'
+```
+
+* 使用 python 脚本发送用户请求示例如下：
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "把李白的静夜思改写为现代诗"},
+    ],
+    stream=True,
+    top_p=0.8
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 ### Top-k_top-p 采样
@@ -59,21 +90,86 @@ export FD_SAMPLING_CLASS=rejection
 
 2. 在发送请求时，指定以下参数：
 
-```json
-    {
-      "top_p": 0.8,
-      "top_k": 20,
-    }
+* 使用 curl 命令发送用户请求示例如下：
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "top_p": 0.8,
+  "top_k": 50
+}'
+```
+
+* 使用 python 脚本发送用户请求示例如下：
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "把李白的静夜思改写为现代诗"},
+    ],
+    stream=True,
+    top_p=0.8,
+    top_k=50
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 ### Min-p 采样
 
 如果你希望在 top_p 或 top_k_top_p 采样之前使用 min_p 采样，在发送请求时指定以下参数：
 
-```json
-    {
-      "min_p": 0.1,
-    }
+* 使用 curl 命令发送用户请求示例如下：
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "min_p": 0.1,
+  "top_p": 0.8,
+  "top_k": 20
+}'
+```
+
+* 使用 python 脚本发送用户请求示例如下：
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "把李白的静夜思改写为现代诗"},
+    ],
+    stream=True,
+    top_p=0.8,
+    top_k=20,
+    min_p=0.1
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 通过上述配置，你可以根据具体的生成任务需求，灵活选择和使用合适的采样策略。
@@ -92,12 +188,41 @@ export FD_SAMPLING_CLASS=rejection
 
 请求中加入bad_words参数：
 
-```json
-    {
-      "bad_words": ["you", "me"]
-    }
+* 使用 curl 命令发送用户请求示例如下：
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "bad_words": ["age", "I"]
+}'
+```
+
+* 使用 python 脚本发送用户请求示例如下：
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    extra_body={"bad_words": ["you", "me"]},
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 ## 参数说明
 
-* `bad_words`: 禁止生成的词列表。list类型，每个元素为str类型。
+* `bad_words`: 禁止生成的词列表。list类型，每个元素为str类型。仅支持每个元素为单个token。

@@ -42,10 +42,40 @@ export FD_SAMPLING_CLASS=rejection # base, base_non_truncated, or air
 ```
 2. When sending a request, specify the following parameters:
 
-```json
-{
+* Example request with curl:
+
+```bash
+
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
   "top_p": 0.8
-}
+}'
+```
+
+* Example request with Python:
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    stream=True,
+    top_p=0.8
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 ### Top-k_Top-p Sampling
@@ -58,21 +88,84 @@ export FD_SAMPLING_CLASS=rejection
 
 2. When sending a request, specify the following parameters:
 
-```json
-{
+* Example request with curl:
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
   "top_p": 0.8,
-  "top_k": 20
-}
+  "top_k": 50
+}'
+```
+
+* Example request with Python:
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    stream=True,
+    top_p=0.8,
+    top_k=50
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 ### Min-p Sampling
 
 If you want to use min-p sampling before top-p or top-k_top-p sampling, specify the following parameters when sending a request:
 
-```json
-{
-  "min_p": 0.1
-}
+* Example request with curl:
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "min_p": 0.1,
+  "top_p": 0.8,
+  "top_k": 20
+}'
+```
+
+* Example request with Python:
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    stream=True,
+    top_p=0.8,
+    top_k=20,
+    min_p=0.1
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 With the above configurations, you can flexibly choose and use the appropriate sampling strategy according to the needs of specific generation tasks.
@@ -93,12 +186,41 @@ Used to prevent the model from generating certain specific words during the infe
 
 Include the `bad_words` parameter in the request:
 
-```json
-{
-  "bad_words": ["you", "me"]
-}
+* Example request with curl:
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "bad_words": ["age", "I"]
+}'
+```
+
+* Example request with Python:
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    extra_body={"bad_words": ["you", "me"]},
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
 ```
 
 ## Parameter Description
 
-`bad_words`: A list of strings, each representing a word or phrase that should not appear in the generated text.
+`bad_words`: List of forbidden words. Type: list of str. Each word must be a single token.
