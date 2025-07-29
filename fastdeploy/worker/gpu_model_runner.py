@@ -165,6 +165,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method == "ngram":
             self.proposer = NgramProposer(self.fd_config)
         elif self.speculative_method == "mtp":
+            self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time)
             self.proposer = MTPProposer(
                 self.fd_config,
                 self.get_model(),
@@ -471,9 +472,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
-            self.proposer.insert_prefill_inputs(req_dicts)
         self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
+        if self.speculative_method in ["mtp"]:
+            self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
