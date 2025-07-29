@@ -385,7 +385,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 0, dtype="int64")
+        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
@@ -515,11 +515,7 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
-        max_bad_tokens_len = (
-            paddle.max(self.share_inputs["bad_tokens_len"])
-            if paddle.max(self.share_inputs["bad_tokens_len"]) > 0
-            else 1
-        )
+        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
         # Initialize forward meta data
         self.initialize_forward_meta()

@@ -408,7 +408,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 0, dtype="int64")
+        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
@@ -476,11 +476,7 @@ class XPUModelRunner(ModelRunnerBase):
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
         )
         # Update bad tokens len
-        max_bad_tokens_len = (
-            paddle.max(self.share_inputs["bad_tokens_len"])
-            if paddle.max(self.share_inputs["bad_tokens_len"]) > 0
-            else 1
-        )
+        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
