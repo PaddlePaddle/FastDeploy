@@ -43,28 +43,29 @@ __global__ void set_value_by_flags(bool *stop_flags,
     int bid = blockIdx.x;
     if (tid >= stop_seqs_bs) return;
     if (bid < bs) {
-        if (prefill_one_step_stop) {
-            stop_flags[bid] = true;
-            if (seq_lens[bid] == 0) {
-                topk_ids[bid] = -1;
-            }
-            next_tokens[bid] = topk_ids[bid];
-        } else {
-            if (stop_flags[bid]) {
+        if(tid == 0){
+            if (prefill_one_step_stop) {
+                stop_flags[bid] = true;
                 if (seq_lens[bid] == 0) {
                     topk_ids[bid] = -1;
-                } else {
-                    topk_ids[bid] = end_ids[0];
-                    next_tokens[bid] = end_ids[0];
                 }
-            } else {
                 next_tokens[bid] = topk_ids[bid];
+            } else {
+                if (stop_flags[bid]) {
+                    if (seq_lens[bid] == 0) {
+                        topk_ids[bid] = -1;
+                    } else {
+                        topk_ids[bid] = end_ids[0];
+                        next_tokens[bid] = end_ids[0];
+                    }
+                } else {
+                    next_tokens[bid] = topk_ids[bid];
+                }
+            }
+            if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
+                stop_flags[bid] = true;
             }
         }
-        if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
-            stop_flags[bid] = true;
-        }
-
         // dealing stop_seqs
         const int stop_seq_len = (stop_seqs_len + bid * stop_seqs_bs)[tid];
         if (stop_seq_len <= 0) return;
