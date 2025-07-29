@@ -164,7 +164,6 @@ class Ernie4_5_MoE(nn.Layer):
                 intermediate_size=shared_experts_hidden_dim,
                 prefix=f"{prefix}.shared_experts",
             )
-        self.fd_config = fd_config
 
     def load_state_dict(self, state_dict):
         self.fused_moe.load_state_dict(state_dict)
@@ -379,6 +378,7 @@ class Ernie4_5_Model(nn.Layer):
             end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
 
             if end_token_id == start_token_id:
+                # 这个microbatch是空的，不需要处理
                 continue
 
             forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
@@ -418,6 +418,7 @@ class Ernie4_5_Model(nn.Layer):
     ):  
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         forward_meta.attn_backend.init_attention_metadata(forward_meta)
+        print((forward_meta.seq_lens_decoder > 0).sum().item(), "周康康")
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
@@ -453,6 +454,8 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
+        self.ii = 0
+
     @classmethod
     def name(self):
         return "Ernie4_5_MoeForCausalLM"
@@ -485,7 +488,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         empty_input_forward
         """
         fake_hidden_states = paddle.empty(
-            shape=[1, self.fd_config.model_config.hidden_size],
+            shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         for i in range(
@@ -498,8 +501,17 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-    ):
+    ):  
+        self.ii += 1
+        
+        if self.ii == 1:
+            from paddle.framework import core
+            core.nvprof_start()
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
+        
+        if self.ii == 5:
+            from paddle.framework import core
+            core.nvprof_stop()
 
         return hidden_states
 
