@@ -996,7 +996,6 @@ int main(int argc, char *argv[]) {
         CutlassTileConfig::CtaShape64x256x64_WarpShape64x64x64,
         CutlassTileConfig::CtaShape32x512x64_WarpShape32x128x64,
         CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
-        CutlassTileConfig::CtaShape32x512x64_WarpShape32x128x64,
     };
     std::vector<SplitKStyle> all_split_k_style{SplitKStyle::NO_SPLIT_K};
 

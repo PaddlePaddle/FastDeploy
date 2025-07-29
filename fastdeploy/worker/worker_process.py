@@ -41,7 +41,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger, none_or_str
+from fastdeploy.utils import get_logger
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -476,34 +476,10 @@ def parse_args():
         help="enable chunked prefill",
     )
     parser.add_argument(
-        "--speculative_method",
+        "--speculative_config",
+        type=json.loads,
         default=None,
-        type=none_or_str,
-        choices=[
-            None,
-            "ngram",
-            "mtp",
-        ],
-    )
-    parser.add_argument(
-        "--speculative_max_draft_token_num",
-        default=1,
-        type=int,
-    )
-    parser.add_argument(
-        "--speculative_model_name_or_path",
-        default="",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_model_quantization",
-        default="WINT8",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_benchmark_mode",
-        default="False",
-        type=str,
+        help="Configation of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -607,7 +583,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
     decoding_config = DecodingConfig(vars(args))
-    speculative_config = SpeculativeConfig(vars(args))
+    speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     parallel_config.tensor_parallel_size = args.tensor_parallel_size

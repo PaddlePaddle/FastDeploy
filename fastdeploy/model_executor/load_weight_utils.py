@@ -101,12 +101,20 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
 
             up_gate_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
             down_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
+
+            down_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_key)
             num_local_ffn_keys.append(down_proj_key)
             num_local_ffn_keys.append(up_gate_proj_quant_key)
             num_local_ffn_keys.append(down_proj_quant_key)
             num_local_ffn_keys.append(up_gate_proj_scale_key)
             num_local_ffn_keys.append(down_proj_scale_key)
+            num_local_ffn_keys.append(down_proj_in_scale_key)
+
+        # for EP w4a8, we need all expert's activation_scale for up_gate_proj
+        for j in range(fd_config.model_config.moe_num_experts):
+            up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
+            num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
     for k in num_local_ffn_keys:
         if k in weight_list:
