@@ -85,6 +85,7 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
                 self._free_blocks(preempted_req)
+                preempted_req.need_prefill_tokens = preempted_req.num_total_tokens
                 self.waiting.appendleft(preempted_req)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
@@ -109,8 +110,8 @@ class ResourceManagerV1(ResourceManager):
             num_decoding_req_nums = 0
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
-                if request.num_computed_tokens >= request.prompt_token_ids_len:  # to be decoding
-                    if request.num_total_tokens > request.prompt_token_ids_len:  # has generated tokens
+                if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
+                    if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
@@ -143,9 +144,9 @@ class ResourceManagerV1(ResourceManager):
                         token_budget -= 1
                 else:  # need to prefill
                     llm_logger.debug(
-                        f"scheduler prefill task: {request} request.prompt_token_ids_len {request.prompt_token_ids_len} request.num_computed_tokens {request.num_computed_tokens}"
+                        f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                     )
-                    num_new_tokens = request.prompt_token_ids_len - request.num_computed_tokens
+                    num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
                     num_new_tokens = min(num_new_tokens, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
@@ -170,7 +171,7 @@ class ResourceManagerV1(ResourceManager):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
-                        num_new_tokens = request.num_total_tokens - request.num_computed_tokens
+                        num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
                         num_new_tokens = min(num_new_tokens, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
@@ -192,7 +193,7 @@ class ResourceManagerV1(ResourceManager):
                         else:
                             break
                     elif request.status == RequestStatus.PREEMPTED:
-                        num_new_tokens = request.num_total_tokens - request.num_computed_tokens
+                        num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
                         num_new_tokens = min(num_new_tokens, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
