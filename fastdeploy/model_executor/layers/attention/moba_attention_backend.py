@@ -24,8 +24,11 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda() and not current_platform.is_dcu():
+try:
     from fastdeploy.model_executor.ops.gpu import MobaAttention, get_cur_cu_seq_len_k
+except:
+    MobaAttention = None
+    get_cur_cu_seq_len_k = None
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
