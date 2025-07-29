@@ -17,7 +17,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from fastdeploy import envs
 from fastdeploy.config import CacheConfig
@@ -30,8 +30,6 @@ from fastdeploy.utils import (
     is_port_available,
     llm_logger,
 )
-
-TaskOption = Literal["generate"]
 
 
 class ModelConfig:
@@ -156,188 +154,6 @@ class ModelConfig:
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
         llm_logger.info("=============================================================")
-
-
-class SpeculativeConfig:
-    """
-    Speculative Decoding Configuration class.
-
-    Attributes:
-        method (Optional[str]): Method used for speculative decoding.
-        num_speculative_tokens (int): Maximum draft tokens, default is 1.
-        model_name_or_path (Optional[str]): Path of the model.
-        quantization (str): Quantization method for draft model, default is WINT8.
-        max_model_len: Optional[int]: Maximum model length for draft model.
-        benchmark_mode (bool): Whether to use benchmark mode.
-    """
-
-    def __init__(
-        self,
-        method: Optional[str] = None,
-        num_speculative_tokens: Optional[int] = 1,
-        model: Optional[str] = None,
-        quantization: Optional[str] = "WINT8",
-        max_model_len: Optional[int] = None,
-        benchmark_mode: bool = False,
-        **kwargs,
-    ):
-        self.model_name_or_path = model
-        self.method = method
-        self.num_speculative_tokens = num_speculative_tokens
-        self.quantization = quantization
-        self.max_model_len = max_model_len
-        self.benchmark_mode = benchmark_mode
-        # Fixed now
-        self.num_gpu_block_expand_ratio = 1
-        self.num_extra_cache_layer = 0
-
-        for key, value in kwargs.items():
-            try:
-                setattr(self, key, value)
-            except Exception:
-                continue
-
-        self.read_model_config()
-        self.reset()
-
-    def read_model_config(self):
-        """
-        Read configuration from file.
-        """
-        self.model_config = {}
-        if not self.enabled_speculative_decoding():
-            return
-
-        self.is_unified_ckpt = check_unified_ckpt(self.model_name_or_path)
-        if self.model_name_or_path is None:
-            return
-
-        self.config_path = os.path.join(self.model_name_or_path, "config.json")
-        if os.path.exists(self.config_path):
-            self.model_config = json.load(open(self.config_path, "r", encoding="utf-8"))
-
-    def reset(self):
-        """
-        Reset configuration.
-        """
-
-        def reset_value(cls, value_name, key=None, default=None):
-            if key is not None and key in cls.model_config:
-                setattr(cls, value_name, cls.model_config[key])
-            elif getattr(cls, value_name, None) is None:
-                setattr(cls, value_name, default)
-
-        if not self.enabled_speculative_decoding():
-            return
-
-        # NOTE(liuzichang): We will support multi-layer in future
-        if self.method in ["mtp"]:
-            self.num_extra_cache_layer = 1
-
-    def enabled_speculative_decoding(self):
-        """
-        Check if speculative decoding is enabled.
-        """
-        if self.method is None:
-            return False
-        return True
-
-    def to_json_string(self):
-        """
-        Convert speculative_config to json string.
-        """
-        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
-
-    def print(self):
-        """
-        print all config
-
-        """
-        llm_logger.info("Speculative Decoding Configuration Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
-
-    def __str__(self) -> str:
-        return self.to_json_string()
-
-
-class GraphOptimizationConfig:
-    def __init__(
-        self,
-        graph_opt_level: Optional[int] = 0,
-        use_cudagraph: Optional[bool] = None,
-        cudagraph_capture_sizes: Optional[List[int]] = None,
-        sot_warmup_sizes: Optional[List[int]] = None,
-        **kwargs,
-    ):
-        """
-        Graph Optimization Configuration class.
-
-        Attributes:
-            graph_opt_level: Compute graph optimization level
-            use_cudagraph: Use CUDA Graph or not
-            cudagraph_capture_sizes: Batch size list will be captured by CUDA Graph
-        """
-        self.check_legality_parameters(graph_opt_level, use_cudagraph, cudagraph_capture_sizes, **kwargs)
-
-        self.graph_opt_level = graph_opt_level
-        self.use_cudagraph = use_cudagraph
-        self.cudagraph_capture_sizes = cudagraph_capture_sizes
-        self.sot_warmup_sizes = [] if sot_warmup_sizes is None else sot_warmup_sizes
-
-    def to_json_string(self):
-        """
-        Convert speculative_config to json string.
-        """
-        return json.dumps({key: value for key, value in self.__dict__.items()})
-
-    def __str__(self) -> str:
-        return self.to_json_string()
-
-    def check_legality_parameters(
-        self,
-        graph_opt_level: Optional[int] = None,
-        use_cudagraph: Optional[bool] = None,
-        cudagraph_capture_sizes: Optional[List[int]] = None,
-        **kwargs,
-    ) -> None:
-        """Check the legality of parameters passed in from the command line"""
-
-        if graph_opt_level is not None:
-            assert graph_opt_level in [
-                0,
-                1,
-                2,
-            ], "In graph optimization config, graph_opt_level can only take the values of 0, 1 and 2."
-        if use_cudagraph is not None:
-            assert type(use_cudagraph) is bool, "In graph optimization config, type of use_cudagraph must is bool."
-        if cudagraph_capture_sizes is not None:
-            assert (
-                type(cudagraph_capture_sizes) is list
-            ), "In graph optimization config, type of cudagraph_capture_sizes must is list."
-            assert (
-                len(cudagraph_capture_sizes) > 0
-            ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
-
-        for key, value in kwargs.items():
-            raise ValueError(f"Invalid --graph-optimization-config parameter {key}")
-
-    def update_use_cudagraph(self, argument: bool):
-        """
-        Unified user specifies the use_cudagraph parameter through two methods,
-        '--use-cudagraph' and '--graph-optimization-config'
-        """
-        if self.use_cudagraph is None:
-            # User only set '--use-cudagraph'
-            self.use_cudagraph = argument
-        else:
-            # User both set '--use-cudagraph' and '--graph-optimization-config'
-            if self.use_cudagraph is False and argument is True:
-                raise ValueError(
-                    "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
-                )
-            argument = self.use_cudagraph
 
 
 class ParallelConfig:
