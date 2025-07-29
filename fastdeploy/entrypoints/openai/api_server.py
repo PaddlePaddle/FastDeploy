@@ -36,9 +36,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponse,
     ControlSchedulerRequest,
     ErrorResponse,
+    ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -104,6 +106,13 @@ async def lifespan(app: FastAPI):
     else:
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
+
+    if args.served_model_name is not None:
+        served_model_names = args.served_model_name
+    else:
+        served_model_names = args.model
+    model_paths = [ModelPath(name=served_model_names, model_path=args.model)]
+
     engine_client = EngineClient(
         args.tokenizer,
         args.max_model_len,
@@ -118,11 +127,13 @@ async def lifespan(app: FastAPI):
     app.state.dynamic_load_weight = args.dynamic_load_weight
     chat_handler = OpenAIServingChat(engine_client, pid, args.ips)
     completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips)
+    model_handler = OpenAIServingModels(engine_client, model_paths, args.max_model_len, pid, args.ips)
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
+    app.state.model_handler = model_handler
     yield
     # close zmq
     try:
@@ -230,6 +241,23 @@ async def create_completion(request: CompletionRequest):
         return JSONResponse(content=generator.model_dump())
 
     return StreamingResponse(content=generator, media_type="text/event-stream")
+
+
+@app.get("v1/models")
+def list_models() -> Response:
+    """
+    List all available models.
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    models = app.state.model_handler.list_models()
+    if isinstance(models, ErrorResponse):
+        return JSONResponse(content=models.model_dump(), status_code=models.code)
+    elif isinstance(models, ModelList):
+        return JSONResponse(content=models.model_dump())
 
 
 @app.get("/update_model_weight")
