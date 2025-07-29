@@ -164,6 +164,7 @@ class Ernie4_5_MoE(nn.Layer):
                 intermediate_size=shared_experts_hidden_dim,
                 prefix=f"{prefix}.shared_experts",
             )
+        self.fd_config = fd_config
 
     def load_state_dict(self, state_dict):
         self.fused_moe.load_state_dict(state_dict)
@@ -354,7 +355,7 @@ class Ernie4_5_Model(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
-    def forward(
+    def forward1(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
@@ -410,15 +411,14 @@ class Ernie4_5_Model(nn.Layer):
         out = self.norm(hidden_states)
         return out
 
-    def forward1(
+    def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-    ):
+    ):  
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         forward_meta.attn_backend.init_attention_metadata(forward_meta)
         residual = None
-        logger.info(ids_remove_padding.shape)
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
