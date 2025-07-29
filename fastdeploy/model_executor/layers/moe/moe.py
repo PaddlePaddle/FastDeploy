@@ -265,7 +265,7 @@ class FusedMoE(nn.Layer):
                             if up_gate_proj_expert_weight_key_name in state_dict
                             else up_gate_proj_expert_weight_key_name
                         ),
-                        self.fd_config.parallel_config.model_name_or_path,
+                        self.fd_config.model_config.model,
                     )
                 )
                 down_proj_weights.append(
@@ -275,7 +275,7 @@ class FusedMoE(nn.Layer):
                             if down_proj_expert_weight_key_name in state_dict
                             else down_proj_expert_weight_key_name
                         ),
-                        self.fd_config.parallel_config.model_name_or_path,
+                        self.fd_config.model_config.model,
                     )
                 )
         else:
@@ -291,7 +291,7 @@ class FusedMoE(nn.Layer):
                         if gate_expert_weight_key_name in state_dict
                         else gate_expert_weight_key_name
                     ),
-                    self.fd_config.parallel_config.model_name_or_path,
+                    self.fd_config.model_config.model,
                 )
                 up = get_tensor(
                     (
@@ -299,7 +299,7 @@ class FusedMoE(nn.Layer):
                         if up_expert_weight_key_name in state_dict
                         else up_expert_weight_key_name
                     ),
-                    self.fd_config.parallel_config.model_name_or_path,
+                    self.fd_config.model_config.model,
                 )
                 up_gate_proj_weights.append(paddle.concat([gate, up], axis=-1))
                 down_proj_weights.append(
@@ -309,7 +309,7 @@ class FusedMoE(nn.Layer):
                             if down_proj_expert_weight_key_name in state_dict
                             else down_proj_expert_weight_key_name
                         ),
-                        self.fd_config.parallel_config.model_name_or_path,
+                        self.fd_config.model_config.model,
                     )
                 )
         return up_gate_proj_weights, down_proj_weights, logical_expert_ids
