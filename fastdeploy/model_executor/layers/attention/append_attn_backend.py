@@ -83,8 +83,8 @@ class AppendAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
-        encoder_block_shape_q: int,
-        decoder_block_shape_q: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
     ) -> None:
         """
         AppendAttentionBackend __init__
