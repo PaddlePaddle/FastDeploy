@@ -271,7 +271,7 @@ class ResourceManagerV1(ResourceManager):
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
-            # TODO: support cache ouput blocks for prefix caching
+            # TODO(chengyanfu): support cache ouput blocks for prefix caching
             self.cache_manager.recycle_gpu_blocks(request.block_tables[request.prefill_block_num :])
         else:
             self.cache_manager.recycle_gpu_blocks(request.block_tables)

@@ -435,7 +435,7 @@ class PrefixCacheManager:
     def update_cache_blocks(self, task, block_size):
         """
         update cache blocks for a task.
-        # TODO: support asynch
+        # TODO(chengyanfu): support async update
 
         Parameters:
         - task: Task
