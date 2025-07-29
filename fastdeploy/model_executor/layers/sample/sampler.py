@@ -255,7 +255,6 @@ class Sampler(nn.Layer):
         logits: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
         skip_idx_list: List[int] = [],
-        stop_flags: paddle.Tensor = None,
     ) -> SamplerOutput:
         """ """
         num_logprobs = sampling_metadata.max_num_logprobs
@@ -290,8 +289,8 @@ class Sampler(nn.Layer):
         )
         if sampling_metadata.enable_early_stop:
             # will set the stop batch in stop_flags
-            assert stop_flags is not None, "need stop_flags for eary stop"
-            self.early_stopper.process(probs, next_tokens, stop_flags)
+            assert sampling_metadata.stop_flags is not None, "need stop_flags for eary stop"
+            self.early_stopper.process(probs, next_tokens, sampling_metadata.stop_flags)
 
         self.processor.update_output_tokens(next_tokens, skip_idx_list)
 

@@ -754,6 +754,7 @@ class GPUModelRunner(ModelRunnerBase):
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=20 if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,
+            stop_flags=self.share_inputs["stop_flags"],
         )
 
     def load_model(self) -> None:
@@ -979,9 +980,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["step_idx"],
                     self.share_inputs["stop_flags"],
                 )
-                sampler_output = self.sampler(
-                    logits, self.sampling_metadata, stop_flags=self.share_inputs["stop_flags"]
-                )
+                sampler_output = self.sampler(logits, self.sampling_metadata)
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
             else:
@@ -1246,7 +1245,6 @@ class GPUModelRunner(ModelRunnerBase):
                 logits,
                 self.sampling_metadata,
                 skip_idx_list,
-                stop_flags=self.share_inputs["stop_flags"],
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
