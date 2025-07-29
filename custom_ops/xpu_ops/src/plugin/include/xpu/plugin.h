@@ -86,6 +86,39 @@ recover_block(Context *ctx,
               const int block_num_per_seq, const int length,
               const int pre_id_length);
 
+
+DLL_EXPORT int
+recover_decode_task(Context *ctx, bool *stop_flags,
+                                   int *seq_lens_this_time,
+                                   int *seq_lens_encoder,
+                                   int *seq_lens_decoder,
+                                   int *step_seq_lens_decoder,
+                                   int *block_tables,
+                                   bool *is_block_step,
+                                   const int bsz,
+                                   const int block_num_per_seq,
+                                   const int block_size);
+
+DLL_EXPORT int
+update_inputs_v1(Context *ctx, bool *not_need_stop,
+                                     int *seq_lens_this_time,
+                                     int *seq_lens_encoder,
+                                     int *seq_lens_decoder,
+                                     int *step_seq_lens_decoder,
+                                     int64_t *prompt_lens,
+                                     int64_t *topk_ids,
+                                     int64_t *input_ids,
+                                     int *block_tables,
+                                     const int64_t *stop_nums,
+                                     bool *stop_flags,
+                                     bool *is_block_step,
+                                     const int64_t *next_tokens,
+                                     const int bsz,
+                                     const int max_bsz,
+                                     const int input_ids_stride,
+                                     const int block_num_per_seq,
+                                     const int block_size);
+
 template <typename TX, typename TY>
 DLL_EXPORT int
 eb_adjust_batch(Context *ctx, const TX *x, TY *y,

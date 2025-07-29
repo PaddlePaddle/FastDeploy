@@ -20,6 +20,7 @@ from typing import List, Optional
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
@@ -138,10 +139,14 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
         num_running_requests: Optional[int] = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
+        if not is_dummy_run:
+            output = self.model_runner.execute_model(model_forward_batch)
+        else:
+            output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
         return output
 
     def exist_prefill(self):
@@ -155,7 +160,10 @@ class XpuWorker(WorkerBase):
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.process_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
+        else:
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def check_health(self) -> bool:
         """ """

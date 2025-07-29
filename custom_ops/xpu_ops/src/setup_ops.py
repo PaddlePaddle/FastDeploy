@@ -144,6 +144,8 @@ def xpu_setup_ops():
         "./ops/get_token_penalty_multi_scores.cc",
         "./ops/get_padding_offset.cc",
         "./ops/update_inputs.cc",
+        "./ops/recover_decode_task.cc",
+        "./ops/update_inputs_v1.cc",
         "./ops/get_output.cc",
         "./ops/step.cc",
         "./ops/get_infer_param.cc",
