@@ -383,7 +383,7 @@ class GraphOptimizationConfig:
             - With dyncmic graph backend: ...
             - With static grpah backend: WIP
         """
-        self.sot_warmup_sizes: Optional[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
+        self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
         self.use_cudagraph: bool = False
         """Sizes to capture cudagraph.
