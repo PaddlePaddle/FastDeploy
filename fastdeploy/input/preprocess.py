@@ -87,9 +87,7 @@ class InputPreprocessor:
                     reasoning_parser_obj=reasoning_parser_obj,
                 )
         else:
-            if not architectures.startswith("Ernie4_5_VLMoeForConditionalGeneration"):
-                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe model.")
-            else:
+            if architectures.startswith("Ernie4_5_VLMoeForConditionalGeneration"):
                 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 
                 self.processor = ErnieMoEVLProcessor(
@@ -98,4 +96,15 @@ class InputPreprocessor:
                     mm_processor_kwargs=self.mm_processor_kwargs,
                     reasoning_parser_obj=reasoning_parser_obj,
                 )
+            elif architectures.startswith("Qwen2_5_VLMoeForConditionalGeneration"):
+                from fastdeploy.input.qwen2_5_vl_processor import Qwen2_5_VLProcessor
+
+                self.processor = Qwen2_5_VLProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    limit_mm_per_prompt=self.limit_mm_per_prompt,
+                    mm_processor_kwargs=self.mm_processor_kwargs,
+                    reasoning_parser_obj=reasoning_parser_obj,
+                )
+            else:
+                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe or Qwen2_5_VL model.")
         return self.processor
