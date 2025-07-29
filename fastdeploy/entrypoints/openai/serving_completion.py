@@ -76,7 +76,7 @@ class OpenAIServingCompletion:
         if not self.models.is_supported_model(request.model):
             err_msg = f"Unsupported model: {request.model}"
             api_server_logger.error(err_msg)
-            raise ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(message=err_msg, code=400)
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"

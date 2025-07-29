@@ -88,7 +88,7 @@ class OpenAIServingChat:
         if not self.models.is_supported_model(request.model):
             err_msg = f"Unsupported model: {request.model}"
             api_server_logger.error(err_msg)
-            raise ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(message=err_msg, code=400)
         if request.user is not None:
             request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
         else:
