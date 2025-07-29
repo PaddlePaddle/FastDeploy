@@ -148,7 +148,6 @@ class MobaAttentionBackend(AttentionBackend):
                 self.head_dim,
             )
 
-
     def forward_mixed(
         self,
         q: paddle.Tensor,
