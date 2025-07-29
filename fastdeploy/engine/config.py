@@ -19,141 +19,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastdeploy import envs
-from fastdeploy.config import CacheConfig
+from fastdeploy.config import CacheConfig, LoadConfig, ModelConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import (
-    ceil_div,
-    check_unified_ckpt,
-    get_host_ip,
-    is_port_available,
-    llm_logger,
-)
-
-
-class ModelConfig:
-    """
-    Configuration class for the model.
-
-    Attributes:
-        model_dir (str): Directory path to the model.
-        is_unified_ckpt (bool): Flag indicating if the checkpoint is unified.
-        model_name_or_path (str): Name or path of the model.
-    """
-
-    def __init__(
-        self,
-        model_name_or_path: str,
-        config_json_file: str = "config.json",
-        dynamic_load_weight: bool = False,
-        load_strategy: str = "ipc_snapshot",
-        quantization: str = None,
-        download_dir: Optional[str] = None,
-    ):
-        """
-        Initialize the ModelConfig class.
-
-        Args:
-            model_name_or_path (str): Name or path of the model.
-            config_json_file (str): Path to the configuration JSON file. Default is 'config.json'.
-            download_dir (Optional[str]): Directory to download model files. Default is None.
-        """
-        self.model_dir = model_name_or_path
-        self.is_unified_ckpt = check_unified_ckpt(self.model_dir)
-        self.dynamic_load_weight = dynamic_load_weight
-        self.load_strategy = load_strategy
-        self.quantization = quantization
-
-        config_file = os.path.join(model_name_or_path, config_json_file)
-        if os.path.isfile(model_name_or_path):
-            try:
-                from paddleformers.transformers import AutoConfig
-
-                config = AutoConfig.from_pretrained(model_name_or_path)
-                config_dict = {k: v for k, v in vars(config).items() if not k.startswith("_")}
-                for key, value in config_dict.items():
-                    setattr(self, key, value)
-            except Exception:
-                llm_logger.error(
-                    "Don't support the current model, you can use `paddleformers` to register your model."
-                )
-                raise ValueError(
-                    "Don't support the current model, you can use `paddleformers` to register your model."
-                )
-        else:
-            with open(config_file, "r", encoding="utf-8") as f:
-                config_dict = json.load(f)
-                for key, value in config_dict.items():
-                    try:
-                        setattr(self, key, value)
-                    except Exception:
-                        continue
-
-        if isinstance(self.architectures, list):
-            self.architectures = self.architectures[0]
-        self.model_name_or_path = model_name_or_path
-        self.override_name_from_config()
-        self.read_from_env()
-
-    def override_name_from_config(self):
-        """
-        Override attribute names from the exported model's configuration.
-        """
-
-        if not self.is_unified_ckpt and hasattr(self, "infer_model_mp_num"):
-            self.tensor_parallel_size = self.infer_model_mp_num
-            del self.infer_model_mp_num
-
-        if hasattr(self, "num_hidden_layers"):
-            if hasattr(self, "remove_tail_layer"):
-                if self.remove_tail_layer is True:
-                    self.num_hidden_layers -= 1
-                elif isinstance(self.remove_tail_layer, int):
-                    self.num_hidden_layers -= self.remove_tail_layer
-
-            self.num_layers = self.num_hidden_layers
-            del self.num_hidden_layers
-
-        if not hasattr(self, "mla_use_absorb"):
-            self.mla_use_absorb = False
-        if not hasattr(self, "head_dim"):
-            assert hasattr(self, "hidden_size") and hasattr(self, "num_attention_heads")
-            self.head_dim = self.hidden_size // self.num_attention_heads
-
-    def read_from_env(self):
-        """
-        Read configuration information from environment variables and update the object's attributes.
-
-        If an attribute is not present or is an empty string in the environment variables, use the default value.
-        """
-        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
-        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
-
-        def reset_config_value(key, value):
-            if not hasattr(self, key.lower()):
-                if os.getenv(key, None):
-                    value = eval(os.getenv(key))
-                    llm_logger.info(f"Get parameter `{key}` = {value} from environment.")
-                else:
-                    llm_logger.info(f"Parameter `{key}` will use default value {value}.")
-                setattr(self, key.lower(), value)
-
-        reset_config_value("COMPRESSION_RATIO", 1.0)
-        reset_config_value("ROPE_THETA", 10000)
-
-    def _get_download_model(self, model_name, model_type="default"):
-        # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
-        pass
-
-    def print(self):
-        """
-        Print all configuration information.
-        """
-        llm_logger.info("Model Configuration Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
+from fastdeploy.utils import ceil_div, get_host_ip, is_port_available, llm_logger
 
 
 class ParallelConfig:
@@ -288,6 +157,7 @@ class Config:
         cache_config: CacheConfig,
         scheduler_config: SchedulerConfig,
         parallel_config: ParallelConfig,
+        load_config: LoadConfig,
         commit_config: CommitConfig = CommitConfig(),
         model_name_or_path: str = None,
         tokenizer: str = None,
@@ -345,6 +215,7 @@ class Config:
         self.cache_config = cache_config
         self.scheduler_config = scheduler_config
         self.parallel_config = parallel_config
+        self.load_config = load_config
         self.commit_config = commit_config
         self.model_name_or_path = model_name_or_path
         self.tokenizer = tokenizer

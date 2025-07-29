@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from fastdeploy.config import (
     CacheConfig,
     GraphOptimizationConfig,
+    LoadConfig,
     SpeculativeConfig,
     TaskOption,
 )
@@ -756,18 +757,6 @@ class EngineArgs:
         """
         return cls(**{field.name: getattr(args, field.name) for field in dataclass_fields(cls)})
 
-    def create_model_config(self) -> ModelConfig:
-        """
-        Create and return a ModelConfig object based on the current settings.
-        """
-        return ModelConfig(
-            model_name_or_path=self.model,
-            config_json_file=self.model_config_name,
-            quantization=self.quantization,
-            dynamic_load_weight=self.dynamic_load_weight,
-            load_strategy=self.load_strategy,
-        )
-
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
         speculative_args = asdict(self)
@@ -826,7 +815,12 @@ class EngineArgs:
         """
         Create and return a Config object based on the current settings.
         """
-        model_cfg = self.create_model_config()
+        all_dict = asdict(self)
+        model_cfg = ModelConfig(all_dict)
+        all_dict["model_cfg"] = model_cfg
+        cache_cfg = CacheConfig(all_dict)
+        load_cfg = LoadConfig(all_dict)
+
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
         if self.max_num_batched_tokens is None:
@@ -843,16 +837,13 @@ class EngineArgs:
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
-        all_dict = asdict(self)
-        all_dict["model_cfg"] = model_cfg
-        cache_cfg = CacheConfig(all_dict)
-
         return Config(
             model_name_or_path=self.model,
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
             cache_config=cache_cfg,
+            load_config=load_cfg,
             parallel_config=self.create_parallel_config(),
             max_model_len=self.max_model_len,
             tensor_parallel_size=self.tensor_parallel_size,
