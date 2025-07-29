@@ -610,9 +610,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.share_inputs["not_need_stop"] = paddle.full(
-            [1], False, dtype="bool"
-        ).cpu()
+        self.share_inputs["not_need_stop"] = paddle.full([1], False, dtype="bool").cpu()
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
@@ -954,9 +952,9 @@ class GPUModelRunner(ModelRunnerBase):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
-        decode_max_tile_size = (self.parallel_config.max_num_seqs * np.ceil(
-                                    (decoder_step_token_num * np.ceil(num_heads / self.model_config.kv_num_heads))
-                                    / decoder_block_shape_q))
+        decode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+            (decoder_step_token_num * np.ceil(num_heads / self.model_config.kv_num_heads)) / decoder_block_shape_q
+        )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
