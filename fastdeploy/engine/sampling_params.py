@@ -233,11 +233,7 @@ class SamplingParams:
                     )
                     continue
 
-                if (
-                    len(self._bad_words_token_ids) == 0
-                    or (not add_prefix_space)
-                    or (add_prefix_space and prompt_token_ids != self._bad_words_token_ids[-1])
-                ):
+                if prompt_token_ids not in self._bad_words_token_ids:
                     self._bad_words_token_ids.extend(prompt_token_ids)
 
     @property

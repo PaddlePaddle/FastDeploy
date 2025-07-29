@@ -727,7 +727,7 @@ def test_non_streaming_chat_with_bad_words(openai_client, capsys):
         temperature=1,
         top_p=0.0,
         max_tokens=10,
-        extra_body={"bad_words": output_0},
+        extra_body={"bad_words": output_0[-5:]},
         stream=False,
     )
     output_1 = []
@@ -759,7 +759,6 @@ def test_streaming_chat_with_bad_words(openai_client, capsys):
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "delta")
         assert hasattr(chunk.choices[0].delta, "content")
-
         output_0.append(chunk.choices[0].delta.content)
 
     # add bad words
@@ -769,7 +768,7 @@ def test_streaming_chat_with_bad_words(openai_client, capsys):
         temperature=1,
         top_p=0.0,
         max_tokens=10,
-        extra_body={"bad_words": output_0},
+        extra_body={"bad_words": output_0[-5:]},
         stream=True,
     )
     output_1 = []
@@ -778,8 +777,7 @@ def test_streaming_chat_with_bad_words(openai_client, capsys):
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "delta")
         assert hasattr(chunk.choices[0].delta, "content")
-        if chunk.choices[0].delta.content != "" and chunk.choices[0].delta.content != "\n":
-            output_1.append(chunk.choices[0].delta.content)
+        output_1.append(chunk.choices[0].delta.content)
     assert output_0 not in output_1
 
 
@@ -810,7 +808,7 @@ def test_non_streaming_completion_with_bad_words(openai_client, capsys):
         temperature=1,
         top_p=0.0,
         max_tokens=10,
-        extra_body={"bad_words": output_0},
+        extra_body={"bad_words": output_0[-5:]},
         stream=False,
     )
     output_1 = []
@@ -840,9 +838,7 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "text")
-        text_split = chunk.choices[0].text.split(" ")
-        for text in text_split:
-            output_0.append(text)
+        output_0.append(chunk.choices[0].text)
 
     # add bad words
     response_1 = openai_client.completions.create(
@@ -851,7 +847,7 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         temperature=1,
         top_p=0.0,
         max_tokens=10,
-        extra_body={"bad_words": output_0},
+        extra_body={"bad_words": output_0[-5:]},
         stream=True,
     )
     output_1 = []
@@ -859,7 +855,5 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "text")
-        text_split = chunk.choices[0].text.split(" ")
-        for text in text_split:
-            output_1.append(text)
+        output_1.append(chunk.choices[0].text)
     assert output_0 not in output_1
