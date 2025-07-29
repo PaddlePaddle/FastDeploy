@@ -21,6 +21,8 @@ from fastdeploy.engine.config import ModelConfig
 from fastdeploy.reasoning import ReasoningParserManager
 
 
+
+
 class InputPreprocessor:
     """
     Args:
@@ -71,6 +73,7 @@ class InputPreprocessor:
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
         architectures = ModelConfig(self.model_name_or_path).architectures
+
         if not self.enable_mm:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.text_processor import DataProcessor
@@ -96,15 +99,19 @@ class InputPreprocessor:
                     mm_processor_kwargs=self.mm_processor_kwargs,
                     reasoning_parser_obj=reasoning_parser_obj,
                 )
-            elif architectures.startswith("Qwen2_5_VLMoeForConditionalGeneration"):
-                from fastdeploy.input.qwen2_5_vl_processor import Qwen2_5_VLProcessor
-
-                self.processor = Qwen2_5_VLProcessor(
-                    model_name_or_path=self.model_name_or_path,
-                    limit_mm_per_prompt=self.limit_mm_per_prompt,
-                    mm_processor_kwargs=self.mm_processor_kwargs,
-                    reasoning_parser_obj=reasoning_parser_obj,
+            elif architectures.startswith("Qwen2_5_VL"):
+                from fastdeploy.input.qwen2_5_vl_processor import (
+                    Qwen2_5_VLImageProcessor,
+                    Qwen2_5_VLProcessor,
+                    process_vision_info,
                 )
+                from fastdeploy.model_executor.models.qwen2_5_vl.mix_qwen2_5_tokenizer import MIXQwen2_5_Tokenizer
+
+                self.image_processor = Qwen2_5_VLImageProcessor()
+                self.tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(self.model_name_or_path)
+                self.processor = Qwen2_5_VLProcessor(
+                    self.image_processor, self.tokenizer)
+
             else:
                 raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe or Qwen2_5_VL model.")
         return self.processor

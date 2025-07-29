@@ -25,7 +25,7 @@ import paddle
 import paddle.nn.functional as F
 import PIL
 import requests
-from paddleformers.transformers import PaddingStrategy
+from paddleformers.transformers.tokenizer_utils_base import PaddingStrategy
 from paddleformers.transformers.feature_extraction_utils import BatchFeature
 from paddleformers.transformers.image_transforms import (
     convert_to_rgb,
@@ -52,6 +52,7 @@ from paddleformers.transformers.tokenizer_utils_base import (
     TextInput,
     TruncationStrategy,
 )
+
 
 from PIL import Image
 
@@ -135,6 +136,10 @@ class Qwen2_5_VLProcessor(ProcessorMixin):
         self.image_max_pixels = kwargs.get("image_max_pixels", self.image_processor.max_pixels)
         # self.image_token = "" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
         # self.video_token = "<|video_pad|>" if not hasattr(tokenizer, "video_token") else tokenizer.video_token
+        
+        # Add eos_token_id_len and pad_token_id attributes for compatibility
+        self.eos_token_id_len = kwargs.get("eos_token_id_len", 1)
+        self.pad_token_id = kwargs.get("pad_token_id", 0)  # Default to 0 if not specified
 
     def __call__(
         self,
