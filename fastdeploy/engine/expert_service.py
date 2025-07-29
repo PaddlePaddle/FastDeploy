@@ -51,7 +51,7 @@ class ExpertService:
         """
         self.cfg = cfg
         start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % cfg.worker_num_per_node
-        end_pos = ((local_data_parallel_id + 1) * self.cfg.tensor_parallel_size) % cfg.worker_num_per_node
+        end_pos = start_pos + self.cfg.tensor_parallel_size
         if cfg.splitwise_role != 'mixed':
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[
                 start_pos:end_pos]
