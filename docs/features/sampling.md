@@ -84,3 +84,21 @@ With the above configurations, you can flexibly choose and use the appropriate s
 `top_k`: The number of tokens with the highest sampling probability, limiting the sampling range to the top k tokens. It is an int type, with a range of [0, vocab_size].
 
 `min_p`: Low probability filtering threshold, considering only the token set with probability greater than or equal to (`max_prob*min_p`). It is a float type, with a range of [0.0, 1.0].
+
+# Bad Words
+
+Used to prevent the model from generating certain specific words during the inference process. Commonly applied in safety control, content filtering, and behavioral constraints of the model.
+
+## Usage Instructions
+
+Include the `bad_words` parameter in the request:
+
+```json
+{
+  "bad_words": ["you", "me"]
+}
+```
+
+## Parameter Description
+
+`bad_words`: A list of strings, each representing a word or phrase that should not appear in the generated text.
