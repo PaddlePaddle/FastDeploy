@@ -25,15 +25,17 @@ class W4A8Config(QuantConfigBase):
     quantization config for weight 4bits and activation 8bits
     """
 
-    def __init__(self) -> None:
+    def __init__(self, is_permuted) -> None:
         super().__init__()
+        self.is_permuted = is_permuted
 
     def name(self) -> str:
         return "w4a8"
 
     @classmethod
     def from_config(cls, config: dict) -> "W4A8Config":
-        return cls()
+        is_permuted = getattr(config, "is_permuted", False)
+        return cls(is_permuted)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
