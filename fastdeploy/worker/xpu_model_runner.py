@@ -22,8 +22,9 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -33,6 +34,13 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.model_executor.model_loader import get_model_from_loader
+from fastdeploy.model_executor.ops.xpu import (
+    adjust_batch,
+    get_infer_param,
+    get_padding_offset,
+    recover_decode_task,
+    update_inputs_v1,
+)
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
@@ -53,11 +61,6 @@ def xpu_pre_process(
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
-    from fastdeploy.model_executor.ops.xpu import (
-        adjust_batch,
-        get_infer_param,
-        get_padding_offset,
-    )
 
     (
         ids_remove_padding,
@@ -111,6 +114,18 @@ def xpu_pre_process(
     ) = get_infer_param(seq_lens_encoder, seq_lens_decoder)
 
     # Adjust batch
+    # print(f"=========================adjust_batch 更新前=========================")
+    # print(f"ids_remove_padding : {ids_remove_padding}")
+    # print(f"cum_offsets : {cum_offsets}")
+    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
+    # print(f"xpu_forward_meta.encoder_batch_idx: {xpu_forward_meta.encoder_batch_idx}")
+    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
+    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
+    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.encoder_batch_map}")
+    # print(f"xpu_forward_meta.dec_batch : {xpu_forward_meta.decoder_batch_map}")
+
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
         cum_offsets,
@@ -125,6 +140,17 @@ def xpu_pre_process(
         None,  # output_padding_offset
         -1,  # max_input_length
     )
+    # print(f"=========================adjust_batch 更新后=========================")
+    # print(f"ids_remove_padding : {ids_remove_padding}")
+    # print(f"cum_offsets : {cum_offsets}")
+    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
+    # print(f"xpu_forward_meta.encoder_batch_idx: {xpu_forward_meta.encoder_batch_idx}")
+    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
+    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
+    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
+    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.encoder_batch_map}")
+
     adjusted_input = adjusted_input.squeeze(1)
 
     share_inputs["ids_remove_padding"] = adjusted_input
@@ -160,7 +186,9 @@ def xpu_process_output(
 def xpu_post_process(
     sampled_token_ids: paddle.Tensor,
     model_output: ModelOutputData,
-    skip_save_output: bool,
+    share_inputs: Dict[str, paddle.Tensor],
+    block_size: int = 64,
+    skip_save_output: bool = False,
 ) -> None:
     """ """
     from fastdeploy.model_executor.ops.xpu import (
@@ -194,17 +222,66 @@ def xpu_post_process(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        update_inputs(
-            model_output.stop_flags,
-            model_output.not_need_stop,
-            model_output.seq_lens_this_time,
-            model_output.seq_lens_encoder,
-            model_output.seq_lens_decoder,
-            model_output.input_ids,
-            model_output.stop_nums,
-            sampled_token_ids,
-            model_output.is_block_step,
-        )
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER and not skip_save_output:
+
+            # print(f"============================================update_inputs_v1 更新前=========================================")
+            # print(f"model_output.stop_flags : {model_output.stop_flags}")
+            # print(f"model_output.not_need_stop : {model_output.not_need_stop}")
+            # print(f"model_output.seq_lens_this_time : {model_output.seq_lens_this_time}")
+            # print(f"model_output.seq_lens_encoder : {model_output.seq_lens_encoder}")
+            # print(f"model_output.seq_lens_decoder : {model_output.seq_lens_decoder}")
+            # print(f"share_inputs['step_seq_lens_decoder'] : {share_inputs['step_seq_lens_decoder']}")
+            # print(f"share_inputs['prompt_lens'] : {share_inputs['prompt_lens']}")
+            # print(f"sampled_token_ids : {sampled_token_ids}")
+            # print(f"model_output.input_ids : {model_output.input_ids}")
+            # print(f"model_output.stop_nums : {model_output.stop_nums}")
+            # print(f"model_output.next_tokens : {model_output.next_tokens}")
+            # print(f"model_output.is_block_step : {model_output.is_block_step}")
+            # print(f"share_inputs['block_tables'] : {share_inputs['block_tables']}")
+            # print(f"block_size : {block_size}")
+            update_inputs_v1(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                share_inputs["step_seq_lens_decoder"],
+                share_inputs["prompt_lens"],
+                sampled_token_ids,
+                model_output.input_ids,
+                share_inputs["block_tables"],
+                model_output.stop_nums,
+                model_output.next_tokens,
+                model_output.is_block_step,
+                block_size,
+            )
+            # print(f"============================================update_inputs_v1 更新后=========================================")
+            # print(f"model_output.stop_flags : {model_output.stop_flags}")
+            # print(f"model_output.not_need_stop : {model_output.not_need_stop}")
+            # print(f"model_output.seq_lens_this_time : {model_output.seq_lens_this_time}")
+            # print(f"model_output.seq_lens_encoder : {model_output.seq_lens_encoder}")
+            # print(f"model_output.seq_lens_decoder : {model_output.seq_lens_decoder}")
+            # print(f"share_inputs['step_seq_lens_decoder'] : {share_inputs['step_seq_lens_decoder']}")
+            # print(f"share_inputs['prompt_lens'] : {share_inputs['prompt_lens']}")
+            # print(f"sampled_token_ids : {sampled_token_ids}")
+            # print(f"model_output.input_ids : {model_output.input_ids}")
+            # print(f"model_output.stop_nums : {model_output.stop_nums}")
+            # print(f"model_output.next_tokens : {model_output.next_tokens}")
+            # print(f"model_output.is_block_step : {model_output.is_block_step}")
+            # print(f"share_inputs['block_tables'] : {share_inputs['block_tables']}")
+            # print(f"block_size : {block_size}")
+        else:
+            update_inputs(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                model_output.input_ids,
+                model_output.stop_nums,
+                sampled_token_ids,
+                model_output.is_block_step,
+            )
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -289,6 +366,96 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
+
+    def insert_tasks_v1(self, req_dicts: List[Request]):
+        """
+        Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
+        """
+        # NOTE(luotingdan): Lazy initialize kv cache
+        if "caches" not in self.share_inputs:
+            self.initialize_kv_cache()
+
+        req_len = len(req_dicts)
+        has_prefill_task = False
+        for i in range(req_len):
+            request = req_dicts[i]
+            idx = request.idx
+            if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                logger.debug(f"Handle prefill request {request} at idx {idx}")
+                prefill_start_index = request.prefill_start_index
+                prefill_end_index = request.prefill_end_index
+                length = prefill_end_index - prefill_start_index
+                input_ids = request.prompt_token_ids + request.output_token_ids
+                self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
+                    input_ids[prefill_start_index:prefill_end_index]
+                )
+                encoder_block_num = len(request.block_tables)
+                self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
+                self.share_inputs["block_tables"][idx : idx + 1, :] = -1
+                self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                    request.block_tables, dtype="int32"
+                )
+                self.share_inputs["stop_flags"][idx : idx + 1] = False
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
+                self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
+                self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.share_inputs["step_idx"][idx : idx + 1] = (
+                    len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
+                )
+                has_prefill_task = True
+            elif request.task_type.value == RequestType.DECODE.value:  # decode task
+                logger.debug(f"Handle decode request {request} at idx {idx}")
+                encoder_block_num = len(request.block_tables)
+                self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
+                self.share_inputs["block_tables"][idx : idx + 1, :] = -1
+                self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                    request.block_tables, dtype="int32"
+                )
+                continue
+            else:  # preempted task
+                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["block_tables"][idx : idx + 1, :] = -1
+                self.share_inputs["stop_flags"][idx : idx + 1] = True
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 0
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                self.share_inputs["is_block_step"][idx : idx + 1] = False
+                continue
+
+            if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
+                request.eos_token_ids.append(request.eos_token_ids[0])
+            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
+
+            self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
+            self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
+            self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
+            self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
+
+            self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
+            self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
+                "max_tokens", self.model_config.max_model_len
+            )
+
+            self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
+            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
+
+            if request.get("seed") is not None:
+                self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
+
+            if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
+                stop_seqs_num = len(request.get("stop_seqs_len"))
+                for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
+                    request.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
+                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
+                    request.get("stop_token_ids"), dtype="int64"
+                )
+        if has_prefill_task:
+            self.share_inputs["not_need_stop"][0] = True
 
     def process_prefill_inputs(self, req_dicts: List[Request]):
         """Process inputs for prefill tasks and update share_inputs buffer"""
@@ -392,6 +559,8 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full(
             [1], False, dtype="bool"
@@ -455,8 +624,19 @@ class XPUModelRunner(ModelRunnerBase):
             dtype="int32",
         )
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, is_dummy_run=False) -> None:
         """prepare the model inputs"""
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER and not is_dummy_run:
+            recover_decode_task(
+                self.share_inputs["stop_flags"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_encoder"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["step_seq_lens_decoder"],
+                self.share_inputs["block_tables"],
+                self.share_inputs["is_block_step"],
+                self.parallel_config.block_size,
+            )
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
@@ -655,7 +835,7 @@ class XPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
         """
         # 1. Prepare inputs of model and decoder.
-        self._prepare_inputs()
+        self._prepare_inputs(is_dummy_run=is_dummy_run)
 
         # 2. Padding inputs for cuda grph
 
@@ -699,6 +879,8 @@ class XPUModelRunner(ModelRunnerBase):
         xpu_post_process(
             sampled_token_ids=sampler_output.sampled_token_ids,
             model_output=model_output_data,
+            share_inputs=self.share_inputs,
+            block_size=self.parallel_config.block_size,
             skip_save_output=is_dummy_run,
         )
 
