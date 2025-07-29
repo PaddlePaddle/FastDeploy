@@ -1,4 +1,4 @@
-# Best Practice for ERNIE-4.5-300B-A47B
+# ERNIE-4.5-300B-A47B
 ## Environmental Preparation
 ### 1.1 Hardware requirements
 The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the following hardware for each quantization is as follows:
@@ -12,39 +12,13 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the follo
 2. Since only 4-GPSs quantization scale is provided, the W4A8 model needs to be deployed on 4 GPUs.
 3. For hardware not listed in the table, you can estimate whether it can be deployed based on the GPU memory.
 
-### 1.2 Install fastdeploy and prepare the model
-- Installation: Before starting the deployment, please ensure that your hardware environment meets the following conditions:
-```
-GPU Driver >= 535
-CUDA >= 12.3
-CUDNN >= 9.5
-Linux X86_64
-Python >= 3.10
-```
-For SM 80/90 GPU（A30/A100/H100/）
-```
-# Install stable release
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+### 1.2 Install fastdeploy
+- Installation: For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
 
-# Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
-For SM 86/89 GPU（A10/4090/L20/L40)
-```
-# Install stable release
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+- Model Download，For detail, please refer to [Supported Models](../supported_models.md). **Please note that models with Paddle suffix need to be used for Fastdeploy**：
 
-# Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
-For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
-
-- Model Download，**Please note that models with Paddle suffix need to be used for Fastdeploy**：
-  - Just specify the model name（e.g. `baidu/ERNIE-4.5-300B-A47B-Paddle`）to automatically download. The default download path is `~/` (i.e. the user's home directory). You can also modify the default download path by configuring the environment variable `FD_MODEL_CACHE`
-  - If affected by network or other factors, you can also download the model through [huggingface](https://huggingface.co/), [modelscope](https://www.modelscope.cn/home), etc., and specify the model path when starting service
-
-## Start the Service
-
+## 2.How to Use
+### 2.1 Basic: Launching the Service
 Start the service by following command:
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -55,9 +29,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
-- `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model.
+- `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
 - `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
-- `--kv-cache-ratio`: Indicates that KVCache blocks are distributed to the Prefill stage and the Decode stage according to the kv_cache_ratio ratio. Improper settings may result in insufficient KVCache blocks in a certain stage, thus affecting performance. If the service management global block is enabled, this setting is not required.
 
 For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。
 

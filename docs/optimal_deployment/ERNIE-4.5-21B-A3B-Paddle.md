@@ -1,4 +1,4 @@
-# Best Practice for ERNIE-4.5-21B-A3B
+# ERNIE-4.5-21B-A3B
 ## Environmental Preparation
 ### 1.1 Hardware requirements
 The minimum number of GPUs required to deploy `ERNIE-4.5-21B-A3B` on the following hardware for each quantization is as follows:
@@ -16,38 +16,12 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-21B-A3B` on the followi
 2. For hardware not listed in the table, you can estimate whether it can be deployed based on the GPU memory.
 
 ### 1.2 Install fastdeploy and prepare the model
-- Installation: Before starting the deployment, please ensure that your hardware environment meets the following conditions:
-```
-GPU Driver >= 535
-CUDA >= 12.3
-CUDNN >= 9.5
-Linux X86_64
-Python >= 3.10
-```
-For SM 80/90 GPU（A30/A100/H100/）
-```
-# Install stable release
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+- Installation: For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
 
-# Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
-For SM 86/89 GPU（A10/4090/L20/L40)
-```
-# Install stable release
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+- Model Download，For detail, please refer to [Supported Models](../supported_models.md). **Please note that models with Paddle suffix need to be used for Fastdeploy**：
 
-# Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
-For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
-
-- Model Download，**Please note that models with Paddle suffix need to be used for Fastdeploy**：
-  - Just specify the model name（e.g. `baidu/ERNIE-4.5-21B-A3B-Paddle`）to automatically download. The default download path is `~/` (i.e. the user's home directory). You can also modify the default download path by configuring the environment variable `FD_MODEL_CACHE`
-  - If affected by network or other factors, you can also download the model through [huggingface](https://huggingface.co/), [modelscope](https://www.modelscope.cn/home), etc., and specify the model path when starting service
-
-## Start the Service
-
+## 2.How to Use
+### 2.1 Basic: Launching the Service
 Start the service by following command:
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -58,9 +32,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
-- `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model.
+- `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
 - `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
-- `--kv-cache-ratio`: Indicates that KVCache blocks are distributed to the Prefill stage and the Decode stage according to the kv_cache_ratio ratio. Improper settings may result in insufficient KVCache blocks in a certain stage, thus affecting performance. If the service management global block is enabled, this setting is not required.
 
 For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。
 
@@ -124,6 +97,52 @@ Rejection sampling is to generate samples from a proposal distribution that is e
 Add the following environment variables before starting
 ```
 export FD_SAMPLING_CLASS=rejection
+```
+
+#### 2.2.7 Disaggregated Deployment
+**Idea:** Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.
+
+**How to enable:** Take the deployment of a single machine with 8 GPUs and 1P1D (4 GPUs each) as an example. Compared with the default hybrid deployment method, `--splitwise-role` is required to specify the role of the node. And the GPUs and logs of the two nodes are isolated through the environment variables `FD_LOG_DIR` and `CUDA_VISIBLE_DEVICES`.
+```
+# prefill
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export INFERENCE_MSG_QUEUE_ID=1315
+export FLAGS_max_partition_size=2048
+export FD_ATTENTION_BACKEND=FLASH_ATTN
+export FD_LOG_DIR="prefill_log"
+
+quant_type=block_wise_fp8
+export FD_USE_DEEP_GEMM=0
+
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
+    --max-model-len 131072 \
+    --max-num-seqs 20 \
+    --num-gpu-blocks-override 40000 \
+    --quantization ${quant_type} \
+    --gpu-memory-utilization 0.9 --kv-cache-ratio 0.9 \
+    --port 7012 --engine-worker-queue-port 7013 --metrics-port 7014 --tensor-parallel-size 4 \
+    --cache-queue-port 7015 \
+    --splitwise-role "prefill" \
+```
+```
+# decode
+export CUDA_VISIBLE_DEVICES=4,5,6,7
+export INFERENCE_MSG_QUEUE_ID=1215
+export FLAGS_max_partition_size=2048
+export FD_LOG_DIR="decode_log"
+
+quant_type=block_wise_fp8
+export FD_USE_DEEP_GEMM=0
+
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
+    --max-model-len 131072 \
+    --max-num-seqs 20 \
+    --quantization ${quant_type} \
+    --gpu-memory-utilization 0.85 --kv-cache-ratio 0.1 \
+    --port 9012 --engine-worker-queue-port 8013 --metrics-port 8014 --tensor-parallel-size 4 \
+    --cache-queue-port 8015 \
+    --innode-prefill-ports 7013 \
+    --splitwise-role "decode"
 ```
 
 ## FAQ

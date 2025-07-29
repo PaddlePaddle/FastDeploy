@@ -1,4 +1,4 @@
-# ERNIE-4.5-21B-A3B 最佳实践
+# ERNIE-4.5-21B-A3B
 ## 一、环境准备
 ### 1.1 支持情况
 ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小卡数如下：
@@ -15,39 +15,13 @@ ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小�
 1. 在启动命令后指定`--tensor-parallel-size 2` 即可修改部署卡数
 2. 表格中未列出的硬件，可根据显存大小进行预估是否可以部署
 
-### 1.2 安装fastdeploy与准备模型
-- 安装：在开始部署前，请确保你的硬件环境满足如下条件：
-```
-GPU驱动 >= 535
-CUDA >= 12.3
-CUDNN >= 9.5
-Linux X86_64
-Python >= 3.10
-```
-针对SM 80/90的GPU（A30/A100/H100/）
-```
-# Install stable release
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+### 1.2 安装fastdeploy
+- 安装，请参考[Fastdeploy Installation](../get_started/installation/README.md)完成安装。
 
-# Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
-针对SM 86/89的GPU（A10/4090/L20/L40)
-```
-# Install stable release
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+- 模型下载，请参考[支持模型列表](../supported_models.md)。**请注意使用Fastdeploy部署需要Paddle后缀的模型**
 
-# Install latest Nightly build
-python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
-安装详情，请参考[Fastdeploy Installation](../get_started/installation/README.md)完成安装。
-
-- 模型下载，**请注意使用Fastdeploy部署需要Paddle后缀的模型**：
-  - 执行时直接指定模型名（如`baidu/ERNIE-4.5-21B-A3B-Paddle`）即可自动下载，默认下载路径为 `~/`(即用户主目录)，也可以通过配置环境变量 `FD_MODEL_CACHE`修改默认下载的路径
-  - 如受到网络或其他因素影响，也可以通过[huggingface](https://huggingface.co/)、[modelscope](https://www.modelscope.cn/home)等下载模型，并在启动时指定模型路径
-
-## 二、启动服务
-
+## 二、如何使用
+### 2.1 基础：启动服务
 通过下列命令启动服务
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -59,9 +33,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-seqs 128
 ```
 其中：
-- `--quantization`: 表示模型采用的量化策略。不同量化策略，模型的性能和精度也会不同。
+- `--quantization`: 表示模型采用的量化策略。不同量化策略，模型的性能和精度也会不同。可选值包括：`wint8` / `wint4` / `block_wise_fp8`(需要Hopper架构)。
 - `--max-model-len`：表示当前部署的服务所支持的最长Token数量。设置得越大，模型可支持的上下文长度也越大，但相应占用的显存也越多，可能影响并发数。
-- `--kv-cache-ratio`: 表示KVCache块按kv_cache_ratio比例分给Prefill阶段和Decode阶段。设置不合理会导致某个阶段的KVCache块不足，从而影响性能。如果开启服务管理全局Block功能，可以不用设置。
 
 更多的参数含义与默认设置，请参见[FastDeploy参数说明](../parameters.md)。
 
@@ -124,6 +97,52 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 启动前增加下列环境变量
 ```
 export FD_SAMPLING_CLASS=rejection
+```
+
+#### 2.2.7 分离式部署
+**原理：** 分离式部署的核心思想是将Prefill 和 Decode 分开部署，在一定场景下可以提高硬件利用率，有效提高吞吐，降低整句时延。具体请参考分离式部署
+
+**启用方式：** 以单机8GPU，1P1D（各4GPU）部署为例，与默认的混合式部署方式相比， 需要`--splitwise-role`指定节点的角色。并通过环境变量`FD_LOG_DIR`和`CUDA_VISIBLE_DEVICES`将两个节点的GPU 和日志隔离开
+```
+# prefill
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export INFERENCE_MSG_QUEUE_ID=1315
+export FLAGS_max_partition_size=2048
+export FD_ATTENTION_BACKEND=FLASH_ATTN
+export FD_LOG_DIR="prefill_log"
+
+quant_type=block_wise_fp8
+export FD_USE_DEEP_GEMM=0
+
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
+    --max-model-len 131072 \
+    --max-num-seqs 20 \
+    --num-gpu-blocks-override 40000 \
+    --quantization ${quant_type} \
+    --gpu-memory-utilization 0.9 --kv-cache-ratio 0.9 \
+    --port 7012 --engine-worker-queue-port 7013 --metrics-port 7014 --tensor-parallel-size 4 \
+    --cache-queue-port 7015 \
+    --splitwise-role "prefill" \
+```
+```
+# decode
+export CUDA_VISIBLE_DEVICES=4,5,6,7
+export INFERENCE_MSG_QUEUE_ID=1215
+export FLAGS_max_partition_size=2048
+export FD_LOG_DIR="decode_log"
+
+quant_type=block_wise_fp8
+export FD_USE_DEEP_GEMM=0
+
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
+    --max-model-len 131072 \
+    --max-num-seqs 20 \
+    --quantization ${quant_type} \
+    --gpu-memory-utilization 0.85 --kv-cache-ratio 0.1 \
+    --port 9012 --engine-worker-queue-port 8013 --metrics-port 8014 --tensor-parallel-size 4 \
+    --cache-queue-port 8015 \
+    --innode-prefill-ports 7013 \
+    --splitwise-role "decode"
 ```
 
 ## 三、常见问题FAQ
