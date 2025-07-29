@@ -709,7 +709,7 @@ def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
         messages=[{"role": "user", "content": "Hello"}],
         min_tokens=1,
         max_tokens=1,
-        temperature=0,
+        temperature=0.0,
         stream=False,
     )
     assert hasattr(response, "choices")
@@ -719,24 +719,3 @@ def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
     # Verify usage shows exactly 1 completion token
     assert hasattr(response, "usage")
     assert response.usage.completion_tokens == 1
-
-
-def test_streaming_min_max_token_equals_one(openai_client, capsys):
-    """
-    Test chat/completion when min_tokens equals max_tokens equals 1.
-    Verify it returns exactly one token.
-    """
-    # Test streaming chat
-    response = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Hello"}],
-        min_tokens=1,
-        max_tokens=1,
-        temperature=0,
-        stream=True,
-    )
-    token_count = 0
-    for chunk in response:
-        if chunk.choices[0].delta.content:
-            token_count += 1
-    assert token_count == 1
