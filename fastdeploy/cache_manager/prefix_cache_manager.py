@@ -507,29 +507,26 @@ class PrefixCacheManager:
                     cpu_match_token_num,
                 ) = self.match_block(req_id, input_ids, block_size)
 
-                # check enough gpu memory to allocate cache
-                match_gpu_blocks_num = len(match_gpu_block_ids)
-                expected_block_num = self.get_required_block_num(input_token_num, block_size)
-                self._check_validity(req_id, match_gpu_blocks_num, expected_block_num)
-
-                # update matched node info
-                current_time = time.time()
-                self._update_matched_node_info(req_id, match_block_node, current_time)
+                #  update matched node info
+                self._update_matched_node_info(req_id, match_block_node, current_time=time.time())
 
                 # 2. prepare cache
                 #  allocate gpu cache for matched cpu blocks
                 gpu_recv_block_ids = []
                 match_cpu_blocks_num = len(match_cpu_block_ids)
-                if match_cpu_blocks_num > 0:
-                    gpu_recv_block_ids = self.allocate_gpu_blocks(match_cpu_blocks_num)
-                    if len(gpu_recv_block_ids) > 0:
-                        self._prepare_cpu_cache(
-                            req_id=req_id,
-                            swap_node_ids=swap_node_ids,
-                            gpu_recv_block_ids=gpu_recv_block_ids,
-                            match_cpu_block_ids=match_cpu_block_ids,
-                            cpu_recv_block_ids=[],
-                        )
+                if self.can_allocate_gpu_blocks(num_blocks=match_cpu_blocks_num):
+                    if match_cpu_blocks_num > 0:
+                        gpu_recv_block_ids = self.allocate_gpu_blocks(match_cpu_blocks_num)
+                        if len(gpu_recv_block_ids) > 0:
+                            self._prepare_cpu_cache(
+                                req_id=req_id,
+                                swap_node_ids=swap_node_ids,
+                                gpu_recv_block_ids=gpu_recv_block_ids,
+                                match_cpu_block_ids=match_cpu_block_ids,
+                                cpu_recv_block_ids=[],
+                            )
+                else:
+                    raise Exception("Not enough GPU memory to allocate cache for matched CPU Cache")
 
                 #  record request cache info
                 self.cache_info[req_id] = (match_block_node, input_ids)

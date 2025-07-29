@@ -85,6 +85,7 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req = self.running.pop()
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
+                preempted_req.prefill_block_num = len(preempted_req.block_tables)
                 self._free_blocks(preempted_req)
                 self.waiting.appendleft(preempted_req)
                 preempted_reqs.append(preempted_req)
@@ -181,7 +182,9 @@ class ResourceManagerV1(ResourceManager):
                     if request.status == RequestStatus.WAITING:
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
-                            self.get_prefix_cached_blocks(request)
+                            success = self.get_prefix_cached_blocks(request)
+                            if not success:
+                                break
 
                         num_new_tokens = request.num_total_tokens - request.num_computed_tokens
                         num_new_tokens = min(num_new_tokens, token_budget)
@@ -244,26 +247,30 @@ class ResourceManagerV1(ResourceManager):
         """
         set prefix cached information for the given request
         """
-        cache_prepare_time = time.time()
-        (common_block_ids, matched_token_num, hit_info) = self.cache_manager.request_match_blocks(
-            request, self.config.cache_config.block_size
-        )
+        try:
+            cache_prepare_time = time.time()
+            (common_block_ids, matched_token_num, hit_info) = self.cache_manager.request_match_blocks(
+                request, self.config.cache_config.block_size
+            )
 
-        matched_block_num = len(common_block_ids)
-        no_cache_block_num = self.cache_manager.get_required_block_num(
-            request.prompt_token_ids_len - matched_token_num,
-            self.config.cache_config.block_size,
-        )
+            matched_block_num = len(common_block_ids)
+            no_cache_block_num = self.cache_manager.get_required_block_num(
+                request.prompt_token_ids_len - matched_token_num,
+                self.config.cache_config.block_size,
+            )
 
-        request.num_cached_tokens = matched_token_num
-        request.gpu_cache_token_num = hit_info["gpu_cache_blocks"] * self.config.cache_config.block_size
-        request.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.config.cache_config.block_size
-        request.cache_info = (matched_block_num, no_cache_block_num)
-        request.block_tables = common_block_ids
+            request.num_cached_tokens = matched_token_num
+            request.gpu_cache_token_num = hit_info["gpu_cache_blocks"] * self.config.cache_config.block_size
+            request.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.config.cache_config.block_size
+            request.cache_info = (matched_block_num, no_cache_block_num)
+            request.block_tables = common_block_ids
 
-        request.prompt_token_ids_len = len(request.prompt_token_ids)
-        request.num_computed_tokens = matched_token_num
-        request.cache_prepare_time = time.time() - cache_prepare_time
+            request.num_computed_tokens = matched_token_num
+            request.cache_prepare_time = time.time() - cache_prepare_time
+            return True
+        except Exception as e:
+            llm_logger.error(f"prefix match blocks error: {e}, waiting reschedule...")
+            return False
 
     def add_request(self, request: Request) -> None:
         self.waiting.append(request)
@@ -272,6 +279,7 @@ class ResourceManagerV1(ResourceManager):
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
             # TODO(chengyanfu): support cache ouput blocks for prefix caching
+            self.cache_manager.release_block_ids_async(request)
             self.cache_manager.recycle_gpu_blocks(request.block_tables[request.prefill_block_num :])
         else:
             self.cache_manager.recycle_gpu_blocks(request.block_tables)
