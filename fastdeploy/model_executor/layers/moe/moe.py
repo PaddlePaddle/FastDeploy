@@ -313,6 +313,9 @@ class FusedMoE(nn.Layer):
         )
         self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
 
+        if self.fd_config.parallel_config.ep_rank < 0:
+            # 如果当前的卡上不需要跑MoE，那么他不需要加载MoE的权重！
+            return
         if self.fd_config.model_config.is_quantized:
             self.quant_method.process_prequanted_weights(self, state_dict)
         else:
