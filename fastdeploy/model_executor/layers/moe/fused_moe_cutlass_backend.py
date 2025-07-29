@@ -496,25 +496,6 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         """
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
-        
-        rank = paddle.distributed.get_rank()
-        rank = rank % 8
-
-        # tmp = []
-        # up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
-        # paddle.distributed.all_gather(tmp, up_gate_proj_weights)
-        # up_gate_proj_weights = paddle.concat(tmp)
-        # up_gate_proj_weights = paddle.split(up_gate_proj_weights, axis=0, num_or_sections = 8)[rank]
-        # up_gate_proj_weights.reshape_([-1, up_gate_proj_weights.shape[-1]])
-        # up_gate_proj_weights = paddle.split(up_gate_proj_weights, axis=0, num_or_sections = 8)
-
-        # tmp = []
-        # down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        # paddle.distributed.all_gather(tmp, down_proj_weights)
-        # down_proj_weights = paddle.concat(tmp)
-        # down_proj_weights = paddle.split(down_proj_weights, axis=0, num_or_sections = 8)[rank]
-        # down_proj_weights.reshape_([-1, down_proj_weights.shape[-1]])
-        # down_proj_weights = paddle.split(down_proj_weights, axis=0, num_or_sections = 8)
 
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
