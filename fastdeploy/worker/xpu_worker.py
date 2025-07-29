@@ -20,6 +20,7 @@ from typing import List, Optional
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
@@ -69,9 +70,10 @@ class XpuWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Optimizes the inference graph using the specified optimization options.
+        Perform the warm-up and the graph optimization
         """
-        logger.warn("XPU current could not graph optimize and warm up model")
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
 
     def determine_available_memory(self) -> int:
         """
@@ -154,7 +156,10 @@ class XpuWorker(WorkerBase):
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+        else:
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
 
     def check_health(self) -> bool:
         """ """

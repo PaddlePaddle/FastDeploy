@@ -28,6 +28,7 @@ from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
     DeviceConfig,
+    EarlyStopConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -41,7 +42,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger, none_or_str
+from fastdeploy.utils import get_logger
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -101,7 +102,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
         tokenizer = ErnieBotTokenizer.from_pretrained(
-            fd_config.parallel_config.model_name_or_path,
+            fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
             padding_side="right",
             use_fast=False,
@@ -439,7 +440,7 @@ def parse_args():
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument(
         "-m",
-        "--model_name_or_path",
+        "--model",
         type=str,
         default="./output",
         help="model dir",
@@ -476,34 +477,10 @@ def parse_args():
         help="enable chunked prefill",
     )
     parser.add_argument(
-        "--speculative_method",
+        "--speculative_config",
+        type=json.loads,
         default=None,
-        type=none_or_str,
-        choices=[
-            None,
-            "ngram",
-            "mtp",
-        ],
-    )
-    parser.add_argument(
-        "--speculative_max_draft_token_num",
-        default=1,
-        type=int,
-    )
-    parser.add_argument(
-        "--speculative_model_name_or_path",
-        default="",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_model_quantization",
-        default="WINT8",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_benchmark_mode",
-        default="False",
-        type=str,
+        help="Configation of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -589,6 +566,12 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
+    parser.add_argument(
+        "--early_stop_config",
+        type=json.loads,
+        default=None,
+        help="Configuration of early stop.",
+    )
 
     args = parser.parse_args()
     return args
@@ -607,7 +590,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
     decoding_config = DecodingConfig(vars(args))
-    speculative_config = SpeculativeConfig(vars(args))
+    speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     parallel_config.tensor_parallel_size = args.tensor_parallel_size
@@ -631,6 +614,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
+
+    early_stop_config = EarlyStopConfig(args.early_stop_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -703,6 +688,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
+        early_stop_config=early_stop_config,
         cache_config=cache_config,
     )
     update_fd_config_for_mm(fd_config)

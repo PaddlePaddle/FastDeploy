@@ -698,6 +698,28 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
 
 
+def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
+    """
+    Test chat/completion when min_tokens equals max_tokens equals 1.
+    Verify it returns exactly one token.
+    """
+    # Test non-streaming chat
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        max_tokens=1,
+        temperature=0.0,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+    # Verify usage shows exactly 1 completion token
+    assert hasattr(response, "usage")
+    assert response.usage.completion_tokens == 1
+
+
 def test_non_streaming_chat_with_bad_words(openai_client, capsys):
     """
     Test bad_words option in non-streaming chat functionality with the local service

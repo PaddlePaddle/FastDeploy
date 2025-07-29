@@ -82,6 +82,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -108,10 +109,9 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
-
         #  Sampler
         if not self.speculative_decoding:
-            self.sampler = Sampler()
+            self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
@@ -275,11 +275,16 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
 
@@ -454,11 +459,15 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
@@ -628,14 +637,17 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
 
         # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full([self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.share_inputs["stop_seqs_len"] = paddle.full(
+            [max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32"
+        )
         self.share_inputs["stop_seqs"] = paddle.full(
             [
+                max_num_seqs,
                 self.model_config.max_stop_seqs_num,
                 self.model_config.stop_seqs_max_len,
             ],
             -1,
-            dtype="int32",
+            dtype="int64",
         )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
@@ -753,6 +765,8 @@ class GPUModelRunner(ModelRunnerBase):
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=20 if self.enable_logprob else None,
+            enable_early_stop=self.enable_early_stop,
+            stop_flags=self.share_inputs["stop_flags"],
         )
 
     def load_model(self) -> None:
@@ -1024,6 +1038,8 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
 
             post_process(
@@ -1288,6 +1304,8 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
             need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
@@ -1480,8 +1498,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
-            tokenizer_name=self.parallel_config.model_name_or_path,
-            image_preprocessor_name=str(self.parallel_config.model_name_or_path),
+            tokenizer_name=self.model_config.model,
+            image_preprocessor_name=str(self.model_config.model),
         )
         processor.eval()
         image_preprocess = processor.image_preprocessor
