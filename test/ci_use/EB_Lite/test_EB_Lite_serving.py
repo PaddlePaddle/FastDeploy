@@ -696,3 +696,41 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     assert hasattr(disabled_response, "choices")
     assert len(disabled_response.choices) > 0
     assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
+
+
+def test_min_max_token_equals_one(openai_client):
+    """
+    Test chat/completion when min_tokens equals max_tokens equals 1.
+    Verify it returns exactly one token.
+    """
+    # Test non-streaming chat
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        min_tokens=1,
+        max_tokens=1,
+        temperature=0,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+    # Verify usage shows exactly 1 completion token
+    assert hasattr(response, "usage")
+    assert response.usage.completion_tokens == 1
+
+    # Test streaming chat
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        min_tokens=1,
+        max_tokens=1,
+        temperature=0,
+        stream=True,
+    )
+    token_count = 0
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            token_count += 1
+    assert token_count == 1
