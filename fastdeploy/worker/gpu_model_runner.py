@@ -215,12 +215,6 @@ class GPUModelRunner(ModelRunnerBase):
                     inputs = request.multimodal_inputs
                     if request.with_image:
                         vision_inputs = {}
-                        num_image_start = request.num_image_start
-                        num_image_end = request.num_image_end
-                        image_type_ids_start = request.image_type_ids_start
-                        image_type_ids_end = request.image_type_ids_end
-                        image_start = request.image_start
-                        image_end = request.image_end
                         vision_inputs["input_ids"] = paddle.to_tensor(
                             inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
                         )
@@ -228,13 +222,14 @@ class GPUModelRunner(ModelRunnerBase):
                             inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
                         )
                         vision_inputs["image_type_ids"] = paddle.to_tensor(
-                            inputs["image_type_ids"][image_type_ids_start:image_type_ids_end], dtype=paddle.int64
+                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
+                            dtype=paddle.int64,
                         )
                         vision_inputs["images"] = paddle.to_tensor(
-                            inputs["images"][image_start:image_end], dtype="uint8"
+                            inputs["images"][request.image_start : request.image_end], dtype="uint8"
                         )
                         vision_inputs["grid_thw"] = paddle.to_tensor(
-                            inputs["grid_thw"][num_image_start:num_image_end], dtype="int64"
+                            inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
                         )
                         self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
                     else:

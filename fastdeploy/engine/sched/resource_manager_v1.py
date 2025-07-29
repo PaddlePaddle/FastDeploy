@@ -157,13 +157,13 @@ class ResourceManagerV1(ResourceManager):
         grid_thw = grid_thw.numpy().reshape([-1, 3])
         pre_end_idx = request.num_computed_tokens
         new_end_idx = pre_end_idx + num_new_tokens
-        if new_end_idx < ori_prompt_len and input_ids[new_end_idx] == image_patch_id:
+        if new_end_idx < ori_prompt_len and input_ids[new_end_idx - 1] == image_patch_id:
             boundary_idx = np.searchsorted(img_boundaries_idx, new_end_idx, side="left").item()
             if boundary_idx == len(img_boundaries_idx):
                 new_end_idx = ori_prompt_len
             else:
                 new_end_idx = img_boundaries_idx[boundary_idx].item()
-        elif pre_end_idx < ori_prompt_len and new_end_idx >= ori_prompt_len:
+        elif new_end_idx >= ori_prompt_len and paddle.sum(input_ids[pre_end_idx:new_end_idx] == image_patch_id):
             new_end_idx = ori_prompt_len
         num_new_tokens = new_end_idx - pre_end_idx
 
