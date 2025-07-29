@@ -83,4 +83,4 @@ With the above configurations, you can flexibly choose and use the appropriate s
 
 `top_k`: The number of tokens with the highest sampling probability, limiting the sampling range to the top k tokens. It is an int type, with a range of [0, vocab_size].
 
-`min_p`: Low probability filtering threshold, considering only the token set with probability greater than or equal to (`max_prob*min_p`). It is a float type, with a range of [0, 1.0].
+`min_p`: Low probability filtering threshold, considering only the token set with probability greater than or equal to (`max_prob*min_p`). It is a float type, with a range of [0.0, 1.0].
