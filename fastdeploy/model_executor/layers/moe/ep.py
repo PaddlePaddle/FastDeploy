@@ -43,9 +43,10 @@ class DeepEPEngine:
         num_max_dispatch_tokens_per_rank: int,
         hidden: int,
         num_experts: int,
-        moe_phase: MoEPhase,
         ep_size: int,
         ep_rank: int,
+        splitwise_role: str,
+        moe_phase: MoEPhase,
         async_finish: bool = False,
     ):
         """
@@ -65,26 +66,44 @@ class DeepEPEngine:
         self.hidden = hidden
         self.num_experts = num_experts
         self.num_local_experts = num_experts // ep_size
-        self.moe_phase = moe_phase
         self.async_finish = async_finish
 
-        self.deepep_engine = None
+        self.prefill_deepep_engine = None
+        self.decode_deepep_engine = None
 
-        if moe_phase == MoEPhase.DECODER:
+        self.ep_config = Config(24, 6, 256)
+        self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
+
+        # In mixed EP mode on a single node, we dynamically switch between
+        # high throughput and low latency modes.
+        if splitwise_role == "mixed":
+            # decode engine
             logger.info("Initializing Low Latency Buffer")
-            self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
             self.get_low_latency_buffer()
-        elif moe_phase == MoEPhase.PREFILL:
-            self.deepep_engine = deep_ep.Buffer(
+            # prefill engine
+            self.prefill_deepep_engine = deep_ep.Buffer(
                 self.group,
-                int(1e9),
+                int(5e8),
                 0,
                 low_latency_mode=False,
                 num_qps_per_rank=1,
             )
-            self.ep_config = Config(24, 6, 256)
+        # In disaggregated mode on mutiple nodes, we either use
+        # high throughput mode or low latency mode.
         else:
-            raise ValueError(f"Unknown generation phase {moe_phase}")
+            if moe_phase.phase == "decode":
+                logger.info("Initializing Low Latency Buffer")
+                self.get_low_latency_buffer()
+            elif moe_phase.phase == "prefill":
+                self.prefill_deepep_engine = deep_ep.Buffer(
+                    self.group,
+                    int(5e8),
+                    0,
+                    low_latency_mode=False,
+                    num_qps_per_rank=1,
+                )
+            else:
+                raise ValueError(f"Unknown generation phase {moe_phase}")
 
     def get_low_latency_buffer(self):
         """
@@ -105,14 +124,14 @@ class DeepEPEngine:
         )
         # Allocate a buffer if not existed or not enough buffer size
         if (
-            self.deepep_engine is None
-            or self.deepep_engine.group != self.group
-            or not self.deepep_engine.low_latency_mode
-            or self.deepep_engine.num_rdma_bytes < num_rdma_bytes
+            self.decode_deepep_engine is None
+            or self.decode_deepep_engine.group != self.group
+            or not self.decode_deepep_engine.low_latency_mode
+            or self.decode_deepep_engine.num_rdma_bytes < num_rdma_bytes
         ):
             # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
             assert self.num_experts % self.ep_size == 0
-            self.deepep_engine = deep_ep.Buffer(
+            self.decode_deepep_engine = deep_ep.Buffer(
                 self.group,
                 0,
                 num_rdma_bytes,
@@ -149,7 +168,7 @@ class DeepEPEngine:
             handle,
             _,
             dispatch_hook,
-        ) = self.deepep_engine.low_latency_dispatch(
+        ) = self.decode_deepep_engine.low_latency_dispatch(
             hidden_states,
             topk_idx,
             expertwise_scale,
@@ -174,8 +193,24 @@ class DeepEPEngine:
         Return:
             combined_hidden_states: [num_tokens, hidden]
         """
+        if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":  # not develop version of PaddlePaddle
+            # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
+            # and when the default recommended version of PaddlePaddle is greater than 3.1.0
+            (
+                src_info,
+                layout_range,
+                num_max_dispatch_tokens_per_rank,
+                num_experts,
+            ) = handle
+            handle = (
+                src_info,
+                layout_range,
+                num_max_dispatch_tokens_per_rank,
+                None,
+                num_experts,
+            )
 
-        combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
+        combined_hidden_states, _, combine_hook = self.decode_deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
@@ -189,7 +224,7 @@ class DeepEPEngine:
         """
         clean_low_latency_buffer
         """
-        self.deepep_engine.clean_low_latency_buffer(
+        self.decode_deepep_engine.clean_low_latency_buffer(
             self.num_max_dispatch_tokens_per_rank, self.hidden, self.num_experts
         )
 
@@ -197,7 +232,11 @@ class DeepEPEngine:
         """
         barrier_all
         """
-        self.deepep_engine.barrier_all()
+        if self.prefill_deepep_engine is not None:
+            self.prefill_deepep_engine.barrier_all()
+
+        if self.decode_deepep_engine is not None:
+            self.decode_deepep_engine.barrier_all()
 
 
 class EPRunner:
@@ -210,33 +249,57 @@ class EPRunner:
         top_k: int,
         hidden: int,
         num_experts: int,
+        splitwise_role: str,
         moe_phase: MoEPhase,
         num_max_dispatch_tokens_per_rank: int = 1,
         ep_size: int = 1,
         ep_rank: int = 0,
+        redundant_experts_num: int = 0,
     ):
         self.top_k = top_k
         self.num_experts = num_experts
+        self.redundant_experts_num = redundant_experts_num
         self.ep_engine = DeepEPEngine(
             num_max_dispatch_tokens_per_rank=num_max_dispatch_tokens_per_rank,
             hidden=hidden,
-            num_experts=num_experts,
-            moe_phase=moe_phase,
+            num_experts=num_experts + redundant_experts_num,
             ep_size=ep_size,
             ep_rank=ep_rank,
+            splitwise_role=splitwise_role,
+            moe_phase=moe_phase,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
         """
         moe_select
         """
-        topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            self.top_k,
-            True,  # apply_norm_weight,
-            False,
-        )
+        if layer.redundant_table_manger is not None:
+            (
+                ep_rank_to_expert_id_list,
+                expert_id_to_ep_rank_array,
+                expert_in_rank_num_list,
+                tokens_per_expert_stats_list,
+            ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
+
+            topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
+                gating_logits=gate_out,
+                expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                expert_in_rank_num_list=expert_in_rank_num_list,
+                tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                bias=layer.gate_correction_bias,
+                moe_topk=self.top_k,
+                apply_norm_weight=True,  # apply_norm_weight
+                enable_softmax_top_k_fused=False,
+                redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+            )
+        else:
+            topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                self.top_k,
+                True,  # apply_norm_weight,
+                False,
+            )
         return topk_idx, topk_weights
 
     @abstractmethod
@@ -264,16 +327,22 @@ class EPPrefillRunner(EPRunner):
         top_k: int,
         hidden: int,
         num_experts: int,
+        splitwise_role: str,
         ep_size: int = 1,
         ep_rank: int = 0,
+        redundant_experts_num: int = 0,
+        moe_phase: MoEPhase = MoEPhase("prefill"),
     ):
         super().__init__(
             top_k,
             hidden,
             num_experts,
-            MoEPhase.PREFILL,
+            splitwise_role,
+            moe_phase,
+            num_max_dispatch_tokens_per_rank=256,
             ep_size=ep_size,
             ep_rank=ep_rank,
+            redundant_experts_num=redundant_experts_num,
         )
 
     def dispatch(
@@ -290,7 +359,7 @@ class EPPrefillRunner(EPRunner):
             num_tokens_per_expert,
             is_token_in_rank,
             _,
-        ) = self.ep_engine.deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
+        ) = self.ep_engine.prefill_deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -303,7 +372,7 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
         }
-        return self.ep_engine.deepep_engine.dispatch(**dispatch_args)
+        return self.ep_engine.prefill_deepep_engine.dispatch(**dispatch_args)
 
     def combine(
         self,
@@ -318,7 +387,7 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
         }
-        fused_moe_out, _, _ = self.ep_engine.deepep_engine.combine(**combine_args)
+        fused_moe_out, _, _ = self.ep_engine.prefill_deepep_engine.combine(**combine_args)
 
         return fused_moe_out
 
@@ -333,18 +402,23 @@ class EPDecoderRunner(EPRunner):
         top_k: int,
         hidden: int,
         num_experts: int,
+        splitwise_role: str,
         num_max_dispatch_tokens_per_rank: int,
         ep_size: int = 1,
         ep_rank: int = 0,
+        redundant_experts_num: int = 0,
+        moe_phase: MoEPhase = MoEPhase("decode"),
     ):
         super().__init__(
             top_k,
             hidden,
             num_experts,
-            MoEPhase.DECODER,
+            splitwise_role,
+            moe_phase,
             num_max_dispatch_tokens_per_rank,
             ep_size=ep_size,
             ep_rank=ep_rank,
+            redundant_experts_num=redundant_experts_num,
         )
 
     def dispatch(

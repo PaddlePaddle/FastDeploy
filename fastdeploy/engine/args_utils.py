@@ -19,15 +19,14 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
-from fastdeploy.engine.config import (
+from fastdeploy.config import (
     CacheConfig,
-    Config,
     GraphOptimizationConfig,
-    ModelConfig,
-    ParallelConfig,
+    LoadConfig,
     SpeculativeConfig,
     TaskOption,
 )
+from fastdeploy.engine.config import Config, ModelConfig, ParallelConfig
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import FlexibleArgumentParser
 
@@ -758,46 +757,14 @@ class EngineArgs:
         """
         return cls(**{field.name: getattr(args, field.name) for field in dataclass_fields(cls)})
 
-    def create_model_config(self) -> ModelConfig:
-        """
-        Create and return a ModelConfig object based on the current settings.
-        """
-        return ModelConfig(
-            model_name_or_path=self.model,
-            config_json_file=self.model_config_name,
-            quantization=self.quantization,
-            dynamic_load_weight=self.dynamic_load_weight,
-            load_strategy=self.load_strategy,
-        )
-
-    def create_cache_config(self, model_cfg) -> CacheConfig:
-        """
-        Create and return a CacheConfig object based on the current settings.
-        """
-        return CacheConfig(
-            block_size=self.block_size,
-            tensor_parallel_size=self.tensor_parallel_size,
-            gpu_memory_utilization=self.gpu_memory_utilization,
-            num_gpu_blocks_override=self.num_gpu_blocks_override,
-            kv_cache_ratio=self.kv_cache_ratio,
-            prealloc_dec_block_slot_num_threshold=self.prealloc_dec_block_slot_num_threshold,
-            enable_prefix_caching=self.enable_prefix_caching,
-            swap_space=self.swap_space,
-            cache_queue_port=self.cache_queue_port,
-            model_cfg=model_cfg,
-            enable_chunked_prefill=self.enable_chunked_prefill,
-            enc_dec_block_num=self.static_decode_blocks,
-            rdma_comm_ports=self.rdma_comm_ports,
-            cache_transfer_protocol=self.cache_transfer_protocol,
-            pd_comm_port=self.pd_comm_port,
-        )
-
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
+        speculative_args = asdict(self)
         if self.speculative_config is not None:
-            return SpeculativeConfig(**self.speculative_config)
-        else:
-            return SpeculativeConfig()
+            for k, v in self.speculative_config.items():
+                speculative_args[k] = v
+
+        return SpeculativeConfig(speculative_args)
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
@@ -838,16 +805,22 @@ class EngineArgs:
         """
         Create and retuan a GraphOptimizationConfig object based on the current settings.
         """
+        graph_optimization_args = asdict(self)
         if self.graph_optimization_config is not None:
-            return GraphOptimizationConfig(**self.graph_optimization_config)
-        else:
-            return GraphOptimizationConfig()
+            for k, v in self.graph_optimization_config.items():
+                graph_optimization_args[k] = v
+        return GraphOptimizationConfig(graph_optimization_args)
 
     def create_engine_config(self) -> Config:
         """
         Create and return a Config object based on the current settings.
         """
-        model_cfg = self.create_model_config()
+        all_dict = asdict(self)
+        model_cfg = ModelConfig(all_dict)
+        all_dict["model_cfg"] = model_cfg
+        cache_cfg = CacheConfig(all_dict)
+        load_cfg = LoadConfig(all_dict)
+
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
         if self.max_num_batched_tokens is None:
@@ -869,7 +842,8 @@ class EngineArgs:
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
-            cache_config=self.create_cache_config(model_cfg),
+            cache_config=cache_cfg,
+            load_config=load_cfg,
             parallel_config=self.create_parallel_config(),
             max_model_len=self.max_model_len,
             tensor_parallel_size=self.tensor_parallel_size,

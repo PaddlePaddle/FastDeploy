@@ -38,7 +38,7 @@ class Proposer(ABC):
         self.parallel_config = self.cfg.parallel_config
         self.model_config = self.cfg.model_config
         self.speculative_config = self.cfg.speculative_config
-        self.kv_cache_config = self.cfg.kv_cache_config
+        self.cache_config = self.cfg.cache_config
         self.quant_config = self.cfg.quant_config
 
         self.max_num_seqs = self.parallel_config.max_num_seqs
