@@ -166,7 +166,7 @@ def main():
         )
     else:
         save_safetensors(save_state_dict, args)
-
+    pretrained_config.is_permuted = True
     pretrained_config.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
     end = time.perf_counter()
