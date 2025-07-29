@@ -15,10 +15,20 @@
 """
 
 from __future__ import annotations
-
 import random
+from functools import cached_property
 from dataclasses import dataclass, fields
 from typing import Any, List, Optional, Union
+from enum import Enum, IntEnum
+
+
+_SAMPLING_EPS = 1e-5
+_MAX_TEMP = 1e-2
+
+class SamplingType(IntEnum):
+    GREEDY = 0
+    RANDOM = 1
+    RANDOM_SEED = 2
 
 
 @dataclass
@@ -108,50 +118,49 @@ class SamplingParams:
         )
 
     @classmethod
-    def from_optional(
-        cls,
-        n,
-        best_of,
-        presence_penalty,
-        frequency_penalty,
-        repetition_penalty,
-        temperature,
-        top_p,
-        top_k,
-        min_p,
-        seed=None,
-        stop=None,
-        stop_token_ids=None,
-        max_tokens=None,
-        reasoning_max_tokens=None,
-        min_tokens=1,
-        logprobs=None,
-        bad_words=None,
-    ) -> SamplingParams:
+    def from_optional(cls,
+                      n,
+                      best_of,
+                      presence_penalty,
+                      frequency_penalty,
+                      repetition_penalty,
+                      temperature,
+                      top_p,
+                      top_k,
+                      min_p,
+                      seed=None,
+                      stop=None,
+                      stop_token_ids=None,
+                      max_tokens=None,
+                      reasoning_max_tokens=None,
+                      min_tokens=1,
+                      logprobs=None,
+                      bad_words=None) -> "SamplingParams":
         """Create instance from command line arguments"""
-        return cls(
-            n=1 if n is None else n,
-            best_of=best_of,
-            presence_penalty=(presence_penalty if presence_penalty is not None else 0.0),
-            frequency_penalty=(frequency_penalty if frequency_penalty is not None else 0.0),
-            repetition_penalty=(repetition_penalty if repetition_penalty is not None else 1.0),
-            temperature=temperature if temperature is not None else 1.0,
-            top_p=top_p,
-            top_k=top_k if top_k is not None else 0,
-            min_p=min_p if min_p is not None else 0.0,
-            seed=seed,
-            stop=stop,
-            stop_token_ids=stop_token_ids,
-            max_tokens=max_tokens if max_tokens is not None else 8192,
-            reasoning_max_tokens=reasoning_max_tokens,
-            min_tokens=min_tokens,
-            logprobs=logprobs,
-            bad_words=bad_words,
-        )
+        return cls(n=1 if n is None else n,
+                   best_of=best_of,
+                   presence_penalty=presence_penalty
+                   if presence_penalty is not None else 0.0,
+                   frequency_penalty=frequency_penalty
+                   if frequency_penalty is not None else 0.0,
+                   repetition_penalty=repetition_penalty
+                   if repetition_penalty is not None else 1.0,
+                   temperature=temperature if temperature is not None else 1.0,
+                   top_p=top_p,
+                   top_k=top_k if top_k is not None else 0,
+                   min_p=min_p if min_p is not None else 0.0,
+                   seed=seed,
+                   stop=stop,
+                   stop_token_ids=stop_token_ids,
+                   max_tokens=max_tokens if max_tokens is not None else 8192,
+                   reasoning_max_tokens=reasoning_max_tokens,
+                   min_tokens=min_tokens,
+                   logprobs=logprobs,
+                   bad_words=bad_words)
 
     def __post_init__(self):
-        if self.seed is None:
-            self.seed = random.randint(0, 922337203685477580)
+        if self.seed == -1:
+            self.seed = None
         if self.max_tokens is not None and self.reasoning_max_tokens is None:
             self.reasoning_max_tokens = max(int(self.max_tokens * 0.8), 1)
         self._verify_args()
@@ -175,7 +184,8 @@ class SamplingParams:
         if self.top_k < -1:
             raise ValueError(f"top_k must be 0 (disable), or at least 1, " f"got {self.top_k}.")
         if not isinstance(self.top_k, int):
-            raise TypeError(f"top_k must be an integer, got {type(self.top_k).__name__}")
+            raise TypeError(
+                f"top_k must be an integer, got {type(self.top_k).__name__}")
         if not 0.0 <= self.min_p <= 1.0:
             raise ValueError("min_p must be in [0,1],got f{self.min_p}")
 
@@ -194,10 +204,16 @@ class SamplingParams:
         if self.logprobs is not None and self.logprobs < 0:
             raise ValueError(f"logprobs must be non-negative, got {self.logprobs}.")
         if self.logprobs is not None and self.logprobs > 20:
-            raise ValueError("Invalid value for 'top_logprobs': must be less than or equal to 20.")
-
-        if not 0 <= self.seed <= 922337203685477580:
-            raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
+            raise ValueError(
+                "Invalid value for 'top_logprobs': must be less than or equal to 20.")
+        
+    @cached_property
+    def sampling_type(self)->SamplingType:
+        if self.temperature < _SAMPLING_EPS:
+            return SamplingType.GREEDY
+        if self.seed is not None:
+            return SamplingType.RANDOM_SEED
+        return SamplingType.RANDOM
 
     def update_from_tokenizer(self, tokenizer):
         """

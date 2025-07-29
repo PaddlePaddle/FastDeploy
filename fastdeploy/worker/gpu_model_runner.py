@@ -78,10 +78,13 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_mm = self.model_config.enable_mm
         self.rank = rank
         self.local_rank = local_rank
+        self.generators={}
         self.device_id = device_id
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+
+        self.gene
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -128,9 +131,7 @@ class GPUModelRunner(ModelRunnerBase):
         self._init_share_inputs(self.parallel_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
             shape=[self.parallel_config.max_num_seqs, 1],
-            fill_value=4,
-            dtype="int64",
-        )
+            dtype="int64")
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -500,7 +501,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Initialize all share buffers for model inputs.
         """
-        self.MAX_INFER_SEED = 9223372036854775806
+
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
@@ -925,9 +926,10 @@ class GPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
+                logits = self.model.compute_logits(model_output)
 
                 hidden_states = rebuild_padding(
-                    model_output,
+                    logits,
                     self.share_inputs["cum_offsets"],
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],

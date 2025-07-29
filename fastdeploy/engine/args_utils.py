@@ -320,6 +320,11 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    seed : Optional[int] = None
+    """
+    Random seed to use for initialization. If not set, a random seed is used.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -465,7 +470,15 @@ class EngineArgs:
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
         )
-
+        model_group.add_argument("--enable-logprob",
+                                 action="store_true",
+                                 default=EngineArgs.enable_logprob,
+                                 help="Enable output of token-level log probabilities."
+                                 )
+        model_group.add_argument("--seed",
+                                type=int,
+                                defualt=None,
+                                help="Random seed for initialization. If not specified, a random seed will be used.")
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
         parallel_group.add_argument(
@@ -775,13 +788,12 @@ class EngineArgs:
         """
         Create and return a ModelConfig object based on the current settings.
         """
-        return ModelConfig(
-            model_name_or_path=self.model,
-            config_json_file=self.model_config_name,
-            quantization=self.quantization,
-            dynamic_load_weight=self.dynamic_load_weight,
-            load_strategy=self.load_strategy,
-        )
+        return ModelConfig(model_name_or_path=self.model,
+                           config_json_file=self.model_config_name,
+                           quantization=self.quantization,
+                           dynamic_load_weight=self.dynamic_load_weight,
+                           load_strategy=self.load_strategy,
+                           seed=self.seed)
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
         """
