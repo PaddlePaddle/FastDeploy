@@ -238,6 +238,7 @@ class FusedMoE(nn.Layer):
                 self.expert_id_offset + self.num_local_experts,
             )
         ]
+        ep_rank_to_expert_id_list = [i for i in range(self.num_experts)]
         if self.redundant_table_manger is not None:
             (
                 ep_rank_to_expert_id_list,
@@ -309,7 +310,7 @@ class FusedMoE(nn.Layer):
                         self.fd_config.model_config.model,
                     )
                 )
-        return up_gate_proj_weights, down_proj_weights, logical_expert_ids
+        return up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list
 
     def extract_moe_ffn_weights(self, state_dict: dict):
         """
@@ -332,7 +333,7 @@ class FusedMoE(nn.Layer):
         assert up_gate_proj_expert_weight_key is not None, "up_gate_proj_expert_weight_key should not be none."
         assert down_proj_expert_weight_key is not None, "down_proj_expert_weight_key should not be none."
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids = self.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = self.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,
