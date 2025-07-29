@@ -8,14 +8,14 @@ Reasoning models return an additional `reasoning_content` field in their output,
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle    | ernie-45-vl    | ✓                         |
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl    | ✓                         |
 
-The reasoning model requires a specified parser to extract reasoning content. The reasoning mode can be disabled by setting the `enable_thinking=False` parameter.
+The reasoning model requires a specified parser to extract reasoning content. The reasoning mode can be disabled by setting the `"enable_thinking": false` parameter.
 
 Interfaces that support toggling the reasoning mode:
 1. `/v1/chat/completions` requests in OpenAI services.
 2. `/v1/chat/completions` requests in the OpenAI Python client.
 3. `llm.chat` requests in Offline interfaces.
 
-For reasoning models, the length of the reasoning content can be controlled via `reasoning_max_tokens`. Add `metadata={"reasoning_max_tokens": 1024}` to the request.
+For reasoning models, the length of the reasoning content can be controlled via `reasoning_max_tokens`. Add `"reasoning_max_tokens": 1024` to the request.
 
 ### Quick Start
 When launching the model service, specify the parser name using the `--reasoning-parser` argument.
@@ -43,7 +43,8 @@ curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
       {"type": "text", "text": "Which era does the cultural relic in the picture belong to"}
     ]}
   ],
-  "metadata": {"enable_thinking": true}
+  "enable_thinking": true,
+  "reasoning_max_tokens": 1024
 }'
 ```
 
@@ -68,7 +69,10 @@ chat_response = client.chat.completions.create(
     ],
     model="vl",
     stream=True,
-    metadata={"enable_thinking": True}
+    extra_body={
+      "enable_thinking": True,
+      "reasoning_max_tokens": 1024
+    }
 )
 for chunk in chat_response:
     if chunk.choices[0].delta is not None:
