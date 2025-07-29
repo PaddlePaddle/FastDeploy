@@ -125,10 +125,13 @@ struct WintQuantTraits<ElementT, WintQuantMethod::kWeightOnlyInt2> {
   static constexpr int32_t kNumPackedValues = 4;
   static constexpr int32_t kPackedSize = 16;
 
+  using LocalScaleType = uint4b_t;
+  using CodeScaleZpType = float;
+
   struct Arguments {
-    const uint8_t *local_scale_ptr; // quanted 4-bits
-    const float *code_scale_ptr;
-    const float *code_zp_ptr;
+    uint8_t *local_scale_ptr; // quanted 4-bits
+    float *code_scale_ptr;
+    float *code_zp_ptr;
   };
 
   CUTLASS_DEVICE
