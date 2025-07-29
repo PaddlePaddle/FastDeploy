@@ -264,6 +264,9 @@ class GCUModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
+            if request.get("bad_words_token_ids") is not None:
+                self.share_inputs["bad_tokens"][idx : idx + 1] = [request.get("bad_words_token_ids")]
+
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
@@ -376,7 +379,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
-        self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype="int64")
+        self.share_inputs["bad_tokens"] = [[-1] for _ in range(max_num_seqs)]
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")

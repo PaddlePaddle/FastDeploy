@@ -443,7 +443,6 @@ class GPUModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
-            print("request get bad_words_token_ids:", request.get("bad_words_token_ids"))
             if request.get("bad_words_token_ids") is not None:
                 self.share_inputs["bad_tokens"][idx : idx + 1] = [request.get("bad_words_token_ids")]
 
