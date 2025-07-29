@@ -994,17 +994,16 @@ class LLMEngine:
         配置环境变量
         """
         variables = {
-            "PADDLE_TRAINER_ID": 0,
-            "PADDLE_TRAINERS_NUM": 1,
-            "TRAINER_INSTANCES_NUM": 1,
-            "TRAINER_INSTANCES": "0.0.0.0",
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
             "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.device_ids.split(",")),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
-            "FLAGS_hardamard_moe_block_size": 128,
+            "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
+            "FLAGS_hardamard_use_diagonal_block_matrix": int(
+                os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
+            ),
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -1082,11 +1081,7 @@ class LLMEngine:
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --quantization {self.cfg.model_config.quantization}"
             f" --ori_vocab_size {ori_vocab_size}"
-            f" --speculative_method {self.cfg.speculative_config.method}"
-            f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
-            f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
-            f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
-            f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
+            f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}"
@@ -1107,11 +1102,7 @@ class LLMEngine:
             if value:
                 arguments = arguments + f" --{worker_flag}"
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + (
-                f" --master {self.cfg.dist_init_addr}"
-                f" --nnodes {self.cfg.nnode!s}"
-                f" --rank {self.cfg.node_rank!s}"
-            )
+            pd_cmd = pd_cmd + f" --ips {','.join(self.cfg.ips)} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(

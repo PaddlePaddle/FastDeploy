@@ -50,6 +50,7 @@ class WorkerBase(ABC):
         self.load_config = fd_config.load_config
         self.parallel_config = fd_config.parallel_config
         self.device_config = fd_config.device_config
+        self.cache_config = fd_config.cache_config
         # ... config
 
         # Device and Runner
@@ -96,6 +97,6 @@ class WorkerBase(ABC):
         """Basic health check (override for device-specific checks)."""
         return NotImplementedError
 
-    def prefill_finished(self):
-        """check whether prefill stage finished."""
+    def exist_prefill(self):
+        """check whether prefill stage exist."""
         return True

@@ -73,7 +73,7 @@ class MTPProposer(Proposer):
         self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
         self.speculative_config.sharing_model = main_model
         self.model_config.num_hidden_layers = 1
-        self.parallel_config.model_name_or_path = self.speculative_config.model_name_or_path
+        self.parallel_config.model_name_or_path = self.speculative_config.model
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
@@ -97,10 +97,10 @@ class MTPProposer(Proposer):
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
-        input_length = int(full_length * self.parallel_config.kv_cache_ratio)
+        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
-            input_length + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            input_length + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -141,7 +141,7 @@ class MTPProposer(Proposer):
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
         if not self.parallel_config.do_profile and (
-            self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
+            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
         ):
             cache_kvs_list = []
             for i in range(
@@ -219,14 +219,14 @@ class MTPProposer(Proposer):
 
         self.main_model_num_gpu_blocks = num_gpu_blocks
         self.num_gpu_blocks = int(num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
-        if not (self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
             range(
                 self.num_gpu_blocks - 1,
-                int(self.main_model_num_gpu_blocks * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.main_model_num_gpu_blocks * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -275,6 +275,7 @@ class MTPProposer(Proposer):
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
         self.model_inputs["top_p"] = self.main_model_inputs["top_p"]
+        self.model_inputs["top_k"] = self.main_model_inputs["top_k"]
         self.model_inputs["temperature"] = self.main_model_inputs["temperature"]
         self.model_inputs["eos_token_id"] = self.main_model_inputs["eos_token_id"]
         self.model_inputs["penalty_score"] = self.main_model_inputs["penalty_score"]
@@ -299,7 +300,7 @@ class MTPProposer(Proposer):
         self.free_list = list(
             range(
                 self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -371,7 +372,7 @@ class MTPProposer(Proposer):
                     ]
                 self.model_inputs["pre_ids"][idx : idx + 1] = -1
                 self.model_inputs["step_idx"][idx : idx + 1] = 0
-                if self.parallel_config.enable_chunked_prefill:
+                if self.cache_config.enable_chunked_prefill:
                     token_chunk_size = request.prefill_chunk_info[0]
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                     self.model_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
@@ -528,6 +529,7 @@ class MTPProposer(Proposer):
                 self.sampling_metadata = SamplingMetadata(
                     temperature=self.model_inputs["temperature"],
                     top_p=self.model_inputs["top_p"],
+                    top_k=self.model_inputs["top_k"],
                     step_idx=self.model_inputs["step_idx"],
                     pre_token_ids=self.model_inputs["pre_ids"],
                     frequency_penalties=self.model_inputs["frequency_score"],
@@ -640,7 +642,7 @@ class MTPProposer(Proposer):
             self.model_inputs["used_list_len"],
             self.model_inputs["free_list"],
             self.model_inputs["free_list_len"],
-            self.parallel_config.block_size,
+            self.cache_config.block_size,
             self.max_draft_token_num,
         )
 

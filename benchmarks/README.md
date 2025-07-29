@@ -41,7 +41,10 @@ python -m pip install -r requirements.txt
 --metric-percentiles 80,95,99,99.9,99.95,99.99：性能结果中展示的性能指标分位值
 --num-prompts 1：总计发送多少条请求
 --max-concurrency 1：压测并发数
---save-result：开启结果保存，结果文件会存入json
+--save-result：开启结果保存，结果文件会存入json，默认False不保存
+--debug：开启debug模式，逐条打印payload和output内容，默认False
+--shuffle：是否打乱数据集，默认False不打乱
+--seed：打乱数据集时的随机种子，默认0
 ```
 
 ##### /v1/chat/completions接口压测单条数据调试

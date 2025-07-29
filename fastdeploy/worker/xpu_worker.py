@@ -20,6 +20,7 @@ from typing import List, Optional
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
@@ -104,7 +105,7 @@ class XpuWorker(WorkerBase):
         self.model_runner.prepare_profile()
         self.model_runner.profile_run()
 
-        total_available_memory = int(total_memory * self.parallel_config.gpu_memory_utilization)
+        total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
         used_memory = xpu_get_used_global_memory(self.local_rank)
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
@@ -143,18 +144,21 @@ class XpuWorker(WorkerBase):
         output = self.model_runner.execute_model(model_forward_batch)
         return output
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        check whether prefill stage finished
+        check whether prefill stage exist
         """
-        return self.model_runner.prefill_finished()
+        return self.model_runner.exist_prefill()
 
     def preprocess_new_task(self, req_dicts: List[Request]) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+        else:
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
 
     def check_health(self) -> bool:
         """ """

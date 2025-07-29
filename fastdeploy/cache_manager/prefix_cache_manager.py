@@ -473,7 +473,10 @@ class PrefixCacheManager:
                 current_time = time.time()
                 self._update_matched_node_info(req_id, match_block_node, current_time)
                 # 2. prepare cache
-                (gpu_recv_block_ids, gpu_extra_block_ids,) = self._prepare_cache(
+                (
+                    gpu_recv_block_ids,
+                    gpu_extra_block_ids,
+                ) = self._prepare_cache(
                     req_id,
                     input_ids,
                     block_size,
