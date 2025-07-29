@@ -155,7 +155,7 @@ class PaddleDisWorkerProc:
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.expert_parallel_rank,
+            local_data_parallel_id=paddle.distributed.get_rank(),
         )
 
     def init_health_status(self) -> None:
@@ -242,7 +242,10 @@ class PaddleDisWorkerProc:
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
-            if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
+            assert self.fd_config.parallel_config.tensor_parallel_rank == 0
+            rank = paddle.distributed.get_rank()
+
+            if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0 and rank < 8:
                 tasks, read_finish = self.task_queue.get_tasks()
 
                 req_dicts = []
@@ -591,19 +594,25 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     parallel_config = ParallelConfig(vars(args))
     parallel_config.tensor_parallel_size = args.tensor_parallel_size
     parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
-    parallel_config.expert_parallel_size = args.expert_parallel_size
+    parallel_config.expert_parallel_size = 8
+
+    # Note(ZKK):
+    # moe_ep_group indicates which cards we need to run MoE on
+    # at now moe_ep_group equals world!
+    ep_rank = parallel_config.ep_rank
+
     # config for EP
-    if args.expert_parallel_size > 1:
+    if args.expert_parallel_size > 1 and ep_rank >= 0:
         expert_parallel_rank = int(local_rank / args.tensor_parallel_size)
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
 
-        num_experts_per_rank = num_experts // args.expert_parallel_size
-        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        num_experts_per_rank = num_experts // 8
+        num_experts_start_offset = ep_rank * num_experts_per_rank
 
-        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.expert_parallel_rank = ep_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
