@@ -70,7 +70,7 @@ class InputPreprocessor:
         reasoning_parser_obj = None
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
-        architectures = ModelConfig(self.model_name_or_path).architectures
+        architectures = ModelConfig({"model": self.model_name_or_path}).architectures[0]
         if not self.enable_mm:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.text_processor import DataProcessor

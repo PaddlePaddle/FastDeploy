@@ -60,7 +60,7 @@ class RolloutModelConfig:
         local_rank: int = 0,
     ):
         # Required parameters
-        self.model_name_or_path = model_name_or_path
+        self.model = model_name_or_path
         self.max_model_len = max_model_len
         self.tensor_parallel_size = tensor_parallel_size
         self.dynamic_load_weight = dynamic_load_weight
@@ -83,10 +83,11 @@ class RolloutModelConfig:
         self.pad_token_id = pad_token_id
         self.eos_tokens_lens = eos_tokens_lens
         self.enable_chunked_prefill = enable_chunked_prefill
-        self.speculative_method = speculative_method
-        self.speculative_max_draft_token_num = speculative_max_draft_token_num
-        self.speculative_model_name_or_path = speculative_model_name_or_path
-        self.speculative_model_quantization = speculative_model_quantization
+        self.speculative_config = {}
+        self.speculative_config["method"] = speculative_method
+        self.speculative_config["max_draft_token_num"] = speculative_max_draft_token_num
+        self.speculative_config["model"] = speculative_model_name_or_path
+        self.speculative_config["quantization"] = speculative_model_quantization
         self.max_num_batched_tokens = max_num_batched_tokens
         self.enable_prefix_caching = enable_prefix_caching
         self.splitwise_role = splitwise_role
