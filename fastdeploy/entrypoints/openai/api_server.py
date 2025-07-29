@@ -53,6 +53,7 @@ from fastdeploy.utils import (
     is_port_available,
     retrive_model_from_server,
 )
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 
 parser = FlexibleArgumentParser()
 parser.add_argument("--port", default=8000, type=int, help="port to the http server")
@@ -103,6 +104,7 @@ async def lifespan(app: FastAPI):
         pid = os.getppid()
     else:
         pid = os.getpid()
+    chat_template = load_chat_template(args.chat_template)
     api_server_logger.info(f"{pid}")
     engine_client = EngineClient(
         args.tokenizer,
@@ -116,7 +118,7 @@ async def lifespan(app: FastAPI):
         args.data_parallel_size,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
-    chat_handler = OpenAIServingChat(engine_client, pid, args.ips)
+    chat_handler = OpenAIServingChat(engine_client, pid, args.ips, chat_template)
     completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips)
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid

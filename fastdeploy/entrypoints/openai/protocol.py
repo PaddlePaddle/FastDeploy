@@ -491,6 +491,7 @@ class ChatCompletionRequest(BaseModel):
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
     structural_tag: Optional[str] = None
+    chat_template: Optional[str] = None
 
     # doc: begin-chat-completion-sampling-params
     repetition_penalty: Optional[float] = None
