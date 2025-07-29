@@ -213,8 +213,11 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts")
         # 2. EP Dispatch
-        permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(x, topk_idx, topk_weights)
+        permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
+            x, topk_idx, topk_weights, expertwise_scale=expertwise_scale
+        )
         # 3. Compute ffn
         if self.moe_quant_type == "w4a8":
             num_local_experts, max_num, _ = permute_input.shape
@@ -376,6 +379,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         # 1. Init scale containers and maps
         up_gate_proj_weight_scales = []
         down_proj_weight_scales = []
+        up_gate_proj_in_scales_all_experts = []
         up_gate_proj_in_scales = []
         down_proj_in_scales = []
 
@@ -396,9 +400,16 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
                 raise ValueError(f"scale {name} should not be none in w4a8 mode.")
 
         # 2. Extract scale tensor from state dict
+        if layer.ep_size > 1:
+            for expert_idx in range(layer.num_experts):
+                scale_tensor = get_tensor(state_dict[scale_key_map["up_gate_proj_in_scale"].format(expert_idx)])
+                up_gate_proj_in_scales_all_experts.append(1 / scale_tensor)
+            create_and_set_parameter(
+                layer, "up_gate_proj_in_scale_all_experts", paddle.concat(up_gate_proj_in_scales_all_experts)
+            )
 
         for local_expert_idx in range(layer.num_local_experts):
-            expert_idx = local_expert_idx + layer.expert_id_offset * layer.num_local_experts
+            expert_idx = local_expert_idx + layer.expert_id_offset
             for name, scale_key_template in scale_key_map.items():
                 scale_tensor = _extract_scale_tensor(state_dict, scale_key_template, expert_idx)
                 scale_weight_map[name].append(scale_tensor)

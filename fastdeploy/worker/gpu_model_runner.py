@@ -275,11 +275,16 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
 
@@ -446,11 +451,15 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
@@ -619,14 +628,17 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
 
         # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full([self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.share_inputs["stop_seqs_len"] = paddle.full(
+            [max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32"
+        )
         self.share_inputs["stop_seqs"] = paddle.full(
             [
+                max_num_seqs,
                 self.model_config.max_stop_seqs_num,
                 self.model_config.stop_seqs_max_len,
             ],
             -1,
-            dtype="int32",
+            dtype="int64",
         )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
@@ -793,16 +805,21 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
-
+        only_decode_batch = True
+        prefill_exists = None
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            is_decode_batch_list = []
-            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
-            is_decode_batch = all(is_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
 
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
+        self.forward_meta.step_use_cudagraph = (
+            self.use_cudagraph
+            and only_decode_batch
+            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
+        )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -1007,6 +1024,8 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
 
             post_process(
@@ -1271,6 +1290,8 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
             need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":

@@ -21,6 +21,7 @@
 template <typename T, typename OutT>
 void MoeFastHardamardWrapper(const T *x_data,
                             const int64_t *expert_idx_per_token,
+                            const int64_t *recv_expert_count,
                             const T *shift,
                             const T *smooth,
                             const float* quant_scales,
@@ -29,5 +30,7 @@ void MoeFastHardamardWrapper(const T *x_data,
                             const float quant_min_bound,
                             const int64_t token_num,
                             const int64_t dim,
+                            const int num_max_tokens_per_expert,
+                            bool used_in_ep_low_latency,
                             OutT* out,
                             cudaStream_t &stream);

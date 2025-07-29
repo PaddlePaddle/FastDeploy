@@ -223,14 +223,11 @@ public:
   static Status can_implement(Arguments const &args)
   {
     CUTLASS_TRACE_HOST("W4A8MoeGemmUniversalBase::can_implement()");
-    // printf("--1\n");
     // Initialize static kernel and device properties, if necessary.
     Status result = init_device_props();
-    // printf("--1-2\n");
     if (result != Status::kSuccess) {
       return result;
     }
-    // printf("--2\n");
     dim3 grid = get_grid_shape(args);
     // printf("--grid:%d, %d, %d\n", grid.x, grid.y, grid.z);
     if (!(grid.y <= std::numeric_limits<uint16_t>::max() &&
@@ -238,7 +235,6 @@ public:
     {
       return Status::kErrorInvalidProblem;
     }
-    // printf("--3\n");
     return GemmKernel::can_implement(args);
   }
 
@@ -285,18 +281,50 @@ public:
   }
 
 
+
   /// Returns the maximum number of active thread blocks per multiprocessor
-  static int maximum_active_blocks()
+  static int maximum_active_blocks(int smem_capacity = -1)
   {
     CUTLASS_TRACE_HOST("W4A8MoeGemmUniversalBase::maximum_active_blocks()");
 
-    // Initialize static device properties, if necessary
-    if (init_device_props() != Status::kSuccess) {
+    int smem_size = int(sizeof(typename GemmKernel_::SharedStorage));
+
+    CUTLASS_TRACE_HOST("  smem_size: " << smem_size << " bytes");
+
+    cudaError_t result;
+    if (smem_size > (48 << 10)) {
+      result = cudaFuncSetAttribute(Kernel2<GemmKernel_>,
+                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+                                    smem_size);
+
+      if (result != cudaSuccess) {
+        // Call cudaGetLastError() to clear the error bit
+        result = cudaGetLastError();
+        CUTLASS_TRACE_HOST(
+          "  cudaFuncSetAttribute() returned error "
+          << cudaGetErrorString(result));
+        return -1;
+      }
+    }
+
+    int max_active_blocks = -1;
+    result = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &max_active_blocks,
+        Kernel2<GemmKernel_>,
+        GemmKernel_::kThreadCount,
+        smem_size);
+
+    if (result != cudaSuccess) {
+      // Call cudaGetLastError() to clear the error bit
+      result = cudaGetLastError();
+      CUTLASS_TRACE_HOST(
+        "  cudaOccupancyMaxActiveBlocksPerMultiprocessor() returned error "
+        << cudaGetErrorString(result));
       return -1;
     }
 
-    CUTLASS_TRACE_HOST("  max_active_blocks: " << sm_occupancy_);
-    return sm_occupancy_;
+    CUTLASS_TRACE_HOST("  max_active_blocks: " << max_active_blocks);
+    return max_active_blocks;
   }
 
 
@@ -341,8 +369,7 @@ public:
 
     // Configure grid and block dimensions
     dim3 block(GemmKernel::kThreadCount, 1, 1);
-    // dim3 grid = params_.get_grid_dims();
-        dim3 grid(216, 1, 1);
+    dim3 grid(params_.threadblock_count, 1, 1);
 
     // Launch kernel
     CUTLASS_TRACE_HOST("  "
