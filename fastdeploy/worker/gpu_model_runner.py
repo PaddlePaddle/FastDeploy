@@ -1484,8 +1484,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
-            tokenizer_name=self.parallel_config.model_name_or_path,
-            image_preprocessor_name=str(self.parallel_config.model_name_or_path),
+            tokenizer_name=self.model_config.model,
+            image_preprocessor_name=str(self.model_config.model),
         )
         processor.eval()
         image_preprocess = processor.image_preprocessor

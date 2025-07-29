@@ -60,7 +60,7 @@ class RolloutModelConfig:
         local_rank: int = 0,
     ):
         # Required parameters
-        self.model_name_or_path = model_name_or_path
+        self.model = model_name_or_path
         self.max_model_len = max_model_len
         self.tensor_parallel_size = tensor_parallel_size
         self.dynamic_load_weight = dynamic_load_weight

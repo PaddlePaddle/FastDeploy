@@ -270,7 +270,7 @@ class BackendBase:
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
                 tokenizer = AutoTokenizer.from_pretrained(
-                    self.fd_config.parallel_config.model_name_or_path,
+                    self.fd_config.model_config.model,
                     use_fast=False,
                 )
 
@@ -289,14 +289,14 @@ class BackendBase:
                 for i in range(len(vocab_file_names)):
                     if os.path.exists(
                         os.path.join(
-                            self.fd_config.parallel_config.model_name_or_path,
+                            self.fd_config.model_config.model,
                             vocab_file_names[i],
                         )
                     ):
                         ErnieBotTokenizer.vocab_files_names["vocab_file"] = vocab_file_names[i]
                         break
 
-                tokenizer = ErnieBotTokenizer.from_pretrained(self.fd_config.parallel_config.model_name_or_path)
+                tokenizer = ErnieBotTokenizer.from_pretrained(self.fd_config.model_config.model)
 
             return tokenizer
         except Exception as e:

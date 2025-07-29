@@ -101,7 +101,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
         tokenizer = ErnieBotTokenizer.from_pretrained(
-            fd_config.parallel_config.model_name_or_path,
+            fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
             padding_side="right",
             use_fast=False,
@@ -439,7 +439,7 @@ def parse_args():
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument(
         "-m",
-        "--model_name_or_path",
+        "--model",
         type=str,
         default="./output",
         help="model dir",
