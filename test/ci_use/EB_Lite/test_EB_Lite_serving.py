@@ -698,7 +698,7 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
 
 
-def test_min_max_token_equals_one(openai_client):
+def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
     """
     Test chat/completion when min_tokens equals max_tokens equals 1.
     Verify it returns exactly one token.
@@ -720,6 +720,12 @@ def test_min_max_token_equals_one(openai_client):
     assert hasattr(response, "usage")
     assert response.usage.completion_tokens == 1
 
+
+def test_streaming_min_max_token_equals_one(openai_client, capsys):
+    """
+    Test chat/completion when min_tokens equals max_tokens equals 1.
+    Verify it returns exactly one token.
+    """
     # Test streaming chat
     response = openai_client.chat.completions.create(
         model="default",
