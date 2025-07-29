@@ -967,7 +967,9 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["step_idx"],
                     self.share_inputs["stop_flags"],
                 )
-                sampler_output = self.sampler(logits, self.sampling_metadata)
+                sampler_output = self.sampler(
+                    logits, self.sampling_metadata, stop_flags=self.share_inputs["stop_flags"]
+                )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
             else:
@@ -1230,6 +1232,7 @@ class GPUModelRunner(ModelRunnerBase):
                 logits,
                 self.sampling_metadata,
                 skip_idx_list,
+                stop_flags=self.share_inputs["stop_flags"],
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)

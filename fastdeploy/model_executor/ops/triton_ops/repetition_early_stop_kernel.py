@@ -23,7 +23,7 @@ def repetition_early_stopper_kernel(
     trunc_ptr,  # float32[B, W]
     probs_ptr,  # float32[B, V]
     next_tokens_ptr,  # int32[B]
-    eos_token_id,
+    stop_flags,  # bool[B]
     threshold,
     B,  # batch size
     W,  # windows size
@@ -56,8 +56,8 @@ def repetition_early_stopper_kernel(
     is_over = scores > threshold
     all_over = tl.sum(is_over & (w_offs < W)) == W
 
-    # step5: if early stop is satisfied, write eos_token_id and clear the row
+    # step5: set stop flags and reset trunc scores
     if all_over:
-        tl.store(next_tokens_ptr + b, eos_token_id)
+        tl.store(stop_flags + b, True)
         zero = tl.full([BLOCK_W], 0.0, tl.float32)
         tl.store(trunc_row + w_offs, zero, mask=w_offs < W)

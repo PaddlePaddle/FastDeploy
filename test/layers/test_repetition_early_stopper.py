@@ -76,7 +76,7 @@ def test_repetition_early_stopper():
     # Determine the first step in each batch where the high probability starts to appear
     trigger_step_flags = [[i, np.random.randint(0, max_steps + 1)] for i in range(batch_size)]
     trigger_step_flags = dict(trigger_step_flags)
-    cfg = EarlyStopConfig(enable_early_stop=True, window_size=window_size, threshold=threshold)
+    cfg = EarlyStopConfig({"enable_early_stop": True, "window_size": window_size, "threshold": threshold})
     stopper = RepetitionEarlyStopper()
     stopper.initialize(batch_size, cfg)
 
@@ -86,29 +86,24 @@ def test_repetition_early_stopper():
     print(f"{next_tokens=}\ntrigger_start={trigger_step_flags[early_stop_batch_id]}")
 
     triggered_step = [None] * batch_size
-
+    stop_flags = paddle.zeros_like(next_tokens)
     for step in range(max_steps):
         print(f"\n===== Step {step} =====")
         flags = [trigger_step_flags[i] for i in range(batch_size)]
         probs_np = simulate_step_probs(batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)
         probs = paddle.to_tensor(probs_np)
         print("Before process:")
-        print("tokens:\n", next_tokens.numpy().T)
+        print("tokens:\n", stop_flags.numpy().T)
 
-        out = stopper.process(probs, next_tokens, eos_token_id)
-
-        assert out is not None, "out is None"
+        stopper.process(probs, next_tokens, stop_flags)
 
         print("After process:")
-        print("tokens:\n", out.numpy().T)
+        print("tokens:\n", stop_flags.numpy().T)
 
-        out_np = out.numpy()
+        out_np = stop_flags.numpy()
         for i in range(batch_size):
-            if out_np[i, 0] == eos_token_id and triggered_step[i] is None:
+            if out_np[i, 0] and triggered_step[i] is None:
                 triggered_step[i] = step
-
-        # update next token
-        next_tokens = out.clone()
 
     # Show which step trigger the early stop in batch i
     print("trigger_step: ", triggered_step)
@@ -118,7 +113,7 @@ def test_repetition_early_stopper():
 
 
 def test_consistency():
-    batch_size = 2
+    batch_size = 20
     vocab_size = 103424
     window_size = 3000
     threshold = 0.9
@@ -130,7 +125,7 @@ def test_consistency():
 
     trigger_step_flags = [[i, np.random.randint(0, max_steps + 1)] for i in range(batch_size)]
     trigger_step_flags = dict(trigger_step_flags)
-    cfg = EarlyStopConfig(enable_early_stop=True, window_size=window_size, threshold=threshold)
+    cfg = EarlyStopConfig({"enable_early_stop": True, "window_size": window_size, "threshold": threshold})
     stopper_normal = RepetitionEarlyStopper()
     stopper_normal.initialize(batch_size, cfg)
     stopper_triton = RepetitionEarlyStopper()
@@ -142,6 +137,9 @@ def test_consistency():
     next_tokens_normal[early_stop_batch_id, 0] = fixed_token_id
     next_tokens_triton[early_stop_batch_id, 0] = fixed_token_id
 
+    stop_flags_normal = paddle.zeros_like(next_tokens_normal)
+    stop_flags_triton = stop_flags_normal.clone()
+
     triggered_step_normal = [None] * batch_size
     triggered_step_triton = [None] * batch_size
 
@@ -151,23 +149,21 @@ def test_consistency():
         probs_np = simulate_step_probs(batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)
         probs = paddle.to_tensor(probs_np)
 
-        out_normal = stopper_normal.process_normal(probs, next_tokens_normal, eos_token_id)
-        out_triton = stopper_triton.process_triton(probs, next_tokens_triton, eos_token_id)
+        stopper_normal.process_normal(probs, next_tokens_normal, stop_flags_normal)
+        stopper_triton.process_triton(probs, next_tokens_triton, stop_flags_triton)
 
-        assert np.allclose(out_normal.numpy(), out_triton.numpy()), f"Token mismatch at step {step}"
+        assert np.allclose(stop_flags_normal.numpy(), stop_flags_triton.numpy()), f"stop flags mismatch at step {step}"
 
         trunc_scores_diff = paddle.abs(stopper_normal.trunc_scores - stopper_triton.trunc_scores)
         assert paddle.all(trunc_scores_diff < 1e-5), f"trunc_scores mismatch at step {step}"
 
-        out_np = out_normal.numpy()
+        out_normal = stop_flags_normal.numpy()
+        out_triton = stop_flags_triton.numpy()
         for i in range(batch_size):
-            if out_np[i, 0] == eos_token_id and triggered_step_normal[i] is None:
+            if out_normal[i, 0] == eos_token_id and triggered_step_normal[i] is None:
                 triggered_step_normal[i] = step
-            if out_np[i, 0] == eos_token_id and triggered_step_triton[i] is None:
+            if out_triton[i, 0] == eos_token_id and triggered_step_triton[i] is None:
                 triggered_step_triton[i] = step
-
-        next_tokens_normal = out_normal.clone()
-        next_tokens_triton = out_triton.clone()
 
     for i in range(batch_size):
         expected = triggered_step_normal[i]
@@ -194,19 +190,19 @@ def test_performance():
 
     next_tokens = paddle.randint(0, vocab_size, shape=[batch_size, 1], dtype="int64")
     next_tokens[early_stop_batch_id, 0] = fixed_token_id
-    cfg = EarlyStopConfig(enable_early_stop=True, window_size=window_size, threshold=threshold)
+    cfg = EarlyStopConfig({"enable_early_stop": True, "window_size": window_size, "threshold": threshold})
     print("Testing performance triton...")
     seconds = []
     stopper = RepetitionEarlyStopper()
     stopper.initialize(batch_size, cfg)
+    stop_flags = paddle.zeros_like(next_tokens)
     for step in range(max_steps):
         flags = [trigger_step_flags[i] for i in range(batch_size)]
         probs_np = simulate_step_probs(batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)
         probs = paddle.to_tensor(probs_np)
         s = time.perf_counter()
-        out = stopper.process_triton(probs, next_tokens, eos_token_id)
+        stopper.process_triton(probs, next_tokens, stop_flags)
         e = time.perf_counter()
-        next_tokens = out.clone()
         seconds.append(e - s)
     print(
         f"triton:\nexecute times: {max_steps}\ntotal execution time: {np.sum(seconds)*1000} ms \navg every step execution time: {np.mean(remove_min_max(seconds))*1000} ms"
@@ -216,14 +212,14 @@ def test_performance():
     seconds = []
     stopper = RepetitionEarlyStopper()
     stopper.initialize(batch_size, cfg)
+    stop_flags = paddle.zeros_like(next_tokens)
     for step in range(max_steps):
         flags = [trigger_step_flags[i] for i in range(batch_size)]
         probs_np = simulate_step_probs(batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)
         probs = paddle.to_tensor(probs_np)
         s = time.perf_counter()
-        out = stopper.process_normal(probs, next_tokens, eos_token_id)
+        stopper.process_normal(probs, next_tokens, stop_flags)
         e = time.perf_counter()
-        next_tokens = out.clone()
         seconds.append(e - s)
     print(
         f"normal:\nexecute times: {max_steps}\ntotal execution time: {np.sum(seconds)*1000} ms \navg every step execution time: {np.mean(remove_min_max(seconds))*1000} ms"

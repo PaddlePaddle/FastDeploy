@@ -33,15 +33,13 @@ class EarlyStopper:
         raise NotImplementedError
 
     @abstractmethod
-    def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+    def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         """
         processs the stopper and return the next tokens
         args:
             - probs: [batch_size, vocab_size], the probs of every sample
             - next_tokens: [batch_size, 1], the token index of every chosen sample
-            - eos_token_id: int, the eos token id
-        return:
-            - next_tokens: [batch_size, 1], stop part will be replaced by eos_token_id
+            - stop_flags: [batch_size, 1], determine which batch will be stopped
         """
         raise NotImplementedError
 
@@ -53,22 +51,20 @@ class RepetitionEarlyStopper(EarlyStopper):
         self.threshold = cfg.threshold
         self.trunc_scores = paddle.zeros((batch_size, self.early_stop_cfg.window_size), dtype="float32")
 
-    def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+    def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         """
         args:
             - probs: [batch_size, vocab_size], the probs of every sample
             - next_tokens: [batch_size, 1], the token index of every chosen sample
-            - eos_token_id: int, the eos token id
-        return:
-            - next_tokens: [batch_size, 1], stop part will be replaced by eos_token_id
+            - stop_flags: [batch_size, 1], determine which batch will be stopped
         """
-        # It will use naive execute if there is no triton support, otherwise use triton
+        # It will use normal execute if there is no triton support, otherwise use triton
         try:
-            return self.process_triton(probs, next_tokens, eos_token_id)
+            self.process_triton(probs, next_tokens, stop_flags)
         except Exception:
-            return self.process_normal(probs, next_tokens, eos_token_id)
+            self.process_normal(probs, next_tokens, stop_flags)
 
-    def process_normal(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+    def process_normal(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         # Get the probability score corresponding to next_tokens in this step
         next_scores = paddle.index_sample(probs, next_tokens)
 
@@ -77,19 +73,16 @@ class RepetitionEarlyStopper(EarlyStopper):
         self.trunc_scores[:, -1:] = next_scores
 
         # Determine which samples need to be terminated: all trunc_scores are greater than threshold
-        need_trunc_all = paddle.all(self.trunc_scores > self.threshold, axis=-1)
+        need_trunc_all = paddle.all(self.trunc_scores > self.threshold, axis=-1).unsqueeze(-1)
 
-        # Replace the next_tokens corresponding to these samples with eos_token_id
-        eos_ids = paddle.full_like(next_tokens, eos_token_id)
-        next_tokens = paddle.where(need_trunc_all.unsqueeze(-1), eos_ids, next_tokens)
+        # Add the stop flags
+        stop_flags[need_trunc_all] = True
 
         # Reset trunc_scores of truncated samples to 0 to avoid false triggering in the next step
-        reset_mask = need_trunc_all.unsqueeze(-1).tile([1, self.window_size])
+        reset_mask = need_trunc_all.tile([1, self.window_size])
         self.trunc_scores = paddle.where(reset_mask, paddle.zeros_like(self.trunc_scores), self.trunc_scores)
 
-        return next_tokens
-
-    def process_triton(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, eos_token_id: int):
+    def process_triton(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         import triton
 
         from fastdeploy.model_executor.ops.triton_ops import (
@@ -105,7 +98,7 @@ class RepetitionEarlyStopper(EarlyStopper):
             self.trunc_scores,
             probs,
             next_tokens,
-            int(eos_token_id),
+            stop_flags,
             self.threshold,
             B,
             W,
