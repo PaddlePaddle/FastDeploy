@@ -25,6 +25,7 @@ import numpy as np
 from aiozmq import zmq
 
 from fastdeploy.engine.request import RequestOutput
+from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
@@ -34,12 +35,20 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
     UsageInfo,
 )
+from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
 from fastdeploy.utils import api_server_logger, get_host_ip
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, ips):
+    def __init__(
+        self,
+        engine_client: EngineClient,
+        models: OpenAIServingModels,
+        pid: int,
+        ips,
+    ):
         self.engine_client = engine_client
+        self.models = models
         self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
@@ -64,6 +73,10 @@ class OpenAIServingCompletion:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+        if not self.models.is_supported_model(request.model):
+            err_msg = f"Unsupported model: {request.model}"
+            api_server_logger.error(err_msg)
+            raise ErrorResponse(message=err_msg, code=400)
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"

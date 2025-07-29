@@ -34,7 +34,7 @@ class ModelPath:
 
 class OpenAIServingModels:
     """
-    Shared instance to hold data about the loaded models
+    OpenAI-style models serving
     """
 
     def __init__(
@@ -42,7 +42,7 @@ class OpenAIServingModels:
         engine_client: EngineClient,
         model_paths: list[ModelPath],
         max_model_len: int,
-        pid,
+        pid: int,
         ips,
     ):
         self.engine_client = engine_client

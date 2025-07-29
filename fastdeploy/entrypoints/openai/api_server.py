@@ -125,15 +125,31 @@ async def lifespan(app: FastAPI):
         args.data_parallel_size,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
-    chat_handler = OpenAIServingChat(engine_client, pid, args.ips)
-    completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips)
-    model_handler = OpenAIServingModels(engine_client, model_paths, args.max_model_len, pid, args.ips)
+    model_handler = OpenAIServingModels(
+        engine_client,
+        model_paths,
+        args.max_model_len,
+        pid,
+        args.ips,
+    )
+    app.state.model_handler = model_handler
+    chat_handler = OpenAIServingChat(
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+    )
+    completion_handler = OpenAIServingCompletion(
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
-    app.state.model_handler = model_handler
     yield
     # close zmq
     try:
@@ -243,8 +259,8 @@ async def create_completion(request: CompletionRequest):
     return StreamingResponse(content=generator, media_type="text/event-stream")
 
 
-@app.get("v1/models")
-def list_models() -> Response:
+@app.get("/v1/models")
+async def list_models() -> Response:
     """
     List all available models.
     """
@@ -253,7 +269,7 @@ def list_models() -> Response:
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
 
-    models = app.state.model_handler.list_models()
+    models = await app.state.model_handler.list_models()
     if isinstance(models, ErrorResponse):
         return JSONResponse(content=models.model_dump(), status_code=models.code)
     elif isinstance(models, ModelList):
