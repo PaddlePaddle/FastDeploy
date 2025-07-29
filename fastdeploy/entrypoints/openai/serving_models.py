@@ -68,6 +68,8 @@ class OpenAIServingModels:
         """
         Check whether the specified model is supported.
         """
+        if model_name == "default":
+            return True
         return any(model.name == model_name for model in self.model_paths)
 
     def model_name(self) -> str:
