@@ -661,7 +661,6 @@ class XPUModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
-            num_running_requests: number of running requests in current batch
             num_running_requests: batch_size
             intermediate_tensors:
         """
