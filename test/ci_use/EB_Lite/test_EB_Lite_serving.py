@@ -707,7 +707,6 @@ def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
     response = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello"}],
-        min_tokens=1,
         max_tokens=1,
         temperature=0.0,
         stream=False,
