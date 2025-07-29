@@ -250,6 +250,7 @@ class MTPProposer(Proposer):
         self.model_inputs["block_tables"] = paddle.clone(self.main_model_inputs["block_tables"])
         self.model_inputs["input_ids"] = paddle.clone(self.main_model_inputs["input_ids"])
         self.tmp_seq_lens_this_time = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+
         self.model_inputs["seq_lens_encoder"] = paddle.clone(self.main_model_inputs["seq_lens_encoder"])
         self.model_inputs["seq_lens_decoder"] = paddle.clone(self.main_model_inputs["seq_lens_decoder"])
         self.model_inputs["step_idx"] = paddle.clone(self.main_model_inputs["step_idx"])
@@ -314,9 +315,11 @@ class MTPProposer(Proposer):
         self.model_inputs["batch_drop"] = paddle.full(shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
         self.model_inputs["used_list_len"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
         if self.max_draft_token_num > 1:
-            self.last_seq_lens_this_time = paddle.full_like(self.tmp_seq_lens_this_time, fill_value=-1, dtype="int32")
+            self.last_seq_lens_this_time = paddle.full_like(
+                self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
+            )
 
-    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests):
         """
         Process inputs for prefill tasks and insert it to model_inputs buffer
         """

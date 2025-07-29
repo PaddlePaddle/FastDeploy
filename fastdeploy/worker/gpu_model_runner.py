@@ -473,6 +473,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["not_need_stop"][0] = True
 
         self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
+
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
