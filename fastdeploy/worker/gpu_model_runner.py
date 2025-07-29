@@ -731,7 +731,11 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
-        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+        max_bad_tokens_len = (
+            paddle.max(self.share_inputs["bad_tokens_len"])
+            if paddle.max(self.share_inputs["bad_tokens_len"]) > 0
+            else 1
+        )
 
         # Initialize forward meta data
         self.initialize_forward_meta()
