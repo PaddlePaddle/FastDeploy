@@ -500,6 +500,8 @@ class DataProcessor:
                 request,
                 tokenize=False,
                 add_generation_prompt=request.get("add_generation_prompt", True),
+                chat_template=request.get("chat_template", None),
+
             )
             .replace("<|image@placeholder|>", "")
             .replace("<|video@placeholder|>", "")

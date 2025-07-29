@@ -88,6 +88,10 @@ class EngineArgs:
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
     """
+    chat_template: str = None
+    """
+    Chat template file path.
+    """
     enable_mm: bool = False
     """
     Flags to enable multi-modal model
@@ -398,6 +402,12 @@ class EngineArgs:
             default=EngineArgs.reasoning_parser,
             help="Flag specifies the reasoning parser to use for extracting "
             "reasoning content from the model output",
+        )
+        model_group.add_argument(
+            "--chat-template",
+            type=str,
+            default=EngineArgs.chat_template,
+            help="chat_template file path",
         )
         model_group.add_argument(
             "--speculative-config",

@@ -15,7 +15,7 @@
 """
 
 from copy import deepcopy
-from typing import List, Literal, Union
+from typing import List, Literal, Union, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -29,6 +29,7 @@ from typing_extensions import Required, TypeAlias, TypedDict
 
 from fastdeploy.input.multimodal.image import ImageMediaIO
 from fastdeploy.input.multimodal.video import VideoMediaIO
+from pathlib import Path
 
 
 class VideoURL(TypedDict, total=False):
@@ -156,3 +157,17 @@ def parse_chat_messages(messages):
 
         conversation.append({"role": role, "content": parsed_content})
     return conversation
+
+def load_chat_template(chat_template: Union[Path, str]) -> Optional[str]:
+    if chat_template is None:
+        return None
+    path = Path(chat_template)
+    if path.exists():
+        if path.is_file():
+            with open(path) as f:
+                return f.read()
+        else:
+            raise ValueError("Invalid input: chat_template must be either a file path or a string template")
+    else:
+        return chat_template
+

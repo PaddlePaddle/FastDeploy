@@ -471,6 +471,7 @@ class DataProcessor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
             return_tensors="pd",
+            chat_template=request.get("chat_template", None),
         )
         req_id = None
         tokens = self.tokenizer.tokenize(spliced_message)

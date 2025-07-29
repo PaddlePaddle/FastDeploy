@@ -309,6 +309,7 @@ class ErnieProcessor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
+            chat_template=request_or_messages.get("chat_template", None)
         )
 
         req_id = None
