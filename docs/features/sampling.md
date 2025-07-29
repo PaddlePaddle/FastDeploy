@@ -79,7 +79,7 @@ With the above configurations, you can flexibly choose and use the appropriate s
 
 ## Parameter Description
 
-`top_p`: The probability cumulative distribution truncation threshold, considering only the most likely token set that reaches this threshold. It is a float type, with a range of [0, 1.0].
+`top_p`: The probability cumulative distribution truncation threshold, considering only the most likely token set that reaches this threshold. It is a float type, with a range of [0.0, 1.0]. When top_p=1.0, all tokens are considered; when top_p=0.0, it degenerates into greedy search.
 
 `top_k`: The number of tokens with the highest sampling probability, limiting the sampling range to the top k tokens. It is an int type, with a range of [0, vocab_size].
 

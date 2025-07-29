@@ -80,6 +80,6 @@ export FD_SAMPLING_CLASS=rejection
 
 ## 参数说明
 
-* `top_p`: 概率累积分布截断阈值，仅考虑累计概率达到此阈值的最可能token集合。float类型，取值范围为[0,1.0]
-* `top_k`: 采样概率最高的token数量，考虑概率最高的k个token进行采样范围限制。int类型，取值范围为[0, vocab_size]
-* `min_p`：低概率过滤阈值，仅考虑概率大于等于(max_prob*min_p)的token集合。float类型，取值范围为[0,1.0]
+* `top_p`: 概率累积分布截断阈值，仅考虑累计概率达到此阈值的最可能token集合。float类型，取值范围为[0.0,1.0]。当top_p=1.0时，考虑所有token；当top_p=0.0时，退化为greedy search。
+* `top_k`: 采样概率最高的token数量，考虑概率最高的k个token进行采样范围限制。int类型，取值范围为[0,vocab_size]
+* `min_p`：低概率过滤阈值，仅考虑概率大于等于(max_prob*min_p)的token集合。float类型，取值范围为[0.0,1.0]
