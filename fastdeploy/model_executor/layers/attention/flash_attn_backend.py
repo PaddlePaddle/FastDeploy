@@ -84,7 +84,6 @@ class FlashAttentionMetadata(AttentionMetadata):
     _dtype: paddle.dtype = paddle.bfloat16
 
     set_max_lengths_decoder: paddle.Tensor = None
-    seq_lens_encoder_copy: paddle.Tensor = None
 
 
 class FlashAttentionBackend(AttentionBackend):
@@ -252,9 +251,6 @@ class FlashAttentionBackend(AttentionBackend):
 
         metadata.set_max_lengths_decoder = paddle.clone(metadata.set_max_lengths)
         metadata.set_max_lengths_decoder[1] = 0
-        metadata.seq_lens_encoder_copy = paddle.where(
-            forward_meta.seq_lens_encoder > 0, self.seq_zeros, forward_meta.seq_lens_encoder
-        )
 
     def forward_mixed(
         self,
@@ -321,7 +317,7 @@ class FlashAttentionBackend(AttentionBackend):
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            metadata.seq_lens_encoder_copy,
+            self.seq_zeros,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.batch_id_per_token,

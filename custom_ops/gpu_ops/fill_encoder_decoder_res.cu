@@ -100,9 +100,6 @@ void FillEncoderDecoderRes(
             head_dim
             );
     }
-    cudaDeviceSynchronize();
-    auto err = cudaGetLastError();
-    printf("fill_encoder_decoder_res err = %d, str = %s\n", err, cudaGetErrorString(err));
 }
 
 PD_BUILD_STATIC_OP(fill_encoder_decoder_res)
