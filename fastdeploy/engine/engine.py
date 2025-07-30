@@ -243,38 +243,38 @@ class LLMEngine:
                 self.splitwise_receive_thread.daemon = True
                 self.splitwise_receive_thread.start()
 
-            self.cfg.init_cache_info()
+        self.cfg.init_cache_info()
 
-            role = self.cfg.splitwise_role
-            host_ip = self.cfg.host_ip
-            disaggregate = self.cfg.disaggregate_info
-            if self.cfg.scheduler_config.name == "splitwise":
-                self.scheduler.start(role, host_ip, disaggregate)
+        role = self.cfg.splitwise_role
+        host_ip = self.cfg.host_ip
+        disaggregate = self.cfg.disaggregate_info
+        if self.cfg.scheduler_config.name == "splitwise":
+            self.scheduler.start(role, host_ip, disaggregate)
 
-            time.sleep(1)
+        time.sleep(1)
 
-            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
-                self.dp_processed = []
-                for i in range(
-                    1,
-                    self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
-                ):
-                    time.sleep(1)
-                    self.dp_processed.append(
-                        multiprocessing.Process(
-                            target=start_expert_service,
-                            args=(
-                                self.cfg,
-                                i + self.cfg.node_rank * self.cfg.worker_num_per_node,
-                                self.ipc_signal_suffix,
-                            ),
-                        )
+        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            self.dp_processed = []
+            for i in range(
+                1,
+                self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+            ):
+                time.sleep(1)
+                self.dp_processed.append(
+                    multiprocessing.Process(
+                        target=start_expert_service,
+                        args=(
+                            self.cfg,
+                            i + self.cfg.node_rank * self.cfg.worker_num_per_node,
+                            self.ipc_signal_suffix,
+                        ),
                     )
-                    llm_logger.info(
-                        f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
-                        + f" data parallel id {i}"
-                    )
-                    self.dp_processed[-1].start()
+                )
+                llm_logger.info(
+                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                    + f" data parallel id {i}"
+                )
+                self.dp_processed[-1].start()
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
         return True
