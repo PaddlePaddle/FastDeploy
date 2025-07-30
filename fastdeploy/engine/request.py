@@ -105,6 +105,7 @@ class Request:
         # Multi-modal related
         self.multimodal_inputs = multimodal_inputs
         self.multimodal_data = multimodal_data
+        self.multimodal_img_boundaries = None
 
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier

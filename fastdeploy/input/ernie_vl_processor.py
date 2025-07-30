@@ -17,6 +17,7 @@
 import os
 
 import numpy as np
+from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
 from fastdeploy.input.ernie_processor import ErnieProcessor
@@ -62,6 +63,15 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
+        # Generation config
+        try:
+            self.generation_config = GenerationConfig.from_pretrained(model_name_or_path)
+        except Exception as e:
+            data_processor_logger.warning(
+                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
+            )
+            self.generation_config = None
+
     def get_pad_id(self):
         """get pad id"""
         return self.tokenizer.pad_token_id
@@ -75,12 +85,34 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         """
         self.tokenizer = self.ernie_processor.tokenizer
 
+    def _apply_default_parameters(self, request):
+        """
+        Apply default value for parameters in request
+        """
+
+        def set_value(req, key, value):
+            value = getattr(self.generation_config, key, value)
+            if isinstance(req, dict):
+                if key not in req:
+                    req[key] = value
+            else:
+                if req.get(key) is None:
+                    req.set(key, value)
+
+        set_value(request, "top_p", 0.7)
+        set_value(request, "temperature", 1.0)
+        set_value(request, "repetition_penalty", 1.0)
+        set_value(request, "frequency_penalty", 0.0)
+        set_value(request, "presence_penalty", 0.0)
+        return request
+
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
         task = request.to_dict()
         task["enable_thinking"] = kwargs.get("enable_thinking", True)
         self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
+        request = self._apply_default_parameters(request)
 
         return request
 
@@ -162,6 +194,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
 
+        request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
@@ -191,7 +224,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
-        request["prompt_token_ids"] = outputs["input_ids"]
+        request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
@@ -227,6 +260,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             outs["grid_thw"] = np.vstack(outs["grid_thw"])
             outs["image_type_ids"] = np.array(outs["image_type_ids"])
 
+        outs["image_patch_id"] = self.image_patch_id
         # Convert lists to arrays
         outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
         outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
