@@ -421,7 +421,6 @@ class Ernie4_5_VLModel(nn.Layer):
         image_token_num = 0
 
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
@@ -436,7 +435,7 @@ class Ernie4_5_VLModel(nn.Layer):
             )
             text_input = fake_hidden_states
 
-        if image_mask.any():
+        if image_features is not None:
             hidden_states[image_mask] = image_features.cast(self._dtype)
             text_input = paddle.full(
                 shape=[text_token_num, hidden_states.shape[1]],
@@ -477,7 +476,7 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = hidden_states.cast("float32")
         score_text = hidden_states
 
-        if image_input is not None:
+        if image_features is not None: 
             token_type_ids = token_type_ids.reshape([-1])
             text_pos_shifted = token_type_ids[:token_num] == 0
             score_text = hidden_states[text_pos_shifted.reshape([-1])]
