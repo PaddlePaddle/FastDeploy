@@ -15,6 +15,7 @@
 """
 
 import os
+import sys
 from collections.abc import Sequence
 from functools import cached_property
 from typing import Callable, Optional, Union

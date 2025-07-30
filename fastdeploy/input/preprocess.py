@@ -57,6 +57,7 @@ class InputPreprocessor:
         self.enable_mm = enable_mm
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
+        self.tool_parser = tool_parser
 
     def create_processor(self):
         """

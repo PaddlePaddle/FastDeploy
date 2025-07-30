@@ -42,6 +42,7 @@ class EngineClient:
         enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
+        tool_parser=None,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -49,6 +50,7 @@ class EngineClient:
             limit_mm_per_prompt,
             mm_processor_kwargs,
             enable_mm,
+            tool_parser,
         )
         self.enable_mm = enable_mm
         self.reasoning_parser = reasoning_parser
