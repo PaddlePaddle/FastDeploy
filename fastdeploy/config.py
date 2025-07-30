@@ -218,6 +218,9 @@ class ParallelConfig:
         self.tensor_parallel_size = 1  # TP degree
         self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
+        self.data_parallel_size = 1  # DP degree
+        self.enable_expert_parallel = False
+        self.local_data_parallel_id = 0
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
         # but hidden_size can, we can consider split embedding weight by column.
@@ -264,7 +267,8 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        self.use_ep = args["expert_parallel_size"] > 1
+
+        self.use_ep = self.expert_parallel_size > 1
         if self.splitwise_role == "mixed":
             self.moe_phase = MoEPhase(phase="prefill")
         elif self.splitwise_role == "prefill":
@@ -283,6 +287,16 @@ class ParallelConfig:
             self.pd_disaggregation_mode = "per_query"
         else:
             self.pd_disaggregation_mode = "None"
+
+    def print(self):
+        """
+        print all config
+
+        """
+        logger.info("Parallel Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class SpeculativeConfig:
@@ -827,6 +841,61 @@ class DecodingConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+
+class CommitConfig:
+    """
+    Configuration for tracking version information from version.txt
+
+    Attributes:
+        fastdeploy_commit: Full FastDeploy git commit hash
+        paddle_version: PaddlePaddle version string
+        paddle_commit: PaddlePaddle git commit hash
+        cuda_version: CUDA version string
+        compiler_version: CXX compiler version string
+    """
+
+    def __init__(
+        self,
+    ):
+        self.fastdeploy_commit: str = ""
+        self.paddle_version: str = ""
+        self.paddle_commit: str = ""
+        self.cuda_version: str = ""
+        self.compiler_version: str = ""
+
+        self._load_from_version_file()
+
+    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
+        """Internal method to load version info from file"""
+        try:
+            with open(file_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("fastdeploy GIT COMMIT ID:"):
+                        self.fastdeploy_commit = line.split(":")[1].strip()
+                    elif line.startswith("Paddle version:"):
+                        self.paddle_version = line.split(":")[1].strip()
+                    elif line.startswith("Paddle GIT COMMIT ID:"):
+                        self.paddle_commit = line.split(":")[1].strip()
+                    elif line.startswith("CUDA version:"):
+                        self.cuda_version = line.split(":")[1].strip()
+                    elif line.startswith("CXX compiler version:"):
+                        self.compiler_version = line.split(":")[1].strip()
+        except FileNotFoundError:
+            logger.info(f"Warning: Version file not found at {file_path}")
+        except Exception as e:
+            logger.info(f"Warning: Could not read version file - {e!s}")
+
+    def print(self):
+        """
+        print all config
+
+        """
+        logger.info("Fasedeploy Commit Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 @dataclass
