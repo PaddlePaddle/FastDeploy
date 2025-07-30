@@ -881,6 +881,20 @@ class LLMEngine:
                 create=True,
             )
 
+        # launched_expert_service_signal 用于感知各个expet_servic是否启动成功
+        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            launched_expert_service_signal_data = np.zeros(
+                shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
+            )
+            self.launched_expert_service_signal = IPCSignal(
+                name="launched_expert_service_signal",
+                array=launched_expert_service_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+
+        # loaded_model_signal 用于感知各个worker是否完成模型加载
         loaded_model_signal_data = np.zeros([1], dtype=np.int32)
         self.loaded_model_signal = IPCSignal(
             name="loaded_model_signal",
@@ -1200,9 +1214,10 @@ class LLMEngine:
 
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
             self.dp_processed = []
+            expert_service_nums = self.cfg.parallel_config.data_parallel_size // self.cfg.nnode
             for i in range(
                 1,
-                self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+                expert_service_nums,
             ):
                 time.sleep(1)
                 self.dp_processed.append(
@@ -1220,6 +1235,9 @@ class LLMEngine:
                     + f" data parallel id {i}"
                 )
                 self.dp_processed[-1].start()
+            for i in range(1, expert_service_nums):
+                while self.launched_expert_service_signal.value[i] == 0:
+                    time.sleep(10)
 
     def check_worker_initialize_status(self):
         """
