@@ -696,3 +696,20 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     assert hasattr(disabled_response, "choices")
     assert len(disabled_response.choices) > 0
     assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
+
+
+def test_non_streaming_chat_with_min_tokens(openai_client, capsys):
+    """
+    Test min_tokens option in non-streaming chat functionality with the local service
+    """
+    min_tokens = 1000
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        extra_body={"min_tokens": min_tokens},
+        stream=False,
+    )
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens")
+    assert response.usage.completion_tokens >= min_tokens
