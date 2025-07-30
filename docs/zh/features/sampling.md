@@ -6,12 +6,10 @@
 
    * Top-p 采样根据概率累积分布进行截断，仅考虑累计概率达到指定阈值 p 的最可能 token 集合。
    * 动态选择考虑的 token 数量，保证了结果的多样性，同时避免了不太可能的 token。
-
 2. Top-k_top-p 采样
 
    * 首先进行 top-k 采样，然后在 top-k 的结果上进行归一化，再进行 top-p 采样。
    * 通过限制初始选择范围（top-k）并在其中进行概率累积选择（top-p），提高了生成文本的质量和连贯性。
-
 3. Min-p 采样
 
    * Min-p 采样首先计算 pivot=max_prob * min_p，然后只保留概率大于pivot的token(其余设置为0)进行后续的采样。
@@ -19,7 +17,7 @@
 
 ## 使用说明
 
-在部署时，可以通过设置环境变量 `FD_SAMPLING_CLASS` 来选择采样算法。可选择的值有`base`, `base_non_truncated`, `air`或 `rejection`。
+在部署时，可以通过设置环境变量 `FD_SAMPLING_CLASS` 来选择采样算法。可选择的值有 `base`, `base_non_truncated`, `air`或 `rejection`。
 
 **仅支持 Top-p Sampling 的算法**
 
