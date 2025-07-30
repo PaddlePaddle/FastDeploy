@@ -85,7 +85,7 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req = self.running.pop()
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
-                preempted_req.prefill_block_num = len(preempted_req.block_tables)
+                preempted_req.prefill_block_num = 0
                 self._free_blocks(preempted_req)
                 self.waiting.appendleft(preempted_req)
                 preempted_reqs.append(preempted_req)
@@ -120,8 +120,8 @@ class ResourceManagerV1(ResourceManager):
                             and request.get("prefill_block_num", None) is None
                         ):
                             # update prefill cache blocks for prefix caching
-                            self.cache_manager.update_cache_blocks(request, self.config.cache_config.block_size)
                             request.prefill_block_num = len(request.block_tables)
+                            self.cache_manager.update_cache_blocks(request, self.config.cache_config.block_size)
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
@@ -191,7 +191,8 @@ class ResourceManagerV1(ResourceManager):
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+                            if not request.get("skip_allocate", False):
+                                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -264,8 +265,13 @@ class ResourceManagerV1(ResourceManager):
             request.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.config.cache_config.block_size
             request.cache_info = (matched_block_num, no_cache_block_num)
             request.block_tables = common_block_ids
+            request.skip_allocate = False
 
-            request.num_computed_tokens = matched_token_num
+            if matched_token_num == request.prompt_token_ids_len:
+                request.num_computed_tokens = matched_token_num - 1
+                request.skip_allocate = True
+            else:
+                request.num_computed_tokens = matched_token_num
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
