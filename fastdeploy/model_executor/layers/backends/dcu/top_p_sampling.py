@@ -13,13 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import paddle
 
 
-def native_top_p_sampling(
-    probs: paddle.Tensor,
-    top_p: paddle.Tensor
-) -> tuple[paddle.Tensor, paddle.Tensor]:
+def native_top_p_sampling(probs: paddle.Tensor, top_p: paddle.Tensor) -> tuple[paddle.Tensor, paddle.Tensor]:
     sorted_indices = paddle.argsort(probs, descending=True)
     sorted_probs = paddle.sort(probs, descending=True)
     cumulative_probs = paddle.cumsum(sorted_probs, axis=-1)
@@ -30,7 +28,9 @@ def native_top_p_sampling(
     sorted_indices = sorted_indices + paddle.arange(probs.shape[0], dtype="int64").unsqueeze(-1) * probs.shape[-1]
 
     condition = paddle.scatter(
-        sorted_indices_to_remove.flatten(), sorted_indices.flatten(), sorted_indices_to_remove.flatten()
+        sorted_indices_to_remove.flatten(),
+        sorted_indices.flatten(),
+        sorted_indices_to_remove.flatten(),
     )
 
     condition = paddle.cast(condition, "bool").reshape(probs.shape)

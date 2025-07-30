@@ -6,7 +6,6 @@
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-#dist_init_ip
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,491 +17,12 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
-from fastdeploy import envs
+from fastdeploy.config import CacheConfig, LoadConfig, ModelConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import (
-    ceil_div,
-    check_unified_ckpt,
-    get_host_ip,
-    get_random_port,
-    is_port_available,
-    llm_logger,
-)
-
-TaskOption = Literal["generate"]
-
-
-class ModelConfig:
-    """
-    Configuration class for the model.
-
-    Attributes:
-        model_dir (str): Directory path to the model.
-        is_unified_ckpt (bool): Flag indicating if the checkpoint is unified.
-        model_name_or_path (str): Name or path of the model.
-    """
-
-    def __init__(
-        self,
-        model_name_or_path: str,
-        config_json_file: str = "config.json",
-        dynamic_load_weight: bool = False,
-        load_strategy: str = "ipc_snapshot",
-        quantization: str = None,
-        download_dir: Optional[str] = None,
-    ):
-        """
-        Initialize the ModelConfig class.
-
-        Args:
-            model_name_or_path (str): Name or path of the model.
-            config_json_file (str): Path to the configuration JSON file. Default is 'config.json'.
-            download_dir (Optional[str]): Directory to download model files. Default is None.
-        """
-        self.model_dir = model_name_or_path
-        self.is_unified_ckpt = check_unified_ckpt(self.model_dir)
-        self.dynamic_load_weight = dynamic_load_weight
-        self.load_strategy = load_strategy
-        self.quantization = quantization
-
-        config_file = os.path.join(model_name_or_path, config_json_file)
-        if os.path.isfile(model_name_or_path):
-            try:
-                from paddleformers.transformers import AutoConfig
-
-                config = AutoConfig.from_pretrained(model_name_or_path)
-                config_dict = {k: v for k, v in vars(config).items() if not k.startswith("_")}
-                for key, value in config_dict.items():
-                    setattr(self, key, value)
-            except Exception:
-                llm_logger.error(
-                    "Don't support the current model, you can use `paddleformers` to register your model."
-                )
-                raise ValueError(
-                    "Don't support the current model, you can use `paddleformers` to register your model."
-                )
-        else:
-            with open(config_file, "r", encoding="utf-8") as f:
-                config_dict = json.load(f)
-                for key, value in config_dict.items():
-                    try:
-                        setattr(self, key, value)
-                    except Exception:
-                        continue
-
-        if isinstance(self.architectures, list):
-            self.architectures = self.architectures[0]
-        self.model_name_or_path = model_name_or_path
-        self.override_name_from_config()
-        self.read_from_env()
-
-    def override_name_from_config(self):
-        """
-        Override attribute names from the exported model's configuration.
-        """
-
-        if not self.is_unified_ckpt and hasattr(self, "infer_model_mp_num"):
-            self.tensor_parallel_size = self.infer_model_mp_num
-            del self.infer_model_mp_num
-
-        if hasattr(self, "num_hidden_layers"):
-            if hasattr(self, "remove_tail_layer"):
-                if self.remove_tail_layer is True:
-                    self.num_hidden_layers -= 1
-                elif isinstance(self.remove_tail_layer, int):
-                    self.num_hidden_layers -= self.remove_tail_layer
-
-            self.num_layers = self.num_hidden_layers
-            del self.num_hidden_layers
-
-        if not hasattr(self, "mla_use_absorb"):
-            self.mla_use_absorb = False
-        if not hasattr(self, "head_dim"):
-            assert hasattr(self, "hidden_size") and hasattr(self, "num_attention_heads")
-            self.head_dim = self.hidden_size // self.num_attention_heads
-
-    def read_from_env(self):
-        """
-        Read configuration information from environment variables and update the object's attributes.
-
-        If an attribute is not present or is an empty string in the environment variables, use the default value.
-        """
-        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
-        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
-
-        def reset_config_value(key, value):
-            if not hasattr(self, key.lower()):
-                if os.getenv(key, None):
-                    value = eval(os.getenv(key))
-                    llm_logger.info(f"Get parameter `{key}` = {value} from environment.")
-                else:
-                    llm_logger.info(f"Parameter `{key}` will use default value {value}.")
-                setattr(self, key.lower(), value)
-
-        reset_config_value("COMPRESSION_RATIO", 1.0)
-        reset_config_value("ROPE_THETA", 10000)
-
-    def _get_download_model(self, model_name, model_type="default"):
-        # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
-        pass
-
-    def print(self):
-        """
-        Print all configuration information.
-        """
-        llm_logger.info("Model Configuration Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
-
-
-class CacheConfig:
-    """
-    Configuration for the KV cache.
-
-    Attributes:
-        block_size (int): Size of a cache block in number of tokens.
-        gpu_memory_utilization (float): Fraction of GPU memory to use for model execution.
-        cache_dtype (str): Data type for kv cache storage. Default is 'bfloat16'.
-        num_gpu_blocks_override (Optional[int]): Number of GPU blocks to use.
-        Overrides profiled num_gpu_blocks if provided.
-        kv_cache_ratio (float): Ratio for calculating the maximum block number.
-        enc_dec_block_num (int): Number of encoder-decoder blocks.
-        prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
-        enable_prefix_caching (bool): Flag to enable prefix caching.
-    """
-
-    def __init__(
-        self,
-        block_size: int,
-        gpu_memory_utilization: float,
-        cache_dtype: str = "bfloat16",
-        num_gpu_blocks_override: Optional[int] = None,
-        swap_space: Optional[int] = None,
-        kv_cache_ratio: float = 0.75,
-        enc_dec_block_num: int = 2,
-        prealloc_dec_block_slot_num_threshold: int = 5,
-        tensor_parallel_size: int = 1,
-        enable_prefix_caching=False,
-        enable_ssd_cache=False,
-        model_cfg=None,
-        cache_queue_port=None,
-        enable_chunked_prefill=False,
-        rdma_comm_ports=None,
-        cache_transfer_protocol=None,
-        pd_comm_port=None,
-    ):
-        """
-        Initialize the CacheConfig class.
-
-        Args:
-            block_size (int): Size of a cache block in number of tokens.
-            gpu_memory_utilization (float): Fraction of GPU memory to use.
-            cache_dtype (str): Data type for cache storage. Default is 'bfloat16'.
-            num_gpu_blocks_override (Optional[int]): Override for number of GPU blocks.
-            num_cpu_blocks (Optional[int]): Number of CPU blocks.
-            kv_cache_ratio (float): Ratio for max block calculation.
-            enc_dec_block_num (int): Number of encoder-decoder blocks.
-            prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
-            enable_prefix_caching (bool): Enable prefix caching.
-        """
-        self.block_size = block_size
-        self.gpu_memory_utilization = gpu_memory_utilization
-        self.num_gpu_blocks_override = num_gpu_blocks_override
-        self.kv_cache_ratio = kv_cache_ratio
-        self.enc_dec_block_num = enc_dec_block_num
-        self.prealloc_dec_block_slot_num_threshold = prealloc_dec_block_slot_num_threshold
-        self.cache_dtype = cache_dtype
-        if hasattr(model_cfg, "quantization_config"):
-            self.cache_dtype = model_cfg.quantization_config.get("kv_cache_quant_type", cache_dtype)
-
-        self.enable_chunked_prefill = enable_chunked_prefill
-        self.rdma_comm_ports = rdma_comm_ports
-        self.cache_transfer_protocol = cache_transfer_protocol
-        self.pd_comm_port = pd_comm_port
-
-        if rdma_comm_ports is not None and isinstance(rdma_comm_ports, str):
-            self.rdma_comm_ports = rdma_comm_ports.split(",")
-
-        if pd_comm_port is not None and isinstance(pd_comm_port, str):
-            self.pd_comm_port = [int(port) for port in pd_comm_port.split(",")]
-
-        self.enable_prefix_caching = enable_prefix_caching
-        if swap_space is None:
-            self.enable_hierarchical_cache = False
-        else:
-            self.enable_hierarchical_cache = True
-
-        self.enable_ssd_cache = enable_ssd_cache
-        self.model_cfg = model_cfg
-        self.cache_queue_port = cache_queue_port
-        self.swap_space = swap_space
-
-        if (
-            hasattr(self.model_cfg, "num_key_value_heads")
-            and hasattr(self.model_cfg, "num_key_value_heads")
-            and self.model_cfg.num_key_value_heads is not None
-            and int(self.model_cfg.num_key_value_heads) > 0
-        ):
-            kv_num_head = int(self.model_cfg.num_key_value_heads)
-        else:
-            kv_num_head = self.model_cfg.num_attention_heads
-        self.model_cfg.kv_num_head = kv_num_head
-
-        # TODO check name
-        if "int4" in self.cache_dtype.lower() or "float4" in self.cache_dtype.lower():
-            byte_size = 0.5
-            self.cache_dtype = "uint8"
-        elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
-            self.cache_dtype = "uint8"
-            byte_size = 1
-        else:
-            byte_size = 2
-
-        self.each_token_cache_space = int(
-            self.model_cfg.num_layers * kv_num_head * self.model_cfg.head_dim * byte_size
-        )
-        self.bytes_per_block = int(self.each_token_cache_space * self.block_size)
-        self.bytes_per_layer_per_block = int(
-            self.block_size * self.model_cfg.kv_num_head * self.model_cfg.head_dim // tensor_parallel_size * byte_size
-        )
-
-        if self.swap_space is None:
-            self.num_cpu_blocks = 0
-        else:
-            self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
-        self._verify_args()
-
-    def metrics_info(self):
-        """Convert cache_config to dict(key: str, value: str) for prometheus metrics info."""
-        return {key: str(value) for key, value in self.__dict__.items()}
-
-    def _verify_args(self):
-        if self.gpu_memory_utilization > 1.0:
-            raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
-        if self.kv_cache_ratio > 1.0:
-            raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
-
-    def postprocess(self, num_total_tokens, number_of_tasks):
-        """
-        calculate block num
-        """
-        self.dec_token_num = self.enc_dec_block_num * self.block_size
-        if self.num_gpu_blocks_override is not None:
-            self.total_block_num = self.num_gpu_blocks_override
-            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
-        else:
-            length = num_total_tokens // number_of_tasks
-            block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
-            self.total_block_num = block_num * number_of_tasks
-            self.prefill_kvcache_block_num = self.total_block_num
-            llm_logger.info(f"Doing profile, the total_block_num:{self.total_block_num}")
-
-    def reset(self, num_gpu_blocks):
-        """
-        reset gpu block number
-        """
-        self.total_block_num = num_gpu_blocks
-        self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
-        llm_logger.info(
-            f"Reset block num, the total_block_num:{self.total_block_num},"
-            f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
-        )
-
-    def print(self):
-        """
-        print all config
-
-        """
-        llm_logger.info("Cache Configuration Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
-
-
-class SpeculativeConfig:
-    """
-    Speculative Decoding Configuration class.
-
-    Attributes:
-        method (Optional[str]): Method used for speculative decoding.
-        num_speculative_tokens (int): Maximum draft tokens, default is 1.
-        model_name_or_path (Optional[str]): Path of the model.
-        quantization (str): Quantization method for draft model, default is WINT8.
-        max_model_len: Optional[int]: Maximum model length for draft model.
-        benchmark_mode (bool): Whether to use benchmark mode.
-    """
-
-    def __init__(
-        self,
-        method: Optional[str] = None,
-        num_speculative_tokens: Optional[int] = 1,
-        model: Optional[str] = None,
-        quantization: Optional[str] = "WINT8",
-        max_model_len: Optional[int] = None,
-        benchmark_mode: bool = False,
-        **kwargs,
-    ):
-        self.model_name_or_path = model
-        self.method = method
-        self.num_speculative_tokens = num_speculative_tokens
-        self.quantization = quantization
-        self.max_model_len = max_model_len
-        self.benchmark_mode = benchmark_mode
-        # Fixed now
-        self.num_gpu_block_expand_ratio = 1
-        self.num_extra_cache_layer = 0
-
-        for key, value in kwargs.items():
-            try:
-                setattr(self, key, value)
-            except Exception:
-                continue
-
-        self.read_model_config()
-        self.reset()
-
-    def read_model_config(self):
-        """
-        Read configuration from file.
-        """
-        self.model_config = {}
-        if not self.enabled_speculative_decoding():
-            return
-
-        self.is_unified_ckpt = check_unified_ckpt(self.model_name_or_path)
-        if self.model_name_or_path is None:
-            return
-
-        self.config_path = os.path.join(self.model_name_or_path, "config.json")
-        if os.path.exists(self.config_path):
-            self.model_config = json.load(open(self.config_path, "r", encoding="utf-8"))
-
-    def reset(self):
-        """
-        Reset configuration.
-        """
-
-        def reset_value(cls, value_name, key=None, default=None):
-            if key is not None and key in cls.model_config:
-                setattr(cls, value_name, cls.model_config[key])
-            elif getattr(cls, value_name, None) is None:
-                setattr(cls, value_name, default)
-
-        if not self.enabled_speculative_decoding():
-            return
-
-        # NOTE(liuzichang): We will support multi-layer in future
-        if self.method in ["mtp"]:
-            self.num_extra_cache_layer = 1
-
-    def enabled_speculative_decoding(self):
-        """
-        Check if speculative decoding is enabled.
-        """
-        if self.method is None:
-            return False
-        return True
-
-    def to_json_string(self):
-        """
-        Convert speculative_config to json string.
-        """
-        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
-
-    def print(self):
-        """
-        print all config
-
-        """
-        llm_logger.info("Speculative Decoding Configuration Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
-
-    def __str__(self) -> str:
-        return self.to_json_string()
-
-
-class GraphOptimizationConfig:
-    def __init__(
-        self,
-        graph_opt_level: Optional[int] = 0,
-        use_cudagraph: Optional[bool] = None,
-        cudagraph_capture_sizes: Optional[List[int]] = None,
-        sot_warmup_sizes: Optional[List[int]] = None,
-        **kwargs,
-    ):
-        """
-        Graph Optimization Configuration class.
-
-        Attributes:
-            graph_opt_level: Compute graph optimization level
-            use_cudagraph: Use CUDA Graph or not
-            cudagraph_capture_sizes: Batch size list will be captured by CUDA Graph
-        """
-        self.check_legality_parameters(graph_opt_level, use_cudagraph, cudagraph_capture_sizes, **kwargs)
-
-        self.graph_opt_level = graph_opt_level
-        self.use_cudagraph = use_cudagraph
-        self.cudagraph_capture_sizes = cudagraph_capture_sizes
-        self.sot_warmup_sizes = [] if sot_warmup_sizes is None else sot_warmup_sizes
-
-    def to_json_string(self):
-        """
-        Convert speculative_config to json string.
-        """
-        return json.dumps({key: value for key, value in self.__dict__.items()})
-
-    def __str__(self) -> str:
-        return self.to_json_string()
-
-    def check_legality_parameters(
-        self,
-        graph_opt_level: Optional[int] = None,
-        use_cudagraph: Optional[bool] = None,
-        cudagraph_capture_sizes: Optional[List[int]] = None,
-        **kwargs,
-    ) -> None:
-        """Check the legality of parameters passed in from the command line"""
-
-        if graph_opt_level is not None:
-            assert graph_opt_level in [
-                0,
-                1,
-                2,
-            ], "In graph optimization config, graph_opt_level can only take the values of 0, 1 and 2."
-        if use_cudagraph is not None:
-            assert type(use_cudagraph) is bool, "In graph optimization config, type of use_cudagraph must is bool."
-        if cudagraph_capture_sizes is not None:
-            assert (
-                type(cudagraph_capture_sizes) is list
-            ), "In graph optimization config, type of cudagraph_capture_sizes must is list."
-            assert (
-                len(cudagraph_capture_sizes) > 0
-            ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
-
-        for key, value in kwargs.items():
-            raise ValueError(f"Invalid --graph-optimization-config parameter {key}")
-
-    def update_use_cudagraph(self, argument: bool):
-        """
-        Unified user specifies the use_cudagraph parameter through two methods,
-        '--use-cudagraph' and '--graph-optimization-config'
-        """
-        if self.use_cudagraph is None:
-            # User only set '--use-cudagraph'
-            self.use_cudagraph = argument
-        else:
-            # User both set '--use-cudagraph' and '--graph-optimization-config'
-            if self.use_cudagraph is False and argument is True:
-                raise ValueError(
-                    "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
-                )
-            argument = self.use_cudagraph
+from fastdeploy.utils import ceil_div, get_host_ip, is_port_available, llm_logger
 
 
 class ParallelConfig:
@@ -637,6 +157,7 @@ class Config:
         cache_config: CacheConfig,
         scheduler_config: SchedulerConfig,
         parallel_config: ParallelConfig,
+        load_config: LoadConfig,
         commit_config: CommitConfig = CommitConfig(),
         model_name_or_path: str = None,
         tokenizer: str = None,
@@ -644,9 +165,7 @@ class Config:
         max_model_len: int = 8192,
         max_num_seqs: int = 8,
         max_num_batched_tokens: Optional[int] = None,
-        dist_init_ip: str = None,
-        nnodes: int = 1,
-        node_rank: int = 0,
+        ips: str = None,
         speculative_config: Optional[Dict[str, Any]] = None,
         graph_optimization_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
@@ -696,20 +215,31 @@ class Config:
         self.cache_config = cache_config
         self.scheduler_config = scheduler_config
         self.parallel_config = parallel_config
+        self.load_config = load_config
         self.commit_config = commit_config
         self.model_name_or_path = model_name_or_path
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
         self.tensor_parallel_size = tensor_parallel_size
-        self.dist_init_ip = dist_init_ip
+        self.ips = ips
 
-        self.nnode = nnodes
-        self.node_rank = node_rank
-        if self.dist_init_ip is None:
+        if self.ips is None:
             self.master_ip = "0.0.0.0"
+        elif isinstance(self.ips, list):
+            self.master_ip = self.ips[0]
         else:
-            self.master_ip = self.dist_init_ip
-            self.dist_init_addr = f"{self.dist_init_ip}:{get_random_port()}"
+            self.ips = self.ips.split(",")
+            self.master_ip = self.ips[0]
+
+        if self.ips is None:
+            self.nnode = 1
+            self.node_rank = 0
+        else:
+            self.nnode = len(self.ips)
+
+            for idx, ip in enumerate(self.ips):
+                if ip == self.master_ip:
+                    self.node_rank = idx
 
         self.max_model_len = max_model_len
         self.max_num_seqs = max_num_seqs
@@ -773,14 +303,11 @@ class Config:
             self.device_ids.split(",").__len__() == self.worker_num_per_node
         ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
 
-        assert (
-            self.worker_num_per_node % self.tensor_parallel_size == 0
-        ), f"tensor_parallel_size: {self.tensor_parallel_size} should be divisible by worker_num_per_node: {self.worker_num_per_node}"
         self.local_device_ids = self.device_ids.split(",")[: self.tensor_parallel_size]
 
         self.host_ip = get_host_ip()
 
-        if self.dist_init_ip is None or self.host_ip == self.master_ip:
+        if self.ips is None or self.host_ip == self.master_ip:
             self.is_master = True
         else:
             self.is_master = False
@@ -817,9 +344,6 @@ class Config:
         assert is_port_available(
             "0.0.0.0", self.engine_worker_queue_port
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
-        assert (
-            self.max_chips_per_node >= self.tensor_parallel_size > 0
-        ), f"tensor_parallel_size: {self.tensor_parallel_size} should be between 1 and {self.max_chips_per_node}"
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
         assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"

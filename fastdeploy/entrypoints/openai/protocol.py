@@ -478,11 +478,12 @@ class ChatCompletionRequest(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     min_p: Optional[float] = None
-    user: Optional[str] = None  
+    user: Optional[str] = None
     metadata: Optional[dict] = None
     extra_body: Optional[dict] = None
     return_token_ids: Optional[bool] = False
     prompt_token_ids: Optional[List[int]] = None
+    disable_chat_template: Optional[bool] = False
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -530,6 +531,11 @@ class ChatCompletionRequest(BaseModel):
                 del req_dict["messages"]
         else:
             assert len(self.messages) > 0
+
+        # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+        if self.disable_chat_template:
+            req_dict["prompt"] = req_dict["messages"][0]["content"]
+            del req_dict["messages"]
 
         guided_json_object = None
         if self.response_format is not None:

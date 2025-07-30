@@ -85,7 +85,7 @@ class BlockAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: BlockAttentionMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
         self.rope_theta = 10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         self.rank = fd_config.parallel_config.tensor_parallel_rank
@@ -116,16 +116,25 @@ class BlockAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: str = None,
     ):
         """
         Caculate kv cache shape
         """
-        return (
-            max_num_blocks,
-            self.kv_num_heads,
-            self.block_size,
-            self.head_dim,
-        )
+        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
+            return (
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim // 2,
+            )
+        else:
+            return (
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim,
+            )
 
     def forward_mixed(
         self,

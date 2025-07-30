@@ -149,9 +149,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.local_rank + int(self.parallel_config.engine_worker_queue_port)
         )
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        Check whether prefill stage finished
+        check whether prefill stage exist
         """
         if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
             return 1
@@ -276,11 +276,16 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
 
@@ -340,7 +345,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
 
                 # Use chunked prefill
-                if self.parallel_config.enable_chunked_prefill:
+                if self.cache_config.enable_chunked_prefill:
                     request.set("chunk_idx", 1)
                     logger.info(f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
@@ -447,11 +452,15 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
@@ -468,10 +477,10 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
-        input_length = int(full_length * self.parallel_config.kv_cache_ratio)
+        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
-            input_length + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            input_length + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -603,15 +612,15 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            self.parallel_config.max_model_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list
         free_list = list(
             range(
                 self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -620,14 +629,17 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
 
         # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full([self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.share_inputs["stop_seqs_len"] = paddle.full(
+            [max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32"
+        )
         self.share_inputs["stop_seqs"] = paddle.full(
             [
+                max_num_seqs,
                 self.model_config.max_stop_seqs_num,
                 self.model_config.stop_seqs_max_len,
             ],
             -1,
-            dtype="int32",
+            dtype="int64",
         )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
@@ -690,7 +702,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"],
                 self.share_inputs["block_tables"],
                 self.share_inputs["is_block_step"],
-                self.parallel_config.block_size,
+                self.cache_config.block_size,
             )
 
         # Remove padding
@@ -794,8 +806,21 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update Batch type for cuda graph
         # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
+        only_decode_batch = True
+        prefill_exists = None
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+
+        self.forward_meta.step_use_cudagraph = (
+            self.use_cudagraph
+            and only_decode_batch
+            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
+        )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -811,20 +836,22 @@ class GPUModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
 
+        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_type = "uint8"
+            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+        )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (
-            self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
-        ):
+        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -999,13 +1026,15 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
 
             post_process(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
-                block_size=self.parallel_config.block_size,
+                block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
             )
@@ -1021,10 +1050,10 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             step_cuda(
                 self.share_inputs,
-                self.parallel_config.block_size,
-                self.parallel_config.enc_dec_block_num,
+                self.cache_config.block_size,
+                self.cache_config.enc_dec_block_num,
                 self.speculative_config,
-                self.parallel_config.enable_prefix_caching,
+                self.cache_config.enable_prefix_caching,
             )
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
@@ -1034,7 +1063,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Update chunked prefill related parameters
         """
-        if not self.parallel_config.enable_chunked_prefill:
+        if not self.cache_config.enable_chunked_prefill:
             return
         for task in tasks:
             if task.get("prefill_chunk_info", None) is None:
@@ -1134,7 +1163,7 @@ class GPUModelRunner(ModelRunnerBase):
             A list of indices corresponding to the requests that need to be skipped.
         """
         skip_idx_list = []
-        if not self.parallel_config.enable_chunked_prefill or self.guided_backend is None:
+        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
             return skip_idx_list
 
         for task in model_forward_batch:
@@ -1161,15 +1190,17 @@ class GPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
-        # NOTE(wufeisheng): For Expert Parallelism
-        if not self.not_need_stop():
-            self._execute_empty_input()
-            return None
-
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # when there is data on other runner, the current runner is required to execute part of the model.
+        if not self.not_need_stop():
+            self._execute_empty_input()
+            return None
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
@@ -1261,6 +1292,8 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
             need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
@@ -1271,7 +1304,7 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
@@ -1290,10 +1323,10 @@ class GPUModelRunner(ModelRunnerBase):
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             step_cuda(
                 self.share_inputs,
-                self.parallel_config.block_size,
-                self.parallel_config.enc_dec_block_num,
+                self.cache_config.block_size,
+                self.cache_config.enc_dec_block_num,
                 self.speculative_config,
-                self.parallel_config.enable_prefix_caching,
+                self.cache_config.enable_prefix_caching,
             )
 
             self._update_chunked_prefill(model_forward_batch)
@@ -1367,7 +1400,7 @@ class GPUModelRunner(ModelRunnerBase):
         free_list = list(
             range(
                 self.num_gpu_blocks - 1,
-                int(self.num_gpu_blocks * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.num_gpu_blocks * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -1413,7 +1446,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.speculative_method in ["mtp"]
             else self.model_config.num_hidden_layers
         )
-        required_memory = byte_of_dtype * 2 * (self.parallel_config.block_size * hidden_dim) * num_layers  # k + v
+        required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
 
     def not_need_stop(self) -> bool:
@@ -1453,8 +1486,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
-            tokenizer_name=self.parallel_config.model_name_or_path,
-            image_preprocessor_name=str(self.parallel_config.model_name_or_path),
+            tokenizer_name=self.model_config.model,
+            image_preprocessor_name=str(self.model_config.model),
         )
         processor.eval()
         image_preprocess = processor.image_preprocessor

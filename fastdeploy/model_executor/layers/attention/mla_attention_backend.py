@@ -113,7 +113,7 @@ class MLAAttentionBackend(AttentionBackend):
         self.attention_metadata: MLAAttentionMetadata = None
 
         # 基础配置
-        self.block_size: int = fd_config.parallel_config.block_size
+        self.block_size: int = fd_config.cache_config.block_size
         self.max_seq_len: int = fd_config.parallel_config.max_model_len
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
@@ -217,14 +217,17 @@ class MLAAttentionBackend(AttentionBackend):
         self.attention_metadata: AttentionMetadata = metadata
 
         forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
-        forward_meta.decoder_tile_ids_per_batch.copy_(
-            metadata.decoder_tile_ids_per_batch, False)
+        forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
         return self.attention_metadata
 
-    def get_kv_cache_shape(self, max_num_blocks: int) -> Tuple[int, int, int, int]:
+    def get_kv_cache_shape(
+        self,
+        max_num_blocks: int,
+        kv_cache_quant_type: str = None,
+    ) -> Tuple[int, int, int, int]:
         """
         Calculate kv cache shape for MLA
         """

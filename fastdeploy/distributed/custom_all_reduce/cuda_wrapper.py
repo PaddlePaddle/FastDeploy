@@ -113,10 +113,7 @@ class CudaRTLibrary:
         Function(
             "cudaStreamIsCapturing",
             cudaError_t,
-            [
-                cudaStream_t,
-                ctypes.POINTER(cudaStreamCaptureStatus)
-            ]
+            [cudaStream_t, ctypes.POINTER(cudaStreamCaptureStatus)],
         ),
     ]
 
@@ -197,9 +194,8 @@ class CudaRTLibrary:
             self.funcs["cudaIpcOpenMemHandle"](ctypes.byref(devPtr), handle, cudaIpcMemLazyEnablePeerAccess)
         )
         return devPtr
+
     def cudaStreamIsCapturing(self, stream: cudaStream_t) -> ctypes.c_int:
         is_capturing = ctypes.c_int()
-        self.CUDART_CHECK(
-            self.funcs["cudaStreamIsCapturing"](stream, is_capturing)
-        )
+        self.CUDART_CHECK(self.funcs["cudaStreamIsCapturing"](stream, is_capturing))
         return is_capturing

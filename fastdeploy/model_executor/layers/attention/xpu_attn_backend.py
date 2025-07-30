@@ -92,7 +92,7 @@ class XPUAttentionBackend(AttentionBackend):
         super().__init__()
         self.attention_metadata: XPUAttentionMetadata = None
         # TODO(gongshaotian): Use fd_config parameters in the correct location
-        self.block_size: int = fd_config.parallel_config.block_size
+        self.block_size: int = fd_config.cache_config.block_size
         self.max_seq_len: int = fd_config.parallel_config.max_model_len
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
@@ -146,6 +146,7 @@ class XPUAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: str = None,
     ) -> Tuple[int, int, int, int]:
         """
         Caculate kv cache shape
