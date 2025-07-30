@@ -182,6 +182,7 @@ class Config:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_logprob: bool = False,
+        early_stop_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the Config class.
@@ -210,6 +211,8 @@ class Config:
             guided_decoding_backend(str): Guided decoding backend. Default is None.
             disable_any_whitespace(bool): Disable any whitespace when using guided decoding.
                 Default is False.
+            enable_logprob(bool): Enable logprob. Default is False.
+            early_stop_config (Optional[Dict[str, Any]]): Early stop configuration. Default is None.
         """
         self.model_config = model_config
         self.cache_config = cache_config
@@ -255,6 +258,7 @@ class Config:
         self.long_prefill_token_threshold = long_prefill_token_threshold
         self.reasoning_parser = reasoning_parser
         self.graph_optimization_config = graph_optimization_config
+        self.early_stop_config = early_stop_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
