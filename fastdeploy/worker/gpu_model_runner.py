@@ -211,6 +211,47 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+                if self.enable_mm:
+                    inputs = request.multimodal_inputs
+                    if request.with_image:
+                        vision_inputs = {}
+                        vision_inputs["input_ids"] = paddle.to_tensor(
+                            inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                        )
+                        vision_inputs["token_type_ids"] = paddle.to_tensor(
+                            inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                        )
+                        vision_inputs["image_type_ids"] = paddle.to_tensor(
+                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
+                            dtype=paddle.int64,
+                        )
+                        vision_inputs["images"] = paddle.to_tensor(
+                            inputs["images"][request.image_start : request.image_end], dtype="uint8"
+                        )
+                        vision_inputs["grid_thw"] = paddle.to_tensor(
+                            inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
+                        )
+                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
+                    else:
+                        self.share_inputs["image_features"] = None
+
+                    if inputs["position_ids"] is not None:
+                        position_ids = paddle.to_tensor(
+                            request.multimodal_inputs["position_ids"],
+                            dtype="int64",
+                        ).unsqueeze([0])
+                    else:
+                        position_ids = None
+
+                    enable_thinking = request.get("enable_thinking", True)
+                    enable_thinking = enable_thinking if enable_thinking is not None else True
+                    self.share_inputs["enable_thinking"][:] = enable_thinking
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
+                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                        position_ids, request.get("max_tokens", 2048)
+                    )
+
                 input_ids = request.prompt_token_ids + request.output_token_ids
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
