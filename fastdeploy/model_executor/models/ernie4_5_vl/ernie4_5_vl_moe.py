@@ -421,6 +421,7 @@ class Ernie4_5_VLModel(nn.Layer):
         image_token_num = 0
 
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
@@ -476,7 +477,7 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = hidden_states.cast("float32")
         score_text = hidden_states
 
-        if image_features is not None: 
+        if image_features is not None:
             token_type_ids = token_type_ids.reshape([-1])
             text_pos_shifted = token_type_ids[:token_num] == 0
             score_text = hidden_states[text_pos_shifted.reshape([-1])]
