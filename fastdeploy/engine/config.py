@@ -93,8 +93,10 @@ class CommitConfig:
         """Automatically load version info when initialized"""
         self._load_from_version_file()
 
-    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
+    def _load_from_version_file(self, file_path: str = None):
         """Internal method to load version info from file"""
+        if file_path is None:
+            file_path = os.path.join(fastdeploy.__path__[0], "version.txt")
         try:
             with open(file_path, "r") as f:
                 for line in f:
