@@ -124,11 +124,21 @@ class OpenAIServingChat:
         previous_num_tokens = 0
         num_prompt_tokens = 0
         num_choices = 1
-        max_streaming_response_tokens = 1
-        enable_thinking = None
-        include_stop_str_in_output = False
-        if request.metadata is not None and request.metadata.get("max_streaming_response_tokens", 1) > 1:
-            max_streaming_response_tokens = request.metadata["max_streaming_response_tokens"]
+        max_streaming_response_tokens = (
+            request.max_streaming_response_tokens
+            if request.max_streaming_response_tokens is not None
+            else (request.metadata or {}).get("max_streaming_response_tokens", 1)
+        )  # dierctly passed & passed in metadata
+        enable_thinking = (
+            request.enable_thinking
+            if request.enable_thinking is not None
+            else (request.metadata or {}).get("enable_thinking")
+        )
+        include_stop_str_in_output = (
+            request.include_stop_str_in_output
+            if request.include_stop_str_in_output is not None
+            else (request.metadata or {}).get("include_stop_str_in_output", False)
+        )
 
         stream_options = request.stream_options
         if stream_options is None:
@@ -149,12 +159,6 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
-            if request.metadata is not None:
-                enable_thinking = request.metadata.get("enable_thinking")
-                include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
-            enable_return_token_ids = request.return_token_ids or (
-                request.extra_body is not None and request.extra_body.get("return_token_ids", False)
-            )
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -204,7 +208,7 @@ class OpenAIServingChat:
                                     completion_token_ids=None,
                                 ),
                             )
-                            if enable_return_token_ids:
+                            if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
@@ -274,7 +278,7 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
-                    if enable_return_token_ids:
+                    if request.return_token_ids:
                         choice.delta.completion_token_ids = list(output["token_ids"])
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
@@ -330,11 +334,17 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         final_res = None
-        enable_thinking = None
-        include_stop_str_in_output = False
-        enable_return_token_ids = request.return_token_ids or (
-            request.extra_body is not None and request.extra_body.get("return_token_ids", False)
+        enable_thinking = (
+            request.enable_thinking
+            if request.enable_thinking is not None
+            else (request.metadata or {}).get("enable_thinking")
         )
+        include_stop_str_in_output = (
+            request.include_stop_str_in_output
+            if request.include_stop_str_in_output is not None
+            else (request.metadata or {}).get("include_stop_str_in_output", False)
+        )
+
         try:
             dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
             dealer.write([b"", request_id.encode("utf-8")])
@@ -363,9 +373,6 @@ class OpenAIServingChat:
                 for data in response:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
-                    if request.metadata is not None:
-                        enable_thinking = request.metadata.get("enable_thinking")
-                        include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
                     data = self.engine_client.data_processor.process_response_dict(
                         data,
                         stream=False,
@@ -407,8 +414,8 @@ class OpenAIServingChat:
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
-            prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-            completion_token_ids=(completion_token_ids if enable_return_token_ids else None),
+            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+            completion_token_ids=completion_token_ids if request.return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:

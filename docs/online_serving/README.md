@@ -88,11 +88,12 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
 - `stream_options`: Optional[StreamOptions] = None
 - `temperature`: Optional[float] = None
 - `top_p`: Optional[float] = None
-- `metadata`: Optional[dict] = None (supported only in `v1/chat/completions` for configuring additional parameters, e.g., `metadata={"enable_thinking": True}`)
+- `extra_body`: Optional[dict] = None (supported only in `v1/chat/completions` for configuring additional parameters, e.g., `extra_body={"enable_thinking": True}`)
   - `min_tokens`: Optional[int] = 1 (minimum number of tokens generated)
   - `reasoning_max_tokens`: Optional[int] = None (maximum number of tokens for reasoning content, defaults to the same as `max_tokens`)
   - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
   - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
+  - `return_token_ids`: Optional[bool] = False: (whether to return token ids as a list)
 
 > Note: For multimodal models, since the reasoning chain is enabled by default, resulting in overly long outputs, `max_tokens` can be set to the model's maximum output length or the default value can be used.
 
@@ -102,6 +103,8 @@ The additional return fields added by FastDeploy are as follows:
 
 - `arrival_time`: Returns the cumulative time taken for all tokens
 - `reasoning_content`: The returned result of the reasoning chain
+- `prompt_token_ids`: The token id list of the prompt
+- `completion_token_ids`: The token id list of the completion
 
 Overview of return parameters:
 
@@ -112,7 +115,7 @@ ChatCompletionStreamResponse:
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
- ChatCompletionResponseStreamChoice:
+ChatCompletionResponseStreamChoice:
     index: int
     delta: DeltaMessage
     finish_reason: Optional[Literal["stop", "length"]] = None
@@ -120,6 +123,7 @@ ChatCompletionStreamResponse:
 DeltaMessage:
     role: Optional[str] = None
     content: Optional[str] = None
-    token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[List[int]] = None
+    completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
 ```

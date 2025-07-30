@@ -346,8 +346,10 @@ class CompletionRequest(BaseModel):
     top_k: Optional[int] = None
     min_p: Optional[float] = None
     user: Optional[str] = None
-    extra_body: Optional[dict] = None
-    return_token_ids: Optional[bool] = False
+
+    min_tokens: Optional[int] = None
+    return_token_ids: Optional[bool] = None
+    max_streaming_response_tokens: Optional[int] = None
     prompt_token_ids: Optional[List[int]] = None
     bad_words: Optional[List[str]] = None
 
@@ -374,16 +376,13 @@ class CompletionRequest(BaseModel):
         if request_id is not None:
             req_dict["request_id"] = request_id
 
-        # parse request model into dict, priority: request > extra_body > suffix
+        # parse request model into dict
+        if self.suffix is not None:
+            for key, value in self.suffix.items():
+                req_dict[key] = value
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
-        if self.extra_body is not None:
-            for key, value in self.extra_body.items():
-                req_dict.setdefault(key, value)
-        if self.suffix is not None:
-            for key, value in self.suffix.items():
-                req_dict.setdefault(key, value)
 
         if prompt is not None:
             req_dict["prompt"] = prompt
@@ -481,10 +480,15 @@ class ChatCompletionRequest(BaseModel):
     min_p: Optional[float] = None
     user: Optional[str] = None
     metadata: Optional[dict] = None
-    extra_body: Optional[dict] = None
-    return_token_ids: Optional[bool] = False
+
+    return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[List[int]] = None
     disable_chat_template: Optional[bool] = False
+    min_tokens: Optional[int] = None
+    enable_thinking: Optional[bool] = None
+    reasoning_max_tokens: Optional[int] = None
+    max_streaming_response_tokens: Optional[int] = None
+    include_stop_str_in_output: Optional[bool] = None
     bad_words: Optional[List[str]] = None
 
     response_format: Optional[AnyResponseFormat] = None
@@ -514,19 +518,16 @@ class ChatCompletionRequest(BaseModel):
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
 
-        # parse request model into dict, priority: request > extra_body > metadata
-        for key, value in self.dict().items():
-            if value is not None:
-                req_dict[key] = value
-        if self.extra_body is not None:
-            for key, value in self.extra_body.items():
-                req_dict.setdefault(key, value)
+        # parse request model into dict, priority: request params > metadata params
         if self.metadata is not None:
             assert (
                 "raw_request" not in self.metadata
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
-                req_dict.setdefault(key, value)
+                req_dict[key] = value
+        for key, value in self.dict().items():
+            if value is not None:
+                req_dict[key] = value
 
         if "prompt_token_ids" in req_dict:
             if "messages" in req_dict:
