@@ -171,7 +171,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
 
     int64_t vocab_size = shape[1];
     int64_t max_dec_len = pre_ids.shape()[1];
-    int64_t bad_words_len = bad_tokens.shape()[0];
+    int64_t bad_words_len = bad_tokens.shape()[1];
     int64_t eos_len = eos_token_id.shape()[0];
     int64_t max_model_len = prompt_ids.shape()[1];
 
