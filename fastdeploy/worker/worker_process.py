@@ -573,6 +573,13 @@ def parse_args():
         help="Configuration of early stop.",
     )
 
+    parser.add_argument(
+        "--load_choices",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/new_loader.",
+    )
+
     args = parser.parse_args()
     return args
 
