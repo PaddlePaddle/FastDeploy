@@ -313,7 +313,7 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
-    seed : Optional[int] = None
+    seed: Optional[int] = None
     """
     Random seed to use for initialization. If not set, a random seed is used.
     """
@@ -469,15 +469,12 @@ class EngineArgs:
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
         )
-        model_group.add_argument("--enable-logprob",
-                                 action="store_true",
-                                 default=EngineArgs.enable_logprob,
-                                 help="Enable output of token-level log probabilities."
-                                 )
-        model_group.add_argument("--seed",
-                                type=int,
-                                defualt=None,
-                                help="Random seed for initialization. If not specified, a random seed will be used.")
+        model_group.add_argument(
+            "--seed",
+            type=int,
+            default=None,
+            help="Random seed for initialization. If not specified, a random seed will be used.",
+        )
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
         parallel_group.add_argument(

@@ -27,13 +27,11 @@ class SamplingMetadata:
     """
 
     temperature: paddle.Tensor
-
     pre_token_ids: paddle.Tensor
     eos_token_ids: paddle.Tensor
     frequency_penalties: paddle.Tensor
     presence_penalties: paddle.Tensor
     repetition_penalties: paddle.Tensor
-
     min_dec_lens: paddle.Tensor
 
     bad_words_token_ids: paddle.Tensor

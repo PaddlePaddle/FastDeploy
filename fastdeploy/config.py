@@ -116,6 +116,7 @@ class ModelConfig:
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.quantization = None
+        self.seed = 0
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

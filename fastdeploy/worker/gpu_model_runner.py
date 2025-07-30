@@ -78,13 +78,10 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_mm = self.model_config.enable_mm
         self.rank = rank
         self.local_rank = local_rank
-        self.generators={}
         self.device_id = device_id
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
-
-        self.gene
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -130,8 +127,8 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
-            dtype="int64")
+            shape=[self.parallel_config.max_num_seqs, 1], fill_value=4, dtype="int64"
+        )
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -270,6 +267,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
             self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
+            print("seed", request.get("seed"))
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
 
