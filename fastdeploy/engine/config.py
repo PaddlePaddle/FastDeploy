@@ -444,7 +444,6 @@ class Config:
         if self.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
 
-
         import paddle
 
         self.paddle_commit_id = paddle.version.commit
