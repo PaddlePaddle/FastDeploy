@@ -454,7 +454,17 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     }
     kv_len += q_len;
   }
+
   const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
+  if(btid==0 && kv_head_idx==0 && chunk_idx==0 && tid == 0 && wid == 0)
+  {
+    printf("in multi_query_append_attention_warp1_4_kernel\n");
+    printf("kv_len : %d\n",kv_len);
+    printf("q_len : %d\n",q_len);
+    printf("num_chunks_this_seq : %d\n",num_chunks_this_seq);
+  }
+
+
   if (chunk_idx >= num_chunks_this_seq) {
     return;
   }
@@ -487,7 +497,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   T *q_base_ptr = q + q_offset;
   T *o_base_ptr_T = nullptr;
   OutT *o_base_ptr_int8 = nullptr;
-  if (num_chunks_this_seq <= 1) {
+  if (num_chunks_this_seq <= 0) {
     o_base_ptr_int8 = out + o_offset;
   } else {
     if (ENABLE_PREFILL) {
@@ -676,13 +686,13 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   merge_block_res_v2<num_frags_x, num_frags_y, T>(
       o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
-  if (num_chunks_this_seq <= 1) {
+  if (num_chunks_this_seq <= 0) {
     normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
   }
 
   // write o
   // [num_frags_x, 16, num_frags_y, 16]
-  if (num_chunks_this_seq <= 1) {
+  if (num_chunks_this_seq <= 0) {
     write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
                                                     num_frags_x,
                                                     num_frags_y,
@@ -720,7 +730,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         HEAD_DIM);
   }
 
-  if (num_chunks_this_seq > 1) {
+  if (num_chunks_this_seq > 0) {
     if (wid == 0) {
 #pragma unroll
       for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
@@ -790,6 +800,10 @@ void MultiQueryAppendAttention(
     const bool is_decoder,
     cudaStream_t &stream,
     paddle::Tensor *out) {
+
+  printf("\nKernel MultiQueryAppendAttention Start\n");
+
+
   using NV_TYPE = typename cascade_attn_type_traits<T>::type;
   using OUT_NV_TYPE = typename cascade_attn_type_traits<OutT>::type;
 
@@ -810,6 +824,7 @@ void MultiQueryAppendAttention(
   const float scale = 1.f / sqrt(HEAD_DIM);
 
   if constexpr (NUM_WARP_Q == 4) {
+    printf("Go to branch NUM_WARP_Q == 4\n");
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16;
     constexpr uint32_t smem_size =
         (num_warps * num_frags_x + NUM_WARP_KV * num_frags_z * 2) * 16 *
@@ -842,9 +857,18 @@ void MultiQueryAppendAttention(
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
     const int num_chunks = div_up(max_dec_len, chunk_size);
+    const int num_chunks_grid = div_up(encoder_max_partition_size, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
+    dim3 grids_2(num_blocks_x_cpu, num_chunks_grid, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1) {
+    printf("is_decoder:%d\n",is_decoder);
+    printf("max_partition_size:%d\n",max_partition_size);
+    printf("encoder_max_partition_size:%d\n",encoder_max_partition_size);
+    printf("chunk_size:%d\n",chunk_size);
+    printf("max_dec_len:%d\n",max_dec_len);
+    printf("num_chunks = div_up(max_dec_len, chunk_size:%d\n",num_chunks);
+    if (num_chunks <= 0) {
+      printf("Go to branch num_chunks <= 1\n");
       auto nosplit_kv_kernel =
           multi_query_append_attention_kernel<NV_TYPE,
                                               false,
@@ -897,6 +921,7 @@ void MultiQueryAppendAttention(
           speculate_max_draft_token_num);
 
     } else {
+      printf("Go to branch num_chunks > 1\n");
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       if (ENABLE_PREFILL) {
         tmp_workspace = allocator->Allocate(
@@ -922,8 +947,8 @@ void MultiQueryAppendAttention(
             static_cast<size_t>(speculate_max_draft_token_num * bsz *
                                 num_chunks * num_heads));
       }
-
-      split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      if(is_decoder){
+        split_kv_kernel<<<grids_2, blocks, smem_size, stream>>>(
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
@@ -952,6 +977,38 @@ void MultiQueryAppendAttention(
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num);
+      }else{
+        split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+          reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
+          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
+          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
+          shift_bias ? reinterpret_cast<NV_TYPE *>(
+                           const_cast<T *>(shift_bias.get().data<T>()))
+                     : nullptr,
+          smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(smooth_weight.get().data<T>()))
+                        : nullptr,
+          seq_lens_q.data<int>(),
+          seq_lens_kv.data<int>(),
+          batch_ids.data<int>(),
+          tile_ids_per_batch.data<int>(),
+          cu_seqlens_q.data<int>(),
+          block_table.data<int>(),
+          max_seq_len,
+          max_dec_len,
+          max_block_num_per_seq,
+          scale,
+          quant_max_bound,
+          quant_min_bound,
+          in_scale,
+          chunk_size,
+          reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+          static_cast<float *>(tmp_m->ptr()),
+          static_cast<float *>(tmp_d->ptr()),
+          reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          speculate_max_draft_token_num);
+      }
+
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
       if (is_decoder) {
@@ -1029,6 +1086,7 @@ void MultiQueryAppendAttention(
       }
     }
   } else {
+    printf("Go to branch NUM_WARP_Q != 4\n");
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16 / NUM_WARP_KV;
     constexpr uint32_t smem_size =
         (num_frags_x + NUM_WARP_KV * num_frags_z * 2) * 16 * HEAD_DIM *
@@ -1063,10 +1121,21 @@ void MultiQueryAppendAttention(
     }
     const int num_chunks = div_up(max_dec_len, chunk_size);
 
+    const int num_chunks_grid = div_up(encoder_max_partition_size, chunk_size);
+    dim3 grids_2(num_blocks_x_cpu, num_chunks_grid, kv_num_heads);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
 
-    if (num_chunks <= 1) {
+    printf("is_decoder:%d\n",is_decoder);
+    printf("max_partition_size:%d\n",max_partition_size);
+    printf("encoder_max_partition_size:%d\n",encoder_max_partition_size);
+    printf("chunk_size:%d\n",chunk_size);
+    printf("max_dec_len:%d\n",max_dec_len);
+    printf("num_chunks = div_up(max_dec_len, chunk_size:%d\n",num_chunks);
+
+
+    if (num_chunks <= 0) {
+      printf("Go to branch num_chunks <= 1\n");
       auto nosplit_kv_kernel =
           multi_query_append_attention_warp1_4_kernel<NV_TYPE,
                                                       false,
@@ -1118,6 +1187,7 @@ void MultiQueryAppendAttention(
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num);
     } else {
+      printf("Go to branch num_chunks > 0\n");
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       if (is_decoder) {
         tmp_workspace = allocator->Allocate(
@@ -1156,7 +1226,8 @@ void MultiQueryAppendAttention(
                                   num_chunks * num_heads));
         }
       }
-      split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      if(is_decoder){
+        split_kv_kernel<<<grids_2, blocks, smem_size, stream>>>(
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
@@ -1185,6 +1256,38 @@ void MultiQueryAppendAttention(
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num);
+      } else{
+        split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+          reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
+          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
+          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
+          shift_bias ? reinterpret_cast<NV_TYPE *>(
+                           const_cast<T *>(shift_bias.get().data<T>()))
+                     : nullptr,
+          smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(smooth_weight.get().data<T>()))
+                        : nullptr,
+          seq_lens_q.data<int>(),
+          seq_lens_kv.data<int>(),
+          batch_ids.data<int>(),
+          tile_ids_per_batch.data<int>(),
+          cu_seqlens_q.data<int>(),
+          block_table.data<int>(),
+          max_seq_len,
+          max_dec_len,
+          max_block_num_per_seq,
+          scale,
+          quant_max_bound,
+          quant_min_bound,
+          in_scale,
+          chunk_size,
+          reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+          static_cast<float *>(tmp_m->ptr()),
+          static_cast<float *>(tmp_d->ptr()),
+          reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+          speculate_max_draft_token_num);
+      }
+
 
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
