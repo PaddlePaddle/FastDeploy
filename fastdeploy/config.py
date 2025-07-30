@@ -23,6 +23,7 @@ from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
+import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.utils import check_unified_ckpt, get_logger
@@ -866,8 +867,10 @@ class CommitConfig:
 
         self._load_from_version_file()
 
-    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
+    def _load_from_version_file(self, file_path: str = None):
         """Internal method to load version info from file"""
+        if file_path is None:
+            file_path = os.path.join(fastdeploy.__path__[0], "version.txt")
         try:
             with open(file_path, "r") as f:
                 for line in f:
