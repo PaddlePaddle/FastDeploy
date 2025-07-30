@@ -31,6 +31,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 
 # from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
 from fastdeploy.utils import llm_logger, retrive_model_from_server
+from fastdeploy.worker.output import Logprob
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
@@ -74,6 +75,7 @@ class LLM:
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,
+            enable_logprob=True,
             **kwargs,
         )
 
@@ -169,8 +171,10 @@ class LLM:
 
         req_ids = self._add_request(prompts=prompts, sampling_params=sampling_params)
 
+        topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
+
         # get output
-        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
         for i in range(len(outputs)):
             outputs[i].prompt = prompts[i]
         return outputs
@@ -223,8 +227,10 @@ class LLM:
             chat_template_kwargs=chat_template_kwargs,
         )
 
+        topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
+
         # get output
-        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
         return outputs
 
     def _add_request(
@@ -278,7 +284,35 @@ class LLM:
             self.llm_engine.add_requests(tasks, current_sampling_params, enable_thinking=enable_thinking)
         return req_ids
 
-    def _run_engine(self, req_ids: list[str], use_tqdm: bool):
+    def _filter_and_decode_logprobs(
+        self, sample_logprobs: list[dict[int, Logprob]], topk_logprobs: Optional[int] = None
+    ) -> list[dict[int, Logprob]]:
+        """
+        Filters Logprob objects by rank and decodes tokens.
+
+        Args:
+            sample_logprobs (list[dict[int, Logprob]]): Original list of token_id -> Logprob maps.
+            num (int): Threshold rank, only ranks less than this will be kept.
+            decode_fn (Callable[[int], str]): Function to decode token_id to string.
+
+        Returns:
+            list[dict[int, Logprob]]: Filtered and updated logprob list.
+        """
+        llm_logger.info(f"filter logprobs, topk_logprobs: {topk_logprobs}")
+        filtered_result = []
+        for token_logprob_dict in sample_logprobs:
+            filtered_dict = {}
+            for token_id, logprob in token_logprob_dict.items():
+                if logprob.rank is not None and logprob.rank <= topk_logprobs:
+                    logprob.decoded_token = self.llm_engine.data_processor.process_logprob_response(
+                        [token_id], clean_up_tokenization_spaces=False
+                    )
+                    filtered_dict[token_id] = logprob
+            if filtered_dict:
+                filtered_result.append(filtered_dict)
+        return filtered_result
+
+    def _run_engine(self, req_ids: list[str], use_tqdm: bool, topk_logprobs: Optional[int] = None):
         """
             运行引擎，并返回结果列表。
 
@@ -320,6 +354,13 @@ class LLM:
 
                     result = self.req_output.pop(req_id)
                     result = self.llm_engine.data_processor.process_response(result)
+
+                    # filter logprobs
+                    if result.outputs.logprobs and topk_logprobs:
+                        result.outputs.logprobs = self._filter_and_decode_logprobs(
+                            result.outputs.logprobs, topk_logprobs
+                        )
+
                     output[pos] = result
                     finished.append(i)
 

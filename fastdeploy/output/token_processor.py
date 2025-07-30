@@ -31,7 +31,7 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
-from fastdeploy.worker.output import LogprobsLists
+from fastdeploy.worker.output import Logprob, LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
 MAX_BSZ = 512
@@ -305,6 +305,30 @@ class TokenProcessor:
                 self.total_step = 0
         self.speculative_stats_step += 1
 
+    def _build_sample_logprobs(self, topk_token_ids, topk_logprobs) -> list[dict[int, Logprob]]:
+        """
+        Constructs a list of dictionaries mapping token IDs to Logprob objects.
+
+        Args:
+            topk_token_ids (list[int]): List of token IDs sampled from the top-k.
+            topk_logprobs (list[float]): Corresponding log probabilities for the sampled tokens.
+            sampled_rank (int): The rank of the sampled token (1-based).
+
+        Returns:
+            list[dict[int, Logprob]]: A list where each item maps a token ID to its Logprob object.
+        """
+        try:
+            logprob_dict = {}
+            for index in range(len(topk_token_ids)):
+                token_id = topk_token_ids[index]
+                logprob = topk_logprobs[index]
+                logprob_obj = Logprob(logprob=logprob, rank=index + 1, decoded_token=None)
+                logprob_dict[token_id] = logprob_obj
+            return [logprob_dict]
+        except Exception as e:
+            llm_logger.error(f"Error building sample logprobs: {e}")
+            return []
+
     def _process_sampling_with_logprob_batch_output(self):
         """
         batch post-processing logprob output function
@@ -382,17 +406,23 @@ class TokenProcessor:
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
+                    # TODO Deprecated: To be removed
                     result.outputs.logprob = float(scores[i, 0])
                     # Construct top_logprobs
                     topk_token_ids = tokens[i, :].tolist()
                     topk_logprobs = scores[i, :].tolist()
                     sampled_rank = ranks[i].item()
 
+                    # TODO Deprecated: To be removed
                     result.outputs.top_logprobs = LogprobsLists(
                         logprob_token_ids=[topk_token_ids],
                         logprobs=[topk_logprobs],
                         sampled_token_ranks=[sampled_rank],
                     )
+
+                    # sample logprobs
+                    result.outputs.logprobs = self._build_sample_logprobs(topk_token_ids[1:], topk_logprobs[1:])
+
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     result.prompt = task.prompt

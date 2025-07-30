@@ -25,7 +25,7 @@ import numpy as np
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists
+from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
 
 
 class RequestStatus(Enum):
@@ -243,6 +243,7 @@ class CompletionOutput:
     token_ids: list[int]
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
+    logprobs: Optional[SampleLogprobs] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
@@ -255,8 +256,7 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
-            "logprob": self.logprob,
-            "top_logprobs": self.top_logprobs,
+            "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
@@ -279,7 +279,8 @@ class CompletionOutput:
             f"text={self.text!r}, "
             f"token_ids={self.token_ids}, "
             f"draft_token_ids={self.draft_token_ids}, "
-            f"reasoning_content={self.reasoning_content!r}"
+            f"reasoning_content={self.reasoning_content!r}, "
+            f"logprobs={self.logprobs}, "
         )
 
 
@@ -393,14 +394,20 @@ class RequestOutput:
         self.finished |= next_output.finished
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
+
         if next_output.metrics.arrival_time is not None and self.metrics.inference_start_time is not None:
             self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
         if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
             self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
+        # TODO Deprecated: To be removed
         if next_output.outputs.top_logprobs is not None:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
             self.outputs.top_logprobs.sampled_token_ranks.extend(next_output.outputs.top_logprobs.sampled_token_ranks)
+
+        # aggregate token logprobs
+        if next_output.outputs.logprobs is not None:
+            self.outputs.logprobs.extend(next_output.outputs.logprobs)
 
     def __repr__(self) -> str:
         return (
@@ -408,8 +415,9 @@ class RequestOutput:
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
             f"outputs={self.outputs}, "
+            f"finished={self.finished}, "
+            f"num_cached_tokens={self.num_cached_tokens}, "
             f"metrics={self.metrics}, "
-            f"num_cached_tokens={self.num_cached_tokens})"
         )
 
     @classmethod

@@ -20,6 +20,21 @@ from typing import NamedTuple, Optional
 import paddle
 
 
+@dataclass
+class Logprob:
+    """
+    A named tuple containing information about a token's log probability.
+    """
+
+    logprob: float
+    rank: Optional[int] = None
+    decoded_token: Optional[str] = None
+
+
+# [{token_id, logprob}] for tokens sampled from the top-k
+SampleLogprobs = list[dict[int, Logprob]]
+
+
 class LogprobsLists(NamedTuple):
     """ """
 
