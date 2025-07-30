@@ -73,7 +73,7 @@ class MTPProposer(Proposer):
         self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
         self.speculative_config.sharing_model = main_model
         self.model_config.num_hidden_layers = 1
-        self.parallel_config.model_name_or_path = self.speculative_config.model_name_or_path
+        self.model_config.model = self.speculative_config.model
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
@@ -275,6 +275,7 @@ class MTPProposer(Proposer):
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
         self.model_inputs["top_p"] = self.main_model_inputs["top_p"]
+        self.model_inputs["top_k"] = self.main_model_inputs["top_k"]
         self.model_inputs["temperature"] = self.main_model_inputs["temperature"]
         self.model_inputs["eos_token_id"] = self.main_model_inputs["eos_token_id"]
         self.model_inputs["penalty_score"] = self.main_model_inputs["penalty_score"]
@@ -528,6 +529,7 @@ class MTPProposer(Proposer):
                 self.sampling_metadata = SamplingMetadata(
                     temperature=self.model_inputs["temperature"],
                     top_p=self.model_inputs["top_p"],
+                    top_k=self.model_inputs["top_k"],
                     step_idx=self.model_inputs["step_idx"],
                     pre_token_ids=self.model_inputs["pre_ids"],
                     frequency_penalties=self.model_inputs["frequency_score"],
