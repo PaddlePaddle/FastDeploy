@@ -34,7 +34,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
 | ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
 | ```use_cudagraph``` | `bool` | Whether to use cuda graph, default: False |
-｜```graph_optimization_config```    | `str`       | Parameters related to graph optimization can be configured, with default values of'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }' |
+|```graph_optimization_config```    | `str`       | Parameters related to graph optimization can be configured, with default values of'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }' |
 | ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
@@ -44,7 +44,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
 | ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
-
+| ```served_model_name```| `str`| The model name used in the API. If not specified, the model name will be the same as the --model argument |
+| ```revision``` | `str` | The specific model version to use. It can be a branch name, a tag name, or a commit id. |
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 
 During FastDeploy inference, GPU memory is occupied by ```model weights```, ```preallocated KVCache blocks``` and ```model computation intermediate activation values```. The preallocated KVCache blocks are determined by ```num_gpu_blocks_override```, with ```block_size``` (default: 64) as its unit, meaning one block can store KVCache for 64 Tokens.

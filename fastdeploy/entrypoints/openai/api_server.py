@@ -126,7 +126,6 @@ async def lifespan(app: FastAPI):
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
-        engine_client,
         model_paths,
         args.max_model_len,
         args.ips,

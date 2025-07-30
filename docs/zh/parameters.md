@@ -32,7 +32,7 @@
 | ```static_decode_blocks```         | `int`       | 推理过程中，每条请求强制从Prefill的KVCache分配对应块数给Decode使用，默认2|
 | ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
 | ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False |
-｜```graph_optimization_config```    | `str`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }' |
+|```graph_optimization_config```    | `str`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }' |
 | ```enable_custom_all_reduce```     | `bool`      | 开启Custom all-reduce，默认False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
@@ -42,6 +42,8 @@
 | ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
+| ```served_model_name```       | `str`      | API 中使用的模型名称，如果未指定，模型名称将与--model参数相同 |
+| ```revision```       | `str`      | 自动下载模型时，用于指定模型的Git版本，分支名或tag |
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 
