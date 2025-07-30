@@ -104,7 +104,6 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
                 self._free_blocks(preempted_req)
-                preempted_req.need_prefill_tokens = preempted_req.num_total_tokens
                 self.waiting.appendleft(preempted_req)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
