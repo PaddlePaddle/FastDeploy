@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import copy
 import os
 import time
 from typing import List, Optional
@@ -165,7 +164,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method == "ngram":
             self.proposer = NgramProposer(self.fd_config)
         elif self.speculative_method == "mtp":
-            self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer)
+            self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
             self.proposer = MTPProposer(
                 self.fd_config,
                 self.get_model(),
@@ -291,7 +290,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -480,7 +479,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
