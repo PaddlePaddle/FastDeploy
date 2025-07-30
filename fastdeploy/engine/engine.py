@@ -491,6 +491,7 @@ class LLMEngine:
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
+            sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
@@ -747,6 +748,8 @@ class LLMEngine:
         """
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+            if task.sampling_params.bad_words is not None:
+                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -1064,7 +1067,7 @@ class LLMEngine:
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
-            f" --model_name_or_path {self.cfg.model_name_or_path!s}"
+            f" --model {self.cfg.model_name_or_path!s}"
             f" --device_ids {self.cfg.device_ids}"
             f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
             f" --engine_worker_queue_port {self.cfg.engine_worker_queue_port!s}"
@@ -1084,7 +1087,8 @@ class LLMEngine:
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --load_strategy {self.cfg.load_config.load_strategy}"
+            f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
         )
 
         worker_append_flag = {
@@ -1092,7 +1096,7 @@ class LLMEngine:
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
-            "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
+            "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
@@ -1231,9 +1235,9 @@ class LLMEngine:
                 elif (match := re.search(r"Start load layer (\d+)", line)) or (
                     match := re.search(r"set state for layer (\d+)", line)
                 ):
-                    progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_layers
+                    progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_hidden_layers
                     self.worker_init_status["layer_loadding"] = progress
-                    if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_layers - 1:
+                    if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
                         self.worker_init_status["finished"] = True
 
         self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)

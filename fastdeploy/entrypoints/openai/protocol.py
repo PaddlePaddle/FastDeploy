@@ -351,6 +351,7 @@ class CompletionRequest(BaseModel):
     return_token_ids: Optional[bool] = None
     max_streaming_response_tokens: Optional[int] = None
     prompt_token_ids: Optional[List[int]] = None
+    bad_words: Optional[List[str]] = None
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -488,6 +489,7 @@ class ChatCompletionRequest(BaseModel):
     reasoning_max_tokens: Optional[int] = None
     max_streaming_response_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = None
+    bad_words: Optional[List[str]] = None
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None

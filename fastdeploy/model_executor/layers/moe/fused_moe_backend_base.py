@@ -66,7 +66,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.fd_config.model_config.redundant_experts_num,
                 )
             else:
-                if layer.fd_config.parallel_config.moe_phase == "prefill":
+                if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
                     from .ep import EPPrefillRunner
 
                     self.ep_prefill_runner = EPPrefillRunner(
