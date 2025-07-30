@@ -132,7 +132,7 @@ class OpenAIServingChat:
         enable_thinking = (
             request.enable_thinking
             if request.enable_thinking is not None
-            else (request.metadata or {}).get("enable_thinking", True)
+            else (request.metadata or {}).get("enable_thinking")
         )
         include_stop_str_in_output = (
             request.include_stop_str_in_output
@@ -337,7 +337,7 @@ class OpenAIServingChat:
         enable_thinking = (
             request.enable_thinking
             if request.enable_thinking is not None
-            else (request.metadata or {}).get("enable_thinking", True)
+            else (request.metadata or {}).get("enable_thinking")
         )
         include_stop_str_in_output = (
             request.include_stop_str_in_output
