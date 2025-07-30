@@ -479,7 +479,12 @@ class DataProcessor:
             if os.path.exists(os.path.join(self.model_name_or_path, vocab_file_names[i])):
                 ErnieBotTokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
                 break
-        self.tokenizer = ErnieBotTokenizer.from_pretrained(self.model_name_or_path)
+        
+        if self.model_name_or_path == "/root/.paddlenlp/models/Qwen/Qwen2.5-VL-7B-Instruct":
+            from fastdeploy.model_executor.models.qwen2_5_vl.mix_qwen2_5_tokenizer import MIXQwen2_5_Tokenizer
+            self.tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(self.model_name_or_path)
+        else:
+            self.tokenizer = ErnieBotTokenizer.from_pretrained(self.model_name_or_path)
 
     def apply_chat_template(self, request):
         """
