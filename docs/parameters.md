@@ -45,7 +45,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
 | ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
 | ```served_model_name```| `str`| The model name used in the API. If not specified, the model name will be the same as the --model argument |
-| ```revision``` | `str` | The specific model version to use. It can be a branch name, a tag name, or a commit id. |
+| ```revision``` | `str` | The specific model version to use. It can be a branch name, a tag name, or a commit id. If unspecified, will use the default version. |
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 
 During FastDeploy inference, GPU memory is occupied by ```model weights```, ```preallocated KVCache blocks``` and ```model computation intermediate activation values```. The preallocated KVCache blocks are determined by ```num_gpu_blocks_override```, with ```block_size``` (default: 64) as its unit, meaning one block can store KVCache for 64 Tokens.
