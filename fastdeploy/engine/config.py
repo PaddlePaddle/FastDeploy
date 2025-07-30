@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import fastdeploy
 from fastdeploy.config import CacheConfig, LoadConfig, ModelConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
