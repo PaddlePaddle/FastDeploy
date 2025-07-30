@@ -17,7 +17,7 @@
 template <typename T, int VecSize>
 __global__ void RebuildPaddingKernel(T *output_data,
                                      const T *input_data,
-                                     const int *cum_offsets,
+                                     const int *cu_seqlens_q,
                                      const int *seq_len_this_time,
                                      const int *seq_len_decoder,
                                      const int *seq_len_encoder,
@@ -36,8 +36,9 @@ __global__ void RebuildPaddingKernel(T *output_data,
         if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
         // if encoder, get last token; just decoder, get first token.
         if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
+
         const int ori_token_idx =
-            bi * max_input_length - cum_offsets[bi] + seq_id;
+            cu_seqlens_q[bi] + seq_id;
         const int src_offset = ori_token_idx * dim_embed + bias_idx;
         Load<T, VecSize>(&input_data[src_offset], &src_vec);
         Store<T, VecSize>(src_vec, &output_data[i]);
@@ -47,7 +48,7 @@ __global__ void RebuildPaddingKernel(T *output_data,
 template <typename T, int VecSize>
 __global__ void RebuildAppendPaddingKernel(T *output_data,
                                            const T *input_data,
-                                           const int *cum_offset,
+                                           const int *cu_seqlens_q,
                                            const int *seq_len_this_time,
                                            const int *seq_len_decoder,
                                            const int *seq_len_encoder,
@@ -69,7 +70,7 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
         // if encoder, get last token; just decoder, get first token.
         if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
 
-        const int input_token_id = ori_token_id - cum_offset[bi] + seq_id;
+        const int input_token_id = cu_seqlens_q[bi]+ seq_id;
         const int bias_idx = i % dim_embed;
 
         Load<T, VecSize>(&input_data[input_token_id * dim_embed + bias_idx],
@@ -81,7 +82,7 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
 template <paddle::DataType D>
 std::vector<paddle::Tensor> rebuild_padding(
     const paddle::Tensor &tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
+    const paddle::Tensor &cu_seqlens_q,  // [bsz+1, 1]
     const paddle::Tensor &seq_len_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,
@@ -100,7 +101,7 @@ std::vector<paddle::Tensor> rebuild_padding(
     std::vector<int64_t> tmp_out_shape = tmp_out.shape();
     const int token_num = tmp_out_shape[0];
     const int dim_embed = tmp_out_shape[1];
-    const int bsz = cum_offsets.shape()[0];
+    const int bsz = cu_seqlens_q.shape()[0] - 1;
 
     paddle::Tensor out;
     if (output_padding_offset) {
@@ -133,7 +134,7 @@ std::vector<paddle::Tensor> rebuild_padding(
             <<<grid_size, blocksize, 0, cu_stream>>>(
                 reinterpret_cast<DataType_ *>(out.data<data_t>()),
                 reinterpret_cast<const DataType_ *>(tmp_out.data<data_t>()),
-                cum_offsets.data<int>(),
+                cu_seqlens_q.data<int>(),
                 seq_len_this_time.data<int>(),
                 seq_lens_decoder.data<int>(),
                 seq_lens_encoder.data<int>(),
@@ -147,7 +148,7 @@ std::vector<paddle::Tensor> rebuild_padding(
                 reinterpret_cast<DataType_ *>(out.data<data_t>()),
                 reinterpret_cast<DataType_ *>(
                     const_cast<data_t *>(tmp_out.data<data_t>())),
-                cum_offsets.data<int>(),
+                cu_seqlens_q.data<int>(),
                 seq_len_this_time.data<int>(),
                 seq_lens_decoder.data<int>(),
                 seq_lens_encoder.data<int>(),
@@ -160,7 +161,7 @@ std::vector<paddle::Tensor> rebuild_padding(
 
 paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor &tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
+    const paddle::Tensor &cu_seqlens_q,  // [bsz, 1]
     const paddle::Tensor &seq_len_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,
@@ -170,7 +171,7 @@ paddle::Tensor RebuildPaddingFunc(
         case paddle::DataType::BFLOAT16: {
             return rebuild_padding<paddle::DataType::BFLOAT16>(
                 tmp_out,
-                cum_offsets,
+                cu_seqlens_q,
                 seq_len_this_time,
                 seq_lens_decoder,
                 seq_lens_encoder,
@@ -180,7 +181,7 @@ paddle::Tensor RebuildPaddingFunc(
         case paddle::DataType::FLOAT16: {
             return rebuild_padding<paddle::DataType::FLOAT16>(
                 tmp_out,
-                cum_offsets,
+                cu_seqlens_q,
                 seq_len_this_time,
                 seq_lens_decoder,
                 seq_lens_encoder,
@@ -190,7 +191,7 @@ paddle::Tensor RebuildPaddingFunc(
         case paddle::DataType::FLOAT32: {
             return rebuild_padding<paddle::DataType::FLOAT32>(
                 tmp_out,
-                cum_offsets,
+                cu_seqlens_q,
                 seq_len_this_time,
                 seq_lens_decoder,
                 seq_lens_encoder,
@@ -208,14 +209,14 @@ paddle::Tensor RebuildPaddingFunc(
 
 std::vector<paddle::Tensor> RebuildPadding(
     const paddle::Tensor &tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
+    const paddle::Tensor &cu_seqlens_q,   // [bsz+1, 1]
     const paddle::Tensor &seq_len_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,
     const paddle::optional<paddle::Tensor> &output_padding_offset,
     int max_input_length) {
     return {RebuildPaddingFunc(tmp_out,
-                               cum_offsets,
+                               cu_seqlens_q,
                                seq_len_this_time,
                                seq_lens_decoder,
                                seq_lens_encoder,
@@ -225,7 +226,7 @@ std::vector<paddle::Tensor> RebuildPadding(
 
 std::vector<std::vector<int64_t>> RebuildPaddingInferShape(
     const std::vector<int64_t> &tmp_out_shape,
-    const std::vector<int64_t> &cum_offsets_shape,
+    const std::vector<int64_t> &cu_seqlens_q_shape,
     const std::vector<int64_t> &seq_len_this_time_shape,
     const std::vector<int64_t> &seq_lens_decoder_shape,
     const std::vector<int64_t> &seq_lens_encoder_shape,
@@ -235,14 +236,14 @@ std::vector<std::vector<int64_t>> RebuildPaddingInferShape(
     if (output_padding_offset_shape) {
         return {{-1, dim_embed}};
     } else {
-        int64_t bsz = cum_offsets_shape[0];
+        int64_t bsz = cu_seqlens_q_shape[0] - 1;
         return {{bsz, dim_embed}};
     }
 }
 
 std::vector<paddle::DataType> RebuildPaddingInferDtype(
     const paddle::DataType &tmp_out_dtype,
-    const paddle::DataType &cum_offsets_dtype,
+    const paddle::DataType &cu_seqlens_q_dtype,
     const paddle::DataType &seq_len_this_time_dtype,
     const paddle::DataType &seq_lens_decoder_dtype,
     const paddle::DataType &seq_lens_encoder_dtype,
@@ -252,7 +253,7 @@ std::vector<paddle::DataType> RebuildPaddingInferDtype(
 
 PD_BUILD_STATIC_OP(rebuild_padding)
     .Inputs({"tmp_out",
-             "cum_offsets",
+             "cu_seqlens_q",
              "seq_len_this_time",
              "seq_lens_decoder",
              "seq_lens_encoder",

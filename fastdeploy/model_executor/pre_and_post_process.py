@@ -104,7 +104,6 @@ def pre_process(
     if speculative_decoding:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
@@ -134,14 +133,12 @@ def pre_process(
     else:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
     return (
         ids_remove_padding,
-        cum_offsets,
         batch_id_per_token,
         cu_seqlens_q,
         cu_seqlens_k,
