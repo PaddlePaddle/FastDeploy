@@ -349,6 +349,7 @@ class CompletionRequest(BaseModel):
     extra_body: Optional[dict] = None
     return_token_ids: Optional[bool] = False
     prompt_token_ids: Optional[List[int]] = None
+    bad_words: Optional[List[str]] = None
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -484,6 +485,7 @@ class ChatCompletionRequest(BaseModel):
     return_token_ids: Optional[bool] = False
     prompt_token_ids: Optional[List[int]] = None
     disable_chat_template: Optional[bool] = False
+    bad_words: Optional[List[str]] = None
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
