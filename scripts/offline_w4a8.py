@@ -152,7 +152,7 @@ def main():
         state_dict[k] = get_tensor(v).cpu()
     end = time.perf_counter()
     logger.info("Finish Quantize.")
-    logger.info(f"load和量化耗时: {end - start:.6f} 秒")
+    logger.info(f"load and quantize took : {end - start:.6f} seconds")
     deal_quant(state_dict, save_state_dict)
     for key in list(state_dict.keys()):
         save_state_dict[key] = state_dict.pop(key)
@@ -170,7 +170,7 @@ def main():
     pretrained_config.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
     end = time.perf_counter()
-    logger.info(f"save耗时: {end - start:.6f} 秒")
+    logger.info(f"save model took: {end - start:.6f} seconds")
     logger.info("Finish.")
 
 

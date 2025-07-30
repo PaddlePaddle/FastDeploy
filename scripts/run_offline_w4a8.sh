@@ -17,8 +17,8 @@ rm -f core*
 
 export devices=0
 export CUDA_VISIBLE_DEVICES=${devices}
-model_path=${1:-"/root/paddlejob/workspace/env_run/merged_pp_fp8_moe_w4a8_safetensor"}
-output_path=${2:-"/root/paddlejob/workspace/env_run/offline_test"}
+model_path=${1:-"/PATH/MODEL_PATH"}
+output_path=${2:-"/PATH/OUTPUT_MODEL"}
 for name in `env | grep -E 'PADDLE|ENDPOINT' | awk -F'=' '{print $1}'`; do
 unset ${name}
 done
