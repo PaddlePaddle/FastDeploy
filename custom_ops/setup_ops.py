@@ -225,6 +225,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/step_reschedule.cu",
+        "gpu_ops/fill_encoder_decoder_res.cu",
     ]
     setup(
         name="fastdeploy_ops",
