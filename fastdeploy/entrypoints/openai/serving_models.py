@@ -42,13 +42,11 @@ class OpenAIServingModels:
         engine_client: EngineClient,
         model_paths: list[ModelPath],
         max_model_len: int,
-        pid: int,
         ips,
     ):
         self.engine_client = engine_client
         self.model_paths = model_paths
         self.max_model_len = max_model_len
-        self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
         if self.master_ip is not None:

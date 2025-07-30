@@ -19,8 +19,7 @@ async def _async_serving_models_init() -> OpenAIServingModels:
         engine_client=mock_engine_client,
         model_paths=MODEL_PATHS,
         max_model_len=MAX_MODEL_LEN,
-        pid=1,
-        ips=[get_host_ip()],
+        ips=get_host_ip(),
     )
 
     return serving_models
@@ -29,13 +28,13 @@ async def _async_serving_models_init() -> OpenAIServingModels:
 @pytest.mark.asyncio
 async def test_serving_model_name():
     serving_models = await _async_serving_models_init()
-    assert serving_models.model_name(None) == MODEL_NAME
+    assert serving_models.model_name() == MODEL_NAME
 
 
 @pytest.mark.asyncio
-async def test_list_models(serving_models):
+async def test_list_models():
     serving_models = await _async_serving_models_init()
-    result = serving_models.list_models()
+    result = await serving_models.list_models()
     assert isinstance(result, ModelList)
     assert isinstance(result.data[0], ModelInfo)
     assert result.object == "list"
