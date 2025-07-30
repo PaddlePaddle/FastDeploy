@@ -15,6 +15,7 @@
 """
 
 from dataclasses import dataclass
+from typing import List, Union
 
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
@@ -42,7 +43,7 @@ class OpenAIServingModels:
         engine_client: EngineClient,
         model_paths: list[ModelPath],
         max_model_len: int,
-        ips,
+        ips: Union[List[str], str],
     ):
         self.engine_client = engine_client
         self.model_paths = model_paths

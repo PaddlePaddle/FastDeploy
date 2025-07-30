@@ -18,7 +18,7 @@ import asyncio
 import time
 import traceback
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import aiozmq
 import msgpack
@@ -56,7 +56,7 @@ class OpenAIServingChat:
         engine_client: EngineClient,
         models: OpenAIServingModels,
         pid: int,
-        ips,
+        ips: Union[List[str], str],
     ):
         self.engine_client = engine_client
         self.models = models

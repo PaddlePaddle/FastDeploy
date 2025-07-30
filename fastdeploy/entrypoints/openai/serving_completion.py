@@ -17,7 +17,7 @@
 import asyncio
 import time
 import uuid
-from typing import List
+from typing import List, Union
 
 import aiozmq
 import msgpack
@@ -45,7 +45,7 @@ class OpenAIServingCompletion:
         engine_client: EngineClient,
         models: OpenAIServingModels,
         pid: int,
-        ips,
+        ips: Union[List[str], str],
     ):
         self.engine_client = engine_client
         self.models = models

@@ -129,7 +129,6 @@ async def lifespan(app: FastAPI):
         engine_client,
         model_paths,
         args.max_model_len,
-        pid,
         args.ips,
     )
     app.state.model_handler = model_handler
