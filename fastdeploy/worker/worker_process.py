@@ -283,14 +283,15 @@ class PaddleDisWorkerProc:
                 paddle.distributed.barrier()
 
             self.insert_step = False
-            self.worker_healthy_live_signal.value[self.local_rank] = int(time.time())
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
+
                     if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
-                        if self.nnode > 1:
+                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
@@ -513,6 +514,12 @@ def parse_args():
         help="expert parallel size",
     )
     parser.add_argument(
+        "--data_parallel_size",
+        type=int,
+        default=1,
+        help="data parallel size",
+    )
+    parser.add_argument(
         "--enable_expert_parallel",
         action="store_true",
         help="enable expert parallel",
@@ -571,6 +578,13 @@ def parse_args():
         type=json.loads,
         default=None,
         help="Configuration of early stop.",
+    )
+
+    parser.add_argument(
+        "--load_choices",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/new_loader.",
     )
 
     args = parser.parse_args()

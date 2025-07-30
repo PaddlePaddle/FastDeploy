@@ -73,7 +73,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
       {"type": "text", "text": "图中的文物属于哪个年代"}
     ]}
   ],
-  "metadata": {"enable_thinking": false}
+  "enable_thinking": false
 }'
 ```
 
@@ -93,7 +93,7 @@ response = client.chat.completions.create(
             {"type": "text", "text": "图中的文物属于哪个年代?"},
         ]},
     ],
-    metadata={"enable_thinking": false},
+    extra_body={"enable_thinking": false},
     stream=True,
 )
 for chunk in response:
