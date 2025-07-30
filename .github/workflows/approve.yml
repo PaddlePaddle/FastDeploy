@@ -26,6 +26,8 @@ jobs:
           git fetch origin pull/${PR_ID}/merge
           git checkout -b test FETCH_HEAD
           git log -n 3 --oneline
+          git remote add upstream https://github.com/PaddlePaddle/FastDeploy.git
+          git fetch upstream $BRANCH
 
       - name: Setup python3.10
         uses: actions/setup-python@v5
