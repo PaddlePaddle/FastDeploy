@@ -195,14 +195,14 @@ class MTPProposer(Proposer):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
 
-        self.model_inputs["decoder_batch_ids"] = paddle.clone(self.main_model_inputs["decoder_batch_ids"])
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
+        self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.main_model_inputs["decoder_batch_ids"])
+        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
             self.main_model_inputs["decoder_tile_ids_per_batch"]
         )
-        self.model_inputs["decoder_num_blocks_cpu"] = paddle.clone(
+        self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
             self.main_model_inputs["decoder_num_blocks_cpu"]
         ).pin_memory()
-        self.model_inputs["max_len_tensor_cpu"] = paddle.clone(self.main_model_inputs["max_len_tensor_cpu"]).cpu()
+        self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(self.main_model_inputs["max_len_tensor_cpu"]).cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
