@@ -117,9 +117,6 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) ->
         paddle.Tensor: Returns a PaddlePaddle tensor.
 
     """
-    if "PySafeSlice" in str(type(input)):
-        input = input.get()
-
     if isinstance(input, paddle.Tensor):
         if input.place.is_cpu_place():
             return input.to(paddle.device.get_device())
