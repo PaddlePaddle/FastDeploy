@@ -50,8 +50,12 @@ class ExpertService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
-        end_pos = ((local_data_parallel_id + 1) * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
+        start_pos = (
+            local_data_parallel_id * self.cfg.parallel_config.tensor_parallel_size
+        ) % self.cfg.worker_num_per_node
+        end_pos = (
+            (local_data_parallel_id + 1) * self.cfg.parallel_config.tensor_parallel_size
+        ) % self.cfg.worker_num_per_node
         self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
         self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
@@ -68,13 +72,13 @@ class ExpertService:
             address=address,
             is_server=False,
             client_id=0,
-            num_client=cfg.tensor_parallel_size,
+            num_client=cfg.parallel_config.tensor_parallel_size,
             local_data_parallel_id=local_data_parallel_id,
         )
         self.resource_manager = ResourceManager(
             cfg.max_num_seqs,
             cfg,
-            cfg.tensor_parallel_size,
+            cfg.parallel_config.tensor_parallel_size,
             cfg.splitwise_role,
             local_data_parallel_id,
         )
@@ -122,7 +126,7 @@ class ExpertService:
 
         self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
-            tensor_parallel_size=self.cfg.tensor_parallel_size,
+            tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
             device_ids=self.cfg.local_device_ids,
             pod_ip=self.cfg.master_ip,
             engine_worker_queue_port=self.cfg.engine_worker_queue_port,

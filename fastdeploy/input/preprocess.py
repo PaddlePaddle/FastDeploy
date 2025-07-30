@@ -16,8 +16,7 @@
 
 from typing import Any, Dict, Optional
 
-from fastdeploy.config import ErnieArchitectures
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ErnieArchitectures, ModelConfig
 from fastdeploy.reasoning import ReasoningParserManager
 
 
