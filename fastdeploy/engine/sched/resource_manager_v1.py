@@ -193,6 +193,7 @@ class ResourceManagerV1(ResourceManager):
                         else:
                             break
                     elif request.status == RequestStatus.PREEMPTED:
+                        request.need_prefill_tokens = request.num_total_tokens  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
                         num_new_tokens = min(num_new_tokens, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
