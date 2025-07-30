@@ -165,7 +165,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method == "ngram":
             self.proposer = NgramProposer(self.fd_config)
         elif self.speculative_method == "mtp":
-            self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time)
+            self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer)
             self.proposer = MTPProposer(
                 self.fd_config,
                 self.get_model(),
@@ -227,7 +227,7 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
-                self.tmp_seq_lens_this_time[idx : idx + 1] = length
+                self.seq_lens_this_time_buffer[idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
@@ -249,7 +249,7 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
-                self.tmp_seq_lens_this_time[idx : idx + 1] = 0
+                self.seq_lens_this_time_buffer[idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
@@ -291,7 +291,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -331,7 +331,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.tmp_seq_lens_this_time[idx : idx + 1] = 1
+                self.seq_lens_this_time_buffer[idx : idx + 1] = 1
                 self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = length
                 self.share_inputs["prompt_lens"][idx : idx + 1] = length
@@ -343,7 +343,7 @@ class GPUModelRunner(ModelRunnerBase):
                         request.draft_token_ids[0:num_prefill_send_token],
                         dtype="int64",
                     )
-                    self.tmp_seq_lens_this_time[idx : idx + 1] = num_prefill_send_token
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
             else:
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -378,7 +378,7 @@ class GPUModelRunner(ModelRunnerBase):
                         )
                         self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                         self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.tmp_seq_lens_this_time[idx : idx + 1] = token_chunk_size
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                     self.share_inputs["prompt_lens"][idx : idx + 1] = token_chunk_size
@@ -396,7 +396,7 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                         self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.tmp_seq_lens_this_time[idx : idx + 1] = length
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = length
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
@@ -472,7 +472,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
@@ -495,7 +495,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.tmp_seq_lens_this_time[idx : idx + 1] = input_length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -513,7 +513,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.share_inputs["seq_lens_this_time"] = self.tmp_seq_lens_this_time
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _init_share_inputs(self, max_num_seqs: int):
         """
@@ -564,7 +564,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.tmp_seq_lens_this_time = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -1341,7 +1341,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
-        self.tmp_seq_lens_this_time[:num_running_requests].copy_(
+        self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
         return None

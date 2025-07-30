@@ -398,7 +398,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
-                self.tmp_seq_lens_this_time[idx : idx + 1] = length
+                self.seq_lens_this_time_buffer[idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
@@ -420,7 +420,7 @@ class XPUModelRunner(ModelRunnerBase):
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
-                self.tmp_seq_lens_this_time[idx : idx + 1] = 0
+                self.seq_lens_this_time_buffer[idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
@@ -457,7 +457,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
 
     def process_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """Process inputs for prefill tasks and update share_inputs buffer"""
@@ -478,7 +478,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
             self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
-            self.tmp_seq_lens_this_time[idx : idx + 1] = length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -512,7 +512,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
         self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.tmp_seq_lens_this_time[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -558,7 +558,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.tmp_seq_lens_this_time = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -788,7 +788,7 @@ class XPUModelRunner(ModelRunnerBase):
             idx = i
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.tmp_seq_lens_this_time[idx : idx + 1] = input_length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -804,7 +804,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.share_inputs["seq_lens_this_time"] = self.tmp_seq_lens_this_time
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _dummy_run(
         self,
@@ -899,7 +899,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.cache_config.enc_dec_block_num,
         )
         if num_running_requests is not None:
-            self.tmp_seq_lens_this_time[:num_running_requests].copy_(
+            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
                 self.share_inputs["seq_lens_this_time"][:num_running_requests], False
             )
 
