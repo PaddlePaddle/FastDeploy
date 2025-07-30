@@ -171,7 +171,7 @@ class Config:
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
-        architectures = self.model_config.architectures
+        architectures = self.model_config.architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
         else:

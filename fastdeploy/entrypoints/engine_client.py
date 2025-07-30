@@ -46,7 +46,7 @@ class EngineClient:
         reasoning_parser=None,
         data_parallel_size=1,
     ):
-        architectures = ModelConfig(model_name_or_path).architectures
+        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
         else:
