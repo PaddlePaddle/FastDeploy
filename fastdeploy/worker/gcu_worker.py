@@ -123,7 +123,8 @@ class GcuWorker(WorkerBase):
         """
         # 1. Warm up model
         # NOTE(gongshaotian): may be not need warm_up at this place
-
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
         # 2. Triger cuda grpah capture
         self.model_runner.capture_model()
 

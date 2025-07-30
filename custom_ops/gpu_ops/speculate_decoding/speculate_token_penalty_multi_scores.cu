@@ -180,7 +180,7 @@ void token_penalty_multi_scores_kernel(
     int64_t token_num = shape[0];
     int64_t length = shape[1];
     int64_t length_id = pre_ids.shape()[1];
-    int64_t length_bad_words = bad_tokens.shape()[0];
+    int64_t length_bad_words = bad_tokens.shape()[1];
 
     int64_t end_length = eos_token_id.shape()[0];
 
