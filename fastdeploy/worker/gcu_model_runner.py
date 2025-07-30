@@ -26,6 +26,10 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.utils import (
+    profile_run_guard,
+    sot_warmup_guard,
+)
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
@@ -79,8 +83,10 @@ class GCUModelRunner(ModelRunnerBase):
             self.sampler = SpeculativeSampler(fd_config)
 
         # Cuda Graph
+        self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
+        self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
@@ -264,6 +270,14 @@ class GCUModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
+            if request.get("bad_words_token_ids") is not None:
+                bad_words_len = len(request.get("bad_words_token_ids"))
+                if bad_words_len > 0:
+                    self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                    self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                        request.get("bad_words_token_ids"), dtype="int64"
+                    )
+
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
@@ -376,7 +390,8 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
-        self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype="int64")
+        self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
+        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
@@ -505,6 +520,9 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
+        # Update bad tokens len
+        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+
         # Initialize forward meta data
         self.initialize_forward_meta()
 
@@ -522,7 +540,7 @@ class GCUModelRunner(ModelRunnerBase):
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
             min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"],
+            bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=20 if self.enable_logprob else None,
         )
@@ -851,6 +869,17 @@ class GCUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    @sot_warmup_guard(True)
+    def sot_warmup(self) -> None:
+        start_time = time.perf_counter()
+        for batch_size in self.sot_warmup_sizes:
+            self._dummy_run(
+                num_tokens=self.parallel_config.max_num_batched_tokens,
+                batch_size=batch_size,
+            )
+            logger.info(f"SOT warmup the model with the batch size:{batch_size}")
+        logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
+
     def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
         """
         Get the index of the request that needs to be skipped during execution.
@@ -1041,6 +1070,7 @@ class GCUModelRunner(ModelRunnerBase):
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
+    @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 

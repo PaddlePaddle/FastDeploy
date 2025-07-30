@@ -57,10 +57,11 @@ class RolloutModelConfig:
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
         graph_optimization_config: str = None,
+        early_stop_config: str = None,
         local_rank: int = 0,
     ):
         # Required parameters
-        self.model_name_or_path = model_name_or_path
+        self.model = model_name_or_path
         self.max_model_len = max_model_len
         self.tensor_parallel_size = tensor_parallel_size
         self.dynamic_load_weight = dynamic_load_weight
@@ -100,6 +101,7 @@ class RolloutModelConfig:
         self.enable_logprob = enable_logprob
         self.graph_optimization_config = graph_optimization_config
         self.local_rank = local_rank
+        self.early_stop_config = early_stop_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())
