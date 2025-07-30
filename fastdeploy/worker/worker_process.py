@@ -514,6 +514,12 @@ def parse_args():
         help="expert parallel size",
     )
     parser.add_argument(
+        "--data_parallel_size",
+        type=int,
+        default=1,
+        help="data parallel size",
+    )
+    parser.add_argument(
         "--enable_expert_parallel",
         action="store_true",
         help="enable expert parallel",
