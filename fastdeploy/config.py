@@ -19,7 +19,8 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from enum import Enum
+from typing import Literal, Optional, Union
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -650,6 +651,14 @@ class EarlyStopConfig:
             argument = self.enable_early_stop
 
 
+class LoadChoices(str, Enum):
+    """LoadChoices"""
+
+    DEFAULT = "default"
+    # only support qwen3-bf16 now
+    NEW_LOADER = "new_loader"
+
+
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
@@ -666,6 +675,7 @@ class LoadConfig:
         self,
         args,
     ):
+        self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None

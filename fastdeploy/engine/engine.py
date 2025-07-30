@@ -1089,6 +1089,7 @@ class LLMEngine:
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --load_choices {self.cfg.load_choices}"
         )
 
         worker_append_flag = {
