@@ -129,7 +129,7 @@ class DataProcessor:
         self.image_end = self.IMG_END
         self.video_start = self.VID_START
         self.video_end = self.VID_END
-        self.image_patch_id = self.tokenizer.convert_tokens_to_ids("<|IMAGE_PLACEHOLDER|>")
+        self.image_patch_id = 151655  # 使用配置文件中定义的image_token_id
         self.image_start_id = self.tokenizer.convert_tokens_to_ids(self.image_start)
         self.video_start_id = self.tokenizer.convert_tokens_to_ids(self.video_start)
         self.sep_token_id = self.tokenizer.convert_tokens_to_ids(self.sep_token)

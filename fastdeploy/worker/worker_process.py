@@ -99,12 +99,19 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
-        tokenizer = ErnieBotTokenizer.from_pretrained(
-            fd_config.parallel_config.model_name_or_path,
-            model_max_length=fd_config.parallel_config.max_model_len,
-            padding_side="right",
-            use_fast=False,
-        )
+
+        if fd_config.model_config.model_type == "qwen2_5_vl":
+            
+            # Use correct tokenizer class for Qwen2.5-VL model
+            from fastdeploy.model_executor.models.qwen2_5_vl.mix_qwen2_5_tokenizer import MIXQwen2_5_Tokenizer
+            tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(fd_config.model_config.model_name_or_path)
+        else:
+            tokenizer = ErnieBotTokenizer.from_pretrained(
+                fd_config.parallel_config.model_name_or_path,
+                model_max_length=fd_config.parallel_config.max_model_len,
+                padding_side="right",
+                use_fast=False,
+            )
         tokenizer.ignored_index = -100
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.unk_token
@@ -115,8 +122,21 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
         vision_config.dtype = fd_config.model_config.dtype
         # vision_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
         # vision_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        fd_config.model_config.im_patch_id = tokenizer.get_vocab()["<|IMAGE_PLACEHOLDER|>"]
-        fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
+        if fd_config.model_config.model_type == "qwen2_5_vl":
+            # 从模型配置中获取image_token_id
+            fd_config.model_config.im_patch_id = fd_config.model_config.image_token_id
+        else:
+            fd_config.model_config.im_patch_id = tokenizer.get_vocab()["<|IMAGE_PLACEHOLDER|>"]
+        
+        # 检查tokenizer中是否存在</think> token
+        vocab = tokenizer.get_vocab()
+        if "</think>" in vocab:
+            fd_config.model_config.think_end_id = vocab["</think>"]
+        else:
+            # 如果不存在则设置为None或合适的默认值
+            fd_config.model_config.think_end_id = None
+            logger.warning("Token '</think>' not found in tokenizer vocabulary")
+            
         fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
 
 
