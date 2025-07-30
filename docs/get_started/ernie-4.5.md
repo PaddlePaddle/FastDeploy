@@ -1,6 +1,7 @@
 # Deploy ERNIE-4.5-300B-A47B Model
 
 This document explains how to deploy the ERNIE-4.5 model. Before starting the deployment, please ensure that your hardware environment meets the following requirements:
+
 - GPU Driver >= 535
 - CUDA >= 12.3
 - CUDNN >= 9.5

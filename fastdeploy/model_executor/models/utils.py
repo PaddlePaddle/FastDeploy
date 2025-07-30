@@ -24,7 +24,7 @@ import random
 import re
 import struct
 from functools import partial
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional, Union
 
 import numpy as np
 import paddle
@@ -40,8 +40,49 @@ from paddleformers.utils.env import (
 from paddleformers.utils.log import logger
 from tqdm import tqdm
 
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import get_tensor
+
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
+
+
+def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
+    if param_attr_map is None:
+        return
+    for key, value in param_attr_map.items():
+        setattr(param, key, value)
+
+
+def default_weight_loader(fd_config: FDConfig) -> None:
+    """Default weight loader"""
+
+    def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
+        """fn"""
+        try:
+            output_dim = getattr(param, "output_dim", None)
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1 if output_dim else 0
+                size = loaded_weight.get_shape()[dim]
+                block_size = size // fd_config.parallel_config.tensor_parallel_size
+                shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
+                shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+                if output_dim:
+                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
+                else:
+                    loaded_weight = loaded_weight[shard_offset:shard_size, ...]
+            loaded_weight = get_tensor(loaded_weight)
+
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+
+            param.copy_(loaded_weight, False)
+        except Exception:
+            raise
+
+    return fn
 
 
 class LayerIdPlaceholder(str, enum.Enum):

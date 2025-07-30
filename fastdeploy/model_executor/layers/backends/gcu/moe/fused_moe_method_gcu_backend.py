@@ -276,7 +276,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
-        up_gate_proj_weights, down_proj_weights, _ = layer.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,

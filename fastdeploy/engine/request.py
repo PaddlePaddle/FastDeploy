@@ -105,6 +105,7 @@ class Request:
         # Multi-modal related
         self.multimodal_inputs = multimodal_inputs
         self.multimodal_data = multimodal_data
+        self.multimodal_img_boundaries = None
 
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier
@@ -117,6 +118,7 @@ class Request:
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
         self.idx = None
+        self.need_prefill_tokens = self.prompt_token_ids_len
 
     @classmethod
     def from_dict(cls, d: dict):

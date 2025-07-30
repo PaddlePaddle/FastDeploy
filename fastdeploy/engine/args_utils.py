@@ -19,15 +19,17 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
-from fastdeploy.config import CacheConfig
-from fastdeploy.engine.config import (
-    Config,
+from fastdeploy.config import (
+    CacheConfig,
+    EarlyStopConfig,
     GraphOptimizationConfig,
+    LoadConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
     TaskOption,
 )
+from fastdeploy.engine.config import Config
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import FlexibleArgumentParser
 
@@ -314,6 +316,23 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    enable_early_stop: bool = False
+    """
+    Flag to enable early stop. Default is False (disabled).
+    """
+
+    early_stop_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for early stop.
+    """
+
+    load_choices: str = "default"
+    """The format of the model weights to load.
+        Options include:
+        - "default": default loader.
+        - "new_loader": new  loader.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -465,6 +484,18 @@ class EngineArgs:
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
         )
+        model_group.add_argument(
+            "--enable-early-stop",
+            action="store_true",
+            default=EngineArgs.enable_early_stop,
+            help="Enable early stopping during generation.",
+        )
+        model_group.add_argument(
+            "--early-stop-config",
+            type=json.loads,
+            default=EngineArgs.early_stop_config,
+            help="the config for early stop.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -517,6 +548,16 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
+        )
+
+        # Load group
+        load_group = parser.add_argument_group("Load Configuration")
+        load_group.add_argument(
+            "--load_choices",
+            type=str,
+            default=EngineArgs.load_choices,
+            help="The format of the model weights to load.\
+                 default/new_loader.",
         )
 
         # CacheConfig parameters group
@@ -758,24 +799,14 @@ class EngineArgs:
         """
         return cls(**{field.name: getattr(args, field.name) for field in dataclass_fields(cls)})
 
-    def create_model_config(self) -> ModelConfig:
-        """
-        Create and return a ModelConfig object based on the current settings.
-        """
-        return ModelConfig(
-            model_name_or_path=self.model,
-            config_json_file=self.model_config_name,
-            quantization=self.quantization,
-            dynamic_load_weight=self.dynamic_load_weight,
-            load_strategy=self.load_strategy,
-        )
-
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
+        speculative_args = asdict(self)
         if self.speculative_config is not None:
-            return SpeculativeConfig(**self.speculative_config)
-        else:
-            return SpeculativeConfig()
+            for k, v in self.speculative_config.items():
+                speculative_args[k] = v
+
+        return SpeculativeConfig(speculative_args)
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
@@ -801,31 +832,33 @@ class EngineArgs:
 
         return SchedulerConfig(**params)
 
-    def create_parallel_config(self) -> ParallelConfig:
-        """
-        Create and return a ParallelConfig object based on the current settings.
-        """
-        return ParallelConfig(
-            tensor_parallel_size=self.tensor_parallel_size,
-            enable_expert_parallel=self.enable_expert_parallel,
-            data_parallel_size=self.data_parallel_size,
-            enable_custom_all_reduce=self.enable_custom_all_reduce,
-        )
-
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
         Create and retuan a GraphOptimizationConfig object based on the current settings.
         """
+        graph_optimization_args = asdict(self)
         if self.graph_optimization_config is not None:
-            return GraphOptimizationConfig(**self.graph_optimization_config)
-        else:
-            return GraphOptimizationConfig()
+            for k, v in self.graph_optimization_config.items():
+                graph_optimization_args[k] = v
+        return GraphOptimizationConfig(graph_optimization_args)
+
+    def create_early_stop_config(self) -> EarlyStopConfig:
+        """
+        Create and retuan an EarlyStopConfig object based on the current settings.
+        """
+        early_stop_args = asdict(self)
+        if self.early_stop_config is not None:
+            for k, v in self.early_stop_config.items():
+                early_stop_args[k] = v
+        return EarlyStopConfig(early_stop_args)
 
     def create_engine_config(self) -> Config:
         """
         Create and return a Config object based on the current settings.
         """
-        model_cfg = self.create_model_config()
+        all_dict = asdict(self)
+        model_cfg = ModelConfig(all_dict)
+
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
         if self.max_num_batched_tokens is None:
@@ -833,18 +866,23 @@ class EngineArgs:
                 self.max_num_batched_tokens = 2048
             else:
                 self.max_num_batched_tokens = self.max_model_len
+
+        all_dict = asdict(self)
+        all_dict["model_cfg"] = model_cfg
+        cache_cfg = CacheConfig(all_dict)
+        load_cfg = LoadConfig(all_dict)
+        parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
         speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
 
+        early_stop_cfg = self.create_early_stop_config()
+        early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
+
         assert not (
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
-
-        all_dict = asdict(self)
-        all_dict["model_cfg"] = model_cfg
-        cache_cfg = CacheConfig(all_dict)
 
         return Config(
             model_name_or_path=self.model,
@@ -852,7 +890,8 @@ class EngineArgs:
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
             cache_config=cache_cfg,
-            parallel_config=self.create_parallel_config(),
+            load_config=load_cfg,
+            parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
             tensor_parallel_size=self.tensor_parallel_size,
             max_num_seqs=self.max_num_seqs,
@@ -874,4 +913,6 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob=self.enable_logprob,
+            early_stop_config=early_stop_cfg,
+            load_choices=self.load_choices,
         )
