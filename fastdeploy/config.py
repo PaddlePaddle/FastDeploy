@@ -73,7 +73,13 @@ class ErnieArchitectures:
 
 
 PRETRAINED_INIT_CONFIGURATION = {
+    "top_p": 1.0,
+    "temperature": 1.0,
     "rope_theta": 10000.0,
+    "penalty_score": 1.0,
+    "frequency_score": 0.0,
+    "presence_score": 0.0,
+    "min_length": 1,
     "num_key_value_heads": -1,
     "start_layer_index": 0,
     "moe_num_shared_experts": 0,
@@ -101,19 +107,7 @@ class ModelConfig:
         self,
         args,
     ):
-        self.max_stop_seqs_num = 5
-        self.stop_seqs_max_len = 8
-
-        # NOTE(gongshaotain): form _load_model_init_val()
-        self.top_p = 1.0
-        self.temperature = 1.0
-        self.rope_theta = 10000.0
-        self.penalty_score = 1.0
-        self.frequency_score = 0.0
-        self.presence_score = 0.0
-        self.min_length = 1
-        self.model_name_or_path = ""
-
+        self.model = ""
         self.is_quantized = False
         self.max_model_len = 0
         self.dtype = ""
@@ -121,13 +115,13 @@ class ModelConfig:
         self.enable_mm = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
-
+        self.quantization = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
-        assert self.model_name_or_path != ""
-        pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
+        assert self.model != ""
+        pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
         # set attribute from pretrained_config
@@ -148,6 +142,64 @@ class ModelConfig:
         self.ori_vocab_size = self.vocab_size
         if ErnieArchitectures.contains_ernie_arch(self.architectures):
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+
+        self.is_unified_ckpt = check_unified_ckpt(self.model)
+
+        self.override_name_from_config()
+        self.read_from_env()
+
+    def override_name_from_config(self):
+        """
+        Override attribute names from the exported model's configuration.
+        """
+
+        if not self.is_unified_ckpt and hasattr(self, "infer_model_mp_num"):
+            self.tensor_parallel_size = self.infer_model_mp_num
+            del self.infer_model_mp_num
+
+        if hasattr(self, "num_hidden_layers"):
+            if hasattr(self, "remove_tail_layer"):
+                if self.remove_tail_layer is True:
+                    self.num_hidden_layers -= 1
+                elif isinstance(self.remove_tail_layer, int):
+                    self.num_hidden_layers -= self.remove_tail_layer
+
+        if not hasattr(self, "mla_use_absorb"):
+            self.mla_use_absorb = False
+
+    def read_from_env(self):
+        """
+        Read configuration information from environment variables and update the object's attributes.
+
+        If an attribute is not present or is an empty string in the environment variables, use the default value.
+        """
+        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+
+        def reset_config_value(key, value):
+            if not hasattr(self, key.lower()):
+                if os.getenv(key, None):
+                    value = eval(os.getenv(key))
+                    logger.info(f"Get parameter `{key}` = {value} from environment.")
+                else:
+                    logger.info(f"Parameter `{key}` will use default value {value}.")
+                setattr(self, key.lower(), value)
+
+        reset_config_value("COMPRESSION_RATIO", 1.0)
+        reset_config_value("ROPE_THETA", 10000)
+
+    def _get_download_model(self, model_name, model_type="default"):
+        # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
+        pass
+
+    def print(self):
+        """
+        Print all configuration information.
+        """
+        logger.info("Model Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class ParallelConfig:
@@ -173,7 +225,6 @@ class ParallelConfig:
         From old wersion worker args
         TODO(gongshaotian): Reclassify
         """
-        self.model_name_or_path: str = "./output"
         self.max_num_seqs: int = 34
         # Set default block num for profile run
         self.total_block_num: int = 2000
@@ -383,7 +434,7 @@ class GraphOptimizationConfig:
             - With dyncmic graph backend: ...
             - With static grpah backend: WIP
         """
-        self.sot_warmup_sizes: Optional[list[int]] = []
+        self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
         self.use_cudagraph: bool = False
         """Sizes to capture cudagraph.
@@ -516,6 +567,74 @@ class GraphOptimizationConfig:
             argument = self.use_cudagraph
 
 
+class EarlyStopConfig:
+    def __init__(
+        self,
+        args,
+    ):
+        """
+        Early Stop Configuration class.
+
+        Attributes:
+            window_size: size of the window
+            threshold: trigger early stop when the ratio of probs exceeds the threshold
+        """
+        """enable to use early stop"""
+        self.enable_early_stop: bool = False
+        """strategy for early stop, the strategy lists are ['repetition']"""
+        self.strategy: str = "repetition"
+        """ the maximum length of verify window for early stop """
+        self.window_size: int = 3000
+        """ the probs threshold for early stop """
+        self.threshold: float = 0.99
+
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+        self.check_legality_parameters()
+
+    def to_json_string(self):
+        """
+        Convert early_stop_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
+    def __str__(self) -> str:
+        return self.to_json_string()
+
+    def check_legality_parameters(
+        self,
+    ) -> None:
+        """Check the legality of parameters passed in from the command line"""
+        if self.enable_early_stop is not None:
+            assert isinstance(
+                self.enable_early_stop, bool
+            ), "In early stop config, type of enable_early_stop must is bool."
+        if self.window_size is not None:
+            assert isinstance(self.window_size, int), "In early stop config, type of window_size must be int."
+            assert self.window_size > 0, "window_size must large than 0"
+        if self.threshold is not None:
+            assert isinstance(self.threshold, float), "In early stop config, type of threshold must be float."
+            assert self.threshold >= 0 and self.threshold <= 1, "threshold must between 0 and 1"
+
+    def update_enable_early_stop(self, argument: bool):
+        """
+        Unified user specifies the enable_early_stop parameter through two methods,
+        '--enable-early-stop' and '--early-stop-config'
+        """
+        if self.enable_early_stop is None:
+            # User only set '--enable-early-stop'
+            self.enable_early_stop = argument
+        else:
+            # User both set '--enable-early-stop' and '--early-stop-config'
+            if self.enable_early_stop is False and argument is True:
+                raise ValueError(
+                    "Invalid parameter: Cannot set ---enable-early-stop and --early-stop-config '{\"enable_early_stop\":false}' simultaneously."
+                )
+            argument = self.enable_early_stop
+
+
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
@@ -609,7 +728,7 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
-            if hasattr(self.model_cfg, "quantization_config"):
+            if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
             if (
                 hasattr(self.model_cfg, "num_key_value_heads")
@@ -631,7 +750,7 @@ class CacheConfig:
             else:
                 byte_size = 2
             self.each_token_cache_space = int(
-                self.model_cfg.num_layers * kv_num_head * self.model_cfg.head_dim * byte_size
+                self.model_cfg.num_hidden_layers * kv_num_head * self.model_cfg.head_dim * byte_size
             )
             self.bytes_per_block = int(self.each_token_cache_space * self.block_size)
             self.bytes_per_layer_per_block = int(
@@ -725,6 +844,7 @@ class FDConfig:
     load_config: LoadConfig = field(default=None, init=True)
     quant_config: Optional[QuantConfigBase] = None
     graph_opt_config: Optional[GraphOptimizationConfig] = None
+    early_stop_config: Optional[EarlyStopConfig] = None
     decoding_config: DecodingConfig = field(default=None, init=True)  # type: ignore
     cache_config: CacheConfig = field(default=None, init=True)  # type: ignore
 

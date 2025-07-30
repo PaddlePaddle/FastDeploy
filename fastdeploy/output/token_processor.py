@@ -344,6 +344,7 @@ class TokenProcessor:
                     first_token_time=time.time() - task.inference_start_time,
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
+                    request_start_time=task.arrival_time,
                 )
 
                 self._record_first_token_metrics(task, current_time)
@@ -476,6 +477,7 @@ class TokenProcessor:
                     first_token_time=time.time() - task.inference_start_time,
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
+                    request_start_time=task.arrival_time,
                 )
 
                 self._record_first_token_metrics(task, current_time)

@@ -90,7 +90,8 @@ class SamplingParams:
     min_p: float = 0.0
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = None
-    stop_token_ids: Optional[Union[List[List[int]], List[int]]] = None
+    stop_token_ids: Optional[List[int]] = None
+    stop_seqs_len: Optional[int] = None
     max_tokens: Optional[int] = None
     reasoning_max_tokens: Optional[int] = None
     min_tokens: int = 1

@@ -70,9 +70,10 @@ class XpuWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Optimizes the inference graph using the specified optimization options.
+        Perform the warm-up and the graph optimization
         """
-        logger.warn("XPU current could not graph optimize and warm up model")
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
 
     def determine_available_memory(self) -> int:
         """
