@@ -43,7 +43,12 @@ from fastdeploy.model_executor.layers.attention.ops import (
     pre_cache_len_concat,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
-from fastdeploy.model_executor.ops.gpu import fill_encoder_decoder_res
+from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import fill_encoder_decoder_res
+else:
+    fill_encoder_decoder_res = None
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
