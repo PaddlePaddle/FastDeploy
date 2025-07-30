@@ -181,6 +181,12 @@ public:
   typedef paddle::bfloat16 data_t;
 };
 
+template <> class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
+public:
+  using DataType = cutlass::float_e4m3_t;             
+  using data_t = paddle::float8_e4m3fn;       
+};
+
 template <> class PDTraits<paddle::DataType::INT8> {
 public:
   typedef int8_t DataType;

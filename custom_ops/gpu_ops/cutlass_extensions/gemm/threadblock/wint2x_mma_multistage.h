@@ -612,15 +612,15 @@ public:
       this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
       ++this->warp_tile_iterator_A_;
 
-      // dequantizes next warp-tile
-      warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                   pipe_state.warp_frag_code_scale_,
-                                   pipe_state.warp_frag_code_zp_,
-                                   pipe_state.warp_frag_super_scale_,
-                                   pipe_state.warp_loaded_frag_B_,
-                                   pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
-                                   ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
-                                   (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
+      // // dequantizes next warp-tile
+      // warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+      //                              pipe_state.warp_frag_code_scale_,
+      //                              pipe_state.warp_frag_code_zp_,
+      //                              pipe_state.warp_frag_super_scale_,
+      //                              pipe_state.warp_loaded_frag_B_,
+      //                              pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
+      //                              ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
+      //                              (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
       // Execute the current warp-tile of MMA operations
       if constexpr (Detail::kStagedAccumulation) {
@@ -728,6 +728,8 @@ public:
     this->warp_tile_iterator_A_.set_kgroup_index(0);
     this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[0]);
     ++this->warp_tile_iterator_A_;
+
+    CUTLASS_TRACE_DEVICE(" Test now in mma dataflow");
 
     // Dequantize B to in register
     warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,

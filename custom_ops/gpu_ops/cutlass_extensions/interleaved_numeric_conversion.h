@@ -703,7 +703,8 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
 template <typename T, int N>
 struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
 {
-    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value,
+    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value
+        || platform::is_same<T, cutlass::float_e4m3_t>::value,
         "T must be fp16 or bf16");
 
     static constexpr int kVecWidth = 16;

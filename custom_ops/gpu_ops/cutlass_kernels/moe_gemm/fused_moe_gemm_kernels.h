@@ -24,7 +24,8 @@
 
 namespace phi {
 
-template <typename T, /*The type used for activations/scales/compute*/
+template <typename InType,
+          typename OutType,
           typename WeightQuantTraits /* The quant traits for the MoE weights */>
 class MoeGemmRunner {
  public:
@@ -33,11 +34,11 @@ class MoeGemmRunner {
 
   MoeGemmRunner();
 
-  void moe_gemm_bias_act(const T* A,
+  void moe_gemm_bias_act(const InType* A,
                          const WeightType* B,
-                         const T* weight_scales,
-                         const T* biases,
-                         T* C,
+                         const OutType* weight_scales,
+                         const OutType* biases,
+                         OutType* C,
                          int64_t* total_rows_before_expert,
                          int64_t total_rows,
                          int64_t tune_total_rows,
@@ -48,10 +49,10 @@ class MoeGemmRunner {
                          std::string activation_type,
                          cudaStream_t stream);
 
-  void moe_gemm(const T* A,
+  void moe_gemm(const InType* A,
                 const WeightType* B,
-                const T* weight_scales,
-                T* C,
+                const OutType* weight_scales,
+                OutType* C,
                 int64_t* total_rows_before_expert,
                 int64_t total_rows,
                 int64_t tune_total_rows,
@@ -63,11 +64,11 @@ class MoeGemmRunner {
 
  private:
   template <typename EpilogueTag>
-  void dispatch_to_arch(const T* A,
+  void dispatch_to_arch(const InType* A,
                         const WeightType* B,
-                        const T* weight_scales,
-                        const T* biases,
-                        T* C,
+                        const OutType* weight_scales,
+                        const OutType* biases,
+                        OutType* C,
                         int64_t* total_rows_before_expert,
                         int64_t total_rows,
                         int64_t gemm_n,
@@ -79,11 +80,11 @@ class MoeGemmRunner {
                         int* occupancy = nullptr);
 
   template <typename EpilogueTag>
-  void run_gemm(const T* A,
+  void run_gemm(const InType* A,
                 const WeightType* B,
-                const T* weight_scales,
-                const T* biases,
-                T* C,
+                const OutType* weight_scales,
+                const OutType* biases,
+                OutType* C,
                 int64_t* total_rows_before_expert,
                 int64_t total_rows,
                 int64_t tune_total_rows,

@@ -46,6 +46,7 @@
 #include "cutlass/arch/memory_sm75.h"
 #include "cutlass/arch/mma_sm75.h"
 #include "cutlass/arch/mma_sm80.h"
+#include "cutlass/arch/mma_sm89.h"
 // #include "cutlass_kernels/w4a8_moe/cutlass_extensions/arch/mma_sm80.h"
 
 #include "cutlass/gemm/gemm.h"

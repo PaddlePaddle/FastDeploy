@@ -147,8 +147,9 @@ struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlig
     kStages, Operator, SharedMemoryClear>
 {
 public:
-    static_assert(platform::is_same<ElementA, half_t>::value || platform::is_same<ElementA, bfloat16_t>::value,
-        "Element A must be fp16 or bf16");
+    static_assert(platform::is_same<ElementA, half_t>::value || platform::is_same<ElementA, bfloat16_t>::value
+            || platform::is_same<ElementA, float_e4m3_t>::value,
+        "Element A must be fp8, fp16 or bf16");
 
     static_assert(platform::is_same<ElementB, uint2b_t>::value,
         "Element B must be uint2b_t");
