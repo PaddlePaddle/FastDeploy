@@ -74,7 +74,7 @@ class ParallelConfig:
 class CommitConfig:
     """
     Configuration for tracking version information from version.txt
-
+r
     Attributes:
         fastdeploy_commit: Full FastDeploy git commit hash
         paddle_version: PaddlePaddle version string
@@ -179,6 +179,7 @@ class Config:
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
         reasoning_parser: str = None,
+        tool_parser: str = None,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_logprob: bool = False,
@@ -254,6 +255,7 @@ class Config:
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
         self.reasoning_parser = reasoning_parser
+        self.tool_parser = tool_parser
         self.graph_optimization_config = graph_optimization_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace

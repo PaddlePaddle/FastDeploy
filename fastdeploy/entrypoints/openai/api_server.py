@@ -25,6 +25,7 @@ import zmq
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -99,6 +100,8 @@ async def lifespan(app: FastAPI):
 
     if args.tokenizer is None:
         args.tokenizer = args.model
+    if args.tool_parser_plugin:
+        ToolParserManager.import_tool_parser(args.tool_parser_plugin)
     if current_process().name != "MainProcess":
         pid = os.getppid()
     else:

@@ -238,15 +238,30 @@ class OpenAIServingChat:
                             response_logprobs=top_logprobs,
                             request_top_logprobs=request.top_logprobs,
                         )
-
-                    previous_num_tokens += len(output["token_ids"])
-                    delta_message = DeltaMessage(
+                    if self.engine_client.data_processor.tool_parser:
+                        tool_delta_message = output["tool_delta_message"]
+                        if tool_delta_message is None:
+                            if res["finished"]:
+                                delta_message = DeltaMessage(
+                                    content=delta_text, 
+                                    reasoning_content=output.get("reasoning_content"), \
+                                    prompt_token_ids=None,
+                                    completion_token_ids=None, 
+                                    tool_calls=None,
+                                )
+                            else:
+                                continue
+                        else:
+                            delta_message = tool_delta_message
+                    else:
+                        delta_message = DeltaMessage(
                         content=delta_text,
                         reasoning_content=output.get("reasoning_content"),
                         prompt_token_ids=None,
                         completion_token_ids=None,
-                        tool_calls=output.get("tool_call_content", []),
+                        tool_calls=None,
                     )
+                    previous_num_tokens += len(output["token_ids"])
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -406,7 +421,7 @@ class OpenAIServingChat:
             role="assistant",
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call_content"),
+            tool_calls=output.get("tool_call"),
             prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
             completion_token_ids=(completion_token_ids if enable_return_token_ids else None),
         )

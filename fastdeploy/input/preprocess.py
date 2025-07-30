@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional
 from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.config import ModelConfig
 from fastdeploy.reasoning import ReasoningParserManager
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 
 
 class InputPreprocessor:
@@ -48,6 +49,7 @@ class InputPreprocessor:
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         enable_mm: bool = False,
+        tool_parser: str = None,
     ) -> None:
 
         self.model_name_or_path = model_name_or_path
@@ -68,8 +70,11 @@ class InputPreprocessor:
             DataProcessor or MultiModalRegistry.Processor (Union[DataProcessor, MultiModalRegistry.Processor]): 数据处理器。
         """
         reasoning_parser_obj = None
+        tool_parser_obj = None
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
+        if self.tool_parser:
+            tool_parser_obj = ToolParserManager.get_tool_parser(self.tool_parser)
         architectures = ModelConfig({"model": self.model_name_or_path}).architectures[0]
         if not self.enable_mm:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
@@ -78,6 +83,7 @@ class InputPreprocessor:
                 self.processor = DataProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj
                 )
             else:
                 from fastdeploy.input.ernie_processor import ErnieProcessor
@@ -85,6 +91,7 @@ class InputPreprocessor:
                 self.processor = ErnieProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj
                 )
         else:
             if not architectures.startswith("Ernie4_5_VLMoeForConditionalGeneration"):
