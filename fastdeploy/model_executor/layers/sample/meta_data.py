@@ -44,5 +44,7 @@ class SamplingMetadata:
     top_k: Optional[paddle.Tensor] = None
     min_p: Optional[paddle.Tensor] = None
     max_num_logprobs: Optional[int] = None
+    enable_early_stop: Optional[int] = False
+    stop_flags: Optional[paddle.Tensor] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
