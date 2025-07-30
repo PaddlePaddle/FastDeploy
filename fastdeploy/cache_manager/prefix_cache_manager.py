@@ -168,7 +168,7 @@ class PrefixCacheManager:
                 + f" --device_id {int(device_ids[i])}"
                 + f" --rank {i}"
                 + f" --splitwise_role {self.splitwise_role}"
-                + f" --num_layers {cache_config.model_cfg.num_layers}"
+                + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                 + f" --head_dim {cache_config.model_cfg.head_dim}"
                 + f" --kv_num_head {kv_num_head}"
                 + f" --mp_num {tensor_parallel_size}"

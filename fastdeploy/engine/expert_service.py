@@ -50,9 +50,10 @@ class ExpertService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
-        end_pos = ((local_data_parallel_id + 1) * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
-        self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
+        start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % cfg.worker_num_per_node
+        end_pos = start_pos + self.cfg.tensor_parallel_size
+        if cfg.splitwise_role != "mixed":
+            self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
         self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
         self.cfg.disaggregate_info = None
@@ -78,11 +79,13 @@ class ExpertService:
             cfg.splitwise_role,
             local_data_parallel_id,
         )
-
-        if len(self.cfg.cache_config.pd_comm_port) == 1:
-            self.cfg.cache_config.pd_comm_port[0] = int(self.cfg.cache_config.pd_comm_port[0]) + local_data_parallel_id
-        else:
-            self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
+        if cfg.splitwise_role != "mixed":
+            if len(self.cfg.cache_config.pd_comm_port) == 1:
+                self.cfg.cache_config.pd_comm_port[0] = (
+                    int(self.cfg.cache_config.pd_comm_port[0]) + local_data_parallel_id
+                )
+            else:
+                self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
 
         self.split_connector = SplitwiseConnector(
             self.cfg,
@@ -119,15 +122,16 @@ class ExpertService:
         start_time = time.time()
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
-
-        self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
-            cache_config=self.cfg.cache_config,
-            tensor_parallel_size=self.cfg.tensor_parallel_size,
-            device_ids=self.cfg.local_device_ids,
-            pod_ip=self.cfg.master_ip,
-            engine_worker_queue_port=self.cfg.engine_worker_queue_port,
-            pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}",
-        )
+        if self.cfg.splitwise_role != "mixed":
+            self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
+                cache_config=self.cfg.cache_config,
+                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                device_ids=self.cfg.local_device_ids,
+                pod_ip=self.cfg.pod_ips[0],
+                engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+                pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}",
+            )
+            self.split_mode_get_tasks()
 
         self.insert_task_to_worker_thread = threading.Thread(target=self._insert_task_to_worker, args=())
         self.insert_task_to_worker_thread.daemon = True
@@ -137,8 +141,6 @@ class ExpertService:
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(local_data_parallel_id + int(self.cfg.engine_worker_queue_port))
 
         self.token_processor.run()
-
-        self.split_mode_get_tasks()
 
         self.cfg.init_cache_info()
 
@@ -321,13 +323,13 @@ class ExpertService:
                 else:
                     is_prefill = True
             self.token_processor.number_of_input_tokens += tasks[i].prompt_token_ids_len
-
-        self.split_connector.send_cache_infos(tasks, current_id)
+        if is_decode or is_prefill:
+            self.split_connector.send_cache_infos(tasks, current_id)
         for task in tasks:
             task.infer_start_time = time.time()
         if not is_decode:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
-            if not is_prefill:
+            if not is_prefill and self.cfg.cache_config.enable_chunked_prefill:
                 if not self.cfg.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
