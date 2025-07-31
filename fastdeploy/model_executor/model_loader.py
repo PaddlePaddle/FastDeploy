@@ -44,6 +44,7 @@ MODEL_CLASSES = {
     "DeepseekV3ForCausalLM": DeepSeekV3PretrainedModel,
     "Ernie4_5_VLMoeForConditionalGeneration": Ernie4_5_VLPretrainedModel,
     "Qwen2_5_VLMoeForConditionalGeneration": Qwen2_5_VLPreTrainedModel,
+    "Qwen2_5_VLForConditionalGeneration": Qwen2_5_VLPreTrainedModel,
 }
 
 
