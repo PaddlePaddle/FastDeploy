@@ -28,6 +28,7 @@ from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
     DeviceConfig,
+    EarlyStopConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -101,7 +102,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
         tokenizer = ErnieBotTokenizer.from_pretrained(
-            fd_config.parallel_config.model_name_or_path,
+            fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
             padding_side="right",
             use_fast=False,
@@ -440,7 +441,7 @@ def parse_args():
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument(
         "-m",
-        "--model_name_or_path",
+        "--model",
         type=str,
         default="./output",
         help="model dir",
@@ -513,6 +514,12 @@ def parse_args():
         help="expert parallel size",
     )
     parser.add_argument(
+        "--data_parallel_size",
+        type=int,
+        default=1,
+        help="data parallel size",
+    )
+    parser.add_argument(
         "--enable_expert_parallel",
         action="store_true",
         help="enable expert parallel",
@@ -566,6 +573,19 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
+    parser.add_argument(
+        "--early_stop_config",
+        type=json.loads,
+        default=None,
+        help="Configuration of early stop.",
+    )
+
+    parser.add_argument(
+        "--load_choices",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/new_loader.",
+    )
 
     args = parser.parse_args()
     return args
@@ -608,6 +628,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
+
+    early_stop_config = EarlyStopConfig(args.early_stop_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -680,6 +702,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
+        early_stop_config=early_stop_config,
         cache_config=cache_config,
     )
     update_fd_config_for_mm(fd_config)
