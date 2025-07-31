@@ -214,8 +214,8 @@ class EngineClient:
             top_logprobs = data.get("top_logprobs")
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
-        else:
-            raise ValueError("Invalid type for 'logprobs': expected bool or int.")
+        elif logprobs:
+            raise ValueError("Invalid type for 'logprobs'")
 
         # enable_logprob
         if top_logprobs is not None:
