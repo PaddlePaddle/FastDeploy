@@ -56,6 +56,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --port 8801 \
        --metrics-port 8802 \
        --engine-worker-queue-port 8803 \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
        --scheduler-name global \
        --scheduler-ttl 900 \
        --scheduler-host "127.0.0.1" \
@@ -63,7 +64,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-db 0 \
        --scheduler-password "" \
        --scheduler-topic "default" \
-       --scheduler-min-load_score 3 \
+       --scheduler-min-load-score 3 \
        --scheduler-load-shards-num 1
 ```
 

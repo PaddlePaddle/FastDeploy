@@ -48,17 +48,13 @@ class AppendAttentionMetadata(AttentionMetadata):
     AppendAttentionMetadata
     """
 
-    max_len_kv: paddle.Tensor = None
-    set_max_lengths: int = -1
     encoder_batch_ids: paddle.Tensor = None
     encoder_tile_ids_per_batch: paddle.Tensor = None
     encoder_num_blocks: paddle.Tensor = None
     kv_batch_ids: paddle.Tensor = None
     kv_tile_ids_per_batch: paddle.Tensor = None
     kv_num_blocks: paddle.Tensor = None
-    decoder_batch_ids: paddle.Tensor = None
-    decoder_tile_ids_per_batch: paddle.Tensor = None
-    decoder_num_blocks: paddle.Tensor = None
+    max_len_kv: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
@@ -66,8 +62,6 @@ class AppendAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: int = -1
-    decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
@@ -89,6 +83,8 @@ class AppendAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
     ) -> None:
         """
         AppendAttentionBackend __init__
@@ -110,9 +106,12 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
+        self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 32768))
+        self.encoder_block_shape_q: int = encoder_block_shape_q
+        self.decoder_block_shape_q: int = decoder_block_shape_q
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 
@@ -126,8 +125,6 @@ class AppendAttentionBackend(AttentionBackend):
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = AppendAttentionMetadata()
-        metadata.encoder_block_shape_q = 64
-        metadata.decoder_block_shape_q = 16
         metadata.max_partition_size = self.max_partition_size
         metadata.encoder_max_partition_size = self.max_seq_len
         metadata._dtype = paddle.get_default_dtype()
@@ -148,18 +145,18 @@ class AppendAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,  # will copy to buffer
-            metadata.decoder_tile_ids_per_batch,  # will copy to buffer
-            metadata.decoder_num_blocks,
             metadata.max_len_kv,
-            metadata.set_max_lengths,
         ) = get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            metadata.encoder_block_shape_q,
-            metadata.decoder_block_shape_q,
-            self.num_heads // self.kv_num_heads,
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
+            forward_meta.decoder_num_blocks_cpu,
+            forward_meta.max_len_tensor_cpu,
+            self.encoder_block_shape_q,
+            self.decoder_block_shape_q,
+            self.group_size,
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
@@ -181,8 +178,6 @@ class AppendAttentionBackend(AttentionBackend):
             )
 
         self.attention_metadata: AttentionMetadata = metadata
-        forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
-        forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -249,10 +244,10 @@ class AppendAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            forward_meta.decoder_batch_ids,  # from buffer
-            forward_meta.decoder_tile_ids_per_batch,  # from buffer
-            metadata.decoder_num_blocks,
-            metadata.set_max_lengths,
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
+            forward_meta.decoder_num_blocks_cpu,
+            forward_meta.max_len_tensor_cpu,
             metadata.max_len_kv,
             metadata.rotary_embs,
             metadata.attn_mask,
@@ -275,8 +270,8 @@ class AppendAttentionBackend(AttentionBackend):
             getattr(layer, "quant_max_bound", 0.0),
             getattr(layer, "quant_min_bound", 0.0),
             getattr(layer, "out_scale", -1.0),
-            metadata.encoder_block_shape_q,
-            metadata.decoder_block_shape_q,
+            self.encoder_block_shape_q,
+            self.decoder_block_shape_q,
             metadata.max_partition_size,
             metadata.encoder_max_partition_size,
             self.speculate_max_draft_token_num + 1,
