@@ -63,6 +63,7 @@ class FusedMoE(nn.Layer):
         routed_scaling_factor: float = 1.0,
         layer_idx: int = -1,
         moe_tag: str = "",
+        redundant_table_manger: RedundantExpertManger = None,
         weight_key_map: dict = {},
     ):
         """
@@ -118,15 +119,8 @@ class FusedMoE(nn.Layer):
             # now, no quant method(w_fp16 a_fp16) can't get from quant_config, we will optimize it in future
             self.quant_method = get_moe_method()
 
-        self.redundant_table_manger = None
+        self.redundant_table_manger = redundant_table_manger
         if self.ep_size > 1:
-            if fd_config.model_config.enable_redundant_experts is True:
-                self.redundant_table_manger = RedundantExpertManger(
-                    n_routed_experts=fd_config.model_config.moe_num_experts,
-                    num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                    redundant_experts_num=fd_config.model_config.redundant_experts_num,
-                    ep_size=self.ep_size,
-                )
             self.quant_method.init_ep(self)
 
         if fd_config.load_config.dynamic_load_weight:
@@ -386,7 +380,7 @@ class FusedMoE(nn.Layer):
             self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
 
         if self.fd_config.model_config.is_quantized:
-            if getattr(self.fd_config.quant_config, "is_permuted", True):
+            if getattr(self.fd_config.quant_config, "is_permuted", False):
                 self.quant_method.process_prequanted_weights(self, state_dict)
             else:
                 self.quant_method.create_weights(self, state_dict)
