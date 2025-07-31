@@ -228,7 +228,7 @@ class OpenAIServingChat:
                     delta_text = output["text"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[LogProbs] = None
-                    if output_top_logprobs is not None:
+                    if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
@@ -459,8 +459,6 @@ class OpenAIServingChat:
                 response_logprobs=top_logprobs,
                 request_top_logprobs=request_top_logprobs,
             )
-            if step_logprobs_res is None:
-                raise ValueError("logprobs parse failed!!!")
             if logprobs_res is None:
                 logprobs_res = step_logprobs_res
             else:
