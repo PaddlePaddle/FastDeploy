@@ -98,7 +98,7 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
     {"role": "user", "content": "How old are you"}
   ],
   "top_p": 0.8,
-  "top_k": 50
+  "top_k": 20
 }'
 ```
 
