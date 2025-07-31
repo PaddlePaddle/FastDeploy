@@ -21,10 +21,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 For more usage methods of the command line during service deployment, refer to [Parameter Descriptions](../parameters.md).
 
-
 ## Chat Completion API
 FastDeploy provides a Chat Completion API that is compatible with the OpenAI protocol, allowing user requests to be sent directly using OpenAI's request method.
-
 
 ### Sending User Requests
 
@@ -89,7 +87,7 @@ model: Optional[str] = "default"
 
 frequency_penalty: Optional[float] = None
 # Frequency penalty coefficient, reducing the probability of generating the same token repeatedly (`>1.0` suppresses repetition, `<1.0` encourages repetition, default `None` disables).
- 
+
 logprobs: Optional[bool] = False
 # Whether to return the log probabilities of each generated token, used for debugging or analysis.
 
@@ -131,71 +129,68 @@ metadata: Optional[dict] = None
 
 ```
 
-
 ### Additional Parameters Added by FastDeploy
 
-> Note:  
-When sending requests using curl, the following parameters can be used directly;  
-When sending requests using openai.Client, these parameters need to be placed in the ` extra_body` parameter, e.g. `extra_body={"chat_template_kwargs": {"enable_thinking":True}, "include_stop_str_in_output": True}`.
+> Note:
+When sending requests using curl, the following parameters can be used directly;
+When sending requests using openai.Client, these parameters need to be placed in the `extra_body` parameter, e.g. `extra_body={"chat_template_kwargs": {"enable_thinking":True}, "include_stop_str_in_output": True}`.
 
 The following sampling parameters are supported.
 ```python
-top_k: Optional[int] = None  
+top_k: Optional[int] = None
 # Limits the consideration to the top K tokens with the highest probability at each generation step, used to control randomness (default None means no limit).
 
-min_p: Optional[float] = None  
+min_p: Optional[float] = None
 # Nucleus sampling threshold, only retaining tokens whose cumulative probability exceeds min_p (default None means disabled).
 
-min_tokens: Optional[int] = None  
+min_tokens: Optional[int] = None
 # Forces a minimum number of tokens to be generated, avoiding premature truncation (default None means no limit).
 
-include_stop_str_in_output: Optional[bool] = False  
+include_stop_str_in_output: Optional[bool] = False
 # Whether to include the stop string content in the output (default False, meaning output is truncated when a stop string is encountered).
 
-bad_words: Optional[List[str]] = None  
+bad_words: Optional[List[str]] = None
 # List of forbidden words (e.g., sensitive words) that the model should avoid generating (default None means no restriction).
 
-repetition_penalty: Optional[float] = None  
+repetition_penalty: Optional[float] = None
 # Repetition penalty coefficient, reducing the probability of repeating already generated tokens (`>1.0` suppresses repetition, `<1.0` encourages repetition, default None means disabled).
 ```
 
-
 The following extra parameters are supported:
 ```python
-chat_template_kwargs: Optional[dict] = None  
+chat_template_kwargs: Optional[dict] = None
 # Additional parameters passed to the chat template, used for customizing dialogue formats (default None).
 
-reasoning_max_tokens: Optional[int] = None  
+reasoning_max_tokens: Optional[int] = None
 # Maximum number of tokens to generate during reasoning (e.g., CoT, chain of thought) (default None means using global max_tokens).
 
-structural_tag: Optional[str] = None  
+structural_tag: Optional[str] = None
 # Structural tag, used to mark specific structures of generated content (such as JSON, XML, etc., default None).
 
-guided_json: Optional[Union[str, dict, BaseModel]] = None  
+guided_json: Optional[Union[str, dict, BaseModel]] = None
 # Guides the generation of content conforming to JSON structure, can be a JSON string, dictionary, or Pydantic model (default None).
 
-guided_regex: Optional[str] = None  
+guided_regex: Optional[str] = None
 # Guides the generation of content conforming to regular expression rules (default None means no restriction).
 
-guided_choice: Optional[List[str]] = None  
+guided_choice: Optional[List[str]] = None
 # Guides the generation of content selected from a specified candidate list (default None means no restriction).
 
-guided_grammar: Optional[str] = None  
+guided_grammar: Optional[str] = None
 # Guides the generation of content conforming to grammar rules (such as BNF) (default None means no restriction).
 
-return_token_ids: Optional[bool] = None  
+return_token_ids: Optional[bool] = None
 # Whether to return the token IDs of the generation results instead of text (default None means return text).
 
-prompt_token_ids: Optional[List[int]] = None  
+prompt_token_ids: Optional[List[int]] = None
 # Directly passes the token ID list of the prompt, skipping the text encoding step (default None means using text input).
 
-max_streaming_response_tokens: Optional[int] = None  
+max_streaming_response_tokens: Optional[int] = None
 # Maximum number of tokens returned at a time during streaming output (default None means no limit).
 
-disable_chat_template: Optional[bool] = False  
+disable_chat_template: Optional[bool] = False
 # Whether to disable chat template rendering, using raw input directly (default False means template is enabled).
 ```
-
 
 ### Differences in Return Fields
 
@@ -266,7 +261,6 @@ curl -X POST "http://0.0.0.0:8188/v1/completions" \
 }'
 ```
 
-
 Here is an example of sending a user request using a Python script:
 
 ```python
@@ -287,82 +281,80 @@ For an explanation of the OpenAI protocol, refer to the [OpenAI Completion API](
 
 ### Compatible OpenAI Parameters
 ```python
-model: Optional[str] = "default"  
+model: Optional[str] = "default"
 # Specifies the model name or version to use, defaulting to `"default"` (which may point to the base model).
 
-prompt: Union[List[int], List[List[int]], str, List[str]]  
+prompt: Union[List[int], List[List[int]], str, List[str]]
 # Input prompt, supporting multiple formats:
 #   - `str`: Plain text prompt (e.g., `"Hello, how are you?"`).
 #   - `List[str]`: Multiple text segments (e.g., `["User:", "Hello!", "Assistant:", "Hi!"]`).
 #   - `List[int]`: Directly passes a list of token IDs (e.g., `[123, 456]`).
 #   - `List[List[int]]`: List of multiple token ID lists (e.g., `[[123], [456, 789]]`).
 
-best_of: Optional[int] = None  
+best_of: Optional[int] = None
 # Generates `best_of` candidate results and returns the highest-scoring one (requires `n=1`).
 
-frequency_penalty: Optional[float] = None  
+frequency_penalty: Optional[float] = None
 # Frequency penalty coefficient, reducing the probability of generating the same token repeatedly (`>1.0` suppresses repetition, `<1.0` encourages repetition).
 
-logprobs: Optional[int] = None  
+logprobs: Optional[int] = None
 # Returns the log probabilities of each generated token, can specify the number of candidates to return.
 
-max_tokens: Optional[int] = None  
+max_tokens: Optional[int] = None
 # Maximum number of tokens to generate (including input and output), no default limit (restricted by the model's context window).
 
-presence_penalty: Optional[float] = None  
+presence_penalty: Optional[float] = None
 # Presence penalty coefficient, reducing the probability of generating new topics (unseen topics) (`>1.0` suppresses new topics, `<1.0` encourages new topics).
 ```
 
-
 ### Additional Parameters Added by FastDeploy
 
-> Note:  
-When sending requests using curl, the following parameters can be used directly;  
-When sending requests using openai.Client, these parameters need to be placed in the ` extra_body` parameter, e.g. `extra_body={"chat_template_kwargs": {"enable_thinking":True}, "include_stop_str_in_output": True}`.
+> Note:
+When sending requests using curl, the following parameters can be used directly;
+When sending requests using openai.Client, these parameters need to be placed in the `extra_body` parameter, e.g. `extra_body={"chat_template_kwargs": {"enable_thinking":True}, "include_stop_str_in_output": True}`.
 
 The following sampling parameters are supported.
 ```python
-top_k: Optional[int] = None  
+top_k: Optional[int] = None
 # Limits the consideration to the top K tokens with the highest probability at each generation step, used to control randomness (default None means no limit).
 
-min_p: Optional[float] = None  
+min_p: Optional[float] = None
 # Nucleus sampling threshold, only retaining tokens whose cumulative probability exceeds min_p (default None means disabled).
 
-min_tokens: Optional[int] = None  
+min_tokens: Optional[int] = None
 # Forces a minimum number of tokens to be generated, avoiding premature truncation (default None means no limit).
 
-include_stop_str_in_output: Optional[bool] = False  
+include_stop_str_in_output: Optional[bool] = False
 # Whether to include the stop string content in the output (default False, meaning output is truncated when a stop string is encountered).
 
-bad_words: Optional[List[str]] = None  
+bad_words: Optional[List[str]] = None
 # List of forbidden words (e.g., sensitive words) that the model should avoid generating (default None means no restriction).
 
-repetition_penalty: Optional[float] = None  
+repetition_penalty: Optional[float] = None
 # Repetition penalty coefficient, reducing the probability of repeating already generated tokens (`>1.0` suppresses repetition, `<1.0` encourages repetition, default None means disabled).
 ```
 
-
 The following extra parameters are supported:
 ```python
-guided_json: Optional[Union[str, dict, BaseModel]] = None  
+guided_json: Optional[Union[str, dict, BaseModel]] = None
 # Guides the generation of content conforming to JSON structure, can be a JSON string, dictionary, or Pydantic model (default None).
 
-guided_regex: Optional[str] = None  
+guided_regex: Optional[str] = None
 # Guides the generation of content conforming to regular expression rules (default None means no restriction).
 
-guided_choice: Optional[List[str]] = None  
+guided_choice: Optional[List[str]] = None
 # Guides the generation of content selected from a specified candidate list (default None means no restriction).
 
-guided_grammar: Optional[str] = None  
+guided_grammar: Optional[str] = None
 # Guides the generation of content conforming to grammar rules (such as BNF) (default None means no restriction).
 
-return_token_ids: Optional[bool] = None  
+return_token_ids: Optional[bool] = None
 # Whether to return the token IDs of the generation results instead of text (default None means return text).
 
-prompt_token_ids: Optional[List[int]] = None  
+prompt_token_ids: Optional[List[int]] = None
 # Directly passes the token ID list of the prompt, skipping the text encoding step (default None means using text input).
 
-max_streaming_response_tokens: Optional[int] = None  
+max_streaming_response_tokens: Optional[int] = None
 # Maximum number of tokens returned at a time during streaming output (default None means no limit).
 ```
 
@@ -406,4 +398,3 @@ CompletionResponseStreamChoice:
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
 
 ```
-

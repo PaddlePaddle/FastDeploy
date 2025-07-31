@@ -361,7 +361,7 @@ class CompletionRequest(BaseModel):
     guided_regex: Optional[str] = None
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
-    
+
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[List[int]] = None
@@ -484,14 +484,14 @@ class ChatCompletionRequest(BaseModel):
 
     # doc: begin-chat-completion-sampling-params
     top_k: Optional[int] = None
-    min_p: Optional[float] = None 
+    min_p: Optional[float] = None
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     # doc: end-chat-completion-sampling-params
-    
+
     # doc: start-completion-extra-params
     chat_template_kwargs: Optional[dict] = None
     reasoning_max_tokens: Optional[int] = None
@@ -506,8 +506,6 @@ class ChatCompletionRequest(BaseModel):
     max_streaming_response_tokens: Optional[int] = None
     disable_chat_template: Optional[bool] = False
     # doc: end-chat-completion-extra-params
-    
-    
 
     def to_dict_for_infer(self, request_id=None):
         """

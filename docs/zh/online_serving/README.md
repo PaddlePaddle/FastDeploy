@@ -21,7 +21,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 服务部署时的命令行更多使用方式参考[参数说明](../parameters.md)。
 
-
 ## Chat Completion API
 FastDeploy 接口兼容 OpenAI 的 Chat Completion API，用户可以通过 OpenAI 协议发送用户请求。
 
@@ -88,7 +87,7 @@ model: Optional[str] = "default"
 
 frequency_penalty: Optional[float] = None
 # 频率惩罚系数，降低重复生成相同 token 的概率（`>1.0` 抑制重复，`<1.0` 鼓励重复，默认 `None` 禁用）。
- 
+
 logprobs: Optional[bool] = False
 # 是否返回每个生成 token 的对数概率（log probabilities），用于调试或分析。
 
@@ -130,69 +129,67 @@ metadata: Optional[dict] = None
 
 ```
 
-
 ### FastDeploy 增加额外参数
 
-> 注：   
-使用 curl 命令发送请求时， 可以直接使用以下参数；   
+> 注：
+使用 curl 命令发送请求时， 可以直接使用以下参数；
 使用openai.Client 发送请求时，需要使用将以下参数放入 `extra_body` 参数中， 如：`extra_body={"chat_template_kwargs": {"enable_thinking":True}, "include_stop_str_in_output": True}`。
 
 额外采样参数的支持如下：
 ```python
-top_k: Optional[int] = None  
+top_k: Optional[int] = None
 # 限制每一步生成时只考虑概率最高的 K 个 token，用于控制随机性（默认 None 表示不限制）。
 
-min_p: Optional[float] = None  
+min_p: Optional[float] = None
 # 核采样（nucleus sampling）阈值，只保留概率累计超过 min_p 的 token（默认 None 表示禁用）。
 
-min_tokens: Optional[int] = None  
+min_tokens: Optional[int] = None
 # 强制生成的最小 token 数，避免过早截断（默认 None 表示不限制）。
 
-include_stop_str_in_output: Optional[bool] = False  
+include_stop_str_in_output: Optional[bool] = False
 # 是否在输出中包含停止符（stop string）的内容（默认 False，即遇到停止符时截断输出）。
 
-bad_words: Optional[List[str]] = None  
+bad_words: Optional[List[str]] = None
 # 禁止生成的词汇列表（例如敏感词），模型会避免输出这些词（默认 None 表示不限制）。
 
-repetition_penalty: Optional[float] = None  
+repetition_penalty: Optional[float] = None
 # 重复惩罚系数，降低已生成 token 的重复概率（>1.0 抑制重复，<1.0 鼓励重复，默认 None 表示禁用）。
 ```
 其他参数的支持如下：
 ```python
-chat_template_kwargs: Optional[dict] = None  
+chat_template_kwargs: Optional[dict] = None
 # 传递给聊天模板（chat template）的额外参数，用于自定义对话格式（默认 None）。
 
-reasoning_max_tokens: Optional[int] = None  
+reasoning_max_tokens: Optional[int] = None
 # 推理（如 CoT, 思维链）过程中生成的最大 token 数（默认 None 表示使用全局 max_tokens）。
 
-structural_tag: Optional[str] = None  
+structural_tag: Optional[str] = None
 # 结构化标签，用于标记生成内容的特定结构（如 JSON、XML 等，默认 None）。
 
-guided_json: Optional[Union[str, dict, BaseModel]] = None  
+guided_json: Optional[Union[str, dict, BaseModel]] = None
 # 引导生成符合 JSON 结构的内容，可以是 JSON 字符串、字典或 Pydantic 模型（默认 None）。
 
-guided_regex: Optional[str] = None  
+guided_regex: Optional[str] = None
 # 引导生成符合正则表达式规则的内容（默认 None 表示不限制）。
 
-guided_choice: Optional[List[str]] = None  
+guided_choice: Optional[List[str]] = None
 # 引导生成内容从指定的候选列表中选择（默认 None 表示不限制）。
 
-guided_grammar: Optional[str] = None  
+guided_grammar: Optional[str] = None
 # 引导生成符合语法规则（如 BNF）的内容（默认 None 表示不限制）。
 
-return_token_ids: Optional[bool] = None  
+return_token_ids: Optional[bool] = None
 # 是否返回生成结果的 token ID 而非文本（默认 None 表示返回文本）。
 
-prompt_token_ids: Optional[List[int]] = None  
+prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
-max_streaming_response_tokens: Optional[int] = None  
+max_streaming_response_tokens: Optional[int] = None
 # 流式输出时每次返回的最大 token 数（默认 None 表示不限制）。
 
-disable_chat_template: Optional[bool] = False  
+disable_chat_template: Optional[bool] = False
 # 是否禁用聊天模板渲染，直接使用原始输入（默认 False 表示启用模板）。
 ```
-
 
 ### 返回字段差异
 
@@ -263,7 +260,6 @@ curl -X POST "http://0.0.0.0:8188/v1/completions" \
 }'
 ```
 
-
 使用 Python 脚本发送用户请求示例如下：
 
 ```python
@@ -284,80 +280,79 @@ print(response.choices[0].text)
 
 ### 兼容OpenAI 参数
 ```python
-model: Optional[str] = "default"  
+model: Optional[str] = "default"
 # 指定使用的模型名称或版本，默认值为 `"default"`（可能指向基础模型）。
 
-prompt: Union[List[int], List[List[int]], str, List[str]]  
+prompt: Union[List[int], List[List[int]], str, List[str]]
 # 输入提示，支持多种格式：
 #   - `str`: 纯文本提示（如 `"Hello, how are you?"`）。
 #   - `List[str]`: 多段文本（如 `["User:", "Hello!", "Assistant:", "Hi!"]`）。
 #   - `List[int]`: 直接传入 token ID 列表（如 `[123, 456]`）。
 #   - `List[List[int]]`: 多段 token ID 列表（如 `[[123], [456, 789]]`）。
 
-best_of: Optional[int] = None  
+best_of: Optional[int] = None
 # 生成 `best_of` 个候选结果，然后返回其中评分最高的一个（需配合 `n=1` 使用）。
 
-frequency_penalty: Optional[float] = None  
+frequency_penalty: Optional[float] = None
 # 频率惩罚系数，降低重复生成相同 token 的概率（`>1.0` 抑制重复，`<1.0` 鼓励重复）。
 
-logprobs: Optional[int] = None  
+logprobs: Optional[int] = None
 # 返回每个生成 token 的对数概率（log probabilities），可指定返回的候选数量。
 
-max_tokens: Optional[int] = None  
+max_tokens: Optional[int] = None
 # 生成的最大 token 数（包括输入和输出），默认无限制（受模型上下文窗口限制）。
 
-presence_penalty: Optional[float] = None  
+presence_penalty: Optional[float] = None
 # 存在惩罚系数，降低新主题（未出现过的话题）的生成概率（`>1.0` 抑制新话题，`<1.0` 鼓励新话题）。
 ```
 
-
 ### FastDeploy 增加额外参数
 
-> 注：   
-使用 curl 命令发送请求时， 可以直接使用以下参数；   
+> 注：
+使用 curl 命令发送请求时， 可以直接使用以下参数；
 使用openai.Client 发送请求时，需要使用将以下参数放入 `extra_body` 参数中， 如：`extra_body={"chat_template_kwargs": {"enable_thinking":True}, "include_stop_str_in_output": True}`。
 
 额外采样参数的支持如下：
 ```python
-top_k: Optional[int] = None  
+top_k: Optional[int] = None
 # 限制每一步生成时只考虑概率最高的 K 个 token，用于控制随机性（默认 None 表示不限制）。
 
-min_p: Optional[float] = None  
+min_p: Optional[float] = None
 # 核采样（nucleus sampling）阈值，只保留概率累计超过 min_p 的 token（默认 None 表示禁用）。
 
-min_tokens: Optional[int] = None  
+min_tokens: Optional[int] = None
 # 强制生成的最小 token 数，避免过早截断（默认 None 表示不限制）。
 
-include_stop_str_in_output: Optional[bool] = False  
+include_stop_str_in_output: Optional[bool] = False
 # 是否在输出中包含停止符（stop string）的内容（默认 False，即遇到停止符时截断输出）。
 
-bad_words: Optional[List[str]] = None  
+bad_words: Optional[List[str]] = None
 # 禁止生成的词汇列表（例如敏感词），模型会避免输出这些词（默认 None 表示不限制）。
 
-repetition_penalty: Optional[float] = None  
+repetition_penalty: Optional[float] = None
 # 重复惩罚系数，降低已生成 token 的重复概率（>1.0 抑制重复，<1.0 鼓励重复，默认 None 表示禁用）。
 ```
 其他参数的支持如下：
 ```python
-guided_json: Optional[Union[str, dict, BaseModel]] = None  
+guided_json: Optional[Union[str, dict, BaseModel]] = None
 # 引导生成符合 JSON 结构的内容，可以是 JSON 字符串、字典或 Pydantic 模型（默认 None）。
 
-guided_regex: Optional[str] = None  
+guided_regex: Optional[str] = None
 # 引导生成符合正则表达式规则的内容（默认 None 表示不限制）。
 
-guided_choice: Optional[List[str]] = None  
+guided_choice: Optional[List[str]] = None
 # 引导生成内容从指定的候选列表中选择（默认 None 表示不限制）。
 
-guided_grammar: Optional[str] = None  
+guided_grammar: Optional[str] = None
 # 引导生成符合语法规则（如 BNF）的内容（默认 None 表示不限制）。
 
-return_token_ids: Optional[bool] = None  
+return_token_ids: Optional[bool] = None
 # 是否返回生成结果的 token ID 而非文本（默认 None 表示返回文本）。
 
-prompt_token_ids: Optional[List[int]] = None  
+prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
-max_streaming_response_tokens: Optional[int] = None  
+max_streaming_response_tokens: Optional[int] = None
 # 流式输出时每次返回的最大 token 数（默认 None 表示不限制）。
 ```
 
