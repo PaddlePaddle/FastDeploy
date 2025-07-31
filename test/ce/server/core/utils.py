@@ -4,7 +4,7 @@
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
 import requests
-from core import base_logger
+from core import TEMPLATES, base_logger
 
 
 def build_request_payload(template_name: str, case_data: dict) -> dict:
@@ -15,7 +15,7 @@ def build_request_payload(template_name: str, case_data: dict) -> dict:
     :param template_name: 模板变量名，例如 "TOKEN_LOGPROB"
     :return: 构造后的完整请求 payload dict
     """
-    template = globals()[template_name]
+    template = TEMPLATES[template_name]
     print(template)
     final_payload = template.copy()
     final_payload.update(case_data)
