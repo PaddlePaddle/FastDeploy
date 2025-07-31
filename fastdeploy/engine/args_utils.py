@@ -31,7 +31,7 @@ from fastdeploy.config import (
     TaskOption,
 )
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import FlexibleArgumentParser
+from fastdeploy.utils import FlexibleArgumentParser, is_port_available
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -866,6 +866,10 @@ class EngineArgs:
         assert not (
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
+
+        assert is_port_available(
+            "0.0.0.0", self.engine_worker_queue_port
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,
