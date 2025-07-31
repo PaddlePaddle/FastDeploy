@@ -87,11 +87,13 @@ FastDeploy 与 OpenAI 协议的请求参数差异如下，其余请求参数会�
 - `stream_options`: Optional[StreamOptions] = None
 - `temperature`: Optional[float] = None
 - `top_p`: Optional[float] = None
-- `metadata`: Optional[dict] = None (仅在v1/chat/compeltions中支持，用于配置额外参数, 如metadata={"enable_thinking": True})
+- `extra_body`: Optional[dict] = None (仅在 v1/chat/compeltions 中支持，用于配置额外参数, 如 `extra_body={"enable_thinking": True}`)
   - `min_tokens`: Optional[int] = 1 最小生成的Token个数
   - `reasoning_max_tokens`: Optional[int] = None 思考内容最大Token数，默认与max_tokens一致
   - `enable_thinking`: Optional[bool] = True 支持深度思考的模型是否打开思考
   - `repetition_penalty`: Optional[float] = None: 直接对重复生成的token进行惩罚的系数（>1时惩罚重复，<1时鼓励重复）
+  - `return_token_ids`: Optional[bool] = False: 是否返回 token id 列表
+  - `include_stop_str_in_output`: Optional[bool] = False: 是否返回结束符
 
 > 注: 若为多模态模型 由于思考链默认打开导致输出过长，max tokens 可以设置为模型最长输出，或使用默认值。
 
@@ -101,6 +103,8 @@ FastDeploy 增加的返回字段如下：
 
 - `arrival_time`：返回所有 token 的累计耗时
 - `reasoning_content`: 思考链的返回结果
+- `prompt_token_ids`: 输入序列的 token id 列表
+- `completion_token_ids`: 输出序列的 token id 列表
 
 返回参数总览：
 
@@ -111,7 +115,7 @@ ChatCompletionStreamResponse:
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
- ChatCompletionResponseStreamChoice:
+ChatCompletionResponseStreamChoice:
     index: int
     delta: DeltaMessage
     finish_reason: Optional[Literal["stop", "length"]] = None
@@ -119,6 +123,7 @@ ChatCompletionStreamResponse:
 DeltaMessage:
     role: Optional[str] = None
     content: Optional[str] = None
-    token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[List[int]] = None
+    completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
 ```

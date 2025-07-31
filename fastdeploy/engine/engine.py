@@ -448,6 +448,7 @@ class LLMEngine:
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
+            sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
@@ -704,6 +705,8 @@ class LLMEngine:
         """
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+            if task.sampling_params.bad_words is not None:
+                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -980,7 +983,10 @@ class LLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
-            "FLAGS_hardamard_moe_block_size": 128,
+            "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
+            "FLAGS_hardamard_use_diagonal_block_matrix": int(
+                os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
+            ),
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -1041,7 +1047,7 @@ class LLMEngine:
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
-            f" --model_name_or_path {self.cfg.model_name_or_path!s}"
+            f" --model {self.cfg.model_name_or_path!s}"
             f" --device_ids {self.cfg.device_ids}"
             f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
             f" --engine_worker_queue_port {self.cfg.engine_worker_queue_port!s}"
@@ -1056,16 +1062,15 @@ class LLMEngine:
             f" --splitwise_role {self.cfg.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization {self.cfg.model_config.quantization}"
             f" --ori_vocab_size {ori_vocab_size}"
-            f" --speculative_method {self.cfg.speculative_config.method}"
-            f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
-            f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
-            f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
-            f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
+            f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --load_strategy {self.cfg.load_config.load_strategy}"
+            f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --load_choices {self.cfg.load_choices}"
         )
 
         worker_append_flag = {
@@ -1073,7 +1078,7 @@ class LLMEngine:
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
-            "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
+            "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
@@ -1194,13 +1199,14 @@ class LLMEngine:
         return True, ""
 
     def launch_pd_disaggregation_env(self):
-        # 单机逻辑
-        self.engine_worker_queue.available_prefill_instances.put(1)
-        self.split_mode_get_tasks()
-        if self.cfg.scheduler_config.name == "splitwise":
-            self.splitwise_receive_thread = threading.Thread(target=self.split_connector.start_receiver, args=())
-            self.splitwise_receive_thread.daemon = True
-            self.splitwise_receive_thread.start()
+        if self.cfg.splitwise_role != "mixed":
+            # 单机逻辑
+            self.engine_worker_queue.available_prefill_instances.put(1)
+            self.split_mode_get_tasks()
+            if self.cfg.scheduler_config.name == "splitwise":
+                self.splitwise_receive_thread = threading.Thread(target=self.split_connector.start_receiver, args=())
+                self.splitwise_receive_thread.daemon = True
+                self.splitwise_receive_thread.start()
 
         self.cfg.init_cache_info()
 
@@ -1211,10 +1217,9 @@ class LLMEngine:
             self.scheduler.start(role, host_ip, disaggregate)
 
         time.sleep(1)
-
+        expert_service_nums = self.cfg.parallel_config.data_parallel_size // self.cfg.nnode
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
             self.dp_processed = []
-            expert_service_nums = self.cfg.parallel_config.data_parallel_size // self.cfg.nnode
             for i in range(
                 1,
                 expert_service_nums,
@@ -1257,9 +1262,9 @@ class LLMEngine:
                 elif (match := re.search(r"Start load layer (\d+)", line)) or (
                     match := re.search(r"set state for layer (\d+)", line)
                 ):
-                    progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_layers
+                    progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_hidden_layers
                     self.worker_init_status["layer_loadding"] = progress
-                    if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_layers - 1:
+                    if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
                         self.worker_init_status["finished"] = True
 
         def detect_kv_cache_env():

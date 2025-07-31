@@ -235,8 +235,14 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
-    const int encoder_block_shape_q, const int decoder_block_shape_q,
-    const int group_size, const int block_size,
+    paddle::Tensor &decoder_batch_ids,          // Inplace
+    paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    const int encoder_block_shape_q,
+    const int decoder_block_shape_q,
+    const int group_size,
+    const int block_size,
     const int decoder_step_token_num);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
@@ -266,13 +272,12 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &seq_lens,
                        const paddle::Tensor &end_ids,
                        const paddle::Tensor &next_tokens,
+                       const paddle::Tensor &pre_ids,
+                       const paddle::Tensor &step_idx,
+                       const paddle::Tensor &stop_seqs,
+                       const paddle::Tensor &stop_seqs_len,
                        const bool beam_search);
 
-void GetStopFlagsMultiSeqs(
-    const paddle::Tensor &topk_ids, const paddle::Tensor &pre_ids,
-    const paddle::Tensor &step_idx, const paddle::Tensor &stop_flags,
-    const paddle::Tensor &seq_lens, const paddle::Tensor &stop_seqs,
-    const paddle::Tensor &stop_seqs_len, const paddle::Tensor &end_ids);
 
 void UpdateInputes(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &not_need_stop, // only on cpu
@@ -954,12 +959,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("set_stop_value_multi_ends", &GetStopFlagsMulti,
         "update_inputs function");
 
-  /**
-   * stop_generation_multi_stop_seqs.cu
-   * set_stop_value_multi_seqs
-   */
-  m.def("set_stop_value_multi_seqs", &GetStopFlagsMultiSeqs,
-        "update_inputs function");
 
   /**
    * update_inputs.cu

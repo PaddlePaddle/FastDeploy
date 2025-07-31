@@ -36,6 +36,7 @@ class MixQuantConfig(QuantConfigBase):
         image_moe_quant_type: str = None,
         is_channel_wise: bool = False,
         has_zero_point: bool = False,
+        is_permuted: bool = False,
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -50,6 +51,7 @@ class MixQuantConfig(QuantConfigBase):
         self.quant_max_bound = 0
         self.quant_min_bound = 0
         self.quant_round_type = 0
+        self.is_permuted = is_permuted
 
     def name(self) -> str:
         return "mix_quant"
@@ -63,14 +65,23 @@ class MixQuantConfig(QuantConfigBase):
             config.get("image_moe_quant_type", None),
             config.get("is_channel_wise", False),
             config.get("has_zero_point", False),
+            config.get("is_permuted", False),
         )
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
-                return get_quantization_config(self.image_moe_quant_type).from_config({}).get_quant_method(layer)
+                return (
+                    get_quantization_config(self.image_moe_quant_type)
+                    .from_config(layer.fd_config.quant_config)
+                    .get_quant_method(layer)
+                )
             else:
-                return get_quantization_config(self.moe_quant_type).from_config({}).get_quant_method(layer)
+                return (
+                    get_quantization_config(self.moe_quant_type)
+                    .from_config(layer.fd_config.quant_config)
+                    .get_quant_method(layer)
+                )
         elif isinstance(layer, Attention):
             if self.kv_cache_quant_type is not None:
                 return (
