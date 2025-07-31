@@ -8,18 +8,18 @@
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✓       |
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✓    |
 
-思考模型需要指定解析器,以便于对思考内容进行解析. 通过`enable_thinking=False` 参数可以关闭模型思考模式.
+思考模型需要指定解析器,以便于对思考内容进行解析. 通过 `"enable_thinking": false` 参数可以关闭模型思考模式.
 
 可以支持思考模式开关的接口:
 1. OpenAI 服务中 `/v1/chat/completions`  请求.
 2. OpenAI Python客户端中 `/v1/chat/completions`  请求.
 3. Offline 接口中 `llm.chat`请求.
 
-同时在思考模型中，支持通过```reasoning_max_tokens```控制思考内容的长度，在请求中添加```metadata={"reasoning_max_tokens": 1024}```即可。
+同时在思考模型中，支持通过 `reasoning_max_tokens` 控制思考内容的长度，在请求中添加 `"reasoning_max_tokens": 1024` 即可。
 
 ## 快速使用
-在启动模型服务时, 通过`--reasoning-parser`参数指定解析器名称.
-该解析器会解析思考模型的输出, 提取`reasoning_content`字段.
+在启动模型服务时, 通过 `--reasoning-parser` 参数指定解析器名称.
+该解析器会解析思考模型的输出, 提取 `reasoning_content` 字段.
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -43,15 +43,16 @@ curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
       {"type": "text", "text": "图中的文物属于哪个年代"}
     ]}
   ],
-  "metadata": {"enable_thinking": true}
+  "enable_thinking": true,
+  "reasoning_max_tokens": 1024
 }'
 
 ```
 
-字段`reasoning_content`包含得出最终结论的思考步骤，而`content`字段包含最终结论。
+字段 `reasoning_content` 包含得出最终结论的思考步骤，而 `content` 字段包含最终结论。
 
 ### 流式会话
-在流式会话中, `reasoning_content`字段会可以在`chat completion response chunks`中的 `delta` 中获取
+在流式会话中, `reasoning_content` 字段会可以在 `chat completion response chunks` 中的 `delta` 中获取
 
 ```python
 from openai import OpenAI
@@ -69,7 +70,10 @@ chat_response = client.chat.completions.create(
     ],
     model="vl",
     stream=True,
-    metadata={"enable_thinking": True}
+    extra_body={
+      "enable_thinking": True,
+      "reasoning_max_tokens": 1024
+    }
 )
 for chunk in chat_response:
     if chunk.choices[0].delta is not None:

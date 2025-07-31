@@ -336,7 +336,7 @@ QpStatus modify_qp_to_rts(
     return QpStatus::kSuccess;
 }
 
-static QpInfo* client_exch_dest(
+static std::shared_ptr<QpInfo> client_exch_dest(
         struct RdmaContext *ctx,
         const std::string &dst_ip,
         int port,
@@ -403,12 +403,10 @@ static QpInfo* client_exch_dest(
         return nullptr;
     }
 
-    QpInfo* rem_dest = new QpInfo();
-    if (!rem_dest) {
-        WARN("Failed to allocate memory for remote destination");
-        close(sockfd);
-        return nullptr;
-    }
+    // I think no need to check memory allocate, because once allocate failed,
+    // that's mean the process encountering OOM, let it crash then check whether
+    // the code logic has memory leak or not.
+    auto rem_dest = std::make_shared<QpInfo>();
     rem_dest->deserialize(buffer);
     return rem_dest;
 }
@@ -634,21 +632,20 @@ bool client_exchange_destinations(
     }
 
     // Exchange destination info with remote
-    struct QpInfo* temp_rem_dest = client_exch_dest(ctx, dst_ip, port, &my_dest);
-    if (!temp_rem_dest) {
+    auto rem_dest = client_exch_dest(ctx, dst_ip, port, &my_dest);
+    if (!rem_dest) {
         ERR("Failed to exchange destination info with %s:%u", dst_ip.c_str(), port);
         return false;
     }
 
-    struct QpInfo rem_dest = *temp_rem_dest;
-    LOGD("Remote address - LID: 0x%04x, QPN: 0x%06x, PSN: 0x%06x, Mtu: %u",rem_dest.lid, rem_dest.qpn, rem_dest.psn, temp_rem_dest->mtu);
+    LOGD("Remote address - LID: 0x%04x, QPN: 0x%06x, PSN: 0x%06x, Mtu: %u",
+        rem_dest->lid, rem_dest->qpn, rem_dest->psn, rem_dest->mtu);
 
     // Modify QP to RTS state
-    if (modify_qp_to_rts(ctx, ib_port, my_dest.psn, &rem_dest, gidx) != QpStatus::kSuccess) {
+    if (modify_qp_to_rts(ctx, ib_port, my_dest.psn, rem_dest.get(), gidx) != QpStatus::kSuccess) {
         ERR("Failed to modify QP 0x%x to RTS state", ctx->qp->qp_num);
         return false;
     }
-    delete temp_rem_dest;
 
     LOGD("Successfully established connection to %s:%u", dst_ip.c_str(), port);
 

@@ -256,6 +256,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/gather_idx.cu",
         "gpu_ops/get_output_ep.cc",
         "gpu_ops/get_mm_split_fuse.cc",
+        "gpu_ops/get_img_boundaries.cc",
         "gpu_ops/token_penalty_multi_scores.cu",
         "gpu_ops/token_penalty_only_once.cu",
         "gpu_ops/stop_generation.cu",

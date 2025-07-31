@@ -16,12 +16,14 @@
 
 import json
 import os
+import time
 
 import paddle
 import paddle.distributed as dist
 from fastsafetensors import SafeTensorsFileLoader, SingleGroup
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.model_utils import load_tp_checkpoint
+from paddleformers.utils.log import logger
 from safetensors import safe_open
 from tqdm import tqdm
 
@@ -30,6 +32,17 @@ from fastdeploy.model_executor.models.tp_utils import (
     check_tensor_parallel_prerequisites,
 )
 from fastdeploy.platforms import current_platform
+
+
+def measure_time(func):
+    def wrapper(*args, **kwargs):
+        time_before_load = time.time()
+        result = func(*args, **kwargs)
+        time_after_load = time.time()
+        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
+        return result
+
+    return wrapper
 
 
 def load_reordered_experts(model_path: str, key_name: str):
@@ -152,9 +165,11 @@ def safetensors_weights_iterator(
         safe_tensor_list,
         desc="Loading safetensors checkpoint shards",
     ):
-        with safe_open(st_file, framework="np") as f:
+        from paddleformers.utils.safetensors import fast_safe_open
+
+        with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
-                param = f.get_tensor(name)
+                param = f.get_slice(name)
                 yield name, param
 
 
