@@ -99,7 +99,7 @@ rm -f core*
 # pkill -9 python #流水线不执行这个
 #清空消息队列
 ipcrm --all=msg
-export ENABLE_V1_KVCACHE_SCHEDULER=True
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 export XPU_VISIBLE_DEVICES="0,1,2,3"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
