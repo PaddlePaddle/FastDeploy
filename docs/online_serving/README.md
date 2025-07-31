@@ -95,6 +95,9 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
   - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
   - `return_token_ids`: Optional[bool] = False: (whether to return token ids as a list)
   - `include_stop_str_in_output`: Optional[bool] = False: (whether to include the stop strings in output text. Defaults to False.)
+  - `top_k`: Optional[int] = None: TopK-TopP sampling parameter, refer to [Sampling Description](../features/sampling.md)
+  - `min_p`: Optional[float] = None: MinP sampling parameter, refer to [Sampling Description](../features/sampling.md)
+  - `bad_words`: Optional[List[str]] = None: List of forbidden words, refer to [Sampling Description](../features/sampling.md)
 
 > Note: For multimodal models, since the reasoning chain is enabled by default, resulting in overly long outputs, `max_tokens` can be set to the model's maximum output length or the default value can be used.
 
