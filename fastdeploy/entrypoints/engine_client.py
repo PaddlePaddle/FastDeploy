@@ -206,8 +206,8 @@ class EngineClient:
         logprobs = data.get("logprobs")
         top_logprobs = None
 
-        if isinstance(logprobs, bool):
-            if logprobs and not self.enable_logprob:
+        if isinstance(logprobs, bool) and logprobs:
+            if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
                 raise ValueError(err_msg)
@@ -218,7 +218,7 @@ class EngineClient:
             raise ValueError("Invalid type for 'logprobs'")
 
         # enable_logprob
-        if top_logprobs is not None:
+        if top_logprobs:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
