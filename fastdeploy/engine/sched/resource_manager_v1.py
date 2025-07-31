@@ -28,6 +28,7 @@ import paddle
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.utils import llm_logger
+from fastdeploy.metrics.metrics import main_process_metrics
 
 
 @dataclass
@@ -75,6 +76,7 @@ class ResourceManagerV1(ResourceManager):
         self.running: list[Request] = []
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
+        main_process_metrics.max_batch_size.set(max_num_seqs)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -98,6 +100,9 @@ class ResourceManagerV1(ResourceManager):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
+        """
+        If the request cannot be scheduled, preempt the running request one by one until it can be scheduled. Last in, first out.
+        """
         can_schedule = True
         while True:
             if not self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
@@ -201,6 +206,9 @@ class ResourceManagerV1(ResourceManager):
         return False
 
     def schedule(self):
+        """
+        Try to pull a batch of requests from the waiting queue and schedule them.
+        """
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
@@ -262,7 +270,7 @@ class ResourceManagerV1(ResourceManager):
                         request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                    else:
+                    else:  # Not enough blocks to allocate, trigger preemption
                         can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
                         if not can_schedule:
                             break
@@ -328,6 +336,9 @@ class ResourceManagerV1(ResourceManager):
                     else:
                         llm_logger.error("Unknown request status type")
             if scheduled_reqs:
+                task_used_block_num = sum([len(task.block_tables) if task else 0 for task in  self.tasks_list])
+                main_process_metrics.available_block_num.set(self.total_block_number() - task_used_block_num)
+                main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
             return scheduled_reqs
 
@@ -368,6 +379,11 @@ class ResourceManagerV1(ResourceManager):
             request.cache_info = (matched_block_num, no_cache_block_num)
             request.block_tables = common_block_ids
             request.skip_allocate = False
+
+            # Report the number of cached tokens to Prometheus metrics
+            main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
+            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
+            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
 
             if matched_token_num == request.prompt_token_ids_len:
                 request.num_computed_tokens = matched_token_num - 1

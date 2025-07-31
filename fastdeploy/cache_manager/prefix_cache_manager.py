@@ -32,6 +32,7 @@ from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal
 from fastdeploy.utils import get_logger
+from fastdeploy.metrics.metrics import main_process_metrics
 
 logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
 
@@ -105,6 +106,18 @@ class PrefixCacheManager:
             f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
             + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
         )
+
+    @property
+    def num_free_blocks(self):
+        return len(self.gpu_free_block_list) + len(self.cpu_free_block_list)
+
+    @property
+    def num_total_blocks(self):
+        return self.num_gpu_blocks + self.num_cpu_blocks
+
+    @property
+    def available_resource(self):
+        return self.num_free_blocks / self.num_total_blocks if self.num_total_blocks > 0 else 0.0
 
     def launch_cache_manager(
         self,
@@ -289,6 +302,10 @@ class PrefixCacheManager:
         heapq.heapify(self.gpu_free_block_list)
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
+        main_process_metrics.max_block_num.set(self.num_total_blocks)
+        main_process_metrics.available_resource.set(1.0)
+        
+
     def _enable_cpu_cache(self):
         """
         _enable_cpu_cache function used to enable cpu cache.
@@ -324,6 +341,8 @@ class PrefixCacheManager:
         logger.info(
             f"allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
+        main_process_metrics.free_block_num.set(self.num_free_blocks)
+        main_process_metrics.available_resource.set(self.available_resource)
         return allocated_block_ids
 
     def recycle_gpu_blocks(self, gpu_block_ids):
@@ -338,6 +357,8 @@ class PrefixCacheManager:
                 heapq.heappush(self.gpu_free_block_list, gpu_block_id)
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
+        main_process_metrics.free_block_num.set(self.num_free_blocks)
+        main_process_metrics.available_resource.set(self.available_resource)
 
     def allocate_cpu_blocks(self, num_blocks):
         """
@@ -350,6 +371,8 @@ class PrefixCacheManager:
         logger.info(
             f"allocate_cpu_blocks: {allocated_block_ids}, len(self.cpu_free_block_list) {len(self.cpu_free_block_list)}"
         )
+        main_process_metrics.free_block_num.set(self.num_free_blocks)
+        main_process_metrics.available_resource.set(self.available_resource)
         return allocated_block_ids
 
     def recycle_cpu_blocks(self, cpu_block_ids):
@@ -364,6 +387,8 @@ class PrefixCacheManager:
                 heapq.heappush(self.cpu_free_block_list, cpu_block_id)
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
+        main_process_metrics.free_block_num.set(self.num_free_blocks)
+        main_process_metrics.available_resource.set(self.available_resource)
 
     def issue_swap_task(
         self,

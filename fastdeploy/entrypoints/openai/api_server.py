@@ -199,6 +199,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
     """
     Create a chat completion for the provided prompt and parameters.
     """
+    main_process_metrics.requests_number.inc()
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
@@ -220,6 +221,7 @@ async def create_completion(request: CompletionRequest):
     """
     Create a completion for the provided prompt and parameters.
     """
+    main_process_metrics.requests_number.inc()
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
