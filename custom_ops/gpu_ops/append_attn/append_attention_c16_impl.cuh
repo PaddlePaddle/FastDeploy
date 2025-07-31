@@ -487,17 +487,17 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   T *q_base_ptr = q + q_offset;
   T *o_base_ptr_T = nullptr;
   OutT *o_base_ptr_int8 = nullptr;
-  if (num_chunks_this_seq <= 1) {
+  if (num_chunks_this_seq <= 0) {
     o_base_ptr_int8 = out + o_offset;
   } else {
     if (ENABLE_PREFILL) {
-      o_base_ptr_T = tmp_workspace + batch_id * num_chunks * q_n_stride +
+      o_base_ptr_T = tmp_workspace + batch_id * num_chunks_this_seq * q_n_stride +
                      chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
                      tid % 8 * num_elems_per_128b<T>();
     } else {
       o_base_ptr_T =
           tmp_workspace +
-          batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
+          batch_id * speculate_max_draft_token_num * num_chunks_this_seq * q_n_stride +
           chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
           tid % 8 * num_elems_per_128b<T>();
     }
@@ -676,13 +676,13 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   merge_block_res_v2<num_frags_x, num_frags_y, T>(
       o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
-  if (num_chunks_this_seq <= 1) {
+  if (num_chunks_this_seq <= 0) {
     normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
   }
 
   // write o
   // [num_frags_x, 16, num_frags_y, 16]
-  if (num_chunks_this_seq <= 1) {
+  if (num_chunks_this_seq <= 0) {
     write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
                                                     num_frags_x,
                                                     num_frags_y,
@@ -716,11 +716,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         quant_min_bound,
         in_scale,
         q_len,
-        q_n_stride * num_chunks,
+        q_n_stride * num_chunks_this_seq,
         HEAD_DIM);
   }
 
-  if (num_chunks_this_seq > 1) {
+  if (num_chunks_this_seq > 0) {
     if (wid == 0) {
 #pragma unroll
       for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
@@ -734,12 +734,12 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
           if (qo_idx - q_start_seq_id < q_len) {
             uint32_t offset;
             if (ENABLE_PREFILL) {
-              offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
+              offset = (batch_id * num_chunks_this_seq + chunk_idx) * q_num_heads +
                        qo_head_idx;
             } else {
               offset = ((batch_id * speculate_max_draft_token_num +
                          qo_idx_now / GROUP_SIZE) *
-                            num_chunks +
+                            num_chunks_this_seq +
                         chunk_idx) *
                            q_num_heads +
                        qo_head_idx;
@@ -1062,11 +1062,12 @@ void MultiQueryAppendAttention(
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
     const int num_chunks = div_up(max_dec_len, chunk_size);
+    const int num_chunks_grid = div_up(encoder_max_partition_size, chunk_size);
 
-    dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
+    dim3 grids(num_blocks_x_cpu, num_chunks_grid, kv_num_heads);
     dim3 blocks(32, num_warps);
 
-    if (num_chunks <= 1) {
+    if (num_chunks <= 0) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_warp1_4_kernel<NV_TYPE,
                                                       false,
