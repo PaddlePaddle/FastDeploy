@@ -373,6 +373,8 @@ class LLMEngine:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+
+            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
                 available_blocks=self.resource_manager.available_block_num(),
                 block_size=self.cfg.cache_config.block_size,
@@ -500,6 +502,7 @@ class LLMEngine:
             enable_thinking = kwargs.get("enable_thinking", None)
         request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
+        request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
         request.set(
             "max_tokens",

@@ -113,7 +113,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
       {"type": "text", "text": "From which era does the artifact in the image originate?"}
     ]}
   ],
-  "enable_thinking": false
+  "chat_template_kwargs":{"enable_thinking": false}
 }'
 ```
 
