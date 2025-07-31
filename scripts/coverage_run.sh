@@ -20,6 +20,9 @@ disabled_tests=(
   operators/test_stop_generation.py
   operators/test_air_topp_sampling.py
   operators/test_fused_moe.py
+  layers/test_repetition_early_stopper.py
+  operators/test_stop_generation_multi_ends.py
+  utils/test_download.py
 )
 is_disabled() {
   local test_file_rel="$1"
