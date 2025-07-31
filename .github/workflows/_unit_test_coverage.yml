@@ -147,7 +147,7 @@ jobs:
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
           fi
           unittest_result="test/failed_tests.log"
-          if [ -f ${unittest_result} ];then
+          if [ -s ${unittest_result} ];then
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
             target_path_stripped="${target_path#paddle-github-action/}"
             UNIT_TEST_RESULT_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/UnitTestResult/${unittest_result}
