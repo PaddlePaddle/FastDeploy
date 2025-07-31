@@ -23,6 +23,10 @@ FD_CPU_USE_BF16=${3:-"false"}
 # These will be translated to 90a / 100a in setup_ops.py for specific features.
 FD_BUILDING_ARCS=${4:-""}
 
+export CLANG_PATH=/host/FastDeploy/xtdk
+export XVLLM_PATH=/host/FastDeploy/xvllm
+export http_proxy=agent.baidu.com:8891
+export https_proxy=agent.baidu.com:8891
 
 # paddle distributed use to set archs
 unset PADDLE_CUDA_ARCH_LIST

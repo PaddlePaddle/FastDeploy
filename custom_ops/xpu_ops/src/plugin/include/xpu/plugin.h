@@ -139,6 +139,38 @@ template <typename TX, typename TSCALE = float, typename TY = int8_t>
 DLL_EXPORT int quant2d_per_channel(api::Context *ctx, const TX *x,
                                    const TSCALE *scale_in, TY *y,
                                    TSCALE *scale_out, int64_t m, int64_t n);
+
+DLL_EXPORT int text_image_index_out(Context* ctx,
+                                    const int* token_type_ids,  // x
+                                    int* text_index,            // y1
+                                    int* image_index,           // y2
+                                    const int64_t token_num);
+
+template <typename T>
+DLL_EXPORT int text_image_gather_scatter(api::Context* ctx,
+                                         T* input,
+                                         T* text_input,
+                                         T* image_input,
+                                         int* token_type_ids,
+                                         int* text_index,
+                                         int* image_index,
+                                         int64_t token_num,
+                                         int64_t text_token_num,
+                                         int64_t image_token_num,
+                                         int64_t hidden_size,
+                                         bool is_scatter);
+
+template <typename T>
+DLL_EXPORT int extract_text_token_output(Context* ctx,
+                                         int* max_seq_len,
+                                         int* max_seq_len_index,
+                                         int* mm_token_num_len,
+                                         int* seq_lens_this_time,
+                                         int* cu_seqlens_q,
+                                         T* score_text,
+                                         T* output,
+                                         const int bsz,
+                                         const int hidden_size);
 } // namespace plugin
 } // namespace api
 } // namespace xpu

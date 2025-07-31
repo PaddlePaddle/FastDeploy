@@ -1,0 +1,102 @@
+#include "xpu/kernel/xtdk.h"
+#include "xpu/kernel/xtdk_math.h"
+#include "xpu/kernel/xtdk_simd.h"
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+template <typename T>
+static __device__ void memset_zero(T* lm, int size) {
+    int8x64_t vy(0x00);
+    uint64_t mask = 0xFFFFFFFFFFFFFFFF;
+    for (int i = 0; i < size; i += 32) {
+        vstore_lm_int8x64_mz((int8_t*)(lm + i), vy, mask);
+    }
+    mfence_lm();
+}
+
+template <typename T>
+__global__ void extract_text_token_output(int *max_seq_len,
+                                          int *max_seq_len_index,
+                                          int *mm_token_num_len,
+                                          int *seq_lens_this_time,
+                                          int *cu_seqlens_q,
+                                          T *score_text,
+                                          T *output,
+                                          const int bsz,
+                                          const int hidden_size) {
+    int cid = core_id();
+    int ncores = core_num();
+    int nthreads = ncores * cluster_num();
+    int tid = ncores * cluster_id() + cid;
+    const int BUFSIZE = rounddown(6144 / sizeof(T), 64);
+    __simd__ T output_lm[BUFSIZE];
+    const int BSZ_BUF = 16;
+    __simd__ int seq_lens_lm[BSZ_BUF];
+    __simd__ int cu_seqlens_lm[BSZ_BUF]; 
+
+    int max_seq_len_val, max_seq_len_index_val, mm_token_num_len_val;
+    GM2LM_ASYNC(max_seq_len, &max_seq_len_val, sizeof(int));
+    GM2LM_ASYNC(max_seq_len_index, &max_seq_len_index_val, sizeof(int));
+    GM2LM(mm_token_num_len, &mm_token_num_len_val, sizeof(int));
+    
+    int bsz_start_core;
+    int bsz_end_core;
+    // core partition
+    partition(tid, nthreads, bsz, 1, &bsz_start_core, &bsz_end_core);
+    int read_len;
+    for (int bsz_index = bsz_start_core; bsz_index < bsz_end_core; bsz_index += 1) {
+      int bsz_offset = bsz_index - bsz_start_core;
+      if(bsz_offset % BSZ_BUF == 0) {
+        int64_t readm = min(bsz + 1 - bsz_index, BSZ_BUF);
+        GM2LM_ASYNC(cu_seqlens_q + bsz_index + 1, cu_seqlens_lm, sizeof(int) * readm);
+        int readn = min(bsz - bsz_index, BSZ_BUF);
+        GM2LM(seq_lens_this_time + bsz_index, seq_lens_lm, sizeof(int) * readn);
+      }
+  
+      int true_bsz = cu_seqlens_lm[bsz_offset % BSZ_BUF] - 1;
+      if (bsz_index >= max_seq_len_index_val) {
+        true_bsz = true_bsz - mm_token_num_len_val;
+      }
+      if (max_seq_len_val == mm_token_num_len_val && bsz_index == max_seq_len_index_val) {
+        memset_zero(output_lm, BUFSIZE * sizeof(T));
+        for (int j = 0; j < hidden_size; j += BUFSIZE) {
+            read_len = min(hidden_size - j, BUFSIZE);
+            LM2GM_ASYNC(output_lm, output + bsz_index * hidden_size + j, sizeof(T) * read_len);
+        }
+        mfence_lm_gm();
+      } else {
+        if (seq_lens_lm[bsz_offset % BSZ_BUF] != 0) {
+          // 复制整行数据
+          for (int j = 0; j < hidden_size; j += BUFSIZE) {
+              read_len = min(hidden_size - j, BUFSIZE);
+              GM2LM(score_text  + j + true_bsz * hidden_size, output_lm, sizeof(T) * read_len);
+              LM2GM(output_lm, output + j + bsz_index * hidden_size, sizeof(T) * read_len);
+          }
+        }
+      }
+    }
+    
+}
+
+
+#define _XPU_DEF_EXTRACT_TEXT_TOKEN_OUTPUT(T)              \
+  template __global__ void extract_text_token_output<T>(    \
+    int *max_seq_len,                                       \
+    int *max_seq_len_index,                                 \
+    int *mm_token_num_len,                                  \
+    int *seq_lens_this_time,                                \
+    int *cu_seqlens_q,                                      \
+    T *score_text,                                          \
+    T *output,                                              \
+    const int bsz,                                          \
+    const int hidden_size);
+_XPU_DEF_EXTRACT_TEXT_TOKEN_OUTPUT(float);
+
+}  // namespace plugin
+}  // namespace xpu3
+
