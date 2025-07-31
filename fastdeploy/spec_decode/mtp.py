@@ -38,6 +38,7 @@ from fastdeploy.model_executor.ops.gpu import (
     mtp_save_first_token,
     mtp_step_paddle,
     share_external_data,
+    set_data_ipc
 )
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -141,9 +142,7 @@ class MTPProposer(Proposer):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
-        if not self.parallel_config.do_profile and (
-            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
-        ):
+        if not self.parallel_config.do_profile and self.parallel_config.splitwise_role != "mixed":
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -160,7 +159,10 @@ class MTPProposer(Proposer):
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_hidden_layers):
+            for i in range(
+                self.num_main_model_layers,
+                self.num_main_model_layers + self.model_config.num_hidden_layers,
+            ):
                 self.cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
@@ -171,6 +173,15 @@ class MTPProposer(Proposer):
                     fill_value=0,
                     dtype=cache_type,
                 )
+                if self.cache_config.enable_prefix_caching:
+                    set_data_ipc(
+                        self.cache_kvs[f"key_caches_{i}"],
+                        f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}",
+                    )
+                    set_data_ipc(
+                        self.cache_kvs[f"value_caches_{i}"],
+                        f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}",
+                    )
             self.model_inputs["caches"] = list(self.cache_kvs.values())
             for value in self.cache_kvs.values():
                 del value
@@ -235,7 +246,7 @@ class MTPProposer(Proposer):
 
         self.main_model_num_gpu_blocks = num_gpu_blocks
         self.num_gpu_blocks = int(num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
-        if not (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if self.parallel_config.splitwise_role == "mixed":
             self.initialize_kv_cache()
 
         # Reset free list
