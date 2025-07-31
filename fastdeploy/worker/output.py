@@ -29,13 +29,6 @@ class Logprob(NamedTuple):
     rank: Optional[int] = None
     decoded_token: Optional[str] = None
 
-    # def to_dict(self):
-    #     return {
-    #         "logprob": self.logprob,
-    #         "rank": self.rank,
-    #         "decoded_token": self.decoded_token,
-    #     }
-
 
 # [{token_id, logprob}] for tokens sampled from the top-k
 SampleLogprobs = list[dict[int, Logprob]]

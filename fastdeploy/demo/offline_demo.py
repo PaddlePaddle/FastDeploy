@@ -17,7 +17,7 @@
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
-model_name_or_path = "/root/paddlejob/ERNIE-0.3B"
+model_name_or_path = "./models/llama-7b"
 
 # 超参设置
 sampling_params = SamplingParams(temperature=0.1, max_tokens=30, logprobs=2)
