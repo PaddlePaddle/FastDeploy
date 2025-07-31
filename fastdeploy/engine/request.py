@@ -258,6 +258,8 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "logprob": self.logprob,
+            "top_logprobs": self.top_logprobs,
             "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
