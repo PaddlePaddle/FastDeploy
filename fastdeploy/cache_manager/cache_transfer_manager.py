@@ -30,7 +30,6 @@ from fastdeploy.model_executor.ops.gpu import (
     cuda_host_alloc,
     share_external_data,
     swap_cache_all_layers,
-
 )
 from fastdeploy.utils import get_logger
 
@@ -124,11 +123,11 @@ class CacheTransferManager:
 
         cache_type = args.cache_dtype
         cache_shape = [
-                    args.num_gpu_blocks,
-                    args.kv_num_head,
-                    args.block_size,
-                    args.head_dim,
-                ]
+            args.num_gpu_blocks,
+            args.kv_num_head,
+            args.block_size,
+            args.head_dim,
+        ]
 
         for i in range(args.num_hidden_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_hidden_layers else self.num_extra_layer_gpu_blocks
@@ -161,8 +160,6 @@ class CacheTransferManager:
                 args.num_cpu_blocks * args.bytes_per_layer_per_block
             )
             self.v_dst_ptrs.append(self.cpu_cache_kvs[f"value_caches_{i}_rank{rank}"])
-
-
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(

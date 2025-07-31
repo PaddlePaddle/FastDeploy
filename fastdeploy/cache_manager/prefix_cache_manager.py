@@ -140,7 +140,6 @@ class PrefixCacheManager:
         filename = "cache_transfer_manager.py"
         py_path = os.path.join(current_dir_path, filename)
 
-
         cache_messager_processes = []
         if self.splitwise_role != "mixed":
             cache_messager_processes = self.launch_cache_messager(
@@ -165,11 +164,11 @@ class PrefixCacheManager:
         else:
             kv_num_head = cache_config.model_cfg.num_attention_heads // tensor_parallel_size
 
-
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
         for i in range(tensor_parallel_size):
-            launch_cmd = (f" {sys.executable} {py_path}"
+            launch_cmd = (
+                f" {sys.executable} {py_path}"
                 + f" --device_id {int(device_ids[i])}"
                 + f" --rank {i}"
                 + f" --num_hidden_layers {cache_config.model_cfg.num_hidden_layers}"
@@ -203,15 +202,8 @@ class PrefixCacheManager:
         cache_manager_processes.extend(cache_messager_processes)
         return cache_manager_processes
 
-    
-
-    def launch_cache_messager(self,
-        cache_config,
-        tensor_parallel_size,
-        device_ids,
-        pod_ip,
-        engine_worker_queue_port,
-        pid_suffix
+    def launch_cache_messager(
+        self, cache_config, tensor_parallel_size, device_ids, pod_ip, engine_worker_queue_port, pid_suffix
     ):
         """
         launch_cache_messager function used to initialize the cache messager.
@@ -276,8 +268,6 @@ class PrefixCacheManager:
             logger.info("Launch cache messager failed, see launch_cache_messager.log for more information")
             cache_messager_processes = None
         return cache_messager_processes
-
-
 
     def update_cache_config(self, cache_config):
         """

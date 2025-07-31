@@ -771,7 +771,6 @@ class LLMEngine:
                 current_tasks.append(cur_task)
             self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
-        
 
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)

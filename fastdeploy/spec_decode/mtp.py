@@ -37,8 +37,8 @@ from fastdeploy.model_executor.ops.gpu import (
     eagle_get_self_hidden_states,
     mtp_save_first_token,
     mtp_step_paddle,
+    set_data_ipc,
     share_external_data,
-    set_data_ipc
 )
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 

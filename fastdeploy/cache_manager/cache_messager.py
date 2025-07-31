@@ -14,20 +14,18 @@
 # limitations under the License.
 """
 
-import math
-import threading
-import time
 import argparse
+import json
+import math
+import time
+
 import numpy as np
 import paddle
-import json
-from fastdeploy.config import SpeculativeConfig
 
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
-from fastdeploy.utils import get_logger
 from fastdeploy.model_executor.ops.gpu import set_data_ipc
-
 
 
 def parse_args():
@@ -81,6 +79,7 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
 
 class CacheMessager:
     """
@@ -445,4 +444,3 @@ if __name__ == "__main__":
     print("create cache messager...")
     print(f"{args}")
     main()
-
