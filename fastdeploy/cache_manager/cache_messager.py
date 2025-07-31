@@ -43,7 +43,7 @@ def parse_args():
     )
     parser.add_argument("--rank", type=int, default=0, help="current rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
-    parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
+    parser.add_argument("--num_hidden_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--head_dim", type=int, default=1, help="model head dim")
     parser.add_argument("--kv_num_head", type=int, default=1, help="model kv num head")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
@@ -97,7 +97,7 @@ class CacheMessager:
         gpu_cache_kvs,
         rank,
         nranks,
-        num_layers,
+        num_hidden_layers,
         gpu_id=0,
         rdma_port=None,
     ):
@@ -111,7 +111,7 @@ class CacheMessager:
             gpu_cache_kvs (dict): GPU kv cache
             rank (int): current rank
             nranks (int): global rank number
-            num_layers (int): model layer number
+            num_hidden_layers (int): model layer number
             gpu_id (int, optional): GPU ID
             rdma_port (int, optional): RDMA port
 
@@ -140,13 +140,13 @@ class CacheMessager:
         print(f"splitwise role: {splitwise_role}, {transfer_protocol}" f"rank: {rank}")
 
         # 1. initialize the cache_k_ptr_list and cache_v_ptr_list
-        self.num_layers = num_layers
+        self.num_hidden_layers = num_hidden_layers
         cache_k_ptr_list = []
         cache_v_ptr_list = []
         cache_k = []
         cache_v = []
         self.messager = {}
-        for layer_idx in range(self.num_layers):
+        for layer_idx in range(self.num_hidden_layers):
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
@@ -163,7 +163,7 @@ class CacheMessager:
         if key_cache.dtype == paddle.bfloat16:
             block_bytes *= 2
         print(
-            f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
+            f"layers {num_hidden_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
             f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
         )
         self.block_bytes = block_bytes
@@ -268,7 +268,7 @@ class CacheMessager:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
                 prefilled_step_idx = step_shm_value.value[0]
-                if prefilled_layer_idx == self.num_layers - 1:
+                if prefilled_layer_idx == self.num_hidden_layers - 1:
                     time.sleep(0.001)
                     prefilled_layer_idx = layer_shm_value.value[0]
                     prefilled_step_idx = step_shm_value.value[0]
@@ -308,7 +308,7 @@ class CacheMessager:
                     src_block_ids = paddle.to_tensor(item["src_block_ids"], dtype="int32", place="cpu")
                     dest_block_ids = paddle.to_tensor(item["dest_block_ids"], dtype="int32", place="cpu")
                     if item["current_id"] < prefilled_step_idx:
-                        current_layer_idx = self.num_layers
+                        current_layer_idx = self.num_hidden_layers
                     else:
                         current_layer_idx = prefilled_layer_idx + 1
 
@@ -344,7 +344,7 @@ class CacheMessager:
                             f"avg_time per block(ms): {round(avg_time_per_block, 5)}"
                         )
                     item["layer_idx"] = current_layer_idx
-                    if item["layer_idx"] == self.num_layers:
+                    if item["layer_idx"] == self.num_hidden_layers:
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(target_id)
                         print(f"finish write cache {item['request_id']}")
@@ -373,8 +373,8 @@ def main():
     gpu_cache_k_tensors = []
     gpu_cache_v_tensors = []
 
-    for i in range(args.num_layers + num_extra_layers):
-        num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else num_extra_layer_gpu_blocks
+    for i in range(args.num_hidden_layers + num_extra_layers):
+        num_gpu_blocks = args.num_gpu_blocks if i < args.num_hidden_layers else num_extra_layer_gpu_blocks
 
         gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"] = paddle.full(
             shape=[
@@ -421,7 +421,7 @@ def main():
         gpu_cache_kvs=gpu_cache_kvs,
         rank=rank,
         nranks=args.mp_num,
-        num_layers=args.num_layers + num_extra_layers,
+        num_hidden_layers=args.num_hidden_layers + num_extra_layers,
         gpu_id=device,
         rdma_port=args.rdma_port,
     )

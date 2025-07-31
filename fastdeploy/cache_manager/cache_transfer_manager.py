@@ -42,7 +42,7 @@ def parse_args():
     parser = argparse.ArgumentParser("Cache transfer manager")
     parser.add_argument("--rank", type=int, default=0, help="current rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
-    parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
+    parser.add_argument("--num_hidden_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--head_dim", type=int, default=1, help="model head dim")
     parser.add_argument("--kv_num_head", type=int, default=1, help="model kv num head")
     parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
@@ -130,8 +130,9 @@ class CacheTransferManager:
                     args.head_dim,
                 ]
 
-        for i in range(args.num_layers + self.num_extra_layers):
-            num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
+        for i in range(args.num_hidden_layers + self.num_extra_layers):
+            num_gpu_blocks = args.num_gpu_blocks if i < args.num_hidden_layers else self.num_extra_layer_gpu_blocks
+            cache_shape[0] = num_gpu_blocks
             key_name = f"key_caches_{i}_rank{rank}.device{device}"
             value_name = f"value_caches_{i}_rank{rank}.device{device}"
             key_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -151,7 +152,7 @@ class CacheTransferManager:
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
-        for i in range(args.num_layers + self.num_extra_layers):
+        for i in range(args.num_hidden_layers + self.num_extra_layers):
             self.cpu_cache_kvs[f"key_caches_{i}_rank{rank}"] = cuda_host_alloc(
                 args.num_cpu_blocks * args.bytes_per_layer_per_block
             )
