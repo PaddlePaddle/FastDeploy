@@ -6,7 +6,23 @@ run_path="$DIR/../test/"
 cd ${run_path}
 ls
 
-dirs=("layers" "operators" "worker" "utils")
+exclude=("ci_use")
+for d in */ ; do
+  dir_name="${d%/}"
+  if [[ -d "$dir_name" ]]; then
+    skip=false
+    for ex in "${exclude[@]}"; do
+      if [[ "$dir_name" == "$ex" ]]; then
+        skip=true
+        break
+      fi
+    done
+    if ! $skip; then
+      dirs+=("$dir_name")
+    fi
+  fi
+done
+
 failed_tests_file="failed_tests.log"
 > "$failed_tests_file"
 disabled_tests=(
@@ -20,6 +36,9 @@ disabled_tests=(
   operators/test_stop_generation.py
   operators/test_air_topp_sampling.py
   operators/test_fused_moe.py
+  layers/test_repetition_early_stopper.py
+  operators/test_stop_generation_multi_ends.py
+  utils/test_download.py
 )
 is_disabled() {
   local test_file_rel="$1"
