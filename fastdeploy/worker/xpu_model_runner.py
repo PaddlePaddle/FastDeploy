@@ -357,11 +357,6 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.fd_config.parallel_config.max_num_seqs)
-        self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
-            fill_value=4,
-            dtype="int64",
-        )
 
         # Initialize attention Backend
         # Note(gonshaotian): Currently, all attention layers share one attention backend instance.
@@ -529,7 +524,6 @@ class XPUModelRunner(ModelRunnerBase):
         """Initialize all share buffers for model inputs.
         Note: In the future, we may abandon share buffers.
         """
-        self.MAX_INFER_SEED = 9223372036854775806
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
@@ -673,6 +667,7 @@ class XPUModelRunner(ModelRunnerBase):
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
             min_p=self.share_inputs["min_p"],
+            seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
@@ -911,8 +906,7 @@ class XPUModelRunner(ModelRunnerBase):
         )
 
         # 7. Updata 'infer_seed' and step_paddle()
-        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+
         step_paddle(
             self.share_inputs,
             self.cache_config.block_size,

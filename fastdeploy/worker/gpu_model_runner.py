@@ -554,7 +554,6 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Initialize all share buffers for model inputs.
         """
-        self.MAX_INFER_SEED = 9223372036854775806
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
