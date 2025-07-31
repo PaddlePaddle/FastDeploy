@@ -202,12 +202,6 @@ class EngineClient:
         if data.get("stream_options") and not data.get("stream"):
             raise ValueError("Stream options can only be defined when `stream=True`.")
 
-        # Check if logprobs is enabled and valid.
-        if not self.enable_logprob:
-            err_msg = "Logprobs is disabled, please enable it in startup config"
-            api_server_logger.error(err_msg)
-            raise ValueError(err_msg)
-
         top_logprobs = None
         if isinstance(data.get("logprobs"), bool):
             top_logprobs = data.get("top_logprobs")
@@ -215,6 +209,12 @@ class EngineClient:
             top_logprobs = data.get("logprobs")
         else:
             raise ValueError("Invalid type for 'logprobs'")
+
+        # Check if logprobs is enabled and valid.
+        if top_logprobs and not self.enable_logprob:
+            err_msg = "Logprobs is disabled, please enable it in startup config"
+            api_server_logger.error(err_msg)
+            raise ValueError(err_msg)
 
         if top_logprobs and not isinstance(top_logprobs, int):
             err_type = type(top_logprobs).__name__

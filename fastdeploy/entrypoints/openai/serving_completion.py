@@ -309,7 +309,7 @@ class OpenAIServingCompletion:
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
-                    if output_top_logprobs is not None:
+                    if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
                     choices.append(
@@ -481,10 +481,6 @@ class OpenAIServingCompletion:
                 request_top_logprobs=request_logprobs,
                 prompt_text_offset=prompt_text_offset,
             )
-            # Check if the logprobs response is valid
-            if step_logprobs_res is None:
-                raise ValueError("logprobs parse failed!!!")
-
             if logprobs_res is None:
                 logprobs_res = step_logprobs_res
             else:
