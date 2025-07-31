@@ -129,11 +129,11 @@ class OpenAIServingChat:
             if request.max_streaming_response_tokens is not None
             else (request.metadata or {}).get("max_streaming_response_tokens", 1)
         )  # dierctly passed & passed in metadata
-        enable_thinking = (
-            request.enable_thinking
-            if request.enable_thinking is not None
-            else (request.metadata or {}).get("enable_thinking")
-        )
+
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+
         include_stop_str_in_output = request.include_stop_str_in_output
 
         stream_options = request.stream_options
@@ -330,11 +330,10 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         final_res = None
-        enable_thinking = (
-            request.enable_thinking
-            if request.enable_thinking is not None
-            else (request.metadata or {}).get("enable_thinking")
-        )
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+
         include_stop_str_in_output = request.include_stop_str_in_output
 
         try:
