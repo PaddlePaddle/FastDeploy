@@ -415,7 +415,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if loaded_shard_id is None:
             loaded_weight = get_tensor(loaded_weight)
-            param = loaded_weight
+            param.copy_(loaded_weight, False)
         else:
             # 1.fused gate_up in disk
             # 2.split gate up
@@ -508,7 +508,7 @@ class QKVParallelLinear(ColumnParallelLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if loaded_shard_id is None:
             loaded_weight = get_tensor(loaded_weight)
-            param = loaded_weight
+            param.copy_(loaded_weight, False)
         else:
             # 1.fused qkv in disk
             # 2.split q k v

@@ -427,14 +427,28 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
         from fastdeploy.model_executor.models.utils import default_weight_loader
 
+        stacked_params_mapping = [
+            # (param_name, weight_name, shard_id)
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+
+        params_dict = dict(self.named_parameters())
         for loaded_weight_name, loaded_weight in weights_iterator:
-            params_dict = dict(self.named_parameters())
-            logger.info(f"loaded_weight_name: {loaded_weight_name}")
-            if loaded_weight_name not in params_dict:
-                continue
-            param = params_dict[loaded_weight_name]
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                param = params_dict[model_param_name]
+                break
+            else:
+                param = params_dict[loaded_weight_name]
+
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             weight_loader(param, loaded_weight)
+
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
