@@ -314,8 +314,8 @@ class FlashAttentionBackend(AttentionBackend):
                 v,
                 metadata.cu_seqlens_q,
                 metadata.cu_seqlens_k,
-                max_seqlen_q=metadata.set_max_lengths[0],
-                max_seqlen_k=metadata.set_max_lengths[3],
+                max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
+                max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0].reshape([-1, self.attn_outputsize_tp])
