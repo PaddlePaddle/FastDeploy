@@ -500,6 +500,7 @@ class LLMEngine:
             enable_thinking = kwargs.get("enable_thinking", None)
         request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
+        request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
         request.set(
             "max_tokens",
