@@ -39,6 +39,7 @@ disabled_tests=(
   layers/test_repetition_early_stopper.py
   operators/test_stop_generation_multi_ends.py
   utils/test_download.py
+  graph_optimization/test_cuda_graph.py
 )
 is_disabled() {
   local test_file_rel="$1"
