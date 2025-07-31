@@ -414,6 +414,8 @@ class ErnieProcessor(BaseDataProcessor):
         Update stop sequences from request.
         """
         stop_seqs = []
+        if isinstance(stop_sequences, str):
+            stop_sequences = [stop_sequences]
         for seq in stop_sequences:
             if seq != self.tokenizer.eos_token_id:
                 stop_seqs.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(seq)))

@@ -215,6 +215,16 @@ class ModelOutputData:
     """
     reasoning_index: paddle.Tensor = None
 
+    """
+        the token ids of stop sequence
+    """
+    stop_token_ids: paddle.Tensor = None
+
+    """
+        the length of stop sequence
+    """
+    stop_seqs_len: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
