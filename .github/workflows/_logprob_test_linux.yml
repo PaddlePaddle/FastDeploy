@@ -87,7 +87,7 @@ jobs:
 
           PARENT_DIR=$(dirname "$WORKSPACE")
 
-          docker run --ipc=host -i --net=host \
+          docker run --ipc=host --pid=host --net=host \
           -v $(pwd):/workspace \
           -w /workspace \
           -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
@@ -130,6 +130,7 @@ jobs:
           python3.10 lanucher.py --request_template TOKEN_LOGPROB --url http://localhost:${FD_API_PORT}/v1/chat/completions  --case ./cases/demo.yaml  --concurrency 1 --name demo --exe logprob || LOGPROB_EXIT_CODE=$?
           echo "LOGPROB_EXIT_CODE=${LOGPROB_EXIT_CODE}" > /workspace/exit_code.env
           curl -X POST http://localhost:${FLASK_PORT}/stop
+          sleep 10s
           cat *result.log
           exit 0
           '

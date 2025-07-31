@@ -11,25 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""UT for topp_sampling"""
-import numpy as np
-import paddle
+set -ex
+rm -rf log
+rm -f core*
 
-from fastdeploy.model_executor.ops.gpu import topp_sampling
+export devices=0
+export CUDA_VISIBLE_DEVICES=${devices}
+model_path=${1:-"/PATH/MODEL_PATH"}
+output_path=${2:-"/PATH/OUTPUT_MODEL"}
+for name in `env | grep -E 'PADDLE|ENDPOINT' | awk -F'=' '{print $1}'`; do
+unset ${name}
+done
+export PADDLE_TRAINER_ID=0
+export PADDLE_TRAINERS_NUM=1
+export TRAINER_INSTANCES_NUM=1
+export TRAINER_INSTANCES=`hostname -i`
+self_ip=`hostname -i`
 
-paddle.seed(2022)
-
-x = paddle.randn([4, 100000], dtype="float16")
-x = paddle.nn.functional.softmax(x)
-top_ps = paddle.to_tensor(
-    np.array(
-        [
-            0.9,
-        ]
-        * 4
-    ).astype(np.float16)
-)
-print(x)
-print(top_ps)
-out = topp_sampling(x, top_ps)
-print(out)
+python offline_w4a8.py \
+       --model_name_or_path ${model_path} \
+       --output_dir ${output_path} \
+       --safe_serialization "True"

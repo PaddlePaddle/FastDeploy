@@ -396,8 +396,6 @@ class TokenProcessor:
                     )
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
-                    result.prompt = task.prompt
-                    result.prompt_token_ids = task.prompt_token_ids
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
                     llm_logger.info(

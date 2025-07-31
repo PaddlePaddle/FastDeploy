@@ -587,12 +587,13 @@ def version():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     version_file_path = os.path.join(current_dir, "version.txt")
 
+    content = "Unknown"
     try:
         with open(version_file_path, "r") as f:
             content = f.read()
-            print(content)
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
+    return content
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
