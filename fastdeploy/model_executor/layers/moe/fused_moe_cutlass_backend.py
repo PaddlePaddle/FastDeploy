@@ -343,10 +343,12 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         up_gate_proj_expert_in_scale_key = layer.weight_key_map.get("up_gate_proj_expert_in_scale_key", None)
         down_proj_expert_in_scale_key = layer.weight_key_map.get("down_proj_expert_in_scale_key", None)
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids = layer.load_experts_weight(
-            state_dict,
-            up_gate_proj_expert_weight_key,
-            down_proj_expert_weight_key,
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            layer.load_experts_weight(
+                state_dict,
+                up_gate_proj_expert_weight_key,
+                down_proj_expert_weight_key,
+            )
         )
 
         up_gate_proj_weight_scale = []
@@ -356,7 +358,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         down_proj_in_scale = []
 
         if layer.ep_size > 1:
-            for expert_idx in range(layer.num_experts):
+            for expert_idx in ep_rank_to_expert_id_list:
                 scale_tensor = get_tensor(state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)])
                 up_gate_proj_in_scale_all_experts.append(scale_tensor)
 
@@ -507,7 +509,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids = layer.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = layer.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,

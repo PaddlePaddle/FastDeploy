@@ -6,7 +6,7 @@ run_path="$DIR/../test/"
 cd ${run_path}
 ls
 
-dirs=("layers" "operators" "worker")
+dirs=("layers" "operators" "worker" "utils")
 failed_tests_file="failed_tests.log"
 > "$failed_tests_file"
 disabled_tests=(

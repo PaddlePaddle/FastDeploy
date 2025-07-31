@@ -37,7 +37,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
-from fastdeploy.model_executor.model_loader import get_model_from_loader
+from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
     get_infer_param,
@@ -686,16 +686,13 @@ class XPUModelRunner(ModelRunnerBase):
     def load_model(self) -> None:
         """load or download model"""
         logger.info(f"Starting to load model {self.model_config.architectures[0]}")
-        time_before_load = time.perf_counter()
         # 1. Load original model
-        self.model = get_model_from_loader(fd_config=self.fd_config)
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        self.model = model_loader.load_model(fd_config=self.fd_config)
 
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
-
-        time_after_load = time.perf_counter()
-        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
 
     def get_model(self) -> nn.Layer:
         """get current model"""

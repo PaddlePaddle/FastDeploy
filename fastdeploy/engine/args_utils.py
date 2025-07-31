@@ -326,6 +326,13 @@ class EngineArgs:
     Configuration for early stop.
     """
 
+    load_choices: str = "default"
+    """The format of the model weights to load.
+        Options include:
+        - "default": default loader.
+        - "new_loader": new  loader.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -541,6 +548,16 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
+        )
+
+        # Load group
+        load_group = parser.add_argument_group("Load Configuration")
+        load_group.add_argument(
+            "--load_choices",
+            type=str,
+            default=EngineArgs.load_choices,
+            help="The format of the model weights to load.\
+                 default/new_loader.",
         )
 
         # CacheConfig parameters group
@@ -897,4 +914,5 @@ class EngineArgs:
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob=self.enable_logprob,
             early_stop_config=early_stop_cfg,
+            load_choices=self.load_choices,
         )
