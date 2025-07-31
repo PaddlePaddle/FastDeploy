@@ -126,11 +126,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
-        self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
-            fill_value=4,
-            dtype="int64",
-        )
+
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -795,6 +791,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
             min_p=self.share_inputs["min_p"],
+            seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             prompt_ids=self.share_inputs["prompt_ids"],
@@ -1096,8 +1093,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Updata 'infer_seed' and step_cuda()
-            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
@@ -1368,8 +1363,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.run(share_inputs=self.share_inputs)
 
         # 7. Updata 'infer_seed' and step_cuda()
-        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             step_cuda(
                 self.share_inputs,
