@@ -343,28 +343,29 @@ class CompletionRequest(BaseModel):
     suffix: Optional[dict] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    top_k: Optional[int] = None
-    min_p: Optional[float] = None
-    include_stop_str_in_output: Optional[bool] = False
     user: Optional[str] = None
 
+    # doc: begin-completion-sampling-params
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     min_tokens: Optional[int] = None
-    return_token_ids: Optional[bool] = None
-    max_streaming_response_tokens: Optional[int] = None
-    prompt_token_ids: Optional[List[int]] = None
+    include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    # doc: end-completion-sampling-params
 
+    # doc: start-completion-extra-params
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
     guided_regex: Optional[str] = None
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
 
-    # doc: begin-completion-sampling-params
-    repetition_penalty: Optional[float] = None
-    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
-
-    # doc: end-completion-sampling-params
+    max_streaming_response_tokens: Optional[int] = None
+    return_token_ids: Optional[bool] = None
+    prompt_token_ids: Optional[List[int]] = None
+    # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -477,33 +478,34 @@ class ChatCompletionRequest(BaseModel):
     stream_options: Optional[StreamOptions] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    top_k: Optional[int] = None
-    min_p: Optional[float] = None
     user: Optional[str] = None
     metadata: Optional[dict] = None
+    response_format: Optional[AnyResponseFormat] = None
 
-    return_token_ids: Optional[bool] = None
-    prompt_token_ids: Optional[List[int]] = None
-    disable_chat_template: Optional[bool] = False
+    # doc: begin-chat-completion-sampling-params
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
     min_tokens: Optional[int] = None
-    enable_thinking: Optional[bool] = None
-    reasoning_max_tokens: Optional[int] = None
-    max_streaming_response_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    repetition_penalty: Optional[float] = None
+    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+    # doc: end-chat-completion-sampling-params
 
-    response_format: Optional[AnyResponseFormat] = None
+    # doc: start-completion-extra-params
+    chat_template_kwargs: Optional[dict] = None
+    reasoning_max_tokens: Optional[int] = None
+    structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
     guided_regex: Optional[str] = None
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
-    structural_tag: Optional[str] = None
 
-    # doc: begin-chat-completion-sampling-params
-    repetition_penalty: Optional[float] = None
-    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
-
-    # doc: end-chat-completion-sampling-params
+    return_token_ids: Optional[bool] = None
+    prompt_token_ids: Optional[List[int]] = None
+    max_streaming_response_tokens: Optional[int] = None
+    disable_chat_template: Optional[bool] = False
+    # doc: end-chat-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None):
         """
