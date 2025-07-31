@@ -7,8 +7,10 @@ ServeTest
 """
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+
 import pytz
+
 
 class Logger(object):
     """
@@ -35,13 +37,14 @@ class Logger(object):
         self.logger.setLevel(logging.DEBUG)
 
         # 设置时区为东八区
-        tz = pytz.timezone('Asia/Shanghai')
+        tz = pytz.timezone("Asia/Shanghai")
 
         # 自定义时间格式化器，指定时区为东八区
         class CSTFormatter(logging.Formatter):
             """
             自定义时间格式化器，指定时区为东八区
             """
+
             def converter(self, timestamp):
                 """
                 自定义时间转换函数，加上时区信息
@@ -72,8 +75,10 @@ class Logger(object):
             self.logger.addHandler(console_handler)
 
         if log_name is None:
-            self.logger.info(f"Logger initialized. Log level: {save_level}. "
-                             f"Log path ({log_path}) is unused according to the level.")
+            self.logger.info(
+                f"Logger initialized. Log level: {save_level}. "
+                f"Log path ({log_path}) is unused according to the level."
+            )
         else:
             self.logger.info(f"Logger initialized. Log level: {save_level}. Log path: {log_name}")
             # Adjusting the timezone offset

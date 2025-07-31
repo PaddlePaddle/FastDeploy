@@ -3,8 +3,9 @@
 # @author DDDivano
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
-from core import *
 import requests
+from core import base_logger
+
 
 def build_request_payload(template_name: str, case_data: dict) -> dict:
     """
@@ -45,13 +46,7 @@ def send_request(url, payload, timeout=600, stream=False):
     base_logger.info("🔄 正在请求模型接口...")
 
     try:
-        res = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            stream=stream,
-            timeout=timeout
-        )
+        res = requests.post(url, headers=headers, json=payload, stream=stream, timeout=timeout)
         base_logger.info("🟢 接收响应中...\n")
         return res
     except requests.exceptions.Timeout:
