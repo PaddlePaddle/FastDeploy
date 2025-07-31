@@ -142,6 +142,7 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
+        self.dp_rank_id = local_data_parallel_id
 
         layerwise_send_cache_thread = threading.Thread(target=self._prefill_layerwise_send_cache_thread)
         layerwise_send_cache_thread.daemon = True
@@ -159,14 +160,14 @@ class CacheMessager:
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
             try:
                 step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.rank}",
+                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
                     array=prefilled_step_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
                     create=True,
                 )
                 layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.rank}",
+                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
                     array=prefilled_layer_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
@@ -174,14 +175,14 @@ class CacheMessager:
                 )
             except:
                 step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.rank}",
+                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
                     array=prefilled_step_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
                     create=False,
                 )
                 layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.rank}",
+                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
                     array=prefilled_layer_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
