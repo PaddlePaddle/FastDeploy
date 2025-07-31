@@ -761,7 +761,7 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
-void FillEncoderDecoderRes(
+void MergePrefillDecodeOutput(
         const paddle::Tensor &encoder_res,
         const paddle::Tensor &decoder_res,
         const paddle::Tensor &seq_lens_encoder,
@@ -1123,5 +1123,5 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_step_paddle",&SpeculateStepPaddle, "speculate_step_paddle function");
 
-  m.def("fill_encoder_decoder_res", &FillEncoderDecoderRes, "fill_encoder_decoder_res function");
+  m.def("merge_prefill_decode_output", &MergePrefillDecodeOutput, "merge_prefill_decode_output function");
 }

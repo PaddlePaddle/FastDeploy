@@ -51,7 +51,7 @@ __global__ void FillEncoderDecoderResKernel(
     *reinterpret_cast<float2*>(encoder_res_data + load_idx) = *reinterpret_cast<float2*>(decoder_res_data + load_idx);
 }
 
-void FillEncoderDecoderRes(
+void MergePrefillDecodeOutput(
         const paddle::Tensor &encoder_res,
         const paddle::Tensor &decoder_res,
         const paddle::Tensor &seq_lens_encoder,
@@ -102,7 +102,7 @@ void FillEncoderDecoderRes(
     }
 }
 
-PD_BUILD_STATIC_OP(fill_encoder_decoder_res)
+PD_BUILD_STATIC_OP(merge_prefill_decode_output)
     .Inputs({"encoder_res",
              "decoder_res",
              "seq_lens_encoder",
@@ -114,4 +114,4 @@ PD_BUILD_STATIC_OP(fill_encoder_decoder_res)
             "head_dim: int",
             "max_token: int"})
     .SetInplaceMap({{"encoder_res", "res"}})
-    .SetKernelFn(PD_KERNEL(FillEncoderDecoderRes));
+    .SetKernelFn(PD_KERNEL(MergePrefillDecodeOutput));

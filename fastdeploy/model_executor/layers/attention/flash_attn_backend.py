@@ -46,9 +46,9 @@ from fastdeploy.model_executor.layers.attention.utils import init_rank_and_devic
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import fill_encoder_decoder_res
+    from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
 else:
-    fill_encoder_decoder_res = None
+    merge_prefill_decode_output = None
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -160,7 +160,9 @@ class FlashAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
 
-        self.seq_zeros = paddle.zeros(shape=[fd_config.parallel_config.max_num_seqs, 1], dtype=paddle.int32)
+        self.zero_seq_enc_lens_for_decode = paddle.zeros(
+            shape=[fd_config.parallel_config.max_num_seqs, 1], dtype=paddle.int32
+        )
 
     def get_attntion_meta(self):
         """get_attntion_meta"""
@@ -322,7 +324,7 @@ class FlashAttentionBackend(AttentionBackend):
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            self.seq_zeros,
+            self.zero_seq_enc_lens_for_decode,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.batch_id_per_token,
@@ -370,7 +372,7 @@ class FlashAttentionBackend(AttentionBackend):
         )[0]
 
         if metadata.set_max_lengths[1] > 0:
-            fill_encoder_decoder_res(
+            merge_prefill_decode_output(
                 res_encoder,
                 res_decoder,
                 forward_meta.seq_lens_encoder,
