@@ -262,6 +262,10 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
         self.share_inputs["not_need_stop"][0] = True
+<<<<<<< HEAD
+=======
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+>>>>>>> d42818da (fix)
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
