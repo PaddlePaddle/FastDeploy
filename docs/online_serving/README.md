@@ -94,6 +94,7 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
   - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
   - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
   - `return_token_ids`: Optional[bool] = False: (whether to return token ids as a list)
+  - `include_stop_str_in_output`: Optional[bool] = False: (whether to include the stop strings in output text. Defaults to False.)
 
 > Note: For multimodal models, since the reasoning chain is enabled by default, resulting in overly long outputs, `max_tokens` can be set to the model's maximum output length or the default value can be used.
 

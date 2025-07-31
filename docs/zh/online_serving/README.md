@@ -93,6 +93,8 @@ FastDeploy 与 OpenAI 协议的请求参数差异如下，其余请求参数会�
   - `enable_thinking`: Optional[bool] = True 支持深度思考的模型是否打开思考
   - `repetition_penalty`: Optional[float] = None: 直接对重复生成的token进行惩罚的系数（>1时惩罚重复，<1时鼓励重复）
   - `return_token_ids`: Optional[bool] = False: 是否返回 token id 列表
+  - `include_stop_str_in_output`: Optional[bool] = False: 是否返回结束符
+  - `top_k`: Optional[bool] = None: TopK-TopP采样参数，参考[采样说明](../features/sampling.md)
 
 > 注: 若为多模态模型 由于思考链默认打开导致输出过长，max tokens 可以设置为模型最长输出，或使用默认值。
 
