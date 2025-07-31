@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import copy
 import os
 from typing import List
 
@@ -416,7 +415,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _initialize_forward_meta(self):
         """
