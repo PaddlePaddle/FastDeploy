@@ -386,7 +386,7 @@ class FusedMoE(nn.Layer):
             self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
 
         if self.fd_config.model_config.is_quantized:
-            if getattr(self.fd_config.quant_config, "is_permuted", False):
+            if getattr(self.fd_config.quant_config, "is_permuted", True):
                 self.quant_method.process_prequanted_weights(self, state_dict)
             else:
                 self.quant_method.create_weights(self, state_dict)
