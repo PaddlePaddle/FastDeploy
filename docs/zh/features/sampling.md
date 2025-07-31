@@ -118,7 +118,7 @@ response = client.chat.completions.create(
     ],
     stream=True,
     top_p=0.8,
-    top_k=50
+    extra_body={"top_k": 50}
 )
 for chunk in response:
     if chunk.choices[0].delta:
@@ -161,7 +161,7 @@ response = client.chat.completions.create(
     ],
     stream=True,
     top_p=0.8,
-    top_k=20,
+    extra_body={"top_k": 20},
     min_p=0.1
 )
 for chunk in response:
