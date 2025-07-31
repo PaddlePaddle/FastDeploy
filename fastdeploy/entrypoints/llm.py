@@ -328,34 +328,6 @@ class LLM:
         except Exception as e:
             llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}")
 
-    def _filter_and_decode_logprobs(
-        self, sample_logprobs: list[dict[int, Logprob]], topk_logprobs: Optional[int] = None
-    ) -> list[dict[int, Logprob]]:
-        """
-        Filters Logprob objects by rank and decodes tokens.
-
-        Args:
-            sample_logprobs (list[dict[int, Logprob]]): Original list of token_id -> Logprob maps.
-            num (int): Threshold rank, only ranks less than this will be kept.
-            decode_fn (Callable[[int], str]): Function to decode token_id to string.
-
-        Returns:
-            list[dict[int, Logprob]]: Filtered and updated logprob list.
-        """
-        llm_logger.info(f"filter logprobs, topk_logprobs: {topk_logprobs}")
-        filtered_result = []
-        for token_logprob_dict in sample_logprobs:
-            filtered_dict = {}
-            for token_id, logprob in token_logprob_dict.items():
-                if logprob.rank is not None and logprob.rank <= topk_logprobs:
-                    logprob.decoded_token = self.llm_engine.data_processor.process_logprob_response(
-                        [token_id], clean_up_tokenization_spaces=False
-                    )
-                    filtered_dict[token_id] = logprob
-            if filtered_dict:
-                filtered_result.append(filtered_dict)
-        return filtered_result
-
     def _run_engine(self, req_ids: list[str], use_tqdm: bool, topk_logprobs: Optional[int] = None):
         """
             运行引擎，并返回结果列表。
