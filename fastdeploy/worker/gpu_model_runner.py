@@ -164,7 +164,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method == "ngram":
             self.proposer = NgramProposer(self.fd_config)
         elif self.speculative_method == "mtp":
-            self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+            self.share_inputs["seq_lens_this_time"].copy_(self.seq_lens_this_time_buffer, False)
             self.proposer = MTPProposer(
                 self.fd_config,
                 self.get_model(),
@@ -290,7 +290,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"].copy_(self.seq_lens_this_time_buffer[:num_running_requests], False)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -479,7 +479,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"].copy_(self.seq_lens_this_time_buffer[:num_running_requests], False)
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
@@ -520,7 +520,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+        self.share_inputs["seq_lens_this_time"].copy_(self.seq_lens_this_time_buffer, False)
 
     def _init_share_inputs(self, max_num_seqs: int):
         """
@@ -1313,8 +1313,8 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+            need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
+            reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
@@ -1354,6 +1354,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
+
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
