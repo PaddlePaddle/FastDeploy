@@ -140,20 +140,22 @@ std::vector<paddle::Tensor> MoeLayerKernel(
 
         } else {
             xffn1_w = std::make_shared<xftblock::Tensor>(
-                const_cast<TW *>(ffn1_weight.data<TW>()), nullptr,
-                const_cast<float *>(ffn1_weight_scale.get_ptr()
-                                        ? ffn1_weight_scale.get_ptr()->data<float>()
-                                        : nullptr),
+                const_cast<TW *>(ffn1_weight.data<TW>()),
+                nullptr,
+                const_cast<float *>(ffn1_weight_scale.get_ptr() ?
+                                    ffn1_weight_scale.get_ptr()->data<float>() : nullptr),
                 xftblock_tw,
-                std::vector<int64_t>{expert_num, inter_dim, hidden_dim});
+                std::vector<int64_t>{expert_num, inter_dim, hidden_dim}
+            );
 
             xffn2_w = std::make_shared<xftblock::Tensor>(
-                const_cast<TW *>(ffn2_weight.data<TW>()), nullptr,
-                const_cast<float *>(ffn2_weight_scale.get_ptr()
-                                        ? ffn2_weight_scale.get_ptr()->data<float>()
-                                        : nullptr),
+                const_cast<TW *>(ffn2_weight.data<TW>()),
+                nullptr,
+                const_cast<float *>(ffn2_weight_scale.get_ptr() ?
+                                    ffn2_weight_scale.get_ptr()->data<float>() : nullptr),
                 xftblock_tw,
-                std::vector<int64_t>{expert_num, hidden_dim, outer_dim});
+                std::vector<int64_t>{expert_num, hidden_dim, outer_dim}
+            );
         }
         std::shared_ptr<xftblock::Tensor> xffn1_bias;
         std::shared_ptr<xftblock::Tensor> xffn2_bias;

@@ -358,7 +358,7 @@ class ForwardMeta():
                 "decoder_tile_ids_per_batch", None),
         )
         return ret
-    
+
     def clear_caches(self):
         """safe clear caches"""
         if self.caches:
@@ -423,3 +423,6 @@ class XPUForwardMeta(ForwardMeta):
 
     #
     total_enc_len: Optional[paddle.Tensor] = None
+
+    #
+    pos_emb_type: Optional[str] = 'NORMAL'

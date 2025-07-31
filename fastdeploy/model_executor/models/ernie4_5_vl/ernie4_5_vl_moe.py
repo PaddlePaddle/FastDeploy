@@ -41,6 +41,9 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (extract_text_token_output,
                                                    text_image_gather_scatter,
                                                    text_image_index_out)
+elif current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (text_image_gather_scatter,
+                                                   text_image_index_out)
 
 from fastdeploy.worker.forward_meta import ForwardMeta
 
@@ -393,8 +396,7 @@ class Ernie4_5_VLModel(nn.Layer):
         token_type_ids = image_mask.cast("int32")
         token_num = hidden_states.shape[0]
         image_token_num = paddle.count_nonzero(token_type_ids).cast("int32")
-        text_token_num = ((token_num - image_token_num) if
-                          (token_num - image_token_num) > 0 else 1)
+        text_token_num = paddle.maximum(token_num - image_token_num, paddle.ones([], dtype="int32"))
         if image_mask.any():
             hidden_states[image_mask] = image_features.cast(self._dtype)
             text_input = paddle.full(
@@ -429,6 +431,11 @@ class Ernie4_5_VLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
+        # extract_text_token_output operation is not needed
+        if current_platform.is_xpu():
+            out = self.norm(hidden_states)
+            return out
+
         # -----------------------
         hidden_states = hidden_states.cast("float32")
         score_text = hidden_states
@@ -446,7 +453,11 @@ class Ernie4_5_VLModel(nn.Layer):
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
             score_text,
-        )[0].cast(self._dtype)
+        )
+        if current_platform.is_xpu():
+            hidden_states = hidden_states.cast(self._dtype)
+        else:
+            hidden_states = hidden_states[0].cast(self._dtype)
         # -----------------------
 
         out = self.norm(hidden_states)

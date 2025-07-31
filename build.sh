@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export CLANG_PATH=$(pwd)/xtdk
+export XVLLM_PATH=$(pwd)/xvllm
+
 BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
@@ -181,13 +184,13 @@ function version_info() {
   fastdeploy_git_commit_id=$(git rev-parse HEAD)
   paddle_version=$(${python} -c "import paddle; print(paddle.__version__)")
   paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.__git_commit__)")
-  cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
+  # cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
   cxx_version=$(g++ --version | head -n 1 | grep -Po "(?<=\) )[\d.]+")
 
   echo "fastdeploy GIT COMMIT ID: $fastdeploy_git_commit_id" > $output_file
   echo "Paddle version: $paddle_version" >> $output_file
   echo "Paddle GIT COMMIT ID: $paddle_git_commit_id" >> $output_file
-  echo "CUDA version: $cuda_version" >> $output_file
+  # echo "CUDA version: $cuda_version" >> $output_file
   echo "CXX compiler version: $cxx_version" >> $output_file
 }
 

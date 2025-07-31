@@ -52,10 +52,16 @@ if current_platform.is_cuda() and current_platform.available():
     from fastdeploy.model_executor.layers.utils import (
         remove_padding, speculate_remove_padding)
 
-from fastdeploy.model_executor.ops.gpu import (save_output,
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (save_output,
                                                set_stop_value_multi_ends,
                                                set_value_by_flags_and_idx,
                                                update_inputs)
+elif current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (save_output,
+                                                set_stop_value_multi_ends,
+                                                set_value_by_flags_and_idx,
+                                                update_inputs)
 
 
 class GPUVLModelRunner(VLModelRunnerBase):
@@ -832,10 +838,11 @@ class GPUVLModelRunner(VLModelRunnerBase):
         generate
         """
         self.pre_process()
-        hiddden_states = self.model(self.share_inputs["ids_remove_padding"],
+        hidden_states = self.model(self.share_inputs["ids_remove_padding"],
                                     self.share_inputs["image_features"],
                                     self.forward_meta)
-        logits = self.model.compute_logits(hiddden_states)
+        logits = self.model.compute_logits(hidden_states)
+
         set_value_by_flags_and_idx(
             self.share_inputs["pre_ids"],
             self.share_inputs["input_ids"],

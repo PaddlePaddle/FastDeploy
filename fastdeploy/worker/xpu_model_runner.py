@@ -30,6 +30,8 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.model_executor.model_loader import get_model_from_loader
+from fastdeploy.model_executor.ops.xpu import (adjust_batch, get_infer_param,
+                                               get_padding_offset)
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -46,15 +48,14 @@ def xpu_pre_process(
         use_speculate_method: bool,
         draft_tokens: Optional[paddle.Tensor] = None,
         seq_lens_encoder: Optional[paddle.Tensor] = None,
-        seq_lens_decoder: Optional[paddle.Tensor] = None) -> XPUForwardMeta:
+        seq_lens_decoder: Optional[paddle.Tensor] = None,
+        attn_backend = None) -> XPUForwardMeta:
     """
 
     """
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
-    from fastdeploy.model_executor.ops.xpu import (adjust_batch,
-                                                   get_infer_param,
-                                                   get_padding_offset)
+
     (
         ids_remove_padding,
         cum_offsets,
@@ -70,7 +71,7 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    xpu_forward_meta = XPUForwardMeta.init_forward_meta(share_inputs, None)
+    xpu_forward_meta = XPUForwardMeta.init_forward_meta(share_inputs, attn_backend)
 
     # Get xpu extra param
     (
@@ -124,7 +125,7 @@ def xpu_process_output(
 
     """
     from fastdeploy.model_executor.ops.xpu import gather_next_token
-    hiddden_states = gather_next_token(
+    hidden_states = gather_next_token(
         forward_output,
         cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
@@ -138,7 +139,7 @@ def xpu_process_output(
         None,  # output_padding_offset
         -1,  # max_input_length
     )
-    return hiddden_states
+    return hidden_states
 
 
 def xpu_post_process(sampled_token_ids: paddle.Tensor,

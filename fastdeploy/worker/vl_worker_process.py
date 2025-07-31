@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-import argparse
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -25,8 +24,16 @@ import paddle.distributed.fleet as fleet
 
 from fastdeploy.engine.config import ModelConfig
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
-from fastdeploy.utils import get_logger, none_or_str
-from fastdeploy.worker.worker_process import initialize_fd_config, parse_args
+from fastdeploy.platforms import current_platform
+from fastdeploy.utils import get_logger
+from fastdeploy.worker.worker_process import parse_args
+
+if current_platform.is_cuda():
+    from fastdeploy.worker.vl_gpu_model_runner import \
+        GPUVLModelRunner as VLModelRunner
+elif current_platform.is_xpu():
+    from fastdeploy.worker.vl_xpu_model_runner import \
+        XPUVLModelRunner as VLModelRunner
 
 logger = get_logger("worker", "worker.log")
 
@@ -116,7 +123,6 @@ class Worker:
         self.device_ids = self.args.device_ids.split(",")
         self.model_cfg = ModelConfig(args.model_name_or_path)
 
-        from fastdeploy.worker.vl_gpu_model_runner import GPUVLModelRunner
 
         self.init_dist_env()
         self.format_print_configuration()
@@ -125,10 +131,10 @@ class Worker:
         local_rank = self.rank % self.args.tensor_parallel_size
         self.local_data_parallel_id = self.rank // self.args.tensor_parallel_size
 
-        self.infer_engine = GPUVLModelRunner(config=self.model_cfg,
-                                             args=self.args,
-                                             nranks=self.nranks,
-                                             rank=self.rank)
+        self.infer_engine = VLModelRunner(config=self.model_cfg,
+                                          args=self.args,
+                                          nranks=self.nranks,
+                                          rank=self.rank)
         self.prefill_tracker = PrefillTracker(args.engine_pid)
 
         # Only applicable for standalone (single-machine) inference
@@ -526,12 +532,146 @@ class Worker:
                 break
 
 
+class XPUWorker(Worker):
+    def determine_num_available_blocks(self):
+        """Profiles the peak memory usage of the model to determine how many
+        KV blocks may be allocated without OOMs.
+
+        The engine will first conduct a profiling of the existing memory usage.
+        Then, it calculate the maximum possible number of XPU and CPU blocks
+        that can be allocated with the remaining free memory.
+
+        .. tip::
+            You may limit the usage of XPU memory
+            by adjusting the `gpu_memory_utilization` parameter.
+        """
+        # Profile the memory usage of the model and get the maximum number of
+        # cache blocks that can be allocated with the remaining free memory.
+        start_time = time.time()
+
+        GiB = 1024**3
+        paddle.device.xpu.empty_cache()
+
+        paddle.device.xpu.reset_max_memory_allocated()
+        before_activation_gpu_memory = paddle.device.xpu.max_memory_allocated(
+        ) / GiB
+        logger.info(
+            f"before activate gpu memory: {before_activation_gpu_memory} GiB.")
+
+        import gc
+
+        total_gpu_memory = paddle.device.xpu.memory_total() / GiB
+        used_gpu_memory = paddle.device.xpu.memory_used() / GiB
+        logger.info(f"used gpu memory: {used_gpu_memory} GiB.")
+
+        self.run_profile()
+        current_max_peak_gpu_memory = paddle.device.xpu.max_memory_reserved(
+        ) / GiB
+        logger.info(
+            f"current max peak gpu memory: {current_max_peak_gpu_memory} GiB.")
+        per_block_memory_used = self.infer_engine._cal_theortical_kvcache(
+        ) / GiB
+        logger.info(f"each kv cache block takes {per_block_memory_used} GiB.")
+        used_cache_gpu_memory = self.args.total_block_num * per_block_memory_used
+        logger.info(f"used cache gpu memory: {used_cache_gpu_memory} GiB.")
+        model_weights_memory = used_gpu_memory - used_cache_gpu_memory
+        paddle_peak_increase = current_max_peak_gpu_memory - before_activation_gpu_memory
+        memory_for_current_instance = total_gpu_memory * self.args.gpu_memory_utilization
+        available_kv_cache_memory = memory_for_current_instance - used_gpu_memory - \
+                                    paddle_peak_increase + used_cache_gpu_memory
+
+        num_gpu_blocks = max(
+            int(available_kv_cache_memory // per_block_memory_used),
+            self.args.total_block_num)
+        profile_time = time.time() - start_time
+
+        msg = (f"Memory profiling takes {profile_time:.2f} seconds\n"
+               "the current instance can use "
+               "total_gpu_memory "
+               f"({(total_gpu_memory):.2f}GiB)"
+               " x gpu_memory_utilization "
+               f"({self.args.gpu_memory_utilization})"
+               f" = {(memory_for_current_instance):.2f}GiB\n"
+               "model weights take "
+               f"{(model_weights_memory ):.2f}GiB;"
+               " Paddle activation peak memory takes "
+               f"{(paddle_peak_increase):.2f}GiB;"
+               " the rest of the memory reserved for KV Cache is "
+               f"{(available_kv_cache_memory):.2f}GiB.")
+
+        self.infer_engine.record_profile_msg = {
+            "per_block_memory_used": per_block_memory_used,
+            "paddle_peak_increase": paddle_peak_increase,
+        }
+
+        logger.info(msg)
+        # Final cleanup
+
+        get_profile_block_num = np.zeros(shape=[self.nranks], dtype=np.int32)
+        self.get_profile_block_num_signal = IPCSignal(
+            name="get_profile_block_num",
+            array=get_profile_block_num,
+            dtype=np.int32,
+            suffix=self.args.engine_pid,
+            create=False)
+        self.get_profile_block_num_signal.value[self.rank] = int(
+            num_gpu_blocks)
+        while np.any(self.get_profile_block_num_signal.value <= 0):
+            time.sleep(0.01)
+        num_gpu_blocks = self.get_profile_block_num_signal.value.min().item()
+        self.get_profile_block_num_signal.value[self.rank] = int(
+            num_gpu_blocks)
+        logger.info(
+            f"{self.get_profile_block_num_signal.value[self.rank]} GPU KV blocks can be allocated."
+        )
+        self.infer_engine.num_gpu_blocks = num_gpu_blocks
+        self.infer_engine._update_share_input_block_num()
+
+        paddle.device.xpu.empty_cache()
+        gc.collect()
+
+    def step_cuda(self):
+        """
+        step cuda
+        """
+        from fastdeploy.model_executor.ops.xpu import step_paddle
+        step_paddle(
+            self.infer_engine.share_inputs["stop_flags"],
+            self.infer_engine.share_inputs["seq_lens_this_time"],
+            self.infer_engine.share_inputs["step_seq_lens_encoder"],
+            self.infer_engine.share_inputs["seq_lens_encoder"],
+            self.infer_engine.share_inputs["seq_lens_decoder"],
+            self.infer_engine.share_inputs["block_tables"],
+            self.infer_engine.share_inputs["encoder_block_lens"],
+            self.infer_engine.share_inputs["is_block_step"],
+            self.infer_engine.share_inputs["step_block_list"],
+            self.infer_engine.share_inputs["step_lens"],
+            self.infer_engine.share_inputs["recover_block_list"],
+            self.infer_engine.share_inputs["recover_lens"],
+            self.infer_engine.share_inputs["need_block_list"],
+            self.infer_engine.share_inputs["need_block_len"],
+            self.infer_engine.share_inputs["used_list_len"],
+            self.infer_engine.share_inputs["free_list"],
+            self.infer_engine.share_inputs["free_list_len"],
+            self.infer_engine.share_inputs["input_ids"],
+            self.infer_engine.share_inputs["pre_ids"],
+            self.infer_engine.share_inputs["step_idx"],
+            self.infer_engine.share_inputs["next_tokens"],
+            self.infer_engine.share_inputs["first_token_ids"],
+            self.args.block_size,
+            self.args.enc_dec_block_num,
+        )
+
+
 def main():
     """
     start worker
     """
     args = parse_args()
-    worker = Worker(args)
+    if current_platform.is_cuda():
+        worker = Worker(args)
+    elif current_platform.is_xpu():
+        worker = XPUWorker(args)
     if args.do_profile:
         worker.determine_num_available_blocks()
     worker.run()
