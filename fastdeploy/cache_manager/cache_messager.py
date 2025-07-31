@@ -136,7 +136,7 @@ class CacheMessager:
         )
         transfer_protocol = transfer_protocol.split(",")
 
-        print(f"splitwise role: {splitwise_role}, {transfer_protocol}" f"rank: {rank}")
+        logger.info(f"splitwise role: {splitwise_role}, {transfer_protocol}" f"rank: {rank}")
 
         # 1. initialize the cache_k_ptr_list and cache_v_ptr_list
         self.num_hidden_layers = num_hidden_layers
@@ -161,7 +161,7 @@ class CacheMessager:
         block_bytes = math.prod(cache_shape[1:])
         if key_cache.dtype == paddle.bfloat16:
             block_bytes *= 2
-        print(
+        logger.info(
             f"layers {num_hidden_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
             f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
         )
@@ -177,10 +177,10 @@ class CacheMessager:
                     cache_v,
                 )
                 local_device_id = int(str(cache_k[0].place)[-2])
-                print(f"done create ipc_comm with local_device_id:{local_device_id}, ")
+                logger.info(f"done create ipc_comm with local_device_id:{local_device_id}, ")
 
             elif protocol == "rdma":
-                print(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
+                logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
 
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
@@ -196,7 +196,7 @@ class CacheMessager:
         self.gpu_id = gpu_id
         self.cache_info = dict()
 
-        print(f"cache messager init finished, use {transfer_protocol}")
+        logger.info(f"cache messager init finished, use {transfer_protocol}")
 
     def prefill_layerwise_send_cache_thread(self):
         """
@@ -248,7 +248,7 @@ class CacheMessager:
                 cache_info = self.engine_worker_queue.get_cache_info()
 
                 if cache_info:
-                    print(f"cache info {cache_info}")
+                    logger.info(f"cache info {cache_info}")
                     for info in cache_info:
                         if info["request_id"] in self.cache_info:
                             self.cache_info[info["request_id"]].update(info)
@@ -260,7 +260,7 @@ class CacheMessager:
                                 current_info["src_block_ids"] = current_src_blocks
                                 current_info["current_layer_ids"] = 0
                                 current_info["status"] = "init"
-                                print(f"start cache_infos: {current_info}")
+                                logger.info(f"start cache_infos: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
                             self.last_step_idx = min(self.last_step_idx, current_info["current_id"])
                         else:
@@ -278,7 +278,7 @@ class CacheMessager:
                 if not self.cache_info:
                     time.sleep(0.001)
                     continue
-                print(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
+                logger.info(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
                         continue
@@ -295,7 +295,7 @@ class CacheMessager:
                         target_id = int(item["rdma_ports"][self.rank])
                         status = self.messager[current_transfer_protocol].connect(target_ip, target_id)
                         if not status:
-                            print(f"connect to {target_ip}:{target_id} failed")
+                            logger.info(f"connect to {target_ip}:{target_id} failed")
                             item["status"] = "error"
                             self.engine_worker_queue.finish_request_barrier.wait()
                             if self.rank == 0:
@@ -325,7 +325,7 @@ class CacheMessager:
                             self.engine_worker_queue.finish_request_barrier.wait()
                             if self.rank == 0:
                                 self.engine_worker_queue.put_finished_req([(item["request_id"], "write cache error")])
-                            print(
+                            logger.info(
                                 f"write cache failed, layer_idx: {layer_idx}, "
                                 f"req_id: {item['request_id']}, dest_ip: {target_ip}"
                             )
@@ -336,7 +336,7 @@ class CacheMessager:
                         block_num = len(src_block_ids)
                         avg_time_per_block = cost_time * 1000 / block_num  # ms
                         send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
-                        print(
+                        logger.info(
                             f"finish write cache for a layer, {item['request_id']}, {layer_idx}"
                             f" {current_transfer_protocol}"
                             f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
@@ -346,18 +346,18 @@ class CacheMessager:
                     if item["layer_idx"] == self.num_hidden_layers:
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(target_id)
-                        print(f"finish write cache {item['request_id']}")
+                        logger.info(f"finish write cache {item['request_id']}")
                         self.engine_worker_queue.finish_request_barrier.wait()
                         if self.rank == 0:
                             self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
-                            print(f"put write cache {item['request_id']}")
+                            logger.info(f"put write cache {item['request_id']}")
                         del self.cache_info[req_id]
 
                     self.last_step_idx = prefilled_step_idx
                     self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:
-            print(f"prefill layerwise send cache thread has exception: {e}")
+            logger.info(f"prefill layerwise send cache thread has exception: {e}")
 
 
 def main():
@@ -407,9 +407,9 @@ def main():
             f"value_caches_{i}_rank{rank}.device{device}",
         )
     cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
-    print(f"device :{device}")
-    print(f"cache_kv_size_byte : {cache_kv_size_byte}")
-    print(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
+    logger.info(f"device :{device}")
+    logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
+    logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
 
     cache_messager = CacheMessager(
         splitwise_role=args.splitwise_role,
@@ -441,6 +441,6 @@ if __name__ == "__main__":
 
     args = parse_args()
 
-    print("create cache messager...")
-    print(f"{args}")
+    logger.info("create cache messager...")
+    logger.info(f"{args}")
     main()

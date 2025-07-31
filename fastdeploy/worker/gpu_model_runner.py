@@ -43,9 +43,9 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import (
     recover_decode_task,
+    set_data_ipc,
     set_value_by_flags_and_idx,
     share_external_data,
-    set_data_ipc
 )
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
@@ -1148,6 +1148,8 @@ class GPUModelRunner(ModelRunnerBase):
             if task.chunk_idx > len(task.prefill_chunk_info):
                 continue
             self.restore_chunked_prefill_request[task.request_id] = task
+        if len(self.restore_chunked_prefill_request) > 0:
+            self.share_inputs["not_need_stop"][0] = True
 
         for id, task in list(self.restore_chunked_prefill_request.items()):
             idx = task.idx
@@ -1192,7 +1194,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                 self.share_inputs["prompt_lens"][idx : idx + 1] += token_chunk_size
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
-
+            self.share_inputs["stop_flags"][idx : idx + 1] = False
             if self.speculative_decoding and self.proposer.is_chunk_prefill_enabled():
                 self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
@@ -1517,12 +1519,12 @@ class GPUModelRunner(ModelRunnerBase):
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
-        num_layers = (
+        num_hidden_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
             if self.speculative_method in ["mtp"]
             else self.model_config.num_hidden_layers
         )
-        required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
+        required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_hidden_layers  # k + v
         return required_memory
 
     def not_need_stop(self) -> bool:
