@@ -24,7 +24,7 @@ import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.cache_data import CacheStatus
-from fastdeploy.engine.config import SpeculativeConfig
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal
 from fastdeploy.model_executor.ops.gpu import (
     cuda_host_alloc,
@@ -114,7 +114,7 @@ class CacheTransferManager:
         self.cpu_cache_kvs = {}
         self.gpu_cache_k_tensors = []
         self.gpu_cache_v_tensors = []
-        self.speculative_config = SpeculativeConfig(**args.speculative_config)
+        self.speculative_config = SpeculativeConfig(args.speculative_config)
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(args.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
 

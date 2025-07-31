@@ -116,6 +116,8 @@ def setup_and_run_server():
         "0.71",
         "--quantization",
         "wint4",
+        "--reasoning-parser",
+        "ernie-45-vl",
     ]
 
     # Start subprocess in new process group
@@ -214,7 +216,11 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
     assert resp1.status_code == 200
     result1 = resp1.json()
-    content1 = result1["choices"][0]["message"]["content"]
+    content1 = (
+        result1["choices"][0]["message"]["reasoning_content"]
+        + "</think>"
+        + result1["choices"][0]["message"]["content"]
+    )
     file_res_temp = "ernie-4_5-vl"
     f_o = open(file_res_temp, "a")
     f_o.writelines(content1)
@@ -338,10 +344,7 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful AI assistant.",
-            },  # system不是必需，可选
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
             {
                 "role": "user",
                 "content": [
@@ -373,10 +376,7 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful AI assistant.",
-            },  # system不是必需，可选
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
             {
                 "role": "user",
                 "content": [
@@ -413,10 +413,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful AI assistant.",
-            },  # system不是必需，可选
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
             {
                 "role": "user",
                 "content": [
@@ -455,10 +452,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful AI assistant.",
-            },  # system不是必需，可选
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
             {
                 "role": "user",
                 "content": [
@@ -486,3 +480,54 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         assert chunk.choices[0].delta.prompt_token_ids is None
         assert hasattr(chunk.choices[0].delta, "completion_token_ids")
         assert chunk.choices[0].delta.completion_token_ids is None
+
+
+def test_chat_with_thinking(openai_client, capsys):
+    """
+    Test enable_thinking & reasoning_max_tokens option in non-streaming chat functionality with the local service
+    """
+    # enable thinking, non-streaming
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=10,
+        extra_body={"enable_thinking": True},
+    )
+    assert response.choices[0].message.reasoning_content is not None
+
+    # disable thinking, non-streaming
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=10,
+        extra_body={"enable_thinking": False},
+    )
+    assert response.choices[0].message.reasoning_content is None
+
+    # enable thinking, streaming
+    reasoning_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={"enable_thinking": True, "reasoning_max_tokens": reasoning_max_tokens, "return_token_ids": True},
+        stream=True,
+        max_tokens=10,
+    )
+    completion_tokens = reasoning_tokens = 1
+    total_tokens = 0
+    for chunk_id, chunk in enumerate(response):
+        if chunk_id == 0:  # the first chunk is an extra chunk
+            continue
+        delta_message = chunk.choices[0].delta
+        if delta_message.content != "" and delta_message.reasoning_content == "":
+            completion_tokens += len(delta_message.completion_token_ids)
+        elif delta_message.reasoning_content != "" and delta_message.content == "":
+            reasoning_tokens += len(delta_message.completion_token_ids)
+        total_tokens += len(delta_message.completion_token_ids)
+    assert completion_tokens + reasoning_tokens == total_tokens
+    assert reasoning_tokens <= reasoning_max_tokens

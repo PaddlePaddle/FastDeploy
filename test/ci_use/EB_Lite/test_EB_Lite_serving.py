@@ -357,7 +357,7 @@ def test_non_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": True},
+        extra_body={"include_stop_str_in_output": True},
         stream=False,
     )
     # Assertions to check the response structure
@@ -370,13 +370,32 @@ def test_non_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": False},
+        extra_body={"include_stop_str_in_output": False},
         stream=False,
     )
     # Assertions to check the response structure
     assert hasattr(response, "choices")
     assert len(response.choices) > 0
     assert not response.choices[0].message.content.endswith("</s>")
+
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        stream=False,
+    )
+    assert not response.choices[0].text.endswith("</s>")
+
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        extra_body={"include_stop_str_in_output": True},
+        stream=False,
+    )
+    assert response.choices[0].text.endswith("</s>")
 
 
 def test_streaming_with_stop_str(openai_client):
@@ -388,7 +407,7 @@ def test_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": True},
+        extra_body={"include_stop_str_in_output": True},
         stream=True,
     )
     # Assertions to check the response structure
@@ -402,7 +421,7 @@ def test_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": False},
+        extra_body={"include_stop_str_in_output": False},
         stream=True,
     )
     # Assertions to check the response structure
@@ -410,6 +429,29 @@ def test_streaming_with_stop_str(openai_client):
     for chunk in response:
         last_token = chunk.choices[0].delta.content
     assert last_token != "</s>"
+
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        max_tokens=10,
+        stream=True,
+    )
+    last_token = ""
+    for chunk in response_1:
+        last_token = chunk.choices[0].text
+    assert not last_token.endswith("</s>")
+
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        max_tokens=10,
+        extra_body={"include_stop_str_in_output": True},
+        stream=True,
+    )
+    last_token = ""
+    for chunk in response_1:
+        last_token = chunk.choices[0].text
+    assert last_token.endswith("</s>")
 
 
 def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
@@ -696,3 +738,203 @@ def test_non_streaming_chat_completion_disable_chat_template(openai_client, caps
     assert hasattr(disabled_response, "choices")
     assert len(disabled_response.choices) > 0
     assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
+
+
+def test_non_streaming_chat_with_min_tokens(openai_client, capsys):
+    """
+    Test min_tokens option in non-streaming chat functionality with the local service
+    """
+    min_tokens = 1000
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        extra_body={"min_tokens": min_tokens},
+        stream=False,
+    )
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens")
+    assert response.usage.completion_tokens >= min_tokens
+
+
+def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
+    """
+    Test chat/completion when min_tokens equals max_tokens equals 1.
+    Verify it returns exactly one token.
+    """
+    # Test non-streaming chat
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        max_tokens=1,
+        temperature=0.0,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+    # Verify usage shows exactly 1 completion token
+    assert hasattr(response, "usage")
+    assert response.usage.completion_tokens == 1
+
+
+def test_non_streaming_chat_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in non-streaming chat functionality with the local service
+    """
+    response_0 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        stream=False,
+    )
+    output_0 = []
+    assert hasattr(response_0, "choices")
+    assert len(response_0.choices) > 0
+    assert hasattr(response_0.choices[0], "message")
+    assert hasattr(response_0.choices[0].message, "content")
+
+    text_split = response_0.choices[0].message.content.split(" ")
+    for text in text_split:
+        output_0.append(text)
+
+    # add bad words
+    response_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        extra_body={"bad_words": output_0[-5:]},
+        stream=False,
+    )
+    output_1 = []
+    assert hasattr(response_1, "choices")
+    assert len(response_1.choices) > 0
+    assert hasattr(response_1.choices[0], "message")
+    assert hasattr(response_1.choices[0].message, "content")
+    text_split = response_1.choices[0].message.content.split(" ")
+    for text in text_split:
+        output_1.append(text)
+    assert output_0 not in output_1
+
+
+def test_streaming_chat_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in streaming chat functionality with the local service
+    """
+    response_0 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        stream=True,
+    )
+    output_0 = []
+    for chunk in response_0:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "content")
+        output_0.append(chunk.choices[0].delta.content)
+
+    # add bad words
+    response_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        extra_body={"bad_words": output_0[-5:]},
+        stream=True,
+    )
+    output_1 = []
+    for chunk in response_1:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "content")
+        output_1.append(chunk.choices[0].delta.content)
+    assert output_0 not in output_1
+
+
+def test_non_streaming_completion_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in non-streaming completion functionality with the local service
+    """
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        stream=False,
+    )
+    output_0 = []
+    assert hasattr(response_0, "choices")
+    assert len(response_0.choices) > 0
+    assert hasattr(response_0.choices[0], "text")
+    text_split = response_0.choices[0].text.split(" ")
+    for text in text_split:
+        output_0.append(text)
+
+    # add bad words
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        extra_body={"bad_words": output_0[-5:]},
+        stream=False,
+    )
+    output_1 = []
+    assert hasattr(response_1, "choices")
+    assert len(response_1.choices) > 0
+    assert hasattr(response_1.choices[0], "text")
+    text_split = response_1.choices[0].text.split(" ")
+    for text in text_split:
+        output_1.append(text)
+    assert output_0 not in output_1
+
+
+def test_streaming_completion_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in streaming completion functionality with the local service
+    """
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        stream=True,
+    )
+    output_0 = []
+    for chunk in response_0:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "text")
+        output_0.append(chunk.choices[0].text)
+
+    # add bad words
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=10,
+        extra_body={"bad_words": output_0[-5:]},
+        stream=True,
+    )
+    output_1 = []
+    for chunk in response_1:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "text")
+        output_1.append(chunk.choices[0].text)
+    assert output_0 not in output_1

@@ -16,12 +16,14 @@
 
 import json
 import os
+import time
 
 import paddle
 import paddle.distributed as dist
 from fastsafetensors import SafeTensorsFileLoader, SingleGroup
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.model_utils import load_tp_checkpoint
+from paddleformers.utils.log import logger
 from safetensors import safe_open
 from tqdm import tqdm
 
@@ -30,6 +32,17 @@ from fastdeploy.model_executor.models.tp_utils import (
     check_tensor_parallel_prerequisites,
 )
 from fastdeploy.platforms import current_platform
+
+
+def measure_time(func):
+    def wrapper(*args, **kwargs):
+        time_before_load = time.time()
+        result = func(*args, **kwargs)
+        time_after_load = time.time()
+        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
+        return result
+
+    return wrapper
 
 
 def load_reordered_experts(model_path: str, key_name: str):
@@ -101,12 +114,20 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
 
             up_gate_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
             down_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
+
+            down_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_key)
             num_local_ffn_keys.append(down_proj_key)
             num_local_ffn_keys.append(up_gate_proj_quant_key)
             num_local_ffn_keys.append(down_proj_quant_key)
             num_local_ffn_keys.append(up_gate_proj_scale_key)
             num_local_ffn_keys.append(down_proj_scale_key)
+            num_local_ffn_keys.append(down_proj_in_scale_key)
+
+        # for EP w4a8, we need all expert's activation_scale for up_gate_proj
+        for j in range(fd_config.model_config.moe_num_experts):
+            up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
+            num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
     for k in num_local_ffn_keys:
         if k in weight_list:
@@ -144,9 +165,11 @@ def safetensors_weights_iterator(
         safe_tensor_list,
         desc="Loading safetensors checkpoint shards",
     ):
-        with safe_open(st_file, framework="np") as f:
+        from paddleformers.utils.safetensors import fast_safe_open
+
+        with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
-                param = f.get_tensor(name)
+                param = f.get_slice(name)
                 yield name, param
 
 

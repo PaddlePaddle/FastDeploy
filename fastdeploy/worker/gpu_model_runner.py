@@ -40,7 +40,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope, get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
-from fastdeploy.model_executor.model_loader import get_model_from_loader
+from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import (
     recover_decode_task,
     set_value_by_flags_and_idx,
@@ -82,6 +82,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -108,10 +109,9 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
-
         #  Sampler
         if not self.speculative_decoding:
-            self.sampler = Sampler()
+            self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
@@ -211,6 +211,47 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+                if self.enable_mm:
+                    inputs = request.multimodal_inputs
+                    if request.with_image:
+                        vision_inputs = {}
+                        vision_inputs["input_ids"] = paddle.to_tensor(
+                            inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                        )
+                        vision_inputs["token_type_ids"] = paddle.to_tensor(
+                            inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                        )
+                        vision_inputs["image_type_ids"] = paddle.to_tensor(
+                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
+                            dtype=paddle.int64,
+                        )
+                        vision_inputs["images"] = paddle.to_tensor(
+                            inputs["images"][request.image_start : request.image_end], dtype="uint8"
+                        )
+                        vision_inputs["grid_thw"] = paddle.to_tensor(
+                            inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
+                        )
+                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
+                    else:
+                        self.share_inputs["image_features"] = None
+
+                    if inputs["position_ids"] is not None:
+                        position_ids = paddle.to_tensor(
+                            request.multimodal_inputs["position_ids"],
+                            dtype="int64",
+                        ).unsqueeze([0])
+                    else:
+                        position_ids = None
+
+                    enable_thinking = request.get("enable_thinking", True)
+                    enable_thinking = enable_thinking if enable_thinking is not None else True
+                    self.share_inputs["enable_thinking"][:] = enable_thinking
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
+                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                        position_ids, request.get("max_tokens", 2048)
+                    )
+
                 input_ids = request.prompt_token_ids + request.output_token_ids
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
@@ -275,11 +316,16 @@ class GPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
 
@@ -443,14 +489,26 @@ class GPUModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
+            if request.get("bad_words_token_ids") is not None:
+                bad_words_len = len(request.get("bad_words_token_ids"))
+                if bad_words_len > 0:
+                    self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                    self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                        request.get("bad_words_token_ids"), dtype="int64"
+                    )
+
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
@@ -552,13 +610,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.share_inputs["not_need_stop"] = paddle.full(
-            [1], False, dtype="bool"
-        ).cpu()  # TODO(gongshaotian): move to pinnd memory
+        self.share_inputs["not_need_stop"] = paddle.full([1], False, dtype="bool").cpu()
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
-        self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype="int64")
+        self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
+        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
@@ -584,9 +641,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        # AttentionBackend buffers
-        self.share_inputs["decoder_batch_ids"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+
+        # Declare AttentionBackend buffers
+        self.share_inputs["decoder_batch_ids"] = None
+        self.share_inputs["decoder_tile_ids_per_batch"] = None
+        self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
+        self.share_inputs["max_len_tensor_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -619,14 +679,17 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
 
         # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full([self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.share_inputs["stop_seqs_len"] = paddle.full(
+            [max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32"
+        )
         self.share_inputs["stop_seqs"] = paddle.full(
             [
+                max_num_seqs,
                 self.model_config.max_stop_seqs_num,
                 self.model_config.stop_seqs_max_len,
             ],
             -1,
-            dtype="int32",
+            dtype="int64",
         )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
@@ -721,6 +784,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
+        # Update bad tokens len
+        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+
         # Initialize forward meta data
         self.initialize_forward_meta()
 
@@ -738,17 +804,19 @@ class GPUModelRunner(ModelRunnerBase):
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
             min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"],
+            bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=20 if self.enable_logprob else None,
+            enable_early_stop=self.enable_early_stop,
+            stop_flags=self.share_inputs["stop_flags"],
         )
 
     def load_model(self) -> None:
         """load or download model"""
         logger.info(f"Starting to load model {self.model_config.architectures[0]}")
-        time_before_load = time.perf_counter()
         # 1. Load original model
-        self.model = get_model_from_loader(fd_config=self.fd_config)
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        self.model = model_loader.load_model(fd_config=self.fd_config)
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
@@ -758,9 +826,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
-
-        time_after_load = time.perf_counter()
-        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
 
         # 4. Init proposer for speculative method
         self._init_speculative_proposer()
@@ -781,6 +846,8 @@ class GPUModelRunner(ModelRunnerBase):
             attn_backend=self.attn_backends[0],
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
+            decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
+            max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
@@ -792,7 +859,6 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Update Batch type for cuda graph
-        # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
         only_decode_batch = True
         prefill_exists = None
         # mix ep in single node
@@ -882,6 +948,18 @@ class GPUModelRunner(ModelRunnerBase):
         )
         head_dim = self.model_config.head_dim
 
+        # Initialize AttentionBackend buffers
+        encoder_block_shape_q = 64
+        decoder_block_shape_q = 16
+        decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
+        decode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+            (decoder_step_token_num * np.ceil(num_heads / self.model_config.kv_num_heads)) / decoder_block_shape_q
+        )
+        self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
@@ -889,6 +967,8 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,
             head_dim=head_dim,
+            encoder_block_shape_q=encoder_block_shape_q,
+            decoder_block_shape_q=decoder_block_shape_q,
         )
 
         self.attn_backends.append(attn_backend)
@@ -1012,6 +1092,8 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
 
             post_process(
@@ -1276,6 +1358,8 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
             need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
@@ -1459,17 +1543,13 @@ class GPUModelRunner(ModelRunnerBase):
         Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
         In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
         """
-        # TODO(gongshaotian): Use more efficient implementation
-        if self.forward_meta.step_use_cudagraph:
-            num_empty_batch = (self.forward_meta.seq_lens_this_time == 0).sum()
-            for i in range(1, num_empty_batch + 1):
-                self.forward_meta.decoder_batch_ids[-i] = 0
-                self.forward_meta.decoder_tile_ids_per_batch[-i] = 0
+        # In init_attention_metadata, the decode buffer has already been cleared
+        return
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
-            tokenizer_name=self.parallel_config.model_name_or_path,
-            image_preprocessor_name=str(self.parallel_config.model_name_or_path),
+            tokenizer_name=self.model_config.model,
+            image_preprocessor_name=str(self.model_config.model),
         )
         processor.eval()
         image_preprocess = processor.image_preprocessor

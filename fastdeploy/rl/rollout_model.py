@@ -20,7 +20,6 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.model_loader import ModelRegistry
 from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MoeForCausalLM,
     Ernie4_5_PretrainedModel,
@@ -29,6 +28,7 @@ from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
     Ernie4_5_VLMoeForConditionalGeneration,
     Ernie4_5_VLPretrainedModel,
 )
+from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import (
     Qwen2ForCausalLM,
     Qwen2PretrainedModel,
