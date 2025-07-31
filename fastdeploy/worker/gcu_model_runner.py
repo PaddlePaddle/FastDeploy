@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import copy
 import os
 import time
 from typing import List, Optional
@@ -296,7 +295,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts)
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""

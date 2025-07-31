@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import copy
 import random
 import time
 from typing import Dict, List, Optional
@@ -463,7 +462,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def process_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """Process inputs for prefill tasks and update share_inputs buffer"""
@@ -526,7 +525,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
         self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = copy.deepcopy(self.seq_lens_this_time_buffer[:num_running_requests])
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
