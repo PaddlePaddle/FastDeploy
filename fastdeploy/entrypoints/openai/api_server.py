@@ -114,6 +114,7 @@ async def lifespan(app: FastAPI):
         args.enable_mm,
         args.reasoning_parser,
         args.data_parallel_size,
+        args.enable_logprob,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     chat_handler = OpenAIServingChat(engine_client, pid, args.ips)

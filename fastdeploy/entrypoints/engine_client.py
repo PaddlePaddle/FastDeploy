@@ -42,6 +42,7 @@ class EngineClient:
         enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
+        enable_logprob=False,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -50,6 +51,7 @@ class EngineClient:
             mm_processor_kwargs,
             enable_mm,
         )
+        self.enable_logprob = enable_logprob
         self.enable_mm = enable_mm
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
@@ -199,6 +201,44 @@ class EngineClient:
 
         if data.get("stream_options") and not data.get("stream"):
             raise ValueError("Stream options can only be defined when `stream=True`.")
+
+        # logprobs
+        logprobs = data.get("logprobs")
+        top_logprobs = None
+
+        if isinstance(logprobs, bool) and logprobs:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+            top_logprobs = data.get("top_logprobs")
+        elif isinstance(logprobs, int):
+            top_logprobs = logprobs
+        elif logprobs:
+            raise ValueError("Invalid type for 'logprobs'")
+
+        # enable_logprob
+        if top_logprobs:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if not isinstance(top_logprobs, int):
+                err_type = type(top_logprobs).__name__
+                err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if top_logprobs < 0:
+                err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if top_logprobs > 20:
+                err_msg = "Invalid value for 'top_logprobs': must be <= 20."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """
