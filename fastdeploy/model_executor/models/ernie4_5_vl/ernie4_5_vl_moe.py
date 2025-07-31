@@ -52,6 +52,12 @@ if current_platform.is_cuda():
         text_image_gather_scatter,
         text_image_index_out,
     )
+elif current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (
+        extract_text_token_output,
+        text_image_gather_scatter,
+        text_image_index_out,
+    )
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 
