@@ -416,6 +416,26 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.models.utils import default_weight_loader
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            params_dict = dict(self.named_parameters())
+            logger.info(f"loaded_weight_name: {loaded_weight_name}")
+            if loaded_weight_name not in params_dict:
+                continue
+            param = params_dict[loaded_weight_name]
+            weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+            weight_loader(param, loaded_weight)
+
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)

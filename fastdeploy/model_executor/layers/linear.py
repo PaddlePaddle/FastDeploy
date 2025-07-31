@@ -413,25 +413,29 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # 1.fused gate_up in disk
-        # 2.split gate up
-        assert loaded_shard_id in ["gate", "up"]
-        output_dim = getattr(param, "output_dim", None)
-        # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None:
-            dim = -1
-            size = loaded_weight.get_shape()[dim]
-            block_size = size // self.nranks
-            shard_offset = self.local_rank * block_size
-            shard_size = (self.local_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
+        if loaded_shard_id is None:
+            loaded_weight = get_tensor(loaded_weight)
+            param = loaded_weight
+        else:
+            # 1.fused gate_up in disk
+            # 2.split gate up
+            assert loaded_shard_id in ["gate", "up"]
+            output_dim = getattr(param, "output_dim", None)
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1
+                size = loaded_weight.get_shape()[dim]
+                block_size = size // self.nranks
+                shard_offset = self.local_rank * block_size
+                shard_size = (self.local_rank + 1) * block_size
+                loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
-        loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = get_tensor(loaded_weight)
 
-        if loaded_shard_id == "gate":
-            param[:, : self.output_size // 2] = loaded_weight
-        elif loaded_shard_id == "up":
-            param[:, self.output_size // 2 :] = loaded_weight
+            if loaded_shard_id == "gate":
+                param[:, : self.output_size // 2] = loaded_weight
+            elif loaded_shard_id == "up":
+                param[:, self.output_size // 2 :] = loaded_weight
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -502,32 +506,36 @@ class QKVParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # 1.fused qkv in disk
-        # 2.split q k v
-        assert loaded_shard_id in ["q", "k", "v"]
-        output_dim = getattr(param, "output_dim", None)
-        # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None:
-            dim = -1
-            size = loaded_weight.get_shape()[dim]
-            block_size = size // self.nranks
-            shard_offset = self.local_rank * block_size
-            shard_size = (self.local_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
+        if loaded_shard_id is None:
+            loaded_weight = get_tensor(loaded_weight)
+            param = loaded_weight
+        else:
+            # 1.fused qkv in disk
+            # 2.split q k v
+            assert loaded_shard_id in ["q", "k", "v"]
+            output_dim = getattr(param, "output_dim", None)
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1
+                size = loaded_weight.get_shape()[dim]
+                block_size = size // self.nranks
+                shard_offset = self.local_rank * block_size
+                shard_size = (self.local_rank + 1) * block_size
+                loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
-        loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = get_tensor(loaded_weight)
 
-        if loaded_shard_id == "q":
-            param[:, : self.num_heads_per_rank * self.head_dim] = loaded_weight
-        elif loaded_shard_id == "k":
-            param[
-                :,
-                self.num_heads_per_rank
-                * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
-                * self.head_dim,
-            ] = loaded_weight
-        elif loaded_shard_id == "v":
-            param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :] = loaded_weight
+            if loaded_shard_id == "q":
+                param[:, : self.num_heads_per_rank * self.head_dim] = loaded_weight
+            elif loaded_shard_id == "k":
+                param[
+                    :,
+                    self.num_heads_per_rank
+                    * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
+                    * self.head_dim,
+                ] = loaded_weight
+            elif loaded_shard_id == "v":
+                param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :] = loaded_weight
 
     def load_weight(self, state_dict: dict):
         """
