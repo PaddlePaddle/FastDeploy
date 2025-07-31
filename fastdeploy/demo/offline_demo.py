@@ -17,11 +17,11 @@
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
-model_name_or_path = "/root/paddlejob/sunlei/ernie-4_5-0_3b-bf16-paddle"
+model_name_or_path = "/root/paddlejob/ERNIE-0.3B"
 
 # 超参设置
 sampling_params = SamplingParams(temperature=0.1, max_tokens=30, logprobs=2)
-llm = LLM(model=model_name_or_path, tensor_parallel_size=1)
+llm = LLM(model=model_name_or_path, tensor_parallel_size=1, enable_logprob=True)
 output = llm.generate(prompts="who are you？", use_tqdm=True, sampling_params=sampling_params)
 
 print(output)

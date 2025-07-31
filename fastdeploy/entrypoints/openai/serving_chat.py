@@ -49,12 +49,11 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips, enable_logprob):
+    def __init__(self, engine_client, pid, ips):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
-        self.enable_logprob = enable_logprob
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
                 self.master_ip = self.master_ip[0]
@@ -68,37 +67,6 @@ class OpenAIServingChat:
             return True
         return False
 
-    def _check_logprobs(self, request: ChatCompletionRequest):
-        """Check if logprobs is enabled and valid."""
-        if not self.enable_logprob:
-            err_msg = "Logprobs is disabled, please enable it in startup config"
-            api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
-
-        if not isinstance(request.logprobs, bool):
-            err_type = type(request.logprobs).__name__
-            err_msg = f"Invalid type for 'logprobs': expected a boolean, but got an {err_type} instead."
-            api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
-
-        if request.top_logprobs and not isinstance(request.top_logprobs, int):
-            err_type = type(request.top_logprobs).__name__
-            err_msg = f"Invalid type for 'logprobs.top_logprobs': expected an integer, but got a {err_type} instead."
-            api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
-
-        if request.top_logprobs and request.top_logprobs < 0:
-            err_msg = f"Invalid 'top_logprobs': integer below minimum value. Expected a value >= 0, but got {request.top_logprobs} instead."
-            api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
-
-        if request.top_logprobs and request.top_logprobs > 20:
-            err_msg = "Invalid value for 'top_logprobs': must be less than or equal to 20."
-            api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
-
-        return None
-
     async def create_chat_completion(self, request: ChatCompletionRequest):
         """
         Create a new chat completion using the specified parameters.
@@ -108,11 +76,6 @@ class OpenAIServingChat:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
-
-        # logprobs
-        logprobs_error = self._check_logprobs(request)
-        if logprobs_error:
-            return logprobs_error
 
         if request.user is not None:
             request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"

@@ -69,13 +69,14 @@ class LLM:
         model: str,
         revision: Optional[str] = "master",
         tokenizer: Optional[str] = None,
+        enable_logprob: Optional[bool] = False,
         **kwargs,
     ):
         model = retrive_model_from_server(model, revision)
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,
-            enable_logprob=True,
+            enable_logprob=enable_logprob,
             **kwargs,
         )
 
@@ -315,7 +316,6 @@ class LLM:
 
             # sliced 1 ~ (1 + effective_topk_logprobs)
             sliced_logprobs_lists = logprobs_lists.slice_columns(1, 1 + effective_topk_logprobs)
-            print(f"==={effective_topk_logprobs}===>{sliced_logprobs_lists}")
             result = []
             for token_ids, logprobs in zip(sliced_logprobs_lists.logprob_token_ids, sliced_logprobs_lists.logprobs):
                 logprob_dict = {

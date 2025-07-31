@@ -42,6 +42,7 @@ class EngineClient:
         enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
+        enable_logprob=False,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -50,6 +51,7 @@ class EngineClient:
             mm_processor_kwargs,
             enable_mm,
         )
+        self.enable_logprob = enable_logprob
         self.enable_mm = enable_mm
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
@@ -199,6 +201,36 @@ class EngineClient:
 
         if data.get("stream_options") and not data.get("stream"):
             raise ValueError("Stream options can only be defined when `stream=True`.")
+
+        # Check if logprobs is enabled and valid.
+        if not self.enable_logprob:
+            err_msg = "Logprobs is disabled, please enable it in startup config"
+            api_server_logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        top_logprobs = None
+        if isinstance(data.get("logprobs"), bool):
+            top_logprobs = data.get("top_logprobs")
+        elif isinstance(data.get("logprobs"), int):
+            top_logprobs = data.get("logprobs")
+        else:
+            raise ValueError("Invalid type for 'logprobs'")
+
+        if top_logprobs and not isinstance(top_logprobs, int):
+            err_type = type(top_logprobs).__name__
+            err_msg = f"Invalid type for 'top_logprobs': expected an integer, but got a {err_type} instead."
+            api_server_logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        if top_logprobs and top_logprobs < 0:
+            err_msg = f"Invalid 'top_logprobs': integer below minimum value. Expected a value >= 0, but got {top_logprobs} instead."
+            api_server_logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        if top_logprobs and top_logprobs > 20:
+            err_msg = "Invalid value for 'top_logprobs': must be less than or equal to 20."
+            api_server_logger.error(err_msg)
+            raise ValueError(err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """
