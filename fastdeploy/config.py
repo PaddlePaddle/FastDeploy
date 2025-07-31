@@ -20,10 +20,13 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from enum import Enum
+from typing import Any, Dict, List, Literal, Optional, Union
 
+import paddle
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
+import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.platforms import current_platform
@@ -271,6 +274,8 @@ class ParallelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        # currently, the expert parallel size is equal data parallel size
+        self.expert_parallel_size = self.data_parallel_size
         self.use_ep = self.expert_parallel_size > 1
         if self.splitwise_role == "mixed":
             self.moe_phase = MoEPhase(phase="prefill")
@@ -652,6 +657,14 @@ class EarlyStopConfig:
             argument = self.enable_early_stop
 
 
+class LoadChoices(str, Enum):
+    """LoadChoices"""
+
+    DEFAULT = "default"
+    # only support qwen3-bf16 now
+    NEW_LOADER = "new_loader"
+
+
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
@@ -668,6 +681,7 @@ class LoadConfig:
         self,
         args,
     ):
+        self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
@@ -869,8 +883,10 @@ class CommitConfig:
 
         self._load_from_version_file()
 
-    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
+    def _load_from_version_file(self, file_path: str = None):
         """Internal method to load version info from file"""
+        if file_path is None:
+            file_path = os.path.join(fastdeploy.__path__[0], "version.txt")
         try:
             with open(file_path, "r") as f:
                 for line in f:
@@ -1052,7 +1068,8 @@ class FDConfig:
         else:
             self.is_master = False
 
-        import paddle
+        if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
+            self.is_master = True
 
         self.paddle_commit_id = paddle.version.commit
 
