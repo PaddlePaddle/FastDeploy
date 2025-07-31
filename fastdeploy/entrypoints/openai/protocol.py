@@ -345,6 +345,7 @@ class CompletionRequest(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     min_p: Optional[float] = None
+    include_stop_str_in_output: Optional[bool] = False
     user: Optional[str] = None
 
     min_tokens: Optional[int] = None
@@ -488,7 +489,7 @@ class ChatCompletionRequest(BaseModel):
     enable_thinking: Optional[bool] = None
     reasoning_max_tokens: Optional[int] = None
     max_streaming_response_tokens: Optional[int] = None
-    include_stop_str_in_output: Optional[bool] = None
+    include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
 
     response_format: Optional[AnyResponseFormat] = None

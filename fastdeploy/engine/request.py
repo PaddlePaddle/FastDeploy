@@ -118,6 +118,7 @@ class Request:
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
         self.idx = None
+        self.need_prefill_tokens = self.prompt_token_ids_len
 
     @classmethod
     def from_dict(cls, d: dict):

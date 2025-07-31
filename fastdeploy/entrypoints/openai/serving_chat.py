@@ -134,11 +134,7 @@ class OpenAIServingChat:
             if request.enable_thinking is not None
             else (request.metadata or {}).get("enable_thinking")
         )
-        include_stop_str_in_output = (
-            request.include_stop_str_in_output
-            if request.include_stop_str_in_output is not None
-            else (request.metadata or {}).get("include_stop_str_in_output", False)
-        )
+        include_stop_str_in_output = request.include_stop_str_in_output
 
         stream_options = request.stream_options
         if stream_options is None:
@@ -339,11 +335,7 @@ class OpenAIServingChat:
             if request.enable_thinking is not None
             else (request.metadata or {}).get("enable_thinking")
         )
-        include_stop_str_in_output = (
-            request.include_stop_str_in_output
-            if request.include_stop_str_in_output is not None
-            else (request.metadata or {}).get("include_stop_str_in_output", False)
-        )
+        include_stop_str_in_output = request.include_stop_str_in_output
 
         try:
             dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")

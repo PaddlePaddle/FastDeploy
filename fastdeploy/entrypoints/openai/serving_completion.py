@@ -182,7 +182,9 @@ class OpenAIServingCompletion:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
 
-                    self.engine_client.data_processor.process_response_dict(data, stream=False)
+                    self.engine_client.data_processor.process_response_dict(
+                        data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
+                    )
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
                     completion_batched_token_ids[rid].extend(data["outputs"]["token_ids"])
                     if data.get("finished", False):
@@ -280,7 +282,9 @@ class OpenAIServingCompletion:
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_dict(res, stream=True)
+                    self.engine_client.data_processor.process_response_dict(
+                        res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
+                    )
                     if res["metrics"].get("first_token_time") is not None:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
