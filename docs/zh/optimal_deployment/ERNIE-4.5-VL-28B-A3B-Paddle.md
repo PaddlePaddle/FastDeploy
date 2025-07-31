@@ -39,7 +39,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9 \
     --enable-chunked-prefill \
     --max-num-batched-tokens 384 \
-    --quantization WINT4 \
+    --quantization wint4 \
     --enable-mm
 ```
  **示例2：** H800上双卡部署128K上下文的服务
@@ -59,7 +59,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9 \
     --enable-chunked-prefill \
     --max-num-batched-tokens 384 \
-    --quantization WINT4 \
+    --quantization wint4 \
     --enable-mm
 ```
 示例是可以稳定运行的一组配置，同时也能得到比较好的性能。

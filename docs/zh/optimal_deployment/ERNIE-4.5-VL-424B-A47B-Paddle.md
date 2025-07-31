@@ -37,7 +37,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.8 \
     --enable-chunked-prefill \
     --max-num-batched-tokens 384 \
-    --quantization WINT4 \
+    --quantization wint4 \
     --enable-mm
 ```
 示例是可以稳定运行的一组配置，同时也能得到比较好的性能。
