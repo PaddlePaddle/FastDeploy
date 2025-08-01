@@ -47,7 +47,7 @@ from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
     IPCSignal,
-    ZmqClient,
+    ZmqIpcServer,
     ZmqTcpServer
 )
 from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
@@ -55,6 +55,7 @@ from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor, WarmUpTokenProcessor
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
+from fastdeploy.splitwise.internal_adapter_utils import ExternalModuleAdapter
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -181,23 +182,15 @@ class LLMEngine:
         self.data_processor = self.input_processor.create_processor()
 
         if api_server_pid is not None:
-            self.zmq_server = ZmqClient(name=api_server_pid, mode=zmq.PULL)
-            self.zmq_server.start_server()
-            self.zmq_server.create_router()
+            if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
+                self.recv_request_server = ZmqTcpServer(port=envs.ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
+                self.send_response_server = ZmqTcpServer(port=envs.ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
+                self.external_adapter = ExternalModuleAdapter(cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node)
+            else:
+                self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
+                self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
             time.sleep(3)
         
-        if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
-            recv_request_port = envs.ZMQ_RECV_REQUEST_SERVER_PORT
-            self.recv_request_server = ZmqTcpServer(port=recv_request_port, mode=zmq.PULL)
-            send_response_port = envs.ZMQ_SEND_RESPONSE_SERVER_PORT
-            self.send_response_server = ZmqTcpServer(port=send_response_port, mode=zmq.ROUTER)
-            recv_control_cmd_ports = envs.ZMQ_CONTROL_CMD_SERVER_PORTS.split(",")
-            self.recv_control_cmd_server = ZmqTcpServer(port=recv_control_cmd_ports[0], mode=zmq.ROUTER)
-            self.handle_control_cmd_thread = threading.Thread(target=self._handle_control_cmd, daemon=True)
-            self.handle_control_cmd_thread.start()
-            self.handle_control_cmd_result_thread = threading.Thread(target=self._handle_connect_rdma_results, daemon=True)
-            self.handle_control_cmd_result_thread.start()
-
         if self.do_profile == 0 and (
             self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"
         ):
@@ -303,67 +296,6 @@ class LLMEngine:
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
         return True
     
-    def _get_current_server_info(self):
-        """
-        获取服务当前资源信息
-        """
-        available_batch_size = min(self.cfg.max_prefill_batch, self.resource_manager.available_batch())
-
-        available_block_num = self.resource_manager.available_block_num()
-        server_info = {
-            "splitwise_role": self.cfg.splitwise_role,
-            "block_size": int(self.cfg.cache_config.block_size),
-            "block_num": int(available_block_num),
-            "dec_token_num": int(self.cfg.cache_config.dec_token_num),
-            "available_resource": 1.0 * available_block_num / self.cfg.cache_config.total_block_num,
-            "max_batch_size": int(available_batch_size),
-            "max_input_token_num": self.cfg.max_num_batched_tokens,
-        }
-        return server_info
-    
-    def _handle_control_cmd(self):
-        """
-        Receive a multipart message from the control cmd socket.
-        """
-        while self.running:
-            try:
-                task = self.recv_control_cmd_server.recv_control_cmd()
-                llm_logger.info(f"Recieve control task: {task}")
-                task_id_str = task["task_id"]
-                if task["cmd"] == "get_payload":
-                    payload_info = self._get_current_server_info()
-                    result = {"task_id": task_id_str, "result": payload_info}
-                    llm_logger.info(f"Response for task: {task_id_str}")
-                    self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
-
-                elif task["cmd"] == "get_metrics":
-                    metrics_text = get_filtered_metrics(
-                        [],
-                        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=1),
-                    )
-                    result = {"task_id": task_id_str, "result": metrics_text}
-                    llm_logger.info(f"Response for task: {task_id_str}")
-                    self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
-                elif task["cmd"] == "connect_rdma":
-                    self.engine_worker_queue.put_connect_rdma_task(task)
-
-            except Exception as e:
-                llm_logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
-
-    def _handle_connect_rdma_results(self):
-        while True:
-            try:
-                result_data = self.engine_worker_queue.get_connect_rdma_task_response()
-                if result_data:
-                    task_id_str = result_data["task_id"]
-                    result = {"task_id": task_id_str, "result": result_data}
-                    llm_logger.info(f"Response for task: {task_id_str}")
-                    self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
-                else:
-                    time.sleep(0.001)
-            except Exception as e:
-                llm_logger.error(f"_handle_connect_rdma_results got error: {e}, {traceback.format_exc() !s}")
-
     def _zmq_send_generated_tokens(self):
         """
         Recieve output for zmq
@@ -376,10 +308,7 @@ class LLMEngine:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
-                        self.send_response_server.send_multipart(request_id, contents)
-                    else:
-                        self.zmq_server.send_multipart(request_id, contents)
+                    self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
@@ -511,16 +440,10 @@ class LLMEngine:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
-                    if not self.cfg.enable_mm:
-                        err, data = self.recv_request_server.receive_json_once(block)
-                    else:
-                        err, data = self.recv_request_server.receive_pyobj_once(block)
+                if not self.cfg.enable_mm:
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    if not self.cfg.enable_mm:
-                        err, data = self.zmq_server.receive_json_once(block)
-                    else:
-                        err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -568,10 +491,7 @@ class LLMEngine:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
-                        self.send_response_server.send_multipart(request_id, error_result)
-                    else:
-                        self.zmq_server.send_multipart(request_id, error_result)
+                    self.send_response_server.send_response(request_id, error_result)
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
@@ -1090,15 +1010,12 @@ class LLMEngine:
                 print(f"Error extracting sub services: {e}")
 
         self.engine_worker_queue.cleanup()
-        if hasattr(self, "zmq_server") and self.zmq_server is not None:
-            self.zmq_server.close()
-        if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
-            if hasattr(self, "send_response_server") and self.send_response_server is not None:
-                self.send_response_server.close()
-            if hasattr(self, "recv_request_server") and self.recv_request_server is not None:
-                self.recv_request_server.close()
-            if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
-                self.recv_control_cmd_server.close()
+        if hasattr(self, "send_response_server") and self.send_response_server is not None:
+            self.send_response_server.close()
+        if hasattr(self, "recv_request_server") and self.recv_request_server is not None:
+            self.recv_request_server.close()
+        if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
+            self.recv_control_cmd_server.close()
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 p.join()

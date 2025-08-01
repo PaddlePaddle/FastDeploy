@@ -16,6 +16,7 @@
 
 import threading
 import time
+from abc import ABC, abstractmethod
 
 import msgpack
 import zmq
@@ -24,54 +25,23 @@ from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
-class ZmqTcpServer:
+class ZmqServerBase(ABC):
     """
-    ZmqTcpServer, used when ENABLE_EXTERNAL_MODULE_ACCESS=1
+    ZmqServerBase
     """
+    def __init__(self):
+        pass
 
-    def __init__(self, port, mode):
-        self.context = zmq.Context()
-        self.socket = self.context.socket(mode)
-        self.mode = mode
-        self.port = port
-        self.socket.setsockopt(zmq.SNDTIMEO, -1)
-        self.socket.bind(f"tcp://*:{self.port}")
-        self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
-        self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
-        self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
-
-        self.mutex = threading.Lock()
-        self.req_dict = dict()
-        self.poller = None
-        self.running = True
-        if self.mode == zmq.PULL:
-            self.poller = zmq.Poller()
-            self.poller.register(self.socket, zmq.POLLIN)
-
-    def send_json(self, data):
-        """
-        Send a JSON-serializable object over the socket.
-        """
-        self.socket.send_json(data)
-
-    def recv_json(self):
-        """
-        Receive a JSON-serializable object from the socket.
-        """
-        return self.socket.recv_json()
-
-    def send_pyobj(self, data):
-        """
-        Send a Pickle-serializable object over the socket.
-        """
-        self.socket.send_pyobj(data)
-
-    def recv_pyobj(self):
-        """
-        Receive a Pickle-serializable object from the socket.
-        """
-        return self.socket.recv_pyobj()
-
+    @abstractmethod
+    def _create_socket(self):
+        """Abstract method to create and return a ZeroMQ socket."""
+        pass
+    
+    def _ensure_socket(self):
+        """Ensure the socket is created before use."""
+        if self.socket is None:
+            self.socket = self._create_socket()
+    
     def pack_aggregated_data(self, data):
         """
         Aggregate multiple responses into one and send them to the client.
@@ -82,41 +52,46 @@ class ZmqTcpServer:
                 result.add(response)
         result = msgpack.packb([result.to_dict()])
         return result
-
-    def recv_control_cmd(self):
-        while self.running:
-            try:
-                client, _, task_data = self.socket.recv_multipart(flags=zmq.NOBLOCK)
-                task = msgpack.unpackb(task_data)
-                task_id_str = task["task_id"]
-            except zmq.Again:
-                time.sleep(0.001)
-                continue
-            with self.mutex:
-                self.req_dict[task_id_str] = client
-            return task
-
-    def response_for_control_cmd(self, task_id, result):
+    
+    def receive_json_once(self, block=False):
         """
-        Send a multipart message to the control cmd socket.
+        Receive a single message from the socket.
         """
-        if self.socket is None:
-            raise RuntimeError("Router socket not created.")
+        self._ensure_socket()
+        if self.socket is None or self.socket.closed:
+            return "zmp socket has closed", None
         try:
-            result = msgpack.packb(result)
-            self.socket.send_multipart([self.req_dict[task_id], b"", result])
-
+            flags = zmq.NOBLOCK if not block else 0
+            return None, self.socket.recv_json(flags=flags)
+        except zmq.Again:
+            return None, None
         except Exception as e:
-            llm_logger.error(f"Send result to zmq client failed: {e}")
+            self.close()
+            llm_logger.warning(f"{e}")
+            return str(e), None
 
-        with self.mutex:
-            self.req_dict.pop(task_id, None)
-        llm_logger.info(f"response contrl cmd finished, task_id: {task_id}")
-
-    def send_multipart(self, req_id, data):
+    def receive_pyobj_once(self, block=False):
         """
-        Send a multipart message to the router socket.
+        Receive a single message from the socket.
         """
+        self._ensure_socket()
+        if self.socket is None or self.socket.closed:
+            return "zmp socket has closed", None
+        try:
+            flags = zmq.NOBLOCK if not block else 0
+            return None, self.socket.recv_pyobj(flags=flags)
+        except zmq.Again:
+            return None, None
+        except Exception as e:
+            self.close()
+            llm_logger.warning(f"{e}")
+            return str(e), None
+    
+    def send_response(self, req_id, data):
+        """
+        Send generated token result to client.
+        """
+        self._ensure_socket()
         if self.socket is None:
             raise RuntimeError("Router socket not created. Call create_router() first.")
 
@@ -149,38 +124,51 @@ class ZmqTcpServer:
             with self.mutex:
                 self.req_dict.pop(req_id, None)
             llm_logger.info(f"send_multipart finished, req_id: {req_id}")
+    
+    @abstractmethod
+    def close(self):
+        pass
 
-    def receive_json_once(self, block=False):
-        """
-        Receive a single message from the socket.
-        """
-        if self.socket is None or self.socket.closed:
-            return "zmp socket has closed", None
-        try:
-            flags = zmq.NOBLOCK if not block else 0
-            return None, self.socket.recv_json(flags=flags)
-        except zmq.Again:
-            return None, None
-        except Exception as e:
-            self.close()
-            llm_logger.warning(f"{e}")
-            return str(e), None
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+    
 
-    def receive_pyobj_once(self, block=False):
+class ZmqIpcServer(ZmqServerBase):
+    """
+    ZmqIpcServer, used when ENABLE_EXTERNAL_MODULE_ACCESS=0
+    """
+
+    def __init__(self, name, mode):
+        self.name = name
+        self.mode = mode
+        if mode == zmq.PULL:
+            self.file_name = f"/dev/shm/{name}.socket"
+        elif mode == zmq.ROUTER:
+            self.file_name = f"/dev/shm/router_{name}.ipc"
+        self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
+        self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
+        self.mutex = threading.Lock()
+        self.req_dict = dict()
+        self.running = True
+    
+    def _create_socket(self):
+        """create and return a ZeroMQ socket."""
+        self.context = zmq.Context()
+        self.context.socket(self.mode)
+        self.router.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
+        self.router.setsockopt(zmq.SNDTIMEO, -1)
+        self.socket.bind(f"ipc://{self.file_name}")
+
+    
+    def _clear_ipc(self, name):
         """
-        Receive a single message from the socket.
+        Remove the IPC file with the given name.
         """
-        if self.socket is None or self.socket.closed:
-            return "zmp socket has closed", None
-        try:
-            flags = zmq.NOBLOCK if not block else 0
-            return None, self.socket.recv_pyobj(flags=flags)
-        except zmq.Again:
-            return None, None
-        except Exception as e:
-            self.close()
-            llm_logger.warning(f"{e}")
-            return str(e), None
+        if os.path.exists(name):
+            try:
+                os.remove(name)
+            except OSError as e:
+                llm_logger.warning(f"Failed to remove IPC file {name} - {e}")
 
     def close(self):
         """
@@ -192,12 +180,84 @@ class ZmqTcpServer:
         self.running = False
         llm_logger.info("Closing ZMQ connection...")
         try:
-            if hasattr(self, "socket") and not self.socket.closed:
-                self.socket.close()
-
             if self.socket is not None and not self.socket.closed:
                 self.socket.close()
+            if not self.context.closed:
+                self.context.term()
+            self._clear_ipc(self.file_name)
+        except Exception as e:
+            llm_logger.warning(f"Failed to close ZMQ connection - {e}")
+            return
 
+
+class ZmqTcpServer(ZmqServerBase):
+    """
+    ZmqTcpServer, used when ENABLE_EXTERNAL_MODULE_ACCESS=1
+    """
+
+    def __init__(self, port, mode):
+        self.mode = mode
+        self.port = port
+        self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
+        self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
+
+        self.mutex = threading.Lock()
+        self.req_dict = dict()
+        self.running = True
+
+    def _create_socket(self):
+        """create and return a ZeroMQ socket."""
+        self.context = zmq.Context()
+        self.socket = self.context.socket(mode)
+        self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
+        self.socket.setsockopt(zmq.SNDTIMEO, -1)
+        self.socket.bind(f"tcp://*:{self.port}")
+
+    def recv_control_cmd(self):
+        """
+        Recieve control command from client
+        """
+        while self.running:
+            try:
+                client, _, task_data = self.socket.recv_multipart(flags=zmq.NOBLOCK)
+                task = msgpack.unpackb(task_data)
+                task_id_str = task["task_id"]
+            except zmq.Again:
+                time.sleep(0.001)
+                continue
+            with self.mutex:
+                self.req_dict[task_id_str] = client
+            return task
+
+    def response_for_control_cmd(self, task_id, result):
+        """
+        Send command result back to client.
+        """
+        if self.socket is None:
+            raise RuntimeError("Router socket not created.")
+        try:
+            result = msgpack.packb(result)
+            self.socket.send_multipart([self.req_dict[task_id], b"", result])
+
+        except Exception as e:
+            llm_logger.error(f"Send result to zmq client failed: {e}")
+
+        with self.mutex:
+            self.req_dict.pop(task_id, None)
+        llm_logger.info(f"response contrl cmd finished, task_id: {task_id}")
+    
+    def close(self):
+        """
+        Close the socket and context.
+        """
+        if not self.running:
+            return
+
+        self.running = False
+        llm_logger.info("Closing ZMQ connection...")
+        try:
+            if self.socket is not None and not self.socket.closed:
+                self.socket.close()
             if not self.context.closed:
                 self.context.term()
 
@@ -205,5 +265,3 @@ class ZmqTcpServer:
             llm_logger.warning(f"Failed to close ZMQ connection - {e}")
             return
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
