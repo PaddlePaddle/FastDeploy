@@ -48,6 +48,7 @@ from fastdeploy.inter_communicator import (
     EngineWorkerQueue,
     IPCSignal,
     ZmqClient,
+    ZmqTcpServer
 )
 from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
