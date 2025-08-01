@@ -43,7 +43,7 @@ curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
       {"type": "text", "text": "Which era does the cultural relic in the picture belong to"}
     ]}
   ],
-  "enable_thinking": true,
+  "chat_template_kwargs":{"enable_thinking": true},
   "reasoning_max_tokens": 1024
 }'
 ```
@@ -70,7 +70,7 @@ chat_response = client.chat.completions.create(
     model="vl",
     stream=True,
     extra_body={
-      "enable_thinking": True,
+      "chat_template_kwargs":{"enable_thinking": True},
       "reasoning_max_tokens": 1024
     }
 )

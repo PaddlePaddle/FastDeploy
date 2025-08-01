@@ -493,7 +493,7 @@ def test_chat_with_thinking(openai_client, capsys):
         temperature=1,
         stream=False,
         max_tokens=10,
-        extra_body={"enable_thinking": True},
+        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
     )
     assert response.choices[0].message.reasoning_content is not None
 
@@ -504,7 +504,7 @@ def test_chat_with_thinking(openai_client, capsys):
         temperature=1,
         stream=False,
         max_tokens=10,
-        extra_body={"enable_thinking": False},
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
     assert response.choices[0].message.reasoning_content is None
 
@@ -514,7 +514,11 @@ def test_chat_with_thinking(openai_client, capsys):
         model="default",
         messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
         temperature=1,
-        extra_body={"enable_thinking": True, "reasoning_max_tokens": reasoning_max_tokens, "return_token_ids": True},
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+            "return_token_ids": True,
+        },
         stream=True,
         max_tokens=10,
     )
