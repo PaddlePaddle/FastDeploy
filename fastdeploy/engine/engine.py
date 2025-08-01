@@ -963,14 +963,17 @@ class LLMEngine:
         self.running = False
 
         if hasattr(self, "cache_manager_processes"):
-            self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
                     print(f"Error extracting file: {e}")
+            if hasattr(self.resource_manager.cache_manager, "cache_ready_signal"):
+                self.resource_manager.cache_manager.cache_ready_signal.clear()
+            self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
+        if hasattr(self, "zmq_server") and self.zmq_server is not None:
+            self.zmq_server.close()
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
@@ -985,12 +988,10 @@ class LLMEngine:
             except Exception as e:
                 print(f"Error extracting sub services: {e}")
 
-        self.engine_worker_queue.cleanup()
-        if hasattr(self, "zmq_server") and self.zmq_server is not None:
-            self.zmq_server.close()
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 p.join()
+        self.engine_worker_queue_server.cleanup()
 
     def _setting_environ_variables(self):
         """

@@ -26,6 +26,7 @@ from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommMa
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.model_executor.ops.gpu import set_data_ipc
+from fastdeploy.utils import get_logger
 
 
 def parse_args():
@@ -440,6 +441,7 @@ def main():
 if __name__ == "__main__":
 
     args = parse_args()
+    logger = get_logger("cache_messager", "cache_messager.log")
 
     logger.info("create cache messager...")
     logger.info(f"{args}")
