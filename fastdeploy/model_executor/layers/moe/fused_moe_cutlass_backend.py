@@ -217,15 +217,6 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-
-        # num_tokens = x.shape[0]
-        # ref_combin_x = paddle.zeros_like(x).cast("float32")
-        # for i in range(num_tokens):
-        #     for k, expert_id in enumerate(topk_idx[i].numpy().tolist()):
-        #         if expert_id == -1:
-        #             continue
-        #         ref_combin_x[i] += (x[i].to(paddle.float32) * topk_weights[i][k])
-
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(x, topk_idx, topk_weights)
         # 3. Compute ffn
@@ -236,27 +227,16 @@ class CutlassMoEMethod(MoEMethodBase):
             expert_idx_per_token = None
         else:
             raise NotImplementedError
-        if permute_input is not None:
-            ffn_out = self.compute_ffn(
-                layer,
-                permute_input,
-                token_nums_per_expert.cast("int64"),
-                expert_idx_per_token,
-                True,
-            )
-            #ffn_out = paddle.assign(permute_input)
-        else:
-            ffn_out = None
+        ffn_out = self.compute_ffn(
+            layer,
+            permute_input,
+            token_nums_per_expert.cast("int64"),
+            expert_idx_per_token,
+            True,
+        )
 
         # 4. EP combine
-        res = self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
-
-        # if res is not None:
-        #     print(res.cast("float32"))
-        #     print(ref_combin_x)
-        #     print(ref_combin_x - res.cast("float32"))
-        
-        return res
+        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
     def apply_tp(
         self,
