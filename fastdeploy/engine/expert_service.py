@@ -27,11 +27,12 @@ import zmq
 import numpy as np
 
 from fastdeploy.engine.resource_manager import ResourceManager
-from fastdeploy.inter_communicator import EngineWorkerQueue, ZmqTcpServer
+from fastdeploy.inter_communicator import EngineWorkerQueue
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
+from fastdeploy.splitwise.internal_adapter_utils import ExternalModuleAdapter
 from fastdeploy.metrics.metrics import EXCLUDE_LABELS, get_filtered_metrics, main_process_metrics
 
 
@@ -117,7 +118,7 @@ class ExpertService:
         if envs.ENABLE_ENGINE_ZMQ_REMOTE_ACCESS:
             self.external_adapter = ExternalModuleAdapter(cfg=self.cfg, engine=self, dp_rank=local_data_parallel_id)
 
-    def start(self, ipc_signal_suffix, local_data_parallel_id, request_queues=None, result_queue=None):
+    def start(self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None):
         """
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
@@ -154,7 +155,7 @@ class ExpertService:
         disaggregate = self.cfg.disaggregate_info
         if self.cfg.scheduler_config.name == 'dp':
             assert (request_queues is not None) and (result_queue is not None)
-            self.scheduler.start(local_data_parallel_id, request_queues, result_queue)
+            self.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
         elif self.cfg.scheduler_config.name == 'splitwise':
             self.scheduler.start(role, host_ip, disaggregate)
         self.cfg.print()
@@ -366,13 +367,13 @@ class ExpertService:
             self.zmq_server.close()
 
 
-def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix, request_queues=None, result_queue=None):
+def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None):
     """
     Start expert service
     """
     expert_service = ExpertService(cfg, local_data_parallel_id)
     try:
-        expert_service.start(ipc_signal_suffix, local_data_parallel_id, request_queues, result_queue)
+        expert_service.start(ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
         expert_service.split_connector.start_receiver()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}")
