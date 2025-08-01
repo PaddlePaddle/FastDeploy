@@ -140,7 +140,7 @@ jobs:
           fi
           diff_cov_result_json="diff_coverage.json"
           if [ -f ${diff_cov_result_json} ];then
-            python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
+            python ${push_file} ${diff_cov_result_json} ${target_path}/CoverageData
             target_path_stripped="${target_path#paddle-github-action/}"
             DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
