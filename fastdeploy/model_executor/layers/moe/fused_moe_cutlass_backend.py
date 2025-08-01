@@ -75,31 +75,15 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         Paddle cutlass create weight process.
         """
-        if self.moe_quant_type == "weight_only_int4":
-            self.weight_dtype = "int8"
-        else:
-            self.weight_dtype = layer._helper.get_default_dtype()
+        self.weight_dtype = layer._helper.get_default_dtype()
         # bf16
         # ffn1
         up_gate_proj_weight_name = self.added_weight_attrs[0]
-        if self.moe_quant_type == "fp8":
-            self.ffn1_weight_shape = [
-                layer.num_local_experts,
-                layer.moe_intermediate_size * 2,
-                layer.hidden_size,
-            ]
-        else:
-            self.ffn1_weight_shape = [
-                layer.num_local_experts,
-                layer.hidden_size,
-                layer.moe_intermediate_size * 2,
-            ]
-        # if not self.activation.endswith("glu"):
-        #     self.ffn1_weight_shape = [
-        #         layer.num_local_experts,
-        #         layer.hidden_size,
-        #         layer.moe_intermediate_size,
-        #     ]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
+        ]
         setattr(
             layer,
             up_gate_proj_weight_name,
@@ -111,18 +95,12 @@ class CutlassMoEMethod(MoEMethodBase):
         )
         # ffn2
         down_proj_weight_name = self.added_weight_attrs[1]
-        if self.moe_quant_type == "fp8":
-            self.ffn2_weight_shape = [
-                layer.num_local_experts,
-                layer.hidden_size,
-                layer.moe_intermediate_size,
-            ]
-        else:
-            self.ffn2_weight_shape = [
-                layer.num_local_experts,
-                layer.moe_intermediate_size,
-                layer.hidden_size,
-            ]
+
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+        ]
         setattr(
             layer,
             down_proj_weight_name,
@@ -493,11 +471,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
                 quant_weight, scale = weight_quantize(weight_tensor[i], algo=self.moe_quant_type, arch=80)
                 weight_list.append(quant_weight)
             quanted_weight = paddle.stack(weight_list, axis=0)
-            try:
-                getattr(layer, weight_name).set_value(quanted_weight)
-            except Exception as e:
-                print(f"{weight_name}_____________________{e}")
-                raise e
+            getattr(layer, weight_name).set_value(quanted_weight)
 
         self.load_w4a8_scale_weights(layer, layer.weight_key_map, state_dict)
 
