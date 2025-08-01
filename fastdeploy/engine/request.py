@@ -71,6 +71,7 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
+        dp_rank: Optional[int] = None
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -119,6 +120,7 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        self.dp_rank = dp_rank
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -151,6 +153,7 @@ class Request:
             guided_json_object=d.get("guided_json_object", None),
             enable_thinking=d.get("enable_thinking", True),
             trace_carrier=d.get("trace_carrier", {}),
+            dp_rank=d.get("dp_rank", None)
         )
 
     @property
