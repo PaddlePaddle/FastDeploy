@@ -820,6 +820,7 @@ class EngineArgs:
             "max_num_partial_prefills",
             "max_long_partial_prefills",
             "long_prefill_token_threshold",
+            "splitwise_role"
         ]
 
         all = asdict(self)
