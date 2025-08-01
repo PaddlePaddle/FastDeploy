@@ -1,4 +1,4 @@
-# Kunlunxin XPU
+# Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on Kunlunxin XPU machine
 
 ## Requirements
 
