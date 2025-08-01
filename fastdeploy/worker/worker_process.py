@@ -245,7 +245,7 @@ class PaddleDisWorkerProc:
             assert self.fd_config.parallel_config.tensor_parallel_rank == 0
             rank = paddle.distributed.get_rank()
 
-            if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0 and rank < 8:
+            if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
 
                 req_dicts = []
@@ -258,6 +258,17 @@ class PaddleDisWorkerProc:
                 )
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts)
+
+
+            tmp = self.worker.model_runner.not_need_stop().item()
+            tmp = paddle.to_tensor(tmp).reshape([1])
+            tmps = []
+            paddle.distributed.all_gather(tmps, tmp)
+            tmps = paddle.concat(tmps,axis=0)
+            if tmps.sum().item() < 8:
+                continue
+            else:
+                print("开始推理啦")
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
