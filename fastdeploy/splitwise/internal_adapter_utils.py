@@ -21,6 +21,7 @@ import threading
 from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
 from fastdeploy.inter_communicator import ZmqTcpServer
 from fastdeploy.utils import envs, llm_logger
+import traceback
 
 class ExternalModuleAdapter:
     def __int__(self, cfg, engine, dp_rank):

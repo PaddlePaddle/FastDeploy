@@ -17,6 +17,7 @@
 import threading
 import time
 from abc import ABC, abstractmethod
+import os
 
 import msgpack
 import zmq
@@ -208,7 +209,7 @@ class ZmqTcpServer(ZmqServerBase):
     def _create_socket(self):
         """create and return a ZeroMQ socket."""
         self.context = zmq.Context()
-        self.socket = self.context.socket(mode)
+        self.socket = self.context.socket(self.mode)
         self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
         self.socket.setsockopt(zmq.SNDTIMEO, -1)
         self.socket.bind(f"tcp://*:{self.port}")
