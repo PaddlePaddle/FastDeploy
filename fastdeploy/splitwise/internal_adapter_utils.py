@@ -79,7 +79,7 @@ class InternalAdapter:
                     llm_logger.info(f"Response for task: {task_id_str}")
                     self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 elif task["cmd"] == "connect_rdma":
-                    self.engine_worker_queue.put_connect_rdma_task(task)
+                    self.engine.engine_worker_queue.put_connect_rdma_task(task)
 
             except Exception as e:
                 llm_logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
@@ -87,7 +87,7 @@ class InternalAdapter:
     def _response_external_module_control_instruct(self):
         while True:
             try:
-                result_data = self.engine_worker_queue.get_connect_rdma_task_response()
+                result_data = self.engine.engine_worker_queue.get_connect_rdma_task_response()
                 if result_data:
                     task_id_str = result_data["task_id"]
                     result = {"task_id": task_id_str, "result": result_data}

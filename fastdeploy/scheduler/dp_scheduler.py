@@ -15,8 +15,7 @@
 """
 import threading
 from multiprocessing import Queue
-from typing import Dict, List
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import time
 
 from fastdeploy.engine.request import Request, RequestOutput
@@ -141,6 +140,8 @@ class DPScheduler:
     def put_requests(self, requests: List[Dict]):
         results = []
         for request in requests:
+            if not hasattr(request, 'dp_rank'):
+                raise ValueError(f"Request object is missing the 'dp_rank' attribute: {request}")
             self.request_queues[request.dp_rank].put(request)
             results.append((request.request_id, None))
         return results
