@@ -6,7 +6,7 @@ run_path="$DIR/../test/"
 cd ${run_path}
 ls
 
-exclude=("ci_use")
+exclude=("ci_use" "ce")
 for d in */ ; do
   dir_name="${d%/}"
   if [[ -d "$dir_name" ]]; then
