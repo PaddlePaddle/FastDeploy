@@ -143,7 +143,8 @@ class BackendBase:
         self.hf_tokenizer = self._get_tokenizer_hf()
         if self.fd_config.model_config.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(
-                self.fd_config.model_config.reasoning_parser)
+                self.fd_config.model_config.reasoning_parser
+            )
             self.reasoning_parser = reasoning_parser_obj(self.hf_tokenizer)
 
     def _create_processor(self):
@@ -227,10 +228,10 @@ class BackendBase:
         return self.reasoning_parser
 
     def _init_logits_processor(
-            self,
-            schemata_key: tuple[str, str],
-            enable_thinking: bool = False,
-        ) -> LogitsProcessorBase:
+        self,
+        schemata_key: tuple[str, str],
+        enable_thinking: bool = False,
+    ) -> LogitsProcessorBase:
         """
         init logits processor by type and schemata.
 
@@ -258,10 +259,10 @@ class BackendBase:
             return None
 
     def get_logits_processor(
-            self,
-            schemata_key: tuple[str, str],
-            enable_thinking: bool = False,
-        ) -> tuple[LogitsProcessorBase, bool]:
+        self,
+        schemata_key: tuple[str, str],
+        enable_thinking: bool = False,
+    ) -> tuple[LogitsProcessorBase, bool]:
         """
         get logits processor by key from cache or create new one.
 
@@ -298,6 +299,7 @@ class BackendBase:
             architectures = self.fd_config.model_config.architectures
             if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
+
                 tokenizer = AutoTokenizer.from_pretrained(
                     self.fd_config.model_config.model,
                     use_fast=False,

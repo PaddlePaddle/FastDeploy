@@ -23,9 +23,11 @@ import torch
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.model_executor.guided_decoding import (BackendBase,
-                                                       BaseChecker,
-                                                       LogitsProcessorBase)
+from fastdeploy.model_executor.guided_decoding import (
+    BackendBase,
+    BaseChecker,
+    LogitsProcessorBase,
+)
 from fastdeploy.utils import llm_logger
 
 try:
@@ -245,7 +247,7 @@ class XGrammarBackend(BackendBase):
             enable_thinking=enable_thinking,
         )
 
-    def _json_processor(self, schemata: str, enable_thinking: bool=False) -> Optional[XGrammarProcessor]:
+    def _json_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile JSON schema into a grammar processor.
 
@@ -263,7 +265,7 @@ class XGrammarBackend(BackendBase):
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
-    def _regex_processor(self, schemata: str, enable_thinking: bool=False) -> Optional[XGrammarProcessor]:
+    def _regex_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile regex pattern into a grammar processor.
 
@@ -281,7 +283,7 @@ class XGrammarBackend(BackendBase):
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
-    def _grammar_processor(self, schemata: str, enable_thinking: bool=False) -> Optional[XGrammarProcessor]:
+    def _grammar_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile grammar (EBNF) into a grammar processor.
 
@@ -299,7 +301,7 @@ class XGrammarBackend(BackendBase):
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
-    def _structural_tag_processor(self, schemata: str, enable_thinking: bool=False) -> Optional[XGrammarProcessor]:
+    def _structural_tag_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile structural tags into a grammar processor.
 
