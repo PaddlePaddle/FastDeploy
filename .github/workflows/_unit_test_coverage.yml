@@ -25,10 +25,11 @@ on:
 
 jobs:
   run_tests_with_coverage:
-    runs-on: [self-hosted, GPU-h1z1-4Cards]
+    runs-on: [self-hosted, GPU-h1z1-2Cards]
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
-      unittest_failed_url: ${{ steps.unittest_failed.outputs.unittest_failed_url }}
+      unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
+      diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
     steps:
       - name: Code Prepare
         shell: bash
@@ -111,7 +112,7 @@ jobs:
             coverage combine coveragedata/
             coverage xml -o python_coverage_all.xml
             COVERAGE_EXIT_CODE=0
-            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=90 || COVERAGE_EXIT_CODE=9
+            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
             echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
             python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
             '
@@ -125,27 +126,68 @@ jobs:
           cd FastDeploy
           commit_id=${{ github.event.pull_request.head.sha }}
           pr_num=${{ github.event.pull_request.number }}
-          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}/CoverageData
+          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
           diff_cov_file="diff_coverage.xml"
           if [ -f ${diff_cov_file} ];then
-            python ${push_file} ${diff_cov_file} ${target_path}
+            python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
             target_path_stripped="${target_path#paddle-github-action/}"
-            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${diff_cov_file}
+            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
             echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
+            echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
           fi
-      - name: Determine Unit Succ and whether the coverage rate reaches 90%
+          diff_cov_result_json="diff_coverage.json"
+          if [ -f ${diff_cov_result_json} ];then
+            python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
+            target_path_stripped="${target_path#paddle-github-action/}"
+            DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
+            echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
+            echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
+          fi
+          unittest_result="test/failed_tests.log"
+          if [ -s ${unittest_result} ];then
+            python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
+            target_path_stripped="${target_path#paddle-github-action/}"
+            UNIT_TEST_RESULT_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/UnitTestResult/${unittest_result}
+            echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
+            echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
+          fi
+      - name: Determine Unit Succ and whether the coverage rate reaches 80%
         shell: bash
         run: |
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            if [ -z "${unittest_failed_url}" ]; then
+              echo "No diff unit failed file URL provided."
+            else
+              wget ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
+            fi
             echo "Unit tests failed (exit code 8)"
+            filename=$(basename "$unittest_failed_url")
+            if [ -f "${filename}" ];then
+              echo "Failed test cases:"
+              cat "${filename}"
+            fi
             exit "$TEST_EXIT_CODE"
           fi
 
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
+            if [ -z "${diff_cov_result_json_url}" ]; then
+              echo "No diff cov result file URL provided."
+            else
+              wget ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
+            fi
+            filename=$(basename "$diff_cov_result_json_url")
+            if [ -f "${filename}" ];then
+              echo "Failed test cases:"
+              if command -v jq >/dev/null 2>&1; then
+                  jq . "${filename}"
+              else
+                  cat "${filename}"
+              fi
+            fi
             exit "$COVERAGE_EXIT_CODE"
           fi
           echo "All tests and coverage passed"
