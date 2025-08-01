@@ -17,18 +17,19 @@
 # **Note**: Just for internal use
 import zmq
 import threading
+import time
 
 from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
 from fastdeploy.inter_communicator import ZmqTcpServer
 from fastdeploy.utils import envs, llm_logger
 import traceback
 
-class ExternalModuleAdapter:
-    def __int__(self, cfg, engine, dp_rank):
+class InternalAdapter:
+    def __init__(self, cfg, engine, dp_rank):
         self.cfg = cfg
         self.engine = engine
         self.dp_rank = dp_rank
-        recv_control_cmd_ports = envs.ZMQ_CONTROL_CMD_SERVER_PORTS.split(",")
+        recv_control_cmd_ports = envs.FD_ZMQ_CONTROL_CMD_SERVER_PORTS.split(",")
         self.recv_control_cmd_server = ZmqTcpServer(port=recv_control_cmd_ports[dp_rank], mode=zmq.ROUTER)
         self.recv_external_instruct_thread = threading.Thread(target=self._recv_external_module_control_instruct, daemon=True)
         self.recv_external_instruct_thread.start()
@@ -36,7 +37,7 @@ class ExternalModuleAdapter:
         self.response_external_instruct_thread.start()
 
     
-    def get_current_server_info(self):
+    def _get_current_server_info(self):
         """
         获取服务当前资源信息
         """

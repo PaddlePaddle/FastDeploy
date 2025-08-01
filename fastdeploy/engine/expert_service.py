@@ -32,7 +32,7 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
-from fastdeploy.splitwise.internal_adapter_utils import ExternalModuleAdapter
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.metrics.metrics import EXCLUDE_LABELS, get_filtered_metrics, main_process_metrics
 
 
@@ -115,8 +115,8 @@ class ExpertService:
             )
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
-        if envs.ENABLE_ENGINE_ZMQ_REMOTE_ACCESS:
-            self.external_adapter = ExternalModuleAdapter(cfg=self.cfg, engine=self, dp_rank=local_data_parallel_id)
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.external_adapter = InternalAdapter(cfg=self.cfg, engine=self, dp_rank=local_data_parallel_id)
 
     def start(self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None):
         """

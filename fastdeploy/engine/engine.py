@@ -55,7 +55,7 @@ from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor, WarmUpTokenProcessor
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.splitwise.internal_adapter_utils import ExternalModuleAdapter
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -182,10 +182,10 @@ class LLMEngine:
         self.data_processor = self.input_processor.create_processor()
 
         if api_server_pid is not None:
-            if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
-                self.recv_request_server = ZmqTcpServer(port=envs.ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
-                self.send_response_server = ZmqTcpServer(port=envs.ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
-                self.external_adapter = ExternalModuleAdapter(cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node)
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
+                self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
+                self.external_adapter = InternalAdapter(cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node)
             else:
                 self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
                 self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
@@ -432,7 +432,7 @@ class LLMEngine:
         if self.api_server_pid is None:
             return
         
-        if envs.ENABLE_EXTERNAL_MODULE_ACCESS:
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
             if self.cfg.splitwise_role == "decode":
                 return
 

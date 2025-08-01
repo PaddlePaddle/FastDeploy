@@ -136,7 +136,7 @@ class ZmqServerBase(ABC):
 
 class ZmqIpcServer(ZmqServerBase):
     """
-    ZmqIpcServer, used when ENABLE_EXTERNAL_MODULE_ACCESS=0
+    ZmqIpcServer, used when FD_ENABLE_INTERNAL_ADAPTER=0
     """
 
     def __init__(self, name, mode):
@@ -155,10 +155,11 @@ class ZmqIpcServer(ZmqServerBase):
     def _create_socket(self):
         """create and return a ZeroMQ socket."""
         self.context = zmq.Context()
-        self.context.socket(self.mode)
-        self.router.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
-        self.router.setsockopt(zmq.SNDTIMEO, -1)
+        self.socket = self.context.socket(self.mode)
+        self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
+        self.socket.setsockopt(zmq.SNDTIMEO, -1)
         self.socket.bind(f"ipc://{self.file_name}")
+        return self.socket
 
     
     def _clear_ipc(self, name):
@@ -193,7 +194,7 @@ class ZmqIpcServer(ZmqServerBase):
 
 class ZmqTcpServer(ZmqServerBase):
     """
-    ZmqTcpServer, used when ENABLE_EXTERNAL_MODULE_ACCESS=1
+    ZmqTcpServer, used when FD_ENABLE_INTERNAL_ADAPTER=1
     """
 
     def __init__(self, port, mode):
@@ -213,6 +214,7 @@ class ZmqTcpServer(ZmqServerBase):
         self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
         self.socket.setsockopt(zmq.SNDTIMEO, -1)
         self.socket.bind(f"tcp://*:{self.port}")
+        return self.socket
 
     def recv_control_cmd(self):
         """

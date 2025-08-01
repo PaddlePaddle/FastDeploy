@@ -81,13 +81,13 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")),
     # enable external module to access LLMEngine.
-    "ENABLE_EXTERNAL_MODULE_ACCESS": lambda: int(os.getenv("ENABLE_EXTERNAL_MODULE_ACCESS", "0")),
-    # LLMEngine recieve requests port, used when ENABLE_EXTERNAL_MODULE_ACCESS=1
-    "ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("ZMQ_RECV_REQUEST_SERVER_PORT", "8200"),
-    # LLMEngine send response port, used when ENABLE_EXTERNAL_MODULE_ACCESS=1
-    "ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
-    # LLMEngine recieve control command port, used when ENABLE_EXTERNAL_MODULE_ACCESS=1
-    "ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
+    "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
+    # LLMEngine recieve requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", "8200"),
+    # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
+    # LLMEngine recieve control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
 }
 
 
