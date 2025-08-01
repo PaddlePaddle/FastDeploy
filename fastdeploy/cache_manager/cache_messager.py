@@ -73,7 +73,7 @@ class CacheMessager:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
-        address = (pod_ip, engine_worker_queue_port)
+        address = (pod_ip, engine_worker_queue_port + local_data_parallel_id)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
