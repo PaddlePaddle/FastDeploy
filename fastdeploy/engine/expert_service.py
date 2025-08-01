@@ -154,7 +154,7 @@ class ExpertService:
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
         if self.cfg.scheduler_config.name == 'dp':
-            assert (request_queues is not None) and (result_queue is not None)
+            assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
             self.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
         elif self.cfg.scheduler_config.name == 'splitwise':
             self.scheduler.start(role, host_ip, disaggregate)
