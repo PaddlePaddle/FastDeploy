@@ -11,12 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set -ex
+rm -rf log
+rm -f core*
 
-"""UT for set_stop_value"""
-import paddle
+export devices=0
+export CUDA_VISIBLE_DEVICES=${devices}
+model_path=${1:-"/PATH/MODEL_PATH"}
+output_path=${2:-"/PATH/OUTPUT_MODEL"}
+for name in `env | grep -E 'PADDLE|ENDPOINT' | awk -F'=' '{print $1}'`; do
+unset ${name}
+done
+export PADDLE_TRAINER_ID=0
+export PADDLE_TRAINERS_NUM=1
+export TRAINER_INSTANCES_NUM=1
+export TRAINER_INSTANCES=`hostname -i`
+self_ip=`hostname -i`
 
-from fastdeploy.model_executor.ops.gpu import set_stop_value
-
-topk_ids = paddle.randint(0, 10000, (8, 1))
-res = set_stop_value(topk_ids, 29980)
-print(res)
+python offline_w4a8.py \
+       --model_name_or_path ${model_path} \
+       --output_dir ${output_path} \
+       --safe_serialization "True"

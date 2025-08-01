@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -220,7 +220,7 @@ class CompletionResponseChoice(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     arrival_time: Optional[float] = None
-    logprobs: Optional[int] = None
+    logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
@@ -239,6 +239,17 @@ class CompletionResponse(BaseModel):
     usage: UsageInfo
 
 
+class CompletionLogprobs(BaseModel):
+    """
+    Completion logprobs.
+    """
+
+    tokens: Optional[List[str]] = None
+    token_logprobs: Optional[List[float]] = None
+    top_logprobs: Optional[List[Dict]] = None
+    text_offset: Optional[List[int]] = None
+
+
 class CompletionResponseStreamChoice(BaseModel):
     """
     Completion response choice for stream response.
@@ -247,9 +258,9 @@ class CompletionResponseStreamChoice(BaseModel):
     index: int
     text: str
     arrival_time: float = None
+    logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
-    logprobs: Optional[float] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
@@ -343,25 +354,29 @@ class CompletionRequest(BaseModel):
     suffix: Optional[dict] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
+    user: Optional[str] = None
+
+    # doc: begin-completion-sampling-params
     top_k: Optional[int] = None
     min_p: Optional[float] = None
-    user: Optional[str] = None
-    extra_body: Optional[dict] = None
-    return_token_ids: Optional[bool] = False
-    prompt_token_ids: Optional[List[int]] = None
+    repetition_penalty: Optional[float] = None
+    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+    min_tokens: Optional[int] = None
+    include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    # doc: end-completion-sampling-params
 
+    # doc: start-completion-extra-params
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
     guided_regex: Optional[str] = None
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
 
-    # doc: begin-completion-sampling-params
-    repetition_penalty: Optional[float] = None
-    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
-
-    # doc: end-completion-sampling-params
+    max_streaming_response_tokens: Optional[int] = None
+    return_token_ids: Optional[bool] = None
+    prompt_token_ids: Optional[List[int]] = None
+    # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -374,16 +389,13 @@ class CompletionRequest(BaseModel):
         if request_id is not None:
             req_dict["request_id"] = request_id
 
-        # parse request model into dict, priority: request > extra_body > suffix
+        # parse request model into dict
+        if self.suffix is not None:
+            for key, value in self.suffix.items():
+                req_dict[key] = value
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
-        if self.extra_body is not None:
-            for key, value in self.extra_body.items():
-                req_dict.setdefault(key, value)
-        if self.suffix is not None:
-            for key, value in self.suffix.items():
-                req_dict.setdefault(key, value)
 
         if prompt is not None:
             req_dict["prompt"] = prompt
@@ -477,28 +489,34 @@ class ChatCompletionRequest(BaseModel):
     stream_options: Optional[StreamOptions] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    top_k: Optional[int] = None
-    min_p: Optional[float] = None
     user: Optional[str] = None
     metadata: Optional[dict] = None
-    extra_body: Optional[dict] = None
-    return_token_ids: Optional[bool] = False
-    prompt_token_ids: Optional[List[int]] = None
-    disable_chat_template: Optional[bool] = False
-    bad_words: Optional[List[str]] = None
-
     response_format: Optional[AnyResponseFormat] = None
+
+    # doc: begin-chat-completion-sampling-params
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
+    min_tokens: Optional[int] = None
+    include_stop_str_in_output: Optional[bool] = False
+    bad_words: Optional[List[str]] = None
+    repetition_penalty: Optional[float] = None
+    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+    # doc: end-chat-completion-sampling-params
+
+    # doc: start-completion-extra-params
+    chat_template_kwargs: Optional[dict] = None
+    reasoning_max_tokens: Optional[int] = None
+    structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
     guided_regex: Optional[str] = None
     guided_choice: Optional[list[str]] = None
     guided_grammar: Optional[str] = None
-    structural_tag: Optional[str] = None
 
-    # doc: begin-chat-completion-sampling-params
-    repetition_penalty: Optional[float] = None
-    stop_token_ids: Optional[List[int]] = Field(default_factory=list)
-
-    # doc: end-chat-completion-sampling-params
+    return_token_ids: Optional[bool] = None
+    prompt_token_ids: Optional[List[int]] = None
+    max_streaming_response_tokens: Optional[int] = None
+    disable_chat_template: Optional[bool] = False
+    # doc: end-chat-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None):
         """
@@ -514,19 +532,16 @@ class ChatCompletionRequest(BaseModel):
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
 
-        # parse request model into dict, priority: request > extra_body > metadata
-        for key, value in self.dict().items():
-            if value is not None:
-                req_dict[key] = value
-        if self.extra_body is not None:
-            for key, value in self.extra_body.items():
-                req_dict.setdefault(key, value)
+        # parse request model into dict, priority: request params > metadata params
         if self.metadata is not None:
             assert (
                 "raw_request" not in self.metadata
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
-                req_dict.setdefault(key, value)
+                req_dict[key] = value
+        for key, value in self.dict().items():
+            if value is not None:
+                req_dict[key] = value
 
         if "prompt_token_ids" in req_dict:
             if "messages" in req_dict:
