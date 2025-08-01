@@ -34,7 +34,7 @@ class W4A8Config(QuantConfigBase):
 
     @classmethod
     def from_config(cls, config: dict) -> "W4A8Config":
-        is_permuted = getattr(config, "is_permuted", False)
+        is_permuted = config.get("is_permuted", True)
         return cls(is_permuted)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:

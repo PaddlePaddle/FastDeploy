@@ -74,7 +74,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
       {"type": "text", "text": "What era does this artifact belong to?"}
     ]}
   ],
-  "enable_thinking": false
+  "chat_template_kwargs":{"enable_thinking": false}
 }'
 ```
 

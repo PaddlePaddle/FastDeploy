@@ -749,6 +749,7 @@ def test_non_streaming_chat_with_min_tokens(openai_client, capsys):
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
+        max_tokens=1010,
         extra_body={"min_tokens": min_tokens},
         stream=False,
     )
