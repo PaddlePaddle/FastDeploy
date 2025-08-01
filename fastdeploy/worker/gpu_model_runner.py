@@ -205,6 +205,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
+            #idx = i
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
@@ -1047,9 +1048,16 @@ class GPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
-        # NOTE(wufeisheng): For Expert Parallelism
-        if not self.not_need_stop():
-            self._execute_empty_input()
+        # # NOTE(wufeisheng): For Expert Parallelism
+        # if not self.not_need_stop():
+        #     self._execute_empty_input()
+        #     return None
+
+        IsH20 = paddle.distributed.get_rank() < 8
+        if IsH20:
+            pass
+        else:
+            model_output = self.model(None, None)
             return None
 
         # 1. Prepare inputs of model and sampler.
