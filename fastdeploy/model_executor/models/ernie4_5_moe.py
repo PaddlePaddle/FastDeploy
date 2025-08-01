@@ -266,6 +266,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
+        self.fd_config = fd_config
 
     def load_state_dict(self, state_dict):
         self.self_attn.load_state_dict(state_dict)
@@ -273,7 +274,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         self.input_layernorm.load_state_dict(state_dict)
         self.post_attention_layernorm.load_state_dict(state_dict)
 
-    def forward(
+    def forward_old(
         self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
@@ -296,6 +297,80 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
         return hidden_states, residual
 
+
+    def forward_attn(
+        self,
+        forward_meta: ForwardMeta,
+        hidden_states: paddle.Tensor,
+        residual: paddle.Tensor = None,
+    ):  
+        hidden_states, residual = self.input_layernorm(hidden_states, residual)
+
+
+        forward_meta.attn_backend.init_attention_metadata(forward_meta)
+
+        hidden_states = self.self_attn(
+            hidden_states=hidden_states,
+            forward_meta=forward_meta,
+        )
+
+        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+
+        gate_out = paddle.matmul(hidden_states.cast("float32"), self.mlp.fused_moe.gate_weight)
+
+        topk_idx, topk_weights = self.mlp.fused_moe.quant_method.ep_decoder_runner.moe_select(self.mlp.fused_moe, gate_out)
+
+        return hidden_states, residual, topk_idx, topk_weights
+
+    def m2n_dispatch(self, x, topk_idx, topk_weights):
+        permute_input, token_nums_per_expert, handle = self.mlp.fused_moe.quant_method.ep_decoder_runner.dispatch(x, topk_idx, topk_weights)
+
+        return permute_input, token_nums_per_expert, handle
+
+
+    def h100_moe(
+        self,
+        permute_input: paddle.Tensor,
+        token_nums_per_expert):
+        ffn_out = self.mlp.fused_moe.quant_method.compute_ffn(
+            self.mlp.fused_moe,
+            permute_input,
+            token_nums_per_expert.cast("int64"),
+            None,
+            True,
+        )
+
+        return ffn_out
+
+    def m2n_combine(self, ffn_out, topk_idx, topk_weights, handle):
+        res = self.mlp.fused_moe.quant_method.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+        return res
+
+    def forward(self,
+        forward_meta: ForwardMeta,
+        hidden_states: paddle.Tensor,
+        residual: paddle.Tensor = None):
+
+        IsH20 = self.fd_config.parallel_config.is_H20
+
+        if IsH20:
+            hidden_states, residual, topk_idx, topk_weights = self.forward_attn(forward_meta, hidden_states, residual)
+        else:
+            hidden_states = None
+            residual = None
+            topk_idx = None
+            topk_weights = None
+
+        permute_input, token_nums_per_expert, handle = self.m2n_dispatch(hidden_states, topk_idx, topk_weights)
+
+        if IsH20:
+            ffn_out = None
+        else:
+            ffn_out = self.h100_moe(permute_input, token_nums_per_expert)
+        
+        hidden_states = self.m2n_combine(ffn_out, topk_idx, topk_weights, handle)
+        
+        return hidden_states, residual
 
 @support_graph_optimization
 class Ernie4_5_Model(nn.Layer):
@@ -339,6 +414,8 @@ class Ernie4_5_Model(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
+        self.fd_config = fd_config
+
     def load_state_dict(self, state_dict):
         """
         Load model parameters from a given state dictionary.
@@ -354,80 +431,110 @@ class Ernie4_5_Model(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
-    def forward1(
-        self,
-        ids_remove_padding: paddle.Tensor,
-        forward_meta: ForwardMeta,
-    ):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
 
+        IsH20 = self.fd_config.parallel_config.is_H20
         all_hidden_states = []
-        bs = forward_meta.seq_lens_encoder.shape[0]
-
-        mc_bs = bs // 3
         forward_metas = []
-        for i in range(0, bs, mc_bs):
-            from copy import copy
-            forward_meta_copy = copy(forward_meta)
-            
-            start_bs = i
-            end_bs = i + mc_bs
-            end_bs = min(end_bs, bs)
+        all_residual = []
+        bs = self.fd_config.parallel_config.max_num_seqs
+        # 暂时设置成1
+        mc_bs = bs // 1
+        if IsH20:
+            # H20 机器
+            hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+            residual = None
+            for i in range(3):
+                hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
 
-            start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
-            end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
+            for i in range(0, bs, mc_bs):
+                from copy import copy
+                forward_meta_copy = copy(forward_meta)
+                
+                start_bs = i
+                end_bs = i + mc_bs
+                end_bs = min(end_bs, bs)
 
-            if end_token_id == start_token_id:
-                # 这个microbatch是空的，不需要处理
-                continue
+                start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
+                end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
 
-            forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
-            forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
-            forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
+                if end_token_id == start_token_id:
+                    # 这个microbatch是空的，不需要处理!!
+                    continue
 
-            forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
-            forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
-            forward_meta_copy.cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs:end_bs+1] - start_token_id
+                forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
+                forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
+                forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
 
-            forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
+                forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
+                forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
+                forward_meta_copy.cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs:end_bs+1] - start_token_id
 
-            forward_metas.append(forward_meta_copy)
-            all_hidden_states.append(hidden_states[start_token_id:end_token_id])
+                forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
 
+                forward_metas.append(forward_meta_copy)
+                all_hidden_states.append(hidden_states[start_token_id:end_token_id])
+                all_residual.append(residual[start_token_id:end_token_id])
+        else:
+            # H100机器啥也不需要做！
+            for i in range(0, bs, mc_bs):
+                forward_metas.append(None)
+                all_hidden_states.append(None)
+                all_residual.append(None)
+        
+        paddle.distributed.barrier()
+
+        # 下面第3层开始H20和H100机器！！一起跑啦！
         for mc_id, mc_forward_meta in enumerate(forward_metas):
             hidden_states = all_hidden_states[mc_id]
+            residual = all_residual[mc_id]
+            mc_forward_meta = forward_metas[mc_id]
 
-            mc_forward_meta.attn_backend.init_attention_metadata(mc_forward_meta)
-
-            residual = None
-            for i in range(self.num_layers):
+            for i in range(3, self.num_layers):
                 hidden_states, residual = self.layers[i](mc_forward_meta,
                                                                 hidden_states,
                                                                 residual)
 
-            hidden_states = hidden_states + residual
-            all_hidden_states[mc_id] = hidden_states
-        hidden_states = paddle.concat(all_hidden_states, axis=0)
-        out = self.norm(hidden_states)
-        return out
+            if IsH20:
+                hidden_states = hidden_states + residual
+                all_hidden_states[mc_id] = hidden_states
+        
+        if IsH20:
+            hidden_states = paddle.concat(all_hidden_states, axis=0)
+            out = self.norm(hidden_states)
+            return out
+        else:
+            # H100返回None
+            return None
 
-    def forward(
+    def forward1(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):  
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-        forward_meta.attn_backend.init_attention_metadata(forward_meta)
-        print((forward_meta.seq_lens_decoder > 0).sum().item(), "周康康")
+
+        IsH20 = self.fd_config.parallel_config.is_H20
+        hidden_states = None
+        if IsH20:
+            hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+            forward_meta.attn_backend.init_attention_metadata(forward_meta)
         residual = None
-        for i in range(self.num_layers):
+
+        if IsH20:
+            hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+            forward_meta.attn_backend.init_attention_metadata(forward_meta)
+            for i in range(3):
+                hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
+
+        for i in range(3, self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
-
-        return out
+        if IsH20:
+            hidden_states = hidden_states + residual
+            out = self.norm(hidden_states)
+            return out
+        else:
+            return None
 
 
 class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
