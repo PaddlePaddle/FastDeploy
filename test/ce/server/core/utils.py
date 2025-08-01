@@ -3,6 +3,8 @@
 # @author DDDivano
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
+import json
+
 import requests
 from core import TEMPLATES, base_logger
 
@@ -55,3 +57,28 @@ def send_request(url, payload, timeout=600, stream=False):
     except requests.exceptions.RequestException as e:
         base_logger.error(f"❌ 请求失败：{e}")
         return None
+
+
+def get_stream_chunks(response):
+    """解析流式返回，生成chunk List[dict]"""
+    chunks = []
+
+    if response.status_code == 200:
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                if line.startswith("data: "):
+                    line = line[len("data: ") :]
+
+                if line.strip() == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(line)
+                    chunks.append(chunk)
+                except Exception as e:
+                    base_logger.error(f"解析失败: {e}, 行内容: {line}")
+    else:
+        base_logger.error(f"请求失败，状态码: {response.status_code}")
+        base_logger.error("返回内容：", response.text)
+
+    return chunks
