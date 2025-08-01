@@ -21,7 +21,7 @@ jobs:
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "90"
+      COMPILE_ARCH: "89,90"
       WITH_NIGHTLY_BUILD: "OFF"
       FD_VERSION: "0.0.0"
 
@@ -52,3 +52,12 @@ jobs:
       PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelCache"
+
+  pre_ce_test:
+    name: Extracted partial CE model tasks to run in CI.
+    needs: [clone,build]
+    uses: ./.github/workflows/_pre_ce_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:fastdeploy-ciuse-cuda126
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}

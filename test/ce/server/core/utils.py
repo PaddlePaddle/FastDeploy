@@ -1,0 +1,57 @@
+#!/bin/env python3
+# -*- coding: utf-8 -*-
+# @author DDDivano
+# encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
+
+import requests
+from core import TEMPLATES, base_logger
+
+
+def build_request_payload(template_name: str, case_data: dict) -> dict:
+    """
+    基于模板构造请求 payload，按优先级依次合并：
+    template < payload 参数 < case_data，后者会覆盖前者的同名字段。
+
+    :param template_name: 模板变量名，例如 "TOKEN_LOGPROB"
+    :return: 构造后的完整请求 payload dict
+    """
+    template = TEMPLATES[template_name]
+    print(template)
+    final_payload = template.copy()
+    final_payload.update(case_data)
+
+    return final_payload
+
+
+def send_request(url, payload, timeout=600, stream=False):
+    """
+    向指定URL发送POST请求，并返回响应结果。
+
+    Args:
+        url (str): 请求的目标URL。
+        payload (dict): 请求的负载数据，应该是一个字典类型。
+        timeout (int, optional): 请求的超时时间，默认为600秒。
+        stream (bool, optional): 是否以流的方式下载响应内容，默认为False。
+
+    Returns:
+        response: 请求的响应结果，如果请求失败则返回None。
+
+    Raises:
+        None
+
+    """
+    headers = {
+        "Content-Type": "application/json",
+    }
+    base_logger.info("🔄 正在请求模型接口...")
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, stream=stream, timeout=timeout)
+        base_logger.info("🟢 接收响应中...\n")
+        return res
+    except requests.exceptions.Timeout:
+        base_logger.error(f"❌ 请求超时（超过 {timeout} 秒）")
+        return None
+    except requests.exceptions.RequestException as e:
+        base_logger.error(f"❌ 请求失败：{e}")
+        return None
