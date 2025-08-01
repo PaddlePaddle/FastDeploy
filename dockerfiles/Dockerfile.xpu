@@ -16,10 +16,16 @@ RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybi
 
 # uninstall existing package
 RUN python -m pip uninstall paddlepaddle-gpu paddlepaddle-xpu -y
-# install paddlepaddle
+# install paddlepaddle-xpu
 RUN python -m pip install --no-cache-dir --progress-bar off paddlepaddle-xpu==${PADDLE_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 
 RUN python -m pip install --no-cache-dir fastdeploy-xpu==${FD_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+RUN mkdir -p /workspace/deps && cd /workspace/deps && \
+    wget https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz && \
+    tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
+
+ENV PATH=/workspace/deps/xre/bin:$PATH
 
 ENV http_proxy=""
 ENV https_proxy=""
