@@ -29,6 +29,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.transformers.linear_utils import Linear
 from paddleformers.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddleformers.transformers.model_utils import PretrainedModel
+from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 
 from .flash_attn_utils import has_flash_attn_func
 from .bert_padding import (
@@ -1859,6 +1860,10 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
     _tied_weights_keys = ["lm_head.weight"]
     config_class = Qwen2_5_VLConfig
     _no_split_modules = ["Qwen2VLDecoderLayer", "Qwen2_5_VLVisionBlock"]
+
+    @classmethod
+    def name(cls):
+        return "Qwen2_5_VLForConditionalGeneration"
 
     def __init__(self, config, attn_implementation="flash_attention_2"):
         super().__init__(config)

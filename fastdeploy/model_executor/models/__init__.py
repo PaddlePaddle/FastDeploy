@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 from .model_base import ModelForCasualLM, ModelRegistry
-
+from .qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
 
 def _find_py_files(root_dir):
     root_path = Path(root_dir)
@@ -44,6 +44,8 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
                 if inspect.isclass(attr) and issubclass(attr, ModelForCasualLM) and attr is not ModelForCasualLM:
+                    ModelRegistry.register(attr)
+                if inspect.isclass(attr) and attr is Qwen2_5_VLForConditionalGeneration:
                     ModelRegistry.register(attr)
         except ImportError:
             raise ImportError(f"{module_file=} import error")

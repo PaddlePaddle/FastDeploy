@@ -32,7 +32,13 @@ class ModelRegistry:
     @classmethod
     def register(cls, model_class):
         """register model class"""
-        if issubclass(model_class, ModelForCasualLM) and model_class is not ModelForCasualLM:
+        from .qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+        
+        is_valid_model = (
+            (issubclass(model_class, ModelForCasualLM) and model_class is not ModelForCasualLM) or
+            (model_class is Qwen2_5_VLForConditionalGeneration)
+        )
+        if is_valid_model:
             cls._registry[model_class.name()] = model_class
         return model_class
 
