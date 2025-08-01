@@ -323,7 +323,7 @@ std::vector<paddle::Tensor> ExtractTextTokenOutput(
     const paddle::Tensor &max_seq_len, const paddle::Tensor &max_seq_len_index,
     const paddle::Tensor &mm_token_num_len,
     const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &cu_seqlens_q, const paddle::Tensor &score_text);
+    const paddle::Tensor &cu_seqlens_q, const paddle::Tensor &hidden_states);
 
 std::vector<paddle::Tensor> MoEDeepGEMMPermute(const paddle::Tensor &x,
                                                const paddle::Tensor &topk_idx,
