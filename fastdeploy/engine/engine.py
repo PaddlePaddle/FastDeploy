@@ -373,6 +373,8 @@ class LLMEngine:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+
+            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
                 available_blocks=self.resource_manager.available_block_num(),
                 block_size=self.cfg.cache_config.block_size,
@@ -422,7 +424,7 @@ class LLMEngine:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error("Engine stops inserting zmq task into scheduler")
+                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
