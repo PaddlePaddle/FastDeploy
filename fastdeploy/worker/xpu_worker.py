@@ -91,7 +91,7 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory)
 
         assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
-        assert len(self.device_ids) > self.local_rank, f"device number must be greater than rank local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
+        assert len(self.device_ids) > self.local_rank, f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
 
         total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
         used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
