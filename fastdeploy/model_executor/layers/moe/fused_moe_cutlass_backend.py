@@ -21,9 +21,10 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.layers.utils import create_and_set_parameter
 from fastdeploy.platforms import current_platform
 
-from ..utils import create_and_set_parameter, get_tensor
+from ..utils import get_tensor
 from .fused_moe_backend_base import MoEMethodBase
 
 if current_platform.is_cuda():
@@ -70,25 +71,75 @@ class CutlassMoEMethod(MoEMethodBase):
     This method is the oldest way to compute MoE in Paddle.
     """
 
+    # TODO(lulinjun): delete the state_dict param
     def create_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass create weight process.
         """
+        if self.moe_quant_type == "weight_only_int4":
+            self.weight_dtype = "int8"
+        else:
+            self.weight_dtype = layer._helper.get_default_dtype()
         # bf16
+        # ffn1
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        if self.moe_quant_type == "fp8":
+            self.ffn1_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size,
+            ]
+        else:
+            self.ffn1_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size * 2,
+            ]
+        # if not self.activation.endswith("glu"):
+        #     self.ffn1_weight_shape = [
+        #         layer.num_local_experts,
+        #         layer.hidden_size,
+        #         layer.moe_intermediate_size,
+        #     ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # ffn2
+        down_proj_weight_name = self.added_weight_attrs[1]
+        if self.moe_quant_type == "fp8":
+            self.ffn2_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size,
+            ]
+        else:
+            self.ffn2_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size,
+                layer.hidden_size,
+            ]
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def load_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
         for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
             getattr(layer, weight_name).set_value(weight_tensor)
 
     def compute_ffn(
@@ -537,11 +588,82 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             "down_proj_weight_scale": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
-            create_and_set_parameter(layer, name, tensor)
+            getattr(layer, name).set_value(tensor)
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass create weight process.
+        """
+        self.default_dtype = layer._helper.get_default_dtype()
+        self.weight_dtype = "int8"
+
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        if self.moe_quant_type == "weight_only_int4":
+            self.ffn1_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size,
+                layer.hidden_size,
+            ]
+        else:
+            self.ffn1_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size,
+            ]
+        if self.moe_quant_type == "weight_only_int4":
+            self.ffn2_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size // 2,
+                layer.moe_intermediate_size,
+            ]
+        else:
+            self.ffn2_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size,
+            ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # in_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def load_weights(self, layer: nn.Layer, state_dict):
+        """
+        Paddle cutlass load weight process.
         """
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
@@ -557,7 +679,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 weight_list.append(quant_weight)
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
-            create_and_set_parameter(layer, weight_name, quanted_weight)
+            getattr(layer, weight_name).set_value(quanted_weight)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
-            create_and_set_parameter(layer, scale_name, quanted_weight_scale)
+            getattr(layer, scale_name).set_value(quanted_weight_scale)
