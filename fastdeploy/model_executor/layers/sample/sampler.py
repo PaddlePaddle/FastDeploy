@@ -131,12 +131,10 @@ class SamplerProcessor:
         for idx, processor in self.logits_processor.items():
             if processor is None or idx in skip_idx_list:
                 continue
-            if not processor.enable_reasoning or processor.reasoning_ended:
+            if self.reasoning_parser is None or not processor.enable_reasoning or processor.reasoning_ended:
                 indices.append(idx)
 
-        return available_processors.apply_token_mask(logits,
-                                                     self.token_bitmask,
-                                                     indices=indices)
+        return available_processors.apply_token_mask(logits, self.token_bitmask, indices=indices)
 
     def _accept_token(self, idx: int, token: int):
         """accept token"""
@@ -201,14 +199,11 @@ class Sampler(nn.Layer):
         self.processor = SamplerProcessor()
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
-        """ set reasoning parser """
+        """set reasoning parser"""
         self.processor.apply_reasoning_parser(reasoning_parser)
 
-    def apply_logits_processor(self,
-                               ids: int,
-                               future: Optional[Any] = None,
-                               prefill_tokens: List[int] = []):
-        """ apply logits processor to sampler """
+    def apply_logits_processor(self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = []):
+        """apply logits processor to sampler"""
         self.processor.add_logits_processor(ids, future, prefill_tokens)
 
     def pre_process(self, skip_idx_list: List[int] = []):
@@ -216,7 +211,7 @@ class Sampler(nn.Layer):
         self.processor.pre_process(skip_idx_list)
 
     def post_process(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
-        """ post process after running """
+        """post process after running"""
         self.processor.update_output_tokens(next_tokens, skip_idx_list)
 
     def compute_logprobs(self, logits: paddle.Tensor) -> paddle.Tensor:
@@ -270,11 +265,11 @@ class Sampler(nn.Layer):
         skip_idx_list: List[int] = [],
     ) -> SamplerOutput:
         """ """
+        logits = self.processor.apply_token_mask(logits, skip_idx_list)
+
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
             raw_logprobs = self.compute_logprobs(logits)
-
-        logits = self.processor.apply_token_mask(logits, skip_idx_list)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -333,18 +328,15 @@ class SpeculativeSampler(nn.Layer):
         pass
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
-        """ set reasoning parser """
+        """set reasoning parser"""
         pass
 
     def post_process(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
-        """ post process after running """
+        """post process after running"""
         pass
 
-    def apply_logits_processor(self,
-                               ids: int,
-                               future: Optional[Any] = None,
-                               prefill_tokens: List[int] = []):
-        """ apply logits processor to sampler """
+    def apply_logits_processor(self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = []):
+        """apply logits processor to sampler"""
         pass
 
     def forward_cuda(
@@ -439,11 +431,11 @@ class MTPSampler(nn.Layer):
         pass
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
-        """ set reasoning parser """
+        """set reasoning parser"""
         pass
 
     def post_process(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
-        """ post process after running """
+        """post process after running"""
         pass
 
     def forward_cuda(

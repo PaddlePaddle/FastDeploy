@@ -29,8 +29,10 @@ from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
 )
-from fastdeploy.model_executor.guided_decoding import (LogitsProcessorBase,
-                                                       get_guided_backend)
+from fastdeploy.model_executor.guided_decoding import (
+    LogitsProcessorBase,
+    get_guided_backend,
+)
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -190,10 +192,13 @@ class GPUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        return self.guided_backend.get_logits_processor(
-            schemata_key=schemata_key,
-            enable_thinking=request.get("enable_thinking"),
-        ), schemata_key
+        return (
+            self.guided_backend.get_logits_processor(
+                schemata_key=schemata_key,
+                enable_thinking=request.get("enable_thinking"),
+            ),
+            schemata_key,
+        )
 
     def insert_tasks_v1(self, req_dicts: List[Request]):
         """
@@ -1251,8 +1256,6 @@ class GPUModelRunner(ModelRunnerBase):
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
-
-            self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
         else:
             self.sampler(
                 logits,
@@ -1313,6 +1316,7 @@ class GPUModelRunner(ModelRunnerBase):
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
         )
+        self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
 
         # 6. Speculative decode
         if self.speculative_decoding:

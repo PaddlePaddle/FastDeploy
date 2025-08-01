@@ -78,7 +78,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
         task = request.to_dict()
-        task['enable_thinking'] = self.get_enable_thinking(kwargs.get("enable_thinking"))
         self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
 
@@ -162,7 +161,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
 
-        request['enable_thinking'] = self.get_enable_thinking(request.get("enable_thinking"))
+        request["enable_thinking"] = self.get_enable_thinking(request.get("enable_thinking"))
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 

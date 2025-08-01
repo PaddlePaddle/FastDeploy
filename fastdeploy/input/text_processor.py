@@ -65,8 +65,7 @@ class BaseDataProcessor(ABC):
         if enable_thinking and self.reasoning_parser is None:
             enable_thinking = False
             data_processor_logger.warning(
-                "enable_thinking is True, but reasoning_parser is None. "
-                "enable_thinking will be set to False."
+                "enable_thinking is True, but reasoning_parser is None. " "enable_thinking will be set to False."
             )
         return enable_thinking
 
@@ -89,6 +88,10 @@ class BaseDataProcessor(ABC):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
+
+        enable_thinking = self.get_enable_thinking(request.get("enable_thinking"))
+        set_value(request, "enable_thinking", enable_thinking)
+
         return request
 
     @abstractmethod
@@ -287,6 +290,7 @@ class DataProcessor(BaseDataProcessor):
             str: error message
         """
         request = self._apply_default_parameters(request)
+        request["enable_thinking"] = self.get_enable_thinking(kwargs.get("enable_thinking"))
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
@@ -348,7 +352,7 @@ class DataProcessor(BaseDataProcessor):
         else:
             # 模型不支持思考,并且没单独设置enable_thinking为false
             response_dict.outputs.text = full_text
-        data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
+        data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
         return response_dict
 
@@ -362,7 +366,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -372,6 +375,7 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
+            enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
