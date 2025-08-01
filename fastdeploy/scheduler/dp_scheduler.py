@@ -17,6 +17,7 @@ import threading
 from multiprocessing import Queue
 from typing import Dict, List
 from typing import Dict, List, Optional, Tuple
+import time
 
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledResponse
