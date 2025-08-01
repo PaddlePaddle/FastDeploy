@@ -323,7 +323,7 @@ std::vector<paddle::Tensor> ExtractTextTokenOutput(
     const paddle::Tensor &max_seq_len, const paddle::Tensor &max_seq_len_index,
     const paddle::Tensor &mm_token_num_len,
     const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &cu_seqlens_q, const paddle::Tensor &score_text);
+    const paddle::Tensor &cu_seqlens_q, const paddle::Tensor &hidden_states);
 
 std::vector<paddle::Tensor> MoEDeepGEMMPermute(const paddle::Tensor &x,
                                                const paddle::Tensor &topk_idx,
@@ -761,6 +761,17 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
+void MergePrefillDecodeOutput(
+        const paddle::Tensor &encoder_res,
+        const paddle::Tensor &decoder_res,
+        const paddle::Tensor &seq_lens_encoder,
+        const paddle::Tensor &seq_lens_decoder,
+        const paddle::Tensor &seq_lens_this_time,
+        const paddle::Tensor &cu_seq_q,
+        const int head_num,
+        const int head_dim,
+        const int max_token);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -1111,4 +1122,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("mtp_step_paddle",&MTPStepPaddle, "mtp_step_paddle function");
 
   m.def("speculate_step_paddle",&SpeculateStepPaddle, "speculate_step_paddle function");
+
+  m.def("merge_prefill_decode_output", &MergePrefillDecodeOutput, "merge_prefill_decode_output function");
 }
