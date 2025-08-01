@@ -72,6 +72,7 @@ std::vector<paddle::Tensor> AppendAttentionKernel(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& out_linear_shifts,
     const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
@@ -429,6 +430,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& out_linear_shifts,
     const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -463,6 +465,10 @@ std::vector<paddle::Tensor> AppendAttention(
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = key_cache.dims()[2];
   meta_data.batch_size = seq_lens_this_time.dims()[0];
+
+  if (mask_offset) {
+    meta_data.mask_offset = mask_offset.get().data<int>();
+  }
 
   auto dispatch_by_template = [&](auto temp_args) -> std::vector<paddle::Tensor> {
       return AppendAttentionKernel<type2value<decltype(temp_args)>::value>(
@@ -499,6 +505,7 @@ std::vector<paddle::Tensor> AppendAttention(
           cache_v_zp,
           out_linear_shifts,
           out_linear_smooths,
+          mask_offset,
           kv_signal_data,
           cache_quant_type_str,
           use_neox_rotary_style,
@@ -576,6 +583,7 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const paddle::optional<std::vector<int64_t>>& cache_v_zp_shape,
     const paddle::optional<std::vector<int64_t>>& out_linear_shifts_shape,
     const paddle::optional<std::vector<int64_t>>& out_linear_smooths_shape,
+    const paddle::optional<std::vector<int64_t>>& mask_offset_shape,
     const paddle::optional<std::vector<int64_t>>& kv_signal_data_shape,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -636,6 +644,7 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const paddle::optional<paddle::DataType>& cache_v_zp_dtype,
     const paddle::optional<paddle::DataType>& out_linear_shifts_dtype,
     const paddle::optional<paddle::DataType>& out_linear_smooths_dtype,
+    const paddle::optional<paddle::DataType>& mask_offset_dtype,
     const paddle::optional<paddle::DataType>& kv_signal_data_dtype,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -714,6 +723,7 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("cache_v_zp"),
              paddle::Optional("out_linear_shifts"),
              paddle::Optional("out_linear_smooths"),
+             paddle::Optional("mask_offset"),
              paddle::Optional("kv_signal_data")})
     .Outputs({"fmha_out", "qkv_out", "key_cache_out", "value_cache_out"})
     .SetInplaceMap({{"key_cache", "key_cache_out"},

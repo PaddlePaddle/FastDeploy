@@ -77,6 +77,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &out_linear_shifts,
     const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
