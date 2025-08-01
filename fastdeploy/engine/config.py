@@ -175,6 +175,8 @@ class Config:
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
+        import fastdeploy.model_executor.models  # noqa: F401
+
         architectures = self.model_config.architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
