@@ -28,6 +28,7 @@ from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
     DeviceConfig,
+    EarlyStopConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -282,14 +283,15 @@ class PaddleDisWorkerProc:
                 paddle.distributed.barrier()
 
             self.insert_step = False
-            self.worker_healthy_live_signal.value[self.local_rank] = int(time.time())
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
+
                     if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
-                        if self.nnode > 1:
+                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
@@ -512,6 +514,12 @@ def parse_args():
         help="expert parallel size",
     )
     parser.add_argument(
+        "--data_parallel_size",
+        type=int,
+        default=1,
+        help="data parallel size",
+    )
+    parser.add_argument(
         "--enable_expert_parallel",
         action="store_true",
         help="enable expert parallel",
@@ -565,11 +573,25 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
-    parser.add_argument("--reasoning_parser",
-                        type=str,
-                        default=None,
-                        help="Flag specifies the reasoning parser to use for " \
-                        "extracting reasoning content from the model output")
+    parser.add_argument(
+        "--reasoning_parser",
+        type=str,
+        default=None,
+        help="Flag specifies the reasoning parser to use for extracting reasoning content from the model output",
+    )
+    parser.add_argument(
+        "--early_stop_config",
+        type=json.loads,
+        default=None,
+        help="Configuration of early stop.",
+    )
+
+    parser.add_argument(
+        "--load_choices",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/new_loader.",
+    )
 
     args = parser.parse_args()
     return args
@@ -612,6 +634,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
+
+    early_stop_config = EarlyStopConfig(args.early_stop_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -684,6 +708,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
+        early_stop_config=early_stop_config,
         cache_config=cache_config,
     )
     update_fd_config_for_mm(fd_config)

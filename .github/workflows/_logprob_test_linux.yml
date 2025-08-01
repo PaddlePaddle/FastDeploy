@@ -87,7 +87,7 @@ jobs:
 
           PARENT_DIR=$(dirname "$WORKSPACE")
 
-          docker run --ipc=host -i --net=host \
+          docker run --ipc=host --pid=host --net=host \
           -v $(pwd):/workspace \
           -w /workspace \
           -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
@@ -101,11 +101,12 @@ jobs:
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
+          # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+
           pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
           pip config set install.trusted-host  pip.baidu.com
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install ${fastdeploy_wheel_url}
 
           wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
@@ -130,6 +131,7 @@ jobs:
           python3.10 lanucher.py --request_template TOKEN_LOGPROB --url http://localhost:${FD_API_PORT}/v1/chat/completions  --case ./cases/demo.yaml  --concurrency 1 --name demo --exe logprob || LOGPROB_EXIT_CODE=$?
           echo "LOGPROB_EXIT_CODE=${LOGPROB_EXIT_CODE}" > /workspace/exit_code.env
           curl -X POST http://localhost:${FLASK_PORT}/stop
+          sleep 10s
           cat *result.log
           exit 0
           '

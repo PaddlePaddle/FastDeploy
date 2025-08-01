@@ -256,6 +256,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/gather_idx.cu",
         "gpu_ops/get_output_ep.cc",
         "gpu_ops/get_mm_split_fuse.cc",
+        "gpu_ops/get_img_boundaries.cc",
         "gpu_ops/token_penalty_multi_scores.cu",
         "gpu_ops/token_penalty_only_once.cu",
         "gpu_ops/stop_generation.cu",
@@ -293,6 +294,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
+        "gpu_ops/merge_prefill_decode_output.cu",
     ]
 
     # pd_disaggregation
