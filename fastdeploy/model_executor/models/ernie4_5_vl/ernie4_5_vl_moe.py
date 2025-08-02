@@ -99,8 +99,8 @@ class Ernie4_5_VLMoE(nn.Layer):
         assert text_moe_layer_start_index <= text_moe_layer_end_index
 
         moe_quant_type = ""
-        if hasattr(fd_config, "quant_config") and fd_config.quant_config is not None:
-            moe_quant_type = getattr(fd_config.quant_config, "name", lambda: "")()
+        if hasattr(fd_config.quant_config, "moe_quant_type"):
+            moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if layer_id >= text_moe_layer_start_index and layer_id <= text_moe_layer_end_index:
             if moe_quant_type == "tensor_wise_fp8" or (

@@ -95,11 +95,9 @@ class Ernie4_5_MLP(nn.Layer):
 
 
 class Ernie4_5_MoE(nn.Layer):
-    def __init__(self, 
-                 fd_config: FDConfig, 
-                 layer_id: int, 
-                 prefix: str,
-                 redundant_table_manger: RedundantExpertManger = None) -> None:
+    def __init__(
+        self, fd_config: FDConfig, layer_id: int, prefix: str, redundant_table_manger: RedundantExpertManger = None
+    ) -> None:
         super().__init__()
         moe_quant_type = ""
         if hasattr(fd_config.quant_config, "moe_quant_type"):
@@ -175,6 +173,9 @@ class Ernie4_5_MoE(nn.Layer):
         self.fused_moe.load_state_dict(state_dict)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
+
+    def update_state_dict(self, state_dict):
+        self.fused_moe.load_state_dict(state_dict, True)
 
     def forward(self, hidden_states: paddle.Tensor):
         out = self.fused_moe(hidden_states)
@@ -281,6 +282,9 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         self.input_layernorm.load_state_dict(state_dict)
         self.post_attention_layernorm.load_state_dict(state_dict)
 
+    def update_state_dict(self, state_dict):
+        self.mlp.update_state_dict(state_dict)
+
     def forward(
         self,
         forward_meta: ForwardMeta,
@@ -321,6 +325,7 @@ class Ernie4_5_Model(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
+        self.fd_config = fd_config
 
         self.redundant_table_manger = None
         if fd_config.model_config.enable_redundant_experts is True:
@@ -371,6 +376,22 @@ class Ernie4_5_Model(nn.Layer):
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
+
+    def update_state_dict(self, state_dict):
+        """
+        Update model parameters from a given state dictionary.
+
+        Args:
+            state_dict (dict[str, np.ndarray | paddle.Tensor]):
+                A dictionary containing model parameters, where keys are parameter names
+                and values are NumPy arrays or PaddlePaddle tensors.
+        """
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            logger.info(f"Start update layer {i}")
+            self.layers[i].update_state_dict(state_dict)
 
     def forward(
         self,

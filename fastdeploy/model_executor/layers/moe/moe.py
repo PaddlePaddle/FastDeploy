@@ -217,6 +217,7 @@ class FusedMoE(nn.Layer):
         state_dict: dict,
         up_gate_proj_expert_weight_key: str,
         down_proj_expert_weight_key: str,
+        is_rearrange: bool = False,
     ):
         """
         Load experts weight from state_dict.
@@ -245,7 +246,13 @@ class FusedMoE(nn.Layer):
             ]
         up_gate_proj_weights = []
         down_proj_weights = []
-        is_ffn_merged = up_gate_proj_expert_weight_key.format(self.expert_id_offset) in state_dict
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+        is_ffn_merged = (
+            up_gate_proj_expert_weight_key.format(logical_expert_ids[0] if is_rearrange else self.expert_id_offset)
+            in state_dict
+        )
         if is_ffn_merged:
             for expert_idx in logical_expert_ids:
                 down_proj_expert_weight_key_name = down_proj_expert_weight_key.format(expert_idx)
@@ -381,7 +388,7 @@ class FusedMoE(nn.Layer):
 
         if self.fd_config.model_config.is_quantized:
             if getattr(self.fd_config.quant_config, "is_permuted", False):
-                self.quant_method.process_prequanted_weights(self, state_dict)
+                self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
             else:
                 self.quant_method.create_weights(self, state_dict)
         else:
