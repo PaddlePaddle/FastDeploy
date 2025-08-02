@@ -88,7 +88,7 @@ def test_sampler():
                 break
 
     if not all_consistent:
-        raise AssertionError("输出的 next_tokens 值不一致！")
+        raise AssertionError("The next_tokens values are inconsistent!")
 
 
 if __name__ == "__main__":
