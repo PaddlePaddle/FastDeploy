@@ -52,25 +52,43 @@ def _create_default_sampling_metadata(
         pre_token_ids=_create_tokens_tensor(batch_size, max_seq_len),
         frequency_penalties=_create_penalty_tensor(batch_size, 0.0),
         presence_penalties=_create_penalty_tensor(batch_size, 0.0),
+        min_p=paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32"),
         repetition_penalties=_create_penalty_tensor(batch_size, 1.0),
         min_dec_lens=paddle.full(shape=[batch_size, 1], fill_value=min_seq_len, dtype="int64"),
         bad_words_token_ids=paddle.full(shape=[batch_size], fill_value=-1, dtype="int64"),
         eos_token_ids=paddle.full(shape=[batch_size], fill_value=-2, dtype="int64"),
+        seed=paddle.full(shape=[batch_size, 1], fill_value=1, dtype="int64"),
     )
     return fake_sampling_metadata
 
 
 def test_sampler():
-    batch_size = 32
-    vocab_size = 1024
+    batch_size = 8
+    vocab_size = 10131
     min_seq_len = 1
     max_seq_len = 1024
 
     sampler = Sampler()
-    logits = _create_fake_logits(batch_size, vocab_size)
-    sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
-    next_tokens = sampler(logits, sampling_metadata)
-    print(next_tokens)
+    reference_tokens = None
+    all_consistent = True
+
+    for i in range(batch_size):
+        logits = _create_fake_logits(batch_size, vocab_size)
+        sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
+        next_tokens = sampler(logits, sampling_metadata)
+        print("next_tokens", next_tokens)
+
+        current_tokens = next_tokens.sampled_token_ids.numpy()
+
+        if reference_tokens is None:
+            reference_tokens = current_tokens
+        else:
+            if not (current_tokens == reference_tokens).all():
+                all_consistent = False
+                break
+
+    if not all_consistent:
+        raise AssertionError("输出的 next_tokens 值不一致！")
 
 
 if __name__ == "__main__":
