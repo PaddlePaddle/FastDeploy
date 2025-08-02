@@ -332,7 +332,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         self.moe_quant_type = "w4a8"
         self.pack_num = 2
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
@@ -500,7 +500,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         self.moe_quant_type = self.quant_config.algo
         self.pack_num = 1
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
