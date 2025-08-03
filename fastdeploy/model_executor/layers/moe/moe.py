@@ -19,11 +19,15 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
-    CutlassMoEMethod,
+from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+    BlockWiseFP8MoEMethod,
+    TensorWiseFP8MoEMethod,
+    TritonWeightOnlyMoEMethod,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.worker.experts_manager import RedundantExpertManger
+
+pre_create_weights_list = (TensorWiseFP8MoEMethod, BlockWiseFP8MoEMethod, TritonWeightOnlyMoEMethod)
 
 
 def get_moe_method():
@@ -154,7 +158,7 @@ class FusedMoE(nn.Layer):
             dtype="float32",
         )
 
-        if isinstance(self.quant_method, CutlassMoEMethod):
+        if isinstance(self.quant_method, pre_create_weights_list):
             self.quant_method.create_weights(self, None)
 
     def init_moe_weights(self):
@@ -393,7 +397,7 @@ class FusedMoE(nn.Layer):
             gate_weight_tensor = get_tensor(state_dict.pop(gate_weight_key))
             self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
 
-        if isinstance(self.quant_method, CutlassMoEMethod):
+        if isinstance(self.quant_method, pre_create_weights_list):
             if self.fd_config.model_config.is_quantized:
                 if getattr(self.fd_config.quant_config, "is_permuted", True):
                     self.quant_method.process_prequanted_weights(self, state_dict)

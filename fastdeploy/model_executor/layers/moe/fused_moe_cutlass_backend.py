@@ -706,7 +706,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
-        # in_scale
+        # weight_scale
         setattr(
             layer,
             self.added_scale_attrs[0],
