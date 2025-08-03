@@ -1052,7 +1052,7 @@ class GPUModelRunner(ModelRunnerBase):
         #     self._execute_empty_input()
         #     return None
 
-        IsH20 = paddle.distributed.get_rank() < 8
+        IsH20 = self.fd_config.parallel_config.is_H20
         if IsH20:
             pass
         else:
