@@ -32,7 +32,7 @@ class ZmqServerBase(ABC):
     """
 
     def __init__(self):
-        self.socket = None
+        pass
 
     @abstractmethod
     def _create_socket(self):

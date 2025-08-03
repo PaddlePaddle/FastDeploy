@@ -14,15 +14,19 @@
 # limitations under the License.
 """
 
-# **Note**: Just for internal use
-import zmq
 import threading
 import time
-
-from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
-from fastdeploy.inter_communicator import ZmqTcpServer
-from fastdeploy.utils import envs, llm_logger
 import traceback
+
+# **Note**: Just for internal use
+import zmq
+
+from fastdeploy.inter_communicator import ZmqTcpServer
+from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
+from fastdeploy.utils import envs, get_logger
+
+logger = get_logger("internal_adapter_utils", "internal_adapter_utils.log")
+
 
 class InternalAdapter:
     def __init__(self, cfg, engine, dp_rank):
@@ -31,12 +35,15 @@ class InternalAdapter:
         self.dp_rank = dp_rank
         recv_control_cmd_ports = envs.FD_ZMQ_CONTROL_CMD_SERVER_PORTS.split(",")
         self.recv_control_cmd_server = ZmqTcpServer(port=recv_control_cmd_ports[dp_rank], mode=zmq.ROUTER)
-        self.recv_external_instruct_thread = threading.Thread(target=self._recv_external_module_control_instruct, daemon=True)
+        self.recv_external_instruct_thread = threading.Thread(
+            target=self._recv_external_module_control_instruct, daemon=True
+        )
         self.recv_external_instruct_thread.start()
-        self.response_external_instruct_thread = threading.Thread(target=self._response_external_module_control_instruct, daemon=True)
+        self.response_external_instruct_thread = threading.Thread(
+            target=self._response_external_module_control_instruct, daemon=True
+        )
         self.response_external_instruct_thread.start()
 
-    
     def _get_current_server_info(self):
         """
         获取服务当前资源信息
@@ -52,9 +59,10 @@ class InternalAdapter:
             "available_resource": 1.0 * available_block_num / self.cfg.cache_config.total_block_num,
             "max_batch_size": int(available_batch_size),
             "max_input_token_num": self.cfg.max_num_batched_tokens,
+            "unhandled_request_num": self.engine.scheduler.get_unhandled_request_num(),
         }
         return server_info
-    
+
     def _recv_external_module_control_instruct(self):
         """
         Receive a multipart message from the control cmd socket.
@@ -62,12 +70,12 @@ class InternalAdapter:
         while True:
             try:
                 task = self.recv_control_cmd_server.recv_control_cmd()
-                llm_logger.info(f"Recieve control task: {task}")
+                logger.info(f"Recieve control task: {task}")
                 task_id_str = task["task_id"]
                 if task["cmd"] == "get_payload":
                     payload_info = self._get_current_server_info()
                     result = {"task_id": task_id_str, "result": payload_info}
-                    llm_logger.info(f"Response for task: {task_id_str}")
+                    logger.info(f"Response for task: {task_id_str}")
                     self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
                 elif task["cmd"] == "get_metrics":
@@ -76,13 +84,13 @@ class InternalAdapter:
                         extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=1),
                     )
                     result = {"task_id": task_id_str, "result": metrics_text}
-                    llm_logger.info(f"Response for task: {task_id_str}")
+                    logger.info(f"Response for task: {task_id_str}")
                     self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 elif task["cmd"] == "connect_rdma":
                     self.engine.engine_worker_queue.put_connect_rdma_task(task)
 
             except Exception as e:
-                llm_logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
+                logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
 
     def _response_external_module_control_instruct(self):
         while True:
@@ -91,9 +99,9 @@ class InternalAdapter:
                 if result_data:
                     task_id_str = result_data["task_id"]
                     result = {"task_id": task_id_str, "result": result_data}
-                    llm_logger.info(f"Response for task: {task_id_str}")
+                    logger.info(f"Response for task: {task_id_str}")
                     self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 else:
                     time.sleep(0.001)
             except Exception as e:
-                llm_logger.error(f"_handle_connect_rdma_results got error: {e}, {traceback.format_exc() !s}")
+                logger.error(f"_handle_connect_rdma_results got error: {e}, {traceback.format_exc() !s}")
