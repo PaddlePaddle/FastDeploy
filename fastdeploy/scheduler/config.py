@@ -18,7 +18,7 @@ import redis
 
 from fastdeploy.utils import llm_logger
 
-from .dp_scheduler import DPLocalScheduler
+from .dp_scheduler import DPScheduler
 from .global_scheduler import GlobalScheduler
 from .local_scheduler import LocalScheduler
 from .splitwise_scheduler import SplitWiseScheduler, SplitWiseSchedulerConfig
@@ -90,8 +90,6 @@ class LocalSchedulerConfig:
         llm_logger.info("=============================================================")
 
 
-
-
 class DPLocalSchedulerConfig(LocalSchedulerConfig):
     """
     Configuration class for DPLocalScheduler.
@@ -110,7 +108,7 @@ class DPLocalSchedulerConfig(LocalSchedulerConfig):
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
-        splitwise_role: str = 'prefill',
+        splitwise_role: str = "prefill",
         **kwargs,
     ):
         """
@@ -282,7 +280,7 @@ class SchedulerConfig:
 
         if name == "splitwise":
             self.config = SplitWiseSchedulerConfig(**kwargs)
-        
+
         if name == "dp":
             self.config = DPLocalSchedulerConfig(**kwargs)
 
@@ -293,7 +291,7 @@ class SchedulerConfig:
         Raises:
             Exception: If invalid scheduler type is specified
         """
-        if self.name not in ["local", "global", "splitwise"]:
+        if self.name not in ["local", "global", "splitwise", "dp"]:
             raise Exception(f"Unknown scheduler type {self.name}")
 
         self.config.check()
@@ -330,9 +328,17 @@ class SchedulerConfig:
 
         if self.name == "splitwise":
             return SplitWiseScheduler(self.config)
-        
+
         if self.name == "dp":
-            return DPLocalScheduler(self.config)
+            return DPScheduler(
+                max_size=self.config.max_size,
+                ttl=self.config.ttl,
+                enable_chunked_prefill=self.config.enable_chunked_prefill,
+                max_num_partial_prefills=self.config.max_num_partial_prefills,
+                max_long_partial_prefills=self.config.max_long_partial_prefills,
+                long_prefill_token_threshold=self.config.long_prefill_token_threshold,
+                splitwise_role=self.config.splitwise_role,
+            )
 
         return LocalScheduler(
             max_size=self.config.max_size,
