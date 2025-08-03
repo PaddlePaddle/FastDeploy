@@ -793,8 +793,15 @@ class InferScheduler:
         current_prefill_tokens = 0
         cur_time = time.time()
         for i in range(batch):
+            time.sleep(5)
             try:
-                req = self.reqs_queue.popleft()
+                if len(self.reqs_queue) > 0:
+                    req = self.reqs_queue.popleft()
+                    req.prompt_token_ids = [518]
+                else:
+                    # do nothing!
+                    print(len(reqs))
+                    return reqs
                 if cur_time - req.arrival_time > self.ttl:
                     logger.error(f"req({req.request_id}) is expired({self.ttl}) when InferScheduler Get Requests")
                     self.node.finish_req(req.request_id)
@@ -804,11 +811,14 @@ class InferScheduler:
                 required_blocks += required_input_blocks + reserved_output_blocks
                 if required_blocks > available_blocks or current_prefill_tokens > max_num_batched_tokens:
                     self.reqs_queue.appendleft(req)
+                    assert False
                     return reqs
                 # logger.info(f"Get Requests from Scheduler: {req.request_id}")
                 reqs.append(req)
-            except Exception:
+            except Exception as e:
+                assert Fasle
                 return reqs
+        print(len(reqs))
         return reqs
 
     def put_results(self, results):

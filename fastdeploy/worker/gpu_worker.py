@@ -182,6 +182,14 @@ class GpuWorker(WorkerBase):
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
+        
+        assert type(req_dicts) == list
+        for i in range(self.model_runner.parallel_config.max_num_seqs):
+            import copy
+            req = copy.deepcopy(req_dicts[0])
+            req.idx = i
+            req_dicts.append(req)
+
         self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
 
     def graph_optimize_and_warm_up_model(self) -> None:

@@ -614,6 +614,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         if self.ii == 1:
             from paddle.framework import core
             core.nvprof_start()
+        
+        if ids_remove_padding is not None:
+            print(ids_remove_padding.shape)
+        
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
         if self.ii == 5:

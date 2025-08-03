@@ -250,6 +250,7 @@ class PaddleDisWorkerProc:
 
                 req_dicts = []
                 for req_dict, bsz in tasks:
+                    # 这个bsz是个啥啊阿啊？？？
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
                 logger.info(
@@ -265,9 +266,14 @@ class PaddleDisWorkerProc:
             tmps = []
             paddle.distributed.all_gather(tmps, tmp)
             tmps = paddle.concat(tmps,axis=0)
-            if tmps.sum().item() < 8:
+            tmp = tmps.sum().item()
+            if tmp < 8:
+                # 先不推理，必须等到Attn每张卡上都有数据！
+                # 我才开始推理！
+                time.sleep(0.1)
                 continue
             else:
+                print((self.worker.model_runner.share_inputs["seq_lens_this_time"] > 0).sum().item())
                 print("开始推理啦")
 
             # Execute model to generate token. The generated token will be written to the buffer.
