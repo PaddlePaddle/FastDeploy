@@ -294,6 +294,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
+        "gpu_ops/merge_prefill_decode_output.cu",
     ]
 
     # pd_disaggregation
@@ -495,7 +496,9 @@ elif paddle.is_compiled_with_cuda():
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
-        sources += ["gpu_ops/w4afp8_gemm/w4afp8_gemm.cu"]
+
+        os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
 
     setup(
         name="fastdeploy_ops",

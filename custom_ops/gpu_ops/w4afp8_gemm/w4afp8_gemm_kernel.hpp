@@ -12,63 +12,6 @@
 #include "kernel_traits.h"
 #include "mainloop_fwd.h"
 
-#define N_SWITCH(_N, ...)                                                    \
-    [&] {                                                                    \
-        if (_N == 16) {                                                      \
-            constexpr static int GemmN = 16;                                 \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 32) {                                               \
-            constexpr static int GemmN = 32;                                 \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 48) {                                               \
-            constexpr static int GemmN = 48;                                 \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 64) {                                               \
-            constexpr static int GemmN = 64;                                 \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 80) {                                               \
-            constexpr static int GemmN = 80;                                 \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 96) {                                               \
-            constexpr static int GemmN = 96;                                 \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 112) {                                              \
-            constexpr static int GemmN = 112;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 128) {                                              \
-            constexpr static int GemmN = 128;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 144) {                                              \
-            constexpr static int GemmN = 144;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 160) {                                              \
-            constexpr static int GemmN = 160;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 176) {                                              \
-            constexpr static int GemmN = 176;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 192) {                                              \
-            constexpr static int GemmN = 192;                                \
-            return __VA_ARGS__();                                            \
-        }  else if (_N == 208) {                                             \
-            constexpr static int GemmN = 208;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 224) {                                              \
-            constexpr static int GemmN = 224;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 240) {                                              \
-            constexpr static int GemmN = 240;                                \
-            return __VA_ARGS__();                                            \
-        } else if (_N == 256) {                                              \
-            constexpr static int GemmN = 256;                                \
-            return __VA_ARGS__();                                            \
-        } else {                                                             \
-            constexpr static int GemmN = 256;                               \
-            return __VA_ARGS__();                                            \
-        }                                                                    \
-    }()
-
-
 
 template<int splitK, typename InputType>
 void __global__ element_add_kernel(const InputType *src, InputType * dst, const uint32_t step) {
@@ -102,6 +45,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
     static_assert(cutlass::sizeof_bits_v<Element> == 8);
 
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
+    using TileShape_MNK_TAIL = typename Ktraits::TileShape_MNK_TAIL;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
 
     static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma{});
@@ -109,7 +53,8 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
     static constexpr int kBlockN = Ktraits::kBlockN;
     static constexpr int kBlockM = Ktraits::kBlockM;
     static constexpr int M = Ktraits::M;
-    static constexpr int TokenPaddingSize = Ktraits::TokenPaddingSize;
+    static constexpr int TokenPackSize = Ktraits::TokenPackSize;
+    static constexpr int TAIL_N = Ktraits::TAIL_N;
 
     using CollectiveMainloop = CollectiveMainloopFwd<Ktraits>;
 
@@ -153,16 +98,17 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         __syncthreads();
     }
 
-    const int pre_fix_tokens = TokenPaddingSize == 0 ? mainloop_params.tokens[bidb] : 0;
+    const int pre_fix_tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb] : 0;
 
-    const int tokens = TokenPaddingSize == 0 ? mainloop_params.tokens[bidb + 1] - pre_fix_tokens : mainloop_params.tokens[bidb];
+    const int tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb + 1] - pre_fix_tokens : mainloop_params.tokens[bidb];
     
 
     if (bidn * kBlockN >= tokens) {
         return;
     }
 
-    __align__(16) __shared__ float input_row_sum[kBlockN];
+    float* input_row_sum = reinterpret_cast<float*>(
+        shared_memory + sizeof(typename Ktraits::SharedStorage));
 
     if (warp_group_idx == 0) {
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
@@ -184,47 +130,74 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
         typename Ktraits::TiledMma tiled_mma;
 
-        Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{})); 
+        typename Ktraits::TiledMma_TAIL tiled_mma_tail;
 
         const int mma_tidx = tidx - NumCopyThreads;
         const int lane_id = mma_tidx % 4 * 2;
 
         const float2 weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4]; 
 
-        if constexpr (TokenPaddingSize == 0) {
+        if constexpr (TokenPackSize == 0) {
             const int input_sum_idx = pre_fix_tokens + bidn * kBlockN;
             if (mma_tidx < kBlockN) {
                 reinterpret_cast<float*>(input_row_sum)[mma_tidx] = reinterpret_cast<const float*>(mainloop_params.input_row_sum + input_sum_idx)[mma_tidx];
             }
         } else {
-            const int input_sum_idx = bidb * TokenPaddingSize + bidn * kBlockN;
+            const int input_sum_idx = bidb * TokenPackSize + bidn * kBlockN;
             if (mma_tidx < kBlockN / 4) {
                 reinterpret_cast<float4*>(input_row_sum)[mma_tidx] = reinterpret_cast<const float4*>(mainloop_params.input_row_sum + input_sum_idx)[mma_tidx];
             }
         }
-        
 
-        collective_mainloop.mma(
-            mainloop_params,
-            pipeline,  
-            smem_pipe_read,
-            shared_storage,
-            tSrS,
-            mma_tidx); 
+        const int reamin_tokens = tokens - bidn * kBlockN;
         
-        collective_mainloop.store(
-            mainloop_params, 
-            tSrS, 
-            shared_storage, 
-            tiled_mma,
-            input_row_sum + lane_id,
-            reinterpret_cast<const float*>(&weight_scale),
-            tokens,
-            pre_fix_tokens,         
-            bidm,
-            bidn,
-            bidb,
-            mma_tidx);
+        if (TAIL_N > 0 && reamin_tokens < kBlockN) {
+            Tensor tSrS_tail = partition_fragment_C(tiled_mma_tail, select<0, 1>(TileShape_MNK_TAIL{})); 
+            collective_mainloop.mma<TAIL_N>(
+                mainloop_params,
+                tiled_mma_tail,
+                pipeline,  
+                smem_pipe_read,
+                shared_storage,
+                tSrS_tail,
+                mma_tidx);
+            collective_mainloop.store<TAIL_N>(
+                mainloop_params, 
+                tSrS_tail, 
+                shared_storage, 
+                tiled_mma_tail,
+                input_row_sum + lane_id,
+                reinterpret_cast<const float*>(&weight_scale),
+                tokens,
+                pre_fix_tokens,         
+                bidm,
+                bidn,
+                bidb,
+                mma_tidx);
+        } else {
+            Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{})); 
+            collective_mainloop.mma<kBlockN>(
+                mainloop_params,
+                tiled_mma,
+                pipeline,  
+                smem_pipe_read,
+                shared_storage,
+                tSrS,
+                mma_tidx);
+            collective_mainloop.store<kBlockN>(
+                mainloop_params, 
+                tSrS, 
+                shared_storage, 
+                tiled_mma,
+                input_row_sum + lane_id,
+                reinterpret_cast<const float*>(&weight_scale),
+                tokens,
+                pre_fix_tokens,         
+                bidm,
+                bidn,
+                bidb,
+                mma_tidx);
+        }
     }
 
 }
@@ -243,7 +216,7 @@ auto get_gmem_layout(const int Rows, const int Cols) {
 }
 
 
-template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Batch, int TokenPaddingSize>
+template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Batch, int TokenPackSize>
 void run_gemm(const InputType * A, const InputType * B, OutputType * C, const float *weight_scale,
         const float *input_row_sum, const int * tokens, const int max_tokens, cudaStream_t stream) {
 
@@ -260,9 +233,9 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
             static_cast<Element const*>(A),
             get_gmem_layout<Batch>(M, K / 2),
             static_cast<Element const*>(B),
-            get_gmem_layout<Batch>(TokenPaddingSize == 0 ? max_tokens * Batch : TokenPaddingSize, K),
+            get_gmem_layout<Batch>(TokenPackSize == 0 ? max_tokens * Batch : TokenPackSize, K),
             static_cast<ElementOutput*>(C),
-            get_gmem_layout<Batch>(M, TokenPaddingSize == 0 ? max_tokens : TokenPaddingSize),
+            get_gmem_layout<Batch>(M, TokenPackSize == 0 ? max_tokens : TokenPackSize),
             weight_scale,
             input_row_sum,
             tokens
@@ -271,7 +244,7 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
     void *kernel;
     kernel = (void *)w4afp8_geem_kernel<Kernel_traits>;
     
-    int smem_size = sizeof(typename Kernel_traits::SharedStorage);
+    int smem_size = sizeof(typename Kernel_traits::SharedStorage) + sizeof(float) * Kernel_traits::kBlockN;
 
     if (smem_size >= 48 * 1024) {
        cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
@@ -288,30 +261,3 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
     cutlass::launch_kernel_on_cluster(
         launch_params, kernel, mainloop_params);
 }
-
-template <typename InputType, typename OutputType, int M, int K, int Batch, int TokenPaddingSize>
-void w4afp8_gemm(
-        const InputType * weight, 
-        const InputType * input, 
-        OutputType * out, 
-        const float *weight_scale,
-        const float *input_row_sum, 
-        const int *tokens, 
-        const int max_tokens, 
-        cudaStream_t stream) {
-    constexpr static int kBlockM = 128;
-    constexpr static int kBlockK = 128;
-    constexpr static int kNWarps = 4 + kBlockM / 16;
-    constexpr static int kStages = 5;
-    constexpr int kCluster = 1;
-    static_assert(K % kBlockK == 0);
-    constexpr int kTiles = K / kBlockK;
-    const int N = (max_tokens + 15) / 16 * 16;
-
-    N_SWITCH(N, [&] {
-        using Kernel_traits = Kernel_traits<kBlockM, GemmN, kBlockK, kNWarps, kStages, kTiles, M, TokenPaddingSize, kCluster, InputType, OutputType>;
-        run_gemm<InputType, OutputType, Kernel_traits, M, K, Batch, TokenPackSize>(weight, input, out, weight_scale, input_row_sum, tokens, max_tokens, stream);
-    });
-    
-}
-

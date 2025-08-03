@@ -73,39 +73,7 @@ out_cuda = w4afp8_gemm(
     True
 )
 
-warm_up = 100
-iters = 1000
-for i in range(warm_up):
-    out_cuda = w4afp8_gemm(
-        input_fp8,
-        weight_int4.cuda(),
-        tokens,
-        tokens_perfix_sum,
-        input_row_sum.astype('float32'),
-        weight_dequant_scale.astype('float32'),
-        int(0),
-        max_tokens,
-        True
-    )
-paddle.device.synchronize()
-start_time = time.time()
-for i in range(iters):
-    out_cuda = w4afp8_gemm(
-        input_fp8,
-        weight_int4.cuda(),
-        tokens,
-        tokens_perfix_sum,
-        input_row_sum.astype('float32'),
-        weight_dequant_scale.astype('float32'),
-        int(0),
-        max_tokens,
-        True
-    )
-paddle.device.synchronize()
-end_time = time.time()
-print("cuda time: ", (end_time - start_time) / iters)
 gap = (out_cuda - out_naive).abs()
-print(gap.argmax())
 print("max gap: ", float(gap.max()), ", mean gap: ", float(gap.mean()))
 print(out_cuda)
 print(out_naive)

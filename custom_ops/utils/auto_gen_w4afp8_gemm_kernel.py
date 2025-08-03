@@ -1,0 +1,117 @@
+file_dir = "../gpu_ops/w4afp8_gemm/"
+
+gemm_template_head = """
+#pragma once
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <cuda_fp16.h>
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+#include <cuda_bf16.h>
+#endif
+#include <cute/tensor.hpp>
+#include <cutlass/array.h>
+#include <cutlass/cutlass.h>
+#include <cutlass/numeric_conversion.h>
+#include <cutlass/numeric_types.h>
+"""
+gemm_template_case = """
+void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
+        const cutlass::float_e4m3_t * weight, 
+        const cutlass::float_e4m3_t * input, 
+        cutlass::bfloat16_t * out, 
+        const float *weight_scale,
+        const float *input_row_sum, 
+        const int *tokens, 
+        const int max_tokens, 
+        cudaStream_t stream);
+"""
+
+gemm_template_cu_head = """
+#include "paddle/extension.h"
+#include "w4afp8_gemm_template.h"
+#include "w4afp8_gemm_kernel.hpp"
+
+"""
+gemm_template_cu_template = """
+void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
+        const cutlass::float_e4m3_t * weight, 
+        const cutlass::float_e4m3_t * input, 
+        cutlass::bfloat16_t * out, 
+        const float *weight_scale,
+        const float *input_row_sum, 
+        const int *tokens, 
+        const int max_tokens, 
+        cudaStream_t stream) {{
+    
+    constexpr static int M = {M};
+    constexpr static int K = {K};
+    constexpr static int Batch = {BATCH};
+    constexpr static int TokenPackSize = {PADDING};
+    constexpr static int kBlockN = {N};
+    constexpr static int kBlockN_TAIL = {TAILN};
+    constexpr static int kBlockM = 128;
+    constexpr static int kBlockK = 128;
+    constexpr static int kNWarps = 4 + kBlockM / 16;
+    constexpr static int kStages = 5;
+    constexpr int kCluster = 1;
+    static_assert(K % kBlockK == 0);
+    constexpr int kTiles = K / kBlockK;
+    
+    using Kernel_traits = Kernel_traits<
+        kBlockM, kBlockN, kBlockK, kNWarps, kStages, kTiles, 
+        M, TokenPackSize, kBlockN_TAIL, kCluster, cutlass::float_e4m3_t, 
+        cutlass::bfloat16_t>;
+    run_gemm<cutlass::float_e4m3_t, cutlass::bfloat16_t, 
+        Kernel_traits, M, K, Batch, TokenPackSize>
+        (weight, input, out, weight_scale, 
+        input_row_sum, tokens, max_tokens, stream);
+}}
+"""
+
+gemm_case = [
+    [7168, 8192, 8, 0],
+    [7168, 8192, 8, 5120],
+]
+
+template_head_file = open(f"{file_dir}w4afp8_gemm_template.h", "w")
+template_head_file.write(gemm_template_head)
+for case in gemm_case:
+    for n in range(16, 257, 16):
+        template_head_file.write(gemm_template_case.format(M=case[0], K=case[1], N=n,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=0))
+        template_head_file.write(gemm_template_case.format(M=case[0], K=case[1], N=256,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=n-16))
+
+        template_cu_file = open(f"{file_dir}w4afp8_gemm_M{case[0]}_N{n}_TAILN{0}_K{case[1]}_B{case[2]}_P{case[3]}_{'BF16'}.cu", "w")
+        template_cu_file.write(gemm_template_cu_head)
+        template_cu_file.write(gemm_template_cu_template.format(M=case[0], K=case[1], N=n,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=0))
+
+        template_cu_file.close()
+
+        template_cu_file = open(f"{file_dir}w4afp8_gemm_M{case[0]}_N{256}_TAILN{n-16}_K{case[1]}_B{case[2]}_P{case[3]}_{'BF16'}.cu", "w")
+        template_cu_file.write(gemm_template_cu_head)
+        template_cu_file.write(gemm_template_cu_template.format(M=case[0], K=case[1], N=256,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=n-16))
+
+        template_cu_file.close()
+
+template_head_file.write("\n")
+template_head_file.write("""#define GEMM_SWITCH(_M, _K, _BATCH, _TokenPaddingSize, _MaxToken, _TailN, ...)  {        \\
+    if (_M == 0 && _K == 0 && _BATCH == 0 && _TokenPaddingSize == 0 && _MaxToken == 0 && _TailN == 0) {    \\""")
+
+template_head_file.write("\n")
+
+for case in gemm_case:
+    for n in range(16, 257, 16):
+        template_head_file.write("""    }} else if (_M == {M} && _K == {K} && _BATCH == {BATCH} && _TokenPaddingSize == {PADDING} && _MaxToken == {N} && _TailN == {TAILN}) {{                        \\
+        w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(__VA_ARGS__);  \\""".format(M=case[0], K=case[1], N=n,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=0))
+        template_head_file.write("\n")
+        template_head_file.write("""    }} else if (_M == {M} && _K == {K} && _BATCH == {BATCH} && _TokenPaddingSize == {PADDING} && _MaxToken == {N} && _TailN == {TAILN}) {{                        \\
+        w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(__VA_ARGS__);  \\""".format(M=case[0], K=case[1], N=256,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=n-16))
+        template_head_file.write("\n")
+
+
+template_head_file.write("""    } else {   \\
+        PD_THROW("W4aFp8 not supported m=%d k=%d  batch=%d  token_padding_size=%d  max_token=%d  tailN=%d\\n", _M, _K, _BATCH, _TokenPaddingSize, _MaxToken, _TailN);    \\
+    }     \\
+}""") 
+
+template_head_file.close()

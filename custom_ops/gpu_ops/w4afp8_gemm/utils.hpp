@@ -98,21 +98,3 @@ __forceinline__ __device__ void gemm(
     warpgroup_fence_operand(tCrC);
     if constexpr (Is_RS) { warpgroup_fence_operand(const_cast<Tensor0 &>(tCrA)); }
 }
-
-void weight_convert(const uint8_t *weight, uint8_t *weight_new, int batch, int M, int K) {
-    assert(K % 64 == 0);
-    for (int b = 0; b < batch; ++b) {
-        for (int m = 0; m < M; ++m) {
-            for (int k = 0; k < K; k+=64) {
-                for (int k_inner = 0; k_inner < 32; ++k_inner) {
-                    uint8_t temp = 0;
-                    uint8_t left = weight[b * M * K + m * K + k + k_inner];
-                    uint8_t right = weight[b * M * K + m * K + k + k_inner + 32];
-                    temp |= left << 4;
-                    temp |= right;
-                    weight_new[b * M * K / 2 + m * K / 2 + k / 2 + k_inner] = *reinterpret_cast<uint8_t*>(&temp);
-                }
-            }
-        }
-    }
-}

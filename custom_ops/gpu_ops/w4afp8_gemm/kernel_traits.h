@@ -28,7 +28,8 @@ struct SharedStorage {
 template<int kBlockM_, int kBlockN_, int kBlockK_,
         int kNWarps_, int kStages_,
         int kTiles_, int M_,
-        int TokenPaddingSize_,
+        int TokenPackSize_,
+        int TAIL_N_ = 0,
         int kClusterM_ = 1, 
         typename elem_type=cutlass::float_e4m3_t,
         typename OutputType = cutlass::bfloat16_t>
@@ -49,10 +50,12 @@ struct Kernel_traits {
     static constexpr int kBlockN = kBlockN_;
     static constexpr int kBlockK = kBlockK_;
     static constexpr int kTiles = kTiles_;
-    static constexpr int TokenPaddingSize = TokenPaddingSize_;
+    static constexpr int TokenPackSize = TokenPackSize_;
     static constexpr int M = M_;
+    static constexpr int TAIL_N = TAIL_N_;
 
     using TileShape_MNK = Shape<Int<kBlockM>, Int<kBlockN>, Int<kBlockK>>;
+    using TileShape_MNK_TAIL = Shape<Int<kBlockM>, Int<TAIL_N>, Int<kBlockK>>;
 
     static constexpr int kClusterM = kClusterM_;
     using ClusterShape_MNK = Shape<Int<kClusterM>, _1, _1>;
@@ -64,6 +67,10 @@ struct Kernel_traits {
 
     using TiledMma = decltype(cute::make_tiled_mma(
         cute::GMMA::rs_op_selector<Element, Element, ElementAccum, TileShape_MNK>(),
+        AtomLayoutMNK{}));
+
+    using TiledMma_TAIL = decltype(cute::make_tiled_mma(
+        cute::GMMA::rs_op_selector<Element, Element, ElementAccum, TileShape_MNK_TAIL>(),
         AtomLayoutMNK{}));
 
     using SmemLayoutAtomA = decltype(
@@ -82,6 +89,19 @@ struct Kernel_traits {
     using SmemLayoutB = decltype(
         tile_to_shape(SmemLayoutAtomB{},
             make_shape(shape<1>(TileShape_MNK{}), shape<2>(TileShape_MNK{}), Int<kStages>{})));
+
+    using SmemLayoutAtomB_TAIL = decltype(
+        cutlass::gemm::collective::detail::rs_smem_selector<
+            GMMA::Major::K, Element, decltype(cute::get<1>(TileShape_MNK_TAIL{})), 
+            decltype(cute::get<2>(TileShape_MNK_TAIL{}))>());
+
+    using SmemLayoutB_TAIL = decltype(
+        tile_to_shape(SmemLayoutAtomB_TAIL{},
+            make_shape(
+                shape<1>(TileShape_MNK_TAIL{}), 
+                shape<2>(TileShape_MNK_TAIL{}), 
+                Int<kStages>{})
+            ));
 
     using SmemLayoutAtomC = decltype(
         cutlass::gemm::collective::detail::rs_smem_selector<

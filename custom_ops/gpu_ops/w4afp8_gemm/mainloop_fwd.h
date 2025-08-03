@@ -21,17 +21,19 @@ struct CollectiveMainloopFwd {
     using Element = typename Ktraits::Element;
     using ElementOutput = typename Ktraits::ElementOutput;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
+    using TileShape_MNK_TAIL = typename Ktraits::TileShape_MNK_TAIL;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
     using ElementAccum = typename Ktraits::ElementAccum;
 
     static constexpr int kStages = Ktraits::kStages;
     static constexpr int kBlockM = Ktraits::kBlockM;
     static constexpr int kBlockN = Ktraits::kBlockN;
+    static constexpr int TAIL_N = Ktraits::TAIL_N;
     static constexpr int kBlockK = Ktraits::kBlockK;
     static constexpr int NumCopyThreads = cutlass::NumThreadsPerWarpGroup;  
     static constexpr int kTiles = Ktraits::kTiles;
     static constexpr int M = Ktraits::M;
-    static constexpr int TokenPaddingSize = Ktraits::TokenPaddingSize;
+    static constexpr int TokenPackSize = Ktraits::TokenPackSize;
 
     using GmemTiledCopy = cute::SM90_TMA_LOAD;
 
@@ -39,6 +41,7 @@ struct CollectiveMainloopFwd {
     using SmemLayoutA = typename Ktraits::SmemLayoutA;
     using SmemLayoutB = typename Ktraits::SmemLayoutB;
     using SmemLayoutC = typename Ktraits::SmemLayoutC;
+    using SmemLayoutB_TAIL = typename Ktraits::SmemLayoutB_TAIL;
 
     using ShapeT = cute::Shape<int64_t, int64_t, int64_t>;
     using StrideT = cute::Shape<int64_t, _1, int64_t>;
@@ -128,7 +131,7 @@ struct CollectiveMainloopFwd {
         cute::prefetch_tma_descriptor(mainloop_params.tma_load_B.get_tma_descriptor());
     }
 
-    template <typename SharedStorage, typename FrgTensorO, typename TiledMma>
+    template <int CUR_N, typename SharedStorage, typename FrgTensorO, typename TiledMma>
     CUTLASS_DEVICE void
     store(Params const& mainloop_params,
         FrgTensorO & tOrO,
@@ -145,8 +148,6 @@ struct CollectiveMainloopFwd {
         
         using packHalf = typename PackedHalf<ElementOutput>::Type;
         Tensor tOrO_out = make_tensor<ElementOutput>(tOrO.layout());
-
-        const packHalf weight_scale_half = *reinterpret_cast<const packHalf*>(&weight_scale);
 
         #pragma unroll
         for (int i = 0; i < size(tOrO); i+=4) {
@@ -165,7 +166,7 @@ struct CollectiveMainloopFwd {
         
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
 
-        constexpr int k_copy_times = kBlockN / 16;
+        constexpr int k_copy_times = CUR_N / 16;
 
         #pragma unroll
         for (int i = 0; i < k_copy_times; i++) {
@@ -176,7 +177,7 @@ struct CollectiveMainloopFwd {
         }
 
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
-        const int batch_idx = TokenPaddingSize == 0 ? pre_fix_tokens * M : bidb * M * TokenPaddingSize;
+        const int batch_idx = TokenPackSize == 0 ? pre_fix_tokens * M : bidb * M * TokenPackSize;
         ElementOutput * store_c = mainloop_params.ptr_C + batch_idx + bidn * (M * kBlockN) + bidm * kBlockM;
         
         const int reamin_tokens = tokens - bidn * kBlockN;
@@ -185,7 +186,7 @@ struct CollectiveMainloopFwd {
 
         constexpr int kPackSize = 16 / sizeof(ElementOutput);
         constexpr int kNumVecElem = kBlockM / kPackSize;
-        constexpr int copy_len = kBlockN * kNumVecElem;
+        constexpr int copy_len = CUR_N * kNumVecElem;
         #pragma unroll
         for (int idx = tidx; idx < copy_len; idx += NumMmaThreads) {
             const int idx_div2 = idx / 2;
@@ -250,7 +251,7 @@ struct CollectiveMainloopFwd {
 
         const int kIters = kTiles / kStages;
 
-        if constexpr (TokenPaddingSize == 0) {
+        if constexpr (TokenPackSize == 0) {
             Tensor gB = get_local_no_packed_tensor(
                 mB, 
                 pre_fix_tokens,
@@ -326,20 +327,24 @@ struct CollectiveMainloopFwd {
         }
     }
 
-    template <typename SharedStorage, typename FrgTensorO>
+    template <int CUR_N, typename SharedStorage, typename FrgTensorO, typename TiledMma>
     CUTLASS_DEVICE void
     mma(Params const& mainloop_params,
+            TiledMma tiled_mma,
             MainloopPipeline pipeline,
             PipelineState& smem_pipe_read,      
             SharedStorage& shared_storage,
             FrgTensorO &tSrS,
             const int tidx) {
+        
+        using sMemBLayout = std::conditional_t<
+            CUR_N == kBlockN,
+            SmemLayoutB,
+            SmemLayoutB_TAIL
+        >;
 
         Tensor sA = make_tensor(make_smem_ptr(shared_storage.smem_a.data()), SmemLayoutA{});
-        Tensor sB = make_tensor(make_smem_ptr(shared_storage.smem_b.data()), SmemLayoutB{});
-        Tensor sC = make_tensor(make_smem_ptr(shared_storage.smem_c.data()), SmemLayoutC{});
-
-        typename Ktraits::TiledMma tiled_mma;
+        Tensor sB = make_tensor(make_smem_ptr(shared_storage.smem_b.data()), sMemBLayout{});
 
         tiled_mma.accumulate_ = GMMA::ScaleOut::One;
 
@@ -357,13 +362,16 @@ struct CollectiveMainloopFwd {
         };
 
         const int kIters = kTiles / kStages;
+
+        constexpr int B_STEPS = CUR_N == 0 ? 1 : (kBlockN / CUR_N);
+        
         #pragma unroll
         for (int kiter = 0; kiter < kIters; ++kiter) {
             #pragma unroll
             for (int s = 0; s < kStages; s++) {
                 Tensor tSsA = smem_thr_copy_A.partition_S(sA(_, _, s));
                 consumer_wait(pipeline, smem_pipe_read);
-                gemm</*wg_wait=*/0>(tiled_mma, tSrA, tSsA, tSrB(_, _, _, s), tSrS, smem_tiled_copy_A, smem_thr_copy_A);
+                gemm</*wg_wait=*/0>(tiled_mma, tSrA, tSsA, tSrB(_, _, _, s * B_STEPS), tSrS, smem_tiled_copy_A, smem_thr_copy_A);
                 pipeline.consumer_release(smem_pipe_read);
                 ++smem_pipe_read;
             }
@@ -372,11 +380,11 @@ struct CollectiveMainloopFwd {
         for (int i = 0; i < kTiles % kStages; ++i) {
             Tensor tSsA = smem_thr_copy_A.partition_S(sA(_, _, i));
             consumer_wait(pipeline, smem_pipe_read);
-            gemm</*wg_wait=*/0>(tiled_mma, tSrA, tSsA, tSrB(_, _, _, i), tSrS, smem_tiled_copy_A, smem_thr_copy_A);
+            
+            gemm</*wg_wait=*/0>(tiled_mma, tSrA, tSsA, tSrB(_, _, _, i * B_STEPS), tSrS, smem_tiled_copy_A, smem_thr_copy_A);
             pipeline.consumer_release(smem_pipe_read);
             ++smem_pipe_read;
         }
     }
-
 };
 

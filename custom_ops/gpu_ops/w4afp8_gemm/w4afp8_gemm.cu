@@ -18,15 +18,36 @@
 
 #include "helper.h"
 #include "paddle/extension.h"
-#include "w4afp8_gemm_kernel.hpp"
+#include "w4afp8_gemm_template.h"
+
+
+void weight_convert(const uint8_t *weight, uint8_t *weight_new, int batch, int M, int K) {
+    assert(K % 64 == 0);
+    for (int b = 0; b < batch; ++b) {
+        for (int m = 0; m < M; ++m) {
+            for (int k = 0; k < K; k+=64) {
+                for (int k_inner = 0; k_inner < 32; ++k_inner) {
+                    uint8_t temp = 0;
+                    uint8_t left = weight[b * M * K + m * K + k + k_inner];
+                    uint8_t right = weight[b * M * K + m * K + k + k_inner + 32];
+                    temp |= left << 4;
+                    temp |= right;
+                    weight_new[b * M * K / 2 + m * K / 2 + k / 2 + k_inner] = *reinterpret_cast<uint8_t*>(&temp);
+                }
+            }
+        }
+    }
+}
+
+
 
 
 
 
 template <typename OutputType>
 void DisPatchW4AFp8Gemm(
-        const phi::dtype::float8_e4m3fn* input,
-        const uint8_t* weight,
+        const cutlass::float_e4m3_t* input,
+        const cutlass::float_e4m3_t* weight,
         const int * tokens,
         const int * tokens_perfix_sum,
         const float * input_row_sum,
@@ -38,30 +59,27 @@ void DisPatchW4AFp8Gemm(
         const int M,
         const int K,
         cudaStream_t stream) {
-
-    if (M == 7168 && K == 8192 && batch_size == 8 && token_padding_size == 0) {
-        w4afp8_gemm<cutlass::float_e4m3_t, OutputType, 7168, 8192, 8, 0>(
-            reinterpret_cast<const cutlass::float_e4m3_t*>(weight),
-            reinterpret_cast<const cutlass::float_e4m3_t*>(input), 
-            out, 
-            weight_scale,
-            input_row_sum, 
-            tokens_perfix_sum, 
-            max_tokens, 
-            stream);
-    } else if (M == 7168 && K == 8192 && batch_size == 8 && token_padding_size == 4096) {
-        w4afp8_gemm<cutlass::float_e4m3_t, OutputType, 7168, 8192, 8, 4096>(
-            reinterpret_cast<const cutlass::float_e4m3_t*>(weight),
-            reinterpret_cast<const cutlass::float_e4m3_t*>(input), 
+    
+    const int max_token_pack16 = (max_token_pack16 + 15) / 16 * 16;
+    int tailn = 0;
+    if (max_tokens > 256) {
+        tailn = max_tokens % 256;
+    } 
+    if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
+        GEMM_SWITCH(
+            M, K, batch_size, token_padding_size, max_token_pack16, tailn, 
+            weight, 
+            input, 
             out, 
             weight_scale,
             input_row_sum, 
             tokens, 
             max_tokens, 
-            stream);
-    } else {
-        PD_THROW("Not supported shape. M:%d, K:%d, batch_size:%d, token_padding_size:%d\n", M, K, batch_size, token_padding_size);
+            stream)
     }
+
+
+    
 }
 
 std::vector<paddle::Tensor> W4AFp8Gemm(
@@ -90,8 +108,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
         
         if (is_bflot16) {
             DisPatchW4AFp8Gemm(
-                input.data<phi::dtype::float8_e4m3fn>(),
-                weight.data<uint8_t>(),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
                 tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
@@ -105,8 +123,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 input.stream());
         } else {
             DisPatchW4AFp8Gemm(
-                input.data<phi::dtype::float8_e4m3fn>(),
-                weight.data<uint8_t>(),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
                 tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
@@ -128,8 +146,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
         
         if (is_bflot16) {
             DisPatchW4AFp8Gemm(
-                input.data<phi::dtype::float8_e4m3fn>(),
-                weight.data<uint8_t>(),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
                 tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
@@ -143,8 +161,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 input.stream());
         } else {
             DisPatchW4AFp8Gemm(
-                input.data<phi::dtype::float8_e4m3fn>(),
-                weight.data<uint8_t>(),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
+                reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
                 tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
