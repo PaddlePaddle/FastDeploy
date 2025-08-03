@@ -650,6 +650,14 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             if "kv_cache_quant_type" not in quantization_config:
                 model_config.is_quantized = True
 
+    if hasattr(model_config, "num_experts"):
+        model_config.moe_num_experts = model_config.num_experts
+        delattr(model_config, "num_experts")
+
+    if hasattr(model_config, "num_experts_per_tok"):
+        model_config.moe_topk = model_config.num_experts_per_tok
+        delattr(model_config, "num_experts_per_tok")
+
     quant_config_name = None
     if quantization_config is not None and quantization_config.get("quantization", None) is None:
         raise ValueError("quantization_config should have a key named 'quantization' for specify quant config.")
