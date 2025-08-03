@@ -58,7 +58,7 @@ class MoEMethodBase(QuantMethodBase):
                 # )
 
                 from .ep import EPMegaRunner
-                self.ep_decoder_runner = EPMegaRunner()
+                self.ep_decoder_runner = EPMegaRunner(layer.fd_config)
 
             else:
                 from .ep import EPPrefillRunner

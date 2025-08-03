@@ -335,7 +335,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         ffn_out = self.mlp.fused_moe.quant_method.compute_ffn(
             self.mlp.fused_moe,
             permute_input,
-            token_nums_per_expert.cast("int64"),
+            token_nums_per_expert,
             None,
             True,
         )

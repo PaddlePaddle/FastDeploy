@@ -283,6 +283,65 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 4. EP combine
         return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
+    def compute_ffn(
+        self,
+        layer: nn.Layer,
+        permute_input: paddle.Tensor,
+        token_nums_per_expert: paddle.Tensor,
+        expert_idx_per_token: paddle.Tensor,
+        used_in_ep_low_latency: bool = False,
+    ):
+        # 3. Compute ffn
+        assert isinstance(permute_input, tuple)
+        assert layer.num_local_experts == permute_input[0].shape[0]
+        up_gate_proj_out = paddle.empty(
+            [
+                permute_input[0].shape[0],
+                permute_input[0].shape[1],
+                layer.moe_intermediate_size * 2,
+            ],
+            dtype=paddle.bfloat16,
+        )
+
+        ffn_out = paddle.empty(
+            [
+                permute_input[0].shape[0],
+                permute_input[0].shape[1],
+                layer.hidden_size,
+            ],
+            dtype=paddle.bfloat16,
+        )
+
+        expected_m = 128
+        deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked(
+            permute_input,
+            (
+                layer.up_gate_proj_weight,
+                layer.up_gate_proj_weight_scale,
+            ),
+            up_gate_proj_out,
+            token_nums_per_expert,
+            expected_m,
+        )
+        act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
+        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
+            act_out,
+            token_nums_per_expert,
+            self.quant_config.weight_block_size[0],
+        )
+
+        deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked(
+            (act_out_fp8, scale),
+            (
+                layer.down_proj_weight,
+                layer.down_proj_weight_scale,
+            ),
+            ffn_out,
+            token_nums_per_expert,
+            expected_m,
+        )
+        return ffn_out
+
     def apply_tp(
         self,
         layer: nn.Layer,

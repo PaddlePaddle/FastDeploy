@@ -373,7 +373,7 @@ class EPDecoderRunner(EPRunner):
 @singleton
 class EPMegaRunner:
 
-    def __init__(self):
+    def __init__(self, fd_config):
         rank = paddle.distributed.get_rank()
         num_ranks = paddle.distributed.get_world_size()
         
@@ -381,7 +381,7 @@ class EPMegaRunner:
         
 
         self.a_start_rank = 0
-        self.a_num_ranks = 8
+        self.a_num_ranks = fd_config.parallel_config.attn_group.nranks
         self.e_start_rank = self.a_start_rank + self.a_num_ranks
         self.e_num_ranks = num_ranks - self.a_num_ranks
 
@@ -390,7 +390,7 @@ class EPMegaRunner:
         self.top_k = 8
         self.num_experts = 64
         self.num_max_tokens = 256
-        self.use_fp8 = False 
+        self.use_fp8 = True
         self.rank = paddle.distributed.get_rank()
 
         num_rdma_ranks = num_ranks // 8
@@ -464,7 +464,7 @@ class EPMegaRunner:
                 self.top_k,
                 self.num_max_tokens,
                 self.num_experts,
-                False,
+                use_fp8=self.use_fp8,
             )
             req.wait()
             result =  packed_recv_x, packed_recv_count, handle
@@ -488,7 +488,7 @@ class EPMegaRunner:
                 ffn_out, 
                 self.top_k,
                 handle,
-                dispatch_use_fp8=False,
+                dispatch_use_fp8=self.use_fp8,
                 out=None,
             )
             req.wait()
