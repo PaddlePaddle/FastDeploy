@@ -328,7 +328,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         return permute_input, token_nums_per_expert, handle
 
 
-    def h100_moe(
+    def compute_moe_ffn(
         self,
         permute_input: paddle.Tensor,
         token_nums_per_expert):
@@ -366,7 +366,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         if IsH20:
             ffn_out = None
         else:
-            ffn_out = self.h100_moe(permute_input, token_nums_per_expert)
+            ffn_out = self.compute_moe_ffn(permute_input, token_nums_per_expert)
         
         hidden_states = self.m2n_combine(ffn_out, topk_idx, topk_weights, handle)
         
@@ -476,7 +476,7 @@ class Ernie4_5_Model(nn.Layer):
                 all_hidden_states.append(hidden_states[start_token_id:end_token_id])
                 all_residual.append(residual[start_token_id:end_token_id])
         else:
-            # H100机器啥也不需要做！
+            # MoE 机器啥也不需要做！
             for i in range(0, bs, mc_bs):
                 forward_metas.append(None)
                 all_hidden_states.append(None)
@@ -484,7 +484,7 @@ class Ernie4_5_Model(nn.Layer):
         
         paddle.distributed.barrier()
 
-        # 下面第3层开始H20和H100机器！！一起跑啦！
+        # 下面第3层开始H20和MoE机器！！一起跑啦！
         for mc_id, mc_forward_meta in enumerate(forward_metas):
             hidden_states = all_hidden_states[mc_id]
             residual = all_residual[mc_id]
@@ -504,7 +504,7 @@ class Ernie4_5_Model(nn.Layer):
             out = self.norm(hidden_states)
             return out
         else:
-            # H100返回None
+            # MoE机器返回None
             return None
 
     def forward1(
