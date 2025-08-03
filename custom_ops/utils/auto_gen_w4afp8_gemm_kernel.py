@@ -1,4 +1,4 @@
-file_dir = "../gpu_ops/w4afp8_gemm/"
+file_dir = "./gpu_ops/w4afp8_gemm/"
 
 gemm_template_head = """
 #pragma once
