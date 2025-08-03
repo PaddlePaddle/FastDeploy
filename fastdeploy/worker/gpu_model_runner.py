@@ -205,7 +205,6 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
-            #idx = i
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
