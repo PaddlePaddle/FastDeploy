@@ -156,6 +156,9 @@ nohup.out
 custom_ops/gpu_ops/fp8_deep_gemm/deep_gemm/include/cutlass
 custom_ops/gpu_ops/fp8_deep_gemm/deep_gemm/include/cute
 
+#marlin_kernel
+custom_ops/gpu_ops/moe/moe_wna16_marlin_utils/kernel_*.cu
+
 # buff
 custom_ops/tmp*
 
