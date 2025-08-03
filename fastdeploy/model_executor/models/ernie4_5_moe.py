@@ -617,6 +617,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         
         if ids_remove_padding is not None:
             print(ids_remove_padding.shape)
+            print(forward_meta.seq_lens_decoder)
         
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         

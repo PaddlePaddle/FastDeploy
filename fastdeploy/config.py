@@ -153,10 +153,14 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
 
         import paddle
-        self.moe_ep_group = paddle.distributed.new_group([8, 9, 10, 11, 12, 13, 14, 15])
+        self.moe_ep_group = paddle.distributed.new_group(range(8,16))
+        self.attn_group = paddle.distributed.new_group(range(0,8))
+
+
+
         self.ep_rank = paddle.distributed.get_rank(self.moe_ep_group)
-        self.is_H20 = paddle.distributed.get_rank() < 8
-        self.is_H100 = paddle.distributed.get_rank() > 8
+        self.is_H20 = paddle.distributed.get_rank(self.attn_group) >= 0
+        self.is_H100 = paddle.distributed.get_rank(self.moe_ep_group) >= 0
 
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
