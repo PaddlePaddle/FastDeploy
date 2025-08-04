@@ -253,7 +253,7 @@ class PaddleDisWorkerProc:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
                 req_ids = [req.request_id for req in req_dicts]
-                
+
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
