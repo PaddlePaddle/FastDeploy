@@ -507,7 +507,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
                 repo_id = "PaddlePaddle" + repo_id.strip()[5:]
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
-            local_path = f"{local_path}/{repo_id}/{revision}"
+            local_path = f"{local_path}/{repo_id}"
             aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
@@ -522,7 +522,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
                 repo_id = "PaddlePaddle" + repo_id.strip()[5:]
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
-            local_path = f"{local_path}/{repo_id}/{revision}"
+            local_path = f"{local_path}/{repo_id}"
             modelscope_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
@@ -540,7 +540,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
                 repo_id = "baidu" + repo_id.strip()[12:]
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
-            local_path = f"{local_path}/{repo_id}/{revision}"
+            local_path = f"{local_path}/{repo_id}"
             huggingface_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
@@ -587,12 +587,31 @@ def version():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     version_file_path = os.path.join(current_dir, "version.txt")
 
+    content = "Unknown"
     try:
         with open(version_file_path, "r") as f:
             content = f.read()
-            print(content)
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
+    return content
+
+
+class DeprecatedOptionWarning(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        console_logger.warning(f"Deprecated option is detected: {option_string}, which may be removed later")
+        setattr(namespace, self.dest, True)
+
+
+DEPRECATED_ARGS = ["enable_mm"]
+
+
+def deprecated_kwargs_warning(**kwargs):
+    for arg in DEPRECATED_ARGS:
+        if arg in kwargs:
+            console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")

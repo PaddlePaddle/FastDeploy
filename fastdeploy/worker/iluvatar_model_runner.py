@@ -26,6 +26,10 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.utils import (
+    profile_run_guard,
+    sot_warmup_guard,
+)
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -33,7 +37,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
-from fastdeploy.model_executor.model_loader import get_model_from_loader
+from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
@@ -76,9 +80,11 @@ class IluvatarModelRunner(ModelRunnerBase):
         # self.kv_caches: list[paddle.Tensor] = []
 
         # Cuda Graph
+        self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.cudagraph_num_of_warmups = self.graph_opt_config.cudagraph_num_of_warmups
+        self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
@@ -189,7 +195,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
 
                 # Use chunked prefill
-                if self.parallel_config.enable_chunked_prefill:
+                if self.cache_config.enable_chunked_prefill:
                     request.set("chunk_idx", 1)
                     logger.info(f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
@@ -236,6 +242,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
+            if request.get("bad_words_token_ids") is not None:
+                bad_words_len = len(request.get("bad_words_token_ids"))
+                if bad_words_len > 0:
+                    self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                    self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                        request.get("bad_words_token_ids"), dtype="int64"
+                    )
+
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
@@ -257,10 +271,10 @@ class IluvatarModelRunner(ModelRunnerBase):
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
-        input_length = int(full_length * self.parallel_config.kv_cache_ratio)
+        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
-            input_length + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            input_length + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -341,7 +355,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
-        self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype="int64")
+        self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
+        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
@@ -367,8 +382,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         # AttentionBackend buffers
-        self.share_inputs["decoder_batch_ids"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["decoder_batch_ids"] = None
+        self.share_inputs["decoder_tile_ids_per_batch"] = None
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -382,15 +397,15 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            self.parallel_config.max_model_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list
         free_list = list(
             range(
                 self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -476,6 +491,9 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
+        # Update bad tokens len
+        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+
         # Initialize forward meta data
         self.initialize_forward_meta()
 
@@ -492,23 +510,20 @@ class IluvatarModelRunner(ModelRunnerBase):
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
             min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"],
+            bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
         )
 
     def load_model(self) -> None:
         """load or download model"""
         logger.info(f"Starting to load model {self.model_config.architectures[0]}")
-        time_before_load = time.perf_counter()
         # 1. Load original model
-        self.model = get_model_from_loader(fd_config=self.fd_config)
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        self.model = model_loader.load_model(fd_config=self.fd_config)
 
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
-
-        time_after_load = time.perf_counter()
-        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
 
     def get_model(self) -> nn.Layer:
         """get current model"""
@@ -571,7 +586,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         )
 
         if not self.parallel_config.do_profile and (
-            self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
+            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
         ):
             raise NotImplementedError("Iluvatar does not support yet")
         else:
@@ -730,10 +745,10 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             step_cuda(
                 self.share_inputs,
-                self.parallel_config.block_size,
-                self.parallel_config.enc_dec_block_num,
+                self.cache_config.block_size,
+                self.cache_config.enc_dec_block_num,
                 self.speculative_config,
-                self.parallel_config.enable_prefix_caching,
+                self.cache_config.enable_prefix_caching,
             )
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
@@ -743,7 +758,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         """
         更新chunked prefill相关参数
         """
-        if not self.parallel_config.enable_chunked_prefill:
+        if not self.cache_config.enable_chunked_prefill:
             return
 
         for task in tasks:
@@ -803,6 +818,17 @@ class IluvatarModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    @sot_warmup_guard(True)
+    def sot_warmup(self) -> None:
+        start_time = time.perf_counter()
+        for batch_size in self.sot_warmup_sizes:
+            self._dummy_run(
+                num_tokens=self.parallel_config.max_num_batched_tokens,
+                batch_size=batch_size,
+            )
+            logger.info(f"SOT warmup the model with the batch size:{batch_size}")
+        logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
+
     def _get_skip_idx(self, model_forward_batch):
         """
         Get the index of the request that needs to be skipped during execution.
@@ -812,7 +838,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             A list of indices corresponding to the requests that need to be skipped.
         """
         skip_idx_list = []
-        if not self.parallel_config.enable_chunked_prefill or self.guided_backend is None:
+        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
             return skip_idx_list
 
         for task in model_forward_batch:
@@ -949,10 +975,10 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         step_cuda(
             self.share_inputs,
-            self.parallel_config.block_size,
-            self.parallel_config.enc_dec_block_num,
+            self.cache_config.block_size,
+            self.cache_config.enc_dec_block_num,
             self.speculative_config,
-            self.parallel_config.enable_prefix_caching,
+            self.cache_config.enable_prefix_caching,
         )
 
         self._update_chunked_prefill(model_forward_batch)
@@ -984,6 +1010,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
+    @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
@@ -1020,7 +1047,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         free_list = list(
             range(
                 self.num_gpu_blocks - 1,
-                int(self.num_gpu_blocks * self.parallel_config.kv_cache_ratio) - 1,
+                int(self.num_gpu_blocks * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -1063,7 +1090,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             if self.speculative_method in ["mtp"]
             else self.model_config.num_hidden_layers
         )
-        required_memory = byte_of_dtype * 2 * (self.parallel_config.block_size * hidden_dim) * num_layers  # k + v
+        required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
 
     def not_need_stop(self) -> bool:

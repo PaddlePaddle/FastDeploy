@@ -44,7 +44,7 @@ on:
         value: ${{ jobs.fd-build.outputs.wheel_path }}
 jobs:
   fd-build:
-    runs-on: [self-hosted, GPU-h1z1-4Cards]
+    runs-on: [self-hosted, GPU-Build]
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
     steps:
@@ -88,10 +88,10 @@ jobs:
         run: |
             set -x
             runner_name="${{ runner.name }}"
-            CARD_ID=$(echo "${runner_name}" | cut -d'-' -f2)
+            CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
             gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
 
-            CACHE_DIR=${CACHE_DIR:-${{ github.workspace }}}
+            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
             echo "CACHE_DIR is set to ${CACHE_DIR}"
             if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
               touch "${CACHE_DIR}/gitconfig"
@@ -103,6 +103,7 @@ jobs:
             -v $(pwd):/workspace -w /workspace \
             -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
             -v "${CACHE_DIR}/.cache:/root/.cache" \
+            -v "${CACHE_DIR}/.ccache:/root/.ccache" \
             -v "${CACHE_DIR}/ConfigDir:/root/.config" \
             -e TZ="Asia/Shanghai" \
             -e "COMPILE_ARCH=${compile_arch}" \
@@ -123,6 +124,7 @@ jobs:
               echo "Date Only: $DATE_ONLY"
               export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
             fi
+            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
             pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
             pip config set install.trusted-host  pip.baidu.com
             pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -130,7 +132,6 @@ jobs:
             python -m pip install --upgrade pip
             python -m pip install -r requirements.txt
             python -m pip install wheel
-            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
             # 编译RDMA
             export ENABLE_FD_RDMA=1
             bash build.sh 1 python false [${COMPILE_ARCH}]
