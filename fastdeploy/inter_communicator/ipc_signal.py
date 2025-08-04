@@ -14,8 +14,10 @@
 # limitations under the License.
 """
 
-import numpy as np
 from multiprocessing.shared_memory import SharedMemory
+
+import numpy as np
+
 
 def shared_memory_exists(name: str) -> bool:
     """Check if a shared memory block with the given name exists.
@@ -37,8 +39,6 @@ def shared_memory_exists(name: str) -> bool:
         return False
 
 
-
-
 class IPCSignal:
     """A shared memory wrapper for inter-process communication using numpy arrays.
 
@@ -50,12 +50,14 @@ class IPCSignal:
         value: Numpy array interface to the shared memory buffer.
     """
 
-    def __init__(self,
-                 name: str,
-                 array: np.ndarray,
-                 dtype: np.dtype,
-                 suffix: int = None,
-                 create: bool = True) -> None:
+    def __init__(
+        self,
+        name: str,
+        array: np.ndarray,
+        dtype: np.dtype,
+        suffix: int = None,
+        create: bool = True,
+    ) -> None:
         """Initialize or connect to a shared memory block.
 
         Args:
@@ -76,18 +78,13 @@ class IPCSignal:
             name = name + f".{suffix}"
 
         if create:
-            assert not shared_memory_exists(
-                name), f"ShareMemory: {name} already exists"
+            assert not shared_memory_exists(name), f"ShareMemory: {name} already exists"
             self.shm = SharedMemory(create=True, size=array.nbytes, name=name)
-            self.value: np.ndarray = np.ndarray(array.shape,
-                                                dtype=array.dtype,
-                                                buffer=self.shm.buf)
+            self.value: np.ndarray = np.ndarray(array.shape, dtype=array.dtype, buffer=self.shm.buf)
             self.value[:] = array  # Initialize with input array data
         else:
             self.shm = SharedMemory(name=name)
-            self.value: np.ndarray = np.ndarray(array.shape,
-                                                dtype=array.dtype,
-                                                buffer=self.shm.buf)
+            self.value: np.ndarray = np.ndarray(array.shape, dtype=array.dtype, buffer=self.shm.buf)
 
     def clear(self) -> None:
         """Release system resources and unlink the shared memory block."""

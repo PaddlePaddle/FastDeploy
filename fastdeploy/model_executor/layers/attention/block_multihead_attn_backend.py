@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -28,7 +27,9 @@ if TYPE_CHECKING:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
+    AttentionBackend,
+    AttentionMetadata,
+)
 
 
 @dataclass
@@ -36,17 +37,13 @@ class BlockAttentionMetadata(AttentionMetadata):
     """
     BlockAttentionMetadata
     """
-    max_len_kv: paddle.Tensor = None
-    set_max_lengths: int = -1
+
     encoder_batch_ids: paddle.Tensor = None
     encoder_tile_ids_per_batch: paddle.Tensor = None
     encoder_num_blocks: paddle.Tensor = None
     kv_batch_ids: paddle.Tensor = None
     kv_tile_ids_per_batch: paddle.Tensor = None
     kv_num_blocks: paddle.Tensor = None
-    decoder_batch_ids: paddle.Tensor = None
-    decoder_tile_ids_per_batch: paddle.Tensor = None
-    decoder_num_blocks: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
@@ -54,13 +51,11 @@ class BlockAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: Optional[paddle.Tensor] = None
-    decoder_block_shape_q: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
-    kv_signal_data_list: List[paddle.Tensor] = field(default_factory=list)
+    kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
 
 class BlockAttentionBackend(AttentionBackend):
@@ -68,17 +63,26 @@ class BlockAttentionBackend(AttentionBackend):
     BlockAttentionBackend backend implementation.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int,
-                 num_heads: int, head_dim: int):
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: BlockAttentionBackend
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ):
         """
         BlockAttentionBackend __init__
         """
         super().__init__()
         self.attention_metadata: BlockAttentionMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
-        self.rope_theta = (10000.0 if fd_config.model_config.rope_theta
-                           is None else fd_config.model_config.rope_theta)
+        self.rope_theta = 10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         self.rank = fd_config.parallel_config.tensor_parallel_rank
 
         self.kv_num_heads = kv_num_heads
@@ -107,12 +111,25 @@ class BlockAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: str = None,
     ):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.kv_num_heads, self.block_size,
-                self.head_dim)
+        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
+            return (
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim // 2,
+            )
+        else:
+            return (
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim,
+            )
 
     def forward_mixed(
         self,

@@ -22,14 +22,14 @@ import sys
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
-from fastdeploy.utils import version
+import typing
+
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
-__all__ = ['LLM', 'SamplingParams']
-
 try:
     import use_triton_in_paddle
+
     use_triton_in_paddle.make_triton_compatible_with_paddle()
 except ImportError:
     pass
@@ -38,13 +38,21 @@ except ImportError:
 
 def _patch_fastsafetensors():
     try:
-        file_path = subprocess.check_output([
-            sys.executable, "-c", "import fastsafetensors, os; \
+        file_path = (
+            subprocess.check_output(
+                [
+                    sys.executable,
+                    "-c",
+                    "import fastsafetensors, os; \
              print(os.path.join(os.path.dirname(fastsafetensors.__file__), \
-             'frameworks', '_paddle.py'))"
-        ]).decode().strip()
+             'frameworks', '_paddle.py'))",
+                ]
+            )
+            .decode()
+            .strip()
+        )
 
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             content = f.read()
         if "DType.U16: DType.BF16," in content and "DType.U8: paddle.uint8," in content:
             return
@@ -56,21 +64,20 @@ def _patch_fastsafetensors():
             inside_block = False
             for line in lines:
                 new_lines.append(line)
-                if 'need_workaround_dtypes: Dict[DType, DType] = {' in line:
+                if "need_workaround_dtypes: Dict[DType, DType] = {" in line:
                     inside_block = True
-                elif inside_block and '}' in line:
-                    new_lines.insert(-1, '    DType.U16: DType.BF16,')
+                elif inside_block and "}" in line:
+                    new_lines.insert(-1, "    DType.U16: DType.BF16,")
                     inside_block = False
                     modified = True
             content = "\n".join(new_lines)
 
         if "DType.I8: paddle.uint8," in content:
-            content = content.replace("DType.I8: paddle.uint8,",
-                                      "DType.U8: paddle.uint8,")
+            content = content.replace("DType.I8: paddle.uint8,", "DType.U8: paddle.uint8,")
             modified = True
 
         if modified:
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 f.write(content + "\n")
 
     except Exception as e:
@@ -78,3 +85,27 @@ def _patch_fastsafetensors():
 
 
 _patch_fastsafetensors()
+
+
+MODULE_ATTRS = {"ModelRegistry": ".model_executor.models.model_base:ModelRegistry", "version": ".utils:version"}
+
+
+if typing.TYPE_CHECKING:
+    from fastdeploy.model_executor.models.model_base import ModelRegistry
+else:
+
+    def __getattr__(name: str) -> typing.Any:
+        from importlib import import_module
+
+        if name in MODULE_ATTRS:
+            try:
+                module_name, attr_name = MODULE_ATTRS[name].split(":")
+                module = import_module(module_name, __package__)
+                return getattr(module, attr_name)
+            except ModuleNotFoundError:
+                print(f"Module {MODULE_ATTRS[name]} not found.")
+        else:
+            print(f"module {__package__} has no attribute {name}")
+
+
+__all__ = ["LLM", "SamplingParams", "ModelRegistry", "version"]

@@ -1,7 +1,7 @@
 # Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on iluvatar machine
 The current version of the software merely serves as a demonstration demo for the Iluvatar CoreX combined with the Fastdeploy inference framework for large models. There may be issues when running the latest ERNIE4.5 model, and we will conduct repairs and performance optimization in the future. Subsequent versions will provide customers with a more stable version.
 
-##  Machine Preparation
+## Machine Preparation
 First, you need to prepare a machine with the following configurations:
 
 | CPU | Memory | Card | Hard Disk|
@@ -19,13 +19,15 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 
 ## Container Preparation
 1. Start Container
+
 ```bash
 docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 docker exec -it paddle_infer bash
 ```
+
 /home/paddle contains the model files, *.whl packages, and scripts.
 
-2. Install packages
+1. Install packages
 
 ```bash
 pip3 install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
@@ -38,6 +40,7 @@ pip3 install fastdeploy_iluvatar_gpu -i https://www.paddlepaddle.org.cn/packages
 script list below:
 
 `run_demo.sh`:
+
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
@@ -78,7 +81,9 @@ for output in outputs:
 ```bash
 ./run_demo.sh
 ```
+
 The following logs will be printed: Loading the model took approximately 74 seconds, and running the demo took approximately 240 seconds.
+
 ```
 /usr/local/lib/python3.10/site-packages/paddle/utils/cpp_extension/extension_utils.py:715: UserWarning: No ccache found. Please be aware that recompiling all source files may be required. You can download and install ccache from: https://github.com/ccache/ccache/blob/master/doc/INSTALL.md
   warnings.warn(warning_message)

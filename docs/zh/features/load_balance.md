@@ -23,6 +23,7 @@
 
 ### 前置依赖 Redis
 - 使用`conda`安装
+
 ```bash
 # 安装
 conda install redis
@@ -31,6 +32,7 @@ nohup redis-server > redis.log 2>&1 &
 ```
 
 - 使用`apt`安装
+
 ```bash
 # 安装
 sudo apt install redis-server -y
@@ -39,6 +41,7 @@ sudo systemctl start redis-server
 ```
 
 - 使用`yum`安装
+
 ```bash
 # 安装
 sudo yum install redis -y
@@ -47,11 +50,13 @@ sudo systemctl start redis
 ```
 
 ### 启动FastDeploy
+
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
        --port 8801 \
        --metrics-port 8802 \
        --engine-worker-queue-port 8803 \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
        --scheduler-name global \
        --scheduler-ttl 900 \
        --scheduler-host "127.0.0.1" \
@@ -59,9 +64,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-db 0 \
        --scheduler-password "" \
        --scheduler-topic "default" \
-       --scheduler-min-load_score 3 \
+       --scheduler-min-load-score 3 \
        --scheduler-load-shards-num 1
 ```
+
 [启动参数说明](../online_serving/scheduler.md)
 
 可以将上述启动命令在多个机器执行，启动多个推理实例（如果是在一个机器中启动多个推理实例，注意端口不要冲突）。

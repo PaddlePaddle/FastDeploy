@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" UT for air_topp_sampling kernel """
+"""UT for air_topp_sampling kernel"""
 
 import copy
 import unittest
@@ -21,7 +21,6 @@ import paddle
 
 
 class Test(unittest.TestCase):
-
     def setUp(self):
         """
         Initialize.
@@ -31,18 +30,36 @@ class Test(unittest.TestCase):
         self.vocab_size = 103424
 
         # prompt token
-        prompt_ids = paddle.full(shape=[self.num_seqs, self.max_model_len], fill_value=0, dtype='int64')
-        prompt_lens = paddle.randint(low=0, high=100, shape=[self.num_seqs, 1], dtype='int64')
-        fake_tokens = paddle.randint(low=3, high=self.vocab_size, shape=[self.num_seqs, self.max_model_len], dtype='int64')
+        prompt_ids = paddle.full(
+            shape=[self.num_seqs, self.max_model_len],
+            fill_value=0,
+            dtype="int64",
+        )
+        prompt_lens = paddle.randint(low=0, high=100, shape=[self.num_seqs, 1], dtype="int64")
+        fake_tokens = paddle.randint(
+            low=3,
+            high=self.vocab_size,
+            shape=[self.num_seqs, self.max_model_len],
+            dtype="int64",
+        )
         for i in range(self.num_seqs):
-            prompt_ids[i, :prompt_lens[i]] = fake_tokens[i, :prompt_lens[i]]
+            prompt_ids[i, : prompt_lens[i]] = fake_tokens[i, : prompt_lens[i]]
 
         # generated token
-        pre_ids = paddle.full(shape=[self.num_seqs, self.max_model_len], fill_value=-1, dtype='int64')
-        step_idx = paddle.randint(low=0, high=100, shape=[self.num_seqs, 1], dtype='int64')
-        fake_tokens = paddle.randint(low=3, high=self.vocab_size, shape=[self.num_seqs, self.max_model_len], dtype='int64')
+        pre_ids = paddle.full(
+            shape=[self.num_seqs, self.max_model_len],
+            fill_value=-1,
+            dtype="int64",
+        )
+        step_idx = paddle.randint(low=0, high=100, shape=[self.num_seqs, 1], dtype="int64")
+        fake_tokens = paddle.randint(
+            low=3,
+            high=self.vocab_size,
+            shape=[self.num_seqs, self.max_model_len],
+            dtype="int64",
+        )
         for i in range(self.num_seqs):
-            pre_ids[i, :step_idx[i]] = fake_tokens[i, :step_idx[i]]
+            pre_ids[i, : step_idx[i]] = fake_tokens[i, : step_idx[i]]
 
         logits = paddle.randn([self.num_seqs, self.vocab_size]).cast("float32")
 
@@ -67,7 +84,7 @@ class Test(unittest.TestCase):
             "penalty_score": penalty_score,
             "frequency_score": frequency_score,
             "presence_score": presence_score,
-            "temperature": temperature
+            "temperature": temperature,
         }
 
     def get_token_penalty_multi_scores_baseline(self):
@@ -92,17 +109,29 @@ class Test(unittest.TestCase):
         # all penalties
         prompt_ids = input_data["prompt_ids"]
         for i in range(self.num_seqs):
-            prompt_ids[i, input_data["prompt_lens"][i]:] = -1
+            prompt_ids[i, input_data["prompt_lens"][i] :] = -1
         prompt_repeat_times = paddle.zeros([self.num_seqs, self.vocab_size + 1]).cast("int64")
-        prompt_repeat_times = paddle.put_along_axis(prompt_repeat_times, prompt_ids, paddle.ones_like(input_data["pre_ids"]), axis=1, reduce="add")
-        prompt_repeat_times = prompt_repeat_times[:, :self.vocab_size]
+        prompt_repeat_times = paddle.put_along_axis(
+            prompt_repeat_times,
+            prompt_ids,
+            paddle.ones_like(input_data["pre_ids"]),
+            axis=1,
+            reduce="add",
+        )
+        prompt_repeat_times = prompt_repeat_times[:, : self.vocab_size]
         prompt_mask = prompt_repeat_times > 0
 
         pre_ids = input_data["pre_ids"]
         pre_ids[pre_ids == -1] = self.vocab_size
         out_repeat_times = paddle.zeros([self.num_seqs, self.vocab_size + 1]).cast("int64")
-        out_repeat_times = paddle.put_along_axis(out_repeat_times, pre_ids, paddle.ones_like(input_data["pre_ids"]), axis=1, reduce="add")
-        out_repeat_times = out_repeat_times[:, :self.vocab_size]
+        out_repeat_times = paddle.put_along_axis(
+            out_repeat_times,
+            pre_ids,
+            paddle.ones_like(input_data["pre_ids"]),
+            axis=1,
+            reduce="add",
+        )
+        out_repeat_times = out_repeat_times[:, : self.vocab_size]
         output_mask = out_repeat_times > 0
 
         penalty_score = penalty_score.tile(self.vocab_size)
@@ -115,26 +144,25 @@ class Test(unittest.TestCase):
         logits /= temperature
         return logits
 
-
     def test_penalty_op(self):
-        """
-        """
+        """ """
         baseline_out = self.get_token_penalty_multi_scores_baseline()
-        from fastdeploy.model_executor.ops.gpu import \
-            get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
+
         logits = get_token_penalty_multi_scores(
-                self.input_data["pre_ids"],
-                self.input_data["prompt_ids"],
-                self.input_data["prompt_lens"],
-                self.input_data["logits"],
-                self.input_data["penalty_score"],
-                self.input_data["frequency_score"],
-                self.input_data["presence_score"],
-                self.input_data["temperature"],
-                self.input_data["bad_tokens"],
-                self.input_data["step_idx"],
-                self.input_data["min_dec_len"],
-                self.input_data["eos_token_id"])
+            self.input_data["pre_ids"],
+            self.input_data["prompt_ids"],
+            self.input_data["prompt_lens"],
+            self.input_data["logits"],
+            self.input_data["penalty_score"],
+            self.input_data["frequency_score"],
+            self.input_data["presence_score"],
+            self.input_data["temperature"],
+            self.input_data["bad_tokens"],
+            self.input_data["step_idx"],
+            self.input_data["min_dec_len"],
+            self.input_data["eos_token_id"],
+        )
         np.testing.assert_allclose(baseline_out.numpy(), logits.numpy(), rtol=1e-04, atol=1e-04)
 
 

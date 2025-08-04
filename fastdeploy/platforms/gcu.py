@@ -25,6 +25,7 @@ class GCUPlatform(Platform):
     """
     gcu platform class
     """
+
     device_name = "gcu"
 
     @classmethod
@@ -33,7 +34,7 @@ class GCUPlatform(Platform):
         Check whether GCU is available.
         """
         try:
-            assert paddle.base.core.get_custom_device_count('gcu') > 0
+            assert paddle.base.core.get_custom_device_count("gcu") > 0
             return True
         except Exception as e:
             logger.warning(
@@ -50,10 +51,10 @@ class GCUPlatform(Platform):
         """
         if selected_backend == _Backend.NATIVE_ATTN:
             logger.info("Using GCU mem_efficient ATTN backend.")
-            return ("fastdeploy.model_executor.layers.backends.gcu.attention.mem_efficient_attn_backend.GCUMemEfficientAttnBackend")
+            return "fastdeploy.model_executor.layers.backends.gcu.attention.mem_efficient_attn_backend.GCUMemEfficientAttnBackend"
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using GCU ATTN backend.")
-            return ("fastdeploy.model_executor.layers.backends.gcu.attention.flash_attn_backend.GCUFlashAttnBackend")
+            return "fastdeploy.model_executor.layers.backends.gcu.attention.flash_attn_backend.GCUFlashAttnBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"

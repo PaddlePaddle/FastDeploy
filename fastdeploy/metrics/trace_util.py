@@ -1,11 +1,13 @@
-from opentelemetry.propagate import inject, extract
+import json
+
+from fastapi import FastAPI
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.propagate import extract, inject
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from fastapi import FastAPI
 from fastdeploy.utils import (llm_logger)
 from fastdeploy import envs
@@ -13,11 +15,15 @@ import json
 import os
 
 
+from fastdeploy import envs
+from fastdeploy.utils import llm_logger
+
 # OpenTelemetry Trace context store in metadata
 TRACE_CARRIER = "trace_carrier"
 
 traces_enable = False
 tracer = trace.get_tracer(__name__)
+
 
 def set_up():
     try:
@@ -33,9 +39,7 @@ def set_up():
         service_name = envs.FD_SERVICE_NAME
         host_name = envs.FD_HOST_NAME
         # --- set attributes (Service Name, Host Name, etc.) ---
-        resource_attributes = {
-            "service.name": service_name
-        }
+        resource_attributes = {"service.name": service_name}
         if host_name:
             resource_attributes["host.name"] = host_name
 
@@ -44,12 +48,12 @@ def set_up():
         # --- set Exporter ---
         exporter_type = envs.TRACES_EXPORTER.lower()
         if exporter_type == "otlp":
-            endpoint = envs.EXPORTER_OTLP_ENDPOINT # should be set
+            endpoint = envs.EXPORTER_OTLP_ENDPOINT  # should be set
             headers = envs.EXPORTER_OTLP_HEADERS  # e.g., "Authentication=***,k2=v2"
 
             otlp_exporter = OTLPSpanExporter(
                 endpoint=endpoint,
-                headers=dict(item.split("=") for item in headers.split(",")) if headers else None
+                headers=(dict(item.split("=") for item in headers.split(",")) if headers else None),
             )
             processor = BatchSpanProcessor(otlp_exporter)
             llm_logger.info(f"Using OTLP Exporter, sending to {endpoint} with headers {headers}")
@@ -67,6 +71,7 @@ def set_up():
         llm_logger.error("set_up failed")
         pass
 
+
 def instrument(app: FastAPI):
     try:
         set_up()
@@ -78,26 +83,25 @@ def instrument(app: FastAPI):
         pass
 
 
-
-def inject_to_metadata(request, metadata_attr='metadata'):
+def inject_to_metadata(request, metadata_attr="metadata"):
     """
-        Inject OpenTelemetry trace context into the metadata field of the request.
+    Inject OpenTelemetry trace context into the metadata field of the request.
 
-        Parameters:
-        request: can be a dict or object, with metadata attributes or fields.
-        metadata_attr: the field name of metadata, default is 'metadata'.
+    Parameters:
+    request: can be a dict or object, with metadata attributes or fields.
+    metadata_attr: the field name of metadata, default is 'metadata'.
 
-        Operation:
-        - If metadata does not exist, create a new one and mount it on the request.
-        - Inject the current trace context as a JSON string and store it in metadata.
-        - Use the key TRACE_CARRIER to store the injected content.
+    Operation:
+    - If metadata does not exist, create a new one and mount it on the request.
+    - Inject the current trace context as a JSON string and store it in metadata.
+    - Use the key TRACE_CARRIER to store the injected content.
 
-        Note:
-        - This function is a non-blocking operation, and errors are silently ignored.
-        - If there is no metadata attribute in the request, an empty dict will be created for it as its attribute
+    Note:
+    - This function is a non-blocking operation, and errors are silently ignored.
+    - If there is no metadata attribute in the request, an empty dict will be created for it as its attribute
     """
     try:
-        if request is None or traces_enable == False:
+        if request is None or not traces_enable:
             return
 
         metadata = request.get(metadata_attr) if isinstance(request, dict) else getattr(request, metadata_attr, None)
@@ -116,17 +120,17 @@ def inject_to_metadata(request, metadata_attr='metadata'):
         pass
 
 
-def extract_from_metadata(request, metadata_attr='metadata'):
+def extract_from_metadata(request, metadata_attr="metadata"):
     """
-        Extract trace context from metadata of request object (dict or class instance).
+    Extract trace context from metadata of request object (dict or class instance).
 
-        Parameters:
-        request: can be a dictionary or any object, containing metadata attributes or fields.
-        metadata_attr: metadata field name, default is 'metadata'.
+    Parameters:
+    request: can be a dictionary or any object, containing metadata attributes or fields.
+    metadata_attr: metadata field name, default is 'metadata'.
 
-        Returns:
-        - Extraction success: returns OpenTelemetry context object (Context)
-        - Extraction failure or exception: returns None
+    Returns:
+    - Extraction success: returns OpenTelemetry context object (Context)
+    - Extraction failure or exception: returns None
     """
     try:
         metadata = request.get(metadata_attr) if isinstance(request, dict) else getattr(request, metadata_attr, None)
@@ -146,15 +150,15 @@ def extract_from_metadata(request, metadata_attr='metadata'):
 
 def extract_from_request(request):
     """
-        Extract trace context from trace_carrier of request object (dict or class instance).
+    Extract trace context from trace_carrier of request object (dict or class instance).
 
-        Parameters:
-        request: can be a dictionary or any object, containing metadata attributes or fields.
-        metadata_attr: metadata field name, default is 'metadata'.
+    Parameters:
+    request: can be a dictionary or any object, containing metadata attributes or fields.
+    metadata_attr: metadata field name, default is 'metadata'.
 
-        Returns:
-        - Extraction success: returns OpenTelemetry context object (Context)
-        - Extraction failure or exception: returns None
+    Returns:
+    - Extraction success: returns OpenTelemetry context object (Context)
+    - Extraction failure or exception: returns None
     """
     try:
         trace_carrier_info = getattr(request, TRACE_CARRIER, None)
@@ -171,7 +175,7 @@ def extract_from_request(request):
 
 def start_span(span_name, request, kind=trace.SpanKind.CLIENT):
     """
-        just start a new span in request trace context
+    just start a new span in request trace context
     """
     try:
         if not traces_enable:
@@ -200,7 +204,7 @@ def fd_start_span(span_name, kind=trace.SpanKind.CLIENT):
 
 def start_span_request(span_name, request, kind=trace.SpanKind.CLIENT):
     """
-        just start a new span in request trace context
+    just start a new span in request trace context
     """
     try:
         if not traces_enable:

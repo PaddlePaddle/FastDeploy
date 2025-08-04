@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional
 
 cudaError_t = ctypes.c_int
 cudaMemcpyKind = ctypes.c_int
+cudaStream_t = ctypes.c_void_p
+cudaStreamCaptureStatus = ctypes.c_int
 
 
 class cudaIpcMemHandle_t(ctypes.Structure):
@@ -41,7 +43,7 @@ def find_loaded_library(lib_name) -> Optional[str]:
     the file `/proc/self/maps` contains the memory maps of the process, which includes the
     shared libraries loaded by the process. We can use this file to find the path of the
     a loaded library.
-    """  # noqa
+    """
     found = False
     with open("/proc/self/maps") as f:
         for line in f:
@@ -73,18 +75,45 @@ class CudaRTLibrary:
         # const char* 	cudaGetErrorString ( cudaError_t error )
         Function("cudaGetErrorString", ctypes.c_char_p, [cudaError_t]),
         # ​cudaError_t 	cudaMalloc ( void** devPtr, size_t size )
-        Function("cudaMalloc", cudaError_t, [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t]),
+        Function(
+            "cudaMalloc",
+            cudaError_t,
+            [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t],
+        ),
         # ​cudaError_t 	cudaFree ( void* devPtr )
         Function("cudaFree", cudaError_t, [ctypes.c_void_p]),
         # ​cudaError_t cudaMemset ( void* devPtr, int  value, size_t count )
-        Function("cudaMemset", cudaError_t, [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t]),
-        # ​cudaError_t cudaMemcpy ( void* dst, const void* src, size_t count, cudaMemcpyKind kind ) # noqa
-        Function("cudaMemcpy", cudaError_t, [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, cudaMemcpyKind]),
-        # cudaError_t cudaIpcGetMemHandle ( cudaIpcMemHandle_t* handle, void* devPtr ) # noqa
-        Function("cudaIpcGetMemHandle", cudaError_t, [ctypes.POINTER(cudaIpcMemHandle_t), ctypes.c_void_p]),
-        # ​cudaError_t cudaIpcOpenMemHandle ( void** devPtr, cudaIpcMemHandle_t handle, unsigned int  flags ) # noqa
         Function(
-            "cudaIpcOpenMemHandle", cudaError_t, [ctypes.POINTER(ctypes.c_void_p), cudaIpcMemHandle_t, ctypes.c_uint]
+            "cudaMemset",
+            cudaError_t,
+            [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t],
+        ),
+        # ​cudaError_t cudaMemcpy ( void* dst, const void* src, size_t count, cudaMemcpyKind kind )
+        Function(
+            "cudaMemcpy",
+            cudaError_t,
+            [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, cudaMemcpyKind],
+        ),
+        # cudaError_t cudaIpcGetMemHandle ( cudaIpcMemHandle_t* handle, void* devPtr )
+        Function(
+            "cudaIpcGetMemHandle",
+            cudaError_t,
+            [ctypes.POINTER(cudaIpcMemHandle_t), ctypes.c_void_p],
+        ),
+        # ​cudaError_t cudaIpcOpenMemHandle ( void** devPtr, cudaIpcMemHandle_t handle, unsigned int  flags )
+        Function(
+            "cudaIpcOpenMemHandle",
+            cudaError_t,
+            [
+                ctypes.POINTER(ctypes.c_void_p),
+                cudaIpcMemHandle_t,
+                ctypes.c_uint,
+            ],
+        ),
+        Function(
+            "cudaStreamIsCapturing",
+            cudaError_t,
+            [cudaStream_t, ctypes.POINTER(cudaStreamCaptureStatus)],
         ),
     ]
 
@@ -165,3 +194,8 @@ class CudaRTLibrary:
             self.funcs["cudaIpcOpenMemHandle"](ctypes.byref(devPtr), handle, cudaIpcMemLazyEnablePeerAccess)
         )
         return devPtr
+
+    def cudaStreamIsCapturing(self, stream: cudaStream_t) -> ctypes.c_int:
+        is_capturing = ctypes.c_int()
+        self.CUDART_CHECK(self.funcs["cudaStreamIsCapturing"](stream, is_capturing))
+        return is_capturing

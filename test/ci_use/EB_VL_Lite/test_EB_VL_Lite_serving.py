@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import requests
-import time
 import json
-import subprocess
-import socket
 import os
 import signal
+import socket
+import subprocess
 import sys
-import openai
+import time
 
+import openai
+import pytest
+import requests
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -31,6 +31,7 @@ FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -43,18 +44,20 @@ def is_port_open(host: str, port: int, timeout=1.0):
     except Exception:
         return False
 
+
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
     Uses `lsof` to find process ids and sends SIGKILL.
     """
     try:
-        output = subprocess.check_output("lsof -i:{} -t".format(port), shell=True).decode().strip()
+        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
-            print("Killed process on port {}, pid={}".format(port, pid))
+            print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
+
 
 def clean_ports():
     """
@@ -62,6 +65,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
@@ -77,28 +81,43 @@ def setup_and_run_server():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path=os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+        model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
     else:
-        model_path="./ernie-4_5-vl-28b-a3b-bf16-paddle"
+        model_path = "./ernie-4_5-vl-28b-a3b-bf16-paddle"
 
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
 
     cmd = [
-        sys.executable, "-m", "fastdeploy.entrypoints.openai.api_server",
-        "--model", model_path,
-        "--port", str(FD_API_PORT),
-        "--tensor-parallel-size", "1",
-        "--engine-worker-queue-port", str(FD_ENGINE_QUEUE_PORT),
-        "--metrics-port", str(FD_METRICS_PORT),
+        sys.executable,
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        model_path,
+        "--port",
+        str(FD_API_PORT),
+        "--tensor-parallel-size",
+        "2",
+        "--engine-worker-queue-port",
+        str(FD_ENGINE_QUEUE_PORT),
+        "--metrics-port",
+        str(FD_METRICS_PORT),
         "--enable-mm",
-        "--max-model-len", "32768",
-        "--max-num-batched-tokens", "384",
-        "--max-num-seqs", "128",
-        "--limit-mm-per-prompt", limit_mm_str,
+        "--max-model-len",
+        "32768",
+        "--max-num-batched-tokens",
+        "384",
+        "--max-num-seqs",
+        "128",
+        "--limit-mm-per-prompt",
+        limit_mm_str,
         "--enable-chunked-prefill",
-        "--kv-cache-ratio", "0.71",
-        "--quantization", "wint4"
+        "--kv-cache-ratio",
+        "0.71",
+        "--quantization",
+        "wint4",
+        "--reasoning-parser",
+        "ernie-45-vl",
     ]
 
     # Start subprocess in new process group
@@ -107,13 +126,13 @@ def setup_and_run_server():
             cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
-            start_new_session=True  # Enables killing full group via os.killpg
+            start_new_session=True,  # Enables killing full group via os.killpg
         )
 
     # Wait up to 300 seconds for API server to be ready
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
-            print("API server is up on port {}".format(FD_API_PORT))
+            print(f"API server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
     else:
@@ -121,17 +140,17 @@ def setup_and_run_server():
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
-            print("Failed to kill process group: {}".format(e))
-        raise RuntimeError("API server did not start on port {}".format(FD_API_PORT))
+            print(f"Failed to kill process group: {e}")
+        raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
 
     yield  # Run tests
 
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        print("API server (pid={}) terminated".format(process.pid))
+        print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
-        print("Failed to terminate API server: {}".format(e))
+        print(f"Failed to terminate API server: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -139,7 +158,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return "http://0.0.0.0:{}/v1/chat/completions".format(FD_API_PORT)
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -147,7 +166,7 @@ def metrics_url(request):
     """
     Returns the metrics endpoint URL.
     """
-    return "http://0.0.0.0:{}/metrics".format(FD_METRICS_PORT)
+    return f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
 
 @pytest.fixture
@@ -166,14 +185,23 @@ def consistent_payload():
     """
     return {
         "messages": [
-            {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0", "detail": "high"}},
-            {"type": "text", "text": "请描述图片内容"}
-            ]}
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            }
         ],
         "temperature": 0.8,
         "top_p": 0,  # fix top_p to reduce randomness
-        "seed": 13  # fixed random seed
+        "seed": 13,  # fixed random seed
     }
 
 
@@ -188,37 +216,44 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
     assert resp1.status_code == 200
     result1 = resp1.json()
-    content1 = result1["choices"][0]["message"]["content"]
+    content1 = (
+        result1["choices"][0]["message"]["reasoning_content"]
+        + "</think>"
+        + result1["choices"][0]["message"]["content"]
+    )
     file_res_temp = "ernie-4_5-vl"
-    f_o = open(file_res_temp, 'a')
+    f_o = open(file_res_temp, "a")
     f_o.writelines(content1)
     f_o.close()
 
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2")
     else:
-        base_file = "ernie-4_5-vl-base"
+        base_file = "ernie-4_5-vl-base-tp2"
     with open(base_file, "r") as f:
         content2 = f.read()
 
     # Verify that result is same as the base result
     assert content1 == content2
 
+
 # ==========================
 # OpenAI Client Chat Completion Test
 # ==========================
+
 
 @pytest.fixture
 def openai_client():
     ip = "0.0.0.0"
     service_http_port = str(FD_API_PORT)
     client = openai.Client(
-        base_url = "http://{}:{}/v1".format(ip, service_http_port),
-        api_key="EMPTY_API_KEY"
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
     )
     return client
+
 
 # Non-streaming test
 def test_non_streaming_chat(openai_client):
@@ -228,33 +263,32 @@ def test_non_streaming_chat(openai_client):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
-            }
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
         ],
         temperature=1,
         max_tokens=53,
         stream=False,
     )
 
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'content')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+
 
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
@@ -264,30 +298,25 @@ def test_streaming_chat(openai_client, capsys):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
-            {
-                "role": "user",
-                "content": "List 3 countries and their capitals."
-            },
+            {"role": "user", "content": "List 3 countries and their capitals."},
             {
                 "role": "assistant",
-                "content": "China(Beijing), France(Paris), Australia(Canberra)."
+                "content": "China(Beijing), France(Paris), Australia(Canberra).",
             },
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
             },
         ],
         temperature=1,
@@ -297,6 +326,212 @@ def test_streaming_chat(openai_client, capsys):
 
     output = []
     for chunk in response:
-        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
+
+# ==========================
+# OpenAI Client additional chat/completions test
+# ==========================
+
+
+def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
+    """
+    Test return_token_ids option in non-streaming chat functionality with the local service
+    """
+    # 设定 return_token_ids
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
+        ],
+        temperature=1,
+        max_tokens=53,
+        extra_body={"return_token_ids": True},
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
+    assert isinstance(response.choices[0].message.prompt_token_ids, list)
+    assert hasattr(response.choices[0].message, "completion_token_ids")
+    assert isinstance(response.choices[0].message.completion_token_ids, list)
+
+    # 不设定 return_token_ids
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
+        ],
+        temperature=1,
+        max_tokens=53,
+        extra_body={"return_token_ids": False},
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
+    assert response.choices[0].message.prompt_token_ids is None
+    assert hasattr(response.choices[0].message, "completion_token_ids")
+    assert response.choices[0].message.completion_token_ids is None
+
+
+def test_streaming_chat_with_return_token_ids(openai_client, capsys):
+    """
+    Test return_token_ids option in streaming chat functionality with the local service
+    """
+    # enable return_token_ids
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
+        ],
+        temperature=1,
+        max_tokens=53,
+        extra_body={"return_token_ids": True},
+        stream=True,
+    )
+    is_first_chunk = True
+    for chunk in response:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+            assert isinstance(chunk.choices[0].delta.prompt_token_ids, list)
+            assert chunk.choices[0].delta.completion_token_ids is None
+        else:
+            assert chunk.choices[0].delta.prompt_token_ids is None
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+
+    # disable return_token_ids
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},  # system不是必需，可选
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
+        ],
+        temperature=1,
+        max_tokens=53,
+        extra_body={"return_token_ids": False},
+        stream=True,
+    )
+    for chunk in response:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
+        assert chunk.choices[0].delta.prompt_token_ids is None
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        assert chunk.choices[0].delta.completion_token_ids is None
+
+
+def test_chat_with_thinking(openai_client, capsys):
+    """
+    Test enable_thinking & reasoning_max_tokens option in non-streaming chat functionality with the local service
+    """
+    # enable thinking, non-streaming
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=10,
+        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+    )
+    assert response.choices[0].message.reasoning_content is not None
+
+    # disable thinking, non-streaming
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=10,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    )
+    assert response.choices[0].message.reasoning_content is None
+
+    # enable thinking, streaming
+    reasoning_max_tokens = 3
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+            "return_token_ids": True,
+        },
+        stream=True,
+        max_tokens=10,
+    )
+    completion_tokens = reasoning_tokens = 1
+    total_tokens = 0
+    for chunk_id, chunk in enumerate(response):
+        if chunk_id == 0:  # the first chunk is an extra chunk
+            continue
+        delta_message = chunk.choices[0].delta
+        if delta_message.content != "" and delta_message.reasoning_content == "":
+            completion_tokens += len(delta_message.completion_token_ids)
+        elif delta_message.reasoning_content != "" and delta_message.content == "":
+            reasoning_tokens += len(delta_message.completion_token_ids)
+        total_tokens += len(delta_message.completion_token_ids)
+    assert completion_tokens + reasoning_tokens == total_tokens
+    assert reasoning_tokens <= reasoning_max_tokens

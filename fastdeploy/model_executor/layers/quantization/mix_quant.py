@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -33,6 +34,9 @@ class MixQuantConfig(QuantConfigBase):
         moe_quant_type: str,
         kv_cache_quant_type: str = None,
         image_moe_quant_type: str = None,
+        is_channel_wise: bool = False,
+        has_zero_point: bool = False,
+        is_permuted: bool = True,
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -42,35 +46,50 @@ class MixQuantConfig(QuantConfigBase):
             self.image_moe_quant_type = moe_quant_type
         else:
             self.image_moe_quant_type = image_moe_quant_type
+        self.is_channel_wise = is_channel_wise
+        self.has_zero_point = has_zero_point
         self.quant_max_bound = 0
         self.quant_min_bound = 0
         self.quant_round_type = 0
+        self.is_permuted = is_permuted
 
     def name(self) -> str:
         return "mix_quant"
 
     @classmethod
     def from_config(cls, config: dict) -> "MixQuantConfig":
-        return cls(config['dense_quant_type'], config['moe_quant_type'],
-                   config.get('kv_cache_quant_type', None),
-                   config.get('image_moe_quant_type', None))
+        return cls(
+            config["dense_quant_type"],
+            config["moe_quant_type"],
+            config.get("kv_cache_quant_type", None),
+            config.get("image_moe_quant_type", None),
+            config.get("is_channel_wise", False),
+            config.get("has_zero_point", False),
+            config.get("is_permuted", True),
+        )
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
-                return get_quantization_config(
-                    self.image_moe_quant_type).from_config(
-                        {}).get_quant_method(layer)
+                return (
+                    get_quantization_config(self.image_moe_quant_type)
+                    .from_config({"is_permuted": self.is_permuted})
+                    .get_quant_method(layer)
+                )
             else:
-                return get_quantization_config(
-                    self.moe_quant_type).from_config(
-                        {}).get_quant_method(layer)
+                return (
+                    get_quantization_config(self.moe_quant_type)
+                    .from_config({"is_permuted": self.is_permuted})
+                    .get_quant_method(layer)
+                )
         elif isinstance(layer, Attention):
             if self.kv_cache_quant_type is not None:
-                return (get_quantization_config("kvcache").from_config(
-                    self.kv_cache_quant_type).get_quant_method(layer))
+                return (
+                    get_quantization_config("kvcache")
+                    .from_config(self.kv_cache_quant_type, self.is_channel_wise, self.has_zero_point)
+                    .get_quant_method(layer)
+                )
             else:
                 return None
         else:
-            return get_quantization_config(self.dense_quant_type).from_config(
-                {}).get_quant_method(layer)
+            return get_quantization_config(self.dense_quant_type).from_config({}).get_quant_method(layer)

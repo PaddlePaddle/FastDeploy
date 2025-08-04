@@ -17,6 +17,11 @@ dcu backend methods
 """
 
 from .fused_moe_triton_backends import DCUTritonWeightOnlyMoEMethod
+from .top_p_sampling import native_top_p_sampling
 from .weight_only import DCUWeightOnlyLinearMethod
 
-__all__ = ['DCUTritonWeightOnlyMoEMethod', 'DCUWeightOnlyLinearMethod']
+__all__ = [
+    "DCUTritonWeightOnlyMoEMethod",
+    "DCUWeightOnlyLinearMethod",
+    "native_top_p_sampling",
+]

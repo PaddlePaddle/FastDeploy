@@ -1,10 +1,10 @@
 FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.0.0
+ARG PADDLE_VERSION=3.1.0
+ARG FD_VERSION=2.0.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /workspace
-RUN rm -rf /workspace/FastDeploy
-COPY . /workspace/FastDeploy
 
 RUN echo "ulimit -u unlimited" >> /root/.bashrc
 RUN echo "ulimit -n 65536" >> /root/.bashrc
@@ -13,10 +13,10 @@ RUN echo "ulimit -n 65536" >> /root/.bashrc
 RUN python -m pip uninstall paddlepaddle-gpu fastdeploy-gpu -y
 
 # install paddlepaddle
-RUN python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+RUN python -m pip install --no-cache-dir paddlepaddle-gpu==${PADDLE_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
 # build and install FastDeploy
-RUN cd FastDeploy && bash build.sh 1 python false [80,90] && python -m pip install --no-cache-dir dist/* && rm -rf /workspace/FastDeploy
+RUN python -m pip install --no-cache-dir  fastdeploy-gpu==${FD_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 ENV http_proxy=""
 ENV https_proxy=""

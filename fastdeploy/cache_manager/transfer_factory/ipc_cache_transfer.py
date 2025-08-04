@@ -14,13 +14,13 @@
 # limitations under the License.
 """
 
-import os
-
 import paddle
 
 from fastdeploy.model_executor.ops.gpu import (
-    get_data_ptr_ipc, ipc_sent_key_value_cache_by_remote_ptr,
-    ipc_sent_key_value_cache_by_remote_ptr_block_sync)
+    get_data_ptr_ipc,
+    ipc_sent_key_value_cache_by_remote_ptr,
+    ipc_sent_key_value_cache_by_remote_ptr_block_sync,
+)
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -44,17 +44,13 @@ class IPCConnector:
         self.rank_id = rank_id_
         self.local_gpu_id = int(local_gpu_id_)
         tmp = paddle.ones([1, 1])
-        logger.info(
-            f"init ipc rank{self.rank_id} with remote {self.remote_gpu_id} {self.local_gpu_id}"
-        )
+        logger.info(f"init ipc rank{self.rank_id} with remote {self.remote_gpu_id} {self.local_gpu_id}")
         for layer_id in range(layer_num):
             key_unique_name = f"key_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
             value_unique_name = f"value_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
-            self.remote_key_tensor_ptr_list.append(
-                get_data_ptr_ipc(tmp, key_unique_name))
-            self.remote_value_tensor_ptr_list.append(
-                get_data_ptr_ipc(tmp, value_unique_name))
-        self.write_stream = paddle.device.Stream(f'gpu:{self.local_gpu_id}')
+            self.remote_key_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_unique_name))
+            self.remote_value_tensor_ptr_list.append(get_data_ptr_ipc(tmp, value_unique_name))
+        self.write_stream = paddle.device.Stream(f"gpu:{self.local_gpu_id}")
         self.finish_event = paddle.device.Event()
 
 
@@ -64,11 +60,11 @@ class IPCCommManager:
     """
 
     def __init__(
-            self,
-            rank_id_,
-            gpu_idx_,
-            local_key_cache_tensor_list,  # tensor list
-            local_value_cache_tensor_list,  # tensor
+        self,
+        rank_id_,
+        gpu_idx_,
+        local_key_cache_tensor_list,  # tensor list
+        local_value_cache_tensor_list,  # tensor
     ):
         self.rank_id = rank_id_
         self.gpu_idx = gpu_idx_
@@ -83,14 +79,11 @@ class IPCCommManager:
         """
         Connect to remote gpu.
         """
-        logger.info(
-            f"{self.rank_id}: connect to remote_gpu_id:{remote_gpu_id_} {self.layer_num} {self.gpu_idx}"
-        )
+        logger.info(f"{self.rank_id}: connect to remote_gpu_id:{remote_gpu_id_} {self.layer_num} {self.gpu_idx}")
         if self.is_connected(remote_gpu_id_):
             return True
         else:
-            self.comm_map[remote_gpu_id_] = IPCConnector(
-                self.rank_id, remote_gpu_id_, self.layer_num, self.gpu_idx)
+            self.comm_map[remote_gpu_id_] = IPCConnector(self.rank_id, remote_gpu_id_, self.layer_num, self.gpu_idx)
             return True
 
     def is_connected(self, remote_gpu_id_=0):
@@ -102,8 +95,7 @@ class IPCCommManager:
         else:
             return False
 
-    def write_cache(self, ip, remote_gpu_id, local_block_ids, remote_block_ids,
-                    layer_idx):
+    def write_cache(self, ip, remote_gpu_id, local_block_ids, remote_block_ids, layer_idx):
         """
         Connect to remote gpu and write cache.
         """
@@ -114,20 +106,26 @@ class IPCCommManager:
         with paddle.device.stream_guard(comm.write_stream):
             ipc_sent_key_value_cache_by_remote_ptr(
                 self.local_key_cache_tensor_list[layer_idx],
-                self.local_value_cache_tensor_list[layer_idx], local_block_ids,
-                remote_block_ids, comm.remote_key_tensor_ptr_list[layer_idx],
-                comm.remote_value_tensor_ptr_list[layer_idx], block_num,
-                self.gpu_idx, comm.remote_gpu_id,
-                comm.write_stream.stream_base.cuda_stream)
+                self.local_value_cache_tensor_list[layer_idx],
+                local_block_ids,
+                remote_block_ids,
+                comm.remote_key_tensor_ptr_list[layer_idx],
+                comm.remote_value_tensor_ptr_list[layer_idx],
+                block_num,
+                self.gpu_idx,
+                comm.remote_gpu_id,
+                comm.write_stream.stream_base.cuda_stream,
+            )
         return 0
 
     def write_block_by_sync(self, remote_gpu_id):
         """
         check finish event and wait for it
         """
-        paddle.set_device(f'gpu:{self.gpu_idx}')
+        paddle.set_device(f"gpu:{self.gpu_idx}")
         comm = self.comm_map[remote_gpu_id]
         ipc_sent_key_value_cache_by_remote_ptr_block_sync(
-            self.local_key_cache_tensor_list[0],  #tensor no use
-            self.local_value_cache_tensor_list[0],  #tensor no use
-            comm.write_stream.stream_base.cuda_stream)
+            self.local_key_cache_tensor_list[0],  # tensor no use
+            self.local_value_cache_tensor_list[0],  # tensor no use
+            comm.write_stream.stream_base.cuda_stream,
+        )

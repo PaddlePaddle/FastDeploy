@@ -19,14 +19,11 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.config import MoEPhase
-
 from ..quantization.quant_base import QuantMethodBase
 
 
 class MoEMethodBase(QuantMethodBase):
-    """
-    """
+    """ """
 
     def __init__(self, quant_config):
         super().__init__()
@@ -36,7 +33,8 @@ class MoEMethodBase(QuantMethodBase):
             self.quant_config = quant_config
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "up_gate_proj_weight_scale", "down_proj_weight_scale"
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
         ]
         self.pack_num = 1
 
@@ -45,17 +43,54 @@ class MoEMethodBase(QuantMethodBase):
         Init EP related module
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase == MoEPhase.DECODER:
-                from .ep import EPDecoderRunner
-                self.ep_decoder_runner = EPDecoderRunner(
-                    layer.top_k, layer.hidden_size, layer.num_experts,
-                    layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-                    layer.ep_size, layer.ep_rank)
-            else:
-                from .ep import EPPrefillRunner
+            if layer.fd_config.parallel_config.splitwise_role == "mixed":
+                from .ep import EPDecoderRunner, EPPrefillRunner
+
                 self.ep_prefill_runner = EPPrefillRunner(
-                    layer.top_k, layer.hidden_size, layer.num_experts,
-                    layer.ep_size, layer.ep_rank)
+                    layer.top_k,
+                    layer.hidden_size,
+                    layer.num_experts,
+                    layer.fd_config.parallel_config.splitwise_role,
+                    layer.ep_size,
+                    layer.ep_rank,
+                    layer.fd_config.model_config.redundant_experts_num,
+                )
+                self.ep_decoder_runner = EPDecoderRunner(
+                    layer.top_k,
+                    layer.hidden_size,
+                    layer.num_experts,
+                    layer.fd_config.parallel_config.splitwise_role,
+                    layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+                    layer.ep_size,
+                    layer.ep_rank,
+                    layer.fd_config.model_config.redundant_experts_num,
+                )
+            else:
+                if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
+                    from .ep import EPPrefillRunner
+
+                    self.ep_prefill_runner = EPPrefillRunner(
+                        layer.top_k,
+                        layer.hidden_size,
+                        layer.num_experts,
+                        layer.fd_config.parallel_config.splitwise_role,
+                        layer.ep_size,
+                        layer.ep_rank,
+                        layer.fd_config.model_config.redundant_experts_num,
+                    )
+                else:
+                    from .ep import EPDecoderRunner
+
+                    self.ep_decoder_runner = EPDecoderRunner(
+                        layer.top_k,
+                        layer.hidden_size,
+                        layer.num_experts,
+                        layer.fd_config.parallel_config.splitwise_role,
+                        layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+                        layer.ep_size,
+                        layer.ep_rank,
+                        layer.fd_config.model_config.redundant_experts_num,
+                    )
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
@@ -68,10 +103,12 @@ class MoEMethodBase(QuantMethodBase):
         check layer is valid for this method
         """
         assert up_gate_proj_weights[0].shape == [
-            layer.hidden_size // self.pack_num, layer.moe_intermediate_size * 2
+            layer.hidden_size // self.pack_num,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_weights[0].shape == [
-            layer.moe_intermediate_size // self.pack_num, layer.hidden_size
+            layer.moe_intermediate_size // self.pack_num,
+            layer.hidden_size,
         ]
 
     @abstractmethod
@@ -127,7 +164,7 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase == MoEPhase.PREFILL:
+            if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
                 return self.apply_ep_prefill(layer, x, gate_out)
             else:
                 return self.apply_ep_decode(layer, x, gate_out)

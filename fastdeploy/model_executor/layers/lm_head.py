@@ -22,6 +22,7 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.models.utils import set_weight_attrs
 
 from .utils import get_tensor
 
@@ -77,29 +78,26 @@ class ParallelLMHead(nn.Layer):
                 self.linear = ColumnParallelLinear(
                     embedding_dim,
                     num_embeddings,
-                    mp_group=fleet.get_hybrid_communicate_group().
-                    get_model_parallel_group(),
+                    mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                     weight_attr=None,
-                    has_bias=True
-                    if self.bias_key is not None else False,
+                    has_bias=True if self.bias_key is not None else False,
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_weight_attrs(self.linear.weight, {"output_dim": True})
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
                     num_embeddings,
-                    mp_group=fleet.get_hybrid_communicate_group().
-                    get_model_parallel_group(),
+                    mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                     weight_attr=None,
-                    has_bias=True
-                    if self.bias_key is not None else False,
+                    has_bias=True if self.bias_key is not None else False,
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_weight_attrs(self.linear.weight, {"output_dim": False})
 
-    def load_state_dict(self, state_dict: Dict[str,
-                                               paddle.Tensor | np.ndarray]):
+    def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
 
@@ -108,25 +106,20 @@ class ParallelLMHead(nn.Layer):
         """
 
         if self.use_ep:
-            self.weight.set_value(
-                get_tensor(state_dict.pop(self.weight_key)).astype(
-                    paddle.get_default_dtype()))
+            self.weight.set_value(get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype()))
         else:
             if self.tie_word_embeddings:
                 self.linear.weight.set_value(
-                    get_tensor(state_dict.pop(self.weight_key)).astype(
-                        paddle.get_default_dtype()).transpose([1, 0]))
+                    get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype()).transpose([1, 0])
+                )
             else:
-                weight_tensor = get_tensor(
-                    state_dict.pop(self.weight_key)).astype(
-                        paddle.get_default_dtype())
+                weight_tensor = get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype())
                 if self.linear.weight.shape != weight_tensor.shape:
                     weight_tensor = weight_tensor.transpose([1, 0])
                 self.linear.weight.set_value(weight_tensor)
 
             if self.bias_key is not None:
-                bias = get_tensor(state_dict.pop(self.bias_key)).astype(
-                    paddle.get_default_dtype())
+                bias = get_tensor(state_dict.pop(self.bias_key)).astype(paddle.get_default_dtype())
                 self.linear.bias.set_value(bias)
 
     def forward(self, input: paddle.Tensor) -> paddle.Tensor:

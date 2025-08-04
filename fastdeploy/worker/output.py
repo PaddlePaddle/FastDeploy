@@ -20,9 +20,22 @@ from typing import NamedTuple, Optional
 import paddle
 
 
+class Logprob(NamedTuple):
+    """
+    A named tuple containing information about a token's log probability.
+    """
+
+    logprob: float
+    rank: Optional[int] = None
+    decoded_token: Optional[str] = None
+
+
+# [{token_id, logprob}] for tokens sampled from the top-k
+SampleLogprobs = list[dict[int, Logprob]]
+
+
 class LogprobsLists(NamedTuple):
-    """
-    """
+    """ """
 
     # [num_reqs, max_num_logprobs + 1]
     logprob_token_ids: list[list[int]]
@@ -39,10 +52,20 @@ class LogprobsLists(NamedTuple):
             self.sampled_token_ranks[start:end],
         )
 
+    def slice_columns(self, start: int, end: int):
+        """
+        Slice columns (per-row top-k logprobs and token IDs).
+        Keeps the number of requests unchanged.
+        """
+        return LogprobsLists(
+            [row[start:end] for row in self.logprob_token_ids],
+            [row[start:end] for row in self.logprobs],
+            self.sampled_token_ranks,  # unchanged
+        )
+
 
 class LogprobsTensors(NamedTuple):
-    """
-    """
+    """ """
 
     # [num_reqs, max_num_logprobs + 1]
     logprob_token_ids: paddle.Tensor
@@ -60,16 +83,12 @@ class LogprobsTensors(NamedTuple):
         )
 
     @staticmethod
-    def empty_cpu(num_positions: int,
-                  num_tokens_per_position: int) -> "LogprobsTensors":
+    def empty_cpu(num_positions: int, num_tokens_per_position: int) -> "LogprobsTensors":
         """Create empty LogprobsTensors on CPU."""
 
-        logprob_token_ids = paddle.empty(
-            [num_positions, num_tokens_per_position],
-            dtype=paddle.int64).cpu()
+        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], dtype=paddle.int64).cpu()
         logprobs = paddle.empty_like(logprob_token_ids, dtype=paddle.float32)
-        selected_token_ranks = paddle.empty([num_positions],
-                                            dtype=paddle.int64).cpu()
+        selected_token_ranks = paddle.empty([num_positions], dtype=paddle.int64).cpu()
         return LogprobsTensors(
             logprob_token_ids=logprob_token_ids,
             logprobs=logprobs,
@@ -79,8 +98,7 @@ class LogprobsTensors(NamedTuple):
 
 @dataclass
 class SamplerOutput:
-    """
-    """
+    """ """
 
     # [num_reqs, max_num_generated_tokens]
     # Different requests can have different number of generated tokens.
@@ -89,10 +107,11 @@ class SamplerOutput:
     sampled_token_ids: paddle.Tensor
     logprobs_tensors: Optional[LogprobsTensors]
 
+
 @dataclass
 class ModelOutputData:
     """
-        OutputData by execute_model
+    OutputData by execute_model
     """
 
     """
@@ -221,12 +240,21 @@ class ModelOutputData:
     """
     reasoning_index: paddle.Tensor = None
 
+    """
+        the token ids of stop sequence
+    """
+    stop_token_ids: paddle.Tensor = None
+
+    """
+        the length of stop sequence
+    """
+    stop_seqs_len: paddle.Tensor = None
 
 
 @dataclass
 class ModelRunnerOutput:
     """
-        [WIP] ModelRunnerOutput is serialized and sent to the scheduler process.
+    [WIP] ModelRunnerOutput is serialized and sent to the scheduler process.
     """
 
     """

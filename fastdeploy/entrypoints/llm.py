@@ -28,8 +28,12 @@ from tqdm import tqdm
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
-# from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
-from fastdeploy.utils import llm_logger, retrive_model_from_server
+from fastdeploy.utils import (
+    deprecated_kwargs_warning,
+    llm_logger,
+    retrive_model_from_server,
+)
+from fastdeploy.worker.output import Logprob, LogprobsLists
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
@@ -65,31 +69,34 @@ class LLM:
     def __init__(
         self,
         model: str,
+        revision: Optional[str] = "master",
         tokenizer: Optional[str] = None,
+        enable_logprob: Optional[bool] = False,
         **kwargs,
     ):
-        model = retrive_model_from_server(model)
+        deprecated_kwargs_warning(**kwargs)
+
+        model = retrive_model_from_server(model, revision)
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,
+            enable_logprob=enable_logprob,
             **kwargs,
         )
 
         # Create the Engine
         self.llm_engine = LLMEngine.from_engine_args(engine_args=engine_args)
 
-        self.default_sampling_params = SamplingParams(
-            max_tokens=self.llm_engine.cfg.max_model_len)
+        self.default_sampling_params = SamplingParams(max_tokens=self.llm_engine.cfg.max_model_len)
 
         self.llm_engine.start()
 
         self.mutex = threading.Lock()
         self.req_output = dict()
         self.master_node_ip = self.llm_engine.cfg.master_ip
-        self._receive_output_thread = threading.Thread(
-            target=self._receive_output, daemon=True)
+        self._receive_output_thread = threading.Thread(target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
-    
+
     def _check_master(self):
         """
         Check if the current node is the master node.
@@ -111,15 +118,19 @@ class LLM:
                                 continue
                             self.req_output[request_id].add(result)
             except Exception as e:
-                llm_logger.error("Unexcepted error happend: {}, {}".format(
-                    e, str(traceback.format_exc())))
+                llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 
     def generate(
         self,
-        prompts: Union[str, list[str], list[int], list[list[int]],
-                       dict[str, Any], list[dict[str, Any]]],
-        sampling_params: Optional[Union[SamplingParams,
-                                        list[SamplingParams]]] = None,
+        prompts: Union[
+            str,
+            list[str],
+            list[int],
+            list[list[int]],
+            dict[str, Any],
+            list[dict[str, Any]],
+        ],
+        sampling_params: Optional[Union[SamplingParams, list[SamplingParams]]] = None,
         use_tqdm: bool = True,
     ):
         """
@@ -161,14 +172,14 @@ class LLM:
             # sampling_params = None
 
         if sampling_params_len != 1 and len(prompts) != sampling_params_len:
-            raise ValueError(
-                "prompts and sampling_params must be the same length.")
+            raise ValueError("prompts and sampling_params must be the same length.")
 
-        req_ids = self._add_request(prompts=prompts,
-                                    sampling_params=sampling_params)
+        req_ids = self._add_request(prompts=prompts, sampling_params=sampling_params)
+
+        topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
 
         # get output
-        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
         for i in range(len(outputs)):
             outputs[i].prompt = prompts[i]
         return outputs
@@ -176,8 +187,7 @@ class LLM:
     def chat(
         self,
         messages: Union[list[Any], list[list[Any]]],
-        sampling_params: Optional[Union[SamplingParams,
-                                        list[SamplingParams]]] = None,
+        sampling_params: Optional[Union[SamplingParams, list[SamplingParams]]] = None,
         use_tqdm: bool = True,
         chat_template_kwargs: Optional[dict[str, Any]] = None,
     ):
@@ -198,7 +208,7 @@ class LLM:
         if not self._check_master():
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_node_ip}"
             raise ValueError(err_msg)
-        
+
         if sampling_params is None:
             sampling_params = self.default_sampling_params
 
@@ -211,18 +221,21 @@ class LLM:
             messages = [messages]
 
         if sampling_params_len != 1 and len(messages) != sampling_params_len:
-            raise ValueError(
-                "messages and sampling_params must be the same length.")
+            raise ValueError("messages and sampling_params must be the same length.")
 
         messages_len = len(messages)
         for i in range(messages_len):
             messages[i] = {"messages": messages[i]}
-        req_ids = self._add_request(prompts=messages,
-                                    sampling_params=sampling_params,
-                                    chat_template_kwargs=chat_template_kwargs)
+        req_ids = self._add_request(
+            prompts=messages,
+            sampling_params=sampling_params,
+            chat_template_kwargs=chat_template_kwargs,
+        )
+
+        topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
 
         # get output
-        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
         return outputs
 
     def _add_request(
@@ -253,8 +266,7 @@ class LLM:
                     "prompt": prompts[i],
                     "request_id": request_id,
                 }
-            elif isinstance(prompts[i], list) and isinstance(
-                    prompts[i][0], int):
+            elif isinstance(prompts[i], list) and isinstance(prompts[i][0], int):
                 tasks = {
                     "prompt_token_ids": prompts[i],
                     "request_id": request_id,
@@ -273,14 +285,54 @@ class LLM:
                 current_sampling_params = sampling_params
             enable_thinking = None
             if chat_template_kwargs is not None:
-                enable_thinking = chat_template_kwargs.get(
-                    "enable_thinking", None)
-            self.llm_engine.add_requests(tasks,
-                                         current_sampling_params,
-                                         enable_thinking=enable_thinking)
+                enable_thinking = chat_template_kwargs.get("enable_thinking", None)
+            self.llm_engine.add_requests(tasks, current_sampling_params, enable_thinking=enable_thinking)
         return req_ids
 
-    def _run_engine(self, req_ids: list[str], use_tqdm: bool):
+    def _build_sample_logprobs(self, logprobs_lists: LogprobsLists, topk_logprobs: int) -> list[dict[int, Logprob]]:
+        """
+        Constructs a list of dictionaries mapping token IDs to Logprob objects,
+        based on sliced LogprobsLists data (excluding the sampled token at index 0).
+
+        Args:
+            logprobs_lists (LogprobsLists): Contains top-k token IDs, logprobs, and sampled ranks.
+            max_num (int): Maximum number of top logprobs to include (excluding sampled token at index 0).
+
+        Returns:
+            list[dict[int, Logprob]]: One dict per request, mapping token ID to Logprob.
+        """
+        try:
+            llm_logger.info(f"filter logprobs, topk_logprobs: {topk_logprobs}")
+            if not logprobs_lists.logprob_token_ids:
+                llm_logger.warning("Empty logprob_token_ids in LogprobsLists")
+                return None
+
+            # exclude sampled token at index 0
+            available_topk = len(logprobs_lists.logprob_token_ids[0]) - 1
+            effective_topk_logprobs = min(topk_logprobs, available_topk)
+
+            if effective_topk_logprobs <= 0:
+                llm_logger.warning(
+                    f"Invalid effective_topk_logprobs={effective_topk_logprobs}, "
+                    f"available_topk={available_topk}, topk_logprobs={topk_logprobs}; returning empty result."
+                )
+                return None
+
+            # sliced 1 ~ (1 + effective_topk_logprobs)
+            sliced_logprobs_lists = logprobs_lists.slice_columns(1, 1 + effective_topk_logprobs)
+            result = []
+            for token_ids, logprobs in zip(sliced_logprobs_lists.logprob_token_ids, sliced_logprobs_lists.logprobs):
+                logprob_dict = {
+                    token_id: Logprob(logprob=logprob, rank=i + 1, decoded_token=None)
+                    for i, (token_id, logprob) in enumerate(zip(token_ids, logprobs))
+                }
+                result.append(logprob_dict)
+            return result
+
+        except Exception as e:
+            llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}")
+
+    def _run_engine(self, req_ids: list[str], use_tqdm: bool, topk_logprobs: Optional[int] = None):
         """
             运行引擎，并返回结果列表。
 
@@ -303,8 +355,7 @@ class LLM:
                 total=num_requests,
                 desc="Processed prompts",
                 dynamic_ncols=True,
-                postfix=(f"est. speed input: {0:.2f} toks/s, "
-                         f"output: {0:.2f} toks/s"),
+                postfix=(f"est. speed input: {0:.2f} toks/s, " f"output: {0:.2f} toks/s"),
             )
 
         output = [None] * num_requests
@@ -322,13 +373,18 @@ class LLM:
                         continue
 
                     result = self.req_output.pop(req_id)
-                    result = self.llm_engine.data_processor.process_response(
-                        result)
+                    result = self.llm_engine.data_processor.process_response(result)
+
+                    # filter logprobs
+                    if result.outputs.top_logprobs and topk_logprobs:
+                        result.outputs.logprobs = self._build_sample_logprobs(
+                            result.outputs.top_logprobs, topk_logprobs
+                        )
+
                     output[pos] = result
                     finished.append(i)
 
-                    llm_logger.debug(
-                        "Request id: {} has been completed.".format(req_id))
+                    llm_logger.debug(f"Request id: {req_id} has been completed.")
 
                     if use_tqdm:
                         pbar.update(1)
@@ -346,24 +402,27 @@ if __name__ == "__main__":
     # llm = LLM(model="llama_model")
     # output = llm.generate(prompts="who are you？", use_tqdm=True)
     # print(output)
-    llm = LLM(model="/opt/baidu/paddle_internal/FastDeploy/Qwen2.5-7B",
-              tensor_parallel_size=2)
+    llm = LLM(
+        model="/opt/baidu/paddle_internal/FastDeploy/Qwen2.5-7B",
+        tensor_parallel_size=2,
+    )
     sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
-    output = llm.generate(prompts="who are you？",
-                          use_tqdm=True,
-                          sampling_params=sampling_params)
+    output = llm.generate(prompts="who are you？", use_tqdm=True, sampling_params=sampling_params)
     print(output)
 
-    output = llm.generate(prompts=["who are you？", "what can you do？"],
-                          sampling_params=SamplingParams(temperature=1,
-                                                         max_tokens=50),
-                          use_tqdm=True)
+    output = llm.generate(
+        prompts=["who are you？", "what can you do？"],
+        sampling_params=SamplingParams(temperature=1, max_tokens=50),
+        use_tqdm=True,
+    )
     print(output)
 
-    output = llm.generate(prompts=["who are you？", "I miss you"],
-                          sampling_params=[
-                              SamplingParams(temperature=1, max_tokens=50),
-                              SamplingParams(temperature=1, max_tokens=20)
-                          ],
-                          use_tqdm=True)
+    output = llm.generate(
+        prompts=["who are you？", "I miss you"],
+        sampling_params=[
+            SamplingParams(temperature=1, max_tokens=50),
+            SamplingParams(temperature=1, max_tokens=20),
+        ],
+        use_tqdm=True,
+    )
     print(output)

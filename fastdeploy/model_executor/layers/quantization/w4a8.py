@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 from ..moe import FusedMoE
@@ -24,19 +25,24 @@ class W4A8Config(QuantConfigBase):
     quantization config for weight 4bits and activation 8bits
     """
 
-    def __init__(self) -> None:
+    def __init__(self, is_permuted) -> None:
         super().__init__()
+        self.is_permuted = is_permuted
 
     def name(self) -> str:
         return "w4a8"
 
     @classmethod
     def from_config(cls, config: dict) -> "W4A8Config":
-        return cls()
+        is_permuted = config.get("is_permuted", True)
+        return cls(is_permuted)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
-            from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import CutlassW4A8MoEMethod
+            from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+                CutlassW4A8MoEMethod,
+            )
+
             return CutlassW4A8MoEMethod(self)
         else:
             raise ValueError(f"Unsupported layer type {type(layer)} for w4a8")

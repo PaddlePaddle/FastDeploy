@@ -42,9 +42,7 @@ from paddleformers.transformers.image_utils import (
     to_numpy_array,
     valid_images,
 )
-from paddleformers.transformers.tokenizer_utils_base import (
-    TensorType,
-)
+from paddleformers.transformers.tokenizer_utils_base import TensorType
 from PIL import Image
 
 from fastdeploy.utils import data_processor_logger
@@ -161,7 +159,12 @@ class AdaptiveImageProcessor(BaseImageProcessor):
             The merge size of the vision encoder to llm encoder.
     """
 
-    model_input_names = ["pixel_values", "image_grid_thw", "pixel_values_videos", "video_grid_thw"]
+    model_input_names = [
+        "pixel_values",
+        "image_grid_thw",
+        "pixel_values_videos",
+        "video_grid_thw",
+    ]
 
     def __init__(
         self,
@@ -221,7 +224,10 @@ class AdaptiveImageProcessor(BaseImageProcessor):
             min_pixels=actual_min_pixels,
             max_pixels=actual_max_pixels,
         )
-        return (resized_height, resized_width), (resized_height // self.patch_size, resized_width // self.patch_size)
+        return (resized_height, resized_width), (
+            resized_height // self.patch_size,
+            resized_width // self.patch_size,
+        )
 
     def _preprocess(
         self,
@@ -330,7 +336,12 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                 image = rescale(image, scale=rescale_factor, data_format=input_data_format)
 
             if do_normalize:
-                image = normalize(image=image, mean=image_mean, std=image_std, data_format=input_data_format)
+                image = normalize(
+                    image=image,
+                    mean=image_mean,
+                    std=image_std,
+                    data_format=input_data_format,
+                )
 
             image = to_channel_dimension_format(image, data_format, input_channel_dim=input_data_format)  # [C, H, W]
 
@@ -341,7 +352,10 @@ class AdaptiveImageProcessor(BaseImageProcessor):
 
         channel = patches.shape[1]  # [time, C, H, W]
         grid_t = patches.shape[0]
-        grid_h, grid_w = resized_height // self.patch_size, resized_width // self.patch_size
+        grid_h, grid_w = (
+            resized_height // self.patch_size,
+            resized_width // self.patch_size,
+        )
         patches = patches.reshape(
             [
                 grid_t,
@@ -358,7 +372,10 @@ class AdaptiveImageProcessor(BaseImageProcessor):
         patches = patches.transpose([0, 2, 5, 3, 6, 1, 4, 7])
 
         flatten_patches = patches.reshape(
-            [grid_t * grid_h * grid_w, channel * self.patch_size * self.patch_size]
+            [
+                grid_t * grid_h * grid_w,
+                channel * self.patch_size * self.patch_size,
+            ]
         )  # [grid_t * grid_h * grid_w, C * psz * psz]
 
         return flatten_patches, (grid_t, grid_h, grid_w)
@@ -471,7 +488,10 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                 vision_grid_thws.append(image_grid_thw)
             pixel_values = np.array(pixel_values)
             vision_grid_thws = np.array(vision_grid_thws)
-            data = {"pixel_values": pixel_values, "image_grid_thw": vision_grid_thws}
+            data = {
+                "pixel_values": pixel_values,
+                "image_grid_thw": vision_grid_thws,
+            }
 
         if videos is not None:
             pixel_values, vision_grid_thws = [], []
@@ -495,7 +515,10 @@ class AdaptiveImageProcessor(BaseImageProcessor):
             pixel_values = np.array(pixel_values)
             vision_grid_thws = np.array(vision_grid_thws)
 
-            data = {"pixel_values_videos": pixel_values, "video_grid_thw": vision_grid_thws}
+            data = {
+                "pixel_values_videos": pixel_values,
+                "video_grid_thw": vision_grid_thws,
+            }
 
         return BatchFeature(data=data, tensor_type=return_tensors)
 
@@ -516,7 +539,11 @@ def floor_by_factor(number: int, factor: int) -> int:
 
 
 def smart_resize(
-    height: int, width: int, factor: int = IMAGE_FACTOR, min_pixels: int = MIN_PIXELS, max_pixels: int = MAX_PIXELS
+    height: int,
+    width: int,
+    factor: int = IMAGE_FACTOR,
+    min_pixels: int = MIN_PIXELS,
+    max_pixels: int = MAX_PIXELS,
 ):
     """
     Rescales the image so that the following conditions are met:

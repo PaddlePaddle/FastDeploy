@@ -26,14 +26,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
        --max-num-seqs 32 \
-       --reasoning-parser ernie-45-vl \
-       --enable-mm
+       --reasoning-parser ernie-45-vl
 ```
 
-> 💡 Note: In the path specified by ```--model```, if the subdirectory corresponding to the path does not exist in the current directory, it will try to query whether AIStudio has a preset model based on the specified model name (such as ```baidu/ERNIE-4.5-0.3B-Base-Paddle```). If it exists, it will automatically start downloading. The default download path is: ```~/xx```. For instructions and configuration on automatic model download, see [Model Download](../supported_models.md).  
-```--max-model-len``` indicates the maximum number of tokens supported by the currently deployed service.  
-```--max-num-seqs``` indicates the maximum number of concurrent processing supported by the currently deployed service.  
-```--reasoning-parser``` specifies the thinking content parser.  
+> 💡 Note: In the path specified by ```--model```, if the subdirectory corresponding to the path does not exist in the current directory, it will try to query whether AIStudio has a preset model based on the specified model name (such as ```baidu/ERNIE-4.5-0.3B-Base-Paddle```). If it exists, it will automatically start downloading. The default download path is: ```~/xx```. For instructions and configuration on automatic model download, see [Model Download](../supported_models.md).
+```--max-model-len``` indicates the maximum number of tokens supported by the currently deployed service.
+```--max-num-seqs``` indicates the maximum number of concurrent processing supported by the currently deployed service.
+```--reasoning-parser``` specifies the thinking content parser.
 ```--enable-mm``` indicates whether to enable multi-modal support.
 
 **Related Documents**
@@ -74,7 +73,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
       {"type": "text", "text": "What era does this artifact belong to?"}
     ]}
   ],
-  "metadata": {"enable_thinking": false}
+  "chat_template_kwargs":{"enable_thinking": false}
 }'
 ```
 
@@ -96,7 +95,7 @@ response = client.chat.completions.create(
             {"type": "text", "text": "What era does this artifact belong to?"},
         ]},
     ],
-    metadata={"enable_thinking": false},
+    extra_body={"enable_thinking": false},
     stream=True,
 )
 for chunk in response:

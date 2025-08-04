@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import gc
 from typing import List, Optional
 
 import paddle
-import paddle.nn as nn
+from paddle import nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
@@ -46,8 +47,7 @@ class GcuWorker(WorkerBase):
         pass
 
     def init_device(self):
-        """ Initialize device and Construct model runner
-        """
+        """Initialize device and Construct model runner"""
         if paddle.is_compiled_with_custom_device("gcu"):
             # Set evironment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
@@ -58,8 +58,7 @@ class GcuWorker(WorkerBase):
 
             gc.collect()
         else:
-            raise RuntimeError(
-                f"Not support device type: {self.device_config.device}")
+            raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
         # Construct model runner
         self.model_runner: GCUModelRunner = GCUModelRunner(
@@ -67,13 +66,14 @@ class GcuWorker(WorkerBase):
             device=self.device,
             device_id=self.device_ids[self.local_rank],
             rank=self.rank,
-            local_rank=self.local_rank)
+            local_rank=self.local_rank,
+        )
 
-    def prefill_finished(self):
+    def exist_prefill(self):
         """
-        check whether prefill stage finished
+        check whether prefill stage exist
         """
-        return self.model_runner.prefill_finished()
+        return self.model_runner.exist_prefill()
 
     def determine_available_memory(self) -> int:
         """
@@ -98,10 +98,9 @@ class GcuWorker(WorkerBase):
         """ """
         return self.model_runner.get_model()
 
-    def initialize_cache(self, num_gpu_blocks: int,
-                         num_cpu_blocks: int) -> None:
+    def initialize_cache(self, num_gpu_blocks: int) -> None:
         """ """
-        pass
+        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
     def execute_model(
         self,
@@ -112,7 +111,7 @@ class GcuWorker(WorkerBase):
         return output
 
     def preprocess_new_task(self, req_dicts: List[Request]) -> None:
-        """ Process new requests and then start the decode loop
+        """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
@@ -124,7 +123,8 @@ class GcuWorker(WorkerBase):
         """
         # 1. Warm up model
         # NOTE(gongshaotian): may be not need warm_up at this place
-
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
         # 2. Triger cuda grpah capture
         self.model_runner.capture_model()
 
@@ -135,8 +135,3 @@ class GcuWorker(WorkerBase):
     def cal_theortical_kvcache(self) -> int:
         """ """
         return self.model_runner.cal_theortical_kvcache()
-
-    def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
-        """ """
-        self.model_runner.update_share_input_block_num(
-            num_gpu_blocks=num_gpu_blocks)

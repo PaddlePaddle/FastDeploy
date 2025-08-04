@@ -25,14 +25,19 @@ import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
 from fastdeploy.model_executor.layers.attention.ops import (
-    get_block_shape_and_split_kv_block, init_signal_layerwise,
-    open_shm_and_get_meta_signal, init_kv_signal_per_query)
+    get_block_shape_and_split_kv_block,
+    init_kv_signal_per_query,
+    init_signal_layerwise,
+    open_shm_and_get_meta_signal,
+)
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda() and not current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import (decode_mla_write_cache,
-                                                   multi_head_latent_attention,
-                                                   prefill_mla_write_cache)
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        decode_mla_write_cache,
+        multi_head_latent_attention,
+        prefill_mla_write_cache,
+    )
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -40,13 +45,14 @@ if TYPE_CHECKING:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
+    AttentionBackend,
+    AttentionMetadata,
+)
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
 
 def yarn_get_mscale(scale=1, mscale=1):
-    """
-    """
+    """ """
     if scale <= 1:
         return 1.0
     return 0.1 * mscale * math.log(scale) + 1.0
@@ -57,17 +63,14 @@ class MLAAttentionMetadata(AttentionMetadata):
     """
     MLAAttentionMetadata for Multi-Layer Attention
     """
-    max_len_kv: paddle.Tensor = None
-    set_max_lengths: int = -1
+
     encoder_batch_ids: paddle.Tensor = None
     encoder_tile_ids_per_batch: paddle.Tensor = None
     encoder_num_blocks: paddle.Tensor = None
     kv_batch_ids: paddle.Tensor = None
     kv_tile_ids_per_batch: paddle.Tensor = None
     kv_num_blocks: paddle.Tensor = None
-    decoder_batch_ids: paddle.Tensor = None
-    decoder_tile_ids_per_batch: paddle.Tensor = None
-    decoder_num_blocks: paddle.Tensor = None
+    max_len_kv: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
@@ -75,13 +78,11 @@ class MLAAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: Optional[paddle.Tensor] = None
-    decoder_block_shape_q: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
-    kv_signal_data_list: List[paddle.Tensor] = field(default_factory=list)
+    kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
 
 class MLAAttentionBackend(AttentionBackend):
@@ -89,8 +90,18 @@ class MLAAttentionBackend(AttentionBackend):
     MLA Attention Backend implementation.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int) -> None:
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: MLAAttentionMetadata
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ) -> None:
         """
         MLAAttentionBackend __init__
         """
@@ -98,11 +109,11 @@ class MLAAttentionBackend(AttentionBackend):
         self.attention_metadata: MLAAttentionMetadata = None
 
         # 基础配置
-        self.block_size: int = fd_config.parallel_config.block_size
+        self.block_size: int = fd_config.cache_config.block_size
         self.max_seq_len: int = fd_config.parallel_config.max_model_len
-        self.rope_theta: float = (10000.0
-                                  if fd_config.model_config.rope_theta is None
-                                  else fd_config.model_config.rope_theta)
+        self.rope_theta: float = (
+            10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
+        )
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
@@ -113,20 +124,20 @@ class MLAAttentionBackend(AttentionBackend):
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
+        self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
+        self.encoder_block_shape_q: int = encoder_block_shape_q
+        self.decoder_block_shape_q: int = decoder_block_shape_q
 
         # For Multi Head Latent Attention
         self.kv_lora_rank: int = fd_config.model_config.kv_lora_rank
         self.qk_rope_head_dim: int = fd_config.model_config.qk_rope_head_dim
-        self.qk_head_dim: int = fd_config.model_config.qk_nope_head_dim \
-            + fd_config.model_config.qk_rope_head_dim
+        self.qk_head_dim: int = fd_config.model_config.qk_nope_head_dim + fd_config.model_config.qk_rope_head_dim
         self.attn_softmax_scale: float = self.qk_head_dim**-0.5
         if fd_config.model_config.rope_scaling:
-            mscale_all_dim = fd_config.model_config.rope_scaling.get(
-                "mscale_all_dim", False)  # 1.0
-            scaling_factor = fd_config.model_config.rope_scaling[
-                "factor"]  # 40
+            mscale_all_dim = fd_config.model_config.rope_scaling.get("mscale_all_dim", False)  # 1.0
+            scaling_factor = fd_config.model_config.rope_scaling["factor"]  # 40
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.attn_softmax_scale = self.attn_softmax_scale * mscale * mscale
 
@@ -134,14 +145,12 @@ class MLAAttentionBackend(AttentionBackend):
 
         self.start_layer_index: int = fd_config.model_config.start_layer_index
         self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
-        
+
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
         metadata = MLAAttentionMetadata()
-        metadata.encoder_block_shape_q = 64
-        metadata.decoder_block_shape_q = 16
         metadata.max_partition_size = 32768
         metadata.encoder_max_partition_size = self.max_seq_len
         metadata._dtype = paddle.get_default_dtype()
@@ -164,28 +173,25 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,
-            metadata.decoder_tile_ids_per_batch,
-            metadata.decoder_num_blocks,
             metadata.max_len_kv,
-            metadata.set_max_lengths,
         ) = get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            forward_meta.cum_offsets,
-            metadata.encoder_block_shape_q,
-            metadata.decoder_block_shape_q,
-            self.num_heads // self.kv_num_heads,
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
+            forward_meta.decoder_num_blocks_cpu,
+            forward_meta.max_len_tensor_cpu,
+            self.encoder_block_shape_q,
+            self.decoder_block_shape_q,
+            self.group_size,
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
 
         # MLA
-        metadata.max_enc_len_this_time = metadata.set_max_lengths[1]
-        metadata.max_dec_len_this_time = metadata.set_max_lengths[2]
-        forward_meta.max_enc_len_this_time = metadata.set_max_lengths[1]
-        forward_meta.max_dec_len_this_time = metadata.set_max_lengths[2]
+        metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
+        metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -200,7 +206,8 @@ class MLAAttentionBackend(AttentionBackend):
                 )
         elif self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
-                self.rank, int(self.device_id), self.keep_pd_step_flag)
+                self.rank, int(self.device_id), self.keep_pd_step_flag
+            )
 
         self.attention_metadata: AttentionMetadata = metadata
 
@@ -208,13 +215,20 @@ class MLAAttentionBackend(AttentionBackend):
         """get_attntion_meta"""
         return self.attention_metadata
 
-    def get_kv_cache_shape(self,
-                           max_num_blocks: int) -> Tuple[int, int, int, int]:
+    def get_kv_cache_shape(
+        self,
+        max_num_blocks: int,
+        kv_cache_quant_type: str = None,
+    ) -> Tuple[int, int, int, int]:
         """
         Calculate kv cache shape for MLA
         """
-        return (max_num_blocks, 1, self.block_size,
-                self.kv_lora_rank + self.qk_rope_head_dim)
+        return (
+            max_num_blocks,
+            1,
+            self.block_size,
+            self.kv_lora_rank + self.qk_rope_head_dim,
+        )
 
     def forward_extend(
         self,
@@ -233,13 +247,12 @@ class MLAAttentionBackend(AttentionBackend):
         metadata = self.attention_metadata
 
         if self.pd_disaggregation_mode == "per_query":
-            metadata.kv_signal_data_list[
-                layer.layer_id] = init_signal_layerwise(
-                    metadata.kv_signal_metadata,
-                    layer.layer_id + self.start_layer_index)
+            metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
+                metadata.kv_signal_metadata,
+                layer.layer_id + self.start_layer_index,
+            )
 
-        latent_cache = forward_meta.caches[layer.layer_id] if hasattr(
-            forward_meta, 'caches') else None
+        latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
         # 写入缓存
         prefill_mla_write_cache(
@@ -248,11 +261,11 @@ class MLAAttentionBackend(AttentionBackend):
             latent_cache,
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
-            getattr(forward_meta, 'max_input_length', -1),
+            getattr(forward_meta, "max_input_length", -1),
         )
 
         # Flash注意力计算
@@ -287,14 +300,13 @@ class MLAAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
-        if self.use_pd_disaggregation:
-            metadata.kv_signal_data_list[
-                layer.layer_id] = init_signal_layerwise(
-                    metadata.kv_signal_metadata,
-                    layer.layer_id + self.start_layer_index)
+        if self.pd_disaggregation_mode == "per_query":
+            metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
+                metadata.kv_signal_metadata,
+                layer.layer_id + self.start_layer_index,
+            )
 
-        latent_cache = forward_meta.caches[layer.layer_id] if hasattr(
-            forward_meta, 'caches') else None
+        latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
         # 获取推测解码参数
         speculate_decoder = self.speculative_method is not None
@@ -307,8 +319,8 @@ class MLAAttentionBackend(AttentionBackend):
             latent_cache,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_encoder,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
             self.max_seq_len,
@@ -324,8 +336,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
             metadata.block_tables,
             metadata.encoder_batch_ids,
             metadata.encoder_tile_ids_per_batch,
@@ -333,11 +344,10 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,
-            metadata.decoder_tile_ids_per_batch,
-            metadata.decoder_num_blocks,
-            metadata.
-            decoder_num_blocks,  # PaddleNLP 传入的是 decoder_num_blocks_cpu
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
+            forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_num_blocks_cpu,
             metadata.max_enc_len_this_time,
             metadata.max_dec_len_this_time,
             metadata.max_len_kv,
@@ -385,14 +395,13 @@ class MLAAttentionBackend(AttentionBackend):
         speculate_decoder = self.speculative_method is not None
         speculate_max_tokens = self.speculate_max_draft_token_num
 
-        if self.use_pd_disaggregation:
-            metadata.kv_signal_data_list[
-                layer.layer_id] = init_signal_layerwise(
-                    metadata.kv_signal_metadata,
-                    layer.layer_id + self.start_layer_index)
+        if self.pd_disaggregation_mode == "per_query":
+            metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
+                metadata.kv_signal_metadata,
+                layer.layer_id + self.start_layer_index,
+            )
 
-        latent_cache = forward_meta.caches[layer.layer_id] if hasattr(
-            forward_meta, 'caches') else None
+        latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
         if k is not None:
             prefill_mla_write_cache(
@@ -401,8 +410,8 @@ class MLAAttentionBackend(AttentionBackend):
                 latent_cache,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
-                forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 "none",
                 self.max_seq_len,
@@ -432,8 +441,8 @@ class MLAAttentionBackend(AttentionBackend):
                 latent_cache,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_encoder,
-                forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 "none",
                 self.max_seq_len,
@@ -449,8 +458,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.cu_seqlens_q,
-                forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.batch_id_per_token,
                 metadata.block_tables,
                 metadata.encoder_batch_ids,
                 metadata.encoder_tile_ids_per_batch,
@@ -458,11 +466,10 @@ class MLAAttentionBackend(AttentionBackend):
                 metadata.kv_batch_ids,
                 metadata.kv_tile_ids_per_batch,
                 metadata.kv_num_blocks,
-                metadata.decoder_batch_ids,
-                metadata.decoder_tile_ids_per_batch,
-                metadata.decoder_num_blocks,
-                metadata.
-                decoder_num_blocks,  # PaddleNLP 传入的是 decoder_num_blocks_cpu
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
+                forward_meta.decoder_num_blocks_cpu,
+                forward_meta.decoder_num_blocks_cpu,
                 metadata.max_enc_len_this_time,
                 metadata.max_dec_len_this_time,
                 metadata.max_len_kv,

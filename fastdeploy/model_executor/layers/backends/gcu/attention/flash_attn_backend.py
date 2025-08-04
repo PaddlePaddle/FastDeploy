@@ -17,24 +17,25 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 
-import paddle
-
 import numpy as np
+import paddle
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
-if TYPE_CHECKING:
-    from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
+    AttentionBackend,
+    AttentionMetadata,
+)
 
-from fastdeploy.model_executor.ops.gcu import (fused_rotary_embedding,
-                                               mem_efficient_attention,
-                                               flash_attn_var_len)
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
+
 from paddleformers.utils.log import logger
+
+from fastdeploy.model_executor.ops.gcu import flash_attn_var_len, fused_rotary_embedding
 
 
 @dataclass
@@ -42,15 +43,13 @@ class GCUFlashAttnMetadata(AttentionMetadata):
     """
     GCUFlashAttnMetadata
     """
-    forward_mode: ForwardMode = ForwardMode.MIXED
 
     _dtype: paddle.dtype = paddle.bfloat16
 
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None
     seq_lens_this_time: Optional[paddle.Tensor] = None
-    cum_offsets: Optional[paddle.Tensor] = None
-    padding_offset: Optional[paddle.Tensor] = None
+    batch_id_per_token: Optional[paddle.Tensor] = None
 
     cu_seqlens_q: Optional[paddle.Tensor] = None
     cu_seqlens_k: Optional[paddle.Tensor] = None
@@ -63,21 +62,27 @@ class GCUFlashAttnMetadata(AttentionMetadata):
     pre_caches_length: int = 0
 
 
-
-
 class GCUFlashAttnBackend(AttentionBackend):
     """
     GCUFlashAttnBackend backend implementation.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int):
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: GCUFlashAttnBackend
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+    ):
         """
         GCUFlashAttnBackend __init__
         """
         super().__init__()
         self.attention_metadata: GCUFlashAttnMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
         self.max_num_seqs = fd_config.parallel_config.max_num_seqs
 
@@ -99,8 +104,6 @@ class GCUFlashAttnBackend(AttentionBackend):
         self.rotary_embs = None
         self.enable_monitor: bool = bool(os.getenv("FD_GCU_ATTN_MONITOR", False))
 
-
-
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = GCUFlashAttnMetadata()
@@ -112,8 +115,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         metadata.seq_lens_encoder = forward_meta.seq_lens_encoder
         metadata.seq_lens_decoder = forward_meta.seq_lens_decoder
         metadata.seq_lens_this_time = forward_meta.seq_lens_this_time
-        metadata.cum_offsets = forward_meta.cum_offsets
-        metadata.padding_offset = forward_meta.padding_offset
+        metadata.batch_id_per_token = forward_meta.batch_id_per_token
 
         metadata.cu_seqlens_q = forward_meta.cu_seqlens_q
         metadata.cu_seqlens_k = forward_meta.cu_seqlens_k
@@ -131,14 +133,13 @@ class GCUFlashAttnBackend(AttentionBackend):
             self.rotary_embs = metadata.rotary_embs.reshape((-1, self.head_dim))
 
         # some info for attention
-        self.seq_lens_this_time_list = forward_meta.seq_lens_this_time.tolist() # List[int]
-        self.seq_lens_encoder_list = forward_meta.seq_lens_encoder.tolist() # List[List[int]]
-        self.seq_lens_decoder_list = forward_meta.seq_lens_decoder.tolist() # List[List[int]]
+        self.seq_lens_this_time_list = forward_meta.seq_lens_this_time.tolist()  # List[int]
+        self.seq_lens_encoder_list = forward_meta.seq_lens_encoder.tolist()  # List[List[int]]
+        self.seq_lens_decoder_list = forward_meta.seq_lens_decoder.tolist()  # List[List[int]]
         self.seq_lens_sum = np.sum(self.seq_lens_this_time_list)
         self.max_seq_len_this_time = np.max(self.seq_lens_this_time_list)
 
         num_seqs = forward_meta.seq_lens_this_time.shape[0]
-
 
         self.is_decoder = all(x[0] == 0 for x in self.seq_lens_encoder_list)
         self.is_all_prefill = all(x[0] == 0 for x in self.seq_lens_decoder_list)
@@ -147,8 +148,14 @@ class GCUFlashAttnBackend(AttentionBackend):
         if self.all_slot_mapping is None:
             max_num_blocks_per_seq = (self.max_seq_len + self.block_size - 1) // self.block_size
             total_blocks = max_num_blocks_per_seq * self.max_num_seqs
-            self.all_block_tables = np.arange(0, total_blocks, dtype=np.int32).reshape((self.max_num_seqs, max_num_blocks_per_seq)).tolist()
-            self.all_slot_mapping = np.arange(0, total_blocks * self.block_size, dtype=np.int32).reshape((self.max_num_seqs, -1)).tolist()
+            self.all_block_tables = (
+                np.arange(0, total_blocks, dtype=np.int32)
+                .reshape((self.max_num_seqs, max_num_blocks_per_seq))
+                .tolist()
+            )
+            self.all_slot_mapping = (
+                np.arange(0, total_blocks * self.block_size, dtype=np.int32).reshape((self.max_num_seqs, -1)).tolist()
+            )
 
         block_tables = []
         slot_mapping = []
@@ -157,9 +164,9 @@ class GCUFlashAttnBackend(AttentionBackend):
         position_ids = []
         for seq_idx in range(num_seqs):
             cache_len = None
-            if self.seq_lens_encoder_list[seq_idx][0] != 0:   # prefill
+            if self.seq_lens_encoder_list[seq_idx][0] != 0:  # prefill
                 cache_len = 0
-            elif self.seq_lens_decoder_list[seq_idx][0] != 0: # decode
+            elif self.seq_lens_decoder_list[seq_idx][0] != 0:  # decode
                 cache_len = self.seq_lens_decoder_list[seq_idx][0]
             # else:  doesnot have req in this seq_idx
 
@@ -193,7 +200,6 @@ class GCUFlashAttnBackend(AttentionBackend):
         self.max_seqlen_q = self.max_seq_len_this_time
         self.max_seqlen_k = np.max(cache_lens)
 
-
     def get_attntion_meta(self):
         """get_attntion_meta"""
         return self.attention_metadata
@@ -201,14 +207,17 @@ class GCUFlashAttnBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: str = None,
     ):
         """
         Caculate kv cache shape
         """
         # [total_tokens, kv_num_heads, head_dim]
-        return (max_num_blocks * self.block_size,
-                self.kv_num_heads,
-                self.head_dim)
+        return (
+            max_num_blocks * self.block_size,
+            self.kv_num_heads,
+            self.head_dim,
+        )
 
     @paddle.no_grad()
     def forward_mixed(
@@ -232,7 +241,6 @@ class GCUFlashAttnBackend(AttentionBackend):
         query = query.reshape_((1, -1, self.num_heads, self.head_dim))
         key = key.reshape_((1, -1, self.kv_num_heads, self.head_dim))
 
-
         # 1. Rope
         if self.rotary_embs.dtype != query.dtype:
             self.rotary_embs = paddle.cast(self.rotary_embs, query.dtype)
@@ -242,7 +250,7 @@ class GCUFlashAttnBackend(AttentionBackend):
             key,
             self.rotary_embs,
             self.position_ids,
-            layer.use_neox_rotary_style
+            layer.use_neox_rotary_style,
         )
 
         # 2. Save kv cache
@@ -281,4 +289,3 @@ class GCUFlashAttnBackend(AttentionBackend):
         )
         res = res.reshape_((token_num, -1))
         return res
-

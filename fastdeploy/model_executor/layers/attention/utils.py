@@ -15,14 +15,16 @@
 """
 
 import os
+
 from fastdeploy.config import FDConfig
 
+
 def init_rank_and_device_id(fd_config: FDConfig):
-    """
-    
-    """
-    rank = (fd_config.parallel_config.expert_parallel_rank * 
-        fd_config.parallel_config.tensor_parallel_size + fd_config.parallel_config.tensor_parallel_rank)
+    """ """
+    rank = (
+        fd_config.parallel_config.expert_parallel_rank * fd_config.parallel_config.tensor_parallel_size
+        + fd_config.parallel_config.tensor_parallel_rank
+    )
 
     cuda_visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", None)
 
