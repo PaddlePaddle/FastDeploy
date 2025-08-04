@@ -1380,7 +1380,8 @@ class GPUModelRunner(ModelRunnerBase):
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
         )
-        self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
+        if sampler_output is not None:
+            self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
 
         # 6. Speculative decode
         if self.speculative_decoding:
