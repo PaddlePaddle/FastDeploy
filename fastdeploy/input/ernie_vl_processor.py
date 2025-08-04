@@ -104,6 +104,9 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
+
+        enable_thinking = self.get_enable_thinking(request.get("enable_thinking", None))
+        set_value(request, "enable_thinking", enable_thinking)
         return request
 
     def process_request(self, request, max_model_len=None, **kwargs):
