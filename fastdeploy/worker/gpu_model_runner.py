@@ -1234,11 +1234,7 @@ class GPUModelRunner(ModelRunnerBase):
         Returns:
             A list of indices corresponding to the requests that need to be skipped.
         """
-        if (
-            not self.parallel_config.enable_chunked_prefill
-            or self.guided_backend is None
-            or model_forward_batch is None
-        ):
+        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None or model_forward_batch is None:
             return []
 
         skip_idx_list = []
