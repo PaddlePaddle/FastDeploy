@@ -13,7 +13,8 @@ concurrency:
 
 jobs:
   CI_GCU:
-    runs-on: [self-hosted, GCU-S60-8Card]
+    runs-on:
+      group: GCU
     steps:
       - name: Print current runner name
         run: |
