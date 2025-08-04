@@ -94,23 +94,23 @@ for case in gemm_case:
         template_cu_file.close()
 
 template_head_file.write("\n")
-template_head_file.write("""#define GEMM_SWITCH(_M, _K, _BATCH, _TokenPaddingSize, _MaxToken, _TailN, ...)  {        \\
-    if (_M == 0 && _K == 0 && _BATCH == 0 && _TokenPaddingSize == 0 && _MaxToken == 0 && _TailN == 0) {    \\""")
+template_head_file.write("""#define GEMM_SWITCH(_M, _K, _BATCH, _TokenPaddingSize, _kBlockN, _TailN, ...)  {        \\
+    if (_M == 0 && _K == 0 && _BATCH == 0 && _TokenPaddingSize == 0 && _kBlockN == 0 && _TailN == 0) {    \\""")
 
 template_head_file.write("\n")
 
 for case in gemm_case:
     for n in range(16, 257, 16):
-        template_head_file.write("""    }} else if (_M == {M} && _K == {K} && _BATCH == {BATCH} && _TokenPaddingSize == {PADDING} && _MaxToken == {N} && _TailN == {TAILN}) {{                        \\
+        template_head_file.write("""    }} else if (_M == {M} && _K == {K} && _BATCH == {BATCH} && _TokenPaddingSize == {PADDING} && _kBlockN == {N} && _TailN == {TAILN}) {{                        \\
         w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(__VA_ARGS__);  \\""".format(M=case[0], K=case[1], N=n,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=0))
         template_head_file.write("\n")
-        template_head_file.write("""    }} else if (_M == {M} && _K == {K} && _BATCH == {BATCH} && _TokenPaddingSize == {PADDING} && _MaxToken == {N} && _TailN == {TAILN}) {{                        \\
+        template_head_file.write("""    }} else if (_M == {M} && _K == {K} && _BATCH == {BATCH} && _TokenPaddingSize == {PADDING} && _kBlockN == {N} && _TailN == {TAILN}) {{                        \\
         w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(__VA_ARGS__);  \\""".format(M=case[0], K=case[1], N=256,  BATCH=case[2], TYPE='BF16', PADDING=case[3], TAILN=n-16))
         template_head_file.write("\n")
 
 
 template_head_file.write("""    } else {   \\
-        PD_THROW("W4aFp8 not supported m=%d k=%d  batch=%d  token_padding_size=%d  max_token=%d  tailN=%d\\n", _M, _K, _BATCH, _TokenPaddingSize, _MaxToken, _TailN);    \\
+        PADDLE_THROW(phi::errors::Unimplemented("W4aFp8 not supported m=%d k=%d  batch=%d  token_padding_size=%d  kBlockN=%d  tailN=%d\\n", _M, _K, _BATCH, _TokenPaddingSize, _kBlockN, _TailN));    \\
     }     \\
 }""") 
 

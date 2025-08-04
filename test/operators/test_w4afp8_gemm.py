@@ -30,10 +30,11 @@ def peruate_scale(weight_scale):
     return weight_scale
 
 paddle.seed(0)
-tokens_per_group = 4096
+tokens_per_group = 1024
 N = 7168
 K = 8192
 BATCH = 8
+TokenPadding = 0
 
 tokens = [tokens_per_group] * BATCH
 tokens_perfix_sum = np.cumsum(tokens)
@@ -61,17 +62,28 @@ weight_dequant_scale = paddle.to_tensor(peruate_scale(weight_dequant_scale) * 51
 
 weight_int4 = w4afp8_gemm_weight_convert(weight_quant.astype("uint8").cpu())
 
-out_cuda = w4afp8_gemm(
-    input_fp8,
-    weight_int4.cuda(),
-    tokens,
-    tokens_perfix_sum,
-    input_row_sum.astype('float32'),
-    weight_dequant_scale.astype('float32'),
-    int(0),
-    max_tokens,
-    True
-)
+if TokenPadding == 0:
+    out_cuda = w4afp8_gemm(
+        input_fp8,
+        weight_int4.cuda(),
+        tokens_perfix_sum,
+        input_row_sum.astype('float32'),
+        weight_dequant_scale.astype('float32'),
+        int(TokenPadding),
+        max_tokens,
+        True
+    )
+else:
+    out_cuda = w4afp8_gemm(
+        input_fp8,
+        weight_int4.cuda(),
+        tokens,
+        input_row_sum.astype('float32'),
+        weight_dequant_scale.astype('float32'),
+        int(TokenPadding),
+        max_tokens,
+        True
+    )
 
 gap = (out_cuda - out_naive).abs()
 print("max gap: ", float(gap.max()), ", mean gap: ", float(gap.mean()))

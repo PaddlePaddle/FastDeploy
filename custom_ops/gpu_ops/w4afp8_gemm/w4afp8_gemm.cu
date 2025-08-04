@@ -49,7 +49,6 @@ void DisPatchW4AFp8Gemm(
         const cutlass::float_e4m3_t* input,
         const cutlass::float_e4m3_t* weight,
         const int * tokens,
-        const int * tokens_perfix_sum,
         const float * input_row_sum,
         const float * weight_scale,
         OutputType * out,
@@ -60,14 +59,15 @@ void DisPatchW4AFp8Gemm(
         const int K,
         cudaStream_t stream) {
     
-    const int max_token_pack16 = (max_token_pack16 + 15) / 16 * 16;
-    int tailn = 0;
-    if (max_tokens > 256) {
-        tailn = max_tokens % 256;
+    int kBlockN = (max_tokens + 15) / 16 * 16;
+    int TailN = 0;
+    if (kBlockN > 256) {
+        TailN = kBlockN % 256;
+        kBlockN = 256;
     } 
     if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
         GEMM_SWITCH(
-            M, K, batch_size, token_padding_size, max_token_pack16, tailn, 
+            M, K, batch_size, token_padding_size, kBlockN, TailN, 
             weight, 
             input, 
             out, 
@@ -77,16 +77,12 @@ void DisPatchW4AFp8Gemm(
             max_tokens, 
             stream)
     }
-
-
-    
 }
 
 std::vector<paddle::Tensor> W4AFp8Gemm(
         const paddle::Tensor& input,
         const paddle::Tensor& weight,
-        const paddle::Tensor& tokens,
-        const paddle::Tensor& tokens_perfix_sum,
+        const paddle::Tensor& tokens, // If tokenpadding=0, this tensor represents the prefix sum of tensors, otherwise it represents the number of tokens in each group
         const paddle::Tensor& input_row_sum,
         const paddle::Tensor& weight_scale,
         const int token_padding_size,
@@ -111,7 +107,6 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
-                tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
                 weight_scale.data<float>(),
                 reinterpret_cast<cutlass::bfloat16_t*>(out_data),
@@ -126,7 +121,6 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
-                tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
                 weight_scale.data<float>(),
                 reinterpret_cast<cutlass::half_t*>(out_data),
@@ -149,7 +143,6 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
-                tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
                 weight_scale.data<float>(),
                 reinterpret_cast<cutlass::bfloat16_t*>(out_data),
@@ -164,7 +157,6 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int>(),
-                tokens_perfix_sum.data<int>(),
                 input_row_sum.data<float>(),
                 weight_scale.data<float>(),
                 reinterpret_cast<cutlass::half_t*>(out_data),
@@ -194,7 +186,6 @@ PD_BUILD_STATIC_OP(w4afp8_gemm)
     .Inputs({"input",
              "weight",
              "tokens",
-             "tokens_perfix_sum",
              "input_row_sum",
              "weight_scale"})
     .Outputs({"out"})
