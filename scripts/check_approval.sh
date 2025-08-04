@@ -18,7 +18,7 @@ fi
 
 FD_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
 
-approval_line=`curl -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/PaddlePaddle/Paddle/pulls/${PR_ID}/reviews?per_page=10000`
+approval_line=`curl -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/PaddlePaddle/FastDeploy/pulls/${PR_ID}/reviews?per_page=10000`
 failed_num=0
 echo_list=()
 
