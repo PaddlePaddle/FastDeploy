@@ -12,35 +12,10 @@
 #include "kernel_traits.h"
 #include "mainloop_fwd.h"
 
-
-template<int splitK, typename InputType>
-void __global__ element_add_kernel(const InputType *src, InputType * dst, const uint32_t step) {
-    constexpr uint32_t kPacketSize = 16 / sizeof(InputType);
-    const uint32_t idx = kPacketSize * (blockIdx.x * blockDim.x + threadIdx.x);
-    if (idx >= step) return;
-    float4 dst_vec;
-
-    #pragma unroll
-    for (int i = 0; i < 4; ++i) {
-        reinterpret_cast<uint32_t*>(&dst_vec)[i] = 0;
-    }
-
-    #pragma unroll
-    for (int i = 0; i < 1; ++i) {
-        const float4 src_vec = *reinterpret_cast<const float4*>(src + idx);
-        #pragma unroll
-        for (int j = 0; j < 4; ++j) {
-            reinterpret_cast<nv_bfloat162*>(&dst_vec)[j] = reinterpret_cast<const nv_bfloat162*>(&src_vec)[j] + reinterpret_cast<nv_bfloat162*>(&dst_vec)[j];
-        }
-    }
-    *reinterpret_cast<float4*>(dst + idx) = dst_vec;
-    
-}
-
 template <typename Ktraits>
 void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp, 1) w4afp8_geem_kernel(
         CUTE_GRID_CONSTANT typename CollectiveMainloopFwd<Ktraits>::Params const mainloop_params) {
-    
+
     using Element = typename Ktraits::Element;
     static_assert(cutlass::sizeof_bits_v<Element> == 8);
 
@@ -77,7 +52,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
     // Obtain warp index
     int const warp_group_thread_idx = threadIdx.x % cutlass::NumThreadsPerWarpGroup;
-    
+
     PipelineParams pipeline_params;
     pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesA + CollectiveMainloop::TmaTransactionBytesB;
     int warp_group_idx = cutlass::canonical_warp_group_idx();
@@ -101,7 +76,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
     const int pre_fix_tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb] : 0;
 
     const int tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb + 1] - pre_fix_tokens : mainloop_params.tokens[bidb];
-    
+
 
     if (bidn * kBlockN >= tokens) {
         return;
@@ -112,10 +87,10 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
     if (warp_group_idx == 0) {
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
-        PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
+        PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>();
         collective_mainloop.load(
-                mainloop_params, 
-                pipeline, 
+                mainloop_params,
+                pipeline,
                 smem_pipe_write,
                 shared_storage,
                 tokens,
@@ -125,7 +100,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
                 bidb,
                 tidx);
     } else {
-        cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 232 : 160>(); 
+        cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 232 : 160>();
         PipelineState smem_pipe_read;
 
         typename Ktraits::TiledMma tiled_mma;
@@ -135,7 +110,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         const int mma_tidx = tidx - NumCopyThreads;
         const int lane_id = mma_tidx % 4 * 2;
 
-        const float2 weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4]; 
+        const float2 weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4];
 
         if constexpr (TokenPackSize == 0) {
             const int input_sum_idx = pre_fix_tokens + bidn * kBlockN;
@@ -150,49 +125,49 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         }
 
         const int reamin_tokens = tokens - bidn * kBlockN;
-        
+
         if (TAIL_N > 0 && reamin_tokens < kBlockN) {
-            Tensor tSrS_tail = partition_fragment_C(tiled_mma_tail, select<0, 1>(TileShape_MNK_TAIL{})); 
+            Tensor tSrS_tail = partition_fragment_C(tiled_mma_tail, select<0, 1>(TileShape_MNK_TAIL{}));
             collective_mainloop.mma<TAIL_N>(
                 mainloop_params,
                 tiled_mma_tail,
-                pipeline,  
+                pipeline,
                 smem_pipe_read,
                 shared_storage,
                 tSrS_tail,
                 mma_tidx);
             collective_mainloop.store<TAIL_N>(
-                mainloop_params, 
-                tSrS_tail, 
-                shared_storage, 
+                mainloop_params,
+                tSrS_tail,
+                shared_storage,
                 tiled_mma_tail,
                 input_row_sum + lane_id,
                 reinterpret_cast<const float*>(&weight_scale),
                 tokens,
-                pre_fix_tokens,         
+                pre_fix_tokens,
                 bidm,
                 bidn,
                 bidb,
                 mma_tidx);
         } else {
-            Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{})); 
+            Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{}));
             collective_mainloop.mma<kBlockN>(
                 mainloop_params,
                 tiled_mma,
-                pipeline,  
+                pipeline,
                 smem_pipe_read,
                 shared_storage,
                 tSrS,
                 mma_tidx);
             collective_mainloop.store<kBlockN>(
-                mainloop_params, 
-                tSrS, 
-                shared_storage, 
+                mainloop_params,
+                tSrS,
+                shared_storage,
                 tiled_mma,
                 input_row_sum + lane_id,
                 reinterpret_cast<const float*>(&weight_scale),
                 tokens,
-                pre_fix_tokens,         
+                pre_fix_tokens,
                 bidm,
                 bidn,
                 bidb,
@@ -243,7 +218,7 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
 
     void *kernel;
     kernel = (void *)w4afp8_geem_kernel<Kernel_traits>;
-    
+
     int smem_size = sizeof(typename Kernel_traits::SharedStorage) + sizeof(float) * Kernel_traits::kBlockN;
 
     if (smem_size >= 48 * 1024) {

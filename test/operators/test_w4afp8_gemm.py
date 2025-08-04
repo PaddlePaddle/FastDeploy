@@ -1,33 +1,33 @@
-import paddle
-from fastdeploy.model_executor.ops.gpu import (
-    w4afp8_gemm,
-    w4afp8_gemm_weight_convert,
-)
 import numpy as np
-import time
+import paddle
+
+from fastdeploy.model_executor.ops.gpu import w4afp8_gemm, w4afp8_gemm_weight_convert
+
 
 def w4afp8_gemm_naive(input_bf16, weight_quant, tokens, weight_dequant_scale, BATCH, N):
     all_tokens = int(tokens.sum())
     out = paddle.zeros([all_tokens, N], dtype="bfloat16")
     pre_fix_token = 0
     for i in range(BATCH):
-        input = input_bf16[pre_fix_token: pre_fix_token + tokens[i], :]
+        input = input_bf16[pre_fix_token : pre_fix_token + tokens[i], :]
         weight = (weight_quant[i] - 7.0) * weight_dequant_scale[i]
         out_i = paddle.matmul(input, weight.astype("bfloat16"), transpose_y=True)
-        out[pre_fix_token: pre_fix_token + tokens[i], :] = out_i
+        out[pre_fix_token : pre_fix_token + tokens[i], :] = out_i
         pre_fix_token += tokens[i]
     return out
+
 
 def peruate_scale(weight_scale):
     weight_scale = weight_scale.reshape([BATCH, N])
     temp = paddle.zeros([16])
     for b in range(BATCH):
         for n in range(0, N, 16):
-            temp[:] = weight_scale[b, n: n + 16]
+            temp[:] = weight_scale[b, n : n + 16]
             for j in range(0, 16, 2):
                 weight_scale[b, n + j] = temp[j // 2]
                 weight_scale[b, n + j + 1] = temp[j // 2 + 8]
     return weight_scale
+
 
 paddle.seed(0)
 tokens_per_group = 1024
@@ -67,22 +67,22 @@ if TokenPadding == 0:
         input_fp8,
         weight_int4.cuda(),
         tokens_perfix_sum,
-        input_row_sum.astype('float32'),
-        weight_dequant_scale.astype('float32'),
+        input_row_sum.astype("float32"),
+        weight_dequant_scale.astype("float32"),
         int(TokenPadding),
         max_tokens,
-        True
+        True,
     )
 else:
     out_cuda = w4afp8_gemm(
         input_fp8,
         weight_int4.cuda(),
         tokens,
-        input_row_sum.astype('float32'),
-        weight_dequant_scale.astype('float32'),
+        input_row_sum.astype("float32"),
+        weight_dequant_scale.astype("float32"),
         int(TokenPadding),
         max_tokens,
-        True
+        True,
     )
 
 gap = (out_cuda - out_naive).abs()

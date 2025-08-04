@@ -58,23 +58,23 @@ void DisPatchW4AFp8Gemm(
         const int M,
         const int K,
         cudaStream_t stream) {
-    
+
     int kBlockN = (max_tokens + 15) / 16 * 16;
     int TailN = 0;
     if (kBlockN > 256) {
         TailN = kBlockN % 256;
         kBlockN = 256;
-    } 
+    }
     if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
         GEMM_SWITCH(
-            M, K, batch_size, token_padding_size, kBlockN, TailN, 
-            weight, 
-            input, 
-            out, 
+            M, K, batch_size, token_padding_size, kBlockN, TailN,
+            weight,
+            input,
+            out,
             weight_scale,
-            input_row_sum, 
-            tokens, 
-            max_tokens, 
+            input_row_sum,
+            tokens,
+            max_tokens,
             stream)
     }
 }
@@ -88,7 +88,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
         const int token_padding_size,
         const int max_tokens,
         const bool is_bflot16) {
-    
+
     const int batch_size = weight.dims()[0];
     const int M = weight.dims()[1];
     const int K = weight.dims()[2] * 2;
@@ -101,7 +101,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
         const int all_tokens = input.dims()[0];
         paddle::Tensor out = paddle::empty({all_tokens, M}, paddle::DataType::BFLOAT16, input.place());
         phi::dtype::bfloat16 *out_data = out.data<phi::dtype::bfloat16>();
-        
+
         if (is_bflot16) {
             DisPatchW4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
@@ -131,13 +131,13 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 K,
                 input.stream());
         }
-        
+
         return {out};
     } else {
         paddle::Tensor out = paddle::empty({batch_size, token_padding_size, M}, paddle::DataType::BFLOAT16, input.place());
 
         phi::dtype::bfloat16 * out_data = out.data<phi::dtype::bfloat16>();
-        
+
         if (is_bflot16) {
             DisPatchW4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),

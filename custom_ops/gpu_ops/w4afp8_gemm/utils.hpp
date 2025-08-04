@@ -53,17 +53,17 @@ __forceinline__ __device__ void convert_c4_2_fp8(const int32_t * src, int32_t * 
     }
 }
 
-template <int wg_wait=0, bool arrive=true, 
-    bool commit=true, typename Tensor0, typename Tensor1, 
+template <int wg_wait=0, bool arrive=true,
+    bool commit=true, typename Tensor0, typename Tensor1,
     typename Tensor2, typename Tensor3, typename TiledMma,
     typename ThrCopyA, typename TiledCopyA>
 __forceinline__ __device__ void gemm(
-        TiledMma &tiled_mma, 
-        Tensor0 &tCrA, 
+        TiledMma &tiled_mma,
+        Tensor0 &tCrA,
         Tensor1 &tCsA,
-        Tensor2 const &tCrB, 
-        Tensor3 &tCrC, 
-        TiledCopyA const &tiled_copy_A, 
+        Tensor2 const &tCrB,
+        Tensor3 &tCrC,
+        TiledCopyA const &tiled_copy_A,
         ThrCopyA const &thr_copy_A) {
     constexpr bool Is_RS = !cute::is_base_of<cute::GMMA::DescriptorIterator, typename TiledMma::FrgTypeA>::value;
     Tensor tCrA1 = make_tensor<cutlass::float_e4m3_t>(tCrA.layout());
