@@ -293,7 +293,7 @@ class LLMEngine:
             # 单机逻辑
             self.engine_worker_queue.available_prefill_instances.put(1)
             self.split_mode_get_tasks()
-            if self.cfg.scheduler_config.name == "splitwise":
+            if self.cfg.scheduler_config.name == "splitwise" or self.cfg.scheduler_config.name == "dp":
                 self.splitwise_receive_thread = threading.Thread(target=self.split_connector.start_receiver, args=())
                 self.splitwise_receive_thread.daemon = True
                 self.splitwise_receive_thread.start()
