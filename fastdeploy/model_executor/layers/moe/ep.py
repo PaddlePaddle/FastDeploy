@@ -307,7 +307,6 @@ class EPRunner:
         """
         raise NotImplementedError
 
-    
     def clean_low_latency_buffer(self):
         self.ep_engine.clean_low_latency_buffer()
 
