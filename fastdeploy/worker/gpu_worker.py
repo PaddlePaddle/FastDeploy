@@ -26,16 +26,15 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
+from fastdeploy.utils import get_logger
+from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
-from fastdeploy.worker.model_runner_base import ModelRunnerBase
 
 logger = get_logger("gpu_worker", "gpu_worker.log")
 
 try:
-    
     ModelRunner = load_model_runner_plugins()
 except:
     from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
