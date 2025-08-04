@@ -68,9 +68,8 @@ class ExpertService:
         self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
-        cfg.engine_worker_queue_port = int(cfg.engine_worker_queue_port) + local_data_parallel_id
 
-        address = (cfg.master_ip, cfg.engine_worker_queue_port)
+        address = (cfg.master_ip, cfg.engine_worker_queue_port + local_data_parallel_id)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
