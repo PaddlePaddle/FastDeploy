@@ -489,13 +489,15 @@ class GPUModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
-            if request.get("bad_words_token_ids") is not None:
+            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                if bad_words_len > 0:
-                    self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
-                    self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
-                        request.get("bad_words_token_ids"), dtype="int64"
-                    )
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                    request.get("bad_words_token_ids"), dtype="int64"
+                )
+            else:
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
