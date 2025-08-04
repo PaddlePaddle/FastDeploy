@@ -424,10 +424,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 ]
                 for shard_id, shard_offset, shard_size in shard_offsets:
                     loaded_weight_shard = loaded_weight[..., shard_offset:shard_size]
-                    from paddleformers.utils.log import logger
-
-                    logger.info(f"loaded_weight_shard shape:{loaded_weight_shard.shape}")
-                    logger.info(f"param shape:{param.shape}")
                     self.weight_loader(param, loaded_weight_shard, shard_id)
             else:
                 loaded_weight = get_tensor(loaded_weight)
