@@ -1,0 +1,104 @@
+name: Pre-CE-Test
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:fastdeploy-ciuse-cuda126"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      FASTDEPLOY_WHEEL_URL:
+        description: "URL of the FastDeploy Wheel."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  run_ce_cases:
+    runs-on: [self-hosted, GPU-L20-4Card]
+    steps:
+      - name: Print current runner name
+        run: |
+          echo "Current runner name: ${{ runner.name }}"
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+            set -x
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            BASE_BRANCH="${{ github.base_ref }}"
+
+            # Clean the repository directory before starting
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            -e "REPO_NAME=${REPO_NAME}" \
+            ${docker_image} /bin/bash -c '
+              if [ -d ${REPO_NAME} ]; then
+                echo "Directory ${REPO_NAME} exists, removing it..."
+                rm -rf ${REPO_NAME}*
+              fi
+            '
+
+            wget -q ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git log -n 3 --oneline
+
+      - name: Run CI unittest
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
+        run: |
+          runner_name="${{ runner.name }}"
+          last_char="${runner_name: -1}"
+
+          if [ "${last_char}" = "1" ]; then
+            gpu_id=2
+            DEVICES="2,3"
+          else
+            gpu_id=0
+            DEVICES="0,1"
+          fi
+          FD_API_PORT=$((9180 + gpu_id * 100))
+          FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))
+          FD_METRICS_PORT=$((9170 + gpu_id * 100))
+
+          PARENT_DIR=$(dirname "$WORKSPACE")
+          echo "PARENT_DIR:$PARENT_DIR"
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -v "/ssd4/GithubActions/gitconfig:/etc/gitconfig:ro" \
+          -v "/ssd4/GithubActions/ModelData:/ModelData:ro" \
+          -v "/ssd4/GithubActions/CacheDir:/root/.cache" \
+          -v "/ssd4/GithubActions/ConfigDir:/root/.config" \
+          -e "MODEL_PATH=/ModelData" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "fd_wheel_url=${fd_wheel_url}" \
+          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install ${fd_wheel_url}
+          bash scripts/run_pre_ce.sh
+          '

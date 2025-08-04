@@ -394,6 +394,7 @@ class TokenProcessor:
                         logprobs=[topk_logprobs],
                         sampled_token_ranks=[sampled_rank],
                     )
+
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     if recovery_stop:
