@@ -254,9 +254,7 @@ class ResourceManager:
                         llm_logger.warning("req_id: {0} not enough blocks available".format(task["req_id"]))
                         return
 
-                    cached_len = self._record_request_cache_info(
-                        task, common_block_ids, unique_block_ids, hit_info
-                    )
+                    cached_len = self._record_request_cache_info(task, common_block_ids, unique_block_ids, hit_info)
                     task.cache_prepare_time = time.time() - cache_prepare_time
 
                     if task.disaggregate_info is not None:
