@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, fields
 from typing import Any, List, Optional, Union
 
@@ -153,8 +154,8 @@ class SamplingParams:
         )
 
     def __post_init__(self):
-        if self.seed == -1:
-            self.seed = None
+        if self.seed is None:
+            self.seed = random.randint(0, 922337203685477580)
         if self.max_tokens is not None and self.reasoning_max_tokens is None:
             self.reasoning_max_tokens = max(int(self.max_tokens * 0.8), 1)
         self._verify_args()
@@ -198,6 +199,9 @@ class SamplingParams:
             raise ValueError(f"logprobs must be non-negative, got {self.logprobs}.")
         if self.logprobs is not None and self.logprobs > 20:
             raise ValueError("Invalid value for 'top_logprobs': must be less than or equal to 20.")
+
+        if not 0 <= self.seed <= 922337203685477580:
+            raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
 
     def update_from_tokenizer(self, tokenizer):
         """Support bad words"""

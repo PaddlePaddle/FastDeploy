@@ -126,6 +126,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
+        self.infer_seed_increment = paddle.full(
+            shape=[self.parallel_config.max_num_seqs, 1],
+            fill_value=4,
+            dtype="int64",
+        )
 
         self.restore_chunked_prefill_request = dict()
 
@@ -554,6 +559,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Initialize all share buffers for model inputs.
         """
+        self.MAX_INFER_SEED = 9223372036854775806
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
@@ -621,7 +627,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["need_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["need_block_len"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
+        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -1108,6 +1114,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Updata 'infer_seed' and step_cuda()
+            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
@@ -1378,7 +1386,10 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.run(share_inputs=self.share_inputs)
 
         # 7. Updata 'infer_seed' and step_cuda()
+        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            print("self.share_inputs[infer_seed]", self.share_inputs["infer_seed"])
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
