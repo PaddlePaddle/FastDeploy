@@ -19,9 +19,6 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
-    CutlassW4A8MoEMethod,
-)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
@@ -241,6 +238,7 @@ class FusedMoE(nn.Layer):
                 self.expert_id_offset + self.num_local_experts,
             )
         ]
+        ep_rank_to_expert_id_list = [i for i in range(self.num_experts)]
         if self.redundant_table_manger is not None:
             (
                 ep_rank_to_expert_id_list,
@@ -265,7 +263,7 @@ class FusedMoE(nn.Layer):
                             if up_gate_proj_expert_weight_key_name in state_dict
                             else up_gate_proj_expert_weight_key_name
                         ),
-                        self.fd_config.parallel_config.model_name_or_path,
+                        self.fd_config.model_config.model,
                     )
                 )
                 down_proj_weights.append(
@@ -275,7 +273,7 @@ class FusedMoE(nn.Layer):
                             if down_proj_expert_weight_key_name in state_dict
                             else down_proj_expert_weight_key_name
                         ),
-                        self.fd_config.parallel_config.model_name_or_path,
+                        self.fd_config.model_config.model,
                     )
                 )
         else:
@@ -291,7 +289,7 @@ class FusedMoE(nn.Layer):
                         if gate_expert_weight_key_name in state_dict
                         else gate_expert_weight_key_name
                     ),
-                    self.fd_config.parallel_config.model_name_or_path,
+                    self.fd_config.model_config.model,
                 )
                 up = get_tensor(
                     (
@@ -299,7 +297,7 @@ class FusedMoE(nn.Layer):
                         if up_expert_weight_key_name in state_dict
                         else up_expert_weight_key_name
                     ),
-                    self.fd_config.parallel_config.model_name_or_path,
+                    self.fd_config.model_config.model,
                 )
                 up_gate_proj_weights.append(paddle.concat([gate, up], axis=-1))
                 down_proj_weights.append(
@@ -309,10 +307,10 @@ class FusedMoE(nn.Layer):
                             if down_proj_expert_weight_key_name in state_dict
                             else down_proj_expert_weight_key_name
                         ),
-                        self.fd_config.parallel_config.model_name_or_path,
+                        self.fd_config.model_config.model,
                     )
                 )
-        return up_gate_proj_weights, down_proj_weights, logical_expert_ids
+        return up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list
 
     def extract_moe_ffn_weights(self, state_dict: dict):
         """
@@ -335,7 +333,7 @@ class FusedMoE(nn.Layer):
         assert up_gate_proj_expert_weight_key is not None, "up_gate_proj_expert_weight_key should not be none."
         assert down_proj_expert_weight_key is not None, "down_proj_expert_weight_key should not be none."
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids = self.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = self.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,
@@ -388,10 +386,10 @@ class FusedMoE(nn.Layer):
             self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
 
         if self.fd_config.model_config.is_quantized:
-            if isinstance(self.quant_method, CutlassW4A8MoEMethod):
-                self.quant_method.create_weights(self, state_dict)
-            else:
+            if getattr(self.fd_config.quant_config, "is_permuted", True):
                 self.quant_method.process_prequanted_weights(self, state_dict)
+            else:
+                self.quant_method.create_weights(self, state_dict)
         else:
             self.quant_method.create_weights(self, state_dict)
 

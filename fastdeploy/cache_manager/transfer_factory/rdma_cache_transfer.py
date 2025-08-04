@@ -45,7 +45,7 @@ class RDMACommManager:
             return
         self.messager = rdma_comm.RDMACommunicator(
             splitwise_role,
-            rank,
+            gpu_id,
             str(rdma_port) if splitwise_role == "decode" else "0",
             cache_k_ptr_list,
             cache_v_ptr_list,

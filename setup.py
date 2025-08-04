@@ -181,7 +181,7 @@ def get_name():
 
 cmdclass_dict = {"bdist_wheel": CustomBdistWheel}
 cmdclass_dict["build_ext"] = CMakeBuild
-FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.0.0-dev")
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.1.0-dev")
 cmdclass_dict["build_optl"] = PostInstallCommand
 
 setup(
