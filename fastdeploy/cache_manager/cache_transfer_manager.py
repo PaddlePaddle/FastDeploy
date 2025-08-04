@@ -92,7 +92,6 @@ def parse_args():
         help="speculative config",
     )
     parser.add_argument("--local_data_parallel_id", type=int, default=0)
-    parser.add_argument("--data_parallel_size", type=int, default=1)
 
     args = parser.parse_args()
     return args
@@ -213,7 +212,6 @@ class CacheTransferManager:
                 pod_ip=args.pod_ip,
                 engine_worker_queue_port=args.engine_worker_queue_port,
                 local_data_parallel_id=args.local_data_parallel_id,
-                data_parallel_size=args.data_parallel_size,
                 gpu_cache_kvs=self.gpu_cache_kvs,
                 rank=self.rank,
                 nranks=args.mp_num,

@@ -596,6 +596,24 @@ def version():
     return content
 
 
+class DeprecatedOptionWarning(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        console_logger.warning(f"Deprecated option is detected: {option_string}, which may be removed later")
+        setattr(namespace, self.dest, True)
+
+
+DEPRECATED_ARGS = ["enable_mm"]
+
+
+def deprecated_kwargs_warning(**kwargs):
+    for arg in DEPRECATED_ARGS:
+        if arg in kwargs:
+            console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
+
+
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
 data_processor_logger = get_logger("data_processor", "data_processor.log")
 scheduler_logger = get_logger("scheduler", "scheduler.log")

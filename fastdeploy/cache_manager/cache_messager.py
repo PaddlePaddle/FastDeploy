@@ -40,7 +40,6 @@ class CacheMessager:
         pod_ip,
         engine_worker_queue_port,
         local_data_parallel_id,
-        data_parallel_size,
         gpu_cache_kvs,
         rank,
         nranks,
@@ -143,8 +142,7 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
-        self.dp_rank_id = local_data_parallel_id
-        self.data_parallel_size = data_parallel_size
+        self.rank_id = self.rank + local_data_parallel_id * self.nranks  # align with engine worker rank (paddle.distributed.launch)
 
         layerwise_send_cache_thread = threading.Thread(target=self._prefill_layerwise_send_cache_thread)
         layerwise_send_cache_thread.daemon = True
@@ -164,20 +162,16 @@ class CacheMessager:
         try:
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
-            if self.data_parallel_size > 1:
-                shm_rank_id = self.dp_rank_id
-            else:
-                shm_rank_id = self.rank
             try:
                 step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{shm_rank_id}",
+                    name=f"splitwise_complete_prefilled_step_{self.rank_id}",
                     array=prefilled_step_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
                     create=True,
                 )
                 layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{shm_rank_id}",
+                    name=f"splitwise_complete_prefilled_layer_{self.rank_id}",
                     array=prefilled_layer_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
@@ -185,14 +179,14 @@ class CacheMessager:
                 )
             except:
                 step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{shm_rank_id}",
+                    name=f"splitwise_complete_prefilled_step_{self.rank_id}",
                     array=prefilled_step_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
                     create=False,
                 )
                 layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{shm_rank_id}",
+                    name=f"splitwise_complete_prefilled_layer_{self.rank_id}",
                     array=prefilled_layer_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
