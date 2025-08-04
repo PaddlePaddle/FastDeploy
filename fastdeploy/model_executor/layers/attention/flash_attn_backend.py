@@ -208,7 +208,7 @@ class FlashAttentionBackend(AttentionBackend):
         ) = pre_cache_len_concat(
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            metadata.set_max_lengths[2],
+            forward_meta.max_len_tensor_cpu[2],
             self.block_size,
         )
 
