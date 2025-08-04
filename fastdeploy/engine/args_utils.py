@@ -318,7 +318,7 @@ class EngineArgs:
 
     seed: Optional[int] = None
     """
-    Random seed to use for initialization. If not set, Default is 0.
+    Random seed to use for initialization. If not set, default is 0.
     """
 
     enable_early_stop: bool = False
