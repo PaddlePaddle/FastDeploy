@@ -1,6 +1,6 @@
 import json
 
-from core import *
+from core import TEMPLATE, URL, build_request_payload, send_request
 
 
 def test_stream_and_non_stream():
