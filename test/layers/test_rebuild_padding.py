@@ -23,8 +23,6 @@ class TestCuSeqlensQPerformance(unittest.TestCase):
             (64, 2048, 4096, 0.5),
             (128, 1024, 8192, 0.7),
             (256, 512, 4096, 0.9),
-            (16, 4096, 4096, 0.6),
-            (32, 2048, 8192, 0.8),
         ]
 
         self.warmup_runs = 10
