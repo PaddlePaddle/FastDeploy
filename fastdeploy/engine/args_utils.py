@@ -316,9 +316,9 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
-    seed: Optional[int] = None
+    seed: int = 0
     """
-    Random seed to use for initialization. If not set, a random seed is used.
+    Random seed to use for initialization. If not set, defaults to 0.
     """
 
     enable_early_stop: bool = False
@@ -492,8 +492,8 @@ class EngineArgs:
         model_group.add_argument(
             "--seed",
             type=int,
-            default=0,
-            help="Random seed for initialization. If not specified, a random seed will be used.",
+            default=EngineArgs.seed,
+            help="Random seed for initialization. If not specified, defaults to 0.",
         )
         model_group.add_argument(
             "--enable-early-stop",
