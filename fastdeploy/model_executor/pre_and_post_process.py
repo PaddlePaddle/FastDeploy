@@ -484,7 +484,7 @@ def step_cuda(
 
 def rebuild_padding(
     tmp_out: paddle.Tensor,
-    cum_offsets: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
     seq_len_this_time: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
     seq_lens_encoder: paddle.Tensor,
@@ -500,7 +500,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -512,7 +512,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -524,19 +524,19 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
             output_padding_offset,
             max_input_length,
         )
-    elif current_platform.is_gcu():
+        # elif current_platform.is_gcu():
         from fastdeploy.model_executor.ops.gcu import rebuild_padding
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -548,7 +548,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding_cpu(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,

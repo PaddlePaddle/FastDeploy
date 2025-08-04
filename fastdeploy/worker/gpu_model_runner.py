@@ -907,7 +907,7 @@ class GPUModelRunner(ModelRunnerBase):
             expected_decode_len=expected_decode_len,
         )
         if self.speculative_method in ["mtp"]:
-            self.proposer.dummy_prefipre_processll_inputs(
+            self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
@@ -1196,9 +1196,7 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
-
-            hidden_states = rebuild_padding_cpu(
+            hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cu_seqlens_q"],
                 self.share_inputs["seq_lens_this_time"],
