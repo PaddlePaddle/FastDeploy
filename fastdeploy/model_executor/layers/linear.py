@@ -16,6 +16,7 @@
 
 from typing import Optional
 
+import numpy as np
 import paddle
 from paddle import nn
 
@@ -414,8 +415,23 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if loaded_shard_id is None:
-            loaded_weight = get_tensor(loaded_weight)
-            param.copy_(loaded_weight, False)
+            # Loaded weight is already fused on disk.
+            if self.fd_config.model_config.pretrained_config.tensor_parallel_degree != 1:
+                shard_offsets = [
+                    # (shard_id, shard_offset, shard_size)
+                    ("gate", 0, self.output_size * self.nranks // 2),
+                    ("up", self.output_size * self.nranks // 2, self.output_size * self.nranks),
+                ]
+                for shard_id, shard_offset, shard_size in shard_offsets:
+                    loaded_weight_shard = loaded_weight[..., shard_offset:shard_size]
+                    from paddleformers.utils.log import logger
+
+                    logger.info(f"loaded_weight_shard shape:{loaded_weight_shard.shape}")
+                    logger.info(f"param shape:{param.shape}")
+                    self.weight_loader(param, loaded_weight_shard, shard_id)
+            else:
+                loaded_weight = get_tensor(loaded_weight)
+                param.copy_(loaded_weight, False)
         else:
             # 1.fused gate_up in disk
             # 2.split gate up
@@ -424,14 +440,15 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1
-                size = loaded_weight.get_shape()[dim]
+                if isinstance(loaded_weight, np.ndarray):
+                    size = loaded_weight.shape[dim]
+                else:
+                    size = loaded_weight.get_shape()[dim]
                 block_size = size // self.nranks
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = loaded_weight[..., shard_offset:shard_size]
-
             loaded_weight = get_tensor(loaded_weight)
-
             if loaded_shard_id == "gate":
                 param[:, : self.output_size // 2] = loaded_weight
             elif loaded_shard_id == "up":
@@ -507,8 +524,21 @@ class QKVParallelLinear(ColumnParallelLinear):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if loaded_shard_id is None:
-            loaded_weight = get_tensor(loaded_weight)
-            param.copy_(loaded_weight, False)
+            # Loaded weight is already fused on disk
+            if self.fd_config.model_config.pretrained_config.tensor_parallel_degree != 1:
+                shard_offsets = [
+                    # (shard_id, shard_offset, shard_size)
+                    ("q", 0, self.num_heads * self.head_dim),
+                    ("k", self.num_heads * self.head_dim, self.kv_num_heads * self.head_dim),
+                    ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.head_dim),
+                ]
+                for shard_id, shard_offset, shard_size in shard_offsets:
+                    loaded_weight_shard = loaded_weight[..., shard_offset:shard_size]
+                    self.weight_loader(param, loaded_weight_shard, shard_id)
+            else:
+                loaded_weight = get_tensor(loaded_weight)
+                split_loaded_weight = loaded_weight
+                param.copy_(split_loaded_weight, False)
         else:
             # 1.fused qkv in disk
             # 2.split q k v
@@ -517,14 +547,15 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1
-                size = loaded_weight.get_shape()[dim]
+                if isinstance(loaded_weight, np.ndarray):
+                    size = loaded_weight.shape[dim]
+                else:
+                    size = loaded_weight.get_shape()[dim]
                 block_size = size // self.nranks
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = loaded_weight[..., shard_offset:shard_size]
-
             loaded_weight = get_tensor(loaded_weight)
-
             if loaded_shard_id == "q":
                 param[:, : self.num_heads_per_rank * self.head_dim] = loaded_weight
             elif loaded_shard_id == "k":

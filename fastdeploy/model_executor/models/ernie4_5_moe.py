@@ -450,6 +450,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         if self.tie_word_embeddings:
             self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
+        for k, v in params_dict.items():
+            logger.info(f"{k} : {v}")
+
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
