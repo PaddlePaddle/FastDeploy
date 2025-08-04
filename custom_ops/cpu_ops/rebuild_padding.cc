@@ -69,20 +69,16 @@ void RebuildAppendPaddingCPUImpl(T *output_data,
         int ori_token_id =
             out_token_id + output_padding_offset_data[out_token_id];
         int bi = ori_token_id / max_input_length;
-        int seq_id = 0;
-
-         if (seq_len_this_time_data[bi] == 0 ||
+        if (seq_len_this_time_data[bi] == 0 ||
             (seq_lens_decoder_data[bi] == 0 &&
             seq_lens_encoder_data[bi] == 0)) {
                 continue;
             }
-
-
+        int seq_id = 0;
         // if encoder, get last token; just decoder, get first token.
         if (seq_lens_encoder_data[bi] > 0) {
             seq_id = seq_lens_encoder_data[bi] - 1;
         }
-
         int input_token_id = cu_seqlens_q_data[bi] + seq_id;
         int bias_idx = i % dim_embed;
         int src_offset = input_token_id * dim_embed + bias_idx;
