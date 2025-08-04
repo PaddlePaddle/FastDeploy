@@ -1,4 +1,4 @@
-name: Run FastDeploy Unit Tests and Coverage
+name: Coverage Check
 description: "Run FastDeploy Unit Tests and Coverage"
 
 on:
@@ -134,7 +134,7 @@ jobs:
           commit_id=${{ github.event.pull_request.head.sha }}
           pr_num=${{ github.event.pull_request.number }}
           target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py -O bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
           diff_cov_file="diff_coverage.xml"
