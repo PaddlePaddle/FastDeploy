@@ -41,7 +41,6 @@ void RebuildPaddingCPUImpl(T *output_data,
             continue;
         }
 
-        // if encoder, get last token; just decoder, get first token.
         if (seq_lens_encoder_data[bi] > 0) {
             seq_id = seq_lens_encoder_data[bi] - 1;
         }
