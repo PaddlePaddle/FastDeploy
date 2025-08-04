@@ -23,12 +23,14 @@ if not URL:
     missing_vars.append("URL")
 if not TEMPLATE:
     missing_vars.append("TEMPLATE")
-
 if missing_vars:
-    msg = (
-        f"❌ 缺少环境变量：{', '.join(missing_vars)}，请先设置，例如：\n"
-        f"   export URL=http://localhost:8000/v1/chat/completions\n"
-        f"   export TEMPLATE=TOKEN_LOGPROB"
-    )
-    base_logger.error(msg)
-    sys.exit(1)  # 终止程序
+    if not URL:
+        msg = (
+            f"❌ 缺少环境变量：{', '.join(missing_vars)}，请先设置，例如：\n"
+            f"   export URL=http://localhost:8000/v1/chat/completions\n"
+            f"   export TEMPLATE=TOKEN_LOGPROB"
+        )
+        base_logger.error(msg)
+        sys.exit(33)  # 终止程序
+    if not TEMPLATE:
+        base_logger.warning("未启用请求模板，请在Case中自行设置请求模板")
