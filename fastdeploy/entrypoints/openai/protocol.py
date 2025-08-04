@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -220,7 +220,7 @@ class CompletionResponseChoice(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     arrival_time: Optional[float] = None
-    logprobs: Optional[int] = None
+    logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
@@ -239,6 +239,17 @@ class CompletionResponse(BaseModel):
     usage: UsageInfo
 
 
+class CompletionLogprobs(BaseModel):
+    """
+    Completion logprobs.
+    """
+
+    tokens: Optional[List[str]] = None
+    token_logprobs: Optional[List[float]] = None
+    top_logprobs: Optional[List[Dict]] = None
+    text_offset: Optional[List[int]] = None
+
+
 class CompletionResponseStreamChoice(BaseModel):
     """
     Completion response choice for stream response.
@@ -247,9 +258,9 @@ class CompletionResponseStreamChoice(BaseModel):
     index: int
     text: str
     arrival_time: float = None
+    logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
-    logprobs: Optional[float] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
