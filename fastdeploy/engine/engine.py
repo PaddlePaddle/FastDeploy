@@ -48,14 +48,14 @@ from fastdeploy.inter_communicator import (
     EngineWorkerQueue,
     IPCSignal,
     ZmqIpcServer,
-    ZmqTcpServer
+    ZmqTcpServer,
 )
-from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor, WarmUpTokenProcessor
-from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
+from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -163,7 +163,6 @@ class LLMEngine:
                 self.cfg.guided_decoding_backend,
                 disable_any_whitespace=self.cfg.disable_any_whitespace,
             )
-        
 
     def start(self, api_server_pid=None):
         """
@@ -185,12 +184,61 @@ class LLMEngine:
             if envs.FD_ENABLE_INTERNAL_ADAPTER:
                 self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
                 self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
-                self.external_adapter = InternalAdapter(cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node)
+                self.external_adapter = InternalAdapter(
+                    cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+                )
             else:
                 self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
                 self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
             time.sleep(3)
-        
+
+        self.cfg.init_cache_info()
+
+        role = self.cfg.splitwise_role
+        host_ip = self.cfg.host_ip
+        disaggregate = self.cfg.disaggregate_info
+        request_queues_for_dp_ipc = (
+            None  # Different dp has its own process, use multiprocessing.Queue to deliver requests for each dp
+        )
+        result_queue_for_dp_ipc = None
+        if self.cfg.scheduler_config.name == "splitwise":
+            self.scheduler.start(role, host_ip, disaggregate)
+        elif self.cfg.scheduler_config.name == "dp":
+            request_queues_for_dp_ipc = []
+            result_queue_for_dp_ipc = multiprocessing.Queue()
+            for i in range(self.cfg.parallel_config.data_parallel_size):
+                request_queues_for_dp_ipc.append(multiprocessing.Queue())
+            self.scheduler.start(
+                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+            )
+
+        time.sleep(1)
+
+        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            self.dp_processed = []
+            for i in range(
+                1,
+                self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+            ):
+                time.sleep(1)
+                self.dp_processed.append(
+                    multiprocessing.Process(
+                        target=start_expert_service,
+                        args=(
+                            self.cfg,
+                            i + self.cfg.node_rank * self.cfg.worker_num_per_node,
+                            self.ipc_signal_suffix,
+                            request_queues_for_dp_ipc,
+                            result_queue_for_dp_ipc,
+                        ),
+                    )
+                )
+                llm_logger.info(
+                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                    + f" data parallel id {i}"
+                )
+                self.dp_processed[-1].start()
+
         if self.do_profile == 0 and (
             self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"
         ):
@@ -245,57 +293,14 @@ class LLMEngine:
             # 单机逻辑
             self.engine_worker_queue.available_prefill_instances.put(1)
             self.split_mode_get_tasks()
-            if self.cfg.scheduler_config.name == "splitwise":
+            if self.cfg.scheduler_config.name == "splitwise" or self.cfg.scheduler_config.name == "dp":
                 self.splitwise_receive_thread = threading.Thread(target=self.split_connector.start_receiver, args=())
                 self.splitwise_receive_thread.daemon = True
                 self.splitwise_receive_thread.start()
 
-        self.cfg.init_cache_info()
-
-        role = self.cfg.splitwise_role
-        host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
-        request_queues_for_dp_ipc = None    # Different dp has its own process, use multiprocessing.Queue to deliver requests for each dp
-        result_queue_for_dp_ipc = None
-        if self.cfg.scheduler_config.name == "splitwise":
-            self.scheduler.start(role, host_ip, disaggregate)
-        elif self.cfg.scheduler_config.name == 'dp':
-            request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
-            self.scheduler.start(self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
-
-        time.sleep(1)
-
-        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
-            self.dp_processed = []
-            for i in range(
-                1,
-                self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
-            ):
-                time.sleep(1)
-                self.dp_processed.append(
-                    multiprocessing.Process(
-                        target=start_expert_service,
-                        args=(
-                            self.cfg,
-                            i + self.cfg.node_rank * self.cfg.worker_num_per_node,
-                            self.ipc_signal_suffix,
-                            request_queues_for_dp_ipc,
-                            result_queue_for_dp_ipc,
-                        ),
-                    )
-                )
-                llm_logger.info(
-                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
-                    + f" data parallel id {i}"
-                )
-                self.dp_processed[-1].start()
-
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
         return True
-    
+
     def _zmq_send_generated_tokens(self):
         """
         Recieve output for zmq
@@ -431,7 +436,7 @@ class LLMEngine:
     def _insert_zmq_task_to_scheduler(self):
         if self.api_server_pid is None:
             return
-        
+
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             if self.cfg.splitwise_role == "decode":
                 return

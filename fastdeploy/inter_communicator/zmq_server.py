@@ -14,10 +14,10 @@
 # limitations under the License.
 """
 
+import os
 import threading
 import time
 from abc import ABC, abstractmethod
-import os
 
 import msgpack
 import zmq
@@ -30,6 +30,7 @@ class ZmqServerBase(ABC):
     """
     ZmqServerBase
     """
+
     def __init__(self):
         pass
 
@@ -37,12 +38,12 @@ class ZmqServerBase(ABC):
     def _create_socket(self):
         """Abstract method to create and return a ZeroMQ socket."""
         pass
-    
+
     def _ensure_socket(self):
         """Ensure the socket is created before use."""
         if self.socket is None:
             self.socket = self._create_socket()
-    
+
     def pack_aggregated_data(self, data):
         """
         Aggregate multiple responses into one and send them to the client.
@@ -53,7 +54,7 @@ class ZmqServerBase(ABC):
                 result.add(response)
         result = msgpack.packb([result.to_dict()])
         return result
-    
+
     def receive_json_once(self, block=False):
         """
         Receive a single message from the socket.
@@ -87,7 +88,7 @@ class ZmqServerBase(ABC):
             self.close()
             llm_logger.warning(f"{e}")
             return str(e), None
-    
+
     def send_response(self, req_id, data):
         """
         Send generated token result to client.
@@ -125,14 +126,14 @@ class ZmqServerBase(ABC):
             with self.mutex:
                 self.req_dict.pop(req_id, None)
             llm_logger.info(f"send_multipart finished, req_id: {req_id}")
-    
+
     @abstractmethod
     def close(self):
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-    
+
 
 class ZmqIpcServer(ZmqServerBase):
     """
@@ -151,17 +152,17 @@ class ZmqIpcServer(ZmqServerBase):
         self.mutex = threading.Lock()
         self.req_dict = dict()
         self.running = True
-    
+        self.context = zmq.Context()
+        self._create_socket()
+
     def _create_socket(self):
         """create and return a ZeroMQ socket."""
-        self.context = zmq.Context()
         self.socket = self.context.socket(self.mode)
         self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
         self.socket.setsockopt(zmq.SNDTIMEO, -1)
         self.socket.bind(f"ipc://{self.file_name}")
         return self.socket
 
-    
     def _clear_ipc(self, name):
         """
         Remove the IPC file with the given name.
@@ -206,10 +207,11 @@ class ZmqTcpServer(ZmqServerBase):
         self.mutex = threading.Lock()
         self.req_dict = dict()
         self.running = True
+        self.context = zmq.Context()
+        self._create_socket()
 
     def _create_socket(self):
         """create and return a ZeroMQ socket."""
-        self.context = zmq.Context()
         self.socket = self.context.socket(self.mode)
         self.socket.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
         self.socket.setsockopt(zmq.SNDTIMEO, -1)
@@ -220,6 +222,7 @@ class ZmqTcpServer(ZmqServerBase):
         """
         Recieve control command from client
         """
+        self._ensure_socket()
         while self.running:
             try:
                 client, _, task_data = self.socket.recv_multipart(flags=zmq.NOBLOCK)
@@ -236,6 +239,7 @@ class ZmqTcpServer(ZmqServerBase):
         """
         Send command result back to client.
         """
+        self._ensure_socket()
         if self.socket is None:
             raise RuntimeError("Router socket not created.")
         try:
@@ -248,7 +252,7 @@ class ZmqTcpServer(ZmqServerBase):
         with self.mutex:
             self.req_dict.pop(task_id, None)
         llm_logger.info(f"response control cmd finished, task_id: {task_id}")
-    
+
     def close(self):
         """
         Close the socket and context.
@@ -267,4 +271,3 @@ class ZmqTcpServer(ZmqServerBase):
         except Exception as e:
             llm_logger.warning(f"Failed to close ZMQ connection - {e}")
             return
-

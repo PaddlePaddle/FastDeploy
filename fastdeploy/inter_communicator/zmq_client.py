@@ -14,16 +14,9 @@
 # limitations under the License.
 """
 
-import os
-import threading
-import time
 from abc import ABC, abstractmethod
 
-import msgpack
 import zmq
-
-from fastdeploy import envs
-from fastdeploy.utils import llm_logger
 
 
 class ZmqClientBase(ABC):
@@ -33,12 +26,12 @@ class ZmqClientBase(ABC):
 
     def __init__(self):
         pass
-    
+
     @abstractmethod
     def _create_socket(self):
         """Abstract method to create and return a ZeroMQ socket."""
         pass
-    
+
     def _ensure_socket(self):
         """Ensure the socket is created before use."""
         if self.socket is None:
@@ -50,7 +43,6 @@ class ZmqClientBase(ABC):
         Connect to the server using the file name specified in the constructor.
         """
         pass
-
 
     def send_json(self, data):
         """
@@ -79,7 +71,6 @@ class ZmqClientBase(ABC):
         """
         self._ensure_socket()
         return self.socket.recv_pyobj()
-    
 
 
 class ZmqIpcClient(ZmqClientBase):
@@ -87,16 +78,14 @@ class ZmqIpcClient(ZmqClientBase):
         self.name = name
         self.mode = mode
         self.file_name = f"/dev/shm/{name}.socket"
-    
+        self.context = zmq.Context()
+        self.socket = self.context.socket(self.mode)
+
     def _create_socket(self):
         """create and return a ZeroMQ socket."""
         self.context = zmq.Context()
         return self.context.socket(self.mode)
-    
+
     def connect(self):
         self._ensure_socket()
         self.socket.connect(f"ipc://{self.file_name}")
-
-    
-
-

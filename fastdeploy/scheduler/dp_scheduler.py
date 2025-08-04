@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import threading
+import time
 from multiprocessing import Queue
 from typing import Dict, List, Optional
-import time
 
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledResponse
@@ -33,7 +34,7 @@ class DPLocalScheduler(LocalScheduler):
         max_num_partial_prefills: int,
         max_long_partial_prefills: int,
         long_prefill_token_threshold: int,
-        splitwise_role: str = 'prefill'
+        splitwise_role: str = "prefill",
     ):
         super().__init__(
             max_size,
@@ -75,7 +76,7 @@ class DPLocalScheduler(LocalScheduler):
         if request_id is not None:
             self.requests.pop(request_id, None)
             self.responses.pop(request_id, None)
-            if self.splitwise_role == 'decode':
+            if self.splitwise_role == "decode":
                 return
             self.ids.pop(self.ids.index(request_id))
             self.ids_read_cursor -= 1
@@ -107,8 +108,6 @@ class DPLocalScheduler(LocalScheduler):
                 self.ids_read_cursor -= len(expired_ids)
 
 
-
-
 class DPScheduler:
     def __init__(
         self,
@@ -118,7 +117,7 @@ class DPScheduler:
         max_num_partial_prefills: int,
         max_long_partial_prefills: int,
         long_prefill_token_threshold: int,
-        splitwise_role: str = 'prefill'
+        splitwise_role: str = "prefill",
     ):
         self._scheduler = DPLocalScheduler(
             max_size,
@@ -127,7 +126,7 @@ class DPScheduler:
             max_num_partial_prefills,
             max_long_partial_prefills,
             long_prefill_token_threshold,
-            splitwise_role
+            splitwise_role,
         )
 
     def start(self, dp_rank: int, request_queues: List[Queue], result_queue: Queue):
@@ -140,7 +139,7 @@ class DPScheduler:
     def put_requests(self, requests: List[Dict]):
         results = []
         for request in requests:
-            if not hasattr(request, 'dp_rank'):
+            if not hasattr(request, "dp_rank"):
                 raise ValueError(f"Request object is missing the 'dp_rank' attribute: {request}")
             self.request_queues[request.dp_rank].put(request)
             results.append((request.request_id, None))
@@ -169,6 +168,9 @@ class DPScheduler:
         return self._scheduler.get_requests(
             available_blocks, block_size, reserved_output_blocks, max_num_batched_tokens, batch
         )
+
+    def get_unhandled_request_num(self):
+        return len(self._scheduler.requests)
 
     def put_results(self, results: List[RequestOutput]):
         self._scheduler.put_results(results)
