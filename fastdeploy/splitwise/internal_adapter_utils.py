@@ -46,7 +46,7 @@ class InternalAdapter:
 
     def _get_current_server_info(self):
         """
-        获取服务当前资源信息
+        Get resources information
         """
         available_batch_size = min(self.cfg.max_prefill_batch, self.engine.resource_manager.available_batch())
 
