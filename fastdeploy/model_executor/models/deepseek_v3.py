@@ -674,6 +674,10 @@ class DeepSeekV3PretrainedModel(PretrainedModel):
         return None
 
     @classmethod
+    def arch_name(self):
+        return "DeepseekV3ForCausalLM"
+
+    @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
 
         logger.info("DeepseekV3 inference model _get_tensor_parallel_mappings")

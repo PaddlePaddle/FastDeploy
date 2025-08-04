@@ -24,7 +24,6 @@ from fastdeploy.model_executor.load_weight_utils import (
     measure_time,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
-from fastdeploy.model_executor.model_loader.utils import get_pretrain_cls
 from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.platforms import current_platform
 
@@ -52,7 +51,7 @@ class DefaultModelLoader(BaseModelLoader):
 
     @measure_time
     def load_weights(self, model, fd_config: FDConfig, architectures: str) -> None:
-        model_class = get_pretrain_cls(architectures)
+        model_class = ModelRegistry.get_pretrain_cls(architectures)
         state_dict = load_composite_checkpoint(
             fd_config.model_config.model,
             model_class,

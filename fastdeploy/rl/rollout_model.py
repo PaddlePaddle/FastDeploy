@@ -22,7 +22,7 @@ from paddle import nn
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MoeForCausalLM,
-    Ernie4_5_PretrainedModel,
+    Ernie4_5_MoePretrainedModel,
 )
 from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
     Ernie4_5_VLMoeForConditionalGeneration,
@@ -126,7 +126,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
     Ernie4_5_MoeForCausalLMRL
     """
 
-    _get_tensor_parallel_mappings = Ernie4_5_PretrainedModel._get_tensor_parallel_mappings
+    _get_tensor_parallel_mappings = Ernie4_5_MoePretrainedModel._get_tensor_parallel_mappings
 
     def __init__(self, fd_config: FDConfig):
         """

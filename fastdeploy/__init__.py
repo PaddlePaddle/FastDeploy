@@ -22,11 +22,10 @@ import sys
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
+import typing
+
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import version
-
-__all__ = ["LLM", "SamplingParams", "version"]
 
 try:
     import use_triton_in_paddle
@@ -86,3 +85,27 @@ def _patch_fastsafetensors():
 
 
 _patch_fastsafetensors()
+
+
+MODULE_ATTRS = {"ModelRegistry": ".model_executor.models.model_base:ModelRegistry", "version": ".utils:version"}
+
+
+if typing.TYPE_CHECKING:
+    from fastdeploy.model_executor.models.model_base import ModelRegistry
+else:
+
+    def __getattr__(name: str) -> typing.Any:
+        from importlib import import_module
+
+        if name in MODULE_ATTRS:
+            try:
+                module_name, attr_name = MODULE_ATTRS[name].split(":")
+                module = import_module(module_name, __package__)
+                return getattr(module, attr_name)
+            except ModuleNotFoundError:
+                print(f"Module {MODULE_ATTRS[name]} not found.")
+        else:
+            print(f"module {__package__} has no attribute {name}")
+
+
+__all__ = ["LLM", "SamplingParams", "ModelRegistry", "version"]
