@@ -30,7 +30,7 @@ def test_unstream_with_logprobs():
         "token": "牛顿",
         "logprob": -0.031025361269712448,
         "bytes": [231, 137, 155, 233, 161, 191],
-        "top_logprobs": None
+        "top_logprobs": None,
     }
     assert resp_json["usage"] == {
         "prompt_tokens": 22,
@@ -68,7 +68,7 @@ def test_unstream_without_logprobs():
         "prompt_tokens": 22,
         "total_tokens": 25,
         "completion_tokens": 3,
-        "prompt_tokens_details": {"cached_tokens": 0}
+        "prompt_tokens_details": {"cached_tokens": 0},
     }
 
 
@@ -111,7 +111,7 @@ def test_stream_with_logprobs():
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["top_logprobs"][0] == {
         "token": "牛顿",
         "logprob": -0.031025361269712448,
-        "bytes": [231, 137, 155, 233, 161, 191]
+        "bytes": [231, 137, 155, 233, 161, 191],
     }
 
 
@@ -154,7 +154,7 @@ def test_stream_without_logprobs():
     assert result_chunk["choices"][0]["logprobs"] is None
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_unstream_with_logprobs()
     test_unstream_without_logprobs()
     test_stream_with_logprobs()

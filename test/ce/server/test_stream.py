@@ -1,6 +1,7 @@
-from core import *
-import requests
 import json
+
+from core import *
+
 
 def test_stream_and_non_stream():
     """
@@ -29,7 +30,7 @@ def test_stream_and_non_stream():
 
         decoded = line.decode("utf-8")
         if decoded.startswith("data: "):
-            decoded = decoded[len("data: "):]
+            decoded = decoded[len("data: ") :]
 
         if decoded == "[DONE]":
             break
@@ -40,9 +41,7 @@ def test_stream_and_non_stream():
     final_content = "".join(
         chunk["choices"][0]["delta"]["content"]
         for chunk in resp_chunks
-        if "choices" in chunk
-        and "delta" in chunk["choices"][0]
-        and "content" in chunk["choices"][0]["delta"]
+        if "choices" in chunk and "delta" in chunk["choices"][0] and "content" in chunk["choices"][0]["delta"]
     )
     print(final_content)
 
