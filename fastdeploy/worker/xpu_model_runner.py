@@ -529,8 +529,8 @@ class XPUModelRunner(ModelRunnerBase):
         """Initialize all share buffers for model inputs.
         Note: In the future, we may abandon share buffers.
         """
-        self.share_inputs = {}
         self.MAX_INFER_SEED = 9223372036854775806
+        self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
