@@ -256,7 +256,7 @@ class PaddleDisWorkerProc:
                 
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids} total len {total_len_num}"
+                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts)
