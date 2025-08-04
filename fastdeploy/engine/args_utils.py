@@ -318,7 +318,7 @@ class EngineArgs:
 
     seed: Optional[int] = None
     """
-    Random seed to use for initialization. If not set, a random seed is used.
+    Random seed to use for initialization. If not set, Default is 0.
     """
 
     enable_early_stop: bool = False
@@ -492,8 +492,8 @@ class EngineArgs:
         model_group.add_argument(
             "--seed",
             type=int,
-            default=None,
-            help="Random seed for initialization. If not specified, a random seed will be used.",
+            default=0,
+            help="Random seed for initialization. If not specified, defualt is 0.",
         )
         model_group.add_argument(
             "--enable-early-stop",
