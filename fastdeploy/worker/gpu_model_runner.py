@@ -1389,7 +1389,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            print("self.share_inputs[infer_seed]", self.share_inputs["infer_seed"])
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
