@@ -492,7 +492,7 @@ class EngineArgs:
         model_group.add_argument(
             "--seed",
             type=int,
-            default=None,
+            default=0,
             help="Random seed for initialization. If not specified, a random seed will be used.",
         )
         model_group.add_argument(
