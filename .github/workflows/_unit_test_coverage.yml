@@ -103,6 +103,13 @@ jobs:
             python -m pip install coverage
             python -m pip install diff-cover
             python -m pip install ${fd_wheel_url}
+            if [ -d "test/plugins" ]; then
+                cd test/plugins
+                python setup.py install
+                cd ../..
+            else
+                echo "Warning: test/plugins directory not found, skipping setup.py install"
+            fi
             export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
             export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
             TEST_EXIT_CODE=0
