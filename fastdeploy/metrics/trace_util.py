@@ -1,4 +1,5 @@
 import json
+import os
 
 from fastapi import FastAPI
 from opentelemetry import trace
@@ -8,12 +9,6 @@ from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from fastapi import FastAPI
-from fastdeploy.utils import (llm_logger)
-from fastdeploy import envs
-import json
-import os
-
 
 from fastdeploy import envs
 from fastdeploy.utils import llm_logger
@@ -188,9 +183,10 @@ def start_span(span_name, request, kind=trace.SpanKind.CLIENT):
     except:
         pass
 
+
 def fd_start_span(span_name, kind=trace.SpanKind.CLIENT):
     """
-        when fd start, start a new span show start success
+    when fd start, start a new span show start success
     """
     try:
         if not traces_enable:

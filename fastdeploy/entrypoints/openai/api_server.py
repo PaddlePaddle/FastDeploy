@@ -28,7 +28,6 @@ from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
-from fastdeploy.metrics.trace_util import fd_start_span
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -46,7 +45,7 @@ from fastdeploy.metrics.metrics import (
     get_filtered_metrics,
     main_process_metrics,
 )
-from fastdeploy.metrics.trace_util import inject_to_metadata, instrument
+from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
