@@ -28,6 +28,7 @@ from fastdeploy.metrics.trace_util import inject_to_metadata,instrument
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.metrics.trace_util import fd_start_span
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (ChatCompletionRequest,
                                                     ChatCompletionResponse,
@@ -287,6 +288,7 @@ def launch_api_server() -> None:
     api_server_logger.info(
         f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
+    fd_start_span("FD_START")
 
     try:
         uvicorn.run(app="fastdeploy.entrypoints.openai.api_server:app",
