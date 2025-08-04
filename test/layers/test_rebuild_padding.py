@@ -179,9 +179,8 @@ class TestCuSeqlensQPerformance(unittest.TestCase):
                 self.assertEqual(list(result.shape), expected_shape, f"Output shape mismatch for {config_name}")
 
             except Exception as e:
-                print(
-                    f"{config_name:<20} {'ERROR':<6} {'ERROR':<7} {'ERROR':<8} "
-                    f"{'ERROR':<10} {'ERROR':<12} {'ERROR':<8} - {str(e)[:30]}..."
+                raise RuntimeError(
+                    f"Failed to test configuration {config_name} (batch={batch_size}, seq_len={max_seq_len}): {str(e)}"
                 )
 
         print("-" * 90)
@@ -216,10 +215,7 @@ def main():
         print("=" * 50)
 
     except Exception as e:
-        print(f"Test failed with error: {e}")
-        import traceback
-
-        traceback.print_exc()
+        raise RuntimeError(f"Performance benchmark failed: {str(e)}")
 
 
 if __name__ == "__main__":

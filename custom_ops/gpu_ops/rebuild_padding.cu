@@ -161,7 +161,7 @@ std::vector<paddle::Tensor> rebuild_padding(
 
 paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor &tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor &cu_seqlens_q,  // [bsz, 1]
+    const paddle::Tensor &cu_seqlens_q,  // [bsz+1, 1]
     const paddle::Tensor &seq_len_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,

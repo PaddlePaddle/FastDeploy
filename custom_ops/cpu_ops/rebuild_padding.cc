@@ -65,27 +65,27 @@ void RebuildAppendPaddingCPUImpl(T *output_data,
                                  const int dim_embed,
                                  const int64_t output_elem_nums) {
     for (int i = 0; i < output_elem_nums; ++i) {
-        const int out_token_id = i / dim_embed;
-        const int ori_token_id =
+        int out_token_id = i / dim_embed;
+        int ori_token_id =
             out_token_id + output_padding_offset_data[out_token_id];
-        const int bi = ori_token_id / max_input_length;
+        int bi = ori_token_id / max_input_length;
         int seq_id = 0;
 
-        if (seq_len_this_time_data[bi] == 0) {
-            continue;
-        }
-        if (seq_lens_decoder_data[bi] == 0 && seq_lens_encoder_data[bi] == 0) {
-            continue;
-        }
+         if (seq_len_this_time_data[bi] == 0 ||
+            (seq_lens_decoder_data[bi] == 0 &&
+            seq_lens_encoder_data[bi] == 0)) {
+                continue;
+            }
+
 
         // if encoder, get last token; just decoder, get first token.
         if (seq_lens_encoder_data[bi] > 0) {
             seq_id = seq_lens_encoder_data[bi] - 1;
         }
 
-        const int input_token_id = cu_seqlens_q_data[bi] + seq_id;
-        const int bias_idx = i % dim_embed;
-        const int src_offset = input_token_id * dim_embed + bias_idx;
+        int input_token_id = cu_seqlens_q_data[bi] + seq_id;
+        int bias_idx = i % dim_embed;
+        int src_offset = input_token_id * dim_embed + bias_idx;
 
         output_data[i] = input_data[src_offset];
     }
