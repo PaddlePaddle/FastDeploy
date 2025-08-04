@@ -34,6 +34,7 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 from fastdeploy.worker.output import Logprob, LogprobsLists
+from fastdeploy.plugins.model_register import load_model_register_plugins
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
@@ -76,6 +77,7 @@ class LLM:
     ):
         deprecated_kwargs_warning(**kwargs)
 
+        load_model_register_plugins()
         model = retrive_model_from_server(model, revision)
         engine_args = EngineArgs(
             model=model,
