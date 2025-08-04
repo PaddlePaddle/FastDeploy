@@ -15,7 +15,7 @@
 #include "cutlass/arch/reg_reconfig.h"
 
 #include "kernel_traits.h"
-#include "mainloop_fwd.hpp"
+#include "mainloop_attn.hpp"
 #include "softmax.hpp"
 
 using namespace cute;
@@ -30,7 +30,7 @@ auto get_gmem_layout(int token_num, int head_num) {
 template <typename Ktraits>
 __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp, 1)
     compute_attn_ws(
-        CUTE_GRID_CONSTANT typename CollectiveMainloopFwd<Ktraits>::Params const mainloop_params,
+        CUTE_GRID_CONSTANT typename CollectiveMainloopAttn<Ktraits>::Params const mainloop_params,
         CUTE_GRID_CONSTANT Flash_mask_params const data_params) {
 
     using Element = typename Ktraits::Element;
@@ -46,7 +46,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     constexpr int kHeadDim = Ktraits::kHeadDim;
     constexpr bool NeedMask = Ktraits::NeedMask;
 
-    using CollectiveMainloop = CollectiveMainloopFwd<Ktraits>;
+    using CollectiveMainloop = CollectiveMainloopAttn<Ktraits>;
 
     using MainloopPipeline = typename Ktraits::MainloopPipeline;
     using PipelineParams = typename MainloopPipeline::Params;
@@ -176,12 +176,12 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
 
 template<typename Kernel_traits>
-void run_flash_fwd(Flash_mask_params &params, cudaStream_t stream) {
+void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
     using Element = typename Kernel_traits::Element;
     using TileShape_MNK = typename Kernel_traits::TileShape_MNK;
     using ClusterShape = typename Kernel_traits::ClusterShape_MNK;
 
-    using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;
+    using CollectiveMainloop = CollectiveMainloopAttn<Kernel_traits>;
     constexpr int kHeadDim = Kernel_traits::kHeadDim;
 
     typename CollectiveMainloop::Params mainloop_params =
@@ -226,6 +226,6 @@ void flash_attn_headdim128(Flash_mask_params &params, cudaStream_t stream) {
     constexpr static int kNWarps = kBlockM / 16 + 4;
     constexpr static int kStages = 2;
 
-    using Ktraits = Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, NeedMask, InputType>;
-    run_flash_fwd<Ktraits>(params, stream);
+    using Ktraits = Flash_mask_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, NeedMask, InputType>;
+    run_flash_mask<Ktraits>(params, stream);
 }

@@ -49,7 +49,7 @@ struct SharedStorageQKVO {
 };
 
 template<int kHeadDim_, int kBlockM_, int kBlockN_, int kNWarps_, int kStages_, bool NeedMask_, typename elem_type=cutlass::half_t>
-struct Flash_fwd_kernel_traits {
+struct Flash_mask_kernel_traits {
     using Element = elem_type;
     using ElementAccum = float;
     using index_t = int32_t;

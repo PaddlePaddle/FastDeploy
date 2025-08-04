@@ -20,7 +20,7 @@
 using namespace cute;
 
 template <typename Ktraits>
-struct CollectiveMainloopFwd {
+struct CollectiveMainloopAttn {
 
     using Element = typename Ktraits::Element;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;

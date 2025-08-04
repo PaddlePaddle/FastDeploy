@@ -51,7 +51,7 @@ def paddle_flash_attn_mask(q_input, k_input, v_input, mask):
         cu_seq_q,
         cu_seq_k,
         seq_len_encoder,
-        None,
+        mask,
         int(q_input.shape[1]),
         int(k_input.shape[1]),
         int(q_input.shape[2]),
