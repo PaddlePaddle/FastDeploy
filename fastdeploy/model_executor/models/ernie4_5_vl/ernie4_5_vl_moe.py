@@ -48,8 +48,6 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         extract_text_token_output,
-        text_image_gather_scatter,
-        text_image_index_out,
     )
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -65,11 +63,7 @@ class Ernie4_5_VLAttention(Ernie4_5_Attention):
 
 @dataclass
 class VLMoEMeta:
-    image_input: Optional[paddle.Tensor] = None
-    text_input: Optional[paddle.Tensor] = None
-    text_index: Optional[paddle.Tensor] = None
     image_index: Optional[paddle.Tensor] = None
-    token_type_ids: Optional[paddle.Tensor] = None
     fake_hidden_states: Optional[paddle.Tensor] = None
 
 
@@ -220,31 +214,8 @@ class Ernie4_5_VLMoE(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
             shared_experts_out = self.shared_experts(hidden_states)
-        if vl_moe_meta.image_input is not None:
-            text_image_gather_scatter(
-                hidden_states,
-                vl_moe_meta.text_input,
-                vl_moe_meta.image_input,
-                vl_moe_meta.token_type_ids,
-                vl_moe_meta.text_index,
-                vl_moe_meta.image_index,
-                True,
-            )
-            text_out = self.text_fused_moe(vl_moe_meta.text_input)
-            image_out = self.image_fused_moe(vl_moe_meta.image_input)
-            text_image_gather_scatter(
-                hidden_states,
-                text_out,
-                image_out,
-                vl_moe_meta.token_type_ids,
-                vl_moe_meta.text_index,
-                vl_moe_meta.image_index,
-                False,
-            )
-        else:
-            hidden_states = self.text_fused_moe(hidden_states)
-            if vl_moe_meta.fake_hidden_states is not None:
-                self.image_fused_moe(vl_moe_meta.fake_hidden_states)
+        hidden_states[~vl_moe_meta.image_index] = self.text_fused_moe(hidden_states[~vl_moe_meta.image_index])
+        hidden_states[vl_moe_meta.image_index] = self.image_fused_moe(hidden_states[vl_moe_meta.image_index])
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
@@ -414,48 +385,23 @@ class Ernie4_5_VLModel(nn.Layer):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
-        text_input = None
-        image_input = None
-        text_index = None
-        image_index = None
         fake_hidden_states = None
-
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-        token_num, hidden_dim = hidden_states.shape
 
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
         image_token_num = image_mask.sum()
-        text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
-
-        token_type_ids = image_mask.cast("int32")
         if self.fd_config.parallel_config.use_ep is True:
             fake_hidden_states = paddle.empty(
                 shape=[0, self.fd_config.model_config.hidden_size],
                 dtype=paddle.get_default_dtype(),
             )
-            text_input = fake_hidden_states
 
         if image_token_num > 0:
             hidden_states[image_mask] = image_features.cast(self._dtype)
-            text_input = paddle.ones(
-                shape=[text_token_num, hidden_dim],
-                dtype=self._dtype,
-            )
-            image_input = paddle.ones(
-                shape=[image_token_num, hidden_dim],
-                dtype=self._dtype,
-            )
-            text_index = paddle.zeros_like(image_mask, dtype="int32")
-            image_index = paddle.zeros_like(image_mask, dtype="int32")
-            text_image_index_out(token_type_ids, text_index, image_index)
 
         vl_moe_meta = VLMoEMeta(
-            text_input=text_input,
-            image_input=image_input,
-            text_index=text_index,
-            image_index=image_index,
-            token_type_ids=token_type_ids,
+            image_index=image_mask,
             fake_hidden_states=fake_hidden_states,
         )
         # -----------------------
