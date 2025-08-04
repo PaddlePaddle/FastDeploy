@@ -1,6 +1,6 @@
-from core import *
-import requests
 import json
+
+from core import *
 
 
 def test_unstream_with_logprobs():
@@ -36,7 +36,7 @@ def test_unstream_with_logprobs():
         "prompt_tokens": 22,
         "total_tokens": 25,
         "completion_tokens": 3,
-        "prompt_tokens_details": {"cached_tokens": 0}
+        "prompt_tokens_details": {"cached_tokens": 0},
     }
 
 
