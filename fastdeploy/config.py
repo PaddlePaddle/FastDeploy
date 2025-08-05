@@ -153,9 +153,8 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
 
         import paddle
-        self.moe_ep_group = paddle.distributed.new_group(range(8,16))
-        self.attn_group = paddle.distributed.new_group(range(0,8))
-
+        self.moe_ep_group = paddle.distributed.new_group(range(16,24))
+        self.attn_group = paddle.distributed.new_group(range(0,16))
 
 
         self.ep_rank = paddle.distributed.get_rank(self.moe_ep_group)
