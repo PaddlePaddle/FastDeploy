@@ -46,6 +46,7 @@ from fastdeploy.metrics.metrics import (
     main_process_metrics,
 )
 from fastdeploy.metrics.trace_util import inject_to_metadata, instrument
+from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
@@ -393,6 +394,7 @@ def launch_controller_server():
 def main():
     """main函数"""
 
+    load_model_register_plugins()
     if load_engine() is None:
         return
 
