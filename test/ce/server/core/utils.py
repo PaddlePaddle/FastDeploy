@@ -4,6 +4,7 @@
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
 import json
+import math
 
 import requests
 from core import TEMPLATES, base_logger
@@ -97,3 +98,41 @@ def get_token_list(response):
 
     base_logger.info(f"Token List:{token_list}")
     return token_list
+
+
+def get_logprobs_list(response):
+    """解析 response 中的 token 文本列表"""
+    logprobs_list = []
+
+    try:
+        content_logprobs = response["choices"][0]["logprobs"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        base_logger.error(f"解析失败：{e}")
+        return []
+
+    for token_info in content_logprobs:
+        token = token_info.get("logprob")
+        if token is not None:
+            logprobs_list.append(token)
+
+    base_logger.info(f"Logprobs List:{logprobs_list}")
+    return logprobs_list
+
+
+def get_probs_list(response):
+    """解析 response 中的 token 文本列表"""
+    probs_list = []
+
+    try:
+        content_logprobs = response["choices"][0]["logprobs"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        base_logger.error(f"解析失败：{e}")
+        return []
+
+    for token_info in content_logprobs:
+        token = token_info.get("logprob")
+        if token is not None:
+            probs_list.append(math.exp(token))
+
+    base_logger.info(f"probs List:{probs_list}")
+    return probs_list
