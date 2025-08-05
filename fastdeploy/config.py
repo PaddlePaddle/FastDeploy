@@ -64,6 +64,11 @@ class ErnieArchitectures:
     }
 
     @classmethod
+    def register_ernie_model_arch(cls, model_class):
+        if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
+            cls.ARCHITECTURES.add(model_class.name())
+
+    @classmethod
     def contains_ernie_arch(cls, architectures):
         """Check if any ERNIE architecture is present in the given architectures."""
         return any(arch in architectures for arch in cls.ARCHITECTURES)
@@ -270,6 +275,8 @@ class ParallelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        # currently, the expert parallel size is equal data parallel size
+        self.expert_parallel_size = self.data_parallel_size
         self.use_ep = self.expert_parallel_size > 1
         if self.splitwise_role == "mixed":
             self.moe_phase = MoEPhase(phase="prefill")

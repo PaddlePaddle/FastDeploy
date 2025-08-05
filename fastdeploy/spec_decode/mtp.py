@@ -107,7 +107,7 @@ class MTPProposer(Proposer):
             idx = i
             self.model_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.model_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.model_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.model_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.model_inputs["seq_lens_decoder"][idx : idx + 1] = 0
             self.model_inputs["step_idx"][idx : idx + 1] = 0
@@ -118,6 +118,7 @@ class MTPProposer(Proposer):
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def initialize_kv_cache(self):
         """
@@ -184,12 +185,25 @@ class MTPProposer(Proposer):
         """
         assert len(self.attn_backends) == 0
 
-        # TODO(gongshaotian): Get rank from config
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = (
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size
+        self.model_config.kv_num_heads = max(
+            1,
+            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
         )
         head_dim = self.model_config.head_dim
+
+        # Initialize AttentionBackend buffers
+        encoder_block_shape_q = 64
+        decoder_block_shape_q = 16
+
+        self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.main_model_inputs["decoder_batch_ids"])
+        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
+            self.main_model_inputs["decoder_tile_ids_per_batch"]
+        )
+        self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+            self.main_model_inputs["decoder_num_blocks_cpu"]
+        ).pin_memory()
+        self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(self.main_model_inputs["max_len_tensor_cpu"]).cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -198,6 +212,8 @@ class MTPProposer(Proposer):
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,
             head_dim=head_dim,
+            encoder_block_shape_q=encoder_block_shape_q,
+            decoder_block_shape_q=decoder_block_shape_q,
         )
         if attn_backend is None:
             raise NotImplementedError(
@@ -248,7 +264,8 @@ class MTPProposer(Proposer):
         # Same shape/dytpe with base model
         self.model_inputs["block_tables"] = paddle.clone(self.main_model_inputs["block_tables"])
         self.model_inputs["input_ids"] = paddle.clone(self.main_model_inputs["input_ids"])
-        self.model_inputs["seq_lens_this_time"] = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+        self.seq_lens_this_time_buffer = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+
         self.model_inputs["seq_lens_encoder"] = paddle.clone(self.main_model_inputs["seq_lens_encoder"])
         self.model_inputs["seq_lens_decoder"] = paddle.clone(self.main_model_inputs["seq_lens_decoder"])
         self.model_inputs["step_idx"] = paddle.clone(self.main_model_inputs["step_idx"])
@@ -293,6 +310,12 @@ class MTPProposer(Proposer):
         self.model_inputs["base_model_draft_tokens"] = self.main_model_inputs["draft_tokens"]
         self.model_inputs["substep"] = 0
 
+        # Declare AttentionBackend buffers
+        self.model_inputs["decoder_batch_ids"] = None
+        self.model_inputs["decoder_tile_ids_per_batch"] = None
+        self.model_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
+        self.model_inputs["max_len_tensor_cpu"] = None  # CPU
+
         # Input tokens
         self.model_inputs["draft_tokens"] = paddle.full(shape=[self.max_num_seqs, 2], fill_value=-1, dtype="int64")
 
@@ -317,7 +340,7 @@ class MTPProposer(Proposer):
                 self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
 
-    def insert_prefill_inputs(self, req_dicts: List[Request]):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
         Process inputs for prefill tasks and insert it to model_inputs buffer
         """
@@ -351,7 +374,7 @@ class MTPProposer(Proposer):
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.model_inputs["seq_lens_this_time"][idx : idx + 1] = prefill_token_num
+                self.seq_lens_this_time_buffer[idx : idx + 1] = prefill_token_num
 
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
                 self.model_inputs["batch_drop"][idx : idx + 1] = False
@@ -376,10 +399,10 @@ class MTPProposer(Proposer):
                 if self.cache_config.enable_chunked_prefill:
                     token_chunk_size = request.prefill_chunk_info[0]
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
-                    self.model_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
                 else:
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = length
-                    self.model_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = length
 
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
@@ -392,6 +415,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _initialize_forward_meta(self):
         """
@@ -405,6 +429,8 @@ class MTPProposer(Proposer):
             attn_backend=self.attn_backends[0],
             decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
+            decoder_num_blocks_cpu=self.model_inputs["decoder_num_blocks_cpu"],
+            max_len_tensor_cpu=self.model_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
