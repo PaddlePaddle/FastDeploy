@@ -157,7 +157,7 @@ def test_multi_turn_conversation():
 
 
 def test_bad_words_filtering():
-    banned_tokens = ["香"]
+    banned_tokens = ["香蕉"]
 
     data = {
         "stream": False,
