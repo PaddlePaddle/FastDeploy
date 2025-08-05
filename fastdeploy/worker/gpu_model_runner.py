@@ -489,13 +489,15 @@ class GPUModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
-            if request.get("bad_words_token_ids") is not None:
+            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                if bad_words_len > 0:
-                    self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
-                    self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
-                        request.get("bad_words_token_ids"), dtype="int64"
-                    )
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                    request.get("bad_words_token_ids"), dtype="int64"
+                )
+            else:
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
@@ -525,6 +527,12 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
+
+        # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
+        # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            full_length = min(full_length, 32)
+
         input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
             input_length + self.cache_config.block_size - 1
