@@ -52,6 +52,7 @@ class SplitwiseConnector:
         self.temp_cache_info = dict()
         self.current_request_ids = dict()
         self.splitwise_queue = splitwise_queue
+        self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if self.cfg.cache_config.pd_comm_port is not None:
             self.zmq_ctx = zmq.Context()
@@ -324,6 +325,18 @@ class SplitwiseConnector:
             client_id=0,
         )
 
+    def check_decode_allocated(self, task):
+        if self.enable_decode_cache_task:
+            return True, ""
+        while self.current_request_ids[task.request_id] == "init":
+            time.sleep(0.001)
+        msg = self.current_request_ids[task.request_id]
+        del self.current_request_ids[task.request_id]
+        if msg == "finished":
+            return True, ""
+        logger.error(f"Receive_decode_allocated error: {msg}")
+        return False, msg
+    
     def send_cache_infos(self, tasks, current_id):
         """
         Send cache information to specific port.
@@ -343,12 +356,18 @@ class SplitwiseConnector:
             logger.info(f"{tasks[i].disaggregate_info}")
             if tasks[i].disaggregate_info["role"] == "decode":
                 if tasks[i].disaggregate_info["transfer_protocol"] == "ipc":
-                    cache_info = {
-                        "request_id": tasks[i].request_id,
-                        "device_ids": self.cfg.device_ids.split(","),
-                        "transfer_protocol": "ipc",
-                        "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
-                    }
+                    if tasks[i].get("error_msg", None) is not None:
+                        cache_info = {
+                            "request_id": tasks[i].request_id,
+                            "error_msg": tasks[i].get("error_msg"),
+                        }
+                    else:
+                        cache_info = {
+                            "request_id": tasks[i].request_id,
+                            "device_ids": self.cfg.device_ids.split(","),
+                            "transfer_protocol": "ipc",
+                            "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
+                        }
                     if tasks[i].disaggregate_info["cache_info"]["ipc"]["port"] not in temp_cache_info:
                         temp_cache_info[tasks[i].disaggregate_info["cache_info"]["ipc"]["port"]] = []
                     temp_cache_info[tasks[i].disaggregate_info["cache_info"]["ipc"]["port"]].append(cache_info)
@@ -357,14 +376,20 @@ class SplitwiseConnector:
                         f"{tasks[i].disaggregate_info['cache_info']['rdma']['ip']}:"
                         + f"{tasks[i].disaggregate_info['cache_info']['rdma']['port']}"
                     )
-                    cache_info = {
-                        "request_id": tasks[i].request_id,
-                        "device_ids": self.cfg.device_ids.split(","),
-                        "ip": self.cfg.host_ip,
-                        "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
-                        "transfer_protocol": "rdma",
-                        "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
-                    }
+                    if tasks[i].get("error_msg", None) is not None:
+                        cache_info = {
+                            "request_id": tasks[i].request_id,
+                            "error_msg": tasks[i].get("error_msg"),
+                        }
+                    else:
+                        cache_info = {
+                            "request_id": tasks[i].request_id,
+                            "device_ids": self.cfg.device_ids.split(","),
+                            "ip": self.cfg.host_ip,
+                            "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
+                            "transfer_protocol": "rdma",
+                            "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
+                        }
                     if addr not in temp_cache_info:
                         temp_cache_info[addr] = []
 
@@ -436,7 +461,9 @@ class SplitwiseConnector:
                 self._handle_decode(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
-                    del self.current_request_ids[task["request_id"]]
+                    self.current_request_ids[task["request_id"]] = task.get("error_msg", "finished")
+                    if self.enable_decode_cache_task:
+                        del self.current_request_ids[task["request_id"]]
                 self.engine_worker_queue.put_cache_info(payload)
 
         except Exception as e:
