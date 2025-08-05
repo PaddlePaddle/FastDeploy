@@ -1,0 +1,99 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import paddle
+
+from fastdeploy.model_executor.ops.gpu import moba_attention
+
+
+def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
+    max_seq_len = int(128 * 1024)
+    moba_encoder_top_k_left = int(10)
+    moba_encoder_top_k_right = int(15)
+    moba_use_encoder_seq_limit = int(10 * 128)
+    moba_decoder_top_k_left = int(10)
+    moba_decoder_top_k_right = int(10)
+    moba_use_decoder_seq_limit = int(10 * 128)
+    max_dec_len_this_time = int(0)
+    qkv = paddle.randn([1, seq_len, num_heads + 2 * num_kv_heads, head_dim], dtype="bfloat16")
+    q_input = qkv[:, :, :num_heads, :].reshape([-1, num_heads, head_dim])
+    k_input = qkv[:, :, num_heads : num_heads + num_kv_heads, :].reshape([-1, num_kv_heads, head_dim])
+    v_input = qkv[:, :, num_heads + num_kv_heads :, :].reshape([-1, num_kv_heads, head_dim])
+    cu_seqlens_q = paddle.to_tensor([0, seq_len], dtype="int32")
+
+    seq_lens_encoder = paddle.to_tensor([seq_len], dtype="int32")
+
+    seq_lens_encoder = paddle.to_tensor([seq_len], dtype="int32")
+
+    cachesk = paddle.zeros([(seq_len + 63) // 64 * 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
+    cachesv = paddle.zeros([(seq_len + 63) // 64 * 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
+
+    block_tables = paddle.arange((seq_len + 63) // 64).astype("int32")
+
+    rotary_embs = paddle.ones([seq_len, head_dim], dtype="float32")
+
+    cache_k_block_means = paddle.zeros([(seq_len + 63) // 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
+
+    q_pack_tokens = paddle.to_tensor([(seq_len + 127) // 128 * 128], dtype="int32").cpu()
+
+    out = moba_attention(
+        qkv,
+        q_input,
+        k_input,
+        v_input,
+        cu_seqlens_q,
+        cu_seqlens_q,
+        cu_seqlens_q,
+        q_pack_tokens,
+        seq_lens_encoder,
+        seq_lens_encoder,
+        cachesk,
+        cachesv,
+        block_tables,
+        rotary_embs,
+        cache_k_block_means,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        int(num_heads),
+        int(num_kv_heads),
+        int(head_dim),
+        max_seq_len,
+        int(seq_len),
+        max_dec_len_this_time,
+        moba_encoder_top_k_left,
+        moba_encoder_top_k_right,
+        moba_use_encoder_seq_limit,
+        moba_decoder_top_k_left,
+        moba_decoder_top_k_right,
+        moba_use_decoder_seq_limit,
+        False,
+        "none",
+    )[0]
+
+    return out
+
+
+if __name__ == "__main__":
+    if paddle.is_compiled_with_cuda():
+        seq_len = int(20 * 1024)
+        num_heads = int(8)
+        num_kv_heads = int(1)
+        head_dim = int(128)
+        test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim)
