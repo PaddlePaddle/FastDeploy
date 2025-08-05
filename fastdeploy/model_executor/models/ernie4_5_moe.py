@@ -434,12 +434,15 @@ class Ernie4_5_Model(nn.Layer):
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
 
         IsH20 = self.fd_config.parallel_config.is_H20
-        all_hidden_states = []
-        forward_metas = []
-        all_residual = []
+        # 暂时设置成1!
+        split_num = 1
+        all_hidden_states = [None] * split_num
+        forward_metas = [None] * split_num
+        all_residual = [None] * split_num
         bs = self.fd_config.parallel_config.max_num_seqs
-        # 暂时设置成1
-        mc_bs = bs // 1
+
+        mc_bs = (bs + split_num - 1) // split_num
+
         if IsH20:
             # H20 机器
             hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
@@ -447,11 +450,11 @@ class Ernie4_5_Model(nn.Layer):
             for i in range(3):
                 hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
 
-            for i in range(0, bs, mc_bs):
+            for i in range(0, split_num):
                 from copy import copy
                 forward_meta_copy = copy(forward_meta)
                 
-                start_bs = i
+                start_bs = i * mc_bs
                 end_bs = i + mc_bs
                 end_bs = min(end_bs, bs)
 
@@ -472,20 +475,17 @@ class Ernie4_5_Model(nn.Layer):
 
                 forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
 
-                forward_metas.append(forward_meta_copy)
-                all_hidden_states.append(hidden_states[start_token_id:end_token_id])
-                all_residual.append(residual[start_token_id:end_token_id])
+                forward_metas[i] = forward_meta_copy
+                all_hidden_states[i] = hidden_states[start_token_id:end_token_id]
+                all_residual[i] = residual[start_token_id:end_token_id]
         else:
             # MoE 机器啥也不需要做！
-            for i in range(0, bs, mc_bs):
-                forward_metas.append(None)
-                all_hidden_states.append(None)
-                all_residual.append(None)
+            pass
         
         paddle.distributed.barrier()
 
         # 下面第3层开始H20和MoE机器！！一起跑啦！
-        for mc_id, mc_forward_meta in enumerate(forward_metas):
+        for mc_id in range(split_num):
             hidden_states = all_hidden_states[mc_id]
             residual = all_residual[mc_id]
             mc_forward_meta = forward_metas[mc_id]
