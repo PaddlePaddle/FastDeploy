@@ -340,7 +340,7 @@ class MTPProposer(Proposer):
                 self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
 
-    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
         Process inputs for prefill tasks and insert it to model_inputs buffer
         """
