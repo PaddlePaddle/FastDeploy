@@ -272,7 +272,6 @@ class MTPProposer(Proposer):
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.main_model_inputs["pre_ids"])
         self.model_inputs["ids_remove_padding"] = paddle.clone(self.main_model_inputs["ids_remove_padding"])
-        self.model_inputs["cum_offsets"] = paddle.clone(self.main_model_inputs["cum_offsets"])
         self.model_inputs["batch_id_per_token"] = paddle.clone(self.main_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(self.main_model_inputs["cu_seqlens_q"])
         self.model_inputs["cu_seqlens_k"] = paddle.clone(self.main_model_inputs["cu_seqlens_k"])
@@ -524,7 +523,6 @@ class MTPProposer(Proposer):
                 # Remove padding
                 (
                     ids_remove_padding,
-                    cum_offsets,
                     batch_id_per_token,
                     cu_seqlens_q,
                     cu_seqlens_k,
@@ -540,7 +538,6 @@ class MTPProposer(Proposer):
                 )
                 # Initialize forward meta data
                 self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-                self.model_inputs["cum_offsets"].copy_(cum_offsets, False)
                 self.model_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
                 self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
                 self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -575,7 +572,7 @@ class MTPProposer(Proposer):
 
                 hidden_states = rebuild_padding(
                     model_output,
-                    self.model_inputs["cum_offsets"],
+                    self.model_inputs["cu_seqlens_q"],
                     self.model_inputs["seq_lens_this_time"],
                     self.model_inputs["seq_lens_decoder"],
                     self.model_inputs["seq_lens_encoder"],
