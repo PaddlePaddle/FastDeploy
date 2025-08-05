@@ -315,17 +315,18 @@ class ExpertService:
             tasks = [tasks]
 
         for task in tasks:
-            status, msg = self.split_connector.check_decode_allocated(task):
-            if not status:
-                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                self.scheduler.put_results([RequestOutput(
-                        request_id=task.request_id,
-                        finished=True,
-                        error_code=500,
-                        error_msg=msg,
-                    )])
-                tasks.remove(task)
-                continue
+            if self.cfg.splitwise_role != "mixed":
+                status, msg = self.split_connector.check_decode_allocated(task):
+                if not status:
+                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                    self.scheduler.put_results([RequestOutput(
+                            request_id=task.request_id,
+                            finished=True,
+                            error_code=500,
+                            error_msg=msg,
+                        )])
+                    tasks.remove(task)
+                    continue
             item.schedule_start_time = time.time()
 
         available_batch = np.sum(self.resource_manager.stop_flags)
