@@ -80,7 +80,7 @@ def test_stop_sequence():
         "messages": [
             {
                 "role": "user",
-                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。这是第二段啦啦啦啦啦。",
+                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
             },
         ],
         "max_tokens": 20,
@@ -94,6 +94,25 @@ def test_stop_sequence():
     assert "第二段" not in content
     assert "第二段" not in token_list
     assert "。" in token_list, "没有找到。符号"
+
+
+def test_stop_sequence1():
+    data = {
+        "stream": False,
+        "messages": [
+            {
+                "role": "user",
+                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+            },
+        ],
+        "max_tokens": 20,
+        "top_p": 0,
+    }
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+    content = resp["choices"][0]["message"]["content"]
+    print("截断输出:", content)
+    assert "第二段" in content
 
 
 def test_sampling_parameters():
