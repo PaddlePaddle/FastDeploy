@@ -416,6 +416,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
+        params_dict = dict(self.named_parameters())
+        for k, v in params_dict.items():
+            logger.info(f"{k} : {v}")
+
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
