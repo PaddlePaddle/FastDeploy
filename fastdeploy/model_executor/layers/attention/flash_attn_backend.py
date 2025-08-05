@@ -246,9 +246,11 @@ class FlashAttentionBackend(AttentionBackend):
                     self.num_layers + self.num_layers_draft_model,
                 )
         elif self.pd_disaggregation_mode == "per_query":
-            metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
-                self.rank, int(self.device_id), self.keep_pd_step_flag
-            )
+            if paddle.max(forward_meta.seq_lens_encoder) != 0:
+                metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
+                    self.rank, int(self.device_id), self.keep_pd_step_flag
+                )
+
 
         if metadata._dtype == "bfloat16":
             metadata._fuse_kernel_compute_dtype = "bf16"
