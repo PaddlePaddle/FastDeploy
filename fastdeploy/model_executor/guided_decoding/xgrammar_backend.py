@@ -39,8 +39,9 @@ try:
         StructuralTagItem,
         TokenizerInfo,
         allocate_token_bitmask,
-        apply_token_bitmask_inplace,
     )
+
+    from .kernels.xgrammar_apply_token_bitmask import apply_token_bitmask_inplace_triton
 except Exception as e:
     raise Exception(f"import XGrammar failed, please check your environment:\n\t {e}")
 
@@ -113,7 +114,7 @@ class XGrammarProcessor(LogitsProcessorBase):
     def apply_token_mask(
         self,
         logits: paddle.Tensor,
-        token_bitmask: torch.Tensor,
+        token_bitmask: paddle.Tensor,
         indices: Optional[List[int]] = None,
     ) -> paddle.Tensor:
         """
@@ -121,28 +122,21 @@ class XGrammarProcessor(LogitsProcessorBase):
 
         Args:
             logits (paddle.Tensor): The logits tensor to modify
-            token_bitmask (torch.Tensor): The token bitmask indicating allowed tokens
+            token_bitmask (paddle.Tensor): The token bitmask indicating allowed tokens
             indices (Optional[List[int]]): Optional list of batch indices to apply mask to
 
         Returns:
             paddle.Tensor: The modified logits tensor
         """
-        origin_place = logits.place
-        origin_dtype = logits.dtype
-        logits = torch.from_numpy(logits.numpy())
+        if token_bitmask.place != logits.place:
+            token_bitmask = token_bitmask.to(device=logits.place)
 
-        logits = logits.float()  # cpu
-        apply_token_bitmask_inplace(
-            logits=logits,
-            bitmask=token_bitmask.to(logits.device, non_blocking=True),
-            indices=indices,
-        )
+        if logits.place.is_gpu_place():
+            apply_token_bitmask_inplace_triton(logits, token_bitmask, self.vocab_size, indices)
+        else:
+            llm_logger.error(f"Unsupported device {logits.place}, skip guided decoding.")
 
-        return paddle.to_tensor(
-            logits.numpy(),
-            dtype=origin_dtype,
-            place=origin_place,
-        )
+        return logits
 
     def reset(self) -> None:
         """

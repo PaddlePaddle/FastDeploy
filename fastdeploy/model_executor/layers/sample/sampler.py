@@ -15,6 +15,7 @@
 """
 
 import threading
+from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -41,29 +42,45 @@ from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
 
 class SamplerProcessor:
-    """
-    SamplingProcessor for guided decoding.
+    """Handles guided decoding with thread-safe logits processing and token masking.
+
+    Manages asynchronous operations for efficient sampling with:
+    - Logits processors for constrained decoding
+    - Vocabulary masking
+    - Thread-safe state updates
     """
 
     def __init__(self):
         self.async_step = None
         self.token_bitmask = None
+        self.insert_processor = False
         self.logits_processor: Dict[int, Optional[Any]] = dict()
         self.executor = ThreadPoolExecutor()
         self.logits_lock = threading.Lock()
 
     def add_logits_processor(
-        self,
-        ids: int,
-        future: Optional[Any] = None,
-        prefill_tokens: List[int] = [],
+        self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = [], skip: bool = False
     ):
-        """add logits processor to SamplerProcessor"""
+        """Registers a logits processor for guided decoding.
+
+        Args:
+            ids: Unique sequence identifier
+            future: Logits processor instance or Future containing one
+            prefill_tokens: Initial tokens to pre-load
+            skip: Whether to skip processor insertion
+        """
+        if self.async_step is not None:
+            self.async_step.result()
+            self.async_step = None
+
         with self.logits_lock:
             if future is None:
                 if ids in self.logits_processor:
                     del self.logits_processor[ids]
                 return
+
+            if not skip:
+                self.insert_processor = True
 
             if isinstance(future, LogitsProcessorBase):
                 self.logits_processor[ids] = future
@@ -76,15 +93,26 @@ class SamplerProcessor:
             else:
                 self.logits_processor[ids] = [future, prefill_tokens]
 
-    def update_vocab_mask(self, skip_idx_list: List[int] = []):
-        """update vocab mask. (cpu-heavy operation)"""
+    def get_available_processors(self):
+        """
+        get available logits processor
+        """
+        available_processors = None
+        with self.logits_lock:
+            for processor in self.logits_processor.values():
+                if processor.is_terminated():
+                    continue
+                available_processors = processor
+        return available_processors
+
+    def update_logits_processor(self):
+        """update logits processor"""
         if len(self.logits_processor) == 0:
             return
 
         with self.logits_lock:
             for idx, processor in self.logits_processor.items():
                 if processor is None:
-                    del self.logits_processor[idx]
                     continue
 
                 if not isinstance(processor, LogitsProcessorBase):
@@ -93,16 +121,26 @@ class SamplerProcessor:
                     for token in prefill_tokens:
                         self.logits_processor[idx].accept_token(token)
 
-            available_processors = None
-            for processor in self.logits_processor.values():
-                if processor.is_terminated():
-                    continue
-                available_processors = processor
-            if available_processors is None:
-                return
+    def update_vocab_mask(self, skip_idx_list: List[int] = []):
+        """Updates vocabulary mask based on active constraints.
+
+        Note: This is a CPU-intensive operation that:
+        1. Processes pending logits processors
+        2. Allocates and fills token bitmask
+
+        Args:
+            skip_idx_list: Sequence IDs to exclude from masking
+        """
+        if len(self.logits_processor) == 0:
+            return
+
+        self.update_logits_processor()
+        available_processors = self.get_available_processors()
+        if available_processors is None:
+            return
 
         # allocate token bitmask
-        self.token_bitmask = available_processors.allocate_token_bitmask()
+        token_bitmask = available_processors.allocate_token_bitmask()
 
         with self.logits_lock:
             # fill token bitmask
@@ -110,21 +148,34 @@ class SamplerProcessor:
                 if processor.is_terminated() or idx in skip_idx_list:
                     continue
 
-                processor.fill_token_bitmask(self.token_bitmask, idx)
+                processor.fill_token_bitmask(token_bitmask, idx)
+        self.token_bitmask = paddle.to_tensor(token_bitmask.numpy())
 
     def apply_token_mask(self, logits: paddle.Tensor, skip_idx_list: List[int] = []):
-        """apply token mask to logits"""
-        if len(self.logits_processor) == 0 or self.token_bitmask is None:
+        """Applies vocabulary mask to restrict token sampling.
+
+        Args:
+            logits: Input logits tensor
+            skip_idx_list: Sequence IDs to exclude from masking
+
+        Returns:
+            Masked logits tensor
+        """
+        if len(self.logits_processor) == 0:
             return logits
 
-        # self.async_step.result()
-        available_processors = None
-        with self.logits_lock:
-            for processor in self.logits_processor.values():
-                if processor.is_terminated():
-                    continue
-                available_processors = processor
-        if available_processors is None:
+        if self.async_step is not None:
+            self.async_step.result()
+            self.async_step = None
+
+        self.update_logits_processor()
+        if self.insert_processor:
+            self.update_vocab_mask(skip_idx_list)
+            with self.logits_lock:
+                self.insert_processor = False
+
+        available_processors = self.get_available_processors()
+        if available_processors is None or self.token_bitmask is None:
             return logits
 
         indices = list(self.logits_processor.keys())
@@ -141,31 +192,60 @@ class SamplerProcessor:
 
         self.logits_processor[idx].accept_token(token)
 
-    def update_output_tokens(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
-        """update output tokens"""
+    def update_output_tokens(
+        self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = [], skip_list_next: List[int] = []
+    ):
+        """Updates processors with newly generated tokens asynchronously.
+
+        Args:
+            next_tokens: Newly sampled tokens
+            skip_idx_list: Current step IDs to skip
+            skip_list_next: Next step IDs to skip
+        """
         if len(self.logits_processor) == 0:
             return
 
-        token_ids = next_tokens.numpy().tolist()
-        with self.logits_lock:
-            for idx in self.logits_processor.keys():
-                token = token_ids[idx][0]
-                if token < 0 or self.logits_processor[idx] is None or idx in skip_idx_list:
-                    continue
-
-                self._accept_token(idx, token)
-
-    def pre_process(self, skip_idx_list: List[int] = []):
-        """pre process before running"""
         # create async operation for guided decoding
-        # TODO: support async
-        self.update_vocab_mask(skip_idx_list)
-        # self.async_step = self.executor.submit(self.update_vocab_mask)
+        def async_update(next_tokens, skip_idx_list, skip_list_next):
+            token_ids = next_tokens.numpy().tolist()
+            with self.logits_lock:
+                for idx in self.logits_processor.keys():
+                    token = token_ids[idx][0]
+                    if token < 0 or self.logits_processor[idx] is None or idx in skip_idx_list:
+                        continue
+                    self._accept_token(idx, token)
+
+            self.update_vocab_mask(skip_list_next)
+
+        self.async_step = self.executor.submit(async_update, next_tokens, skip_idx_list, skip_list_next)
 
 
-class Sampler(nn.Layer):
+class SamplerBase(nn.Layer):
+    def __init__(self):
+        """Base class for sampler"""
+        super().__init__()
+
+    @abstractmethod
+    def forward_cuda(self, *args, **kwargs) -> SamplerOutput:
+        pass
+
+    def apply_logits_processor(self, *args, **kwargs):
+        """apply logits processor to sampler"""
+        pass
+
+    def async_post_process(self, *args, **kwargs):
+        """async accept token from outside, update vocab mask for inside"""
+        pass
+
+
+class Sampler(SamplerBase):
     """
-    Sampler for normal generation.
+    Normal generation sampler with guided decoding support.
+
+    Features:
+    - Top-p (nucleus) sampling
+    - Repetition/frequency penalties
+    - Integration with guided decoding processors
     """
 
     def __init__(self, fd_config: FDConfig = None):
@@ -198,13 +278,19 @@ class Sampler(nn.Layer):
         ids: int,
         future: Optional[Any] = None,
         prefill_tokens: List[int] = [],
+        skip: bool = False,
     ):
         """apply logits processor to sampler"""
-        self.processor.add_logits_processor(ids, future, prefill_tokens)
+        self.processor.add_logits_processor(ids, future=future, prefill_tokens=prefill_tokens, skip=skip)
 
-    def pre_process(self, skip_idx_list: List[int] = []):
-        """pre process before running"""
-        self.processor.pre_process(skip_idx_list)
+    def async_post_process(
+        self,
+        next_tokens: paddle.Tensor,
+        skip_idx_list: List[int] = [],
+        skip_list_next: List[int] = [],
+    ):
+        """async accept token from outside, update vocab mask for inside"""
+        self.processor.update_output_tokens(next_tokens, skip_idx_list, skip_list_next)
 
     def compute_logprobs(self, logits: paddle.Tensor) -> paddle.Tensor:
         """ """
@@ -305,7 +391,7 @@ class Sampler(nn.Layer):
         return sampler_output
 
 
-class SpeculativeSampler(nn.Layer):
+class SpeculativeSampler(SamplerBase):
     """
     Sampler for speculative generation.
     """
@@ -320,19 +406,6 @@ class SpeculativeSampler(nn.Layer):
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
         self.speculative_benchmark_mode = fd_config.speculative_config.benchmark_mode
-
-    def pre_process(self, skip_idx_list: List[int] = []):
-        """pre process before running"""
-        pass
-
-    def apply_logits_processor(
-        self,
-        ids: int,
-        future: Optional[Any] = None,
-        prefill_tokens: List[int] = [],
-    ):
-        """apply logits processor to sampler"""
-        pass
 
     def forward_cuda(
         self,
@@ -401,7 +474,7 @@ class SpeculativeSampler(nn.Layer):
         return None
 
 
-class MTPSampler(nn.Layer):
+class MTPSampler(SamplerBase):
     """ """
 
     def __init__(self, fd_config: FDConfig):
@@ -411,19 +484,6 @@ class MTPSampler(nn.Layer):
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
-
-    def pre_process(self, skip_idx_list: List[int] = []):
-        """pre process before running"""
-        pass
-
-    def apply_logits_processor(
-        self,
-        ids: int,
-        future: Optional[Any] = None,
-        prefill_tokens: List[int] = [],
-    ):
-        """apply logits processor to sampler"""
-        pass
 
     def forward_cuda(
         self,
