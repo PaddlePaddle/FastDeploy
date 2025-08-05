@@ -511,11 +511,11 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
-            if os.path.exists(model_name_or_path):
+            if os.path.exists(local_path):
                 llm_logger.error(
                     "Failed to connect to aistudio, but detected that the model directory exists. Attempting to start."
                 )
-                return model_name_or_path
+                return local_path
             else:
                 raise Exception(
                     f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
@@ -534,11 +534,11 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             modelscope_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
-            if os.path.exists(model_name_or_path):
+            if os.path.exists(local_path):
                 llm_logger.error(
                     "Failed to connect to modelscope, but detected that the model directory exists. Attempting to start."
                 )
-                return model_name_or_path
+                return local_path
             else:
                 raise Exception(
                     f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
