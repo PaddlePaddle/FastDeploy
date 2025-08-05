@@ -436,19 +436,14 @@ class LLMEngine:
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
-                    if (
-                        request.guided_json is not None
-                        or request.guided_regex is not None
-                        or request.structural_tag is not None
-                        or request.guided_grammar is not None
-                    ) and self.guided_decoding_checker is None:
-                        err_msg = (
-                            "guided_backend is None, use --guided-decoding-backend to "
-                            "specify the backend at server startup."
-                        )
-
-                    if self.guided_decoding_checker is not None:
-                        request, err_msg = self.guided_decoding_checker.schema_format(request)
+                    if self._has_guided_input(request):
+                        if self.guided_decoding_checker is None:
+                            err_msg = (
+                                "guided_backend is None, use --guided-decoding-backend to "
+                                "specify the backend at server startup."
+                            )
+                        else:
+                            request, err_msg = self.guided_decoding_checker.schema_format(request)
 
                     if err_msg is not None:
                         llm_logger.error(err_msg)
@@ -487,6 +482,20 @@ class LLMEngine:
                     f"Error happend while receving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
+
+    def _has_guided_input(self, request):
+        """
+        Check if the request has any guided input.
+        """
+        return any(
+            x is not None
+            for x in (
+                request.guided_json,
+                request.guided_regex,
+                request.structural_tag,
+                request.guided_grammar,
+            )
+        )
 
     def add_requests(self, task, sampling_params=None, **kwargs):
         """
@@ -541,18 +550,14 @@ class LLMEngine:
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if (
-            request.guided_json is not None
-            or request.guided_regex is not None
-            or request.structural_tag is not None
-            or request.guided_grammar is not None
-        ) and self.guided_decoding_checker is None:
-            err_msg = "guided_backend is None, use --guided-decoding-backend to specify the backend at server startup."
-            llm_logger.error(err_msg)
-            raise EngineError(err_msg, error_code=400)
-
-        if self.guided_decoding_checker is not None:
-            request, err_msg = self.guided_decoding_checker.schema_format(request)
+        if self._has_guided_input(request):
+            err_msg = None
+            if self.guided_decoding_checker is None:
+                err_msg = (
+                    "guided_backend is None, use --guided-decoding-backend to specify the backend at server startup."
+                )
+            else:
+                request, err_msg = self.guided_decoding_checker.schema_format(request)
             if err_msg is not None:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)

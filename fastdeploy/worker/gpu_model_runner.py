@@ -1380,7 +1380,7 @@ class GPUModelRunner(ModelRunnerBase):
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
         )
-        if sampler_output is not None:
+        if self.guided_backend is not None and sampler_output is not None:
             self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
 
         # 6. Speculative decode
@@ -1410,7 +1410,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Add cache for guided decoding.
         """
-        if self.guided_backend is None:
+        if self.guided_backend is None or model_forward_batch is None:
             return
 
         for request in model_forward_batch:
