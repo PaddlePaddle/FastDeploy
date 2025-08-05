@@ -1009,10 +1009,15 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 3. Run model
             if self.enable_mm:
-                model_output = self.model(
+                input_embeddings = self.model.get_input_embeddings(
                     self.share_inputs["ids_remove_padding"],
-                    self.share_inputs["image_features"],
+                    self.share_inputs["image_features"]
+                )
+                model_output = self.model(
+                    input_embeddings,
+                    self.share_inputs["ids_remove_padding"],
                     self.forward_meta,
+                    self.model.prepare_VLMoEMeta(input_embeddings, self.share_inputs["ids_remove_padding"])
                 )
                 hidden_states = model_output
             else:
@@ -1273,10 +1278,12 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
+            input_embeddings = self.model.get_input_embeddings(self.share_inputs["ids_remove_padding"])
             model_output = self.model(
-                self.share_inputs["ids_remove_padding"],
+                input_embeddings,
                 self.share_inputs["image_features"],
                 self.forward_meta,
+                    self.model.prepare_VLMoEMeta(input_embeddings, self.share_inputs["ids_remove_padding"])
             )
             hidden_states = model_output
         else:
