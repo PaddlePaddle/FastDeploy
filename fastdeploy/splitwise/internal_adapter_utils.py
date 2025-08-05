@@ -60,6 +60,7 @@ class InternalAdapter:
             "max_batch_size": int(available_batch_size),
             "max_input_token_num": self.cfg.max_num_batched_tokens,
             "unhandled_request_num": self.engine.scheduler.get_unhandled_request_num(),
+            "available_batch": int(self.engine.resource_manager.available_batch()),
         }
         return server_info
 
