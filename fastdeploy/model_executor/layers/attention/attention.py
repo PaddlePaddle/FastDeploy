@@ -28,11 +28,11 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethod
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.layers.utils import get_tensor
 
 import os
 
 from fastdeploy import envs
+from fastdeploy.model_executor.layers.utils import get_tensor
 
 
 class Attention(nn.Layer):
@@ -117,21 +117,6 @@ class Attention(nn.Layer):
             self.k_norm_key = f"{self.prefix}.k_norm"
             self.init_weight()
 
-    def init_weight(self):
-        self.q_norm_weight = self.create_parameter(
-            shape=[self.qk_head_dim],
-            dtype=self._dtype,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-
-        self.k_norm_weight = self.create_parameter(
-            shape=[self.qk_head_dim],
-            dtype=self._dtype,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-
         if envs.FD_ATTENTION_BACKEND == "MOBA_ATTN":
             mlp_weight_path = envs.FD_MOBA_MLP_WEIGHT_PATH
             self.moba_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
@@ -159,6 +144,21 @@ class Attention(nn.Layer):
                 ],
                 dtype=paddle.get_default_dtype(),
             )
+
+    def init_weight(self):
+        self.q_norm_weight = self.create_parameter(
+            shape=[self.qk_head_dim],
+            dtype=self._dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        self.k_norm_weight = self.create_parameter(
+            shape=[self.qk_head_dim],
+            dtype=self._dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
