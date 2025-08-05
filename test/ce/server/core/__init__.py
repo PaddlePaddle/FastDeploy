@@ -13,12 +13,22 @@ base_logger.setLevel("INFO")
 from .request_template import TEMPLATES
 from .utils import (
     build_request_payload,
+    get_logprobs_list,
+    get_probs_list,
     get_stream_chunks,
     get_token_list,
     send_request,
 )
 
-__all__ = ["build_request_payload", "send_request", "TEMPLATES", "get_stream_chunks", "get_token_list"]
+__all__ = [
+    "build_request_payload",
+    "send_request",
+    "TEMPLATES",
+    "get_stream_chunks",
+    "get_token_list",
+    "get_logprobs_list",
+    "get_probs_list",
+]
 
 # 检查环境变量是否存在
 URL = os.environ.get("URL")
