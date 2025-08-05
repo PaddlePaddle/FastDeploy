@@ -1105,7 +1105,7 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
-            "enable_mm": self.cfg.enable_mm,
+            "enable_mm": self.cfg.model_config.enable_mm,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
