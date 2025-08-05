@@ -28,6 +28,7 @@ from tqdm import tqdm
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -76,6 +77,7 @@ class LLM:
     ):
         deprecated_kwargs_warning(**kwargs)
 
+        load_model_register_plugins()
         model = retrive_model_from_server(model, revision)
         engine_args = EngineArgs(
             model=model,
@@ -289,6 +291,10 @@ class LLM:
             self.llm_engine.add_requests(tasks, current_sampling_params, enable_thinking=enable_thinking)
         return req_ids
 
+    def _decode_token(self, token_id: int) -> str:
+        """Decodes a single token ID into its string representation."""
+        return self.llm_engine.data_processor.process_logprob_response([token_id], clean_up_tokenization_spaces=False)
+
     def _build_sample_logprobs(self, logprobs_lists: LogprobsLists, topk_logprobs: int) -> list[dict[int, Logprob]]:
         """
         Constructs a list of dictionaries mapping token IDs to Logprob objects,
@@ -322,8 +328,9 @@ class LLM:
             sliced_logprobs_lists = logprobs_lists.slice_columns(1, 1 + effective_topk_logprobs)
             result = []
             for token_ids, logprobs in zip(sliced_logprobs_lists.logprob_token_ids, sliced_logprobs_lists.logprobs):
+
                 logprob_dict = {
-                    token_id: Logprob(logprob=logprob, rank=i + 1, decoded_token=None)
+                    token_id: Logprob(logprob=logprob, rank=i + 1, decoded_token=self._decode_token(token_id))
                     for i, (token_id, logprob) in enumerate(zip(token_ids, logprobs))
                 }
                 result.append(logprob_dict)
