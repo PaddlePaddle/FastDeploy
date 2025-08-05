@@ -775,10 +775,6 @@ class LLMEngine:
         """
         Insert tasks to engine.
         """
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
-            if task.sampling_params.bad_words is not None:
-                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -804,6 +800,11 @@ class LLMEngine:
                 current_tasks.append(cur_task)
             self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
+
+        for task in tasks:
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+            if task.sampling_params.bad_words is not None:
+                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 
@@ -846,11 +847,10 @@ class LLMEngine:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
                 task.inference_start_time = time.time()
-            if not is_prefill:
-                if not self.cfg.enable_mm:
-                    self.update_requests_chunk_size(tasks)
-                else:
-                    self.update_mm_requests_chunk_size(tasks)
+            if not self.cfg.enable_mm:
+                self.update_requests_chunk_size(tasks)
+            else:
+                self.update_mm_requests_chunk_size(tasks)
             self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
             if is_prefill and self.cfg.scheduler_config.name != "splitwise":
                 self.engine_worker_queue.available_prefill_instances.put(1)
@@ -992,14 +992,17 @@ class LLMEngine:
         self.running = False
 
         if hasattr(self, "cache_manager_processes"):
-            self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
                     print(f"Error extracting file: {e}")
+            if hasattr(self.resource_manager.cache_manager, "cache_ready_signal"):
+                self.resource_manager.cache_manager.cache_ready_signal.clear()
+            self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
+        if hasattr(self, "zmq_server") and self.zmq_server is not None:
+            self.zmq_server.close()
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
@@ -1024,6 +1027,7 @@ class LLMEngine:
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 p.join()
+        self.engine_worker_queue_server.cleanup()
 
     def _setting_environ_variables(self):
         """
