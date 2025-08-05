@@ -42,11 +42,10 @@ def peruate_scale(weight_scale):
                 weight_scale[b, n + j + 1] = temp[j // 2 + 8]
     return weight_scale
 
-
 paddle.seed(0)
-tokens_per_group = 1024
-N = 7168
-K = 8192
+tokens_per_group = 32
+N = 8192
+K = 3584
 BATCH = 8
 TokenPadding = 0
 
