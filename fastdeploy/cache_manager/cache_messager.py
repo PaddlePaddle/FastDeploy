@@ -196,7 +196,11 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
-        self.dp_rank_id = local_data_parallel_id
+        self.rank_id = self.rank + local_data_parallel_id * self.nranks  # align with engine worker rank (paddle.distributed.launch)
+
+        connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
+        connect_rdma_thread.daemon = True
+        connect_rdma_thread.start()
 
         logger.info(f"cache messager init finished, use {transfer_protocol}")
 
@@ -210,14 +214,14 @@ class CacheMessager:
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
             try:
                 step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
+                    name=f"splitwise_complete_prefilled_step_{self.rank_id}",
                     array=prefilled_step_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
                     create=True,
                 )
                 layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
+                    name=f"splitwise_complete_prefilled_layer_{self.rank_id}",
                     array=prefilled_layer_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
@@ -225,14 +229,14 @@ class CacheMessager:
                 )
             except:
                 step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
+                    name=f"splitwise_complete_prefilled_step_{self.rank_id}",
                     array=prefilled_step_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
                     create=False,
                 )
                 layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
+                    name=f"splitwise_complete_prefilled_layer_{self.rank_id}",
                     array=prefilled_layer_idx_data,
                     dtype=np.int32,
                     suffix=self.gpu_id,
@@ -360,6 +364,25 @@ class CacheMessager:
 
         except Exception as e:
             logger.info(f"prefill layerwise send cache thread has exception: {e}")
+            
+    def _handle_connect_task(self):
+        while True:
+            try:
+                task = self.engine_worker_queue.get_connect_rdma_task()
+                if task is None:
+                    time.sleep(0.001)
+                    continue
+                logger.info(f"_handle_connect_task recv task: {task}")
+                task_id = task["task_id"]
+                ip, rdma_port = task["ip"], task["rdma_port"]
+                status = self.messager["rdma"].connect(ip, rdma_port)
+                if not status:
+                    response = {"task_id": task_id, "success": False}
+                else:
+                    response = {"task_id": task_id, "success": True}
+                self.engine_worker_queue.put_connect_rdma_task_response(response)
+            except Exception as e:
+                logger.error(f"handle_connect_task has exception: {e}")
 
 
 def main():
