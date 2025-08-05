@@ -50,7 +50,7 @@ def test_set_stop_value_multi_ends_with_stop_seq():
         False,
     )
 
-    assert stop_flags[0, 0] is True
+    assert bool(stop_flags[0, 0]) is True
     assert sampled_token_ids[0, 0] == 2  # eos token id
 
 

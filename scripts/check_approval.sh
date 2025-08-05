@@ -18,14 +18,14 @@ fi
 
 FD_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/../" && pwd )"
 
-approval_line=`curl -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/PaddlePaddle/Paddle/pulls/${PR_ID}/reviews?per_page=10000`
+approval_line=`curl -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/PaddlePaddle/FastDeploy/pulls/${PR_ID}/reviews?per_page=10000`
 failed_num=0
 echo_list=()
 
 
 function check_approval(){
     person_num=`echo $@|awk '{for (i=2;i<=NF;i++)print $i}'`
-    APPROVALS=`echo ${approval_line}|python ${PADDLE_ROOT}/tools/check_pr_approval.py $1 $person_num`
+    APPROVALS=`echo ${approval_line}|python ${FD_ROOT}/scripts/check_pr_approval.py $1 $person_num`
     if [[ "${APPROVALS}" == "FALSE" && "${echo_line}" != "" ]]; then
         add_failed "${failed_num}. ${echo_line}"
     fi
@@ -40,7 +40,7 @@ function add_failed(){
 
 HAS_CUSTOM_REGISTRER=`git diff -U0 upstream/$BRANCH | grep '^\+' | grep -zoE "PD_BUILD_(STATIC_)?OP" || true`
 if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
-    echo_line="You must have one FastDeploy RD (qingqing01(dangqingqing), Jiang-Jia-Jun(jiangjiajun), heavengate(zhenkaipeng)) one QA(DDDivano(zhengtianyu)) one PaddlePaddle RD (XiaoguangHu01(huxiaoguang), jeff41404(gaoxiang), phlrain(liuhongyu)) approval for adding custom op.\n"
+    echo_line="You must have one FastDeploy RD (qingqing01(dangqingqing), Jiang-Jia-Jun(jiangjiajun), heavengate(dengkaipeng)) one QA(DDDivano(zhengtianyu)) one PaddlePaddle RD (XiaoguangHu01(huxiaoguang), jeff41404(gaoxiang), phlrain(liuhongyu)) approval for adding custom op.\n"
     check_approval 1 qingqing01, Jiang-Jia-Jun, heavengate
     check_approval 1 XiaoguangHu01 zhiqiu Xreki zhangbo9674 zyfncg phlrain
     check_approval 1 XiaoguangHu01, jeff41404, phlrain
