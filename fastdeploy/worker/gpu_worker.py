@@ -26,12 +26,18 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
+from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.utils import get_logger
-from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("gpu_worker", "gpu_worker.log")
+
+try:
+    ModelRunner = load_model_runner_plugins()
+except:
+    from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 
 class GpuWorker(WorkerBase):
@@ -70,7 +76,7 @@ class GpuWorker(WorkerBase):
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
         # Construct model runner
-        self.model_runner: GPUModelRunner = GPUModelRunner(
+        self.model_runner: ModelRunnerBase = ModelRunner(
             fd_config=self.fd_config,
             device=self.device,
             device_id=self.device_ids[self.local_rank % self.max_chips_per_node],
@@ -175,20 +181,21 @@ class GpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_request: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch)
+        output = self.model_runner.execute_model(model_forward_batch, num_running_request)
         return output
 
-    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
         else:
-            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
