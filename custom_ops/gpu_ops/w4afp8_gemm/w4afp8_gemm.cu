@@ -66,7 +66,18 @@ void DisPatchW4AFp8Gemm(
         kBlockN = 256;
     }
     if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
-        GEMM_SWITCH(
+        GEMM_SWITCH_BF16(
+            M, K, batch_size, token_padding_size, kBlockN, TailN,
+            weight,
+            input,
+            out,
+            weight_scale,
+            input_row_sum,
+            tokens,
+            max_tokens,
+            stream)
+    } else {
+        GEMM_SWITCH_FP16(
             M, K, batch_size, token_padding_size, kBlockN, TailN,
             weight,
             input,
@@ -99,10 +110,9 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
 
     if (token_padding_size == 0) {
         const int all_tokens = input.dims()[0];
-        paddle::Tensor out = paddle::empty({all_tokens, M}, paddle::DataType::BFLOAT16, input.place());
-        phi::dtype::bfloat16 *out_data = out.data<phi::dtype::bfloat16>();
-
         if (is_bflot16) {
+            paddle::Tensor out = paddle::empty({all_tokens, M}, paddle::DataType::BFLOAT16, input.place());
+            phi::dtype::bfloat16 *out_data = out.data<phi::dtype::bfloat16>();
             DisPatchW4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
@@ -116,7 +126,10 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 M,
                 K,
                 input.stream());
+            return {out};
         } else {
+            paddle::Tensor out = paddle::empty({all_tokens, M}, paddle::DataType::FLOAT16, input.place());
+            phi::dtype::float16 *out_data = out.data<phi::dtype::float16>();
             DisPatchW4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
@@ -130,15 +143,12 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 M,
                 K,
                 input.stream());
+            return {out};
         }
-
-        return {out};
     } else {
-        paddle::Tensor out = paddle::empty({batch_size, token_padding_size, M}, paddle::DataType::BFLOAT16, input.place());
-
-        phi::dtype::bfloat16 * out_data = out.data<phi::dtype::bfloat16>();
-
         if (is_bflot16) {
+            paddle::Tensor out = paddle::empty({batch_size, token_padding_size, M}, paddle::DataType::BFLOAT16, input.place());
+            phi::dtype::bfloat16 * out_data = out.data<phi::dtype::bfloat16>();
             DisPatchW4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
@@ -152,7 +162,11 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 M,
                 K,
                 input.stream());
+            return {out};
         } else {
+            paddle::Tensor out = paddle::empty({batch_size, token_padding_size, M}, paddle::DataType::FLOAT16, input.place());
+            phi::dtype::float16 * out_data = out.data<phi::dtype::float16>();
+
             DisPatchW4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
@@ -166,9 +180,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 M,
                 K,
                 input.stream());
+            return {out};
         }
-
-        return {out};
     }
 }
 
