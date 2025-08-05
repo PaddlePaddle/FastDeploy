@@ -309,14 +309,42 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
+        print("gaoziyuan test")
+        print(layer.topk_method)
+        print(layer)
+        if layer.topk_method == "noaux_tc":
+            print("gaoziyuan test")
+            print(layer.topk_method)
+            print("gaoziyuan test top_k")
+            print(layer.top_k)
+            print(layer.routed_scaling_factor)
+            print("layer.n_group")
+            print(layer.n_group)
 
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight
-            False,
-        )
+            print("layer.topk_group")
+            print(layer.topk_group)
+
+        if layer.topk_method == "noaux_tc":
+            from .ep import get_moe_scores
+
+            _, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,  # 8
+                layer.topk_group,  # 4
+                layer.top_k,  # 8
+                layer.routed_scaling_factor,  # 2.5
+                layer.gate_correction_bias,
+            )
+            print("topk_weights", topk_weights)
+            print("topk_ids", topk_ids)
+        else:
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,  # apply_norm_weight
+                False,
+            )
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
