@@ -326,7 +326,11 @@ class SplitwiseConnector:
         )
 
     def check_decode_allocated(self, task):
+        if task.disaggregate_info is None:
+            return True, ""
         if self.enable_decode_cache_task:
+            return True, ""
+        if task.disaggregate_info["role"] != "prefill":
             return True, ""
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
