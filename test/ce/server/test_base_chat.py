@@ -104,6 +104,9 @@ def test_stop_sequence():
 
 
 def test_stop_sequence1():
+    """
+    不加stop看看是否有影响
+    """
     data = {
         "stream": False,
         "messages": [
@@ -120,6 +123,53 @@ def test_stop_sequence1():
     content = resp["choices"][0]["message"]["content"]
     print("截断输出:", content)
     assert "第二段" in content
+
+
+def test_stop_sequence2():
+    """
+    stop token长度测试
+    """
+    data = {
+        "stream": False,
+        "stop": ["这是第二段啦啦"],
+        "messages": [
+            {
+                "role": "user",
+                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+            },
+        ],
+        "max_tokens": 50,
+        "top_p": 0,
+    }
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+    content = resp["choices"][0]["message"]["content"]
+    # token_list = get_token_list(resp)
+    print("截断输出:", content)
+    assert "啦啦啦" not in content
+
+
+# def test_stop_sequence3():
+#     """
+#     stop token 数量测试
+#     """
+#     data = {
+#         "stream": False,
+#         "stop": ["。", "果冻", "果", "冻", "第二", "二"],
+#         "messages": [
+#             {
+#                 "role": "user",
+#                 "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+#             },
+#         ],
+#         "max_tokens": 50,
+#         "top_p": 0,
+#     }
+#     payload = build_request_payload(TEMPLATE, data)
+#     resp = send_request(URL, payload).json()
+#     content = resp["choices"][0]["message"]["content"]
+#     print("截断输出:", content)
+#     assert "啦啦啦" not in content
 
 
 def test_sampling_parameters():

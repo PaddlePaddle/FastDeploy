@@ -46,7 +46,10 @@ void EncoderWriteCacheWithRopeKernel(
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
-    paddle::Tensor* value_cache_out) {
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps) {
   auto token_num = meta_data.token_nums;
   auto num_heads = meta_data.q_num_heads;
   auto kv_num_heads = meta_data.kv_num_heads;
@@ -56,28 +59,9 @@ void EncoderWriteCacheWithRopeKernel(
     is_scale_channel_wise = true;
   }
 
-  if (num_heads == kv_num_heads) {
-    rotary_qk_variable(
-        qkv_out->data<T>(),
-        qkv.data<QKV_TYPE>(),
-        qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-        qkv_biases ? qkv_biases.get().data<T>() : nullptr,
-        rotary_embs.get().data<float>(),
-        batch_id_per_token.data<int>(),
-        cu_seqlens_q.data<int>(),
-        seq_lens_encoder.data<int>(),
-        seq_lens_decoder.data<int>(),
-        token_num,
-        num_heads,
-        max_seq_len,
-        rotary_embs.get().dims()[2],
-        head_dim,
-        stream,
-        use_neox_style,
-        rope_3d);
-  } else {
-    if (!is_scale_channel_wise) {
-      gqa_rotary_qk_variable(
+  if (q_norm_weight && k_norm_weight) {
+    if (num_heads != kv_num_heads && !is_scale_channel_wise && !use_neox_style) {
+      gqa_rotary_qk_norm_variable(
         qkv_out->data<T>(),
         qkv.data<QKV_TYPE>(),
         qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
@@ -95,31 +79,80 @@ void EncoderWriteCacheWithRopeKernel(
         head_dim,
         stream,
         use_neox_style,
-        rope_3d);
+        rope_3d,
+        q_norm_weight ? q_norm_weight.get().data<T>() : nullptr,
+        k_norm_weight ? k_norm_weight.get().data<T>() : nullptr,
+        rms_norm_eps);
     } else {
-      gqa_rotary_qk_quant_variable(
-        qkv_out->data<T>(),
-        qkv.data<QKV_TYPE>(),
-        qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-        qkv_biases ? qkv_biases.get().data<T>() : nullptr,
-        cache_k_scale ? cache_k_scale.get().data<T>() : nullptr,
-        cache_v_scale ? cache_v_scale.get().data<T>() : nullptr,
-        rotary_embs.get().data<float>(),
-        batch_id_per_token.data<int>(),
-        cu_seqlens_q.data<int>(),
-        seq_lens_encoder.data<int>(),
-        seq_lens_decoder.data<int>(),
-        token_num,
-        num_heads,
-        kv_num_heads,
-        max_seq_len,
-        rotary_embs.get().dims()[2],
-        head_dim,
-        stream,
-        use_neox_style,
-        rope_3d);
+      PD_THROW(
+          "gqa_rotary_qk_norm_variable only support gqa mode. channel wise scale and neox style are not supported");
     }
+  } else {
+    if (num_heads == kv_num_heads) {
+      rotary_qk_variable(
+          qkv_out->data<T>(),
+          qkv.data<QKV_TYPE>(),
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? qkv_biases.get().data<T>() : nullptr,
+          rotary_embs.get().data<float>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          token_num,
+          num_heads,
+          max_seq_len,
+          rotary_embs.get().dims()[2],
+          head_dim,
+          stream,
+          use_neox_style,
+          rope_3d);
+    } else {
+      if (!is_scale_channel_wise) {
+        gqa_rotary_qk_variable(
+          qkv_out->data<T>(),
+          qkv.data<QKV_TYPE>(),
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? qkv_biases.get().data<T>() : nullptr,
+          rotary_embs.get().data<float>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          token_num,
+          num_heads,
+          kv_num_heads,
+          max_seq_len,
+          rope_3d ? rotary_embs.get().dims()[3] : rotary_embs.get().dims()[2],
+          head_dim,
+          stream,
+          use_neox_style,
+          rope_3d);
+      } else {
+        gqa_rotary_qk_quant_variable(
+          qkv_out->data<T>(),
+          qkv.data<QKV_TYPE>(),
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? qkv_biases.get().data<T>() : nullptr,
+          cache_k_scale ? cache_k_scale.get().data<T>() : nullptr,
+          cache_v_scale ? cache_v_scale.get().data<T>() : nullptr,
+          rotary_embs.get().data<float>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          token_num,
+          num_heads,
+          kv_num_heads,
+          max_seq_len,
+          rotary_embs.get().dims()[2],
+          head_dim,
+          stream,
+          use_neox_style,
+          rope_3d);
+      }
 
+    }
   }
   const uint32_t block_size = meta_data.block_size;
   if (cache_quant_type_str == "none") {
