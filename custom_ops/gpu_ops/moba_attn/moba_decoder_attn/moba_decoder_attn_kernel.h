@@ -1,16 +1,27 @@
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include "paddle/extension.h"
 #include "cute/tensor.hpp"
 #include "cute/algorithm/copy.hpp"
 #include "cute/algorithm/gemm.hpp"
-#include "../moba_attention/moba_encoder_utils.hpp"
-#include "attn_utils.hpp"
-
-namespace gqa_attention {
+#include "../moba_attn_utils.hpp"
 
 using namespace cute;
 template <typename T>
-struct Block_attn_params {
+struct moba_decoder_attn_params {
     T *__restrict__ q_input;
     void *__restrict__ cache_k;
     void *__restrict__ cache_v;
@@ -45,11 +56,9 @@ struct Block_attn_params {
 template <typename cute_type_, int DataBits_>
 struct CacheKV_quant_traits {
     using cuteType = cute_type_;
-    // c4 就是4，c16就是16
     static constexpr int kDataBits = DataBits_;
     static constexpr int kBlockSize = 64;
     static constexpr int kHeadDim = 128;
-     // 这个值不能超64，否则会有bank flict
     static constexpr int kBlockKSmem = 64;
     using SmemLayoutAtomQ = decltype(
         composition(Swizzle<3, 3, 3>{},
@@ -112,7 +121,7 @@ struct CacheKV_quant_traits {
 };
 
 template <int kGqaGroupSize_, int kTileN_, int kMaxN_, typename CacheKV_traits_>
-struct Block_attn_kernel_traits {
+struct moba_decoder_attn_kernel_traits {
     using ElementAccum = float;
     using CacheKV_traits = CacheKV_traits_;
     using cuteType = typename CacheKV_traits::cuteType;
@@ -128,7 +137,6 @@ struct Block_attn_kernel_traits {
     static_assert(kGqaGroupSize <= 16);
     static constexpr int32_t kNWarps = CacheKV_traits::kNWarps;
 
-     // 这个值不能超64，否则会有bank flict
     static constexpr int kBlockKSmem = CacheKV_traits::kBlockKSmem;
     static constexpr int kBlockKVSmem = kHeadDimKV <= 64 ? kHeadDimKV : 64;
     static_assert(kHeadDim % kBlockKSmem == 0);
@@ -215,4 +223,3 @@ struct Block_attn_kernel_traits {
 
     static constexpr int kShareMemSize = (size(SmemLayoutQ{}) + size(SmemLayoutQK{}) + size(SmemLayoutKV{}) * 2) * sizeof(cuteType);
 };
-}

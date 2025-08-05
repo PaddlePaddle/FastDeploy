@@ -1,7 +1,20 @@
-#include "paddle/extension.h"
-#include "moba_attention.h"
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-namespace gqa_attention {
+#include "paddle/extension.h"
+#include "moba_attn/moba_attn.h"
+
 
 template <typename T, int kBlockSize, int kHeadDim>
 __global__ void write_encoder_cachekv_c16(
@@ -57,7 +70,7 @@ __global__ void write_encoder_cachekv_c16(
     }
 }
 
-void WriteEncoderCacheKV(
+void MobaEncoderAttnWriteCacheKv(
         const paddle::Tensor& k_input,
         const paddle::Tensor& v_input,
         const paddle::Tensor& cu_seq_k,
@@ -116,12 +129,13 @@ void WriteEncoderCacheKV(
                 kv_head_num,
                 max_blocks_per_seq);
         }
+    } else {
+        PADDLE_THROW(phi::errors::Unimplemented(
+            "Quantized cache not implemented for cache_quant_type = %s", cache_quant_type_str.c_str()));
     }
 }
 
-}
-
-PD_BUILD_OP(gqa_attention_write_encoder_cache_kv)
+PD_BUILD_OP(moba_encoder_attn_write_cache_kv)
     .Inputs({
         "k_input",
         "v_input",
@@ -146,4 +160,4 @@ PD_BUILD_OP(gqa_attention_write_encoder_cache_kv)
     .Outputs({"cache_k_out", "cache_v_out"})
     .SetInplaceMap({{"cache_k", "cache_k_out"},
                     {"cache_v", "cache_v_out"}})
-    .SetKernelFn(PD_KERNEL(gqa_attention::WriteEncoderCacheKV));
+    .SetKernelFn(PD_KERNEL(MobaEncoderAttnWriteCacheKv));

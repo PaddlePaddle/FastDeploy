@@ -13,10 +13,9 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/pipeline/pipeline.hpp"
 
-namespace moba {
 using namespace cute;
 
-struct Flash_fwd_params {
+struct moba_encoder_attn_params {
     void *__restrict__ q_ptr;
     void *__restrict__ k_ptr;
     void *__restrict__ v_ptr;
@@ -52,14 +51,12 @@ struct SharedStorageQKVO {
     };
 };
 
-// If Share_Q_K_smem is true, that forces Is_Q_in_regs to be true
 template<int kHeadDim_, int kBlockM_, int kBlockN_, int kNWarps_, int kStages_, int kMaxN_, bool UseMoba_, typename elem_type=cutlass::half_t>
-struct Flash_fwd_kernel_traits {
+struct moba_encoder_attn_kernel_traits {
     using Element = elem_type;
     using ElementAccum = float;
     using index_t = int32_t;
 
-    // The number of threads.
     static constexpr int kNWarps = kNWarps_;
     static constexpr int kNThreads = kNWarps * cutlass::NumThreadsPerWarp;
 
@@ -129,6 +126,4 @@ struct Flash_fwd_kernel_traits {
 
     using MainloopPipeline = typename cutlass::PipelineTmaAsync<kStages>;
     using PipelineState = typename cutlass::PipelineState<kStages>;
-};
-
 };

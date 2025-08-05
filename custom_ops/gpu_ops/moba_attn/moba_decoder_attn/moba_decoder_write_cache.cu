@@ -1,11 +1,23 @@
-#include "paddle/extension.h"
-#include "../moba_attention/moba_encoder_utils.hpp"
-#include "moba_attention.h"
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-namespace gqa_attention {
+#include "paddle/extension.h"
+#include "../moba_attn_utils.hpp"
+#include "moba_attn/moba_attn.h"
 
 template <typename T, int kBlockSize, int kHeadDim, int moba_block_size, int kMaxN>
-__global__ void write_decoder_cachekv_c16(
+__global__ void moba_decoder_attn_write_c16(
         const T * qkv_out,
         const T * qkv_bias,
         T * q_input,
@@ -33,8 +45,8 @@ __global__ void write_decoder_cachekv_c16(
     }
 
     constexpr int kPackSize = 4;
-    using SrcType = moba::Vec<T, kPackSize>;
-    using rope_type = moba::Vec<float, kPackSize / 2>;
+    using SrcType = Vec<T, kPackSize>;
+    using rope_type = Vec<float, kPackSize / 2>;
     SrcType src, bias, k_prev;
     rope_type sin, cos;
     const int bias_idx = bidh * kHeadDim + tidx * kPackSize;
@@ -54,7 +66,7 @@ __global__ void write_decoder_cachekv_c16(
         const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
         sin.load_from(sin_rope);
         cos.load_from(cos_rope);
-        moba::apply_rotary_embedding<T, kPackSize>(src, cos, sin);
+        apply_rotary_embedding<T, kPackSize>(src, cos, sin);
 
         src.store_to(q_input + cu_seq_q[bidb] * head_num * kHeadDim + bias_idx);
     } else if (bidh < head_num + kv_head_num) {
@@ -64,7 +76,7 @@ __global__ void write_decoder_cachekv_c16(
         const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
         sin.load_from(sin_rope);
         cos.load_from(cos_rope);
-        moba::apply_rotary_embedding<T, kPackSize>(src, cos, sin);
+        apply_rotary_embedding<T, kPackSize>(src, cos, sin);
 
         T * cache = cache_k + physical_block_number * kv_head_num * kBlockSize * kHeadDim + bidh * kBlockSize * kHeadDim + tidx * kPackSize + token_in_blocks * kHeadDim;
         src.store_to(cache);
@@ -95,7 +107,7 @@ __global__ void write_decoder_cachekv_c16(
 
 }
 
-void WriteDecoderCacheKV(
+void MobaDecoderAttnWriteCacheKv(
         const paddle::Tensor& qkv_out,
         const paddle::Tensor& q_input,
         const paddle::Tensor& cu_seq_q,
@@ -134,7 +146,7 @@ void WriteDecoderCacheKV(
         grid_dims.y = batch_size;
         if (qkv_out.dtype() == paddle::DataType::FLOAT16) {
             using T = phi::dtype::float16;
-            write_decoder_cachekv_c16<T, kBlockSize, kHeadDim, kMobaBlockSize, kMaxN><<<grid_dims, kThreads, 0, qkv_out.stream()>>>(
+            moba_decoder_attn_write_c16<T, kBlockSize, kHeadDim, kMobaBlockSize, kMaxN><<<grid_dims, kThreads, 0, qkv_out.stream()>>>(
                 qkv_out.data<T>(),
                 qkv_bias ? qkv_bias.get().data<T>() : nullptr,
                 const_cast<T*>(q_input.data<T>()),
@@ -153,7 +165,7 @@ void WriteDecoderCacheKV(
                 max_input_length);
         } else if (qkv_out.dtype() == paddle::DataType::BFLOAT16) {
             using T = phi::dtype::bfloat16;
-            write_decoder_cachekv_c16<T, kBlockSize, kHeadDim, kMobaBlockSize, kMaxN><<<grid_dims, kThreads, 0, qkv_out.stream()>>>(
+            moba_decoder_attn_write_c16<T, kBlockSize, kHeadDim, kMobaBlockSize, kMaxN><<<grid_dims, kThreads, 0, qkv_out.stream()>>>(
                 qkv_out.data<T>(),
                 qkv_bias ? qkv_bias.get().data<T>() : nullptr,
                 const_cast<T*>(q_input.data<T>()),
@@ -171,37 +183,7 @@ void WriteDecoderCacheKV(
                 max_blocks_per_seq,
                 max_input_length);
         }
+    } else {
+        PD_THROW("Only supported cache_quant_type_str in ['none'].");
     }
 }
-}
-
-PD_BUILD_OP(gqa_attention_write_decoder_cache_kv)
-    .Inputs({
-        "qkv_out",
-        "q_input",
-        "cu_seq_q",
-        "cu_seq_k",
-        "seq_len_encoder",
-        "seq_len_decoder",
-        "cache_k",
-        "cache_v",
-        "block_tables",
-        "rope_sin_cos",
-        "k_block_means",
-        paddle::Optional("qkv_bias"),
-        paddle::Optional("cache_k_quant_scale"),
-        paddle::Optional("cache_v_quant_scale"),
-        paddle::Optional("cache_k_dequant_scale"),
-        paddle::Optional("cache_v_dequant_scale"),
-        paddle::Optional("cache_k_zero_points"),
-        paddle::Optional("cache_v_zero_points")})
-    .Attrs({
-        "head_num: int",
-        "kv_head_num: int",
-        "head_dim: int",
-        "max_input_length: int",
-        "cache_quant_type_str: std::string"})
-    .Outputs({"cache_k_out", "cache_v_out"})
-    .SetInplaceMap({{"cache_k", "cache_k_out"},
-                    {"cache_v", "cache_v_out"}})
-    .SetKernelFn(PD_KERNEL(gqa_attention::WriteDecoderCacheKV));

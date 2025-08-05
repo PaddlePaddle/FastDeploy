@@ -1,6 +1,4 @@
 #include "paddle/extension.h"
-#include "moba_attention.h"
-
 #include <cute/tensor.hpp>
 
 #include "cutlass/util/print_error.hpp"
@@ -8,37 +6,12 @@
 #if defined(CUTLASS_ENABLE_CUBLAS) && CUTLASS_ENABLE_CUBLAS != 0
 #  include "cutlass/util/cublas_wrappers.hpp"
 #endif
-#include "moba_encoder_utils.hpp"
-#include "moba_encoder_kernel_traits.h"
-#include "moba_encoder_mainloop_fwd.hpp"
-#include "moba_encoder_softmax.hpp"
+#include "moba_attn/moba_attn_utils.hpp"
+#include "moba_attn/moba_attn.h"
+#include "kernel_traits.h"
+#include "mainloop_attn.hpp"
+#include "softmax.hpp"
 #include "cutlass/arch/reg_reconfig.h"
-
-namespace moba {
-
-template <typename T>
-static void PrintFrontNPerLine(const T *a,
-                               int rows,
-                               int cols,
-                               int n) {
-    cudaDeviceSynchronize();
-    std::vector<T> a_h(rows * cols);
-
-    cudaMemcpy(
-        a_h.data(), a, rows * cols * sizeof(T), cudaMemcpyDeviceToHost);
-
-    for (int line = 0; line < rows; ++line) {
-        std::cout << "[" << line << "] ";
-        for (int i = 0; i < n; ++i) {
-            if (std::is_same<T, int8_t>::value) {
-                std::cout << (int)(a_h[line * cols + i]) << " ";  // NOLINT
-            } else {
-                std::cout << float(a_h[line * cols + i]) << " ";  // NOLINT
-            }
-        }
-        std::cout << "\n";
-    }
-}
 
 template <int kHeadDim>
 auto get_gmem_layout(int token_num, int head_num) {
@@ -49,9 +22,9 @@ auto get_gmem_layout(int token_num, int head_num) {
 
 template <typename Ktraits>
 __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp, 1)
-    compute_attn_ws(
-        CUTE_GRID_CONSTANT typename CollectiveMainloopFwd<Ktraits>::Params const mainloop_params,
-        CUTE_GRID_CONSTANT Flash_fwd_params const data_params) {
+    moba_encoder_attention_kernel(
+        CUTE_GRID_CONSTANT typename CollectiveMainloopAttn<Ktraits>::Params const mainloop_params,
+        CUTE_GRID_CONSTANT moba_encoder_attn_params const data_params) {
 
     using Element = typename Ktraits::Element;
     using ElementAccum = typename Ktraits::ElementAccum;
@@ -66,7 +39,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     constexpr int kHeadDim = Ktraits::kHeadDim;
     constexpr int kMaxN = Ktraits::kMaxN;
 
-    using CollectiveMainloop = CollectiveMainloopFwd<Ktraits>;
+    using CollectiveMainloop = CollectiveMainloopAttn<Ktraits>;
 
     using MainloopPipeline = typename Ktraits::MainloopPipeline;
     using PipelineParams = typename MainloopPipeline::Params;
@@ -204,12 +177,12 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
 
 template<typename Kernel_traits>
-void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
+void run_moba_decoder_attn(moba_encoder_attn_params &params, cudaStream_t stream) {
     using Element = typename Kernel_traits::Element;
     using TileShape_MNK = typename Kernel_traits::TileShape_MNK;
     using ClusterShape = typename Kernel_traits::ClusterShape_MNK;
 
-    using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;
+    using CollectiveMainloop = CollectiveMainloopAttn<Kernel_traits>;
     constexpr int kHeadDim = Kernel_traits::kHeadDim;
 
     typename CollectiveMainloop::Params mainloop_params =
@@ -228,7 +201,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     num_blocks_m = cutlass::ceil_div(num_blocks_m, size<0>(ClusterShape{})) * size<0>(ClusterShape{});
 
     void *kernel;
-    kernel = (void *)compute_attn_ws<Kernel_traits>;
+    kernel = (void *)moba_encoder_attention_kernel<Kernel_traits>;
     int smem_size = sizeof(typename Kernel_traits::SharedStorage);
 
     if (smem_size >= 48 * 1024) {
@@ -249,18 +222,18 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
 
 
 template <int kBlockM, int kBlockN, int kMaxN, typename InputType>
-void flash_attn_headdim128(Flash_fwd_params &params, cudaStream_t stream) {
+void run_moba_encoder_attn_hdim128(moba_encoder_attn_params &params, cudaStream_t stream) {
 
     constexpr static int Headdim = 128;
     constexpr static int kNWarps = kBlockM / 16 + 4;
     constexpr static int kStages = 2;
 
-    using Ktraits = Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, kMaxN, true, InputType>;
-    run_flash_fwd<Ktraits>(params, stream);
+    using Ktraits = moba_encoder_attn_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, kMaxN, true, InputType>;
+    run_moba_decoder_attn<Ktraits>(params, stream);
 }
 
 template <typename T>
-void DispatchEncoderAttention(
+void DispatchMobaEncoderAttn(
         const paddle::Tensor& q_input,
         const paddle::Tensor& k_input,
         const paddle::Tensor& v_input,
@@ -286,8 +259,8 @@ void DispatchEncoderAttention(
 
     using cute_type = typename cuteType<T>::type;
 
-    Flash_fwd_params params;
-    memset(&params, 0, sizeof(Flash_fwd_params));
+    moba_encoder_attn_params params;
+    memset(&params, 0, sizeof(moba_encoder_attn_params));
 
     params.q_ptr = reinterpret_cast<cute_type*>(const_cast<T*>(q_input.data<T>()));
     params.k_ptr = reinterpret_cast<cute_type*>(const_cast<T*>(k_input.data<T>()));
@@ -307,10 +280,10 @@ void DispatchEncoderAttention(
     params.seq_len_encoder = const_cast<int*>(seq_len_encoder.data<int>());
     params.cu_seq_q_pack = const_cast<int*>(cu_seq_q_pack.data<int>());
 
-    flash_attn_headdim128<kBlockM, kBlockN, kMaxN, cute_type>(params, out.stream());
+    run_moba_encoder_attn_hdim128<kBlockM, kBlockN, kMaxN, cute_type>(params, out.stream());
 }
 
-void EncoderAttention(
+void MobaEncoderAttn(
         const paddle::Tensor& q_input,
         const paddle::Tensor& k_input,
         const paddle::Tensor& v_input,
@@ -331,7 +304,7 @@ void EncoderAttention(
     const int batch_size = seq_len_encoder.dims()[0];
     if (q_input.dtype() == paddle::DataType::FLOAT16) {
         return
-            DispatchEncoderAttention<phi::dtype::float16>(
+            DispatchMobaEncoderAttn<phi::dtype::float16>(
                 q_input,
                 k_input,
                 v_input,
@@ -351,7 +324,7 @@ void EncoderAttention(
                 max_input_length);
     } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
         return
-            DispatchEncoderAttention<phi::dtype::bfloat16>(
+            DispatchMobaEncoderAttn<phi::dtype::bfloat16>(
                 q_input,
                 k_input,
                 v_input,
@@ -372,10 +345,8 @@ void EncoderAttention(
     }
 }
 
-};
 
-
-PD_BUILD_OP(encoder_moba_attention)
+PD_BUILD_OP(moba_encoder_attn)
     .Inputs({
         "q_input",
         "k_input",
@@ -396,4 +367,4 @@ PD_BUILD_OP(encoder_moba_attention)
         "max_input_length: int"})
     .Outputs({"attn_out"})
     .SetInplaceMap({{"out", "attn_out"}})
-    .SetKernelFn(PD_KERNEL(moba::EncoderAttention));
+    .SetKernelFn(PD_KERNEL(MobaEncoderAttn));

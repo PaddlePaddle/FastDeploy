@@ -426,7 +426,6 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
         sources += find_end_files("gpu_ops/moe/", ".cu")
-        sources += find_end_files("gpu_ops/gqa_use_tensor_core_attn/", ".cu")
         nvcc_compile_args += ["-Igpu_ops/moe"]
 
     if cc >= 89:
@@ -510,9 +509,12 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optmized mla
+        nvcc_compile_args += ["-DENABLE_TMA"]
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
-        sources += find_end_files("gpu_ops/moba_attention", ".cu")
-        sources += ["gpu_ops/moba_attention.cu"]
+        sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
+        sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
+        sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
+        sources += ["gpu_ops/moba_attn/moba_attn.cu"]
 
     setup(
         name="fastdeploy_ops",

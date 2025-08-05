@@ -14,13 +14,9 @@
 
 #include "cutlass/gemm/collective/collective_builder.hpp"
 
-#include "moba_encoder_utils.hpp"
-
-namespace moba {
-
 using namespace cute;
 
-enum class FwdNamedBarriers {
+enum class AttnNamedBarriers {
     QueryEmpty = 0,
     ValueEmpty = 1,
     TileCountSmemEmpty = 2,
@@ -33,7 +29,7 @@ enum class FwdNamedBarriers {
 
 
 template <typename Ktraits>
-struct CollectiveMainloopFwd {
+struct CollectiveMainloopAttn {
 
     using Element = typename Ktraits::Element;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
@@ -274,7 +270,7 @@ struct CollectiveMainloopFwd {
     CUTLASS_DEVICE void
     warp_scheduler_barrier_sync() {
         if constexpr (UseSchedulerBarrier) {
-            cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(FwdNamedBarriers::WarpSchedulerWG1) - 1 + cutlass::canonical_warp_group_idx() /*id*/);
+            cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + cutlass::canonical_warp_group_idx() /*id*/);
         }
     }
 
@@ -283,11 +279,11 @@ struct CollectiveMainloopFwd {
         if constexpr (!UseSchedulerBarrier) { return; }
         static_assert(NumMmaThreads == 2 * cutlass::NumThreadsPerWarpGroup || NumMmaThreads == 3 * cutlass::NumThreadsPerWarpGroup);
         if (cutlass::canonical_warp_group_idx() > 1) {
-            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(FwdNamedBarriers::WarpSchedulerWG1) - 1 + 1 /*id*/);
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + 1 /*id*/);
         }
         if constexpr (NumMmaThreads == 3 * cutlass::NumThreadsPerWarpGroup) {
             if (cutlass::canonical_warp_group_idx() > 2) {
-                cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(FwdNamedBarriers::WarpSchedulerWG1) - 1 + 2 /*id*/);
+                cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + 2 /*id*/);
             }
         }
 
@@ -298,10 +294,10 @@ struct CollectiveMainloopFwd {
         if constexpr (!UseSchedulerBarrier) { return; }
         static_assert(NumMmaThreads == 2 * cutlass::NumThreadsPerWarpGroup || NumMmaThreads == 3 * cutlass::NumThreadsPerWarpGroup);
         if constexpr (NumMmaThreads == 2 * cutlass::NumThreadsPerWarpGroup) {
-            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(FwdNamedBarriers::WarpSchedulerWG1) - 1 + (3 - cutlass::canonical_warp_group_idx()) /*id*/);
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + (3 - cutlass::canonical_warp_group_idx()) /*id*/);
         } else {
-            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(FwdNamedBarriers::WarpSchedulerWG1) - 1 + (cutlass::canonical_warp_group_idx() <= 2 ? cutlass::canonical_warp_group_idx() + 1 : cutlass::canonical_warp_group_idx() + 1 - 3)  /*id*/);
-            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(FwdNamedBarriers::WarpSchedulerWG1) - 1 + (cutlass::canonical_warp_group_idx() <= 1 ? cutlass::canonical_warp_group_idx() + 2 : cutlass::canonical_warp_group_idx() + 2 - 3)  /*id*/);
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + (cutlass::canonical_warp_group_idx() <= 2 ? cutlass::canonical_warp_group_idx() + 1 : cutlass::canonical_warp_group_idx() + 1 - 3)  /*id*/);
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + (cutlass::canonical_warp_group_idx() <= 1 ? cutlass::canonical_warp_group_idx() + 2 : cutlass::canonical_warp_group_idx() + 2 - 3)  /*id*/);
         }
     }
 
@@ -434,7 +430,7 @@ struct CollectiveMainloopFwd {
         Tensor taccOrO = smem_thr_copy_O.retile_S(tOrO_out);
         Tensor taccOsO = smem_thr_copy_O.partition_D(sO);
 
-        cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(FwdNamedBarriers::ValueEmpty) /*id*/);
+        cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(AttnNamedBarriers::ValueEmpty) /*id*/);
         cute::copy(smem_tiled_copy_O, taccOrO, taccOsO);
         cutlass::arch::fence_view_async_shared(); // ensure smem writes are visible to TMA
         cutlass::arch::NamedBarrier::arrive(NumMmaThreads + cutlass::NumThreadsPerWarp,cutlass::arch::ReservedNamedBarriers::EpilogueBarrier);
@@ -461,5 +457,3 @@ struct CollectiveMainloopFwd {
     }
 
 };
-
-} // namespace moba

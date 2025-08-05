@@ -1,9 +1,22 @@
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include "paddle/extension.h"
-#include "attention_kernel.h"
-#include "moba_attention.h"
+#include "moba_decoder_attn_kernel.h"
+#include "moba_attn/moba_attn.h"
 
-namespace gqa_attention {
 
 template<bool Is_first, int kMiLen, typename Tensor0, typename Tensor1, typename T>
 inline __device__ void softmax_rescale_o(Tensor0 &scores, Tensor1 &acc_o, const T *scores_max, const T *scores_max_prev, T * scores_sum, const float softmax_scale) {
@@ -25,11 +38,7 @@ inline __device__ void softmax_rescale_o(Tensor0 &scores, Tensor1 &acc_o, const 
 };
 
 template<typename Kernel_traits, typename ParamType>
-__global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_attention_kernel(ParamType params) {
-    // q的shape为[token_num, head num, head dim] 其中decoder和encoder的结果在一起
-    // attn_out的shape为[bsz, head num, head dim]
-    // partion_out的shape为[bsz, head num, partition num, head dim]
-
+__global__ __launch_bounds__(Kernel_traits::kNThreads) void moba_decoder_attention_kernel(ParamType params) {
     using cuteType = typename Kernel_traits::cuteType;
     using ElementAccum = typename Kernel_traits::ElementAccum;
     using CacheKV_traits = typename Kernel_traits::CacheKV_traits;
@@ -49,7 +58,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     const int32_t partition_idx = blockIdx.x;
     const int32_t kv_head_idx = blockIdx.z;
     const int32_t q_head_idx = kv_head_idx * kGqaGroupSize;
-    // +1 是因为 decoder 的kv已经写入cache kv
+
     const int32_t seq_len = params.seq_lens_decoder[bi] == 0 ? 0 : params.seq_lens_decoder[bi] + 1;
 
     const int32_t head_num = params.head_num;
@@ -91,7 +100,6 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         Shape<Int<kBlockSize>, Int<kHeadDimKV>>{},
         Stride<Int<kHeadDimKV>, _1>{});
 
-    // Shared memory.
     extern __shared__ char smem_[];
     Tensor sQ = make_tensor(
         make_smem_ptr(reinterpret_cast<cuteType *>(smem_)),
@@ -150,15 +158,15 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     Tensor tOsVt = smem_thr_copy_V.partition_S(sVt);
     Tensor tOrVt  = thr_mma.partition_fragment_B(sVtNoSwizzle);
 
-    moba::copy<false>(gmem_tiled_copy_Q, tQgQ, tQsQ, tQcQ, kGqaGroupSize);
+    copy<false>(gmem_tiled_copy_Q, tQgQ, tQsQ, tQcQ, kGqaGroupSize);
 
 
     cute::cp_async_fence();
-    moba::cp_async_wait<0>();
+    cp_async_wait<0>();
 
     const int32_t remain_seq_len = seq_len - partition_idx * kTileN * kBlockSize;
 
-    moba::copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);
+    copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);
 
     cute::cp_async_fence();
 
@@ -168,8 +176,8 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     const int32_t col = lane_id % 4;
     const int row_idx = tidx / 4;
 
-    using scale_k_vec = moba::Vec<cuteType, 32>;
-    using scale_v_vec = moba::Vec<cuteType, 4>;
+    using scale_k_vec = Vec<cuteType, 32>;
+    using scale_v_vec = Vec<cuteType, 4>;
 
     scale_k_vec scale_k;
     scale_k_vec zp_k;
@@ -207,22 +215,22 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         }
 
         clear(acc_s);
-        moba::cp_async_wait<0>();
+        cp_async_wait<0>();
         __syncthreads();
 
         if (n > 0) {
             tVgV.data() = tVgV.data() + (block_table[n] - block_table[n - 1]) * cache_offset_step;
         }
 
-        moba::copy(gmem_tiled_copy_KV, tVgV, tVsV, tKVcKV);
+        copy(gmem_tiled_copy_KV, tVgV, tVsV, tKVcKV);
 
         cute::cp_async_fence();
 
         if constexpr (kDataBits == 16) {
             if (n == 0) {
-                moba::gemm(acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_thr_copy_Q, smem_thr_copy_K, smem_tiled_copy_Q, smem_tiled_copy_K);
+                gemm(acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_thr_copy_Q, smem_thr_copy_K, smem_tiled_copy_Q, smem_tiled_copy_K);
             } else {
-                moba::gemm<true>(acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_thr_copy_Q, smem_thr_copy_K, smem_tiled_copy_Q, smem_tiled_copy_K);
+                gemm<true>(acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_thr_copy_Q, smem_thr_copy_K, smem_tiled_copy_Q, smem_tiled_copy_K);
             }
         } else {
             Tensor tSrKQuant = make_tensor<cuteType>(
@@ -257,7 +265,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
 
         __syncthreads();
 
-        moba::MaxOp<ElementAccum> max_op;
+        MaxOp<ElementAccum> max_op;
 
         if (tidx < kGqaGroupSize) {
             float cur_max = scores_warp[0][tidx];
@@ -268,12 +276,12 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
             scores_warp[0][tidx] = cur_max;
         }
 
-        moba::cp_async_wait<0>();
+        cp_async_wait<0>();
         __syncthreads();
 
         if (cur_remain_seq_len > kBlockSize && n < kTileN - 1) {
             tKgK.data() = tKgK.data() + (block_table[n + 1] - block_table[n]) * cache_offset_step;
-            moba::copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);
+            copy(gmem_tiled_copy_KV, tKgK, tKsK, tKVcKV);
             cute::cp_async_fence();
         }
 
@@ -288,7 +296,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
             softmax_rescale_o<false, kMiLen>(scores, acc_o, scores_max, scores_max_prev, scores_sum, params.inv_sqrt_dh);
         }
 
-        Tensor rS = moba::convert_type<cuteType>(acc_s);
+        Tensor rS = convert_type<cuteType>(acc_s);
 
         Tensor trQK = smem_thr_copy_O.retile_S(rS);
         Tensor tsQK = smem_thr_copy_O.partition_D(sQK);
@@ -297,7 +305,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         __syncthreads();
 
         if constexpr (kDataBits == 16) {
-            moba::gemm(acc_o, tSrQK, tOrVt, tSsQK, tOsVt, tiled_mma, smem_thr_copy_Q, smem_thr_copy_V, smem_tiled_copy_Q, smem_tiled_copy_V);
+            gemm(acc_o, tSrQK, tOrVt, tSsQK, tOsVt, tiled_mma, smem_thr_copy_Q, smem_thr_copy_V, smem_tiled_copy_Q, smem_tiled_copy_V);
         } else {
             Tensor tSrVQuant = make_tensor<cuteType>(
                 Layout<
@@ -314,7 +322,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
         params.maxs[max_sum_offset] = scores_warp[0][tidx] * params.inv_sqrt_dh;
     }
 
-    moba::SumOp<ElementAccum> sum_op;
+    SumOp<ElementAccum> sum_op;
     #pragma unroll
     for (int mi = 0; mi < kMiLen; ++mi) {
         scores_sum[mi] = Allreduce<4>::run(scores_sum[mi], sum_op);
@@ -329,7 +337,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void multi_block_gqa_atte
     }
 
 
-    Tensor rO = moba::convert_type<cuteType>(acc_o);
+    Tensor rO = convert_type<cuteType>(acc_o);
     Tensor taccOrO = smem_thr_copy_O.retile_S(rO);
     Tensor taccOsO = smem_thr_copy_O.partition_D(sQ);
 
@@ -383,10 +391,9 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
     const int32_t head_idx = blockIdx.y;
     const int32_t head_num = params.head_num;
 
-    using float_vec = moba::Vec<float, kNFloatPacksize>;
+    using float_vec = Vec<float, kNFloatPacksize>;
     const int32_t offset = bi * head_num * pack_max_partition_num + head_idx * pack_max_partition_num;
 
-    // Load max logits to shared memory.
     float* shared_max_logits = reinterpret_cast<float*>(shared_mem);
     const float* max_logits_ptr = params.maxs + offset;
     float global_max_logit = -FLT_MAX;
@@ -409,7 +416,7 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
     }
 
     const int32_t packed_data_num = partition_num / kNFloatPacksize * kNFloatPacksize;
-    // 剩下的不足packsize的元素
+
     idx = packed_data_num + tidx;
     #pragma unroll
     for (; idx < partition_num; idx += kNReduceThreads) {
@@ -426,9 +433,9 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
         }
     }
     __syncthreads();
-    // Reduce within the warp.
-    global_max_logit = moba::BlockAllReduce<float, moba::MaxOp<float>, kNReduceThreads>(global_max_logit);
-    // Load rescaled exp sums to shared memory.
+
+    global_max_logit = BlockAllReduce<float, MaxOp<float>, kNReduceThreads>(global_max_logit);
+
     float* share_sum_scale = reinterpret_cast<float*>(shared_mem + sizeof(float) * pack_max_partition_num);
     const float* exp_sums_ptr = params.sums + offset;
     float global_exp_sum = 0.0f;
@@ -456,8 +463,6 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
         share_max.store_to(share_sum_scale + idx);
     }
 
-
-    // 剩下的不足packsize的元素
     idx = packed_data_num + tidx;
     #pragma unroll
     for (; idx < partition_num; idx += kNReduceThreads) {
@@ -479,14 +484,14 @@ inline __device__ float caluate_logit_scale(const int partition_num, const int p
     }
     __syncthreads();
 
-    global_exp_sum = moba::BlockAllReduce<float, moba::SumOp<float>, kNReduceThreads>(global_exp_sum);
+    global_exp_sum = BlockAllReduce<float, SumOp<float>, kNReduceThreads>(global_exp_sum);
 
     const float inv_global_exp_sum = fdividef(1.0f, global_exp_sum + 1e-6f);
     return inv_global_exp_sum;
 }
 
 template<typename Kernel_traits, typename ParamType>
-__global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_attention_reduce_kernel(ParamType params) {
+__global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) moba_decoder_attention_merge_kernel(ParamType params) {
     using cuteType = typename Kernel_traits::cuteType;
     constexpr int32_t kBlockN = Kernel_traits::kTileN * Kernel_traits::kBlockSize;
     constexpr int32_t kNReducePacksize = 16 / sizeof(cuteType);
@@ -501,7 +506,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     const int32_t lane_id = tidx % 32;
     const int32_t seq_len = params.seq_lens_decoder[bi] + 1;
     const int32_t head_num = params.head_num;
-    using pack_half = typename moba::PackedHalf<cuteType>::Type;
+    using pack_half = typename PackedHalf<cuteType>::Type;
 
 
     if (params.seq_lens_decoder[bi] == 0) {
@@ -522,11 +527,11 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     float inv_global_exp_sum = caluate_logit_scale<Kernel_traits>(partition_num, pack_max_partition_num, params, shared_mem, seq_len, qk_gate_topk_idx_ptr);
 
 
-    using T_vec = moba::Vec<cuteType, kNReducePacksize>;
+    using T_vec = Vec<cuteType, kNReducePacksize>;
 
     cuteType* partition_attn_out = reinterpret_cast<cuteType*>(params.partition_attn_out) + bi * head_num * params.max_num_partitions * kHeadDim + head_idx * kHeadDim + headdim_idx;
 
-    moba::Vec<float, kNReducePacksize> acc;
+    Vec<float, kNReducePacksize> acc;
     acc.set_zero();
     #pragma unroll
     for (int idx = lane_id; idx < partition_num; idx += 32) {
@@ -546,7 +551,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     T_vec out;
     #pragma unroll
     for (int k = 0; k < kNReducePacksize; ++k) {
-        out.data.elt[k] = static_cast<cuteType>(moba::WarpAllReduce<float, moba::SumOp<float>>(acc.data.elt[k]) * inv_global_exp_sum);
+        out.data.elt[k] = static_cast<cuteType>(WarpAllReduce<float, SumOp<float>>(acc.data.elt[k]) * inv_global_exp_sum);
     }
 
     const int ori_token_idx = params.cu_seq_q[bi];
@@ -559,26 +564,18 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
 
 
 template<typename Kernel_traits, typename ParamType>
-void run_block_attn(ParamType &params, cudaStream_t stream) {
-    // cudaDeviceSynchronize();
-    // auto err = cudaGetLastError();
-    // printf("pre attn err = %d, str = %s\n", err, cudaGetErrorString(err));
+void run_moba_decoder_attn(ParamType &params, cudaStream_t stream) {
     dim3 grid;
     grid.x = params.max_num_partitions;
     grid.y = params.batch_size;
     grid.z = params.kv_head_num;
     constexpr int smem_size = Kernel_traits::kShareMemSize;
-    constexpr auto kernel = &multi_block_gqa_attention_kernel<Kernel_traits, ParamType>;
+    constexpr auto kernel = &moba_decoder_attention_kernel<Kernel_traits, ParamType>;
     if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
     }
     kernel<<<grid, Kernel_traits::kNThreads, smem_size, stream>>>(params);
 
-    // cudaDeviceSynchronize();
-    // auto err = cudaGetLastError();
-    // printf("attn err = %d, str = %s  smem_size:%d\n", err, cudaGetErrorString(err), smem_size);
-
-    // 2 是指 存放max和sum
     int32_t reduce_shared_mem_size = 2 * (params.max_num_partitions + 4) * sizeof(float);
     constexpr int32_t pack_size = 16 / sizeof(typename Kernel_traits::cuteType);
     static_assert(Kernel_traits::kHeadDim % pack_size == 0);
@@ -586,32 +583,44 @@ void run_block_attn(ParamType &params, cudaStream_t stream) {
     grid.x = Kernel_traits::kHeadDim / Kernel_traits::kNReduceWarps / pack_size;
     grid.y = params.head_num;
     grid.z = params.batch_size;
-    auto reduce_kernel = &multi_block_attention_reduce_kernel<Kernel_traits, ParamType>;
+    auto reduce_kernel = &moba_decoder_attention_merge_kernel<Kernel_traits, ParamType>;
 
     if (reduce_shared_mem_size >= 48 * 1024) {
         cudaFuncSetAttribute(
             reduce_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, reduce_shared_mem_size);
     }
     reduce_kernel<<<grid, Kernel_traits::kNReduceThreads, reduce_shared_mem_size, stream>>>(params);
-
-    // cudaDeviceSynchronize();
-    // err = cudaGetLastError();
-    // printf("reduce err = %d, str = %s\n", err, cudaGetErrorString(err));
 }
 
 
 template<typename cute_type, int kCacheBits, int kBlockN, int kMaxN, typename ParamType>
-void run_block_attn_hdim128(ParamType &params, cudaStream_t stream) {
+void run_moba_decoder_attn_hdim128(ParamType &params, cudaStream_t stream) {
     const int gqaGroupSize = params.head_num / params.kv_head_num;
     using CacheKVTraits = CacheKV_quant_traits<cute_type, kCacheBits>;
     constexpr int kTileN = kBlockN / CacheKVTraits::kBlockSize;
     switch (gqaGroupSize) {
+        case 12: {
+            run_moba_decoder_attn<moba_decoder_attn_kernel_traits<12, kTileN, kMaxN,CacheKVTraits>>(params, stream);
+            break;
+        }
         case 8: {
-            run_block_attn<Block_attn_kernel_traits<8, kTileN, kMaxN,CacheKVTraits>>(params, stream);
+            run_moba_decoder_attn<moba_decoder_attn_kernel_traits<8, kTileN, kMaxN,CacheKVTraits>>(params, stream);
+            break;
+        }
+        case 7: {
+            run_moba_decoder_attn<moba_decoder_attn_kernel_traits<7, kTileN, kMaxN,CacheKVTraits>>(params, stream);
+            break;
+        }
+        case 6: {
+            run_moba_decoder_attn<moba_decoder_attn_kernel_traits<6, kTileN, kMaxN,CacheKVTraits>>(params, stream);
             break;
         }
         case 5: {
-            run_block_attn<Block_attn_kernel_traits<5, kTileN, kMaxN,CacheKVTraits>>(params, stream);
+            run_moba_decoder_attn<moba_decoder_attn_kernel_traits<5, kTileN, kMaxN,CacheKVTraits>>(params, stream);
+            break;
+        }
+        case 4: {
+            run_moba_decoder_attn<moba_decoder_attn_kernel_traits<4, kTileN, kMaxN,CacheKVTraits>>(params, stream);
             break;
         }
         default: {
@@ -623,7 +632,7 @@ void run_block_attn_hdim128(ParamType &params, cudaStream_t stream) {
 
 
 template <typename T>
-void DispatchGqaAttention(
+void DispatchMobaDecoderAttn(
         const paddle::Tensor& q_input,
         const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
@@ -650,12 +659,12 @@ void DispatchGqaAttention(
         const int use_moba_seq_limit,
         const std::string &cache_quant_type_str) {
 
-    using cute_type = typename moba::cuteType<T>::type;
+    using cute_type = typename cuteType<T>::type;
     const int kMobaBlockSize = 128;
     const int kMaxN = 1024;
 
     constexpr int max_seq_per_block = kMobaBlockSize;
-    Block_attn_params<cute_type> params;
+    moba_decoder_attn_params<cute_type> params;
     memset(&params, 0, sizeof(params));
     const uint32_t max_num_partitions = (max_seq_k + max_seq_per_block) / max_seq_per_block;
     assert(head_dim == 128);
@@ -687,7 +696,7 @@ void DispatchGqaAttention(
     if (cache_quant_type_str == "none") {
         params.cache_k = reinterpret_cast<cute_type *>(const_cast<T*>(cache_k.data<T>()));
         params.cache_v = reinterpret_cast<cute_type *>(const_cast<T*>(cache_v.data<T>()));
-        run_block_attn_hdim128<cute_type, 16, max_seq_per_block, kMaxN>(params, q_input.stream());
+        run_moba_decoder_attn_hdim128<cute_type, 16, max_seq_per_block, kMaxN>(params, q_input.stream());
     } else {
         params.cache_k = const_cast<uint8_t*>(cache_k.data<uint8_t>());
         params.cache_v = const_cast<uint8_t*>(cache_v.data<uint8_t>());
@@ -698,9 +707,9 @@ void DispatchGqaAttention(
         params.cache_k_zp = reinterpret_cast<cute_type *>(const_cast<T*>(cache_k_zero_points.get().data<T>()));
         params.cache_v_zp = reinterpret_cast<cute_type *>(const_cast<T*>(cache_v_zero_points.get().data<T>()));
         if (cache_quant_type_str == "cache_int8_zp") {
-            run_block_attn_hdim128<cute_type, 8, max_seq_per_block, kMaxN>(params, q_input.stream());
+            run_moba_decoder_attn_hdim128<cute_type, 8, max_seq_per_block, kMaxN>(params, q_input.stream());
         } else if (cache_quant_type_str == "cache_int4_zp") {
-            run_block_attn_hdim128<cute_type, 4, max_seq_per_block, kMaxN>(params, q_input.stream());
+            run_moba_decoder_attn_hdim128<cute_type, 4, max_seq_per_block, kMaxN>(params, q_input.stream());
         } else {
             PADDLE_THROW(phi::errors::Unimplemented(
             "GQA Attention not implemented for cache_quant_type_str = %s", cache_quant_type_str.c_str()));
@@ -708,7 +717,7 @@ void DispatchGqaAttention(
     }
 }
 
-void GqaAttention(
+void MobaDecoderAttn(
         const paddle::Tensor& q_input,
         const paddle::Tensor& seq_len_encoder,
         const paddle::Tensor& seq_len_decoder,
@@ -736,7 +745,7 @@ void GqaAttention(
 
     const int batch_size = block_tables.dims()[0];
     if (q_input.dtype() == paddle::DataType::FLOAT16) {
-        return DispatchGqaAttention<phi::dtype::float16>(
+        return DispatchMobaDecoderAttn<phi::dtype::float16>(
             q_input,
             seq_len_encoder,
             seq_len_decoder,
@@ -763,7 +772,7 @@ void GqaAttention(
             use_moba_seq_limit,
             cache_quant_type_str);
     } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
-        return DispatchGqaAttention<phi::dtype::bfloat16>(
+        return DispatchMobaDecoderAttn<phi::dtype::bfloat16>(
             q_input,
             seq_len_encoder,
             seq_len_decoder,
@@ -791,39 +800,3 @@ void GqaAttention(
             cache_quant_type_str);
     }
 }
-
-
-}
-
-PD_BUILD_OP(gqa_attention)
-    .Inputs({
-        "q_input",
-        "seq_len_encoder",
-        "seq_len_decoder",
-        "cu_seq_q",
-        "cache_k",
-        "cache_v",
-        "block_tables",
-        "k_block_means",
-        "out",
-        "qk_gate_topk_idx",
-        paddle::Optional("cache_k_quant_scale"),
-        paddle::Optional("cache_v_quant_scale"),
-        paddle::Optional("cache_k_dequant_scale"),
-        paddle::Optional("cache_v_dequant_scale"),
-        paddle::Optional("cache_k_zero_points"),
-        paddle::Optional("cache_v_zero_points")})
-    .Attrs({
-        "head_num: int",
-        "kv_head_num: int",
-        "head_dim: int",
-        "max_input_length: int",
-        "use_moba_seq_limit: int",
-        "max_seq_q: int",
-        "max_seq_k: int",
-        "cache_quant_type_str: std::string"})
-    .Outputs({"attn_out", "cache_k_out", "cache_v_out"})
-    .SetInplaceMap({{"out", "attn_out"},
-                    {"cache_k", "cache_k_out"},
-                    {"cache_v", "cache_v_out"}})
-    .SetKernelFn(PD_KERNEL(gqa_attention::GqaAttention));

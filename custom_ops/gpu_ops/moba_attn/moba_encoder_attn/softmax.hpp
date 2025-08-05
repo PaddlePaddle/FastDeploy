@@ -10,31 +10,9 @@
 
 #include <cutlass/numeric_types.h>
 
-#include "moba_encoder_utils.hpp"
-
-namespace moba {
+#include "../moba_attn_utils.hpp"
 
 using namespace cute;
-
-template<int THREADS>
-struct Allreduce {
-    static_assert(THREADS == 32 || THREADS == 16 || THREADS == 8 || THREADS == 4);
-    template<typename T, typename Operator>
-    static __device__ __forceinline__ T run(T x, Operator &op) {
-        constexpr int OFFSET = THREADS / 2;
-        x = op(x, __shfl_xor_sync(uint32_t(-1), x, OFFSET));
-        return Allreduce<OFFSET>::run(x, op);
-    }
-};
-
-template<>
-struct Allreduce<2> {
-template<typename T, typename Operator>
-static __device__ __forceinline__ T run(T x, Operator &op) {
-    x = op(x, __shfl_xor_sync(uint32_t(-1), x, 1));
-    return x;
-}
-};
 
 template<bool zero_init=true, typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Operator>
 __device__ __forceinline__ void thread_reduce_(Tensor<Engine0, Layout0> const &tensor, Tensor<Engine1, Layout1> &summary, Operator &op) {
@@ -139,16 +117,16 @@ struct Softmax {
 
     template<bool Is_first, bool Check_inf=false, typename Tensor0>
     __forceinline__ __device__ TensorT max(Tensor0 &acc_s, float softmax_scale_log2) {
-        Tensor scores = make_tensor(acc_s.data(), moba::convert_layout_acc_rowcol(acc_s.layout()));
+        Tensor scores = make_tensor(acc_s.data(), convert_layout_acc_rowcol(acc_s.layout()));
         static_assert(decltype(size<0>(scores))::value == kNRows);
         TensorT scores_scale;
         if constexpr (Is_first) {
-            moba::template reduce_max</*zero_init=*/true>(scores, row_max);
+            reduce_max</*zero_init=*/true>(scores, row_max);
             cute::fill(scores_scale, 1.f);
         } else {
             Tensor scores_max_prev = make_fragment_like(row_max);
             cute::copy(row_max, scores_max_prev);
-            moba::template reduce_max</*zero_init=*/false>(scores, row_max);
+            reduce_max</*zero_init=*/false>(scores, row_max);
             #pragma unroll
             for (int mi = 0; mi < size(row_max); ++mi) {
                 float scores_max_cur = row_max(mi);
@@ -161,17 +139,17 @@ struct Softmax {
 
     template<bool Is_first, typename Tensor0>
     __forceinline__ __device__ TensorT online_softmax(Tensor0 &acc_s, float softmax_scale_log2) {
-        Tensor scores = make_tensor(acc_s.data(), moba::convert_layout_acc_rowcol(acc_s.layout()));
+        Tensor scores = make_tensor(acc_s.data(), convert_layout_acc_rowcol(acc_s.layout()));
         static_assert(decltype(size<0>(scores))::value == kNRows);
         TensorT scores_scale;
         if constexpr (Is_first) {
-            moba::template reduce_max</*zero_init=*/true>(scores, row_max);
-            moba::template scale_apply_exp2(scores, row_max, softmax_scale_log2);
-            moba::reduce_sum</*zero_init=*/true, /*warp_reduce=*/false>(scores, row_sum);
+            reduce_max</*zero_init=*/true>(scores, row_max);
+            scale_apply_exp2(scores, row_max, softmax_scale_log2);
+            reduce_sum</*zero_init=*/true, /*warp_reduce=*/false>(scores, row_sum);
             cute::fill(scores_scale, 1.f);
         } else {
-            moba::template scale_apply_exp2(scores, row_max, softmax_scale_log2);
-            moba::reduce_sum</*zero_init=*/false, /*warp_reduce=*/false>(scores, row_sum);
+            scale_apply_exp2(scores, row_max, softmax_scale_log2);
+            reduce_sum</*zero_init=*/false, /*warp_reduce=*/false>(scores, row_sum);
         }
         return scores_scale;
     };
@@ -204,5 +182,3 @@ struct Softmax {
     };
 
 };
-
-}  // namespace moba

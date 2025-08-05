@@ -113,7 +113,7 @@ class Attention(nn.Layer):
             moba_max_seq_length = int(envs.FD_MOBA_MAX_SEQ_LENGTH)
             if self.moba_use_mlp:
                 if self.layer_id < fd_config.model_config.num_hidden_layers - 1:
-                    temp_weight = paddle.load(f"{mlp_weight_path}/attn_gate.pdparams")
+                    temp_weight = paddle.load(mlp_weight_path)
 
                     self.attn_gate_weight = temp_weight[
                         f"ernie.layers.{self.layer_id}.self_attn.attn_gate.weight"

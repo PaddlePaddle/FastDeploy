@@ -1,7 +1,8 @@
+#pragma once
+
 #include "paddle/extension.h"
 
-namespace gqa_attention {
-void WriteDecoderCacheKV(
+void MobaDecoderAttnWriteCacheKv(
     const paddle::Tensor& qkv_out,
     const paddle::Tensor& q_input,
     const paddle::Tensor& cu_seq_q,
@@ -26,7 +27,7 @@ void WriteDecoderCacheKV(
     const int max_input_length,
     const std::string &cache_quant_type_str);
 
-void WriteEncoderCacheKV(
+void MobaEncoderAttnWriteCacheKv(
     const paddle::Tensor& k_input,
     const paddle::Tensor& v_input,
     const paddle::Tensor& cu_seq_k,
@@ -47,7 +48,7 @@ void WriteEncoderCacheKV(
     const int max_seq_q,
     const std::string &cache_quant_type_str);
 
-void GqaAttention(
+void MobaDecoderAttn(
     const paddle::Tensor& q_input,
     const paddle::Tensor& seq_len_encoder,
     const paddle::Tensor& seq_len_decoder,
@@ -72,9 +73,8 @@ void GqaAttention(
     const int max_seq_q,
     const int max_seq_k,
     const std::string &cache_quant_type_str);
-}
 
-namespace moba {
+
 void FusedBlockMeanAndRope(
     const paddle::Tensor& qkv_out,
     const paddle::Tensor& k_block_means,
@@ -146,7 +146,7 @@ void GetKVFromCache(
     const std::string &cache_quant_type_str);
 
 
-void EncoderAttention(
+void MobaEncoderAttn(
     const paddle::Tensor& q_input,
     const paddle::Tensor& k_input,
     const paddle::Tensor& v_input,
@@ -188,4 +188,3 @@ std::vector<paddle::Tensor> MobaMlpEinsum(
     const paddle::Tensor& cu_seq_k,
     const int max_seq_len,
     const int kv_head_num);
-}

@@ -64,7 +64,18 @@ class MobaAttentionBackend(AttentionBackend):
     Which is used only for testing purpose.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ) -> None:
+        """
+        MobaAttentionBackend __init__
+        """
         if not current_platform.is_cuda():
             raise NotImplementedError()
         super().__init__()
@@ -81,13 +92,13 @@ class MobaAttentionBackend(AttentionBackend):
         self.moba_encoder_top_k_left = int(envs.FD_MOBA_ENCODER_TOP_K_LEFT)
         self.moba_encoder_top_k_right = int(envs.FD_MOBA_ENCODER_TOP_K_RIGHT)
         self.moba_use_encoder_seq_limit = int(envs.FD_MOBA_USE_ENCODER_SEQ_LIMIT)
-        if self.moba_use_encoder_seq_limit == 0:
+        if self.moba_use_encoder_seq_limit < self.moba_encoder_top_k_left * self.moba_block_size:
             self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
 
         self.moba_decoder_top_k_left = int(envs.FD_MOBA_DECODER_TOP_K_LEFT)
         self.moba_decoder_top_k_right = int(envs.FD_MOBA_DECODER_TOP_K_RIGHT)
         self.moba_use_decoder_seq_limit = int(envs.FD_MOBA_USE_DECODER_SEQ_LIMIT)
-        if self.moba_use_decoder_seq_limit == 0:
+        if self.moba_use_decoder_seq_limit < self.moba_decoder_top_k_left * self.moba_block_size:
             self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
 
         assert self.moba_encoder_top_k_left >= 0
@@ -97,9 +108,6 @@ class MobaAttentionBackend(AttentionBackend):
         assert self.moba_decoder_top_k_left >= 0
         assert self.moba_decoder_top_k_right >= 0
         assert self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
-
-        assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
-        assert self.moba_use_decoder_seq_limit >= self.moba_decoder_top_k_left * self.moba_block_size
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Init the metadata for a forward pass."""

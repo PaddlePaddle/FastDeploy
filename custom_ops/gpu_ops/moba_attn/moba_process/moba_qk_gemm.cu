@@ -1,5 +1,6 @@
-#pragma once
-// #include "cute/algorithm/copy.hpp"
+#include "paddle/extension.h"
+#include "moba_attn/moba_attn_utils.hpp"
+#include "moba_attn/moba_attn.h"
 #include "cute/atom/mma_atom.hpp"
 #include "cutlass/gemm/collective/collective_builder.hpp"
 
@@ -9,9 +10,6 @@
 #include "cutlass/pipeline/pipeline.hpp"
 #include "cutlass/cluster_launch.hpp"
 #include "cutlass/arch/reg_reconfig.h"
-#include "moba_attention_utils.hpp"
-
-namespace moba {
 
 template <typename input_type, int kBlockM, int kBlockN, int kMobaBlockSize, int kMaxN, int kHeadDim, bool is_split_kv>
 __global__ void qk_gemm_kernel(
@@ -320,347 +318,134 @@ void qk_gemm(
         gqa_group_size);
 }
 
-template <int kPackSize, int knthreads>
-__device__ inline int get_data_count(const float * src, const float limit_value) {
-    int count = 0;
-    #pragma unroll
-    for (int i = 0; i < kPackSize; i++) {
-        if (src[i] >= limit_value) {
-            count++;
-        }
-    }
-    count = BlockAllReduce<int, SumOp<int>, knthreads>(count);
-    return count;
-}
 
-template <typename T, int knthreads, int moba_block_size, int kBlockM, int kBlockMaxN, int searchtimes>
-__global__ void qk_gate_sort_encoder_kernel(
-        const T* qk_gate_weight,
-        int * qk_gate_topk_idx,
-        const int *seq_len_encoder,
-        const int *seq_len_decoder,
-        const int* cu_seq_q,
-        const int* cu_seq_k,
-        const int* cu_seq_q_pack,
-        const int use_moba_seq_limit,
+template <typename T>
+std::vector<paddle::Tensor> DispatchMobaQKGemm(
+        const paddle::Tensor& q_input,
+        const paddle::Tensor& k_block_means,
+        const paddle::Tensor& seq_len_encoder,
+        const paddle::Tensor& seq_len_decoder,
+        const paddle::Tensor& cu_seq_q,
+        const paddle::Tensor& cu_seq_k,
         const int max_seq_q,
         const int max_seq_k,
         const int head_num,
         const int kv_head_num,
-        const int kGqaGroupSize,
-        const int top_k_left,
-        const int top_k_right) {
-
-    const int bidt = blockIdx.x * kBlockM;
-    const int bidh = blockIdx.y;
-    const int bidb = blockIdx.z;
-    const int tidx = threadIdx.x;
-
-    constexpr int kPackSize = kBlockMaxN / knthreads;
-
-    static_assert(kBlockMaxN % knthreads == 0);
-
-    const int seq_len_q = seq_len_encoder[bidb];
-
-    if (seq_len_q == 0 || bidt >= seq_len_q) {
-        return;
-    }
-
-    const int seq_len_k = (bidt + kBlockM + seq_len_decoder[bidb]);
-
-    const int seq_len_moba = seq_len_k / moba_block_size;
-
-    using SrcType = Vec<T, kPackSize>;
-    using SrcType_f = Vec<float, kPackSize>;
-    using SrcType_i = Vec<int, kPackSize>;
-
-    SrcType src;
-    SrcType_f src_f;
-
-    SrcType_i select_idx;
-
-    select_idx.set_zero();
-
-    const int store_idx = cu_seq_q_pack[bidb] / kBlockM * head_num * kBlockMaxN + bidh * kBlockMaxN + blockIdx.x * head_num * kBlockMaxN + tidx * kPackSize;
-
-    if (seq_len_k < use_moba_seq_limit) {
-        #pragma unroll
-        for (int i = 0; i < kPackSize; i++) {
-            select_idx.data.elt[i] = 1;
-        }
-        select_idx.store_to(qk_gate_topk_idx + store_idx);
-        return;
-    }
-
-    const int load_offset = (cu_seq_q[bidb] + bidt) * head_num * kBlockMaxN + bidh * kBlockMaxN + tidx * kPackSize;
-    const int data_len = seq_len_moba - tidx * kPackSize;
-
-    #pragma unroll
-    for (int t = 0; t < kBlockM; t++) {
-        if (bidt + t >= seq_len_q) {
-            break;
-        }
-        src.load_from(qk_gate_weight + load_offset + t * head_num * kBlockMaxN);
-        float min_global = FLT_MAX;
-        float max_global = -FLT_MAX;
-        #pragma unroll
-        for (int i = 0; i < kPackSize; i++) {
-            if (i < data_len) {
-                src_f.data.elt[i] = float(src.data.elt[i]);
-                min_global = min(min_global, src_f.data.elt[i]);
-            } else {
-                src_f.data.elt[i] = -FLT_MAX;
-            }
-            max_global = max(max_global, src_f.data.elt[i]);
-        }
-
-        max_global = BlockAllReduce<float, MaxOp<float>, knthreads>(max_global);
-        min_global = BlockAllReduce<float, MinOp<float>, knthreads>(min_global);
-
-        float right_limit = max_global;
-        float left_limit = min_global;
-
-        float mid_limit;
-        int count;
-
-        if (right_limit == left_limit) {
-            mid_limit = (left_limit + right_limit) * 0.5f;
-        } else {
-            #pragma unroll
-            for (int i = 0; i < searchtimes; i++) {
-                mid_limit = (left_limit + right_limit) * 0.5f;
-                count = get_data_count<kPackSize, knthreads>(src_f.data.elt, mid_limit);
-                if (count < top_k_left) {
-                    right_limit = mid_limit;
-                } else if (count > top_k_right) {
-                    left_limit = mid_limit;
-                } else {
-                    break;
-                }
-            }
-        }
-
-        #pragma unroll
-        for (int i = 0; i < kPackSize; i++) {
-            if (src_f.data.elt[i] >= mid_limit) {
-                select_idx.data.elt[i] = 1;
-            }
-        }
-    }
-
-    if (tidx == 0) {
-        select_idx.data.elt[0] = 1;
-    }
-
-    __align__(16) __shared__ int qk_gate_mem[kBlockMaxN];
-    __align__(16) __shared__ int qk_continue_idx_mem[kBlockMaxN];
-    select_idx.store_to(qk_gate_mem + tidx * kPackSize);
-
-    __syncthreads();
-
-    if (tidx == 0) {
-        int cur_idx = 0;
-        for (int i = seq_len_moba - 2; i >= 0; --i) {
-            if (qk_gate_mem[i] == 1) {
-                int idx = -1;
-                while (i + idx >= 0 && qk_gate_mem[i + idx] == 0) {
-                    idx--;
-                }
-                qk_continue_idx_mem[cur_idx] = -idx;
-                cur_idx++;
-            }
-        }
-
-        qk_continue_idx_mem[cur_idx] = 10000000;
-    }
-
-    __syncthreads();
-
-    *reinterpret_cast<SrcType_i *>(qk_gate_topk_idx + store_idx) = reinterpret_cast<SrcType_i *>(qk_continue_idx_mem)[tidx];
-}
-
-template <int kBlockM, int kMaxN, int moba_block_size, typename T>
-void qk_gate_sort_encoder(
-        const T* qk_gate_weight,
-        int * qk_gate_topk_idx,
-        const int *seq_len_encoder,
-        const int *seq_len_decoder,
-        const int* cu_seq_q,
-        const int* cu_seq_k,
-        const int* cu_seq_q_pack,
-        const int use_moba_seq_limit,
-        const int max_seq_q,
-        const int max_seq_k,
-        const int head_num,
-        const int kv_head_num,
-        const int batch_size,
-        const int top_k_left,
-        const int top_k_right,
-        cudaStream_t stream) {
-
-    constexpr int kPackSize = 16 / sizeof(T);
-
-    const int gqa_group_size = head_num / kv_head_num;
-    const int knthreads = kMaxN / kPackSize;
-    const int searchtimes = 6;
-
-    dim3 grid_dims;
-    grid_dims.x = (max_seq_q + kBlockM - 1) / kBlockM;
-    grid_dims.y = head_num;
-    grid_dims.z = batch_size;
-
-    constexpr auto kernel = qk_gate_sort_encoder_kernel<T, knthreads, moba_block_size, kBlockM, kMaxN, searchtimes>;
-
-    kernel<<<grid_dims, knthreads, 0, stream>>>(
-        qk_gate_weight,
-        qk_gate_topk_idx,
-        seq_len_encoder,
-        seq_len_decoder,
-        cu_seq_q,
-        cu_seq_k,
-        cu_seq_q_pack,
-        use_moba_seq_limit,
-        max_seq_q,
-        max_seq_k,
-        head_num,
-        kv_head_num,
-        gqa_group_size,
-        top_k_left,
-        top_k_right);
-}
-
-template <typename T, int knthreads, int moba_block_size, int kBlockMaxN, int searchtimes>
-__global__ void qk_gate_sort_decoder_kernel(
-        const T* qk_gate_weight,
-        int * qk_gate_topk_idx,
-        const int *decoder_seq_lens,
-        const int head_num,
-        const int kv_head_num,
-        const int kGqaGroupSize,
-        const int top_k_left,
-        const int top_k_right,
+        const bool is_split_kv,
         const int use_moba_seq_limit) {
 
-    const int bidb = blockIdx.x;
-    const int bidh = blockIdx.y;
-    const int tidx = threadIdx.x;
-    const int bidh_kv = bidh / kGqaGroupSize;
-
-    if (decoder_seq_lens[bidb] == 0 || decoder_seq_lens[bidb] < use_moba_seq_limit) {
-        return;
-    }
-    const int seq_len = (decoder_seq_lens[bidb] + moba_block_size - 1) / moba_block_size;
-
-    constexpr int kPackSize = kBlockMaxN / knthreads;
-
-    static_assert(kBlockMaxN % knthreads == 0);
-
-    T token_mean[kPackSize];
-
-    using SrcType = Vec<T, kPackSize>;
-    using SrcType_f = Vec<float, kPackSize>;
-    using SrcType_i = Vec<int, kPackSize>;
-
-    SrcType src;
-    SrcType_f src_f;
-    SrcType_i select_idx;
-
-    select_idx.set_zero();
-
-    const int load_offset = bidb * head_num * kBlockMaxN + bidh * kBlockMaxN + tidx * kPackSize;
-
-    src.load_from(qk_gate_weight + load_offset);
-
-    float max_global = -FLT_MAX;
-    float min_global = FLT_MAX;
-
-    const int data_len = seq_len - tidx * kPackSize;
-
-    #pragma unroll
-    for (int i = 0; i < kPackSize; i++) {
-        if (i < data_len) {
-            src_f.data.elt[i] = float(src.data.elt[i]);
-            min_global = min(min_global, src_f.data.elt[i]);
-        } else {
-            src_f.data.elt[i] = -FLT_MAX;
-        }
-        max_global = max(max_global, src_f.data.elt[i]);
-    }
-
-
-    max_global = BlockAllReduce<float, MaxOp<float>, knthreads>(max_global);
-    min_global = BlockAllReduce<float, MinOp<float>, knthreads>(min_global);
-
-
-    float right_limit = max_global;
-    float left_limit = min_global;
-
-    float mid_limit;
-    int count;
-
-    #pragma unroll
-    for (int i = 0; i < searchtimes; i++) {
-        mid_limit = (left_limit + right_limit) * 0.5f;
-        count = get_data_count<kPackSize, knthreads>(src_f.data.elt, mid_limit);
-        if (count < top_k_left) {
-            right_limit = mid_limit;
-        } else if (count > top_k_right) {
-            left_limit = mid_limit;
-        } else {
-            break;
-        }
-    }
-
-    const int store_idx = bidb * kv_head_num * kBlockMaxN + bidh_kv * kBlockMaxN + tidx * kPackSize;
-
-    #pragma unroll
-    for (int i = 0; i < kPackSize; i++) {
-        if (src_f.data.elt[i] >= mid_limit) {
-            qk_gate_topk_idx[store_idx + i] = 1;
-        }
-    }
-
-    if (tidx == 0) {
-        qk_gate_topk_idx[store_idx] = 1;
-        qk_gate_topk_idx[store_idx + seq_len - 1] = 1;
-        qk_gate_topk_idx[store_idx + seq_len - 2] = 1;
-    }
-}
-
-template <int kBlockMaxN, int moba_block_size, typename T>
-void qk_gate_sort_decoder(
-        const T* qk_gate_weight,
-        int * qk_gate_topk_idx,
-        const int *decoder_seq_lens,
-        const int head_num,
-        const int kv_head_num,
-        const int batch_size,
-        const int top_k_left,
-        const int top_k_right,
-        const int use_moba_seq_limit,
-        cudaStream_t stream) {
-
-    const int gqa_group_size = head_num / kv_head_num;
-    constexpr int kPackSize = 16 / sizeof(T);
-    const int knthreads = kBlockMaxN / kPackSize;
-    dim3 grid_dims;
-    grid_dims.x = batch_size;
-    grid_dims.y = head_num;
-    const int searchtimes = 6;
-
-    constexpr auto kernel = qk_gate_sort_decoder_kernel<T, knthreads, moba_block_size, kBlockMaxN, searchtimes>;
-
-    kernel<<<grid_dims, knthreads, 0, 0>>>(
-            qk_gate_weight,
-            qk_gate_topk_idx,
-            decoder_seq_lens,
+    constexpr int kMobaBlockSize = 128;
+    constexpr int kMaxN = 1024;
+    const int batch_size = seq_len_encoder.dims()[0];
+    using cute_type = typename cuteType<T>::type;
+    if (is_split_kv) {
+        paddle::Tensor qk_gate_weight = paddle::empty({batch_size, head_num, kMaxN}, q_input.dtype(), q_input.place());
+        qk_gemm<cute_type, 16, kMobaBlockSize, kMobaBlockSize, kMaxN, true>(
+            reinterpret_cast<const cute_type*>(q_input.data<T>()),
+            reinterpret_cast<const cute_type*>(k_block_means.data<T>()),
+            reinterpret_cast<cute_type*>(qk_gate_weight.data<T>()),
+            seq_len_encoder.data<int>(),
+            seq_len_decoder.data<int>(),
+            cu_seq_q.data<int>(),
+            cu_seq_k.data<int>(),
+            use_moba_seq_limit,
+            max_seq_q,
+            max_seq_k,
             head_num,
             kv_head_num,
-            gqa_group_size,
-            top_k_left,
-            top_k_right,
-            use_moba_seq_limit);
+            batch_size,
+            q_input.stream()
+        );
+        return {qk_gate_weight};
+    } else {
+        constexpr int kBlockM = 128;
+        constexpr int kBlockN = 128;
+        const int token_num = q_input.dims()[0];
+        paddle::Tensor qk_gate_weight = paddle::empty({token_num, head_num, kMaxN}, q_input.dtype(), q_input.place());
+        qk_gemm<cute_type, kBlockM, kBlockN, kMobaBlockSize, kMaxN, false>(
+            reinterpret_cast<cute_type *>(const_cast<T*>(q_input.data<T>())),
+            reinterpret_cast<cute_type *>(const_cast<T*>(k_block_means.data<T>())),
+            reinterpret_cast<cute_type *>(qk_gate_weight.data<T>()),
+            seq_len_encoder.data<int>(),
+            seq_len_decoder.data<int>(),
+            cu_seq_q.data<int>(),
+            cu_seq_k.data<int>(),
+            use_moba_seq_limit,
+            max_seq_q,
+            max_seq_k,
+            head_num,
+            kv_head_num,
+            batch_size,
+            q_input.stream());
+        return {qk_gate_weight};
+    }
 }
 
+std::vector<paddle::Tensor> MobaQKGemm(
+        const paddle::Tensor& q_input,
+        const paddle::Tensor& k_block_means,
+        const paddle::Tensor& seq_len_encoder,
+        const paddle::Tensor& seq_len_decoder,
+        const paddle::Tensor& cu_seq_q,
+        const paddle::Tensor& cu_seq_k,
+        const int max_seq_q,
+        const int max_seq_k,
+        const int head_num,
+        const int kv_head_num,
+        const bool is_split_kv,
+        const int use_moba_seq_limit) {
 
+    if (q_input.dtype() == paddle::DataType::FLOAT16) {
+        return std::move(
+            DispatchMobaQKGemm<phi::dtype::float16>(
+                q_input,
+                k_block_means,
+                seq_len_encoder,
+                seq_len_decoder,
+                cu_seq_q,
+                cu_seq_k,
+                max_seq_q,
+                max_seq_k,
+                head_num,
+                kv_head_num,
+                is_split_kv,
+                use_moba_seq_limit
+            )
+        );
+    } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
+        return std::move(
+            DispatchMobaQKGemm<phi::dtype::bfloat16>(
+                q_input,
+                k_block_means,
+                seq_len_encoder,
+                seq_len_decoder,
+                cu_seq_q,
+                cu_seq_k,
+                max_seq_q,
+                max_seq_k,
+                head_num,
+                kv_head_num,
+                is_split_kv,
+                use_moba_seq_limit
+            )
+        );
+    }
 }
+
+PD_BUILD_OP(moba_qk_gemm)
+    .Inputs({
+        "q_input",
+        "k_block_means",
+        "seq_len_encoder",
+        "seq_len_decoder",
+        "cu_seq_q",
+        "cu_seq_k",
+        "max_seq_q",
+        "max_seq_k"})
+    .Attrs({
+        "head_num: int",
+        "kv_head_num: int",
+        "is_split_kv: bool",
+        "use_moba_seq_limit: int"})
+    .Outputs({"qk_gate_weight"})
+    .SetKernelFn(PD_KERNEL(MobaQKGemm));

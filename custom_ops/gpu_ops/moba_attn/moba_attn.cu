@@ -1,5 +1,5 @@
 #include "paddle/extension.h"
-#include "moba_attention.h"
+#include "moba_attn.h"
 
 
 std::vector<paddle::Tensor> MobaAttention(
@@ -43,7 +43,7 @@ std::vector<paddle::Tensor> MobaAttention(
 
     paddle::Tensor out = paddle::empty({qkv.dims()[0], head_num * head_dim}, qkv.dtype(), qkv.place());
     if (max_dec_len_this_time > 0) {
-        gqa_attention::WriteDecoderCacheKV(
+        MobaDecoderAttnWriteCacheKv(
             qkv,
             q_input,
             cu_seq_q,
@@ -68,7 +68,7 @@ std::vector<paddle::Tensor> MobaAttention(
             max_seq_len,
             cache_quant_type_str);
 
-        auto qk_gate_weight = moba::MobaQKGemm(
+        auto qk_gate_weight = MobaQKGemm(
             q_input,
             k_block_means,
             seq_len_encoder,
@@ -83,7 +83,7 @@ std::vector<paddle::Tensor> MobaAttention(
             moba_use_decoder_seq_limit
         )[0];
 
-        auto qk_gate_topk_idx = moba::QkSortDecoder(
+        auto qk_gate_topk_idx = QkSortDecoder(
             qk_gate_weight,
             seq_len_encoder,
             seq_len_decoder,
@@ -94,7 +94,7 @@ std::vector<paddle::Tensor> MobaAttention(
             moba_use_decoder_seq_limit
         )[0];
 
-        gqa_attention::GqaAttention(
+        MobaDecoderAttn(
             q_input,
             seq_len_encoder,
             seq_len_decoder,
@@ -123,7 +123,7 @@ std::vector<paddle::Tensor> MobaAttention(
     }
 
     if (max_enc_len_this_time > 0) {
-        moba::FusedBlockMeanAndRope(
+        FusedBlockMeanAndRope(
             qkv,
             k_block_means,
             q_input,
@@ -144,7 +144,7 @@ std::vector<paddle::Tensor> MobaAttention(
             cache_quant_type_str
         );
 
-        gqa_attention::WriteEncoderCacheKV(
+        MobaEncoderAttnWriteCacheKv(
             k_input,
             v_input,
             cu_seq_k,
@@ -166,7 +166,7 @@ std::vector<paddle::Tensor> MobaAttention(
             cache_quant_type_str
         );
 
-        moba::GetKVFromCache(
+        GetKVFromCache(
             k_input,
             v_input,
             cu_seq_k,
@@ -190,7 +190,7 @@ std::vector<paddle::Tensor> MobaAttention(
         paddle::Tensor *k_gate_weight = const_cast<paddle::Tensor*>(&k_block_means);
 
         if (moba_use_mlp && attn_gate_weight) {
-            paddle::Tensor k_gate_mlp = moba::MobaMlpEinsum(
+            paddle::Tensor k_gate_mlp = MobaMlpEinsum(
                 k_input,
                 attn_gate_weight.get(),
                 seq_len_encoder,
@@ -202,7 +202,7 @@ std::vector<paddle::Tensor> MobaAttention(
             k_gate_weight = &k_gate_mlp;
         }
 
-        auto qk_gate_weight = moba::MobaQKGemm(
+        auto qk_gate_weight = MobaQKGemm(
             q_input,
             k_block_means,
             seq_len_encoder,
@@ -218,7 +218,7 @@ std::vector<paddle::Tensor> MobaAttention(
         )[0];
 
 
-        auto qk_gate_topk_idx = moba::QkSortEncoder(
+        auto qk_gate_topk_idx = QkSortEncoder(
             qk_gate_weight,
             seq_len_encoder,
             seq_len_decoder,
@@ -234,7 +234,7 @@ std::vector<paddle::Tensor> MobaAttention(
             moba_encoder_top_k_right,
             moba_use_encoder_seq_limit)[0];
 
-        moba::EncoderAttention(
+        MobaEncoderAttn(
             q_input,
             k_input,
             v_input,
@@ -306,10 +306,11 @@ PD_BUILD_OP(moba_attention)
         "key_cache_out",
         "value_cache_out",
         "k_block_means_out"})
-    .SetInplaceMap({{"q_input", "q_input_out"},
-                    {"k_input", "k_input_out"},
-                    {"v_input", "v_input_out"},
-                    {"key_cache", "key_cache_out"},
-                    {"value_cache", "value_cache_out"},
-                    {"k_block_means", "k_block_means_out"}})
+    .SetInplaceMap({{
+        "q_input", "q_input_out"},
+        {"k_input", "k_input_out"},
+        {"v_input", "v_input_out"},
+        {"key_cache", "key_cache_out"},
+        {"value_cache", "value_cache_out"},
+        {"k_block_means", "k_block_means_out"}})
     .SetKernelFn(PD_KERNEL(MobaAttention));
