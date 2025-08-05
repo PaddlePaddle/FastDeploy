@@ -322,10 +322,12 @@ class GPUModelRunner(ModelRunnerBase):
                     request.sampling_params.stop_seqs_len.append(0)
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
                     request.sampling_params.stop_seqs_len, dtype="int32"
-                )
+                )[: self.model_config.max_stop_seqs_num]
                 self.share_inputs["stop_seqs"][
                     idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
-                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")[
+                    : self.model_config.max_stop_seqs_num, : self.model_config.stop_seqs_max_len
+                ]
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
@@ -511,10 +513,12 @@ class GPUModelRunner(ModelRunnerBase):
                     request.sampling_params.stop_seqs_len.append(0)
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
                     request.sampling_params.stop_seqs_len, dtype="int32"
-                )
+                )[: self.model_config.max_stop_seqs_num]
                 self.share_inputs["stop_seqs"][
                     idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
-                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")[
+                    : self.model_config.max_stop_seqs_num, : self.model_config.stop_seqs_max_len
+                ]
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
