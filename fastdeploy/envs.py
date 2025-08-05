@@ -83,7 +83,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
-    "ROLLOUT_JOB_ID": lambda: os.getenv("ROLLOUT_JOB_ID"),
+    "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
 }
 
 
