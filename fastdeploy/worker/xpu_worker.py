@@ -149,7 +149,7 @@ class XpuWorker(WorkerBase):
         num_running_requests: Optional[int] = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        if not is_dummy_run:
+        if is_dummy_run:
             output = self.model_runner.execute_model(model_forward_batch)
         else:
             output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
