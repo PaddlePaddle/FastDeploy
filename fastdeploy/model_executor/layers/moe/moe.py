@@ -393,12 +393,16 @@ class FusedMoE(nn.Layer):
                     self.gate_correction_bias_key, state_dict
                 )
                 self.gate_correction_bias.set_value(gate_correction_bias_tensor)
+            else:
+                self.gate_correction_bias = None
 
             gate_weight_key = self.weight_key_map.get("gate_weight_key", None)
             assert gate_weight_key is not None, "gate_weight_key should not be None, please check model checkpoints"
 
             gate_weight_tensor = get_tensor(state_dict.pop(gate_weight_key))
             self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
+        else:
+            self.gate_correction_bias = None
 
         if isinstance(self.quant_method, pre_create_weights_list):
             if self.fd_config.model_config.is_quantized:

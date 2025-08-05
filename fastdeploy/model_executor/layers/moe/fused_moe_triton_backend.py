@@ -349,17 +349,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             ]
         ):
             name = self.added_wfp8afp8_attrs[idx]
-            # TODO(lulinjun): what's the in_scale and weight_scale shape
-            if idx > 1:
-                setattr(
-                    layer,
-                    name,
-                    layer.create_parameter(
-                        shape=weight_tensor.shape,
-                        dtype=weight_tensor.dtype,
-                        default_initializer=paddle.nn.initializer.Constant(0),
-                    ),
-                )
             if weight_tensor.dtype == paddle.float8_e4m3fn:
                 getattr(layer, name).copy_(weight_tensor, False)
             else:
@@ -401,6 +390,16 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        for idx in range(2, len(self.added_wfp8afp8_attrs)):
+            setattr(
+                layer,
+                self.added_wfp8afp8_attrs[idx],
+                layer.create_parameter(
+                    shape=[layer.num_local_experts],
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
 
     def apply(
         self,
