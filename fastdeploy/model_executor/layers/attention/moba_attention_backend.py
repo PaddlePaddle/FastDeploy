@@ -25,9 +25,9 @@ from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 try:
-    from fastdeploy.model_executor.ops.gpu import MobaAttention, get_cur_cu_seq_len_k
+    from fastdeploy.model_executor.ops.gpu import get_cur_cu_seq_len_k, moba_attention
 except:
-    MobaAttention = None
+    moba_attention = None
     get_cur_cu_seq_len_k = None
 
 if TYPE_CHECKING:
@@ -174,7 +174,7 @@ class MobaAttentionBackend(AttentionBackend):
         Mixed模式的前向传播
         """
         attention_metadata = self.attention_metadata
-        out = MobaAttention(
+        out = moba_attention(
             qkv,
             attention_metadata.q_input,
             attention_metadata.k_input,

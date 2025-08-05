@@ -375,19 +375,7 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-    nvcc_compile_args += [
-        "-O3",
-        "-DNDEBUG",
-        "-U__CUDA_NO_HALF_OPERATORS__",
-        "-U__CUDA_NO_HALF_CONVERSIONS__",
-        "-U__CUDA_NO_BFLOAT16_OPERATORS__",
-        "-U__CUDA_NO_BFLOAT16_CONVERSIONS__",
-        "-U__CUDA_NO_BFLOAT162_OPERATORS__",
-        "-U__CUDA_NO_BFLOAT162_CONVERSIONS__",
-        "--expt-relaxed-constexpr",
-        "--expt-extended-lambda",
-        "--use_fast_math",
-    ]
+
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
     if nvcc_version >= 12.0:
@@ -509,7 +497,6 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optmized mla
-        nvcc_compile_args += ["-DENABLE_TMA"]
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
