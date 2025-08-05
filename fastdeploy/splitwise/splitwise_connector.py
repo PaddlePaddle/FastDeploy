@@ -461,10 +461,12 @@ class SplitwiseConnector:
                 self._handle_decode(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
-                    self.current_request_ids[task["request_id"]] = task.get("error_msg", "finished")
+                    current_status = task.get("error_msg", "finished")
+                    self.current_request_ids[task["request_id"]] = current_status
                     if self.enable_decode_cache_task:
                         del self.current_request_ids[task["request_id"]]
-                self.engine_worker_queue.put_cache_info(payload)
+                    if current_status == "finished":
+                        self.engine_worker_queue.put_cache_info(payload)
 
         except Exception as e:
             logger.error(f"Message processing failed: {e}")
