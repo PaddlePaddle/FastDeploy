@@ -22,7 +22,7 @@ import numpy as np
 
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import get_logger, llm_logger
 
 
 class ResourceManager:
@@ -49,6 +49,12 @@ class ResourceManager:
         Initializes the engine with the given configuration and sets up necessary
         data structures to manage tasks and blocks.
         """
+        if local_data_parallel_id > 0:
+            self.logger = get_logger(
+                f"expert_service_{local_data_parallel_id}", f"expert_service_{local_data_parallel_id}.log"
+            )
+        else:
+            self.logger = llm_logger
         self.cfg = config.cache_config
         self.max_num_seqs = max_num_seqs
         self.stop_flags = [True] * max_num_seqs
@@ -58,7 +64,7 @@ class ResourceManager:
         self.req_dict = dict()
         # current batch status of the engine
         self.real_bsz = 0
-        llm_logger.info(f"{self.info()}")
+        self.logger.info(f"{self.info()}")
 
     def reset_cache_config(self, cfg):
         """
@@ -134,10 +140,10 @@ class ResourceManager:
         block_list = list()
         current_block_num = self.available_block_num()
         if block_num > current_block_num:
-            llm_logger.error(f"block_num:{block_num} > free_list len:{current_block_num}")
+            self.logger.error("block_num:{0} > free_list len:{1}".format(block_num, current_block_num))
             return block_list
         block_list = self.cache_manager.allocate_gpu_blocks(block_num)
-        llm_logger.debug(f"dispatch {len(block_list)} blocks.")
+        self.logger.debug(f"dispatch {len(block_list)} blocks.")
         return block_list
 
     def check_and_free_block_tables(self):
@@ -169,7 +175,7 @@ class ResourceManager:
             self.cache_manager.recycle_gpu_blocks(block_tables)
             cur_number = self.available_block_num()
             main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-            llm_logger.info(f"recycle {req_id} {cur_number - ori_number} blocks.")
+            self.logger.info(f"recycle {req_id} {cur_number - ori_number} blocks.")
 
     def available_batch(self):
         """
@@ -248,12 +254,10 @@ class ResourceManager:
                     if self.enable_prefix_cache:
                         cache_prepare_time = time.time()
                         common_block_ids, unique_block_ids, hit_info = self.cache_manager.request_block_ids(
-                            task,
-                            self.cfg.block_size,
-                            self.cfg.dec_token_num,
+                            task, self.cfg.block_size, self.cfg.dec_token_num
                         )
                         if unique_block_ids is None:
-                            llm_logger.warning("req_id: {0} not enough blocks available".format(task["req_id"]))
+                            self.logger.warning("req_id: {0} not enough blocks available".format(task["req_id"]))
                             return
 
                         cached_len = self._record_request_cache_info(
@@ -294,7 +298,7 @@ class ResourceManager:
                     task.inference_time_cost = -1.0
                     task.tokens_all_num = 0
                     self.tasks_list[allocated_position] = task
-                    llm_logger.info(
+                    self.logger.info(
                         f"Allocate request: {task.request_id}, "
                         f"allocated_position:{allocated_position}, "
                         f"length of prompt token: {task.prompt_token_ids_len}"
@@ -308,10 +312,10 @@ class ResourceManager:
                 self.real_bsz = i + 1
                 break
 
-        llm_logger.info(
+        self.logger.info(
             f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
         )
-        llm_logger.info(f"{self.info()}")
+        self.logger.info(f"{self.info()}")
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
 
         return processed_tasks
@@ -342,8 +346,8 @@ class ResourceManager:
         cached_len = len(common_block_ids) * self.cfg.block_size
         task.block_tables = common_block_ids + unique_block_ids
         task.need_block_tables = unique_block_ids
-        llm_logger.debug(f"common: {common_block_ids} ")
-        llm_logger.debug(f"unique: {unique_block_ids} ")
+        self.logger.debug(f"common: {common_block_ids} ")
+        self.logger.debug(f"unique: {unique_block_ids} ")
         return cached_len
 
     def info(self):

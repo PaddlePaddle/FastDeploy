@@ -177,6 +177,8 @@ class OpenAIServingChat:
                 for res in response:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
+                    if res["finished"]:
+                        api_server_logger.info(f"chat completion finished: {request_id}")
 
                     self.engine_client.data_processor.process_response_dict(
                         res,

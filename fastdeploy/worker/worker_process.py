@@ -150,7 +150,7 @@ class PaddleDisWorkerProc:
         # Initialize task queue
         task_address = (
             self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
+            self.parallel_config.engine_worker_queue_port + self.parallel_config.expert_parallel_rank,
         )
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.task_queue = TaskQueue(
@@ -252,9 +252,11 @@ class PaddleDisWorkerProc:
                 for req_dict, bsz in tasks:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
+                req_ids = [req.request_id for req in req_dicts]
+
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}"
+                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts)
