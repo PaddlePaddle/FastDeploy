@@ -420,10 +420,10 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 shard_offsets = [
                     # (shard_id, shard_offset, shard_size)
                     ("gate", 0, self.output_size * self.nranks // 2),
-                    ("up", self.output_size * self.nranks // 2, self.output_size * self.nranks),
+                    ("up", self.output_size * self.nranks // 2, self.output_size * self.nranks // 2),
                 ]
                 for shard_id, shard_offset, shard_size in shard_offsets:
-                    loaded_weight_shard = loaded_weight[..., shard_offset:shard_size]
+                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
                     self.weight_loader(param, loaded_weight_shard, shard_id)
             else:
                 loaded_weight = get_tensor(loaded_weight)
@@ -529,7 +529,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                     ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.head_dim),
                 ]
                 for shard_id, shard_offset, shard_size in shard_offsets:
-                    loaded_weight_shard = loaded_weight[..., shard_offset:shard_size]
+                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
                     self.weight_loader(param, loaded_weight_shard, shard_id)
             else:
                 loaded_weight = get_tensor(loaded_weight)
