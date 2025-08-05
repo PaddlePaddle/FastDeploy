@@ -67,7 +67,7 @@ class ParallelLMHead(nn.Layer):
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
 
         if self.use_ep:
-            self.weight = self.create_parameter(
+            self.linear = self.create_parameter(
                 shape=[embedding_dim, num_embeddings],
                 dtype=paddle.get_default_dtype(),
                 is_bias=False,
@@ -134,7 +134,7 @@ class ParallelLMHead(nn.Layer):
         """
         logits = input
         if self.use_ep:
-            logits = paddle.matmul(logits, self.weight)
+            logits = paddle.matmul(logits, self.linear)
         else:
             logits = self.linear(logits)
         return logits

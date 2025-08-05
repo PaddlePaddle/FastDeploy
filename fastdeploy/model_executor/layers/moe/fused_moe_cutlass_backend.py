@@ -241,7 +241,9 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts")
+        expertwise_scale = None
+        if hasattr(layer, "up_gate_proj_in_scale_all_experts"):  # only use in w4a8
+            expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, expertwise_scale=expertwise_scale
@@ -732,7 +734,6 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         """
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
-
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             scale_name = self.added_scale_attrs[idx]

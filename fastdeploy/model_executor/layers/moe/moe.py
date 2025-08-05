@@ -19,6 +19,9 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
+from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+    CutlassMoEMethod,
+)
 from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
     BlockWiseFP8MoEMethod,
     TensorWiseFP8MoEMethod,
@@ -27,7 +30,7 @@ from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
-pre_create_weights_list = (TensorWiseFP8MoEMethod, BlockWiseFP8MoEMethod, TritonWeightOnlyMoEMethod)
+pre_create_weights_list = (CutlassMoEMethod, TensorWiseFP8MoEMethod, BlockWiseFP8MoEMethod, TritonWeightOnlyMoEMethod)
 
 
 def get_moe_method():
