@@ -94,9 +94,14 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory,
         )
 
-        total_memory = xpu_get_total_global_memory(self.local_rank)
-        used_memory = xpu_get_used_global_memory(self.local_rank)
-        free_memory = xpu_get_free_global_memory(self.local_rank)
+        assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
+        assert (
+            len(self.device_ids) > self.local_rank
+        ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
+
+        total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
+        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
 
         logger.info(
             f"Before warm up, total_memory: {total_memory}, \
@@ -107,7 +112,7 @@ class XpuWorker(WorkerBase):
         self.model_runner.profile_run()
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
-        used_memory = xpu_get_used_global_memory(self.local_rank)
+        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num

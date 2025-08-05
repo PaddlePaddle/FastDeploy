@@ -36,7 +36,7 @@ class MixQuantConfig(QuantConfigBase):
         image_moe_quant_type: str = None,
         is_channel_wise: bool = False,
         has_zero_point: bool = False,
-        is_permuted: bool = False,
+        is_permuted: bool = True,
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -65,7 +65,7 @@ class MixQuantConfig(QuantConfigBase):
             config.get("image_moe_quant_type", None),
             config.get("is_channel_wise", False),
             config.get("has_zero_point", False),
-            config.get("is_permuted", False),
+            config.get("is_permuted", True),
         )
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
@@ -73,13 +73,13 @@ class MixQuantConfig(QuantConfigBase):
             if layer.moe_tag == "Image":
                 return (
                     get_quantization_config(self.image_moe_quant_type)
-                    .from_config(layer.fd_config.quant_config)
+                    .from_config({"is_permuted": self.is_permuted})
                     .get_quant_method(layer)
                 )
             else:
                 return (
                     get_quantization_config(self.moe_quant_type)
-                    .from_config(layer.fd_config.quant_config)
+                    .from_config({"is_permuted": self.is_permuted})
                     .get_quant_method(layer)
                 )
         elif isinstance(layer, Attention):

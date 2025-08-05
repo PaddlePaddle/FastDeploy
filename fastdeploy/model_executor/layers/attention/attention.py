@@ -48,6 +48,7 @@ class Attention(nn.Layer):
         linear_shift: paddle.Tensor = None,
         linear_smooth: paddle.Tensor = None,
         use_neox_rotary_style: bool = False,
+        use_qk_norm: bool = False,
     ) -> None:
         """
         Initializes `LMLayer` with the given parameters.

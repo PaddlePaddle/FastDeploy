@@ -19,9 +19,11 @@ import uuid
 
 import numpy as np
 
+from fastdeploy.engine.config import ModelConfig
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, api_server_logger
 
@@ -33,24 +35,34 @@ class EngineClient:
 
     def __init__(
         self,
+        model_name_or_path,
         tokenizer,
         max_model_len,
         tensor_parallel_size,
         pid,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        enable_mm=False,
+        # enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
+        enable_logprob=False,
     ):
+        import fastdeploy.model_executor.models  # noqa: F401
+
+        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
+        if MultimodalRegistry.contains_model(architectures):
+            self.enable_mm = True
+        else:
+            self.enable_mm = False
+
         input_processor = InputPreprocessor(
             tokenizer,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            enable_mm,
+            self.enable_mm,
         )
-        self.enable_mm = enable_mm
+        self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
@@ -199,6 +211,44 @@ class EngineClient:
 
         if data.get("stream_options") and not data.get("stream"):
             raise ValueError("Stream options can only be defined when `stream=True`.")
+
+        # logprobs
+        logprobs = data.get("logprobs")
+        top_logprobs = None
+
+        if isinstance(logprobs, bool) and logprobs:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+            top_logprobs = data.get("top_logprobs")
+        elif isinstance(logprobs, int):
+            top_logprobs = logprobs
+        elif logprobs:
+            raise ValueError("Invalid type for 'logprobs'")
+
+        # enable_logprob
+        if top_logprobs:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if not isinstance(top_logprobs, int):
+                err_type = type(top_logprobs).__name__
+                err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if top_logprobs < 0:
+                err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if top_logprobs > 20:
+                err_msg = "Invalid value for 'top_logprobs': must be <= 20."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """

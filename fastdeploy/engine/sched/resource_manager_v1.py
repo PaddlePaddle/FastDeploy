@@ -80,6 +80,7 @@ class ResourceManagerV1(ResourceManager):
         return len(request.block_tables) * self.config.cache_config.block_size
 
     def get_new_block_nums(self, request: Request, num_new_tokens: int):
+        self.check_and_free_block_tables()
         return (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
         ) // self.config.cache_config.block_size - len(request.block_tables)
@@ -103,6 +104,7 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req = self.running.pop()
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
+                preempted_req.prefill_block_num = 0
                 self._free_blocks(preempted_req)
                 self.waiting.appendleft(preempted_req)
                 preempted_reqs.append(preempted_req)
@@ -212,6 +214,14 @@ class ResourceManagerV1(ResourceManager):
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
+                    else:  # prefill finished
+                        if (
+                            self.config.cache_config.enable_prefix_caching
+                            and request.get("prefill_block_num", None) is None
+                        ):
+                            # update prefill cache blocks for prefix caching
+                            request.prefill_block_num = len(request.block_tables)
+                            self.cache_manager.update_cache_blocks(request, self.config.cache_config.block_size)
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
@@ -271,11 +281,18 @@ class ResourceManagerV1(ResourceManager):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
+                        # Enable prefix caching
+                        if self.config.cache_config.enable_prefix_caching:
+                            success = self.get_prefix_cached_blocks(request)
+                            if not success:
+                                break
+
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+                            if not request.get("skip_allocate", False):
+                                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -292,7 +309,9 @@ class ResourceManagerV1(ResourceManager):
                         else:
                             break
                     elif request.status == RequestStatus.PREEMPTED:
-                        request.need_prefill_tokens = request.num_total_tokens  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
+                        request.need_prefill_tokens = (
+                            request.num_total_tokens
+                        )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
@@ -327,12 +346,51 @@ class ResourceManagerV1(ResourceManager):
                 break
         return self.real_bsz
 
+    def get_prefix_cached_blocks(self, request: Request):
+        """
+        set prefix cached information for the given request
+        """
+        try:
+            cache_prepare_time = time.time()
+            (common_block_ids, matched_token_num, hit_info) = self.cache_manager.request_match_blocks(
+                request, self.config.cache_config.block_size
+            )
+
+            matched_block_num = len(common_block_ids)
+            no_cache_block_num = self.cache_manager.get_required_block_num(
+                request.prompt_token_ids_len - matched_token_num,
+                self.config.cache_config.block_size,
+            )
+
+            request.num_cached_tokens = matched_token_num
+            request.gpu_cache_token_num = hit_info["gpu_cache_blocks"] * self.config.cache_config.block_size
+            request.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.config.cache_config.block_size
+            request.cache_info = (matched_block_num, no_cache_block_num)
+            request.block_tables = common_block_ids
+            request.skip_allocate = False
+
+            if matched_token_num == request.prompt_token_ids_len:
+                request.num_computed_tokens = matched_token_num - 1
+                request.skip_allocate = True
+            else:
+                request.num_computed_tokens = matched_token_num
+            request.cache_prepare_time = time.time() - cache_prepare_time
+            return True
+        except Exception as e:
+            llm_logger.error(f"prefix match blocks error: {e}, waiting reschedule...")
+            return False
+
     def add_request(self, request: Request) -> None:
         self.waiting.append(request)
         self.requests[request.request_id] = request
 
     def _free_blocks(self, request: Request):
-        self.cache_manager.recycle_gpu_blocks(request.block_tables)
+        if self.config.cache_config.enable_prefix_caching:
+            # TODO(chengyanfu): support cache ouput blocks for prefix caching
+            self.cache_manager.release_block_ids_async(request)
+            self.cache_manager.recycle_gpu_blocks(request.block_tables[request.prefill_block_num :])
+        else:
+            self.cache_manager.recycle_gpu_blocks(request.block_tables)
         request.block_tables = []
 
     def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):

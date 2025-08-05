@@ -46,6 +46,7 @@ from fastdeploy.metrics.metrics import (
     main_process_metrics,
 )
 from fastdeploy.metrics.trace_util import inject_to_metadata, instrument
+from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
@@ -105,15 +106,17 @@ async def lifespan(app: FastAPI):
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
     engine_client = EngineClient(
+        args.model,
         args.tokenizer,
         args.max_model_len,
         args.tensor_parallel_size,
         pid,
         args.limit_mm_per_prompt,
         args.mm_processor_kwargs,
-        args.enable_mm,
+        # args.enable_mm,
         args.reasoning_parser,
         args.data_parallel_size,
+        args.enable_logprob,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     chat_handler = OpenAIServingChat(engine_client, pid, args.ips)
@@ -391,6 +394,7 @@ def launch_controller_server():
 def main():
     """main函数"""
 
+    load_model_register_plugins()
     if load_engine() is None:
         return
 
