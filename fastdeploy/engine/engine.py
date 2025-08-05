@@ -812,17 +812,18 @@ class LLMEngine:
 
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
-            status, msg = self.split_connector.check_decode_allocated(task):
-            if not status:
-                llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                self.scheduler.put_results([RequestOutput(
-                        request_id=task.request_id,
-                        finished=True,
-                        error_code=500,
-                        error_msg=msg,
-                    )])
-                tasks.remove(task)
-                continue
+            if self.cfg.splitwise_role != "mixed":
+                status, msg = self.split_connector.check_decode_allocated(task):
+                if not status:
+                    llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                    self.scheduler.put_results([RequestOutput(
+                            request_id=task.request_id,
+                            finished=True,
+                            error_code=500,
+                            error_msg=msg,
+                        )])
+                    tasks.remove(task)
+                    continue
             if task.sampling_params.bad_words is not None:
                 task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
