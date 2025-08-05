@@ -325,6 +325,10 @@ class Qwen3MoePretrainedModel(PretrainedModel):
         return None
 
     @classmethod
+    def arch_name(self):
+        return "Qwen3MoeForCausalLM"
+
+    @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
         # TODO not support TP split now, next PR will support TP.
 

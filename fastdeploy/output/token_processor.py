@@ -412,7 +412,11 @@ class TokenProcessor:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
-            if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+            if (
+                not is_prefill
+                or self.cfg.scheduler_config.name == "splitwise"
+                or self.cfg.scheduler_config.name == "dp"
+            ):
                 batch_result.append(result)
 
         self.postprocess(batch_result)
@@ -531,7 +535,11 @@ class TokenProcessor:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
-            if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+            if (
+                not is_prefill
+                or self.cfg.scheduler_config.name == "splitwise"
+                or self.cfg.scheduler_config.name == "dp"
+            ):
                 batch_result.append(result)
 
         self.postprocess(batch_result)

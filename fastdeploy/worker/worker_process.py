@@ -410,7 +410,7 @@ class PaddleDisWorkerProc:
 
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
-        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+        if self.parallel_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
                 name="launched_cache_manager_signal",
@@ -750,4 +750,7 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
+    from fastdeploy.plugins.model_register import load_model_register_plugins
+
+    load_model_register_plugins()
     run_worker_proc()
