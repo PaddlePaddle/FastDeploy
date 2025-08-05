@@ -123,7 +123,7 @@ class MTPProposer(Proposer):
             idx = i
             self.model_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.model_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.model_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.model_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.model_inputs["seq_lens_decoder"][idx : idx + 1] = 0
             self.model_inputs["step_idx"][idx : idx + 1] = 0
@@ -134,6 +134,7 @@ class MTPProposer(Proposer):
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def initialize_kv_cache(self, main_model_num_blocks, profile: bool = False):
         """
@@ -262,7 +263,8 @@ class MTPProposer(Proposer):
         # Same shape/dytpe with base model
         self.model_inputs["block_tables"] = paddle.clone(self.main_model_inputs["block_tables"])
         self.model_inputs["input_ids"] = paddle.clone(self.main_model_inputs["input_ids"])
-        self.model_inputs["seq_lens_this_time"] = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+        self.seq_lens_this_time_buffer = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+
         self.model_inputs["seq_lens_encoder"] = paddle.clone(self.main_model_inputs["seq_lens_encoder"])
         self.model_inputs["seq_lens_decoder"] = paddle.clone(self.main_model_inputs["seq_lens_decoder"])
         self.model_inputs["step_idx"] = paddle.clone(self.main_model_inputs["step_idx"])
@@ -345,7 +347,7 @@ class MTPProposer(Proposer):
             )
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
 
-    def insert_prefill_inputs(self, req_dicts: List[Request]):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
         Process inputs for prefill tasks and insert it to model_inputs buffer
         """
@@ -377,7 +379,7 @@ class MTPProposer(Proposer):
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.model_inputs["seq_lens_this_time"][idx : idx + 1] = prefill_token_num
+                self.seq_lens_this_time_buffer[idx : idx + 1] = prefill_token_num
 
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
                 self.model_inputs["batch_drop"][idx : idx + 1] = False
@@ -402,10 +404,10 @@ class MTPProposer(Proposer):
                 if self.cache_config.enable_chunked_prefill:
                     token_chunk_size = request.prefill_chunk_info[0]
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
-                    self.model_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
                 else:
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = length
-                    self.model_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = length
 
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
@@ -418,7 +420,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _initialize_forward_meta(self):
         """
