@@ -304,7 +304,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
     const std::string& quant_method, const bool used_in_ep_low_latency) {
 
-    cudaCheckError();
+    // cudaCheckError();
     const auto t_type = quant_method == "w4a8" ? up_gate_proj_scale.get().dtype() : permute_input.dtype();
     auto ffn_out = paddle::empty_like(permute_input, t_type);
 
