@@ -70,10 +70,18 @@ jobs:
             DEVICES="0"
           fi
 
-          FLASK_PORT=$((9160 + DEVICES * 100))
-          FD_API_PORT=$((9180 + DEVICES * 100))
-          FD_ENGINE_QUEUE_PORT=$((9150 + DEVICES * 100))
-          FD_METRICS_PORT=$((9170 + DEVICES * 100))
+          FLASK_PORT=$((42068 + DEVICES * 100))
+          FD_API_PORT=$((42088 + DEVICES * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICES * 100))
+          FD_METRICS_PORT=$((42078 + DEVICES * 100))
+          echo "Test ENV Parameter:"
+          echo "========================================================="
+          echo "FLASK_PORT=${FLASK_PORT}"
+          echo "FD_API_PORT=${FD_API_PORT}"
+          echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+          echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "DEVICES=${DEVICES}"
+          echo "========================================================="
 
           CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
           echo "CACHE_DIR is set to ${CACHE_DIR}"
@@ -86,8 +94,10 @@ jobs:
           fi
 
           PARENT_DIR=$(dirname "$WORKSPACE")
+          unset http_proxy
+          unset https_proxy
 
-          docker run --ipc=host --pid=host --net=host \
+          docker run --rm --ipc=host --pid=host --net=host \
           -v $(pwd):/workspace \
           -w /workspace \
           -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
@@ -100,7 +110,7 @@ jobs:
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
-          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
+          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
           # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
@@ -124,6 +134,10 @@ jobs:
               -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
 
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+          curl -s -o /dev/null -w "%{http_code}" -m 2 "http://0.0.0.0:${FD_API_PORT}/health"
+          curl -X POST "http://0.0.0.0:${FD_API_PORT}/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -d "{\"messages\": [{\"role\": \"user\", \"content\": \"1+1=?\"}], \"logprobs\": true}"
           set +e
           rm -rf ./baseline_output
           cp -r baseline/ERNIE-4.5-0.3B-Paddle ./baseline_output
