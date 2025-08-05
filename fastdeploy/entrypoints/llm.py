@@ -28,6 +28,7 @@ from tqdm import tqdm
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -76,6 +77,7 @@ class LLM:
     ):
         deprecated_kwargs_warning(**kwargs)
 
+        load_model_register_plugins()
         model = retrive_model_from_server(model, revision)
         engine_args = EngineArgs(
             model=model,

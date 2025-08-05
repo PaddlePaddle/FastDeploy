@@ -64,9 +64,9 @@ class ModelRegistry:
 
     @classmethod
     def get_supported_archs(cls):
-        assert len(cls._arch_to_model_cls) == len(
-            cls._arch_to_model_cls
-        ), "model class / pretrained model registry num is not same"
+        assert len(cls._arch_to_model_cls) >= len(
+            cls._arch_to_pretrained_model_cls
+        ), "model class num is more than pretrained model registry num"
         return [key for key in cls._arch_to_model_cls.keys()]
 
 
