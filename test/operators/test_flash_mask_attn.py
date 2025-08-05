@@ -80,7 +80,7 @@ def test(bsz, num_head, num_kv_head, q_seq_len, k_seq_len):
     naive_attn_out = naive_attn(q_input, k_input, v_input, mask)
     paddle_attn_out = paddle_flash_attn_mask(q_input, k_input, v_input, mask)
 
-    print((paddle_attn_out.reshape([-1]) - paddle.to_tensor(naive_attn_out).reshape([-1])).max())
+    assert float((paddle_attn_out.reshape([-1]) - paddle.to_tensor(naive_attn_out).reshape([-1])).max()) <= 0.05
 
 
 if __name__ == "__main__":
