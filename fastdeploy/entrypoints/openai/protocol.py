@@ -99,7 +99,7 @@ class ExtractedToolCallInformation(BaseModel):
     tools_called: bool
 
     # extracted tool calls
-    tool_calls: list[ToolCall]
+    tool_calls: Optional[list[ToolCall]] = None
 
     # content - per OpenAI spec, content AND tool calls can be returned rarely
     # But some models will do this intentionally

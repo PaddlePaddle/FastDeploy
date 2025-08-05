@@ -238,19 +238,10 @@ class OpenAIServingChat:
                             response_logprobs=top_logprobs,
                             request_top_logprobs=request.top_logprobs,
                         )
-                    if self.engine_client.data_processor.tool_parser:
+                    if self.engine_client.data_processor.tool_parser and not res["finished"]:
                         tool_delta_message = output["tool_delta_message"]
                         if tool_delta_message is None:
-                            if res["finished"]:
-                                delta_message = DeltaMessage(
-                                    content=delta_text, 
-                                    reasoning_content=output.get("reasoning_content"), \
-                                    prompt_token_ids=None,
-                                    completion_token_ids=None, 
-                                    tool_calls=None,
-                                )
-                            else:
-                                continue
+                            continue
                         else:
                             delta_message = tool_delta_message
                     else:
