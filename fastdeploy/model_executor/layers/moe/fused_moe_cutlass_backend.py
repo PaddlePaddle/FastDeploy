@@ -213,7 +213,7 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts")
+        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, expertwise_scale=expertwise_scale

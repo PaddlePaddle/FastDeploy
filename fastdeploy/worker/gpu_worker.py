@@ -26,12 +26,18 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
+from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.utils import get_logger, set_random_seed
-from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("gpu_worker", "gpu_worker.log")
+
+try:
+    ModelRunner = load_model_runner_plugins()
+except:
+    from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 
 class GpuWorker(WorkerBase):
@@ -71,7 +77,7 @@ class GpuWorker(WorkerBase):
 
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
-        self.model_runner: GPUModelRunner = GPUModelRunner(
+        self.model_runner: ModelRunnerBase = ModelRunner(
             fd_config=self.fd_config,
             device=self.device,
             device_id=self.device_ids[self.local_rank % self.max_chips_per_node],
