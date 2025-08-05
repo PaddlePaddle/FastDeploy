@@ -362,7 +362,11 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
         for key, value in filtered_config.items():
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
-        if hasattr(args, "early_stop_config") and args.early_stop_config and args.early_stop_config["enable_early_stop"]:
+        if (
+            hasattr(args, "early_stop_config")
+            and args.early_stop_config
+            and args.early_stop_config["enable_early_stop"]
+        ):
             setattr(args, "enable_early_stop", True)
         return args
 
