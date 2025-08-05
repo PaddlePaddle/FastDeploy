@@ -352,6 +352,11 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.max_dec_len_this_time = paddle.to_tensor([self.max_dec_len_this_time], "int32", place=paddle.CPUPlace())
         self.seq_lens_this_time = self.seq_lens_encoder
 
+        self.decoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
+        self.decoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
+        self.decoder_num_blocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
+
         self.cache_shape = (
             self.max_block_num,
             self.kv_num_head,
@@ -414,16 +419,15 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             kv_batch_ids,
             kv_tile_ids_per_batch,
             kv_num_blocks,
-            decoder_batch_ids,
-            decoder_tile_ids_per_batch,
-            decoder_num_blocks,
             max_len_kv,
-            set_max_lengths,
         ) = get_block_shape_and_split_kv_block(
             self.seq_lens_encoder,
             self.seq_lens_decoder,
             self.seq_lens_this_time,
-            self.cum_offset,
+            self.decoder_batch_ids,
+            self.decoder_tile_ids_per_batch,
+            self.decoder_num_blocks_cpu,
+            self.max_len_tensor_cpu,
             64,
             12,
             (self.q_num_head + 2 * self.kv_num_head) // self.kv_num_head,
@@ -454,10 +458,10 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 kv_batch_ids,
                 kv_tile_ids_per_batch,
                 kv_num_blocks,
-                decoder_batch_ids,
-                decoder_tile_ids_per_batch,
-                decoder_num_blocks,
-                set_max_lengths,
+                self.decoder_batch_ids,
+                self.decoder_tile_ids_per_batch,
+                self.decoder_num_blocks_cpu,
+                self.max_len_tensor_cpu,
                 max_len_kv,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask

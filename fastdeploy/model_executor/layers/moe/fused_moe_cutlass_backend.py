@@ -244,6 +244,7 @@ class CutlassMoEMethod(MoEMethodBase):
         expertwise_scale = None
         if hasattr(layer, "up_gate_proj_in_scale_all_experts"):  # only use in w4a8
             expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
+
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, expertwise_scale=expertwise_scale
