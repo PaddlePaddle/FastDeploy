@@ -42,6 +42,7 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MLP,
 )
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -487,6 +488,7 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@MultimodalRegistry.register_model()
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
@@ -603,7 +605,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
     """
-    Ernie4_5_PretrainedModel
+    Ernie4_5_MoePretrainedModel
     """
 
     config_class = FDConfig
@@ -613,6 +615,10 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Ernie4_5_VLMoeForConditionalGeneration"
 
     from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
     from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid

@@ -409,6 +409,7 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
         nvcc_compile_args += ["-DENABLE_BF16"]
         # moe
+        os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
         sources += find_end_files("gpu_ops/moe/", ".cu")
@@ -496,6 +497,7 @@ elif paddle.is_compiled_with_cuda():
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
+        sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
 
     setup(
         name="fastdeploy_ops",

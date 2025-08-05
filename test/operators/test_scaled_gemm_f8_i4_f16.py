@@ -33,6 +33,10 @@ class Test(unittest.TestCase):
         paddle.seed(2024)
         print(paddle.device.cuda.get_device_properties())
         print(paddle.__git_commit__)
+        prop = paddle.device.cuda.get_device_properties()
+        cc = prop.major * 10 + prop.minor
+        if cc != 89:
+            self.skipTest("scaled_gemm_f8_i4_f16 only support sm 89!")
 
     def quant_fp8_pertensor(self, tensor):
         """

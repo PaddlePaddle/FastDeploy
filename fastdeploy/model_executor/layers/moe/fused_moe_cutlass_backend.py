@@ -53,7 +53,7 @@ def get_moe_scores(
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
     scores_with_bias = scores + e_score_correction_bias.unsqueeze(0)
-    scores = noaux_tc(
+    scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,
         n_group,
@@ -61,7 +61,7 @@ def get_moe_scores(
         top_k,
         routed_scaling_factor,
     )
-    return scores
+    return scores, topk_values, topk_idx
 
 
 class CutlassMoEMethod(MoEMethodBase):
@@ -213,7 +213,7 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts")
+        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, expertwise_scale=expertwise_scale
@@ -248,7 +248,7 @@ class CutlassMoEMethod(MoEMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.topk_method == "noaux_tc":
-            gate_out = get_moe_scores(
+            gate_out, _, _ = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,

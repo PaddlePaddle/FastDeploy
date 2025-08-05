@@ -16,6 +16,70 @@
 #include "utils.cuh"
 
 template <typename T, typename QKV_TYPE>
+void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
+                              T* key_cache,
+                              T* value_cache,
+                              T* qkv_out,
+                              const int* block_tables,
+                              const int* batch_id_per_token,
+                              const int* cu_seqlens_q,
+                              const int* seq_lens,
+                              const int* seq_lens_encoder,
+                              const float* cos_emb,
+                              const float* sin_emb,
+                              const float* qkv_out_scales,
+                              const T* qkv_biases,
+                              const int max_seq_len,
+                              const int max_blocks_per_seq,
+                              const int num_heads,
+                              const int kv_num_heads,
+                              const int dim_head,
+                              const int block_size,
+                              const int bsz,
+                              const cudaStream_t& stream,
+                              const bool use_neox_style,
+                              const bool rope_3d,
+                              const T* q_norm_weight,
+                              const T* k_norm_weight,
+                              const float rms_norm_eps) {
+  const uint32_t elem_nums =
+      use_neox_style ? bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2
+                     : bsz * (num_heads + 2 * kv_num_heads) * dim_head;
+  assert(dim_head == 128 && "dim_head must be 128");
+  constexpr int HEAD_DIM = 128;
+
+  constexpr int PackSize = HEAD_DIM / kWarpSize;
+  const int pack_num = elem_nums / PackSize;
+  const int blocksize = 128;
+  int grid_size = 1;
+  GetNumBlocks<128>(pack_num, &grid_size);
+  dim3 block_dim(blocksize / kWarpSize, kWarpSize, 1);
+  append_decode_cache_T_rope_qk_norm_kernel<T, PackSize>
+      <<<grid_size, block_dim, 0, stream>>>(reinterpret_cast<const T*>(qkv),
+                                            key_cache,
+                                            value_cache,
+                                            qkv_out,
+                                            block_tables,
+                                            batch_id_per_token,
+                                            cu_seqlens_q,
+                                            seq_lens,
+                                            seq_lens_encoder,
+                                            cos_emb,
+                                            sin_emb,
+                                            max_seq_len,
+                                            max_blocks_per_seq,
+                                            num_heads,
+                                            dim_head,
+                                            block_size,
+                                            elem_nums,
+                                            kv_num_heads,
+                                            rope_3d,
+                                            q_norm_weight,
+                                            k_norm_weight,
+                                            rms_norm_eps);
+}
+
+template <typename T, typename QKV_TYPE>
 void append_decode_cache_rope(const QKV_TYPE* qkv,
                               T* key_cache,
                               T* value_cache,
@@ -441,7 +505,10 @@ void DecoderWriteCacheWithRoPEKernel(
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
-    paddle::Tensor* value_cache_out) {
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps) {
   typedef cascade_attn_type_traits<T> traits_;
   typedef cascade_attn_type_traits<QKV_TYPE> qkt_nv_type_;
   typedef typename traits_::type DataType_;
@@ -464,107 +531,77 @@ void DecoderWriteCacheWithRoPEKernel(
             ? rotary_embs.get().data<float>() + max_seq_len * dim_head
             : rotary_embs.get().data<float>() + max_seq_len * dim_head / 2;
   }
-  if (cache_quant_type_str == "none") {
-    append_decode_cache_rope(
-        reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-        reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
-        reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
-        reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-        block_tables.data<int>(),
-        batch_id_per_token.data<int>(),
-        cu_seqlens_q.data<int>(),
-        seq_lens.data<int>(),
-        seq_lens_encoder.data<int>(),
-        cos_emb,
-        sin_emb,
-        qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-        qkv_biases ? reinterpret_cast<DataType_*>(
-                         const_cast<T*>(qkv_biases.get().data<T>()))
-                   : nullptr,
-        max_seq_len,
-        max_blocks_per_seq,
-        num_heads,
-        kv_num_heads,
-        dim_head,
-        block_size,
-        bsz,
-        stream,
-        use_neox_rotary_style,
-        rope_3d);
-  } else if (cache_quant_type_str == "cache_int8") {
-    bool is_scale_channel_wise = false;
-    if (cache_k_scale && cache_k_scale.get().dims()[0] == dim_head * kv_num_heads) {
-      is_scale_channel_wise = true;
-    }
-    if (is_scale_channel_wise) {
-      append_decode_cache_int8_rope<DataType_, QKV_TYPE, true>(
-        reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-        key_cache_out->data<uint8_t>(),
-        value_cache_out->data<uint8_t>(),
-        reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-        block_tables.data<int>(),
-        batch_id_per_token.data<int>(),
-        cu_seqlens_q.data<int>(),
-        seq_lens.data<int>(),
-        seq_lens_encoder.data<int>(),
-        cos_emb,
-        sin_emb,
-        qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-        qkv_biases ? reinterpret_cast<DataType_*>(
-                         const_cast<T*>(qkv_biases.get().data<T>()))
-                   : nullptr,
-        cache_k_scale ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(cache_k_scale.get().data<T>()))
-                      : nullptr,
-        cache_v_scale ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(cache_v_scale.get().data<T>()))
-                      : nullptr,
-        max_seq_len,
-        max_blocks_per_seq,
-        num_heads,
-        kv_num_heads,
-        dim_head,
-        block_size,
-        bsz,
-        stream,
-        use_neox_rotary_style,
-        rope_3d);
+
+  if (q_norm_weight && k_norm_weight) {
+    if (cache_quant_type_str == "none") {
+      append_decode_cache_rope_qk_norm(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
+          reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                          const_cast<T*>(qkv_biases.get().data<T>()))
+                    : nullptr,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          stream,
+          use_neox_rotary_style,
+          rope_3d,
+          reinterpret_cast<const DataType_*>(q_norm_weight.get().data<T>()),
+          reinterpret_cast<const DataType_*>(k_norm_weight.get().data<T>()),
+          rms_norm_eps);
     } else {
-      append_decode_cache_int8_rope<DataType_, QKV_TYPE, false>(
-          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-          key_cache_out->data<uint8_t>(),
-          value_cache_out->data<uint8_t>(),
-          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-          block_tables.data<int>(),
-          batch_id_per_token.data<int>(),
-          cu_seqlens_q.data<int>(),
-          seq_lens.data<int>(),
-          seq_lens_encoder.data<int>(),
-          cos_emb,
-          sin_emb,
-          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-          qkv_biases ? reinterpret_cast<DataType_*>(
-                          const_cast<T*>(qkv_biases.get().data<T>()))
-                    : nullptr,
-          cache_k_scale ? reinterpret_cast<DataType_*>(
-                              const_cast<T*>(cache_k_scale.get().data<T>()))
-                        : nullptr,
-          cache_v_scale ? reinterpret_cast<DataType_*>(
-                              const_cast<T*>(cache_v_scale.get().data<T>()))
-                        : nullptr,
-          max_seq_len,
-          max_blocks_per_seq,
-          num_heads,
-          kv_num_heads,
-          dim_head,
-          block_size,
-          bsz,
-          stream,
-          use_neox_rotary_style,
-          rope_3d);
+      PD_THROW(
+          "append_decode_cache_rope_qk_norm not support cachekv quant yet");
     }
-  } else if (cache_quant_type_str == "cache_fp8")  {
-      append_decode_cache_int8_rope<DataType_, QKV_TYPE, false, true>(
+  } else {
+    if (cache_quant_type_str == "none") {
+      append_decode_cache_rope(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
+          reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                          const_cast<T*>(qkv_biases.get().data<T>()))
+                    : nullptr,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          stream,
+          use_neox_rotary_style,
+          rope_3d);
+    } else if (cache_quant_type_str == "cache_int8") {
+      bool is_scale_channel_wise = false;
+      if (cache_k_scale && cache_k_scale.get().dims()[0] == dim_head * kv_num_heads) {
+        is_scale_channel_wise = true;
+      }
+      if (is_scale_channel_wise) {
+        append_decode_cache_int8_rope<DataType_, QKV_TYPE, true>(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
           key_cache_out->data<uint8_t>(),
           value_cache_out->data<uint8_t>(),
@@ -596,49 +633,117 @@ void DecoderWriteCacheWithRoPEKernel(
           stream,
           use_neox_rotary_style,
           rope_3d);
-  } else if (cache_quant_type_str == "cache_int4_zp") {
-    append_decode_cache_int4_rope(
-        reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-        key_cache_out->data<uint8_t>(),
-        value_cache_out->data<uint8_t>(),
-        reinterpret_cast<DataType_*>(const_cast<T*>(qkv_out->data<T>())),
-        block_tables.data<int>(),
-        batch_id_per_token.data<int>(),
-        cu_seqlens_q.data<int>(),
-        seq_lens.data<int>(),
-        seq_lens_encoder.data<int>(),
-        cos_emb,
-        sin_emb,
-        qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-        qkv_biases ? reinterpret_cast<DataType_*>(
-                         const_cast<T*>(qkv_biases.get().data<T>()))
-                   : nullptr,
-        cache_k_scale ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(cache_k_scale.get().data<T>()))
+      } else {
+        append_decode_cache_int8_rope<DataType_, QKV_TYPE, false>(
+            reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+            key_cache_out->data<uint8_t>(),
+            value_cache_out->data<uint8_t>(),
+            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+            block_tables.data<int>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens.data<int>(),
+            seq_lens_encoder.data<int>(),
+            cos_emb,
+            sin_emb,
+            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+            qkv_biases ? reinterpret_cast<DataType_*>(
+                            const_cast<T*>(qkv_biases.get().data<T>()))
                       : nullptr,
-        cache_v_scale ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(cache_v_scale.get().data<T>()))
+            cache_k_scale ? reinterpret_cast<DataType_*>(
+                                const_cast<T*>(cache_k_scale.get().data<T>()))
+                          : nullptr,
+            cache_v_scale ? reinterpret_cast<DataType_*>(
+                                const_cast<T*>(cache_v_scale.get().data<T>()))
+                          : nullptr,
+            max_seq_len,
+            max_blocks_per_seq,
+            num_heads,
+            kv_num_heads,
+            dim_head,
+            block_size,
+            bsz,
+            stream,
+            use_neox_rotary_style,
+            rope_3d);
+      }
+    } else if (cache_quant_type_str == "cache_fp8")  {
+        append_decode_cache_int8_rope<DataType_, QKV_TYPE, false, true>(
+            reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+            key_cache_out->data<uint8_t>(),
+            value_cache_out->data<uint8_t>(),
+            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+            block_tables.data<int>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens.data<int>(),
+            seq_lens_encoder.data<int>(),
+            cos_emb,
+            sin_emb,
+            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+            qkv_biases ? reinterpret_cast<DataType_*>(
+                            const_cast<T*>(qkv_biases.get().data<T>()))
                       : nullptr,
-        cache_k_zp ? reinterpret_cast<DataType_*>(
-                         const_cast<T*>(cache_k_zp.get().data<T>()))
-                   : nullptr,
-        cache_v_zp ? reinterpret_cast<DataType_*>(
-                         const_cast<T*>(cache_v_zp.get().data<T>()))
-                   : nullptr,
-        max_seq_len,
-        max_blocks_per_seq,
-        num_heads,
-        kv_num_heads,
-        dim_head,
-        block_size,
-        bsz,
-        stream,
-        use_neox_rotary_style,
-        rope_3d);
-  } else {
-    PD_THROW(
-        "cache_quant_type_str should be one of [none, cache_int8, cache_fp8 "
-        "cache_int4_zp]");
+            cache_k_scale ? reinterpret_cast<DataType_*>(
+                                const_cast<T*>(cache_k_scale.get().data<T>()))
+                          : nullptr,
+            cache_v_scale ? reinterpret_cast<DataType_*>(
+                                const_cast<T*>(cache_v_scale.get().data<T>()))
+                          : nullptr,
+            max_seq_len,
+            max_blocks_per_seq,
+            num_heads,
+            kv_num_heads,
+            dim_head,
+            block_size,
+            bsz,
+            stream,
+            use_neox_rotary_style,
+            rope_3d);
+    } else if (cache_quant_type_str == "cache_int4_zp") {
+      append_decode_cache_int4_rope(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(const_cast<T*>(qkv_out->data<T>())),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                          const_cast<T*>(qkv_biases.get().data<T>()))
+                    : nullptr,
+          cache_k_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_k_scale.get().data<T>()))
+                        : nullptr,
+          cache_v_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_v_scale.get().data<T>()))
+                        : nullptr,
+          cache_k_zp ? reinterpret_cast<DataType_*>(
+                          const_cast<T*>(cache_k_zp.get().data<T>()))
+                    : nullptr,
+          cache_v_zp ? reinterpret_cast<DataType_*>(
+                          const_cast<T*>(cache_v_zp.get().data<T>()))
+                    : nullptr,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          stream,
+          use_neox_rotary_style,
+          rope_3d);
+    } else {
+      PD_THROW(
+          "cache_quant_type_str should be one of [none, cache_int8, cache_fp8 "
+          "cache_int4_zp]");
+    }
   }
 }
 
@@ -667,7 +772,10 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, int>(
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
-    paddle::Tensor* value_cache_out);
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
 
 template void
 DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, paddle::bfloat16>(
@@ -694,7 +802,10 @@ DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, paddle::bfloat16>(
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
-    paddle::Tensor* value_cache_out);
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
 
 template void DecoderWriteCacheWithRoPEKernel<paddle::float16, int>(
     const AppendAttnMetaData& meta_data,
@@ -720,7 +831,10 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::float16, int>(
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
-    paddle::Tensor* value_cache_out);
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
 
 template void DecoderWriteCacheWithRoPEKernel<paddle::float16, paddle::float16>(
     const AppendAttnMetaData& meta_data,
@@ -746,4 +860,7 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::float16, paddle::float16>(
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
-    paddle::Tensor* value_cache_out);
+    paddle::Tensor* value_cache_out,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps);
