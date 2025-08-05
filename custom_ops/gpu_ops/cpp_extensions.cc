@@ -773,6 +773,7 @@ void MergePrefillDecodeOutput(
     const int max_token);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
+
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
         py::arg("num_experts"), "get expert token num");
 
