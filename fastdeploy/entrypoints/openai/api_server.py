@@ -373,6 +373,7 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
+    fd_start_span("FD_START")
 
     try:
         uvicorn.run(
@@ -495,6 +496,7 @@ def launch_controller_server():
 def main():
     """main函数"""
 
+    load_model_register_plugins()
     if load_engine() is None:
         return
 
