@@ -87,6 +87,8 @@ template <
     typename LayoutB_,
     /// Access granularity of B matrix in units of elements
     int kAlignmentB,
+    /// Element type for the input scale
+    typename ElementScale,
     /// Element type for internal accumulation
     typename ElementAccumulator_,
     /// Layout type for C and D matrix operands
@@ -124,6 +126,8 @@ template <
     typename LayoutB,
     /// Access granularity of B matrix in units of elements
     int kAlignmentB,
+    /// Element type for the input scale
+    typename ElementScale,
     /// Element type for internal accumulation
     typename ElementAccumulator,
     /// Operator class tag
@@ -142,7 +146,7 @@ template <
     typename Operator,
     /// Use zfill or predicate for out-of-bound cp.async
     SharedMemoryClearOption SharedMemoryClear>
-struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementAccumulator,
+struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementScale, ElementAccumulator,
     layout::RowMajor, OperatorClass, ArchTag, ThreadblockShape, WarpShape, InstructionShape,
     kStages, Operator, SharedMemoryClear>
 {
@@ -157,7 +161,20 @@ public:
     static_assert(platform::is_same<Operator, arch::OpMultiplyAddDequantizeInterleavedBToA>::value,
         "Mma multistage must dequantize after ldsm");
 
-    using ElementSuperScale = ElementA;
+    using ElementSuperScale = ElementScale;
+
+    // using ElementSuperScale = typename std::conditional<
+    //     std::is_same_v<ElementA, cutlass::float_e4m3_t>,
+    //     cutlass::float_e5m2_t,
+    //     ElementA
+    // >::type;
+
+    // using ElementSuperScale = typename std::conditional<
+    //     std::is_same_v<ElementA, cutlass::float_e4m3_t>,
+    //     half_t,
+    //     ElementA
+    // >::type;
+
     using ElementLocalScale = uint4b_t;
     using ElementCodeScaleZp = float;
 

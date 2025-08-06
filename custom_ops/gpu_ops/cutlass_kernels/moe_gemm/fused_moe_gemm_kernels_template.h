@@ -156,7 +156,8 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
 
   // The cutlass type for the input elements. This is needed to convert to
   // cutlass::half_t if necessary.
-  using ElementType = typename cutlass::CutlassDataType<InType>::Type;
+  using ElementInType = typename cutlass::CutlassDataType<InType>::Type;
+  using ElementOutType = typename cutlass::CutlassDataType<OutType>::Type;
   using CutlassWeightType = typename cutlass::CutlassDataType<typename WeightQuantTraits::WeightType>::Type;
   using CutlassMmaWeightType = typename WeightQuantTraits::MmaWeightType;
   using CutlassMmaKernelType = typename WeightQuantTraits::MmaKernelType;
@@ -164,17 +165,17 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
   // We need separate config for each architecture since we will target
   // different tensorcore instructions. For float, we do not target TCs.
   using MixedGemmArchTraits = cutlass::gemm::kernel::
-      MixedGemmArchTraits<ElementType, CutlassMmaKernelType, arch>;
+      MixedGemmArchTraits<ElementInType, CutlassMmaKernelType, arch>;
   using ElementAccumulator = typename MixedGemmArchTraits::AccType;
 
-  using EpilogueOp = typename Epilogue<ElementType,
+  using EpilogueOp = typename Epilogue<ElementOutType,
                                        MixedGemmArchTraits::ElementsPerAccessC,
                                        ElementAccumulator,
                                        EpilogueTag>::Op;
 
   // Finally, set up the kernel.
   using BaseGemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
-      ElementType,
+      ElementInType,
       cutlass::layout::RowMajor,
       cutlass::ComplexTransform::kNone,
       MixedGemmArchTraits::ElementsPerAccessA,
@@ -182,7 +183,7 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
       typename CutlassLayoutB<MixedGemmArchTraits, WeightQuantTraits::kQuantMethod>::Type,
       cutlass::ComplexTransform::kNone,
       MixedGemmArchTraits::ElementsPerAccessB,
-      ElementType,
+      ElementOutType,
       cutlass::layout::RowMajor,
       ElementAccumulator,
       typename MixedGemmArchTraits::OperatorClass,
@@ -228,11 +229,11 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
       num_experts,
       threadblock_count,
       epilogue_op,
-      reinterpret_cast<const ElementType*>(A),
+      reinterpret_cast<const ElementInType*>(A),
       reinterpret_cast<const CutlassMmaKernelType*>(B),
-      reinterpret_cast<const ElementType*>(weight_scales),
-      reinterpret_cast<const ElementType*>(biases),
-      reinterpret_cast<ElementType*>(C),
+      reinterpret_cast<const ElementOutType*>(weight_scales),
+      reinterpret_cast<const ElementOutType*>(biases),
+      reinterpret_cast<ElementOutType*>(C),
       total_rows_before_expert,
       total_rows,
       gemm_n,
@@ -366,7 +367,7 @@ template <typename InType,
 struct dispatch_stages<InType,
                        OutType,
                        WeightQuantTraits,
-                       cutlass::arch::Sm80,
+                       cutlass::arch::Sm89,
                        EpilogueTag,
                        ThreadblockShape,
                        WarpShape,
@@ -390,7 +391,7 @@ struct dispatch_stages<InType,
     generic_moe_gemm_kernelLauncher<InType,
                                     OutType,
                                     WeightQuantTraits,
-                                    cutlass::arch::Sm80,
+                                    cutlass::arch::Sm89,
                                     EpilogueTag,
                                     ThreadblockShape,
                                     WarpShape,

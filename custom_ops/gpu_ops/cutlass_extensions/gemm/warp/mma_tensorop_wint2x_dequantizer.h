@@ -74,17 +74,6 @@ struct DataTypeTraits<half_t> {
     using DualType = __half2;
 };
 
-struct __nv_fp8_e4m3x2 {
-    __nv_fp8_e4m3 x;
-    __nv_fp8_e4m3 y;
-};
-
-template <>
-struct DataTypeTraits<cutlass::float_e4m3_t> {
-    using Type = __nv_fp8_e4m3;
-    using DualType = __nv_fp8_e4m3x2;
-};
-
 template <typename T, int N, typename Enable = void>
 struct LocalScaleConverter {
     using FragmentSource = Array<uint8_t, N>;
@@ -252,12 +241,8 @@ class MmaTensorOpWin2xDequantizer<
     //    && platform::is_same<typename MmaOperator_::ArchMmaOperator::LayoutB, layout::ColumnMajor>::value>::type>
 {
 public:
-    // static_assert(platform::is_same<ElementOperand_, half_t>::value || platform::is_same<ElementOperand_, bfloat16_t>::value
-    //      || platform::is_same<ElementOperand_, cutlass::float_e4m3_t>::value,
-    //     "T must be fp16 or bf16");
-    static_assert(platform::is_same<ElementOperand_, half_t>::value || platform::is_same<ElementOperand_, bfloat16_t>::value
-         || platform::is_same<ElementOperand_, cutlass::float_e4m3_t>::value,
-        "T must be fp8, fp16 or bf16");
+    static_assert(platform::is_same<ElementOperand_, half_t>::value || platform::is_same<ElementOperand_, bfloat16_t>::value,
+        "T must be fp16 or bf16");
     /// Mma Operator
     using MmaOperator = MmaOperator_;
 
@@ -384,75 +369,59 @@ public:
                     FragmentOutput& output_frag,
                     int tb_offset_k,
                     int warp_k_compute_offset) {
-        if constexpr (platform::is_same<ElementOperand, cutlass::float_e4m3_t>::value) {
-            __nv_fp8_e4m3 fp8_one{0x38};
-            using Type = typename detail::DataTypeTraits<ElementOperand>::Type;
-            Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
-            const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
-            CUTLASS_PRAGMA_UNROLL
-            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
-                CUTLASS_PRAGMA_UNROLL
-                for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
-                    output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = fp8_one;
-                    output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = fp8_one;
-                }
-            }
 
-            CUTLASS_TRACE_DEVICE(" ElementOperand is fp8, elem = %d", MmaOperator::FragmentB::kElements / kExpansionFactor);
-        } else {
-            CUTLASS_TRACE_DEVICE(" ElementOperand not fp8");
-            if constexpr (kUnpackInterval != 1) {
-                // unsupport now
-                arch::device_breakpoint();
-            }
+        CUTLASS_TRACE_DEVICE(" ElementOperand not fp8");
+        if constexpr (kUnpackInterval != 1) {
+            // unsupport now
+            arch::device_breakpoint();
+        }
 
-            typename Uint2Converter::source_type source_frag;
+        typename Uint2Converter::source_type source_frag;
 
-            int in_offset = warp_k_compute_offset * kUnpackInterval;
+        int in_offset = warp_k_compute_offset * kUnpackInterval;
 
-            uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
-            uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
+        uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
+        uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
 
-            CUTLASS_PRAGMA_UNROLL
-            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
-                ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
-            }
-            FragmentInputUnpack unpacked_frag = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
+        CUTLASS_PRAGMA_UNROLL
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+            ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
+        }
+        FragmentInputUnpack unpacked_frag = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
 
-            // dequantize local_scale
-            if (warp_k_compute_offset == 0) {
-                using LocalScaleConverter = detail::LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>;
+        // dequantize local_scale
+        if (warp_k_compute_offset == 0) {
+            using LocalScaleConverter = detail::LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>;
 
-                // special for TileRows = 64
-                int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
-                LocalScaleConverter::Apply(local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
-            }
+            // special for TileRows = 64
+            int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
+            LocalScaleConverter::Apply(local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
+        }
 
-            // unscale
-            // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
-            // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
-            const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
+        // unscale
+        // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
+        // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
+        const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
 
-            using Type = typename detail::DataTypeTraits<ElementOperand>::Type;
-            using DualType = typename detail::DataTypeTraits<ElementOperand>::DualType;
+        using Type = typename detail::DataTypeTraits<ElementOperand>::Type;
+        using DualType = typename detail::DataTypeTraits<ElementOperand>::DualType;
 
-            Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
-            DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag);
-            DualType const* scale_ptr = reinterpret_cast<DualType const*>(&scale_frag_);
+        Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
+        DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag);
+        DualType const* scale_ptr = reinterpret_cast<DualType const*>(&scale_frag_);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
+            int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
+
+            DualType scalex2 = scale_ptr[mma_n_iter / 2];
 
             CUTLASS_PRAGMA_UNROLL
-            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
-                int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
-
-                DualType scalex2 = scale_ptr[mma_n_iter / 2];
-
-                CUTLASS_PRAGMA_UNROLL
-                for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
-                    DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
-                    DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
-                    output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value.x;
-                    output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
-                }
+            for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
+                DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
+                DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
+                output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value.x;
+                output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
             }
         }
     }

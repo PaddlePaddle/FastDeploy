@@ -112,6 +112,10 @@ public:
   using QuantParamsAccessor = QuantParamsAccessor_;
   using QuantArguments = typename QuantParamsAccessor::Arguments;
 
+  using ElementSuperScale = typename QuantParamsAccessor::ElementSuperScale;
+  // static_assert(platform::is_same<ElementSuperScale, cutlass::float_e4m3_t>::value,
+  //     "ElementSuperScale must be float_e4m3_t");
+
   static constexpr int kInterleave = IteratorB::Shape::kRow / Shape::kK;
 
   using SmemIteratorA = SmemIteratorA_;
@@ -135,12 +139,13 @@ public:
 
   //using LayoutScale = typename QuantParamsAccessor::IteratorSuperScale::Layout;
   using LayoutScale = layout::RowMajor;
-  using WarpTransformedFragmentB = typename Operator::TransformedFragmentB;
+  // using WarpTransformedFragmentB = typename Operator::TransformedFragmentB;
   using WarpDequantizer =
       warp::MmaTensorOpWin2xDequantizer<Operator,
                                         typename Base::WarpGemm,
                                         Operand::kB,
-                                        typename WarpTransformedFragmentB::Element,
+                                        ElementSuperScale,
+                                        // typename WarpTransformedFragmentB::Element,
                                         LayoutScale,
                                         QuantParamsAccessor::kGroupSize>;
   static_assert(sizeof(WarpDequantizer) > 0, "WarpDequantizer template instantiation failed");
@@ -211,6 +216,9 @@ public:
 
     /// group-wise quant params
     FragmentLocalScale warp_frag_local_scale_;
+
+    using WarpDequantFp16FragmentB = typename cutlass::Array<ElementSuperScale, WarpTransformedFragmentB::kElements>;
+    WarpDequantFp16FragmentB warp_dequant_frag_B_[2];
   };
 
   using ElementA = typename IteratorA::Element;
@@ -622,6 +630,34 @@ public:
       //                              ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
       //                              (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
+      if constexpr (platform::is_same<ElementA, cutlass::float_e4m3_t>::value) {
+        // dequantizes next warp-tile
+        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                    pipe_state.warp_frag_code_scale_,
+                                    pipe_state.warp_frag_code_zp_,
+                                    pipe_state.warp_frag_super_scale_,
+                                    pipe_state.warp_loaded_frag_B_,
+                                    pipe_state.warp_dequant_frag_B_[(warp_mma_k + 1) % 2],
+                                    ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
+                                    (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
+
+        constexpr cutlass::FloatRoundStyle RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
+        constexpr int ConversionVectorWidth = PipeState::WarpDequantFp16FragmentB::kElements;
+        using Converter
+            = cutlass::NumericArrayConverter<ElementA, ElementSuperScale, ConversionVectorWidth, RoundStyle>;
+        pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2] = Converter::convert(pipe_state.warp_dequant_frag_B_[(warp_mma_k + 1) % 2]);
+      } else {
+        // dequantizes next warp-tile
+        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                    pipe_state.warp_frag_code_scale_,
+                                    pipe_state.warp_frag_code_zp_,
+                                    pipe_state.warp_frag_super_scale_,
+                                    pipe_state.warp_loaded_frag_B_,
+                                    pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
+                                    ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
+                                    (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
+      }
+
       // Execute the current warp-tile of MMA operations
       if constexpr (Detail::kStagedAccumulation) {
         warp_mma_(
@@ -731,15 +767,42 @@ public:
 
     CUTLASS_TRACE_DEVICE(" Test now in mma dataflow");
 
-    // Dequantize B to in register
-    warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                 pipe_state.warp_frag_code_scale_,
-                                 pipe_state.warp_frag_code_zp_,
-                                 pipe_state.warp_frag_super_scale_,
-                                 pipe_state.warp_loaded_frag_B_,
-                                 pipe_state.warp_frag_B_[0],
-                                 0,
-                                 0);
+    if constexpr (platform::is_same<ElementA, cutlass::float_e4m3_t>::value) {
+      warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                  pipe_state.warp_frag_code_scale_,
+                                  pipe_state.warp_frag_code_zp_,
+                                  pipe_state.warp_frag_super_scale_,
+                                  pipe_state.warp_loaded_frag_B_,
+                                  pipe_state.warp_dequant_frag_B_[0],
+                                  0,
+                                  0);
+      constexpr cutlass::FloatRoundStyle RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
+      constexpr int ConversionVectorWidth = PipeState::WarpDequantFp16FragmentB::kElements;
+
+      using Converter
+          = cutlass::NumericArrayConverter<ElementA, ElementSuperScale, ConversionVectorWidth, RoundStyle>;
+      pipe_state.warp_frag_B_[0] = Converter::convert(pipe_state.warp_dequant_frag_B_[0]);
+
+    } else {
+      warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                  pipe_state.warp_frag_code_scale_,
+                                  pipe_state.warp_frag_code_zp_,
+                                  pipe_state.warp_frag_super_scale_,
+                                  pipe_state.warp_loaded_frag_B_,
+                                  pipe_state.warp_frag_B_[0],
+                                  0,
+                                  0);
+    }
+
+    // // Dequantize B to in register
+    // warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+    //                              pipe_state.warp_frag_code_scale_,
+    //                              pipe_state.warp_frag_code_zp_,
+    //                              pipe_state.warp_frag_super_scale_,
+    //                              pipe_state.warp_loaded_frag_B_,
+    //                              pipe_state.warp_frag_B_[0],
+    //                              0,
+    //                              0);
 
     if constexpr (Detail::kStagedAccumulation) {
       pipe_state.tmp_accum_.clear();
