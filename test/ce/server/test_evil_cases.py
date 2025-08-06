@@ -94,3 +94,4 @@ def test_mixed_valid_invalid_fields():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert "error" not in resp, "非法字段不应导致请求失败"
+
