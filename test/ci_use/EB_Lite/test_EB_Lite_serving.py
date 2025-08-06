@@ -939,3 +939,68 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         assert hasattr(chunk.choices[0], "text")
         output_1.append(chunk.choices[0].text)
     assert output_0 not in output_1
+
+def test_non_stream_prompt_echo_response(openai_client, capsys):
+    """
+    Test chat/completion when min_tokens equals max_tokens equals 1.
+    Verify it returns exactly one token.
+    """
+    # Test single prompt
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=10,
+        stream=False,
+        echo=True,
+    )
+    assert response.choices[0].text.startswith("Hello, how are you?")
+    
+    # Test multiple prompts
+    prompts = ["Hello, how are you?", "What is your name?"]
+    response = openai_client.completions.create(
+        model="default",
+        prompt=["Hello, how are you?", "What is your name?"],
+        temperature=1,
+        max_tokens=10,
+        stream=False,
+        echo=True,
+    )
+    choices = response["choices"]
+    for i, choice in enumerate(choices):
+        text = choice["message"]["content"]
+        assert prompts[i] in text
+
+def test_streaming_prompt_echo_response(openai_client, capsys):
+    # Test single prompt
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=10,
+        stream=True,
+        echo=True,
+    )
+    output = []
+    for chunk in response:
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
+            output.append(chunk.choices[0].delta.content)
+    assert "".join(output).startswith("Hello, how are you?")
+
+    # Test multiple prompts
+    prompts = ["Hello, how are you?", "What is your name?"]
+    response = openai_client.completions.create(
+        model="default",
+        prompt=prompts,
+        temperature=1,
+        max_tokens=10,
+        stream=True,
+        echo=True,
+    )
+    output = []
+    for chunk in response:
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
+            output.append(chunk.choices[0].delta.content)
+    text = "".join(output)
+    for prompt in prompts:
+        assert prompt in text
