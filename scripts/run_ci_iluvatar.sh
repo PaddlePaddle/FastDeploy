@@ -16,7 +16,9 @@ python -m pip uninstall paddle-iluvatar-gpu -y
 python -m pip install --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
 # TODO: Change to open access URL
 # python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
-python -m pip install /data1/fastdeploy/packages/paddle_iluvatar_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+wget -q https://paddle-whl.bj.bcebos.com/stable/ixuca/fastdeploy-iluvatar-gpu/fastdeploy_iluvatar_gpu-2.1.0.dev0-py3-none-any.whl
+python -m pip install fastdeploy_iluvatar_gpu-2.1.0.dev0-py3-none-any.whl
+
 # Patch, remove if image updated
 cp /data1/fastdeploy/packages/cusolver.h /usr/local/lib/python3.10/site-packages/paddle/include/paddle/phi/backends/dynload/cusolver.h
 echo "build whl"
