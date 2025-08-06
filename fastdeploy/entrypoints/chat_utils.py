@@ -158,16 +158,29 @@ def parse_chat_messages(messages):
         conversation.append({"role": role, "content": parsed_content})
     return conversation
 
-def load_chat_template(chat_template: Union[Path, str]) -> Optional[str]:
+def load_chat_template(chat_template: Union[Path, str], is_literal: bool = False,) -> Optional[str]:
     if chat_template is None:
         return None
-    path = Path(chat_template)
-    if path.exists():
-        if path.is_file():
-            with open(path) as f:
-                return f.read()
-        else:
-            raise ValueError("Invalid input: chat_template must be either a file path or a string template")
-    else:
-        return chat_template
+    if is_literal:
+        if isinstance(chat_template, Path):
+            raise TypeError("chat_template is expected to be read directly "
+                            "from its value")
 
+        return chat_template
+    
+    try:
+        with open(chat_template) as f:
+            return f.read()
+    except OSError as e:
+        if isinstance(chat_template, Path):
+            raise
+        JINJA_CHARS = "{}\n"
+        if not any(c in chat_template for c in JINJA_CHARS):
+            msg = (f"The supplied chat template ({chat_template}) "
+                   f"looks like a file path, but it failed to be "
+                   f"opened. Reason: {e}")
+            raise ValueError(msg) from e
+
+        # If opening a file fails, set chat template to be args to
+        # ensure we decode so our escape are interpreted correctly
+        return load_chat_template(chat_template, is_literal=True)

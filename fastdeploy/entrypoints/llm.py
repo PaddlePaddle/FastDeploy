@@ -35,6 +35,7 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 from fastdeploy.worker.output import Logprob, LogprobsLists
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
@@ -73,6 +74,7 @@ class LLM:
         revision: Optional[str] = "master",
         tokenizer: Optional[str] = None,
         enable_logprob: Optional[bool] = False,
+        chat_template: Optional[str] = None,
         **kwargs,
     ):
         deprecated_kwargs_warning(**kwargs)
@@ -98,6 +100,7 @@ class LLM:
         self.master_node_ip = self.llm_engine.cfg.master_ip
         self._receive_output_thread = threading.Thread(target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
+        self.chat_template = load_chat_template(chat_template)
 
     def _check_master(self):
         """
@@ -225,6 +228,9 @@ class LLM:
 
         if sampling_params_len != 1 and len(messages) != sampling_params_len:
             raise ValueError("messages and sampling_params must be the same length.")
+        
+        if chat_template is None:
+            chat_template = self.chat_template
 
         messages_len = len(messages)
         for i in range(messages_len):

@@ -5,7 +5,7 @@ from fastdeploy.input.ernie_processor import ErnieProcessor
 from fastdeploy.input.text_processor import DataProcessor
 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 
-input_chat_template = "unit test"
+input_chat_template = "unit test \n"
 
 class TestChatTemplate(unittest.TestCase):
     def test_load_chat_template_str(self):
