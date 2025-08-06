@@ -192,6 +192,7 @@ class LLM:
         sampling_params: Optional[Union[SamplingParams, list[SamplingParams]]] = None,
         use_tqdm: bool = True,
         chat_template_kwargs: Optional[dict[str, Any]] = None,
+        chat_template: Optional[str] = None,
     ):
         """
         Args:
@@ -227,7 +228,7 @@ class LLM:
 
         messages_len = len(messages)
         for i in range(messages_len):
-            messages[i] = {"messages": messages[i]}
+            messages[i] = {"messages": messages[i], "chat_template": chat_template}
         req_ids = self._add_request(
             prompts=messages,
             sampling_params=sampling_params,
