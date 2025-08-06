@@ -940,10 +940,10 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         output_1.append(chunk.choices[0].text)
     assert output_0 not in output_1
 
+
 def test_non_stream_prompt_echo_response(openai_client, capsys):
     """
-    Test chat/completion when min_tokens equals max_tokens equals 1.
-    Verify it returns exactly one token.
+    Test echo option in non-streaming completion functionality.
     """
     # Test single prompt
     response = openai_client.completions.create(
@@ -955,7 +955,7 @@ def test_non_stream_prompt_echo_response(openai_client, capsys):
         echo=True,
     )
     assert response.choices[0].text.startswith("Hello, how are you?")
-    
+
     # Test multiple prompts
     prompts = ["Hello, how are you?", "What is your name?"]
     response = openai_client.completions.create(
@@ -971,7 +971,11 @@ def test_non_stream_prompt_echo_response(openai_client, capsys):
         text = choice["message"]["content"]
         assert prompts[i] in text
 
+
 def test_streaming_prompt_echo_response(openai_client, capsys):
+    """
+    Test echo option in streaming completion functionality.
+    """
     # Test single prompt
     response = openai_client.completions.create(
         model="default",
