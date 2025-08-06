@@ -350,14 +350,17 @@ class OpenAIServingCompletion:
                     if res["finished"]:
                         num_choices -= 1
                         if getattr(request, "stream_options", None) and request.stream_options.include_usage:
+                            total_prompt_toknes = len(prompt_batched_token_ids[idx])
+                            total_completion_tokens = output_tokens[idx]
                             usage_chunk = CompletionStreamResponse(
                                 id=request_id,
                                 created=created_time,
                                 model=model_name,
                                 choices=[],
                                 usage=UsageInfo(
-                                    prompt_tokens=len(prompt_batched_token_ids[idx]),
-                                    completion_tokens=output_tokens[idx],
+                                    prompt_tokens=total_prompt_toknes,
+                                    completion_tokens=total_completion_tokens,
+                                    total_tokens=total_prompt_toknes + total_completion_tokens,
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
