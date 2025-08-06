@@ -308,7 +308,14 @@ class OpenAIServingCompletion:
 
                     # 如果是第一个响应片段，拼接prompt到text前
                     if res["outputs"].get("send_idx", -1) == 0 and request.prompt is not None:
-                        prompt_text = request.prompt if isinstance(request.prompt, str) else request.prompt[0]
+                        if isinstance(request.prompt, list):
+                            # 处理多个prompt的情况
+                            if len(request.prompt) > idx:
+                                prompt_text = request.prompt[idx]
+                            else:
+                                prompt_text = request.prompt[0]
+                        else:
+                            prompt_text = request.prompt
                         res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
