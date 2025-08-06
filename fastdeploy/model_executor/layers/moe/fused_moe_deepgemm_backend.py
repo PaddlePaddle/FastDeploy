@@ -314,6 +314,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         print("gaoziyuan test")
         print(layer.topk_method)
         print(layer)
+        gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
             print("gaoziyuan test")
             print(layer.topk_method)
