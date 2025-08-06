@@ -941,12 +941,12 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
     assert output_0 not in output_1
 
 
-def test_non_stream_prompt_echo_response(openai_client, capsys):
+def test_non_streaming_prompt_echo_response(openai_client, capsys):
     """
     Test echo option in non-streaming completion functionality.
     """
     # Test single prompt
-    response = openai_client.completions.create(
+    response_0 = openai_client.completions.create(
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
@@ -954,11 +954,11 @@ def test_non_stream_prompt_echo_response(openai_client, capsys):
         stream=False,
         echo=True,
     )
-    assert response.choices[0].text.startswith("Hello, how are you?")
+    assert response_0.choices[0].text.startswith("Hello, how are you?")
 
     # Test multiple prompts
     prompts = ["Hello, how are you?", "What is your name?"]
-    response = openai_client.completions.create(
+    response_1 = openai_client.completions.create(
         model="default",
         prompt=["Hello, how are you?", "What is your name?"],
         temperature=1,
@@ -966,10 +966,8 @@ def test_non_stream_prompt_echo_response(openai_client, capsys):
         stream=False,
         echo=True,
     )
-    choices = response["choices"]
-    for i, choice in enumerate(choices):
-        text = choice["message"]["content"]
-        assert prompts[i] in text
+    for i in range(len(response_1.choices)):
+        assert response_1.choices[i].text.startswith(prompts[i])
 
 
 def test_streaming_prompt_echo_response(openai_client, capsys):
@@ -977,7 +975,7 @@ def test_streaming_prompt_echo_response(openai_client, capsys):
     Test echo option in streaming completion functionality.
     """
     # Test single prompt
-    response = openai_client.completions.create(
+    response_0 = openai_client.completions.create(
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
@@ -986,14 +984,13 @@ def test_streaming_prompt_echo_response(openai_client, capsys):
         echo=True,
     )
     output = []
-    for chunk in response:
-        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
-            output.append(chunk.choices[0].delta.content)
+    for chunk in response_0:
+        output.append(chunk.choices[0].text)
     assert "".join(output).startswith("Hello, how are you?")
 
     # Test multiple prompts
     prompts = ["Hello, how are you?", "What is your name?"]
-    response = openai_client.completions.create(
+    response_1 = openai_client.completions.create(
         model="default",
         prompt=prompts,
         temperature=1,
@@ -1001,10 +998,20 @@ def test_streaming_prompt_echo_response(openai_client, capsys):
         stream=True,
         echo=True,
     )
-    output = []
-    for chunk in response:
-        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
-            output.append(chunk.choices[0].delta.content)
-    text = "".join(output)
-    for prompt in prompts:
-        assert prompt in text
+    outputs = {i: [] for i in range(len(prompts))}
+    for chunk in response_1:
+        if chunk == "data: [DONE]":
+            break
+
+        for choice in chunk.choices:
+            index = choice.index
+            text = choice.text
+            outputs[index].append(text)
+
+            # 如果是该prompt的第一个回复字段，检查是否等于prompt本身
+            if len(outputs[index]) == 1:
+                assert text.startswith(
+                    prompts[index]
+                ), f"Prompt {index} first response '{text}' doesn't match prompt '{prompts[index]}'"
+                continue
+            continue
