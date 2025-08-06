@@ -29,6 +29,8 @@ from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
 
+import numpy as np
+import paddle
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
@@ -293,6 +295,13 @@ def extract_tar(tar_path, output_dir):
         print(f"Successfully extracted to: {output_dir}")
     except Exception as e:
         raise RuntimeError(f"Extraction failed: {e!s}")
+
+
+def set_random_seed(seed: int) -> None:
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        paddle.seed(seed)
 
 
 def download_model(url, output_dir, temp_tar):
