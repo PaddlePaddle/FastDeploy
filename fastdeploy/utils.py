@@ -513,7 +513,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
         except Exception:
             if os.path.exists(local_path):
                 llm_logger.error(
-                    "Failed to connect to aistudio, but detected that the model directory exists. Attempting to start."
+                    f"Failed to connect to aistudio, but detected that the model directory {local_path} exists. Attempting to start."
                 )
                 return local_path
             else:
@@ -536,7 +536,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
         except Exception:
             if os.path.exists(local_path):
                 llm_logger.error(
-                    "Failed to connect to modelscope, but detected that the model directory exists. Attempting to start."
+                    f"Failed to connect to modelscope, but detected that the model directory {local_path} exists. Attempting to start."
                 )
                 return local_path
             else:
