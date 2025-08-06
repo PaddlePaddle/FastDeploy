@@ -52,7 +52,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         """process_prequanted_weights"""
         pass
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
         """
@@ -108,7 +108,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             ),
         )
 
-    def load_weights(self, layer: nn.Layer, state_dict):
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Triton MoE load weight process.
         """
@@ -355,7 +355,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             else:
                 getattr(layer, name).set_value(weight_tensor)
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
         """
@@ -600,7 +600,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         raise NotImplementedError
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
         """
@@ -663,7 +663,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             ),
         )
 
-    def load_weights(self, layer: nn.Layer, state_dict):
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Triton MoE create weight process.
         """

@@ -423,7 +423,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
 
         self.create_w4a8_scale_weights(layer, layer.weight_key_map)
 
-    def load_weights(self, layer: nn.Layer, state_dict):
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass load weight process.
         """
@@ -691,7 +691,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             ),
         )
 
-    def load_weights(self, layer: nn.Layer, state_dict):
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass load weight process.
         """

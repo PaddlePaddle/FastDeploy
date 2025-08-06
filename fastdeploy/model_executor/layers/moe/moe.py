@@ -21,18 +21,14 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
-    CutlassMoEMethod,
-)
-from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
-    BlockWiseFP8MoEMethod,
-    TensorWiseFP8MoEMethod,
-    TritonWeightOnlyMoEMethod,
-)
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
-pre_create_weights_list = (CutlassMoEMethod, TensorWiseFP8MoEMethod, BlockWiseFP8MoEMethod, TritonWeightOnlyMoEMethod)
+# TODO(lulinjun): remove this import after supporting all backends
+is_supported_moe_backend = None
+if current_platform.is_cuda():
+    from .check_backend_supported import is_supported_moe_backend
 
 
 def get_moe_method():
@@ -130,11 +126,15 @@ class FusedMoE(nn.Layer):
         if moe_quant_config:
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
+            if is_supported_moe_backend is not None and is_supported_moe_backend(self.quant_method):
+                self.quant_method.create_weights(self, weight_loader=self.weight_loader)
         else:
             # w_fp16 a_fp16
             self.quant_method = get_moe_method()
             self.quant_method.create_weights(self, weight_loader=self.weight_loader)
-
+        self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
+        if self.gate_correction_bias_key is not None:
+            self.gate_correction_bias = self.create_parameter(shape=[1, self.num_experts], dtype="float32")
         self.redundant_table_manger = None
         if self.ep_size > 1:
             if fd_config.model_config.enable_redundant_experts is True:
@@ -492,7 +492,7 @@ class FusedMoE(nn.Layer):
         else:
             self.gate_correction_bias = None
 
-        if isinstance(self.quant_method, pre_create_weights_list):
+        if is_supported_moe_backend is not None and is_supported_moe_backend(self.quant_method):
             if self.fd_config.model_config.is_quantized:
                 if getattr(self.fd_config.quant_config, "is_permuted", True):
                     self.quant_method.process_prequanted_weights(self, state_dict)
@@ -500,7 +500,6 @@ class FusedMoE(nn.Layer):
                     self.quant_method.process_loaded_weights(self, state_dict)
             else:
                 self.quant_method.process_loaded_weights(self, state_dict)
-
         else:
             if self.fd_config.model_config.is_quantized:
                 if getattr(self.fd_config.quant_config, "is_permuted", True):

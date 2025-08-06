@@ -67,7 +67,7 @@ class ParallelLMHead(nn.Layer):
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
 
         if self.use_ep:
-            self.linear = self.create_parameter(
+            self.weight = self.create_parameter(
                 shape=[embedding_dim, num_embeddings],
                 dtype=paddle.get_default_dtype(),
                 is_bias=False,
@@ -113,7 +113,7 @@ class ParallelLMHead(nn.Layer):
         """
 
         if self.use_ep:
-            self.linear.set_value(get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype()))
+            self.weight.set_value(get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype()))
             if self.bias_key is not None:
                 self.bias.set_value(
                     get_tensor(state_dict.pop(self.linear_bias_key)).astype(paddle.get_default_dtype())
@@ -146,9 +146,9 @@ class ParallelLMHead(nn.Layer):
         logits = input
         if self.use_ep:
             if self.linear_bias_key is None:
-                logits = paddle.matmul(logits, self.linear)
+                logits = paddle.matmul(logits, self.weight)
             else:
-                logits = paddle.incubate.nn.functional.fused_linear(logits, self.linear, self.bias)
+                logits = paddle.incubate.nn.functional.fused_linear(logits, self.weight, self.bias)
         else:
             logits = self.linear(logits)
         return logits
