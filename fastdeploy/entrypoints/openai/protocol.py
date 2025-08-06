@@ -548,7 +548,9 @@ class ChatCompletionRequest(BaseModel):
                 del req_dict["messages"]
         else:
             # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-            assert len(req_dict["messages"]) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
+            assert (
+                len(req_dict["messages"]) > 0
+            ), "messages can not be an empty list, unless prompt_token_ids is passed"
             if self.disable_chat_template:
                 req_dict["prompt"] = req_dict["messages"][0]["content"]
                 del req_dict["messages"]
