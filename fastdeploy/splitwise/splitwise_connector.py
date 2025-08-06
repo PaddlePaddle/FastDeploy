@@ -423,7 +423,7 @@ class SplitwiseConnector:
         # JSON反序列化
         message = msgpack.unpackb(data)
         req_ids = [task["request_id"] for task in message["payload"]]
-        self.logger.info(f"send message {message['type']} {req_ids}")
+        self.logger.info(f"recv message type {message['type']} for {req_ids}")
         return message["type"], message["payload"]
 
     def _process_message(self, message: bytes):
@@ -454,7 +454,7 @@ class SplitwiseConnector:
         tasks_data = [Request.from_dict(task) for task in tasks]
         req_ids = [task["request_id"] for task in tasks]
         self.splitwise_queue.append(("decode", tasks_data))
-        self.logger.debug(f"{req_ids} received prefill data")
+        self.logger.info(f"{req_ids} received prefill data")
 
     def _handle_decode(self, payload):
         """
@@ -475,4 +475,4 @@ class SplitwiseConnector:
             )
         req_ids = [task["request_id"] for task in payload]
         self.splitwise_queue.append(("decode", tasks))
-        self.logger.debug(f"{req_ids} received decode data")
+        self.logger.info(f"{req_ids} received decode data")

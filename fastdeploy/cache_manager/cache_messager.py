@@ -287,7 +287,7 @@ class CacheMessager:
                 if not self.cache_info:
                     time.sleep(0.001)
                     continue
-                logger.info(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
+                logger.debug(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
                         continue
