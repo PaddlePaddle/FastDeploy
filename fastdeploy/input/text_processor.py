@@ -148,7 +148,7 @@ class BaseDataProcessor(ABC):
 
 
 class DataProcessor(BaseDataProcessor):
-    def __init__(self, model_name_or_path, reasoning_parser_obj=None, , tool_parser_obj=None):
+    def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
         """
             Initializes the DecodeStatus object.
 
