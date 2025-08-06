@@ -32,6 +32,7 @@ from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
+    ReplicatedLinear,
     RowParallelLinear,
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
@@ -39,6 +40,47 @@ from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
+
+
+class Qwen3MoeBlock(nn.Layer):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        layer_id: int,
+        prefix: str = "",
+    ) -> None:
+        super().__init__()
+        weight_key_map = {
+            "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+            "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
+        }
+        self.experts = FusedMoE(
+            fd_config,
+            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
+            num_experts=fd_config.model_config.num_experts,
+            top_k=fd_config.model_config.num_experts_per_tok,
+            layer_idx=layer_id,
+            weight_key_map=weight_key_map,
+        )
+
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.num_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+        )
+
+    def forward(self, x):
+        out = self.experts(x, self.gate)
+        return out
+
+    def load_state_dict(self, state_dict):
+        """ """
+        self.gate.load_state_dict(state_dict)
+        self.experts.load_state_dict(state_dict)
 
 
 class Qwen3MLP(nn.Layer):
@@ -104,22 +146,13 @@ class Qwen3DecoderLayer(nn.Layer):
             layer_id=layer_id,
             prefix=f"{prefix}.self_attn",
         )
-
-        weight_key_map = {
-            "gate_weight_key": f"{prefix}.mlp.gate.weight",
-            "up_gate_proj_expert_weight_key": f"{prefix}.mlp.experts.{{}}.up_gate_proj.weight",
-            "down_proj_expert_weight_key": f"{prefix}.mlp.experts.{{}}.down_proj.weight",
-        }
-
-        if fd_config.model_config.num_experts is not None and layer_id >= fd_config.model_config.moe_layer_start_index:
-            self.mlp = FusedMoE(
-                fd_config,
-                moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
-                num_experts=fd_config.model_config.num_experts,
-                top_k=fd_config.model_config.num_experts_per_tok,
-                layer_idx=layer_id,
-                weight_key_map=weight_key_map,
-            )
+        mlp_only_layers = (
+            [] if not hasattr(fd_config.model_config, "mlp_only_layers") else fd_config.model_config.mlp_only_layers
+        )
+        if (layer_id not in mlp_only_layers) and (
+            fd_config.model_config.num_experts > 0 and (layer_id + 1) % fd_config.model_config.decoder_sparse_step == 0
+        ):
+            self.mlp = Qwen3MoeBlock(fd_config, layer_id, prefix=f"{prefix}.mlp")
         else:
             self.mlp = Qwen3MLP(
                 fd_config,
@@ -278,6 +311,74 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
     def name(self):
         """ """
         return "Qwen3MoeForCausalLM"
+
+    def get_expert_mapping(
+        self,
+    ) -> list[tuple[str, str, int, str]]:
+        # (param_name, weight_name, expert_id, shard_id)
+        return FusedMoE.make_expert_params_mapping(
+            ckpt_gate_proj_name="gate_proj",
+            ckpt_down_proj_name="down_proj",
+            ckpt_up_proj_name="up_proj",
+            param_gate_up_proj_name="experts.up_gate_proj_",
+            param_down_proj_name="experts.down_proj_",
+            num_experts=self.fd_config.model_config.num_experts,
+        )
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.models.utils import default_weight_loader
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+        expert_params_mapping = self.get_expert_mapping()
+        params_dict = dict(self.named_parameters())
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                if "mlp.experts" in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                for mapping in expert_params_mapping:
+                    param_name, weight_name, expert_id, shard_id = mapping
+                    if weight_name not in loaded_weight_name:
+                        continue
+                    model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                    if model_param_name not in params_dict:
+                        continue
+                    param = params_dict[model_param_name]
+                    weight_loader = param.weight_loader
+                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    break
+                else:
+                    if loaded_weight_name not in params_dict:
+                        continue
+                    param = params_dict[loaded_weight_name]
+                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                    weight_loader(param, loaded_weight)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
