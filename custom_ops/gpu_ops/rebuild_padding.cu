@@ -34,7 +34,6 @@ __global__ void RebuildPaddingKernel(T *output_data,
         int seq_id = 0;
         if (seq_len_this_time[bi] == 0) continue;
         if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
-        // if encoder, get last token; just decoder, get first token.
         if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
 
         const int ori_token_idx =
@@ -55,22 +54,25 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
                                            const int *output_padding_offset,
                                            const int max_input_length,
                                            const int dim_embed,
-                                           const int64_t output_elem_nums) {
+                                           const int64_t output_elem_nums,
+                                           const int bsz) {
     AlignedVector<T, VecSize> src_vec;
     const int64_t global_idx = blockDim.x * blockIdx.x + threadIdx.x;
     for (int64_t i = global_idx * VecSize; i < output_elem_nums;
          i += gridDim.x * blockDim.x * VecSize) {
         const int out_token_id = i / dim_embed;
-        const int ori_token_id =
-            out_token_id + output_padding_offset[out_token_id];
+        const int ori_token_id = out_token_id + output_padding_offset[out_token_id];
+
         const int bi = ori_token_id / max_input_length;
+
         int seq_id = 0;
         if (seq_len_this_time[bi] == 0) continue;
         if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
-        // if encoder, get last token; just decoder, get first token.
+
         if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
 
-        const int input_token_id = cu_seqlens_q[bi]+ seq_id;
+        const int cum_offset_bi = bi * max_input_length - cu_seqlens_q[bi];
+        const int input_token_id = ori_token_id - cum_offset_bi + seq_id;
         const int bias_idx = i % dim_embed;
 
         Load<T, VecSize>(&input_data[input_token_id * dim_embed + bias_idx],
@@ -78,6 +80,8 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
         Store<T, VecSize>(src_vec, &output_data[i]);
     }
 }
+
+
 
 template <paddle::DataType D>
 std::vector<paddle::Tensor> rebuild_padding(
@@ -141,7 +145,8 @@ std::vector<paddle::Tensor> rebuild_padding(
                 output_padding_offset.get_ptr()->data<int>(),
                 max_input_length,
                 dim_embed,
-                elem_nums);
+                elem_nums,
+                bsz);
     } else {
         RebuildPaddingKernel<DataType_, PackSize>
             <<<grid_size, blocksize, 0, cu_stream>>>(
