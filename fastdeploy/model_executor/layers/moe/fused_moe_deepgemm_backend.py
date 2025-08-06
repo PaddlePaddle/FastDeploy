@@ -316,10 +316,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
-                layer.n_group,  # 8
-                layer.topk_group,  # 4
-                layer.top_k,  # 8
-                layer.routed_scaling_factor,  # 2.5
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
                 layer.gate_correction_bias,
             )
         else:
