@@ -17,6 +17,30 @@ class TestAistudioDownload(unittest.TestCase):
 
         os.environ.clear()
 
+    def test_retrive_model_from_server_AISTUDIO(self):
+        os.environ["FD_MODEL_SOURCE"] = "AISTUDIO"
+        os.environ["FD_MODEL_CACHE"] = "./models"
+
+        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
+        revision = "master"
+        expected_path = f"./models/PaddlePaddle/ERNIE-4.5-0.3B-PT/{revision}"
+        result = retrive_model_from_server(model_name_or_path, revision)
+        self.assertEqual(expected_path, result)
+
+        os.environ.clear()
+
+    def test_retrive_model_from_server_HUGGINGFACE(self):
+        os.environ["FD_MODEL_SOURCE"] = "HUGGINGFACE"
+        os.environ["FD_MODEL_CACHE"] = "./models"
+
+        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
+        revision = "master"
+        expected_path = f"./models/PaddlePaddle/ERNIE-4.5-0.3B-PT/{revision}"
+        result = retrive_model_from_server(model_name_or_path, revision)
+        self.assertEqual(expected_path, result)
+
+        os.environ.clear()
+
     def test_retrive_model_from_server_unsupported_source(self):
         os.environ["FD_MODEL_SOURCE"] = "UNSUPPORTED_SOURCE"
         os.environ["FD_MODEL_CACHE"] = "./models"
