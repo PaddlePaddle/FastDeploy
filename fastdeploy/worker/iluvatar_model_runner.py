@@ -37,7 +37,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
-from fastdeploy.model_executor.model_loader import get_model_from_loader
+from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
@@ -142,9 +142,10 @@ class IluvatarModelRunner(ModelRunnerBase):
             schemata_key,
         )
 
-    def insert_prefill_inputs(self, req_dicts: List[Request]):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
+        num_running_requests: batch_size
         TODO(gongshaotian): Refactor this func
         """
 
@@ -176,7 +177,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
+                self.seq_lens_this_time_buffer[idx : idx + 1] = 1
                 self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = length
                 self.share_inputs["prompt_lens"][idx : idx + 1] = length
@@ -188,7 +189,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                         request.draft_token_ids[0:num_prefill_send_token],
                         dtype="int64",
                     )
-                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = num_prefill_send_token
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
             else:
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -199,7 +200,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                     request.set("chunk_idx", 1)
                     logger.info(f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
-                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
                     self.share_inputs["input_ids"][idx, :token_chunk_size] = np.array(
                         request.prompt_token_ids[:token_chunk_size]
                     )
@@ -211,7 +212,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 else:
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = length
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
@@ -242,13 +243,15 @@ class IluvatarModelRunner(ModelRunnerBase):
                 request.block_tables, dtype="int32"
             )
 
-            if request.get("bad_words_token_ids") is not None:
+            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                if bad_words_len > 0:
-                    self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
-                    self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
-                        request.get("bad_words_token_ids"), dtype="int64"
-                    )
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                    request.get("bad_words_token_ids"), dtype="int64"
+                )
+            else:
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
@@ -262,6 +265,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
         self.share_inputs["not_need_stop"][0] = True
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
@@ -281,7 +285,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -297,6 +301,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -342,7 +347,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["max_dec_len"] = paddle.full([max_num_seqs, 1], self.model_config.max_length, dtype="int64")
         self.share_inputs["min_length"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
         self.share_inputs["max_length"] = paddle.full([max_num_seqs, 1], self.model_config.max_length, dtype="int64")
-        self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -383,8 +388,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         # AttentionBackend buffers
-        self.share_inputs["decoder_batch_ids"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["decoder_batch_ids"] = None
+        self.share_inputs["decoder_tile_ids_per_batch"] = None
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -519,16 +524,13 @@ class IluvatarModelRunner(ModelRunnerBase):
     def load_model(self) -> None:
         """load or download model"""
         logger.info(f"Starting to load model {self.model_config.architectures[0]}")
-        time_before_load = time.perf_counter()
         # 1. Load original model
-        self.model = get_model_from_loader(fd_config=self.fd_config)
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        self.model = model_loader.load_model(fd_config=self.fd_config)
 
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
-
-        time_after_load = time.perf_counter()
-        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
 
     def get_model(self) -> nn.Layer:
         """get current model"""
@@ -862,6 +864,7 @@ class IluvatarModelRunner(ModelRunnerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -869,6 +872,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
+            num_running_requests: batch_size
             intermediate_tensors:
         """
         # Note(@wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
@@ -989,6 +993,9 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         self._update_chunked_prefill(model_forward_batch)
         self._add_cache(model_forward_batch)
+        self.seq_lens_this_time_buffer[:num_running_requests].copy_(
+            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+        )
         return None
 
     def _add_cache(self, model_forward_batch) -> None:

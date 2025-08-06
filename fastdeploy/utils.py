@@ -587,12 +587,31 @@ def version():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     version_file_path = os.path.join(current_dir, "version.txt")
 
+    content = "Unknown"
     try:
         with open(version_file_path, "r") as f:
             content = f.read()
-            print(content)
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
+    return content
+
+
+class DeprecatedOptionWarning(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        console_logger.warning(f"Deprecated option is detected: {option_string}, which may be removed later")
+        setattr(namespace, self.dest, True)
+
+
+DEPRECATED_ARGS = ["enable_mm"]
+
+
+def deprecated_kwargs_warning(**kwargs):
+    for arg in DEPRECATED_ARGS:
+        if arg in kwargs:
+            console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")

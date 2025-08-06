@@ -31,7 +31,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint4 \
        --max-model-len 32768 \
        --max-num-seqs 32 \
-       --enable-mm \
        --mm-processor-kwargs '{"video_max_frames": 30}' \
        --limit-mm-per-prompt '{"image": 10, "video": 3}' \
        --reasoning-parser ernie-45-vl
@@ -113,7 +112,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
       {"type": "text", "text": "From which era does the artifact in the image originate?"}
     ]}
   ],
-  "metadata": {"enable_thinking": false}
+  "chat_template_kwargs":{"enable_thinking": false}
 }'
 ```
 

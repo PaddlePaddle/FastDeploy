@@ -139,11 +139,17 @@ class OpenAIServingChat:
         previous_num_tokens = 0
         num_prompt_tokens = 0
         num_choices = 1
-        max_streaming_response_tokens = 1
-        enable_thinking = None
-        include_stop_str_in_output = False
-        if request.metadata is not None and request.metadata.get("max_streaming_response_tokens", 1) > 1:
-            max_streaming_response_tokens = request.metadata["max_streaming_response_tokens"]
+        max_streaming_response_tokens = (
+            request.max_streaming_response_tokens
+            if request.max_streaming_response_tokens is not None
+            else (request.metadata or {}).get("max_streaming_response_tokens", 1)
+        )  # dierctly passed & passed in metadata
+
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+
+        include_stop_str_in_output = request.include_stop_str_in_output
 
         stream_options = request.stream_options
         if stream_options is None:
@@ -164,12 +170,6 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
-            if request.metadata is not None:
-                enable_thinking = request.metadata.get("enable_thinking")
-                include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
-            enable_return_token_ids = request.return_token_ids or (
-                request.extra_body is not None and request.extra_body.get("return_token_ids", False)
-            )
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -219,7 +219,7 @@ class OpenAIServingChat:
                                     completion_token_ids=None,
                                 ),
                             )
-                            if enable_return_token_ids:
+                            if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
@@ -240,18 +240,11 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     delta_text = output["text"]
-                    raw_top_logprobs = output["top_logprobs"]
-                    logprobs_res = None
-                    if raw_top_logprobs is not None:
-                        top_logprobs = LogprobsLists(
-                            logprob_token_ids=raw_top_logprobs[0],
-                            logprobs=raw_top_logprobs[1],
-                            sampled_token_ranks=raw_top_logprobs[2],
-                        )
-                        logprobs_res = self.build_logprobs_response(
-                            request_logprobs=request.logprobs,
-                            response_logprobs=top_logprobs,
-                            request_top_logprobs=request.top_logprobs,
+                    output_top_logprobs = output["top_logprobs"]
+                    logprobs_res: Optional[LogProbs] = None
+                    if request.logprobs and output_top_logprobs is not None:
+                        logprobs_res = self._create_chat_logprobs(
+                            output_top_logprobs, request.logprobs, request.top_logprobs
                         )
 
                     previous_num_tokens += len(output["token_ids"])
@@ -289,7 +282,7 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
-                    if enable_return_token_ids:
+                    if request.return_token_ids:
                         choice.delta.completion_token_ids = list(output["token_ids"])
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
@@ -345,11 +338,12 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         final_res = None
-        enable_thinking = None
-        include_stop_str_in_output = False
-        enable_return_token_ids = request.return_token_ids or (
-            request.extra_body is not None and request.extra_body.get("return_token_ids", False)
-        )
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+
+        include_stop_str_in_output = request.include_stop_str_in_output
+
         try:
             dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
             dealer.write([b"", request_id.encode("utf-8")])
@@ -378,9 +372,6 @@ class OpenAIServingChat:
                 for data in response:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
-                    if request.metadata is not None:
-                        enable_thinking = request.metadata.get("enable_thinking")
-                        include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
                     data = self.engine_client.data_processor.process_response_dict(
                         data,
                         stream=False,
@@ -392,17 +383,10 @@ class OpenAIServingChat:
                     completion_token_ids.extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
                     output = data["outputs"]
-                    raw_top_logprobs = output["top_logprobs"]
-                    if raw_top_logprobs is not None:
-                        top_logprobs = LogprobsLists(
-                            logprob_token_ids=raw_top_logprobs[0],
-                            logprobs=raw_top_logprobs[1],
-                            sampled_token_ranks=raw_top_logprobs[2],
-                        )
-                        logprobs_res = self.build_logprobs_response(
-                            request_logprobs=request.logprobs,
-                            response_logprobs=top_logprobs,
-                            request_top_logprobs=request.top_logprobs,
+                    output_top_logprobs = output["top_logprobs"]
+                    if output_top_logprobs is not None:
+                        logprobs_res = self._create_chat_logprobs(
+                            output_top_logprobs, request.logprobs, request.top_logprobs
                         )
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents.extend(logprobs_res.content)
@@ -422,8 +406,8 @@ class OpenAIServingChat:
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
-            prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-            completion_token_ids=(completion_token_ids if enable_return_token_ids else None),
+            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+            completion_token_ids=completion_token_ids if request.return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:
@@ -465,7 +449,36 @@ class OpenAIServingChat:
             usage=usage,
         )
 
-    def build_logprobs_response(
+    def _create_chat_logprobs(
+        self,
+        output_top_logprobs,
+        request_logprobs: Optional[bool] = None,
+        request_top_logprobs: Optional[int] = None,
+    ) -> Optional[LogProbs]:
+        """Create OpenAI-style logprobs for chat completions."""
+        if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
+            return None
+        logprobs_res: Optional[LogProbs] = None
+        for logprob_token_ids, logprobs, sampled_token_ranks in zip(
+            output_top_logprobs[0], output_top_logprobs[1], output_top_logprobs[2]
+        ):
+            top_logprobs = LogprobsLists(
+                logprob_token_ids=[logprob_token_ids],
+                logprobs=[logprobs],
+                sampled_token_ranks=[sampled_token_ranks],
+            )
+            step_logprobs_res = self._build_logprobs_response(
+                request_logprobs=request_logprobs,
+                response_logprobs=top_logprobs,
+                request_top_logprobs=request_top_logprobs,
+            )
+            if logprobs_res is None:
+                logprobs_res = step_logprobs_res
+            else:
+                logprobs_res.content.extend(step_logprobs_res.content)
+        return logprobs_res
+
+    def _build_logprobs_response(
         self,
         request_logprobs: bool,
         response_logprobs: Optional[LogprobsLists],
@@ -502,12 +515,10 @@ class OpenAIServingChat:
                 token_str = self.engine_client.data_processor.process_logprob_response(
                     [tid], clean_up_tokenization_spaces=False
                 )
-                # token_bytes = token_str.encode("utf-8", errors="replace")
-                entry = LogProbEntry(
-                    token=token_str,
-                    logprob=lp,
-                    # bytes=list(token_bytes)
-                )
+                token_bytes = token_str.encode("utf-8", errors="replace")
+                if "\ufffd" in token_str:
+                    token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                entry = LogProbEntry(token=token_str, logprob=lp, bytes=list(token_bytes))
                 top_logprob_entries.append(entry)
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
             sampled_entry = LogProbEntry(
@@ -520,6 +531,6 @@ class OpenAIServingChat:
             return LogProbs(content=[sampled_entry])
 
         except Exception as e:
-            api_server_logger.error("Error in build_logprobs_response: %s", e)
+            api_server_logger.error("Error in _build_logprobs_response: %s", e)
             api_server_logger.error(traceback.format_exc())
             return None

@@ -20,15 +20,15 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.model_loader import ModelRegistry
 from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MoeForCausalLM,
-    Ernie4_5_PretrainedModel,
+    Ernie4_5_MoePretrainedModel,
 )
 from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
     Ernie4_5_VLMoeForConditionalGeneration,
     Ernie4_5_VLPretrainedModel,
 )
+from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import (
     Qwen2ForCausalLM,
     Qwen2PretrainedModel,
@@ -56,6 +56,9 @@ class RolloutModel(nn.Layer):
     def _init_model(self) -> nn.Layer:
         """Load model from loader based on config."""
         context = paddle.LazyGuard()
+        from fastdeploy.plugins.model_register import load_model_register_plugins
+
+        load_model_register_plugins()
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
         with context:
             model_cls = ModelRegistry.get_class(architectures)
@@ -126,7 +129,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
     Ernie4_5_MoeForCausalLMRL
     """
 
-    _get_tensor_parallel_mappings = Ernie4_5_PretrainedModel._get_tensor_parallel_mappings
+    _get_tensor_parallel_mappings = Ernie4_5_MoePretrainedModel._get_tensor_parallel_mappings
 
     def __init__(self, fd_config: FDConfig):
         """
@@ -429,4 +432,24 @@ class Qwen3ForCausalLMRL(Qwen3ForCausalLM, BaseRLModel):
         return "Qwen3ForCausalLMRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
-        pass
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("model")
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx):
+            # FFN mappings
+            for ph in place_holders:
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"] = (
+                    f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                )
+
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping

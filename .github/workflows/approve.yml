@@ -1,0 +1,42 @@
+name: Approval
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - 'release/*'
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  Approval:
+    name: Approval
+    if: ${{ github.repository_owner == 'PaddlePaddle' }}
+    runs-on: ubuntu-latest
+    env:
+      PR_ID: ${{ github.event.pull_request.number }}
+      BRANCH: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Checkout base repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 1000
+
+      - name: Merge PR to test branch
+        run: |
+          git fetch origin pull/${PR_ID}/merge
+          git checkout -b test FETCH_HEAD
+          git log -n 3 --oneline
+          git remote add upstream https://github.com/PaddlePaddle/FastDeploy.git
+          git fetch upstream $BRANCH
+
+      - name: Setup python3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Run approval check script
+        run: |
+          bash scripts/check_approval.sh

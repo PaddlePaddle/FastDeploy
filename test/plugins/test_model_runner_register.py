@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,25 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""UT for topp_sampling"""
-import numpy as np
-import paddle
 
-from fastdeploy.model_executor.ops.gpu import topp_sampling
+import unittest
 
-paddle.seed(2022)
+from fastdeploy.plugins import load_model_runner_plugins
 
-x = paddle.randn([4, 100000], dtype="float16")
-x = paddle.nn.functional.softmax(x)
-top_ps = paddle.to_tensor(
-    np.array(
-        [
-            0.9,
-        ]
-        * 4
-    ).astype(np.float16)
-)
-print(x)
-print(top_ps)
-out = topp_sampling(x, top_ps)
-print(out)
+
+class TestModelRunnerRegistryPlugins(unittest.TestCase):
+    def test_model_runner_callable(self):
+        runner_class = load_model_runner_plugins()
+        device_id = 1
+
+        # create runner
+        runner = runner_class(device_id)
+
+        # test func
+        res = runner.get_rank()
+
+        self.assertEqual(res, device_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

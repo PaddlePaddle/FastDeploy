@@ -199,7 +199,7 @@ class LLMEngine:
             self.launched_cache_manager_signal.value[0] = 1
 
         self.worker_proc = self._start_worker_service()
-        console_logger.info("Waitting worker processes ready...")
+        console_logger.info("Waiting worker processes ready...")
         time.sleep(5)
         self.worker_init_status = dict()
         if not self.check_worker_initialize_status():
@@ -243,38 +243,38 @@ class LLMEngine:
                 self.splitwise_receive_thread.daemon = True
                 self.splitwise_receive_thread.start()
 
-            self.cfg.init_cache_info()
+        self.cfg.init_cache_info()
 
-            role = self.cfg.splitwise_role
-            host_ip = self.cfg.host_ip
-            disaggregate = self.cfg.disaggregate_info
-            if self.cfg.scheduler_config.name == "splitwise":
-                self.scheduler.start(role, host_ip, disaggregate)
+        role = self.cfg.splitwise_role
+        host_ip = self.cfg.host_ip
+        disaggregate = self.cfg.disaggregate_info
+        if self.cfg.scheduler_config.name == "splitwise":
+            self.scheduler.start(role, host_ip, disaggregate)
 
-            time.sleep(1)
+        time.sleep(1)
 
-            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
-                self.dp_processed = []
-                for i in range(
-                    1,
-                    self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
-                ):
-                    time.sleep(1)
-                    self.dp_processed.append(
-                        multiprocessing.Process(
-                            target=start_expert_service,
-                            args=(
-                                self.cfg,
-                                i + self.cfg.node_rank * self.cfg.worker_num_per_node,
-                                self.ipc_signal_suffix,
-                            ),
-                        )
+        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            self.dp_processed = []
+            for i in range(
+                1,
+                self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+            ):
+                time.sleep(1)
+                self.dp_processed.append(
+                    multiprocessing.Process(
+                        target=start_expert_service,
+                        args=(
+                            self.cfg,
+                            i + self.cfg.node_rank * self.cfg.worker_num_per_node,
+                            self.ipc_signal_suffix,
+                        ),
                     )
-                    llm_logger.info(
-                        f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
-                        + f" data parallel id {i}"
-                    )
-                    self.dp_processed[-1].start()
+                )
+                llm_logger.info(
+                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                    + f" data parallel id {i}"
+                )
+                self.dp_processed[-1].start()
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
         return True
@@ -373,6 +373,8 @@ class LLMEngine:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+
+            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
                 available_blocks=self.resource_manager.available_block_num(),
                 block_size=self.cfg.cache_config.block_size,
@@ -422,7 +424,7 @@ class LLMEngine:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error("Engine stops inserting zmq task into scheduler")
+                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
@@ -500,6 +502,7 @@ class LLMEngine:
             enable_thinking = kwargs.get("enable_thinking", None)
         request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
+        request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
         request.set(
             "max_tokens",
@@ -1082,6 +1085,7 @@ class LLMEngine:
             f" --splitwise_role {self.cfg.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization {self.cfg.model_config.quantization}"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
@@ -1089,6 +1093,7 @@ class LLMEngine:
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --load_choices {self.cfg.load_choices}"
         )
 
         worker_append_flag = {

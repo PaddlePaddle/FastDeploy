@@ -19,10 +19,12 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from enum import Enum
+from typing import Literal, Optional, Union
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
+import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.utils import check_unified_ckpt, get_logger
@@ -60,6 +62,11 @@ class ErnieArchitectures:
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
     }
+
+    @classmethod
+    def register_ernie_model_arch(cls, model_class):
+        if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
+            cls.ARCHITECTURES.add(model_class.name())
 
     @classmethod
     def contains_ernie_arch(cls, architectures):
@@ -268,6 +275,8 @@ class ParallelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        # currently, the expert parallel size is equal data parallel size
+        self.expert_parallel_size = self.data_parallel_size
         self.use_ep = self.expert_parallel_size > 1
         if self.splitwise_role == "mixed":
             self.moe_phase = MoEPhase(phase="prefill")
@@ -649,6 +658,14 @@ class EarlyStopConfig:
             argument = self.enable_early_stop
 
 
+class LoadChoices(str, Enum):
+    """LoadChoices"""
+
+    DEFAULT = "default"
+    # only support qwen3-bf16 now
+    NEW_LOADER = "new_loader"
+
+
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
@@ -665,6 +682,7 @@ class LoadConfig:
         self,
         args,
     ):
+        self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
@@ -866,8 +884,10 @@ class CommitConfig:
 
         self._load_from_version_file()
 
-    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
+    def _load_from_version_file(self, file_path: str = None):
         """Internal method to load version info from file"""
+        if file_path is None:
+            file_path = os.path.join(fastdeploy.__path__[0], "version.txt")
         try:
             with open(file_path, "r") as f:
                 for line in f:
