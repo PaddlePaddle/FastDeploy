@@ -117,13 +117,12 @@ class DeepSeekV3MoE(nn.Layer):
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
 
         weight_key_map = {
-            "gate_weight_key": f"{prefix}.gate.weight",
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
             "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
         }
 
-        self.fused_moe = FusedMoE(
+        self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=False,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
@@ -135,6 +134,16 @@ class DeepSeekV3MoE(nn.Layer):
             routed_scaling_factor=fd_config.model_config.routed_scaling_factor,
             layer_idx=layer_id,
             weight_key_map=weight_key_map,
+        )
+
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.n_routed_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
         )
 
         self.num_shared_experts = fd_config.model_config.n_shared_experts
@@ -149,13 +158,14 @@ class DeepSeekV3MoE(nn.Layer):
 
     def load_state_dict(self, state_dict):
         """ """
-        self.fused_moe.load_state_dict(state_dict)
+        self.gate.load_state_dict(state_dict)
+        self.experts.load_state_dict(state_dict)
         self.shared_experts.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
         """ """
         shared_experts_out = self.shared_experts(hidden_states)
-        moe_out = self.fused_moe(hidden_states)
+        moe_out = self.experts(hidden_states, self.gate)
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
@@ -315,7 +325,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             dtype=layernorm_out.dtype,
         )
 
-        if forward_meta.max_enc_len_this_time:
+        if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
             query = self.q_a_proj(layernorm_out)
             query = self.q_a_layernorm(query)
             query = self.q_b_proj(query)
@@ -362,7 +372,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
             fmha_out = fmha_out + fmha_out_prefill
-        if forward_meta.max_dec_len_this_time:
+        if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
             query = self.q_a_proj(layernorm_out)
             query = self.q_a_layernorm(query)
             ln_out_or_q_c = query

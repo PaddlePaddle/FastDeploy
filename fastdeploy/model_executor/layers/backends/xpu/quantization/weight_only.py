@@ -35,7 +35,7 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
     ) -> None:
         super().__init__(quant_config)
 
-    def create_weights(self, layer: nn.Layer) -> None:
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs) -> None:
         """
         Create weights for linear layer on XPU
         """
@@ -45,6 +45,12 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         if self.quant_config.name() == "weight_only_int4":
             layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
+        layer.weight = layer.create_parameter(
+            shape=layer.weight_shape,
+            dtype=layer.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,
             dtype="float32",
