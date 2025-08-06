@@ -540,6 +540,7 @@ class GCUModelRunner(ModelRunnerBase):
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
             min_p=self.share_inputs["min_p"],
+            seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             prompt_ids=self.share_inputs["prompt_ids"],
