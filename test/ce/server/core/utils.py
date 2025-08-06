@@ -4,6 +4,7 @@
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
 import json
+import math
 
 import requests
 from core import TEMPLATES, base_logger
@@ -37,10 +38,6 @@ def send_request(url, payload, timeout=600, stream=False):
 
     Returns:
         response: 请求的响应结果，如果请求失败则返回None。
-
-    Raises:
-        None
-
     """
     headers = {
         "Content-Type": "application/json",
@@ -60,7 +57,7 @@ def send_request(url, payload, timeout=600, stream=False):
 
 
 def get_stream_chunks(response):
-    """解析流式返回，生成chunk List[dict]"""
+    """解析流式返回，生成 chunk List[dict]"""
     chunks = []
 
     if response.status_code == 200:
@@ -82,3 +79,60 @@ def get_stream_chunks(response):
         base_logger.error("返回内容：", response.text)
 
     return chunks
+
+
+def get_token_list(response):
+    """解析 response 中的 token 文本列表"""
+    token_list = []
+
+    try:
+        content_logprobs = response["choices"][0]["logprobs"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        base_logger.error(f"解析失败：{e}")
+        return []
+
+    for token_info in content_logprobs:
+        token = token_info.get("token")
+        if token is not None:
+            token_list.append(token)
+
+    base_logger.info(f"Token List:{token_list}")
+    return token_list
+
+
+def get_logprobs_list(response):
+    """解析 response 中的 token 文本列表"""
+    logprobs_list = []
+
+    try:
+        content_logprobs = response["choices"][0]["logprobs"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        base_logger.error(f"解析失败：{e}")
+        return []
+
+    for token_info in content_logprobs:
+        token = token_info.get("logprob")
+        if token is not None:
+            logprobs_list.append(token)
+
+    base_logger.info(f"Logprobs List:{logprobs_list}")
+    return logprobs_list
+
+
+def get_probs_list(response):
+    """解析 response 中的 token 文本列表"""
+    probs_list = []
+
+    try:
+        content_logprobs = response["choices"][0]["logprobs"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        base_logger.error(f"解析失败：{e}")
+        return []
+
+    for token_info in content_logprobs:
+        token = token_info.get("logprob")
+        if token is not None:
+            probs_list.append(math.exp(token))
+
+    base_logger.info(f"probs List:{probs_list}")
+    return probs_list
