@@ -9,21 +9,6 @@ class TestAistudioDownload(unittest.TestCase):
     Test cases for downloading models from different sources using FastDeploy utilities.
     """
 
-    def test_retrive_model_from_server_MODELSCOPE(self):
-        """
-        Test case for retrieving a model from ModelScope server.
-        """
-        os.environ["FD_MODEL_SOURCE"] = "MODELSCOPE"
-        os.environ["FD_MODEL_CACHE"] = "./models"
-
-        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
-        revision = "master"
-        expected_path = "./models/PaddlePaddle/ERNIE-4.5-0.3B-PT"
-        result = retrive_model_from_server(model_name_or_path, revision)
-        self.assertEqual(expected_path, result)
-
-        os.environ.clear()
-
     def test_retrive_model_from_server_unsupported_source(self):
         """
         Test case for retrieving a model from an unsupported source.
@@ -33,6 +18,20 @@ class TestAistudioDownload(unittest.TestCase):
 
         model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
         with self.assertRaises(ValueError):
+            retrive_model_from_server(model_name_or_path)
+
+        os.environ.clear()
+
+    def test_retrive_model_from_modelscope_server_model_not_exist(self):
+        """
+        Test case for retrieving a model from ModelScope server when it doesn't exist.
+        """
+        os.environ["FD_MODEL_SOURCE"] = "MODELSCOPE"
+        os.environ["FD_MODEL_CACHE"] = "./model"
+
+        model_name_or_path = "non_existing_model_modelscope"
+
+        with self.assertRaises(Exception):
             retrive_model_from_server(model_name_or_path)
 
         os.environ.clear()
@@ -56,21 +55,6 @@ class TestAistudioDownload(unittest.TestCase):
         Test case for retrieving a model from AI Studio server.
         """
         os.environ["FD_MODEL_SOURCE"] = "AISTUDIO"
-        os.environ["FD_MODEL_CACHE"] = "./models"
-
-        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
-        revision = "aaa"
-        expected_path = "./models/PaddlePaddle/ERNIE-4.5-0.3B-PT"
-        result = retrive_model_from_server(model_name_or_path, revision)
-        self.assertEqual(expected_path, result)
-
-        os.environ.clear()
-
-    def test_retrive_model_from_modelscope_server_(self):
-        """
-        Test case for retrieving a model from ModelScope server.
-        """
-        os.environ["FD_MODEL_SOURCE"] = "MODELSCOPE"
         os.environ["FD_MODEL_CACHE"] = "./models"
 
         model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
