@@ -24,7 +24,7 @@ from fastdeploy.distributed.communication import tensor_model_parallel_all_reduc
 from fastdeploy.platforms import current_platform
 
 from ..utils import create_and_set_parameter, get_tensor
-from .fused_moe_backend_base import MoEMethodBase
+from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
@@ -64,32 +64,19 @@ def get_moe_scores(
     return scores, topk_values, topk_idx
 
 
-class CutlassMoEMethod(MoEMethodBase):
+class CutlassMoEMethod(UnquantizedFusedMoEMethod):
     """
     Use Cutlass Group Gemm to compute Fused MoE.
     This method is the oldest way to compute MoE in Paddle.
     """
 
-    def create_weights(self, layer: nn.Layer, state_dict):
-        """
-        Paddle cutlass create weight process.
-        """
-        # bf16
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
-            weight_name = self.added_weight_attrs[idx]
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            getattr(layer, weight_name).set_value(weight_tensor)
+
+        layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
+        layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
     def compute_ffn(
         self,
@@ -134,11 +121,12 @@ class CutlassMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
@@ -206,11 +194,12 @@ class CutlassMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
@@ -242,11 +231,12 @@ class CutlassMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
             gate_out, _, _ = get_moe_scores(
                 gate_out,
