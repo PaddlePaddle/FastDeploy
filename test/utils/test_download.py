@@ -27,8 +27,30 @@ class TestAistudioDownload(unittest.TestCase):
 
         os.environ.clear()
 
-    def test_retrive_model_from_server_model_not_exist(self):
+    def test_retrive_model_from_modelscope_server_model_not_exist(self):
         os.environ["FD_MODEL_SOURCE"] = "MODELSCOPE"
+        os.environ["FD_MODEL_CACHE"] = "./models"
+
+        model_name_or_path = "non_existing_model"
+
+        with self.assertRaises(Exception):
+            retrive_model_from_server(model_name_or_path)
+
+        os.environ.clear()
+
+    def test_retrive_model_from_aistudio_server_model_not_exist(self):
+        os.environ["FD_MODEL_SOURCE"] = "AISTUDIO"
+        os.environ["FD_MODEL_CACHE"] = "./models"
+
+        model_name_or_path = "non_existing_model"
+
+        with self.assertRaises(Exception):
+            retrive_model_from_server(model_name_or_path)
+
+        os.environ.clear()
+
+    def test_retrive_model_from_huggingface_server_model_not_exist(self):
+        os.environ["FD_MODEL_SOURCE"] = "HUGGINGFACE"
         os.environ["FD_MODEL_CACHE"] = "./models"
 
         model_name_or_path = "non_existing_model"
