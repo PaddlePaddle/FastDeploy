@@ -663,7 +663,7 @@ class LoadChoices(str, Enum):
 
     DEFAULT = "default"
     # only support qwen3-bf16 now
-    NEW_LOADER = "new_loader"
+    DEFAULT_V1 = "default_v1"
 
 
 class LoadConfig:

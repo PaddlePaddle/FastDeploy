@@ -16,6 +16,8 @@
 
 from typing import Optional
 
+import paddle
+
 from fastdeploy.model_executor.layers.moe import FusedMoE
 
 from ..utils import get_tensor
@@ -79,11 +81,14 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         self.quant_round_type = 1
         self.weight_dtype = "float8_e4m3fn"
 
-    def create_weights(self, layer):
-        """
-        Nothing to do!
-        """
-        pass
+    def create_weights(self, layer, **extra_weight_attrs):
+
+        layer.weight = layer.create_parameter(
+            shape=layer.weight_shape,
+            dtype=layer.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
 
     def process_prequanted_weights(self, layer, state_dict) -> None:
         """
