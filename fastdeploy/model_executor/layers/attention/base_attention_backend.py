@@ -86,6 +86,15 @@ class AttentionBackend(ABC):
                 layer,
                 forward_meta,
             )
+        elif forward_meta.forward_mode.is_native():
+            return self.forward_native_backend(
+                q,
+                k,
+                v,
+                qkv,
+                layer,
+                forward_meta,
+            )
         else:
             return self.forward_extend(
                 q,
@@ -138,4 +147,16 @@ class AttentionBackend(ABC):
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """Run a forward for extend."""
+        raise NotImplementedError
+
+    def forward_native_backend(
+        self,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        qkv: paddle.Tensor,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta,
+    ) -> paddle.Tensor:
+        """Run a forward for native."""
         raise NotImplementedError
