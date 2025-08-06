@@ -11,31 +11,7 @@ class TestAistudioDownload(unittest.TestCase):
 
         model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
         revision = "master"
-        expected_path = f"./models/PaddlePaddle/ERNIE-4.5-0.3B-PT/{revision}"
-        result = retrive_model_from_server(model_name_or_path, revision)
-        self.assertEqual(expected_path, result)
-
-        os.environ.clear()
-
-    def test_retrive_model_from_server_AISTUDIO(self):
-        os.environ["FD_MODEL_SOURCE"] = "AISTUDIO"
-        os.environ["FD_MODEL_CACHE"] = "./models"
-
-        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
-        revision = "master"
-        expected_path = f"./models/PaddlePaddle/ERNIE-4.5-0.3B-PT/{revision}"
-        result = retrive_model_from_server(model_name_or_path, revision)
-        self.assertEqual(expected_path, result)
-
-        os.environ.clear()
-
-    def test_retrive_model_from_server_HUGGINGFACE(self):
-        os.environ["FD_MODEL_SOURCE"] = "HUGGINGFACE"
-        os.environ["FD_MODEL_CACHE"] = "./models"
-
-        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
-        revision = "master"
-        expected_path = f"./models/PaddlePaddle/ERNIE-4.5-0.3B-PT/{revision}"
+        expected_path = "./models/PaddlePaddle/ERNIE-4.5-0.3B-PT"
         result = retrive_model_from_server(model_name_or_path, revision)
         self.assertEqual(expected_path, result)
 
@@ -81,6 +57,32 @@ class TestAistudioDownload(unittest.TestCase):
 
         with self.assertRaises(Exception):
             retrive_model_from_server(model_name_or_path)
+
+        os.environ.clear()
+
+    def test_retrive_model_from_aistudio_server_(self):
+        os.environ["FD_MODEL_SOURCE"] = "AISTUDIO"
+        os.environ["FD_MODEL_CACHE"] = "./models"
+
+        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
+        revision = "aaa"
+        os.makedirs("./models/PaddlePaddle/ERNIE-4.5-0.3B-PT", exist_ok=True)
+        expected_path = "./models/PaddlePaddle/ERNIE-4.5-0.3B-PT"
+        result = retrive_model_from_server(model_name_or_path, revision)
+        self.assertEqual(expected_path, result)
+
+        os.environ.clear()
+
+    def test_retrive_model_from_modelscope_server_(self):
+        os.environ["FD_MODEL_SOURCE"] = "MODELSCOPE"
+        os.environ["FD_MODEL_CACHE"] = "./models"
+
+        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
+        revision = "aaa"
+        os.makedirs("./models/PaddlePaddle/ERNIE-4.5-0.3B-PT", exist_ok=True)
+        expected_path = "./models/PaddlePaddle/ERNIE-4.5-0.3B-PT"
+        result = retrive_model_from_server(model_name_or_path, revision)
+        self.assertEqual(expected_path, result)
 
         os.environ.clear()
 
