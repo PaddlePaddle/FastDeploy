@@ -126,11 +126,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
@@ -233,11 +234,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
@@ -303,27 +305,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
-        print("gaoziyuan test")
-        print(layer.topk_method)
-        print(layer)
-        if layer.topk_method == "noaux_tc":
-            print("gaoziyuan test")
-            print(layer.topk_method)
-            print("gaoziyuan test top_k")
-            print(layer.top_k)
-            print(layer.routed_scaling_factor)
-            print("layer.n_group")
-            print(layer.n_group)
-
-            print("layer.topk_group")
-            print(layer.topk_group)
-
         if layer.topk_method == "noaux_tc":
             from .ep import get_moe_scores
 
@@ -335,8 +322,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.routed_scaling_factor,  # 2.5
                 layer.gate_correction_bias,
             )
-            print("topk_weights", topk_weights)
-            print("topk_ids", topk_ids)
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,

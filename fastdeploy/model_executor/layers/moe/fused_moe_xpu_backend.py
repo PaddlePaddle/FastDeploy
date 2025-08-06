@@ -19,47 +19,36 @@ from typing import Dict
 import paddle
 from paddle import nn
 
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
+    UnquantizedFusedMoEMethod,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.ops.xpu import weight_quantize_xpu
 
-from .fused_moe_backend_base import MoEMethodBase
 
-
-class XPUMoEMethod(MoEMethodBase):
+class XPUMoEMethod(UnquantizedFusedMoEMethod):
     """
     XPU MOE
     """
 
-    def create_weights(self, layer: nn.Layer, state_dict):
-        """
-        Paddle cutlass create weight process.
-        """
-        # bf16
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         for weights in [up_gate_proj_weights, down_proj_weights]:
             for idx, weight in enumerate(weights):
                 weights[idx] = weight.transpose([1, 0])
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
-            weight_name = self.added_weight_attrs[idx]
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            getattr(layer, weight_name).set_value(weight_tensor)
+
+        layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
+        layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
     def apply_tp(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -68,7 +57,7 @@ class XPUMoEMethod(MoEMethodBase):
 
         fused_moe_out = xpu_moe_layer(
             x,
-            layer.gate_weight.transpose([1, 0]),
+            gate.weight.transpose([1, 0]),
             layer.gate_correction_bias,
             layer.up_gate_proj_weight,
             layer.down_proj_weight,
@@ -94,7 +83,7 @@ class XPUMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -105,7 +94,7 @@ class XPUMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -187,7 +176,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         XPU compute Fused MoE.
@@ -196,7 +185,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
 
         fused_moe_out = xpu_moe_layer(
             x,
-            layer.gate_weight.transpose([1, 0]),
+            gate.weight.transpose([1, 0]),
             layer.gate_correction_bias,
             layer.up_gate_proj_weight,
             layer.down_proj_weight,

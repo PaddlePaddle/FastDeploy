@@ -171,12 +171,12 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
-
+        gate_out = gate(x.cast("float32"))
         from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
 
         (
@@ -242,12 +242,12 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
-
+        gate_out = gate(x.cast("float32"))
         from fastdeploy.model_executor.ops.triton_ops import moe_wint2_ffn_kernel
 
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
