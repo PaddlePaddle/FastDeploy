@@ -14,15 +14,17 @@
 # limitations under the License.
 """
 
+import asyncio
 import os
 import threading
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from multiprocessing import current_process
 
 import uvicorn
 import zmq
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -45,8 +47,7 @@ from fastdeploy.metrics.metrics import (
     get_filtered_metrics,
     main_process_metrics,
 )
-from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
-from fastdeploy.plugins.model_register import load_model_register_plugins
+from fastdeploy.metrics.trace_util import inject_to_metadata, instrument
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
@@ -92,6 +93,64 @@ def load_engine():
     return engine
 
 
+app = FastAPI()
+
+
+# 自定义信号量类，提供状态查询功能
+class StatefulSemaphore:
+    __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
+
+    def __init__(self, value: int):
+        self._semaphore = asyncio.Semaphore(value)
+        self._max_value = value
+        self._acquired_count = 0
+        self._last_reset = time.monotonic()
+
+    async def acquire(self):
+        await self._semaphore.acquire()
+        self._acquired_count += 1
+
+    def release(self):
+        self._semaphore.release()
+        self._acquired_count = max(0, self._acquired_count - 1)
+
+    def locked(self) -> bool:
+        return self._semaphore.locked()
+
+    @property
+    def available(self) -> int:
+        """返回当前可用的连接数"""
+        return self._max_value - self._acquired_count
+
+    @property
+    def acquired(self) -> int:
+        """返回当前已使用的连接数"""
+        return self._acquired_count
+
+    @property
+    def max_value(self) -> int:
+        """返回最大允许的连接数"""
+        return self._max_value
+
+    @property
+    def uptime(self) -> float:
+        """返回信号量运行时间（秒）"""
+        return time.monotonic() - self._last_reset
+
+    def status(self) -> dict:
+        """返回完整的信号量状态"""
+        return {
+            "available": self.available,
+            "acquired": self.acquired,
+            "max_value": self.max_value,
+            "uptime": round(self.uptime, 2),
+        }
+
+
+MAX_CONCURRENT_CONNECTIONS = (args.max_num_seqs + args.workers - 1) // args.workers
+connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -106,14 +165,13 @@ async def lifespan(app: FastAPI):
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
     engine_client = EngineClient(
-        args.model,
         args.tokenizer,
         args.max_model_len,
         args.tensor_parallel_size,
         pid,
         args.limit_mm_per_prompt,
         args.mm_processor_kwargs,
-        # args.enable_mm,
+        args.enable_mm,
         args.reasoning_parser,
         args.data_parallel_size,
         args.enable_logprob,
@@ -140,6 +198,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 instrument(app)
+
+
+@asynccontextmanager
+async def connection_manager():
+    """异步上下文管理器，用于获取和释放连接信号量"""
+    try:
+        await asyncio.wait_for(connection_semaphore.acquire(), timeout=300)
+        yield
+    except asyncio.TimeoutError:
+        api_server_logger.info(f"Time out release: {connection_semaphore.status()}")
+        if connection_semaphore.locked():
+            connection_semaphore.release()
+        raise HTTPException(status_code=429, detail="Too many requests")
 
 
 # TODO 传递真实引擎值 通过pid 获取状态
@@ -195,6 +266,23 @@ def ping(raw_request: Request) -> Response:
     return health(raw_request)
 
 
+def wrap_streaming_generator(original_generator: AsyncGenerator):
+    """
+    Wrap an async generator to release the connection semaphore when the generator is finished.
+    """
+
+    async def wrapped_generator():
+        try:
+            async for chunk in original_generator:
+                yield chunk
+        finally:
+            api_server_logger.info(f"release: {connection_semaphore.status()}")
+            if connection_semaphore.locked():
+                connection_semaphore.release()
+
+    return wrapped_generator
+
+
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """
@@ -204,16 +292,25 @@ async def create_chat_completion(request: ChatCompletionRequest):
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
-    inject_to_metadata(request)
-    generator = await app.state.chat_handler.create_chat_completion(request)
+    try:
+        async with connection_manager():
+            inject_to_metadata(request)
+            generator = await app.state.chat_handler.create_chat_completion(request)
+            api_server_logger.info(f"{connection_semaphore.status()}")
+            if isinstance(generator, ErrorResponse):
+                if connection_semaphore.locked():
+                    connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+            elif isinstance(generator, ChatCompletionResponse):
+                if connection_semaphore.locked():
+                    connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump())
+            else:
+                wrapped_generator = wrap_streaming_generator(generator)
+                return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
 
-    if isinstance(generator, ErrorResponse):
-        return JSONResponse(content=generator.model_dump(), status_code=generator.code)
-
-    elif isinstance(generator, ChatCompletionResponse):
-        return JSONResponse(content=generator.model_dump())
-
-    return StreamingResponse(content=generator, media_type="text/event-stream")
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
 @app.post("/v1/completions")
@@ -225,14 +322,22 @@ async def create_completion(request: CompletionRequest):
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
-
-    generator = await app.state.completion_handler.create_completion(request)
-    if isinstance(generator, ErrorResponse):
-        return JSONResponse(content=generator.model_dump(), status_code=generator.code)
-    elif isinstance(generator, CompletionResponse):
-        return JSONResponse(content=generator.model_dump())
-
-    return StreamingResponse(content=generator, media_type="text/event-stream")
+    try:
+        async with connection_manager():
+            generator = await app.state.completion_handler.create_completion(request)
+            if isinstance(generator, ErrorResponse):
+                if connection_semaphore.locked():
+                    connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+            elif isinstance(generator, CompletionResponse):
+                if connection_semaphore.locked():
+                    connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump())
+            else:
+                wrapped_generator = wrap_streaming_generator(generator)
+                return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
 @app.get("/update_model_weight")
@@ -272,7 +377,6 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
-    fd_start_span("FD_START")
 
     try:
         uvicorn.run(
@@ -395,7 +499,6 @@ def launch_controller_server():
 def main():
     """main函数"""
 
-    load_model_register_plugins()
     if load_engine() is None:
         return
 
