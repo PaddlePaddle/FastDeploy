@@ -22,7 +22,9 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
+    UnquantizedFusedMoEMethod,
+)
 from fastdeploy.model_executor.layers.utils import (
     CpuGuard,
     create_and_set_parameter,
@@ -37,7 +39,7 @@ from fastdeploy.model_executor.ops.gcu import (
 )
 
 
-class GCUFusedMoeMethod(MoEMethodBase):
+class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
     """
     Use GCU to compute Fused MoE.
     """
@@ -46,28 +48,12 @@ class GCUFusedMoeMethod(MoEMethodBase):
         super().__init__(quant_config)
         self.group_size = -1
 
-    def create_weights(self, layer: nn.Layer, state_dict):
-        """
-        Paddle gcu create weight process.
-        """
-        # bf16
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
-            # shape [E, K, N] -> [E, N, K]
-            weight_tensor = paddle.transpose(weight_tensor, [0, 2, 1])
-            weight_name = self.added_weight_attrs[idx]
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            getattr(layer, weight_name).set_value(weight_tensor)
+        layer.up_gate_proj_weight.set_value(paddle.transpose(stacked_up_gate_proj_weights, [0, 2, 1]))
+        layer.down_proj_weight.set_value(paddle.transpose(stacked_down_proj_weights, [0, 2, 1]))
 
     @paddle.no_grad()
     def compute_ffn(
@@ -202,18 +188,19 @@ class GCUFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         return self.compute_ffn(layer, x, gate_out, enable_quant=False)
 
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -224,7 +211,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -235,7 +222,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -400,9 +387,10 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         return self.compute_ffn(layer, x, gate_out, enable_quant=True)

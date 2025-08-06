@@ -316,6 +316,11 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    seed: int = 0
+    """
+    Random seed to use for initialization. If not set, defaults to 0.
+    """
+
     enable_early_stop: bool = False
     """
     Flag to enable early stop. Default is False (disabled).
@@ -483,6 +488,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--seed",
+            type=int,
+            default=EngineArgs.seed,
+            help="Random seed for initialization. If not specified, defaults to 0.",
         )
         model_group.add_argument(
             "--enable-early-stop",
