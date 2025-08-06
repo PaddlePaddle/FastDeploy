@@ -503,6 +503,8 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
         sources += ["gpu_ops/moba_attn/moba_attn.cu"]
+        os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
 
     setup(
         name="fastdeploy_ops",
