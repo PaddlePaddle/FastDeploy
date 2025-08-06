@@ -1285,10 +1285,10 @@ void MultiQueryAppendC4Attention(
     if (!is_decoder) {
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
-    const int num_chunks = div_up(max_dec_len, chunk_size);
+    const int num_chunks = div_up(encoder_max_partition_size, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1) {
+    if (num_chunks <= 0) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_c4_warp1_4_kernel<NV_TYPE,
                                                          uint8_t,
