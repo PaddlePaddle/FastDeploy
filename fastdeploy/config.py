@@ -122,6 +122,7 @@ class ModelConfig:
         self.enable_mm = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
+        self.seed = 0
         self.quantization = None
         for key, value in args.items():
             if hasattr(self, key):
@@ -663,7 +664,7 @@ class LoadChoices(str, Enum):
 
     DEFAULT = "default"
     # only support qwen3-bf16 now
-    NEW_LOADER = "new_loader"
+    DEFAULT_V1 = "default_v1"
 
 
 class LoadConfig:

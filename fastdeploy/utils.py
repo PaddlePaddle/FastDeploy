@@ -29,6 +29,8 @@ from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
 
+import numpy as np
+import paddle
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
@@ -38,6 +40,10 @@ from typing_extensions import TypeIs, assert_never
 from fastdeploy import envs
 
 T = TypeVar("T")
+
+# [N,2] -> every line is [config_name, enable_xxx_name]
+# Make sure enable_xxx equal to config.enable_xxx
+ARGS_CORRECTION_LIST = [["early_stop_config", "enable_early_stop"], ["graph_optimization_config", "use_cudagraph"]]
 
 
 class EngineError(Exception):
@@ -291,6 +297,13 @@ def extract_tar(tar_path, output_dir):
         raise RuntimeError(f"Extraction failed: {e!s}")
 
 
+def set_random_seed(seed: int) -> None:
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        paddle.seed(seed)
+
+
 def download_model(url, output_dir, temp_tar):
     """
     下载模型，并将其解压到指定目录。
@@ -361,8 +374,16 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
             namespace = argparse.Namespace()
         for key, value in filtered_config.items():
             setattr(namespace, key, value)
+        args = super().parse_args(args=remaining_args, namespace=namespace)
 
-        return super().parse_args(args=remaining_args, namespace=namespace)
+        # Args correction
+        for config_name, flag_name in ARGS_CORRECTION_LIST:
+            if hasattr(args, config_name) and hasattr(args, flag_name):
+                # config is a dict
+                config = getattr(args, config_name, None)
+                if config is not None and flag_name in config.keys():
+                    setattr(args, flag_name, config[flag_name])
+        return args
 
 
 def resolve_obj_from_strname(strname: str):

@@ -27,7 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
@@ -75,6 +75,7 @@ class GpuWorker(WorkerBase):
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
+        set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
         self.model_runner: ModelRunnerBase = ModelRunner(
             fd_config=self.fd_config,
@@ -129,6 +130,7 @@ class GpuWorker(WorkerBase):
 
         # 2. Profile run
         self.model_runner.profile_run()
+        set_random_seed(self.fd_config.model_config.seed)
 
         # 3. Statistical memory information
         paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(local_rank)

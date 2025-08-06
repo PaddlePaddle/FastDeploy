@@ -129,8 +129,8 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
         )
 
-    # Wait up to 300 seconds for API server to be ready
-    for _ in range(300):
+    # Wait up to 10 minutes for API server to be ready
+    for _ in range(10 * 60):
         if is_port_open("127.0.0.1", FD_API_PORT):
             print(f"API server is up on port {FD_API_PORT}")
             break
