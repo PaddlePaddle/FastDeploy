@@ -50,7 +50,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             layer.weight,
             {"weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config))},
         )
-        if hasattr(layer, "nranks") and layer.nranks > 0:
+        if hasattr(layer, "nranks") and layer.nranks > 1:
             set_weight_attrs(layer.weight, {"output_dim": extra_weight_attrs.get("output_dim")})
 
     def process_loaded_weights(self, layer, weights) -> None:
@@ -340,7 +340,8 @@ class ColumnParallelLinear(LinearBase):
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
-                set_weight_attrs(self.bias, {"output_dim": True})
+                if self.nranks > 1:
+                    set_weight_attrs(self.bias, {"output_dim": True})
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -670,12 +671,13 @@ class RowParallelLinear(LinearBase):
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=0)
-                set_weight_attrs(
-                    self.bias,
-                    {
-                        "output_dim": False,
-                    },
-                )
+                if self.nranks > 1:
+                    set_weight_attrs(
+                        self.bias,
+                        {
+                            "output_dim": False,
+                        },
+                    )
 
         self.reduce_results = reduce_results
 
