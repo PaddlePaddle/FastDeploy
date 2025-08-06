@@ -30,6 +30,8 @@ from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
 
+import numpy as np
+import paddle
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
@@ -39,6 +41,10 @@ from typing_extensions import TypeIs, assert_never
 from fastdeploy import envs
 
 T = TypeVar("T")
+
+# [N,2] -> every line is [config_name, enable_xxx_name]
+# Make sure enable_xxx equal to config.enable_xxx
+ARGS_CORRECTION_LIST = [["early_stop_config", "enable_early_stop"], ["graph_optimization_config", "use_cudagraph"]]
 
 
 class EngineError(Exception):
@@ -292,6 +298,13 @@ def extract_tar(tar_path, output_dir):
         raise RuntimeError(f"Extraction failed: {e!s}")
 
 
+def set_random_seed(seed: int) -> None:
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        paddle.seed(seed)
+
+
 def download_model(url, output_dir, temp_tar):
     """
     下载模型，并将其解压到指定目录。
@@ -362,8 +375,16 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
             namespace = argparse.Namespace()
         for key, value in filtered_config.items():
             setattr(namespace, key, value)
+        args = super().parse_args(args=remaining_args, namespace=namespace)
 
-        return super().parse_args(args=remaining_args, namespace=namespace)
+        # Args correction
+        for config_name, flag_name in ARGS_CORRECTION_LIST:
+            if hasattr(args, config_name) and hasattr(args, flag_name):
+                # config is a dict
+                config = getattr(args, config_name, None)
+                if config is not None and flag_name in config.keys():
+                    setattr(args, flag_name, config[flag_name])
+        return args
 
 
 def resolve_obj_from_strname(strname: str):
@@ -508,7 +529,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
                 repo_id = "PaddlePaddle" + repo_id.strip()[5:]
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
-            local_path = f"{local_path}/{repo_id}/{revision}"
+            local_path = f"{local_path}/{repo_id}"
             aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
@@ -523,7 +544,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
                 repo_id = "PaddlePaddle" + repo_id.strip()[5:]
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
-            local_path = f"{local_path}/{repo_id}/{revision}"
+            local_path = f"{local_path}/{repo_id}"
             modelscope_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
@@ -541,7 +562,7 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
                 repo_id = "baidu" + repo_id.strip()[12:]
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
-            local_path = f"{local_path}/{repo_id}/{revision}"
+            local_path = f"{local_path}/{repo_id}"
             huggingface_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
@@ -602,12 +623,31 @@ def version():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     version_file_path = os.path.join(current_dir, "version.txt")
 
+    content = "Unknown"
     try:
         with open(version_file_path, "r") as f:
             content = f.read()
-            print(content)
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
+    return content
+
+
+class DeprecatedOptionWarning(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        console_logger.warning(f"Deprecated option is detected: {option_string}, which may be removed later")
+        setattr(namespace, self.dest, True)
+
+
+DEPRECATED_ARGS = ["enable_mm"]
+
+
+def deprecated_kwargs_warning(**kwargs):
+    for arg in DEPRECATED_ARGS:
+        if arg in kwargs:
+            console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")

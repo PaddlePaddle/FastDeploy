@@ -80,6 +80,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
     # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")),
+    # Whether to use PLUGINS.
+    "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
+    # set trace attribute job_id.
+    "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
 }
 
 

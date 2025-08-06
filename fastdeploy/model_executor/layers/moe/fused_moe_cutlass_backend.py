@@ -24,7 +24,7 @@ from fastdeploy.distributed.communication import tensor_model_parallel_all_reduc
 from fastdeploy.platforms import current_platform
 
 from ..utils import create_and_set_parameter, get_tensor
-from .fused_moe_backend_base import MoEMethodBase
+from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
@@ -53,7 +53,7 @@ def get_moe_scores(
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
     scores_with_bias = scores + e_score_correction_bias.unsqueeze(0)
-    scores = noaux_tc(
+    scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,
         n_group,
@@ -61,35 +61,22 @@ def get_moe_scores(
         top_k,
         routed_scaling_factor,
     )
-    return scores
+    return scores, topk_values, topk_idx
 
 
-class CutlassMoEMethod(MoEMethodBase):
+class CutlassMoEMethod(UnquantizedFusedMoEMethod):
     """
     Use Cutlass Group Gemm to compute Fused MoE.
     This method is the oldest way to compute MoE in Paddle.
     """
 
-    def create_weights(self, layer: nn.Layer, state_dict):
-        """
-        Paddle cutlass create weight process.
-        """
-        # bf16
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
-            weight_name = self.added_weight_attrs[idx]
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            getattr(layer, weight_name).set_value(weight_tensor)
+
+        layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
+        layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
     def compute_ffn(
         self,
@@ -134,11 +121,12 @@ class CutlassMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
@@ -206,14 +194,15 @@ class CutlassMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts")
+        expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, expertwise_scale=expertwise_scale
@@ -242,13 +231,14 @@ class CutlassMoEMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
-            gate_out = get_moe_scores(
+            gate_out, _, _ = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
@@ -331,6 +321,68 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         self.quant_config = quant_config
         self.moe_quant_type = "w4a8"
         self.pack_num = 2
+
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+        """
+        Paddle cutlass process prequanted weights.
+        """
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
+        up_gate_proj_expert_in_scale_key = layer.weight_key_map.get("up_gate_proj_expert_in_scale_key", None)
+        down_proj_expert_in_scale_key = layer.weight_key_map.get("down_proj_expert_in_scale_key", None)
+
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            layer.load_experts_weight(
+                state_dict,
+                up_gate_proj_expert_weight_key,
+                down_proj_expert_weight_key,
+            )
+        )
+
+        up_gate_proj_weight_scale = []
+        down_proj_weight_scale = []
+        up_gate_proj_in_scale_all_experts = []
+        up_gate_proj_in_scale = []
+        down_proj_in_scale = []
+
+        if layer.ep_size > 1:
+            for expert_idx in ep_rank_to_expert_id_list:
+                scale_tensor = get_tensor(state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)])
+                up_gate_proj_in_scale_all_experts.append(scale_tensor)
+
+        for expert_idx in logical_expert_ids:
+            up_gate_proj_weight_scale.append(
+                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+            )
+            down_proj_weight_scale.append(
+                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+            )
+            up_gate_proj_in_scale.append(
+                get_tensor(state_dict.pop(up_gate_proj_expert_in_scale_key.format(expert_idx)))
+            )
+            down_proj_in_scale.append(get_tensor(state_dict.pop(down_proj_expert_in_scale_key.format(expert_idx))))
+
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).cast(paddle.get_default_dtype())
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).cast(paddle.get_default_dtype())
+        up_gate_proj_in_scale_all_experts = paddle.stack(up_gate_proj_in_scale_all_experts, axis=0)
+        up_gate_proj_in_scale = paddle.stack(up_gate_proj_in_scale, axis=0)
+        down_proj_in_scale = paddle.stack(down_proj_in_scale, axis=0)
+
+        name_tensor_map = {
+            "up_gate_proj_weight": up_gate_proj_weight,
+            "down_proj_weight": down_proj_weight,
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
+            "down_proj_weight_scale": down_proj_weight_scale,
+            "up_gate_proj_in_scale_all_experts": up_gate_proj_in_scale_all_experts,
+            "up_gate_proj_in_scale": up_gate_proj_in_scale,
+            "down_proj_in_scale": down_proj_in_scale,
+        }
+        for name, tensor in name_tensor_map.items():
+            create_and_set_parameter(layer, name, tensor)
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -447,7 +499,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids = layer.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = layer.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,
