@@ -122,6 +122,10 @@ class LinearBase(nn.Layer):
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
+        elif fd_config.model_config.is_quantized and not skip_quant:
+            self.weight_key = f"{prefix}.quant_weight"
+            self.weight_scale_key = f"{prefix}.weight_scale"
+            self.act_scale_key = f"{prefix}.activation_scale"
         else:
             self.weight_key = f"{prefix}.weight"
         self.bias_key = f"{prefix}.bias"
@@ -170,7 +174,11 @@ class LinearBase(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the prequantized weights and scales.
         """
-        self.quant_method.process_prequanted_weights(self, state_dict)
+        if isinstance(self.quant_method, UnquantizedLinearMethod):
+            # for gate
+            self.load_weight(state_dict)
+        else:
+            self.quant_method.process_prequanted_weights(self, state_dict)
 
     def load_weight(self, state_dict: dict):
         """
