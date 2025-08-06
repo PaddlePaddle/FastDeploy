@@ -422,7 +422,14 @@ class OpenAIServingCompletion:
                     output_text = prompt_text
                 else:
                     token_ids = [*prompt_token_ids, *output["token_ids"]]
-                    output_text = prompt_text + output["text"]
+                    if isinstance(prompt_text, list):
+                        # 处理多个prompt的情况
+                        if len(prompt_text) > idx:
+                            output_text = prompt_text[idx] + output["text"]
+                        else:
+                            output_text = prompt_text[0] + output["text"]
+                    else:
+                        output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
