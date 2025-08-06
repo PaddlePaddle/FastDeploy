@@ -642,7 +642,6 @@ class LLMEngine:
                                             self.waiting_requests.extend(new_waiting)
                                             llm_logger.info(f"Added {len(new_waiting)} tasks to waiting queue")
 
-
                     else:
                         time.sleep(0.001)
 
@@ -813,15 +812,19 @@ class LLMEngine:
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
             if self.cfg.splitwise_role != "mixed":
-                status, msg = self.split_connector.check_decode_allocated(task):
+                status, msg = self.split_connector.check_decode_allocated(task)
                 if not status:
                     llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                    self.scheduler.put_results([RequestOutput(
-                            request_id=task.request_id,
-                            finished=True,
-                            error_code=500,
-                            error_msg=msg,
-                        )])
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=task.request_id,
+                                finished=True,
+                                error_code=500,
+                                error_msg=msg,
+                            )
+                        ]
+                    )
                     tasks.remove(task)
                     continue
             if task.sampling_params.bad_words is not None:
@@ -1038,7 +1041,6 @@ class LLMEngine:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
                 print(f"Error extracting sub services: {e}")
-
 
         for worker_queue in self.engine_worker_queue_server:
             worker_queue.cleanup()

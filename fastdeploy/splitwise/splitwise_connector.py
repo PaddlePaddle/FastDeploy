@@ -75,7 +75,7 @@ class SplitwiseConnector:
         self.router_socket.setsockopt(zmq.SNDHWM, 1000)
         self.router_socket.setsockopt(zmq.ROUTER_MANDATORY, 1)
         self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port[0]}")
-        self.logger.info(f"bind {self.cfg.cache_config.pd_comm_port}")
+        self.logger.info(f"bind {self.cfg.cache_config.pd_comm_port[0]}")
 
         self.poller = zmq.Poller()
         self.poller.register(self.router_socket, zmq.POLLIN)
@@ -342,9 +342,9 @@ class SplitwiseConnector:
         del self.current_request_ids[task.request_id]
         if msg == "finished":
             return True, ""
-        logger.error(f"Receive_decode_allocated error: {msg}")
+        self.logger.error(f"Receive_decode_allocated error: {msg}")
         return False, msg
-    
+
     def send_cache_infos(self, tasks, current_id):
         """
         Send cache information to specific port.
@@ -469,6 +469,7 @@ class SplitwiseConnector:
                 self._handle_decode(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
+                    self.logger.info(f"cache_sync task: {task}")
                     current_status = task.get("error_msg", "finished")
                     self.current_request_ids[task["request_id"]] = current_status
                     if self.enable_decode_cache_task:
