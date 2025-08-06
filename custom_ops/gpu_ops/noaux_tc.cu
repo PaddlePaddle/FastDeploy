@@ -28,7 +28,7 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     int topk,
                                     float routed_scaling_factor) {
   auto input_shape = scores_with_bias.shape();
-  PD_CHECK(input_shape.shape().size() == 2, );
+  PD_CHECK(input_shape.size() == 2);
   int64_t num_tokens = input_shape[0];
   int64_t num_experts = input_shape[1];
   auto input_type = scores_with_bias.dtype();
