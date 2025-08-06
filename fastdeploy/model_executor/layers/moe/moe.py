@@ -139,11 +139,11 @@ class FusedMoE(nn.Layer):
                 )
             self.quant_method.init_ep(self)
 
-        self.create_weights()
-
         if fd_config.load_config.dynamic_load_weight:
             # It's for RL to build model
             self.init_moe_weights()
+        else:
+            self.create_weights()
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
