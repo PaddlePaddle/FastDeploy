@@ -96,7 +96,6 @@ def load_engine():
 app = FastAPI()
 
 
-# 自定义信号量类，提供状态查询功能
 class StatefulSemaphore:
     __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
 
@@ -119,26 +118,21 @@ class StatefulSemaphore:
 
     @property
     def available(self) -> int:
-        """返回当前可用的连接数"""
         return self._max_value - self._acquired_count
 
     @property
     def acquired(self) -> int:
-        """返回当前已使用的连接数"""
         return self._acquired_count
 
     @property
     def max_value(self) -> int:
-        """返回最大允许的连接数"""
         return self._max_value
 
     @property
     def uptime(self) -> float:
-        """返回信号量运行时间（秒）"""
         return time.monotonic() - self._last_reset
 
     def status(self) -> dict:
-        """返回完整的信号量状态"""
         return {
             "available": self.available,
             "acquired": self.acquired,
@@ -202,7 +196,9 @@ instrument(app)
 
 @asynccontextmanager
 async def connection_manager():
-    """异步上下文管理器，用于获取和释放连接信号量"""
+    """
+    async context manager for connection manager
+    """
     try:
         await asyncio.wait_for(connection_semaphore.acquire(), timeout=300)
         yield
@@ -276,7 +272,7 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
             async for chunk in original_generator:
                 yield chunk
         finally:
-            api_server_logger.info(f"release: {connection_semaphore.status()}")
+            api_server_logger.debug(f"release: {connection_semaphore.status()}")
             if connection_semaphore.locked():
                 connection_semaphore.release()
 
