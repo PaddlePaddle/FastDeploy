@@ -94,7 +94,7 @@ class EngineArgs:
     """
     chat_template: str = None
     """
-    Chat template file path.
+    chat template or chat template file path
     """
     enable_mm: bool = False
     """
@@ -428,7 +428,7 @@ class EngineArgs:
             "--chat-template",
             type=str,
             default=EngineArgs.chat_template,
-            help="chat_template file path",
+            help="chat template or chat template file path",
         )
         model_group.add_argument(
             "--speculative-config",
