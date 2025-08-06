@@ -460,9 +460,9 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         return "Ernie4_5_ForCausalLM"
 
 
-class Ernie4_5_PretrainedModel(PretrainedModel):
+class Ernie4_5_MoePretrainedModel(PretrainedModel):
     """
-    Ernie4_5_PretrainedModel
+    Ernie4_5_MoePretrainedModel
     """
 
     config_class = FDConfig
@@ -472,6 +472,10 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Ernie4_5_MoeForCausalLM"
 
     weight_infos = [
         WeightMeta(
@@ -594,3 +598,16 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             config.prefix_name,
         )
         return mappings
+
+
+class Ernie4_5_PretrainedModel(Ernie4_5_MoePretrainedModel):
+    """
+    Ernie4_5_PretrainedModel
+    """
+
+    @classmethod
+    def arch_name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5_ForCausalLM"

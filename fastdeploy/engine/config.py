@@ -15,114 +15,20 @@
 
 import json
 import os
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastdeploy.config import CacheConfig, LoadConfig, ModelConfig
+from fastdeploy.config import (
+    CacheConfig,
+    CommitConfig,
+    LoadConfig,
+    ModelConfig,
+    ParallelConfig,
+)
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import ceil_div, get_host_ip, is_port_available, llm_logger
-
-
-class ParallelConfig:
-    """
-    Configuration for parallelism.
-
-    Attributes:
-        tensor_parallel_size (int): Size of tensor parallelism.
-        data_parallel_size (int): Size of data parallelism.
-        local_data_parallel_id (int): ID of local data parallel.
-        enable_expert_parallel (bool): Whether to enable expert parallel.
-    """
-
-    def __init__(
-        self,
-        tensor_parallel_size: int = 1,
-        data_parallel_size: int = 1,
-        enable_expert_parallel: bool = False,
-        enable_custom_all_reduce: bool = False,
-    ):
-        """
-        Initialize the ParallelConfig class.
-
-        Args:
-            tensor_parallel_size (int): Size of tensor parallelism.
-            data_parallel_size (int): Size of data parallelism.
-            local_data_parallel_id (int): ID of local data parallel.
-            enable_expert_parallel (bool): Whether to enable expert parallel.
-        """
-        self.tensor_parallel_size = tensor_parallel_size
-        self.data_parallel_size = data_parallel_size
-        self.enable_expert_parallel = enable_expert_parallel
-        self.expert_parallel_size = data_parallel_size
-        self.local_data_parallel_id = 0
-        self.enable_custom_all_reduce = enable_custom_all_reduce
-
-    def print(self):
-        """
-        print all config
-
-        """
-        llm_logger.info("Parallel Configuration Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
-
-
-@dataclass
-class CommitConfig:
-    """
-    Configuration for tracking version information from version.txt
-
-    Attributes:
-        fastdeploy_commit: Full FastDeploy git commit hash
-        paddle_version: PaddlePaddle version string
-        paddle_commit: PaddlePaddle git commit hash
-        cuda_version: CUDA version string
-        compiler_version: CXX compiler version string
-    """
-
-    fastdeploy_commit: str = ""
-    paddle_version: str = ""
-    paddle_commit: str = ""
-    cuda_version: str = ""
-    compiler_version: str = ""
-
-    def __post_init__(self):
-        """Automatically load version info when initialized"""
-        self._load_from_version_file()
-
-    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
-        """Internal method to load version info from file"""
-        try:
-            with open(file_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("fastdeploy GIT COMMIT ID:"):
-                        self.fastdeploy_commit = line.split(":")[1].strip()
-                    elif line.startswith("Paddle version:"):
-                        self.paddle_version = line.split(":")[1].strip()
-                    elif line.startswith("Paddle GIT COMMIT ID:"):
-                        self.paddle_commit = line.split(":")[1].strip()
-                    elif line.startswith("CUDA version:"):
-                        self.cuda_version = line.split(":")[1].strip()
-                    elif line.startswith("CXX compiler version:"):
-                        self.compiler_version = line.split(":")[1].strip()
-        except FileNotFoundError:
-            llm_logger.info(f"Warning: Version file not found at {file_path}")
-        except Exception as e:
-            llm_logger.info(f"Warning: Could not read version file - {e!s}")
-
-    def print(self):
-        """
-        print all config
-
-        """
-        llm_logger.info("Fasedeploy Commit Information :")
-        for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
 
 
 class Config:
@@ -149,6 +55,7 @@ class Config:
         splitwise_role (str): Splitwise role.
         innode_prefill_ports (Optional[List[int]]): Innode prefill ports.
             Temporary configuration, will be removed in the future.
+        load_choices(str):The format of the model weights to load. .Default is default
     """
 
     def __init__(
@@ -172,7 +79,7 @@ class Config:
         engine_worker_queue_port: int = 8002,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        enable_mm: bool = False,
+        # enable_mm: bool = False,
         splitwise_role: str = "mixed",
         innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
@@ -182,6 +89,8 @@ class Config:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_logprob: bool = False,
+        early_stop_config: Optional[Dict[str, Any]] = None,
+        load_choices: str = "default",
     ):
         """
         Initialize the Config class.
@@ -210,6 +119,9 @@ class Config:
             guided_decoding_backend(str): Guided decoding backend. Default is None.
             disable_any_whitespace(bool): Disable any whitespace when using guided decoding.
                 Default is False.
+            enable_logprob(bool): Enable logprob. Default is False.
+            early_stop_config (Optional[Dict[str, Any]]): Early stop configuration. Default is None.
+            load_choices(str):The format of the model weights to load. .Default is default
         """
         self.model_config = model_config
         self.cache_config = cache_config
@@ -245,7 +157,7 @@ class Config:
         self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
-        self.enable_mm = enable_mm
+        # self.enable_mm = enable_mm
         self.speculative_config = speculative_config
         self.use_warmup = use_warmup
         self.splitwise_role = splitwise_role
@@ -255,17 +167,27 @@ class Config:
         self.long_prefill_token_threshold = long_prefill_token_threshold
         self.reasoning_parser = reasoning_parser
         self.graph_optimization_config = graph_optimization_config
+        self.early_stop_config = early_stop_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
+        self.load_choices = load_choices
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
+
+        import fastdeploy.model_executor.models  # noqa: F401
+
+        architectures = self.model_config.architectures[0]
+        if MultimodalRegistry.contains_model(architectures):
+            self.enable_mm = True
+        else:
+            self.enable_mm = False
 
         # TODO
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if enable_mm:
+        if self.enable_mm:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
@@ -311,6 +233,9 @@ class Config:
             self.is_master = True
         else:
             self.is_master = False
+
+        if self.tensor_parallel_size <= self.worker_num_per_node:
+            self.is_master = True
 
         import paddle
 

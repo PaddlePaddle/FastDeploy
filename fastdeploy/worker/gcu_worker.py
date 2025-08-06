@@ -105,17 +105,18 @@ class GcuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch)
+        output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
         return output
 
-    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
+        self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
@@ -123,7 +124,8 @@ class GcuWorker(WorkerBase):
         """
         # 1. Warm up model
         # NOTE(gongshaotian): may be not need warm_up at this place
-
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
         # 2. Triger cuda grpah capture
         self.model_runner.capture_model()
 

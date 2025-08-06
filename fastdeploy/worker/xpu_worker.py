@@ -70,9 +70,10 @@ class XpuWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Optimizes the inference graph using the specified optimization options.
+        Perform the warm-up and the graph optimization
         """
-        logger.warn("XPU current could not graph optimize and warm up model")
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
 
     def determine_available_memory(self) -> int:
         """
@@ -93,9 +94,14 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory,
         )
 
-        total_memory = xpu_get_total_global_memory(self.local_rank)
-        used_memory = xpu_get_used_global_memory(self.local_rank)
-        free_memory = xpu_get_free_global_memory(self.local_rank)
+        assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
+        assert (
+            len(self.device_ids) > self.local_rank
+        ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
+
+        total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
+        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
 
         logger.info(
             f"Before warm up, total_memory: {total_memory}, \
@@ -106,7 +112,7 @@ class XpuWorker(WorkerBase):
         self.model_runner.profile_run()
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
-        used_memory = xpu_get_used_global_memory(self.local_rank)
+        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
@@ -139,9 +145,14 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
+        num_running_requests: Optional[int] = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch)
+        if is_dummy_run:
+            output = self.model_runner.execute_model(model_forward_batch)
+        else:
+            output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
         return output
 
     def exist_prefill(self):
@@ -150,15 +161,15 @@ class XpuWorker(WorkerBase):
         """
         return self.model_runner.exist_prefill()
 
-    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
         else:
-            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def check_health(self) -> bool:
         """ """

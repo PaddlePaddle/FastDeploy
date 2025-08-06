@@ -358,7 +358,7 @@ __global__ void GQAVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_bi = batch_id_per_token[token_idx];;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
@@ -402,6 +402,94 @@ __global__ void GQAVariableLengthRotaryKernel(
       }
     }
     Store<T, VecSize>(bias_vec, &qkv_out[base_idx]);
+  }
+}
+
+
+template <typename T, int VecSize = 1>
+__global__ void GQAVariableLengthRotaryQKNormKernel(
+    const T *qkv,
+    const float *cos_emb,
+    const float *sin_emb,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
+    const int *seq_lens,
+    const int *seq_lens_decoder,
+    T *qkv_out,
+    const int64_t elem_cnt,
+    const int q_num_head,
+    const int kv_num_head,
+    const int seq_len,
+    const int last_dim,
+    const bool rope_3d,
+    const T* q_norm_weight,
+    const T* k_norm_weight,
+    const float rms_norm_eps
+) {
+  using LoadT = AlignedVector<T, VecSize>;
+  constexpr int HalfVecSize = VecSize / 2;
+  using LoadEmbT = AlignedVector<float, HalfVecSize>;
+  LoadT src_vec;
+  LoadEmbT cos_emb_vec;
+  LoadEmbT sin_emb_vec;
+  int64_t global_warp_idx = blockDim.x * blockIdx.x + threadIdx.x;
+  int64_t all_warp_num = gridDim.x * blockDim.x;
+  const int half_lastdim = last_dim / 2;
+  const int offset = (q_num_head + kv_num_head) * last_dim;
+  const int all_head_num = elem_cnt / last_dim;
+  for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_num; gloabl_hi += all_warp_num) {
+    int64_t linear_index = gloabl_hi * last_dim + threadIdx.y * VecSize;
+    const int token_idx = linear_index / offset;
+    const int ori_bi = batch_id_per_token[token_idx];
+    if (seq_lens[ori_bi] == 0) continue;
+    const int bias = linear_index % offset;
+    const int hi = bias / last_dim;
+    const int h_bias = bias % last_dim;
+
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
+    const int64_t base_idx =
+        token_idx * (q_num_head + 2 * kv_num_head) * last_dim + hi * last_dim +
+        h_bias;
+    Load<T, VecSize>(&qkv[base_idx], &src_vec);
+
+    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+    Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+
+    float thread_m2 = 0.0f;
+    float warp_m2 = 0.0f;
+
+#pragma unroll
+    for (int i = 0; i < HalfVecSize; i++) {
+      const float input_left = static_cast<float>(src_vec[2 * i]);
+      const float input_right = static_cast<float>(src_vec[2 * i + 1]);
+      const float cos_tmp = cos_emb_vec[i];
+      const float sin_tmp = sin_emb_vec[i];
+      float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
+      float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+      src_vec[2 * i] = static_cast<T>(tmp1);
+      src_vec[2 * i + 1] = static_cast<T>(tmp2);
+      thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
+    }
+    WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
+    float row_variance =
+        max(warp_m2 / last_dim, 0.0f);
+    float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
+    LoadT q_norm_vec, k_norm_vec;
+    if (hi < q_num_head) {
+      Load<T, VecSize>(&q_norm_weight[threadIdx.y * VecSize], &q_norm_vec);
+      #pragma unroll
+      for (int i = 0; i < VecSize; i++) {
+        src_vec[i] = static_cast<T>(static_cast<float>(src_vec[i]) * row_inv_var * static_cast<float>(q_norm_vec[i]));
+      }
+    } else {
+      Load<T, VecSize>(&k_norm_weight[threadIdx.y * VecSize], &k_norm_vec);
+      for (int i = 0; i < VecSize; i++) {
+        src_vec[i] = static_cast<T>(static_cast<float>(src_vec[i]) * row_inv_var * static_cast<float>(k_norm_vec[i]));
+      }
+    }
+    Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
   }
 }
 
@@ -1566,6 +1654,66 @@ void rotary_qk_variable(
               dim_head);
     }
   }
+}
+
+template <typename T, typename QKV_TYPE>
+void gqa_rotary_qk_norm_variable(
+    T *qkv_out,                   // [token_num, 3, num_head, dim_head]
+    const QKV_TYPE *qkv_input,    // qkv
+    const float *qkv_out_scales,  // [3, num_head, dim_head]
+    const T *qkv_bias,
+    const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
+    const int *seq_lens,
+    const int *seq_lens_decoder,
+    const int token_num,
+    const int num_heads,
+    const int kv_num_heads,
+    const int seq_len,
+    const int input_output_len,
+    const int dim_head,
+    const cudaStream_t &stream,
+    bool use_neox_style = false,
+    bool rope_3d = false,
+    const T *q_norm_weight = nullptr,
+    const T *k_norm_weight = nullptr,
+    const float rms_norm_eps = 1e-6) {
+  int64_t elem_nums =
+      qkv_out_scales
+          ? token_num * (num_heads + 2 * kv_num_heads) * dim_head
+          : token_num * (num_heads + kv_num_heads) * dim_head;  // for all q k v
+  assert(dim_head == 128 && "dim_head must be 128");
+  constexpr int HEAD_DIM = 128;
+  constexpr int PackSize = HEAD_DIM / kWarpSize;
+  const int pack_num = elem_nums / PackSize;
+  const int blocksize = 128;
+  int grid_size = 1;
+  GetNumBlocks<128>(pack_num, &grid_size);
+  dim3 Blocks(grid_size/kWarpSize, kWarpSize, 1);
+
+  const float *cos_emb = rotary_emb;
+  const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
+
+  GQAVariableLengthRotaryQKNormKernel<T, PackSize>
+      <<<grid_size, Blocks, 0, stream>>>(
+          reinterpret_cast<const T *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out,
+          elem_nums,
+          num_heads,
+          kv_num_heads,
+          seq_len,
+          dim_head,
+          rope_3d,
+          q_norm_weight,
+          k_norm_weight,
+          rms_norm_eps);
 }
 
 template <typename T, typename QKV_TYPE>
