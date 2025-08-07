@@ -388,7 +388,7 @@ class PaddleDisWorkerProc:
                 create=False,
             )
             while np.any(self.launched_cache_manager_signal.value[0] <= 0):
-                time.sleep(0.01)
+                time.sleep(5)
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 

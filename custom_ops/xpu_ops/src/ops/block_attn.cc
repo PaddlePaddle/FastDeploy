@@ -42,7 +42,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::Tensor &encoder_batch_map_cpu,
     const paddle::Tensor &decoder_context_len_cpu,
     const paddle::Tensor &decoder_batch_map_cpu,
-    const std::string &pos_emb_type="NORMAL") {
+    const std::string &pos_emb_type="NORMAL",
+    bool rope_3d=false) {
     phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
     auto dev_ctx =
         paddle::experimental::DeviceContextPool::Instance().Get(place);
@@ -73,6 +74,14 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     int enc_batch = enc_batch_tensor.data<int32_t>()[0];
     int dec_batch = dec_batch_tensor.data<int32_t>()[0];
     int total_enc_len = total_enc_len_tensor.data<int32_t>()[0];
+    int rope_max_seqlen = 0;
+    int rope_3d_num_seqs = 1;
+    if (rope_3d) {
+        rope_max_seqlen = rotary_embs.dims()[3];
+        rope_3d_num_seqs = rotary_embs.dims()[0];
+    } else {
+        rope_max_seqlen = rotary_embs.dims()[2];
+    }
 
     auto block_attn_out =
         paddle::full({token_num, hidden_dim}, -1, qkv.type(), qkv.place());
@@ -152,7 +161,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                 prefix_lens_vp,        // start_tokens
                 param.batch_size,      // batch_size
                 1,                     // emb_batch_size
-                rotary_embs.dims()[2], // max_seqlen
+                rope_max_seqlen,       // max_seqlen
                 param.head_num, param.kv_head_num, param.head_dim,
                 param.max_batch_size, block_size, max_block_per_seq, "BLHD",
                 "HLD", pos_emb_type,
@@ -247,7 +256,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             vsl.slot_mapping_vp,   // real_batch
             param.batch_size,      // batch_size
             1,                     // emb_batch_size
-            rotary_embs.dims()[2], // max_seqlen TODO!!double check
+            rope_max_seqlen,       // max_seqlen TODO!!double check
             param.head_num, param.kv_head_num, param.head_dim,
             param.max_batch_size, block_size, max_block_per_seq, "BLHD", "HLD",
             pos_emb_type,
@@ -261,7 +270,9 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                       param.kv_head_num, // v_cache_scale_inv
             nullptr,                     // k_cache_zp
             nullptr,                     // v_cache_zp
-            false);                      // b_c8_pc
+            false,                       // b_c8_pc
+            rope_3d,                     // rope_3d
+            rope_3d_num_seqs);                      
         XFTBLOCK_CHECK_EQ(ret, api::SUCCESS);
 
         // attn decode
@@ -315,7 +326,7 @@ PD_BUILD_OP(block_attn)
         "decoder_context_len_cpu",
         "decoder_batch_map_cpu",
     })
-    .Attrs({"pos_emb_type:std::string"})
+    .Attrs({"pos_emb_type:std::string", "rope_3d:bool"})
     .Outputs({"block_attn_out"})
     .SetKernelFn(PD_KERNEL(BlockAttnKernel))
     .SetInferShapeFn(PD_INFER_SHAPE(BlockAttnInferShape))

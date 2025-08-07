@@ -165,7 +165,6 @@ class XPUAttentionBackend(AttentionBackend):
         v_quant_scale = getattr(layer, "cache_v_scale", None)
 
         from fastdeploy.model_executor.ops.xpu import block_attn
-
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -184,5 +183,6 @@ class XPUAttentionBackend(AttentionBackend):
             forward_meta.decoder_context_len_cpu,
             forward_meta.decoder_batch_map_cpu,
             forward_meta.pos_emb_type,
+            self.rope_3d
         )
         return res

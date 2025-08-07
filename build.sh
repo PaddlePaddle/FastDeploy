@@ -24,7 +24,7 @@ FD_CPU_USE_BF16=${3:-"false"}
 FD_BUILDING_ARCS=${4:-""}
 
 export CLANG_PATH=/host/FastDeploy/xtdk
-export XVLLM_PATH=/host/FastDeploy/xvllm
+export XVLLM_PATH=/host/baidu/xpu/vllm/output
 export http_proxy=agent.baidu.com:8891
 export https_proxy=agent.baidu.com:8891
 

@@ -87,6 +87,7 @@ class GPUModelRunner(ModelRunnerBase):
         rank: int,
         local_rank: int,
     ):
+        self.XPUModelRunner_cnt = 10
         super().__init__(fd_config=fd_config, device=device)
         self.enable_mm = self.model_config.enable_mm
         self.rank = rank
@@ -1373,6 +1374,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.padding_cudagraph_inputs()
 
         # 3. Execute model
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, ids_remove_padding 1: {self.share_inputs["ids_remove_padding"]}')
         if self.enable_mm:
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"],
@@ -1395,8 +1397,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.parallel_config.max_model_len,
             )
 
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, hidddn_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, logits, max: {paddle.max(logits)}, min: {paddle.min(logits)}, mean: {paddle.mean(logits)}')
+
 
         if not self.speculative_decoding:
             set_value_by_flags_and_idx(
@@ -1450,6 +1455,8 @@ class GPUModelRunner(ModelRunnerBase):
                     group=self.parallel_config.tp_group,
                 )
 
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, next_tokens 1: {self.share_inputs["next_tokens"][0]}')
+
         # 5. Post Process
         model_output_data = ModelOutputData(
             next_tokens=self.share_inputs["next_tokens"],
@@ -1496,6 +1503,8 @@ class GPUModelRunner(ModelRunnerBase):
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
         )
+
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, next_tokens 2: {self.share_inputs["next_tokens"][0]}')
 
         # 6. Speculative decode
         if self.speculative_decoding:
