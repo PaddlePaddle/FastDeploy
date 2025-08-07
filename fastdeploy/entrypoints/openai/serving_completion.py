@@ -121,7 +121,7 @@ class OpenAIServingCompletion:
                 else:
                     await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
             except Exception:
-                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_timeout}")
+                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
