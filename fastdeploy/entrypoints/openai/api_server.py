@@ -66,7 +66,7 @@ parser.add_argument("--metrics-port", default=8001, type=int, help="port for met
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
 parser.add_argument(
     "--max-waiting-time",
-    default=300,
+    default=-1,
     type=int,
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
