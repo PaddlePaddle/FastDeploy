@@ -1,4 +1,4 @@
-name: Run FastDeploy Unit Tests and Coverage
+name: Coverage Check
 description: "Run FastDeploy Unit Tests and Coverage"
 
 on:
@@ -134,7 +134,7 @@ jobs:
           commit_id=${{ github.event.pull_request.head.sha }}
           pr_num=${{ github.event.pull_request.number }}
           target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py -O bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
           diff_cov_file="diff_coverage.xml"
@@ -165,13 +165,14 @@ jobs:
         shell: bash
         run: |
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
               echo "No diff unit failed file URL provided."
             else
-              wget ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
             fi
             echo "Unit tests failed (exit code 8)"
-            filename=$(basename "$unittest_failed_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               cat "${filename}"
@@ -181,12 +182,13 @@ jobs:
 
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
+            filename=$(basename "$diff_cov_result_json_url")
             if [ -z "${diff_cov_result_json_url}" ]; then
               echo "No diff cov result file URL provided."
             else
-              wget ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
             fi
-            filename=$(basename "$diff_cov_result_json_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               if command -v jq >/dev/null 2>&1; then

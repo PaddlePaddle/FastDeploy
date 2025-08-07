@@ -497,6 +497,9 @@ elif paddle.is_compiled_with_cuda():
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
+        sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
 
     setup(
         name="fastdeploy_ops",

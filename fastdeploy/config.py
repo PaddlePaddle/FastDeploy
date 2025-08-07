@@ -64,6 +64,11 @@ class ErnieArchitectures:
     }
 
     @classmethod
+    def register_ernie_model_arch(cls, model_class):
+        if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
+            cls.ARCHITECTURES.add(model_class.name())
+
+    @classmethod
     def contains_ernie_arch(cls, architectures):
         """Check if any ERNIE architecture is present in the given architectures."""
         return any(arch in architectures for arch in cls.ARCHITECTURES)
@@ -117,6 +122,7 @@ class ModelConfig:
         self.enable_mm = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
+        self.seed = 0
         self.quantization = None
         for key, value in args.items():
             if hasattr(self, key):
@@ -658,7 +664,7 @@ class LoadChoices(str, Enum):
 
     DEFAULT = "default"
     # only support qwen3-bf16 now
-    NEW_LOADER = "new_loader"
+    DEFAULT_V1 = "default_v1"
 
 
 class LoadConfig:

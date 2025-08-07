@@ -28,5 +28,5 @@ def load_model_runner_plugins():
     plugins_loaded = True
 
     plugins = load_plugins_by_group(group=PLUGINS_GROUP)
-    assert len(plugins) == 1, "Only one plugin is allowed to be loaded."
-    return next(iter(plugins.values()))
+    assert len(plugins) <= 1, "Most one plugin is allowed to be loaded."
+    return next(iter(plugins.values()))()

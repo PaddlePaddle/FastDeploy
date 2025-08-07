@@ -20,11 +20,22 @@ Assuming you have a custom model class `MyModelForCasualLM` and a pretrained cla
 # File: fd_add_dummy_model/__init__.py or fd_add_dummy_model/register.py
 from fastdeploy.model_registry import ModelRegistry
 from my_custom_model import MyModelForCasualLM, MyPretrainedModel
+from fastdeploy.config import ErnieArchitectures
 
 def register():
     if "MyModelForCasualLM" not in ModelRegistry.get_supported_archs():
+        if MyModelForCasualLM.name().startswith("Ernie"):
+            ErnieArchitectures.register_ernie_model_arch(MyModelForCasualLM)
         ModelRegistry.register_model_class(MyModelForCasualLM)
         ModelRegistry.register_pretrained_model(MyPretrainedModel)
+```
+Assuming you have a custom model_runner class `MyModelRunner`, you can write the following registration function:
+```python
+# File: fd_add_dummy_model_runner/__init__.py
+from .my_model_runner import MyModelRunner
+
+def get_runner():
+    return MyModelRunner
 ```
 
 #### 2. Register Plugin in `setup.py`
@@ -36,10 +47,13 @@ from setuptools import setup
 setup(
     name="fastdeploy-plugins",
     version="0.1",
-    packages=["fd_add_dummy_model"],
+    packages=["fd_add_dummy_model", "fd_add_dummy_model_runner"],
     entry_points={
         "fastdeploy.model_register_plugins": [
             "fd_add_dummy_model = fd_add_dummy_model:register",
+        ],
+        "fastdeploy.model_runner_plugins": [
+            "model_runner = fd_add_dummy_model:get_runner"
         ],
     },
 )

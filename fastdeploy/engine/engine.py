@@ -198,7 +198,7 @@ class LLMEngine:
             )
 
         self.worker_proc = self._start_worker_service()
-        console_logger.info("Waitting worker processes ready...")
+        console_logger.info("Waiting worker processes ready...")
         time.sleep(5)
         self.worker_init_status = dict()
         if not self.check_worker_initialize_status():
