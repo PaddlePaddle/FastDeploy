@@ -866,10 +866,10 @@ class LLMEngine:
                     is_prefill = True
             self.token_processor.number_of_input_tokens += tasks[i].prompt_token_ids_len
 
+        for task in tasks:
+            task.inference_start_time = time.time()
         if not is_decode:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
-            for task in tasks:
-                task.inference_start_time = time.time()
             if not self.cfg.enable_mm:
                 self.update_requests_chunk_size(tasks)
             else:
