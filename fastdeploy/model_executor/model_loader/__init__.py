@@ -17,14 +17,16 @@
 from fastdeploy.config import LoadChoices, LoadConfig
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.model_loader.default_loader import DefaultModelLoader
-from fastdeploy.model_executor.model_loader.new_loader import NewModelLoader
+from fastdeploy.model_executor.model_loader.default_loader_v1 import (
+    DefaultModelLoaderV1,
+)
 
 
 def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
     """get_model_loader"""
 
-    if load_config.load_choices == LoadChoices.NEW_LOADER:
-        return NewModelLoader(load_config)
+    if load_config.load_choices == LoadChoices.DEFAULT_V1:
+        return DefaultModelLoaderV1(load_config)
 
     return DefaultModelLoader(load_config)
 
