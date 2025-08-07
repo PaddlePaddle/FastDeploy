@@ -227,6 +227,7 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
             )
+
         res = append_attention(
             qkv,
             forward_meta.caches[2 * layer.layer_id],

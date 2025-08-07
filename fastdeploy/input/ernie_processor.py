@@ -106,7 +106,6 @@ class ErnieProcessor(BaseDataProcessor):
                 tokens = self.tokenizer.tokenize(prompt)
                 token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
                 request.prompt_token_ids = token_ids
-
                 data_processor_logger.info(f"req_id:{request.request_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
                 request.prompt_token_ids = self.messages2ids(request.to_dict())
@@ -311,6 +310,7 @@ class ErnieProcessor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
         )
+
         req_id = None
         if isinstance(request_or_messages, dict):
             req_id = request_or_messages.get("request_id", None)
