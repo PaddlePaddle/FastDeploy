@@ -343,27 +343,36 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
         IsH20 = self.fd_config.parallel_config.is_H20
         IsH100 = self.fd_config.parallel_config.is_H100
-
-        if IsH20 and hidden_states is not None:
-            hidden_states, residual, topk_idx, topk_weights = self.forward_attn(forward_meta, hidden_states, residual)
-        else:
-            hidden_states = paddle.empty([0,8192], dtype="bfloat16")
-            residual = paddle.empty([0,8192], dtype="bfloat16")
-            topk_idx = paddle.empty([0,8], dtype="int64")
-            topk_weights = paddle.empty([0,8], dtype="float32")
+        runner = self.mlp.fused_moe.quant_method.ep_decoder_runner
 
         if IsH20:
-            _, handle, event, a2e_isend_hook = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.a2e_isend_two_stage_v3(
+            hidden_states, residual, topk_idx, topk_weights = self.forward_attn(forward_meta, hidden_states, residual)
+
+            _, handle, event, a2e_isend_hook = runner.buffer.a2e_isend_two_stage_v3(
                 hidden_states,
                 topk_idx,
                 topk_weights,
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_max_tokens,
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_experts,
-                use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+                runner.num_max_tokens,
+                runner.num_experts,
+                use_fp8=runner.use_fp8,
             )
             event.current_stream_wait()
             a2e_isend_hook_event = a2e_isend_hook()
             a2e_isend_hook_event.current_stream_wait()
+
+
+            e2a_x, e2a_event, e2a_irecv_hook = runner.buffer.e2a_irecv_two_stage_v3(
+                topk_idx,
+                topk_weights,
+                handle,
+                dispatch_use_fp8=runner.use_fp8,
+                out=None,
+            )
+            e2a_event.current_stream_wait()
+            e2a_irecv_hook_event = e2a_irecv_hook()
+            e2a_irecv_hook_event.current_stream_wait()
+
+            return e2a_x, residual
 
         else:
             (
@@ -373,41 +382,24 @@ class Ernie4_5_DecoderLayer(nn.Layer):
                 handle,
                 event,
                 a2e_irecv_hook,
-            ) = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.a2e_irecv_two_stage_v3(
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.hidden,
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.top_k,
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_max_tokens,
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_experts,
-                use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+            ) = runner.buffer.a2e_irecv_two_stage_v3(
+                runner.hidden,
+                runner.top_k,
+                runner.num_max_tokens,
+                runner.num_experts,
+                use_fp8=runner.use_fp8,
             )
             event.current_stream_wait()
             a2e_irecv_hook_event = a2e_irecv_hook()
             a2e_irecv_hook_event.current_stream_wait()
 
-        if IsH20:
-            pass
-        else:
             ffn_out = self.compute_moe_ffn(packed_recv_x, packed_recv_count)
 
-        if IsH20:
-            e2a_x, e2a_event, e2a_irecv_hook = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.e2a_irecv_two_stage_v3(
-                topk_idx,
-                topk_weights,
-                handle,
-                dispatch_use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
-                out=None,
-            )
-            e2a_event.current_stream_wait()
-            e2a_irecv_hook_event = e2a_irecv_hook()
-            e2a_irecv_hook_event.current_stream_wait()
-
-            return e2a_x, residual
-        else:
-            e2a_event, e2a_isend_hook = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.e2a_isend_two_stage_v3(
+            e2a_event, e2a_isend_hook = runner.buffer.e2a_isend_two_stage_v3(
                 ffn_out, 
-                self.mlp.fused_moe.quant_method.ep_decoder_runner.top_k,
+                runner.top_k,
                 handle,
-                dispatch_use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+                dispatch_use_fp8=runner.use_fp8,
                 out=None,
             )
             e2a_event.current_stream_wait()
