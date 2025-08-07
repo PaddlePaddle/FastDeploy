@@ -27,8 +27,8 @@ from openai.types.chat import (
 )
 from typing_extensions import Required, TypeAlias, TypedDict
 
-from fastdeploy.input.multimodal.image import ImageMediaIO
-from fastdeploy.input.multimodal.video import VideoMediaIO
+from fastdeploy.multimodal.image import ImageMediaIO
+from fastdeploy.multimodal.video import VideoMediaIO
 
 
 class VideoURL(TypedDict, total=False):

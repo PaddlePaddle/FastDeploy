@@ -81,8 +81,16 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         super().__init__()
         self.quant_config = quant_config
 
-    def create_weights(self, layer):
+    def create_weights(self, layer, **extra_weight_attrs):
         layer.weight_shape.reverse()
+        layer.weight_dtype = "float8_e4m3fn"
+        layer.weight = layer.create_parameter(
+            shape=layer.weight_shape,
+            dtype=layer.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
         layer.weight_scale = layer.create_parameter(
             shape=[
                 (layer.output_size + self.quant_config.weight_block_size[0] - 1)
@@ -93,7 +101,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             dtype="float32",
             is_bias=False,
         )
-        layer.weight_dtype = "float8_e4m3fn"
 
     def process_loaded_weights(self, layer, weights) -> None:
         weight_tensor = weights.transpose([1, 0])

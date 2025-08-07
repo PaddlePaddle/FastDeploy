@@ -282,7 +282,9 @@ class Sampler(nn.Layer):
 
         probs = min_p_sampling(probs, sampling_metadata.min_p)
 
-        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, seed=sampling_metadata.seed[0, 0]
+        )
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)

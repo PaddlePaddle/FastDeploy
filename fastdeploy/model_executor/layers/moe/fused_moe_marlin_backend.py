@@ -41,7 +41,7 @@ def get_moe_scores(
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
     scores_with_bias = scores + e_score_correction_bias.unsqueeze(0)
-    scores = noaux_tc(
+    scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,
         n_group,
@@ -49,7 +49,7 @@ def get_moe_scores(
         top_k,
         routed_scaling_factor,
     )
-    return scores
+    return scores, topk_values, topk_idx
 
 
 def gptq_marlin_moe_repack(
@@ -219,11 +219,12 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Marlin compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
         top_k = layer.top_k
@@ -233,7 +234,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         topk_method = layer.topk_method
 
         if topk_method == "noaux_tc":
-            gate_out = get_moe_scores(
+            gate_out, _, _ = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,

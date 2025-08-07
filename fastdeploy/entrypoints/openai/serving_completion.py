@@ -358,6 +358,7 @@ class OpenAIServingCompletion:
                                 usage=UsageInfo(
                                     prompt_tokens=len(prompt_batched_token_ids[idx]),
                                     completion_tokens=output_tokens[idx],
+                                    total_tokens=len(prompt_batched_token_ids[idx]) + output_tokens[idx],
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"

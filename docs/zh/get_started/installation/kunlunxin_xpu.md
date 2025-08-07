@@ -5,8 +5,8 @@
 - OS：Linux
 - Python：3.10
 - XPU 型号：P800
-- XPU 驱动版本：≥ 5.0.21.10
-- XPU 固件版本：≥ 1.31
+- XPU 驱动版本：≥ 5.0.21.26
+- XPU 固件版本：≥ 1.48
 
 已验证的平台：
 - CPU：INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
@@ -15,8 +15,8 @@
 - OS：CentOS release 7.6 (Final)
 - Python：3.10
 - XPU 型号：P800（OAM 版）
-- XPU 驱动版本：5.0.21.10
-- XPU 固件版本：1.31
+- XPU 驱动版本：5.0.21.26
+- XPU 固件版本：1.48
 
 **注：** 目前只验证过 INTEL 或海光 CPU OAM 版 P800 服务器，暂未验证其它 CPU 和 PCIe 版 P800 服务器。
 
