@@ -22,6 +22,7 @@ from paddle import nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.models.utils import (
     default_weight_loader,
     set_weight_attrs,
@@ -29,6 +30,42 @@ from fastdeploy.model_executor.models.utils import (
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor
+
+
+class UnquantizedLinearMethod(QuantMethodBase):
+    """Linear method without quantization."""
+
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+        """
+        extra_weight_attrs is a dictionary that may include parameters like:
+        - output_dim: determines whether the split is applied along the output dimension (rows) or input dimension (columns)
+        - weight_loader: a callable or method responsible for loading the weight data
+        """
+        layer.weight = layer.create_parameter(
+            shape=layer.weight_shape,
+            dtype=layer.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        set_weight_attrs(
+            layer.weight,
+            {"weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config))},
+        )
+        if hasattr(layer, "nranks") and layer.nranks > 1:
+            set_weight_attrs(layer.weight, {"output_dim": extra_weight_attrs.get("output_dim")})
+
+    def process_loaded_weights(self, layer, weights) -> None:
+        # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+        if layer.weight.dtype != weights.dtype:
+            weights = weights.cast(layer.weight.dtype)
+        layer.weight.set_value(weights)
+
+    def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
+
+        linear_out = paddle.matmul(x, layer.weight)
+        if layer.with_bias:
+            linear_out = paddle.add(linear_out, layer.bias)
+        return linear_out
 
 
 class LinearBase(nn.Layer):
@@ -45,6 +82,8 @@ class LinearBase(nn.Layer):
         with_bias: bool = False,
         add_bias: bool = False,
         skip_quant: bool = False,
+        weight_dtype: str = "",
+        weight_key: str = "",
     ):
         """
         Initializes a linear layer and provides additional parameters required for inference and quantization.
@@ -82,46 +121,35 @@ class LinearBase(nn.Layer):
         self.add_bias = add_bias
         self.prefix = prefix
         # key
-        self.weight_key = f"{prefix}.weight"
+        if weight_key:
+            self.weight_key = f"{prefix}.{weight_key}"
+        elif fd_config.model_config.is_quantized and not skip_quant:
+            self.weight_key = f"{prefix}.quant_weight"
+            self.weight_scale_key = f"{prefix}.weight_scale"
+            self.act_scale_key = f"{prefix}.activation_scale"
+        else:
+            self.weight_key = f"{prefix}.weight"
         self.bias_key = f"{prefix}.bias"
         self.shift_key = f"{prefix}.shift_bias"
         self.smooth_key = f"{prefix}.smooth_weight"
         self.out_scale_key = f"{prefix}.out_scale"
 
         self._dtype = self._helper.get_default_dtype()
-        self.weight_dtype = self._dtype
+        if weight_dtype:
+            self.weight_dtype = weight_dtype
+        elif self.skip_quant:
+            self.weight_dtype = self._dtype
+        else:
+            self.weight_dtype = self._dtype
         self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
-        if fd_config.quant_config:
+
+        if fd_config.quant_config and not skip_quant:
             self.quant_method = fd_config.quant_config.get_quant_method(self)
-        if fd_config.model_config.is_quantized:
-            self.weight_key = f"{prefix}.quant_weight"
-            self.weight_scale_key = f"{prefix}.weight_scale"
-            self.act_scale_key = f"{prefix}.activation_scale"
-
-    def init_weight(self):
-        """
-        Initialize the weights and biases.
-        """
-        if self.skip_quant:
-            self.weight_dtype = self._dtype
-        self.weight = self.create_parameter(
-            shape=self.weight_shape,
-            dtype=self.weight_dtype,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-
-        set_weight_attrs(
-            self.weight,
-            {
-                "weight_loader": (
-                    self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
-                )
-            },
-        )
+        else:
+            self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
 
         self.bias = None
         if self.with_bias:
@@ -131,18 +159,14 @@ class LinearBase(nn.Layer):
                 is_bias=True,
             )
 
-        set_weight_attrs(
-            self.weight,
-            {
-                "weight_loader": (
-                    self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
-                )
-            },
-        )
-
         # smooth quant
         self.linear_shift = None
         self.linear_smooth = None
+
+        if fd_config.model_config.is_quantized:
+            self.weight_key = f"{prefix}.quant_weight"
+            self.weight_scale_key = f"{prefix}.weight_scale"
+            self.act_scale_key = f"{prefix}.activation_scale"
 
     def load_prequant_weight(self, state_dict: dict):
         """
@@ -151,7 +175,11 @@ class LinearBase(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the prequantized weights and scales.
         """
-        self.quant_method.process_prequanted_weights(self, state_dict)
+        if isinstance(self.quant_method, UnquantizedLinearMethod):
+            # for gate
+            self.load_weight(state_dict)
+        else:
+            self.quant_method.process_prequanted_weights(self, state_dict)
 
     def load_weight(self, state_dict: dict):
         """
@@ -161,11 +189,7 @@ class LinearBase(nn.Layer):
             state_dict (dict): A dictionary containing the weights
         """
         weight_tensor = get_tensor(state_dict.pop(self.weight_key))
-
-        if self.fd_config.quant_config:
-            self.quant_method.process_loaded_weights(self, weight_tensor)
-        else:
-            self.weight.set_value(weight_tensor)
+        self.quant_method.process_loaded_weights(self, weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -200,12 +224,7 @@ class LinearBase(nn.Layer):
         Raises:
             NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
         """
-        if self.fd_config.quant_config:
-            linear_out = self.quant_method.apply(self, x)
-        else:
-            linear_out = paddle.matmul(x, self.weight)
-            if self.with_bias:
-                linear_out = paddle.add(linear_out, self.bias)
+        linear_out = self.quant_method.apply(self, x)
 
         return linear_out
 
@@ -224,6 +243,8 @@ class ReplicatedLinear(LinearBase):
         with_bias: bool = False,
         add_bias: bool = False,
         skip_quant: bool = False,
+        weight_dtype: str = "",
+        weight_key: str = "",
     ):
         """
         Initializes a replicated linear layer.
@@ -246,6 +267,8 @@ class ReplicatedLinear(LinearBase):
             with_bias=with_bias,
             add_bias=add_bias,
             skip_quant=skip_quant,
+            weight_dtype=weight_dtype,
+            weight_key=weight_key,
         )
 
         self.hidden_size = fd_config.model_config.hidden_size
@@ -253,9 +276,14 @@ class ReplicatedLinear(LinearBase):
             self.input_size,
             self.output_size,
         ]
-        if fd_config.quant_config:
-            self.quant_method.create_weights(self)
-        self.init_weight()
+
+        assert self.quant_method is not None
+        self.quant_method.create_weights(
+            self,
+            weight_loader=(
+                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+            ),
+        )
 
 
 class ColumnParallelLinear(LinearBase):
@@ -307,60 +335,22 @@ class ColumnParallelLinear(LinearBase):
             self.input_size,
             self.output_size,
         ]
-        if fd_config.quant_config:
-            self.quant_method.create_weights(self)
-        self.init_weight()
 
-    def init_weight(self):
-        """
-        Initialize the weights and biases.
-        """
-        if self.skip_quant:
-            self.weight_dtype = self._dtype
-        self.weight = self.create_parameter(
-            shape=self.weight_shape,
-            dtype=self.weight_dtype,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
+        assert self.quant_method is not None
+        self.quant_method.create_weights(
+            self,
+            output_dim=True,
+            weight_loader=(
+                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+            ),
         )
         if self.nranks > 0:
-            # col parallel
             _set_var_distributed(self.weight, split_axis=1)
-            set_weight_attrs(
-                self.weight,
-                {
-                    "output_dim": True,
-                    "weight_loader": (
-                        self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
-                    ),
-                },
-            )
-
-        self.bias = None
-        if self.with_bias:
-            self.bias = self.create_parameter(
-                shape=[self.output_size],
-                dtype=self._dtype,
-                is_bias=True,
-            )
-            if self.nranks > 0:
+            if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
-                set_weight_attrs(
-                    self.weight,
-                    {
-                        "output_dim": True,
-                        "weight_loader": (
-                            self.weight_loader
-                            if hasattr(self, "weight_loader")
-                            else default_weight_loader(self.fd_config)
-                        ),
-                    },
-                )
-
-        # smooth quant
-        self.linear_shift = None
-        self.linear_smooth = None
+                if self.nranks > 1:
+                    set_weight_attrs(self.bias, {"output_dim": True})
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -444,11 +434,18 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = loaded_weight[..., shard_offset:shard_size]
+
             loaded_weight = get_tensor(loaded_weight)
+
             if loaded_shard_id == "gate":
-                param[:, : self.output_size // 2] = loaded_weight
+                param = param[:, : self.output_size // 2]
             elif loaded_shard_id == "up":
-                param[:, self.output_size // 2 :] = loaded_weight
+                param = param[:, self.output_size // 2 :]
+
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+            param.copy_(loaded_weight, False)
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -551,18 +548,25 @@ class QKVParallelLinear(ColumnParallelLinear):
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = loaded_weight[..., shard_offset:shard_size]
+
             loaded_weight = get_tensor(loaded_weight)
+
             if loaded_shard_id == "q":
-                param[:, : self.num_heads_per_rank * self.head_dim] = loaded_weight
+                param = param[:, : self.num_heads_per_rank * self.head_dim]
             elif loaded_shard_id == "k":
-                param[
+                param = param[
                     :,
                     self.num_heads_per_rank
                     * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
                     * self.head_dim,
-                ] = loaded_weight
+                ]
             elif loaded_shard_id == "v":
-                param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :] = loaded_weight
+                param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
+
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+            param.copy_(loaded_weight, False)
 
     def load_weight(self, state_dict: dict):
         """
@@ -700,62 +704,29 @@ class RowParallelLinear(LinearBase):
         ]
         self._dtype = self._helper.get_default_dtype()
 
-        if fd_config.quant_config:
-            self.quant_method = fd_config.quant_config.get_quant_method(self)
-            self.quant_method.create_weights(self)
-
-        self.reduce_results = reduce_results
-        self.init_weight()
-
-    def init_weight(self):
-        """
-        Initialize the weights and biases.
-        """
-        if self.skip_quant:
-            self.weight_dtype = self._dtype
-
-        self.weight = self.create_parameter(
-            shape=self.weight_shape,
-            dtype=self.weight_dtype,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
+        assert self.quant_method is not None
+        self.quant_method.create_weights(
+            self,
+            split_axis=0,
+            output_dim=False,
+            weight_loader=(
+                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+            ),
         )
         if self.nranks > 0:
-            # row parallel
-            set_weight_attrs(
-                self.weight,
-                {
-                    "output_dim": False,
-                    "weight_loader": (
-                        self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
-                    ),
-                },
-            )
             _set_var_distributed(self.weight, split_axis=0)
+            if self.with_bias:
+                # col parallel
+                _set_var_distributed(self.bias, split_axis=0)
+                if self.nranks > 1:
+                    set_weight_attrs(
+                        self.bias,
+                        {
+                            "output_dim": False,
+                        },
+                    )
 
-        self.bias = None
-        if self.with_bias:
-            self.bias = self.create_parameter(
-                shape=[self.hidden_size],
-                dtype=self._dtype,
-                is_bias=True,
-            )
-            if self.nranks > 0:
-                set_weight_attrs(
-                    self.bias,
-                    {
-                        "output_dim": False,
-                        "weight_loader": (
-                            self.weight_loader
-                            if hasattr(self, "weight_loader")
-                            else default_weight_loader(self.fd_config)
-                        ),
-                    },
-                )
-
-        # smooth quant
-        self.linear_shift = None
-        self.linear_smooth = None
+        self.reduce_results = reduce_results
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         if self.fd_config.quant_config:

@@ -344,7 +344,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,  # from buffer
             forward_meta.decoder_tile_ids_per_batch,  # from buffer
             forward_meta.decoder_num_blocks_cpu,
-            forward_meta.max_len_tensor_cpu,
+            metadata.max_len_tensor_cpu_decoder,
             metadata.max_len_kv,
             metadata.rotary_embs,
             forward_meta.attn_mask,
@@ -359,6 +359,9 @@ class FlashAttentionBackend(AttentionBackend):
             layer.linear_shift,
             layer.linear_smooth,
             metadata.kv_signal_data_list[layer.layer_id],
+            getattr(layer, "q_norm_weight", None),
+            getattr(layer, "k_norm_weight", None),
+            getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
             getattr(layer, "cache_quant_type_str", "none"),
             layer.use_neox_rotary_style,
