@@ -115,11 +115,12 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -336,12 +337,12 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
         """
-
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -576,12 +577,12 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
         """
-
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts

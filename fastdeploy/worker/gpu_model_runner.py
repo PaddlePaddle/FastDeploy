@@ -131,6 +131,7 @@ class GPUModelRunner(ModelRunnerBase):
             fill_value=4,
             dtype="int64",
         )
+
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -813,6 +814,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
             min_p=self.share_inputs["min_p"],
+            seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             prompt_ids=self.share_inputs["prompt_ids"],

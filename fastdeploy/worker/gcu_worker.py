@@ -22,7 +22,7 @@ from paddle import nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.gcu_model_runner import GCUModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
@@ -60,6 +60,7 @@ class GcuWorker(WorkerBase):
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
+        set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
         self.model_runner: GCUModelRunner = GCUModelRunner(
             fd_config=self.fd_config,
@@ -128,6 +129,7 @@ class GcuWorker(WorkerBase):
             self.model_runner.sot_warmup()
         # 2. Triger cuda grpah capture
         self.model_runner.capture_model()
+        set_random_seed(self.fd_config.model_config.seed)
 
     def check_health(self) -> bool:
         """ """
