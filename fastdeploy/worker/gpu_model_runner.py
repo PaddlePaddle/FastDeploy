@@ -1043,15 +1043,15 @@ class GPUModelRunner(ModelRunnerBase):
                 del input_embeddings
                 input_embeddings = self.share_inputs["input_embeds"][:actual_token_num]
 
-                # mm_args = self.model.init_mm_data(
-                #     input_embeddings,
-                #     self.share_inputs["ids_remove_padding"],
-                # )
+                mm_args = self.model.init_mm_data(
+                    input_embeddings,
+                    self.share_inputs["ids_remove_padding"],
+                )
                 model_output = self.model(
                     input_embeddings,
                     self.share_inputs["ids_remove_padding"],
                     self.forward_meta,
-                    self.model.prepare_VLMoEMeta(input_embeddings, self.share_inputs["ids_remove_padding"]),
+                    mm_args,
                 )
                 hidden_states = model_output
             else:
@@ -1321,14 +1321,16 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["input_embeds"][:actual_token_num] = input_embeddings.clone().detach()
             del input_embeddings
             input_embeddings = self.share_inputs["input_embeds"][:actual_token_num]
+
+            mm_args = self.model.init_mm_data(
+                input_embeddings,
+                self.share_inputs["ids_remove_padding"],
+            )
             model_output = self.model(
                 input_embeddings,
-                self.share_inputs["image_features"],
+                self.share_inputs["ids_remove_padding"],
                 self.forward_meta,
-                self.model.prepare_VLMoEMeta(
-                    input_embeddings,
-                    self.share_inputs["ids_remove_padding"],
-                ),
+                mm_args,
             )
             hidden_states = model_output
         else:

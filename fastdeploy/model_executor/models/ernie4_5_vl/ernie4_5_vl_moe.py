@@ -406,11 +406,11 @@ class Ernie4_5_VLModel(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
-    def prepare_VLMoEMeta(
+    def prepare_vl_moe_meta(
         self,
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
-    ):
+    ) -> VLMoEMeta:
         hidden_states = input_embeddings
 
         image_mask = ids_remove_padding == self.im_patch_id
@@ -431,7 +431,6 @@ class Ernie4_5_VLModel(nn.Layer):
 
         text_index.zero_()
         image_index.zero_()
-
         text_image_index_out(token_type_ids, text_index, image_index)
 
         vl_moe_meta = VLMoEMeta(
@@ -452,16 +451,13 @@ class Ernie4_5_VLModel(nn.Layer):
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-        mm_args,
+        vl_moe_meta: VLMoEMeta,
     ):
         hidden_states = input_embeddings
 
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
         image_token_num = image_mask.sum()
-
-        # vl_moe_meta = mm_args.get("vl_moe_meta")
-        vl_moe_meta = mm_args
         vl_moe_meta.token_type_ids = token_type_ids
         residual = None
 
@@ -605,16 +601,14 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie.text_index_buffer = share_inputs["text_index"]
         self.ernie.image_index_buffer = share_inputs["image_index"]
 
-    def prepare_VLMoEMeta(self, input_embedding: paddle.Tensor, ids_remove_padding: paddle.Tensor) -> VLMoEMeta:
-        return self.ernie.prepare_VLMoEMeta(input_embedding=input_embedding, ids_remove_padding=ids_remove_padding)
-
     def init_mm_data(
         self,
         input_embedding: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
     ):
-        vl_moe_meta = self.prepare_VLMoEMeta(input_embedding=input_embedding, ids_remove_padding=ids_remove_padding)
-
+        vl_moe_meta = self.ernie.prepare_vl_moe_meta(
+            input_embedding=input_embedding, ids_remove_padding=ids_remove_padding
+        )
         return {"vl_moe_meta": vl_moe_meta}
 
     def forward(
@@ -628,7 +622,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
-            mm_args=mm_args,
+            vl_moe_meta=mm_args["vl_moe_meta"],
         )
 
         return hidden_states
