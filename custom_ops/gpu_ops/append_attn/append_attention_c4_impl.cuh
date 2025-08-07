@@ -1285,7 +1285,7 @@ void MultiQueryAppendC4Attention(
     if (!is_decoder) {
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
-    
+
     const int num_chunks = div_up(max_seq_len, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
