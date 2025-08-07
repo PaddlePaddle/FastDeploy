@@ -49,20 +49,7 @@ def get_moe_scores(
     compute moe scores using e_score_correction_bias.
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
-    print("e_score_correction_bias", e_score_correction_bias)
     scores_with_bias = scores + e_score_correction_bias
-    print("scores", scores)
-    print("scores_with_bias", scores_with_bias)
-    print("n_group", n_group)
-    print("topk_group", topk_group)
-    print("top_k", top_k)
-    print("routed_scaling_factor", routed_scaling_factor)
-    inputs = {}
-    inputs["scores"] = scores
-    inputs["scores_with_bias"] = scores_with_bias
-    path = "/root/paddlejob/workspace/env_run/gaoziyuan/FastDeploy/inputs"
-    paddle.save(inputs, path)
-    print("hahah")
     scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,
@@ -71,8 +58,6 @@ def get_moe_scores(
         top_k,
         routed_scaling_factor,
     )
-    print("topk_values", topk_values)
-    print("topk_idx", topk_idx)
     return scores, topk_values, topk_idx
 
 

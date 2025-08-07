@@ -105,8 +105,7 @@ class ErnieProcessor(BaseDataProcessor):
                 prompt = prompt[0] if isinstance(prompt, list) else prompt
                 tokens = self.tokenizer.tokenize(prompt)
                 token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                # request.prompt_token_ids = token_ids
-                request.prompt_token_ids = self.eos_token_ids + token_ids
+                request.prompt_token_ids = token_ids
 
                 data_processor_logger.info(f"req_id:{request.request_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
@@ -161,8 +160,7 @@ class ErnieProcessor(BaseDataProcessor):
 
                 tokens = self.tokenizer.tokenize(prompt)
                 token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                # request["prompt_token_ids"] = token_ids
-                request['prompt_token_ids'] = self.eos_token_ids + token_ids
+                request["prompt_token_ids"] = token_ids
                 req_id = request.get("request_id", None)
                 data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
@@ -307,21 +305,28 @@ class ErnieProcessor(BaseDataProcessor):
         """
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
-        # spliced_message = self.tokenizer.apply_chat_template(
-        #     request_or_messages,
-        #     tokenize=False,
-        #     split_special_tokens=False,
-        #     add_special_tokens=False,
-        # )
-        spliced_message = request_or_messages["messages"][0]["content"]
+        spliced_message = self.tokenizer.apply_chat_template(
+            request_or_messages,
+            tokenize=False,
+            split_special_tokens=False,
+            add_special_tokens=False,
+        )
+
+        print("gaoziyuan spliced_message apply_chat_template??", spliced_message)
+        tokens_1 = self.tokenizer.tokenize(spliced_message)
+        print("spliced_message token 1", tokens_1)
+
+
+        spliced_message_2 = request_or_messages["messages"][0]["content"]
+        print("gaoziyuan fuck spliced_message no apply_chat_template", spliced_message_2)
+        tokens_2 = self.tokenizer.tokenize(spliced_message_2)
+        print("token 2", tokens_2)
 
         req_id = None
         if isinstance(request_or_messages, dict):
             req_id = request_or_messages.get("request_id", None)
         tokens = self.tokenizer.tokenize(spliced_message)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        print("gaoziyuan add 了 token 2")
-        token_ids = self.eos_token_ids + token_ids
         data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
         return token_ids
 

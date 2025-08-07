@@ -311,6 +311,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
+        gate_out = gate(x.cast("float32"))
+
         if layer.topk_method == "noaux_tc":
             from .ep import get_moe_scores
 
