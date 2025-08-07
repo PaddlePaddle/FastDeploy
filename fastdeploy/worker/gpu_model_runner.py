@@ -1277,10 +1277,6 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
-        # 1. Prepare inputs of model and sampler.
-        skip_idx_list = self._get_skip_idx(model_forward_batch)
-        self._prepare_inputs()
-        self.sampler.pre_process(skip_idx_list)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
@@ -1288,6 +1284,11 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.not_need_stop():
             self._execute_empty_input()
             return None
+
+        # 1. Prepare inputs of model and sampler.
+        skip_idx_list = self._get_skip_idx(model_forward_batch)
+        self._prepare_inputs()
+        self.sampler.pre_process(skip_idx_list)
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
