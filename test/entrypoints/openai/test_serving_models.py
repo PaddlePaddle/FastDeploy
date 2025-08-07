@@ -1,8 +1,6 @@
-from unittest.mock import MagicMock
+import asyncio
+import unittest
 
-import pytest
-
-from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import ModelInfo, ModelList
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.utils import get_host_ip
@@ -13,32 +11,41 @@ MAX_MODEL_LEN = 2048
 
 
 async def _async_serving_models_init() -> OpenAIServingModels:
-    mock_engine_client = MagicMock(spec=EngineClient)
-
-    serving_models = OpenAIServingModels(
-        engine_client=mock_engine_client,
+    """异步初始化 OpenAIServingModels 实例"""
+    return OpenAIServingModels(
         model_paths=MODEL_PATHS,
         max_model_len=MAX_MODEL_LEN,
         ips=get_host_ip(),
     )
 
-    return serving_models
+
+class TestOpenAIServingModels(unittest.TestCase):
+    """测试 OpenAIServingModels 的 unittest 版本"""
+
+    def test_serving_model_name(self):
+        """测试模型名称获取"""
+        # 通过 asyncio.run() 执行异步初始化
+        serving_models = asyncio.run(_async_serving_models_init())
+        self.assertEqual(serving_models.model_name(), MODEL_NAME)
+
+    def test_list_models(self):
+        """测试模型列表功能"""
+        serving_models = asyncio.run(_async_serving_models_init())
+
+        # 通过 asyncio.run() 执行异步方法
+        result = asyncio.run(serving_models.list_models())
+
+        # 验证返回类型和内容
+        self.assertIsInstance(result, ModelList)
+        self.assertEqual(len(result.data), 1)
+
+        model_info = result.data[0]
+        self.assertIsInstance(model_info, ModelInfo)
+        self.assertEqual(model_info.id, MODEL_NAME)
+        self.assertEqual(model_info.max_model_len, MAX_MODEL_LEN)
+        self.assertEqual(model_info.root, MODEL_PATHS[0].model_path)
+        self.assertEqual(result.object, "list")
 
 
-@pytest.mark.asyncio
-async def test_serving_model_name():
-    serving_models = await _async_serving_models_init()
-    assert serving_models.model_name() == MODEL_NAME
-
-
-@pytest.mark.asyncio
-async def test_list_models():
-    serving_models = await _async_serving_models_init()
-    result = await serving_models.list_models()
-    assert isinstance(result, ModelList)
-    assert isinstance(result.data[0], ModelInfo)
-    assert result.object == "list"
-    assert len(result.data) == 1
-    assert result.data[0].id == MODEL_NAME
-    assert result.data[0].max_model_len == MAX_MODEL_LEN
-    assert result.data[0].root == MODEL_PATHS[0].model_path
+if __name__ == "__main__":
+    unittest.main()
