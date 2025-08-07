@@ -530,6 +530,26 @@ class LLMEngine:
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
+        if request.get("stop_seqs_len") is not None:
+            stop_seqs_len = request.get("stop_seqs_len")
+            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            if len(stop_seqs_len) > max_stop_seqs_num:
+                error_msg = (
+                    f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
+                    "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
+                )
+                llm_logger.error(error_msg)
+                raise EngineError(error_msg, error_code=400)
+            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            for single_stop_seq_len in stop_seqs_len:
+                if single_stop_seq_len > stop_seqs_max_len:
+                    error_msg = (
+                        f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
+                        "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
+                    )
+                    llm_logger.error(error_msg)
+                    raise EngineError(error_msg, error_code=400)
+
         if self.guided_decoding_checker is not None:
             request, err_msg = self.guided_decoding_checker.schema_format(request)
             if err_msg is not None:

@@ -95,3 +95,30 @@ def test_mixed_valid_invalid_fields():
     resp = send_request(URL, payload).json()
     assert "error" not in resp, "非法字段不应导致请求失败"
 
+
+def test_stop_seq_exceed_num():
+    """stop 字段包含超过 FD_MAX_STOP_SEQS_NUM 个元素，服务应报错"""
+    data = {
+        "stream": False,
+        "messages": [{"role": "user", "content": "非洲的首都是？"}],
+        "top_p": 0,
+        "stop": ["11", "22", "33", "44", "55", "66", "77"],
+    }
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+    assert resp.get("object") == "error", "stop 超出个数应触发异常"
+    assert "exceeds the limit max_stop_seqs_num" in resp.get("message", ""), "未返回预期的报错信息"
+
+
+def test_stop_seq_exceed_length():
+    """stop 中包含长度超过 FD_STOP_SEQS_MAX_LEN 的元素，服务应报错"""
+    data = {
+        "stream": False,
+        "messages": [{"role": "user", "content": "非洲的首都是？"}],
+        "top_p": 0,
+        "stop": ["11", "今天天气比明天好多了，请问你会出门还是和我一起玩"],
+    }
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+    assert resp.get("object") == "error", "stop 超出长度应触发异常"
+    assert "exceeds the limit stop_seqs_max_len" in resp.get("message", ""), "未返回预期的报错信息"
