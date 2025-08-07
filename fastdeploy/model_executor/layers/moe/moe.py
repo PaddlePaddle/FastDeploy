@@ -294,7 +294,7 @@ class FusedMoE(nn.Layer):
         # Create parameters
         if self.moe_quant_type == "block_wise_fp8":
             # (TODO:gaoziyuan)
-            self.weight_dtype="float8_e4m3fn"
+            self.weight_dtype = "float8_e4m3fn"
             self.init_block_wise_fp8_scale()
         elif self.moe_quant_type == "wint8":
             self.weight_dtype = "int8"
