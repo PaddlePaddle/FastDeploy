@@ -322,12 +322,6 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
         return hidden_states, residual, topk_idx, topk_weights
 
-    def m2n_dispatch(self, x, topk_idx, topk_weights):
-        permute_input, token_nums_per_expert, handle = self.mlp.fused_moe.quant_method.ep_decoder_runner.dispatch(x, topk_idx, topk_weights)
-
-        return permute_input, token_nums_per_expert, handle
-
-
     def compute_moe_ffn(
         self,
         permute_input: paddle.Tensor,
@@ -342,35 +336,85 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
         return ffn_out
 
-    def m2n_combine(self, ffn_out, topk_idx, topk_weights, handle):
-        res = self.mlp.fused_moe.quant_method.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
-        return res
-
     def forward(self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None):
 
         IsH20 = self.fd_config.parallel_config.is_H20
+        IsH100 = self.fd_config.parallel_config.is_H100
 
-        if IsH20:
+        if IsH20 and hidden_states is not None:
             hidden_states, residual, topk_idx, topk_weights = self.forward_attn(forward_meta, hidden_states, residual)
         else:
-            hidden_states = None
-            residual = None
-            topk_idx = None
-            topk_weights = None
-
-        permute_input, token_nums_per_expert, handle = self.m2n_dispatch(hidden_states, topk_idx, topk_weights)
+            hidden_states = paddle.empty([0,8192], dtype="bfloat16")
+            residual = paddle.empty([0,8192], dtype="bfloat16")
+            topk_idx = paddle.empty([0,8], dtype="int64")
+            topk_weights = paddle.empty([0,8], dtype="float32")
 
         if IsH20:
-            ffn_out = None
+            _, handle, event, a2e_isend_hook = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.a2e_isend_two_stage_v3(
+                hidden_states,
+                topk_idx,
+                topk_weights,
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_max_tokens,
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_experts,
+                use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+            )
+            event.current_stream_wait()
+            a2e_isend_hook_event = a2e_isend_hook()
+            a2e_isend_hook_event.current_stream_wait()
+
         else:
-            ffn_out = self.compute_moe_ffn(permute_input, token_nums_per_expert)
-        
-        hidden_states = self.m2n_combine(ffn_out, topk_idx, topk_weights, handle)
-        
-        return hidden_states, residual
+            (
+                packed_recv_x,
+                packed_recv_count,
+                rdma_send_flags,
+                handle,
+                event,
+                a2e_irecv_hook,
+            ) = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.a2e_irecv_two_stage_v3(
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.hidden,
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.top_k,
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_max_tokens,
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.num_experts,
+                use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+            )
+            event.current_stream_wait()
+            a2e_irecv_hook_event = a2e_irecv_hook()
+            a2e_irecv_hook_event.current_stream_wait()
+
+        if IsH20:
+            pass
+        else:
+            ffn_out = self.compute_moe_ffn(packed_recv_x, packed_recv_count)
+
+        if IsH20:
+            e2a_x, e2a_event, e2a_irecv_hook = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.e2a_irecv_two_stage_v3(
+                topk_idx,
+                topk_weights,
+                handle,
+                dispatch_use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+                out=None,
+            )
+            e2a_event.current_stream_wait()
+            e2a_irecv_hook_event = e2a_irecv_hook()
+            e2a_irecv_hook_event.current_stream_wait()
+
+            return e2a_x, residual
+        else:
+            e2a_event, e2a_isend_hook = self.mlp.fused_moe.quant_method.ep_decoder_runner.buffer.e2a_isend_two_stage_v3(
+                ffn_out, 
+                self.mlp.fused_moe.quant_method.ep_decoder_runner.top_k,
+                handle,
+                dispatch_use_fp8=self.mlp.fused_moe.quant_method.ep_decoder_runner.use_fp8,
+                out=None,
+            )
+            e2a_event.current_stream_wait()
+            e2a_isend_hook_event = e2a_isend_hook()
+            e2a_isend_hook_event.current_stream_wait()
+            
+            return None, None
 
 @support_graph_optimization
 class Ernie4_5_Model(nn.Layer):
@@ -481,8 +525,6 @@ class Ernie4_5_Model(nn.Layer):
         else:
             # MoE 机器啥也不需要做！
             pass
-        
-        paddle.distributed.barrier()
 
         # 下面第3层开始H20和MoE机器！！一起跑啦！
         for mc_id in range(split_num):
