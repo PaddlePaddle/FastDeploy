@@ -531,8 +531,16 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             local_path = f"{local_path}/{repo_id}"
             aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
+        except requests.exceptions.ConnectTimeout:
+            if os.path.exists(local_path):
+                llm_logger.error(
+                    f"Failed to connect to aistudio, but detected that the model directory {local_path} exists. Attempting to start."
+                )
+                return local_path
         except Exception:
-            raise Exception(f"The setting model_name_or_path:{model_name_or_path} is not exist.")
+            raise Exception(
+                f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
+            )
     elif model_source == "MODELSCOPE":
         try:
             from modelscope.hub.snapshot_download import (
@@ -546,8 +554,16 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             local_path = f"{local_path}/{repo_id}"
             modelscope_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
+        except requests.exceptions.ConnectTimeout:
+            if os.path.exists(local_path):
+                llm_logger.error(
+                    f"Failed to connect to modelscope, but detected that the model directory {local_path} exists. Attempting to start."
+                )
+                return local_path
         except Exception:
-            raise Exception(f"The setting model_name_or_path:{model_name_or_path} is not exist.")
+            raise Exception(
+                f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
+            )
     elif model_source == "HUGGINGFACE":
         try:
             from huggingface_hub._snapshot_download import (
@@ -565,7 +581,9 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             huggingface_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
         except Exception:
-            raise Exception(f"The setting model_name_or_path:{model_name_or_path} is not exist.")
+            raise Exception(
+                f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
+            )
     else:
         raise ValueError(
             f"Unsupported model source: {model_source}, please choose one of ['MODELSCOPE', 'AISTUDIO', 'HUGGINGFACE']"
