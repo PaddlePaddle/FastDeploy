@@ -954,3 +954,13 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         assert hasattr(chunk.choices[0], "text")
         output_1.append(chunk.choices[0].text)
     assert output_0 not in output_1
+
+
+def test_chat_with_empty_message_list(openai_client, capsys):
+    for is_stream in [True, False]:
+        response = openai_client.chat.completions.create(
+            model="default",
+            messages=[],
+            stream=is_stream,
+        )
+        assert response.status_code == 400
