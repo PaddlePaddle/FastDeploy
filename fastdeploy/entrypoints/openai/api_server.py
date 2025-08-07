@@ -53,9 +53,9 @@ from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
     console_logger,
+    get_limited_max_value,
     is_port_available,
     retrive_model_from_server,
-    get_limited_value,
 )
 
 parser = FlexibleArgumentParser()
@@ -64,8 +64,13 @@ parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the htt
 parser.add_argument("--workers", default=1, type=int, help="number of workers")
 parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
-parser.add_argument("--max-waiting-time", default=300, type=int, help="max waiting time for connection, if set value -1 means no waiting time limit")
-parser.add_argument("--max-concurrency", default=512, type=get_limited_value(1024), help="max concurrency")
+parser.add_argument(
+    "--max-waiting-time",
+    default=300,
+    type=int,
+    help="max waiting time for connection, if set value -1 means no waiting time limit",
+)
+parser.add_argument("--max-concurrency", default=512, type=get_limited_max_value(1024), help="max concurrency")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
@@ -103,7 +108,16 @@ app = FastAPI()
 class StatefulSemaphore:
     __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
 
+    """
+    StatefulSemaphore is a class that wraps an asyncio.Semaphore and provides additional stateful information.
+    """
+
     def __init__(self, value: int):
+        """
+        StatefulSemaphore constructor
+        """
+        if value < 0:
+            raise ValueError("Value must be non-negative.")
         self._semaphore = asyncio.Semaphore(value)
         self._max_value = value
         self._acquired_count = 0
