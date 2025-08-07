@@ -303,13 +303,16 @@ def set_random_seed(seed: int) -> None:
         np.random.seed(seed)
         paddle.seed(seed)
 
+
 def get_limited_max_value(max_value):
     def validator(value):
         value = float(value)
         if value > max_value:
             raise argparse.ArgumentTypeError(f"The value cannot exceed {max_value}")
         return value
+
     return validator
+
 
 def download_model(url, output_dir, temp_tar):
     """
