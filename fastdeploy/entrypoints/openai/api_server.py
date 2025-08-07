@@ -51,9 +51,9 @@ from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, ins
 from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     FlexibleArgumentParser,
+    StatefulSemaphore,
     api_server_logger,
     console_logger,
-    get_limited_max_value,
     is_port_available,
     retrive_model_from_server,
 )
@@ -70,7 +70,7 @@ parser.add_argument(
     type=int,
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
-parser.add_argument("--max-concurrency", default=512, type=get_limited_max_value(1024), help="max concurrency")
+parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
@@ -104,61 +104,6 @@ def load_engine():
 
 app = FastAPI()
 
-
-class StatefulSemaphore:
-    __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
-
-    """
-    StatefulSemaphore is a class that wraps an asyncio.Semaphore and provides additional stateful information.
-    """
-
-    def __init__(self, value: int):
-        """
-        StatefulSemaphore constructor
-        """
-        if value < 0:
-            raise ValueError("Value must be non-negative.")
-        self._semaphore = asyncio.Semaphore(value)
-        self._max_value = value
-        self._acquired_count = 0
-        self._last_reset = time.monotonic()
-
-    async def acquire(self):
-        await self._semaphore.acquire()
-        self._acquired_count += 1
-
-    def release(self):
-        self._semaphore.release()
-        self._acquired_count = max(0, self._acquired_count - 1)
-
-    def locked(self) -> bool:
-        return self._semaphore.locked()
-
-    @property
-    def available(self) -> int:
-        return self._max_value - self._acquired_count
-
-    @property
-    def acquired(self) -> int:
-        return self._acquired_count
-
-    @property
-    def max_value(self) -> int:
-        return self._max_value
-
-    @property
-    def uptime(self) -> float:
-        return time.monotonic() - self._last_reset
-
-    def status(self) -> dict:
-        return {
-            "available": self.available,
-            "acquired": self.acquired,
-            "max_value": self.max_value,
-            "uptime": round(self.uptime, 2),
-        }
-
-
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
@@ -188,10 +133,11 @@ async def lifespan(app: FastAPI):
         args.reasoning_parser,
         args.data_parallel_size,
         args.enable_logprob,
+        args.workers,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
-    chat_handler = OpenAIServingChat(engine_client, pid, args.ips)
-    completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips)
+    chat_handler = OpenAIServingChat(engine_client, pid, args.ips, args.max_waiting_time)
+    completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips, args.max_waiting_time)
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
@@ -219,13 +165,10 @@ async def connection_manager():
     async context manager for connection manager
     """
     try:
-        if args.max_waiting_time < 0:
-            await connection_semaphore.acquire()
-        else:
-            await asyncio.wait_for(connection_semaphore.acquire(), timeout=args.max_waiting_time)
+        await asyncio.wait_for(connection_semaphore.acquire(), timeout=0.001)
         yield
     except asyncio.TimeoutError:
-        api_server_logger.info(f"Time out release: {connection_semaphore.status()}")
+        api_server_logger.info(f"Reach max request release: {connection_semaphore.status()}")
         if connection_semaphore.locked():
             connection_semaphore.release()
         raise HTTPException(status_code=429, detail="Too many requests")
@@ -295,8 +238,7 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
                 yield chunk
         finally:
             api_server_logger.debug(f"release: {connection_semaphore.status()}")
-            if connection_semaphore.locked():
-                connection_semaphore.release()
+            connection_semaphore.release()
 
     return wrapped_generator
 
@@ -314,20 +256,18 @@ async def create_chat_completion(request: ChatCompletionRequest):
         async with connection_manager():
             inject_to_metadata(request)
             generator = await app.state.chat_handler.create_chat_completion(request)
-            api_server_logger.info(f"{connection_semaphore.status()}")
             if isinstance(generator, ErrorResponse):
-                if connection_semaphore.locked():
-                    connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+                connection_semaphore.release()
+                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
             elif isinstance(generator, ChatCompletionResponse):
-                if connection_semaphore.locked():
-                    connection_semaphore.release()
+                connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump())
             else:
                 wrapped_generator = wrap_streaming_generator(generator)
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
 
     except HTTPException as e:
+        api_server_logger.error(f"Error in chat completion: {str(e)}")
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
@@ -344,12 +284,10 @@ async def create_completion(request: CompletionRequest):
         async with connection_manager():
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
-                if connection_semaphore.locked():
-                    connection_semaphore.release()
+                connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump(), status_code=generator.code)
             elif isinstance(generator, CompletionResponse):
-                if connection_semaphore.locked():
-                    connection_semaphore.release()
+                connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump())
             else:
                 wrapped_generator = wrap_streaming_generator(generator)
