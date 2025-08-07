@@ -126,15 +126,8 @@ class FusedMoE(nn.Layer):
         if moe_quant_config:
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
-            if is_supported_moe_backend is not None and is_supported_moe_backend(self.quant_method):
-                self.quant_method.create_weights(self, weight_loader=self.weight_loader)
         else:
-            # w_fp16 a_fp16
             self.quant_method = get_moe_method()
-            self.quant_method.create_weights(self, weight_loader=self.weight_loader)
-        self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
-        if self.gate_correction_bias_key is not None:
-            self.gate_correction_bias = self.create_parameter(shape=[1, self.num_experts], dtype="float32")
         self.redundant_table_manger = None
         if self.ep_size > 1:
             if fd_config.model_config.enable_redundant_experts is True:
@@ -149,6 +142,20 @@ class FusedMoE(nn.Layer):
         if fd_config.load_config.dynamic_load_weight:
             # It's for RL to build model
             self.init_moe_weights()
+        else:
+            self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
+            if self.gate_correction_bias_key is not None:
+                self.gate_correction_bias = self.create_parameter(shape=[1, self.num_experts], dtype="float32")
+            if moe_quant_config:
+                if (
+                    moe_quant_config
+                    and is_supported_moe_backend is not None
+                    and is_supported_moe_backend(self.quant_method)
+                ):
+                    self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+            else:
+                # w_fp16 a_fp16
+                self.quant_method.create_weights(self, weight_loader=self.weight_loader)
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
