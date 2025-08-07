@@ -311,17 +311,6 @@ class ErnieProcessor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
         )
-
-        print("gaoziyuan spliced_message apply_chat_template??", spliced_message)
-        tokens_1 = self.tokenizer.tokenize(spliced_message)
-        print("spliced_message token 1", tokens_1)
-
-
-        spliced_message_2 = request_or_messages["messages"][0]["content"]
-        print("gaoziyuan fuck spliced_message no apply_chat_template", spliced_message_2)
-        tokens_2 = self.tokenizer.tokenize(spliced_message_2)
-        print("token 2", tokens_2)
-
         req_id = None
         if isinstance(request_or_messages, dict):
             req_id = request_or_messages.get("request_id", None)

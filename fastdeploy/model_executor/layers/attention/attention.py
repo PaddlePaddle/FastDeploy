@@ -114,7 +114,6 @@ class Attention(nn.Layer):
             self.init_weight()
 
     def init_weight(self):
-        print("gaoziyuan test q_norm_weight")
         self.q_norm_weight = self.create_parameter(
             shape=[self.qk_head_dim],
             dtype=self._dtype,
