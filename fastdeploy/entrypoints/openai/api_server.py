@@ -55,6 +55,7 @@ from fastdeploy.utils import (
     console_logger,
     is_port_available,
     retrive_model_from_server,
+    get_limited_value,
 )
 
 parser = FlexibleArgumentParser()
@@ -63,6 +64,8 @@ parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the htt
 parser.add_argument("--workers", default=1, type=int, help="number of workers")
 parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
+parser.add_argument("--max-waiting-time", default=300, type=int, help="max waiting time for connection, if set value -1 means no waiting time limit")
+parser.add_argument("--max-concurrency", default=512, type=get_limited_value(1024), help="max concurrency")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
@@ -142,7 +145,7 @@ class StatefulSemaphore:
         }
 
 
-MAX_CONCURRENT_CONNECTIONS = (args.max_num_seqs + args.workers - 1) // args.workers
+MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
@@ -202,7 +205,10 @@ async def connection_manager():
     async context manager for connection manager
     """
     try:
-        await asyncio.wait_for(connection_semaphore.acquire(), timeout=300)
+        if args.max_waiting_time < 0:
+            await connection_semaphore.acquire()
+        else:
+            await asyncio.wait_for(connection_semaphore.acquire(), timeout=args.max_waiting_time)
         yield
     except asyncio.TimeoutError:
         api_server_logger.info(f"Time out release: {connection_semaphore.status()}")
