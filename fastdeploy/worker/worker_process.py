@@ -351,8 +351,7 @@ class PaddleDisWorkerProc:
             if not self.worker.model_runner.not_need_stop():
                 if self.ranks > 1:
                     paddle.distributed.barrier()
-
-                time.sleep(0.001)
+                time.sleep(5)
                 continue
 
             # Execute model to generate token. The generated token will be written to the buffer.
@@ -426,7 +425,7 @@ class PaddleDisWorkerProc:
                 create=False,
             )
             while np.any(self.launched_cache_manager_signal.value[0] <= 0):
-                time.sleep(0.01)
+                time.sleep(5)
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 

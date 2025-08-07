@@ -443,12 +443,14 @@ class Ernie4_5_VLModel(nn.Layer):
         fake_hidden_states = None
 
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        print(f'Ernie4_5_VLModel hidden_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
         token_num, hidden_dim = hidden_states.shape
 
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
         image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
+        print(f'Ernie4_5_VLModel text_token_num, max: {paddle.max(text_token_num)}, min: {paddle.min(text_token_num)}, mean: {paddle.mean(text_token_num)}')
 
         token_type_ids = image_mask.cast("int32")
         if self.fd_config.parallel_config.use_ep is True:
@@ -490,11 +492,16 @@ class Ernie4_5_VLModel(nn.Layer):
                 residual,
                 vl_moe_meta,
             )
+            print(f'Ernie4_5_VLModel layer[{i}] hidden_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
 
         hidden_states = hidden_states + residual
 
         # -----------------------
         max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
+        print(f'Ernie4_5_VLModel max_seq_len: {max_seq_len}, max_seq_len_index: {max_seq_len_index}')
+        print(f'Ernie4_5_VLModel image_token_num: {image_token_num}')
+        print(f'Ernie4_5_VLModel seq_lens_this_time: {forward_meta.seq_lens_this_time}')
+        print(f'Ernie4_5_VLModel cu_seqlens_q: {forward_meta.cu_seqlens_q}')
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
@@ -504,6 +511,7 @@ class Ernie4_5_VLModel(nn.Layer):
             hidden_states.cast("float32"),
         ).cast(self._dtype)
         # -----------------------
+        print(f'Ernie4_5_VLModel extract_text_token_output hidden_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
 
         out = self.norm(hidden_states)
 
@@ -591,6 +599,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
+        print(f"compute_logits: logits, max: {paddle.max(logits)}, min: {paddle.min(logits)}, mean: {paddle.mean(logits)}")
+        print(f"compute_logits: ori_vocab_size, {self.ori_vocab_size}")
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
