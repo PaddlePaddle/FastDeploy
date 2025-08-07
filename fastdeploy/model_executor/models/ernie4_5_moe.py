@@ -37,6 +37,7 @@ from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
+    ReplicatedLinear,
     RowParallelLinear,
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
@@ -147,13 +148,23 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
             }
 
-        self.fused_moe = FusedMoE(
+        self.experts = FusedMoE(
             fd_config=fd_config,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.moe_num_experts,
             top_k=fd_config.model_config.moe_k,
             layer_idx=layer_id,
             weight_key_map=weight_key_map,
+        )
+
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.moe_num_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
         )
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
@@ -166,12 +177,13 @@ class Ernie4_5_MoE(nn.Layer):
             )
 
     def load_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict)
+        self.gate.load_state_dict(state_dict)
+        self.experts.load_state_dict(state_dict)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
-        out = self.fused_moe(hidden_states)
+        out = self.experts(hidden_states, self.gate)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -435,7 +447,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.expert(fake_hidden_states)
 
     def forward(
         self,

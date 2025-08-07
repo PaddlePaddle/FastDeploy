@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import contextlib
+
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -29,7 +31,7 @@ from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.platforms import current_platform
 
 
-class NewModelLoader(BaseModelLoader):
+class DefaultModelLoaderV1(BaseModelLoader):
     """ModelLoader that can load registered models"""
 
     def __init__(self, load_config: LoadConfig):
@@ -54,15 +56,19 @@ class NewModelLoader(BaseModelLoader):
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         architectures = fd_config.model_config.architectures[0]
         logger.info(f"Starting to load model {architectures}")
-
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
             import fastdeploy.rl  # noqa
 
             architectures = architectures + "RL"
+            context = paddle.LazyGuard()
 
-        model_cls = ModelRegistry.get_class(architectures)
-        model = model_cls(fd_config)
+        else:
+            context = contextlib.nullcontext()
+
+        with context:
+            model_cls = ModelRegistry.get_class(architectures)
+            model = model_cls(fd_config)
 
         model.eval()
 

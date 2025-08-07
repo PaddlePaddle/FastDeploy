@@ -60,6 +60,7 @@ class ParallelLMHead(nn.Layer):
             self.bias_key: Optional[str] = None
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.column_cut = True
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -72,6 +73,13 @@ class ParallelLMHead(nn.Layer):
                 dtype=paddle.get_default_dtype(),
                 is_bias=False,
             )
+            if self.bias_key is not None:
+                self.bias = self.create_parameter(
+                    shape=[num_embeddings],
+                    dtype=paddle.get_default_dtype(),
+                    is_bias=True,
+                )
+
         else:
             if self.column_cut:
                 need_gather = True
@@ -84,7 +92,8 @@ class ParallelLMHead(nn.Layer):
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
-                set_weight_attrs(self.linear.weight, {"output_dim": True})
+                if self.nranks > 1:
+                    set_weight_attrs(self.linear.weight, {"output_dim": True})
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
@@ -95,7 +104,8 @@ class ParallelLMHead(nn.Layer):
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
-                set_weight_attrs(self.linear.weight, {"output_dim": False})
+                if self.nranks > 1:
+                    set_weight_attrs(self.linear.weight, {"output_dim": False})
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
@@ -107,6 +117,10 @@ class ParallelLMHead(nn.Layer):
 
         if self.use_ep:
             self.weight.set_value(get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype()))
+            if self.bias_key is not None:
+                self.bias.set_value(
+                    get_tensor(state_dict.pop(self.linear_bias_key)).astype(paddle.get_default_dtype())
+                )
         else:
             if self.tie_word_embeddings:
                 self.linear.weight.set_value(
@@ -134,7 +148,10 @@ class ParallelLMHead(nn.Layer):
         """
         logits = input
         if self.use_ep:
-            logits = paddle.matmul(logits, self.weight)
+            if self.linear_bias_key is None:
+                logits = paddle.matmul(logits, self.weight)
+            else:
+                logits = paddle.incubate.nn.functional.fused_linear(logits, self.weight, self.bias)
         else:
             logits = self.linear(logits)
         return logits
