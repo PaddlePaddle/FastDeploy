@@ -201,7 +201,37 @@ class LLMEngine:
         console_logger.info("Waiting worker processes ready...")
         time.sleep(5)
         self.worker_init_status = dict()
-        if not self.check_worker_initialize_status():
+
+        result_container = {}
+
+        def check_worker_initialize_status_func(res: dict):
+            res["worker_is_alive"] = True
+            if not self.check_worker_initialize_status():
+                console_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+                res["worker_is_alive"] = False
+
+        self.check_worker_initialize_status_func_thread = threading.Thread(
+            target=check_worker_initialize_status_func, args=(result_container,), daemon=True
+        )
+        self.check_worker_initialize_status_func_thread.start()
+
+        # Wait model loading
+        while self.loaded_model_signal.value[0] == 0:
+            # Make sure worker process is alive
+            if not self.check_worker_initialize_status_func_thread.is_alive():
+                return False
+            time.sleep(1)
+
+        if self.do_profile:
+            self._stop_profile()
+        # Launch components: scheduler, cache_manager, expert_service et.al.
+        self.launch_components()
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            self.launched_cache_manager_signal.value[0] = 1
+
+        # Worker launched
+        self.check_worker_initialize_status_func_thread.join()
+        if not result_container["worker_is_alive"]:
             console_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
             return False
 
@@ -212,26 +242,6 @@ class LLMEngine:
             self.warmup()
             self._del_warmup_token_processor()
             console_logger.info("Warmup finished")
-
-        self.token_processor.tasks_queue = self.engine_worker_queue
-
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.insert_task_to_worker_thread = threading.Thread(target=self._scheduler_task_to_worker_v1, daemon=True)
-        else:
-            self.insert_task_to_worker_thread = threading.Thread(target=self._insert_task_to_worker, daemon=True)
-        self.insert_task_to_worker_thread.start()
-
-        if self.api_server_pid is not None:
-            self.insert_task_to_scheduler_thread = threading.Thread(
-                target=self._insert_zmq_task_to_scheduler, daemon=True
-            )
-            self.insert_task_to_scheduler_thread.start()
-
-            self.receive_output_thread = threading.Thread(target=self._zmq_send_generated_tokens, daemon=True)
-            self.receive_output_thread.start()
-
-        # Start TokenProcessor thread
-        self.token_processor.run()
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
         return True
@@ -1201,7 +1211,27 @@ class LLMEngine:
 
         return True, ""
 
-    def launch_pd_disaggregation_env(self):
+    def launch_components(self):
+        self.token_processor.tasks_queue = self.engine_worker_queue
+
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.insert_task_to_worker_thread = threading.Thread(target=self._scheduler_task_to_worker_v1, daemon=True)
+        else:
+            self.insert_task_to_worker_thread = threading.Thread(target=self._insert_task_to_worker, daemon=True)
+        self.insert_task_to_worker_thread.start()
+
+        if self.api_server_pid is not None:
+            self.insert_task_to_scheduler_thread = threading.Thread(
+                target=self._insert_zmq_task_to_scheduler, daemon=True
+            )
+            self.insert_task_to_scheduler_thread.start()
+
+            self.receive_output_thread = threading.Thread(target=self._zmq_send_generated_tokens, daemon=True)
+            self.receive_output_thread.start()
+
+        # Start TokenProcessor thread
+        self.token_processor.run()
+
         if self.cfg.splitwise_role != "mixed":
             # 单机逻辑
             self.engine_worker_queue.available_prefill_instances.put(1)
@@ -1270,19 +1300,8 @@ class LLMEngine:
                     if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
                         self.worker_init_status["finished"] = True
 
-        def detect_kv_cache_env():
-            while self.loaded_model_signal.value[0] == 0:
-                time.sleep(1)
-            if self.do_profile:
-                self._stop_profile()
-            if self.cfg.splitwise_role != "mixed":
-                self.launch_pd_disaggregation_env()
-            self.launched_cache_manager_signal.value[0] = 1
-
         self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)
         self.checking_worker_status_thread.start()
-        checking_worker_init_kv_cache_status_thread = threading.Thread(target=detect_kv_cache_env, daemon=True)
-        checking_worker_init_kv_cache_status_thread.start()
 
         # display weight loadding progress
         with tqdm(total=100, desc="Loading Weights") as pbar:
@@ -1313,7 +1332,6 @@ class LLMEngine:
         self.worker_init_status["finished"] = True
         try:
             self.checking_worker_status_thread.join(timeout=1)
-            checking_worker_init_kv_cache_status_thread.join(timeout=1)
         except Exception:
             pass
         return True
