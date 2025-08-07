@@ -19,7 +19,7 @@ import uuid
 
 import numpy as np
 
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics

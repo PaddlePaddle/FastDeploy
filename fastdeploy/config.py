@@ -29,6 +29,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
@@ -123,7 +124,6 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = ""
         self.enable_logprob = False
-        self.enable_mm = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.quantization = None
@@ -153,6 +153,12 @@ class ModelConfig:
         self.ori_vocab_size = self.vocab_size
         if ErnieArchitectures.contains_ernie_arch(self.architectures):
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+
+        architectures = self.architectures[0]
+        if MultimodalRegistry.contains_model(architectures):
+            self.enable_mm = True
+        else:
+            self.enable_mm = False
 
         self.is_unified_ckpt = check_unified_ckpt(self.model)
 
@@ -951,7 +957,6 @@ class FDConfig:
         engine_worker_queue_port: int = 8002,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        enable_mm: bool = False,
         splitwise_role: str = "mixed",
         innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
@@ -1010,7 +1015,6 @@ class FDConfig:
         self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
-        self.enable_mm = enable_mm
         self.use_warmup = use_warmup
         self.splitwise_role = splitwise_role
         self.innode_prefill_ports = innode_prefill_ports
@@ -1023,12 +1027,13 @@ class FDConfig:
         self._str_to_list("innode_prefill_ports", int)
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
+        import fastdeploy.model_executor.models  # noqa: F401
 
         # TODO
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if enable_mm:
+        if self.model_config.enable_mm:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
@@ -1091,7 +1096,7 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
-            if self.enable_mm:
+            if self.model_config.enable_mm:
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
@@ -1156,7 +1161,9 @@ class FDConfig:
 
             if self.guided_decoding_backend != "off":
                 # TODO: mm support guided_decoding
-                assert self.enable_mm is False, "Multimodal model currently do not support guided_decoding"
+                assert (
+                    self.model_config.enable_mm is False
+                ), "Multimodal model currently do not support guided_decoding"
 
                 # TODO: speculative decoding support guided_decoding
 

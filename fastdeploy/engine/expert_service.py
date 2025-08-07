@@ -330,7 +330,7 @@ class ExpertService:
         if not is_decode:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             if not is_prefill and self.cfg.cache_config.enable_chunked_prefill:
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)

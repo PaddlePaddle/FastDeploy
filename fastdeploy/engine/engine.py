@@ -105,7 +105,7 @@ class LLMEngine:
             cfg.reasoning_parser,
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
-            cfg.enable_mm,
+            cfg.model_config.enable_mm,
         )
 
         self.start_queue_service()
@@ -419,7 +419,7 @@ class LLMEngine:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     err, data = self.zmq_server.receive_json_once(block)
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
@@ -821,7 +821,7 @@ class LLMEngine:
             for task in tasks:
                 task.inference_start_time = time.time()
             if not is_prefill:
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -1035,7 +1035,7 @@ class LLMEngine:
             if self.cfg.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.enable_mm:
+        if self.cfg.model_config.enable_mm:
             variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
@@ -1105,7 +1105,6 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
-            "enable_mm": self.cfg.model_config.enable_mm,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

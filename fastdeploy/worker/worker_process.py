@@ -567,7 +567,6 @@ def parse_args():
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
     )
-    parser.add_argument("--enable_mm", action="store_true", help="Whether to enable vl model")
     parser.add_argument(
         "--enable_logprob",
         action="store_true",
