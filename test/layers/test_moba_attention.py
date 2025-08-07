@@ -14,7 +14,12 @@
 
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import moba_attention
+try:
+    from fastdeploy.model_executor.ops.gpu import get_cur_cu_seq_len_k, moba_attention
+except:
+    moba_attention = None
+    get_cur_cu_seq_len_k = None
+import os
 
 
 def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
@@ -25,6 +30,18 @@ def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
     moba_decoder_top_k_left = int(10)
     moba_decoder_top_k_right = int(10)
     moba_use_decoder_seq_limit = int(10 * 128)
+
+    os.environ["FD_ATTENTION_BACKEND"] = "MOBA_ATTN"
+    os.environ["FD_MOBA_MLP_WEIGHT_PATH"] = "None"
+    os.environ["FD_MOBA_ENCODER_TOP_K_LEFT"] = str(moba_encoder_top_k_left)
+    os.environ["FD_MOBA_ENCODER_TOP_K_RIGHT"] = str(moba_encoder_top_k_right)
+    os.environ["FD_MOBA_DECODER_TOP_K_LEFT"] = str(moba_decoder_top_k_left)
+    os.environ["FD_MOBA_DECODER_TOP_K_RIGHT"] = str(moba_decoder_top_k_right)
+    os.environ["FD_MOBA_USE_ENCODER_SEQ_LIMIT"] = str(moba_use_encoder_seq_limit)
+    os.environ["FD_MOBA_USE_DECODER_SEQ_LIMIT"] = str(moba_use_decoder_seq_limit)
+    os.environ["FD_MOBA_BLOCK_SIZE"] = str(128)
+    os.environ["FD_MOBA_MAX_SEQ_LENGTH"] = str(max_seq_len)
+
     max_dec_len_this_time = int(0)
     qkv = paddle.randn([1, seq_len, num_heads + 2 * num_kv_heads, head_dim], dtype="bfloat16")
     q_input = qkv[:, :, :num_heads, :].reshape([-1, num_heads, head_dim])
@@ -34,7 +51,7 @@ def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
 
     seq_lens_encoder = paddle.to_tensor([seq_len], dtype="int32")
 
-    seq_lens_encoder = paddle.to_tensor([seq_len], dtype="int32")
+    seq_lens_decoder = paddle.to_tensor([0], dtype="int32")
 
     cachesk = paddle.zeros([(seq_len + 63) // 64 * 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
     cachesv = paddle.zeros([(seq_len + 63) // 64 * 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
@@ -45,7 +62,12 @@ def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
 
     cache_k_block_means = paddle.zeros([(seq_len + 63) // 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
 
-    q_pack_tokens = paddle.to_tensor([(seq_len + 127) // 128 * 128], dtype="int32").cpu()
+    cu_seq_q_pack, cu_seqlens_k, q_pack_tokens = get_cur_cu_seq_len_k(
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_encoder,
+        int(128),
+    )
 
     out = moba_attention(
         qkv,
@@ -53,8 +75,8 @@ def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
         k_input,
         v_input,
         cu_seqlens_q,
-        cu_seqlens_q,
-        cu_seqlens_q,
+        cu_seqlens_k,
+        cu_seq_q_pack,
         q_pack_tokens,
         seq_lens_encoder,
         seq_lens_encoder,
