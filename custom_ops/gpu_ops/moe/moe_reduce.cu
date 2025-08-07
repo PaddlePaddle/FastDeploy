@@ -58,11 +58,11 @@ paddle::Tensor MoeExpertReduceFunc(
   const int hidden_size = ffn_out.dims()[1];
 
   auto output = GetEmptyTensor({num_rows, hidden_size}, input_type, place);
-  
+
   if(num_rows == 0){
     return output;
   }
-  
+
   switch (input_type) {
   case paddle::DataType::BFLOAT16:
     MoeReduceKernel<paddle::DataType::BFLOAT16>(

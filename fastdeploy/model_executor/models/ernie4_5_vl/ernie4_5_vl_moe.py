@@ -64,12 +64,11 @@ class Ernie4_5_VLAttention(Ernie4_5_Attention):
 
 @dataclass
 class VLMoEMeta:
-    image_input: Optional[paddle.Tensor] = None
-    text_input: Optional[paddle.Tensor] = None
-    text_index: Optional[paddle.Tensor] = None
-    image_index: Optional[paddle.Tensor] = None
-    token_type_ids: Optional[paddle.Tensor] = None
-    fake_hidden_states: Optional[paddle.Tensor] = None
+    image_input: paddle.Tensor
+    text_input: paddle.Tensor
+    text_index: paddle.Tensor
+    image_index: paddle.Tensor
+    token_type_ids: paddle.Tensor
 
 
 class Ernie4_5_VLMoE(nn.Layer):
@@ -362,6 +361,11 @@ class Ernie4_5_VLModel(nn.Layer):
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
         self.fd_config = fd_config
 
+        self.text_input_buffer = None
+        self.image_input_buffer = None
+        self.text_index_buffer = None
+        self.image_index_buffer = None
+
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
@@ -405,29 +409,29 @@ class Ernie4_5_VLModel(nn.Layer):
     def prepare_VLMoEMeta(
         self,
         input_embeddings: paddle.Tensor,
-        ids_remove_padding: paddle.Tensor
+        ids_remove_padding: paddle.Tensor,
     ):
         hidden_states = input_embeddings
-        
+
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
-        
+
         token_num = hidden_states.shape[0]
         image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
-        text_input = paddle.full(
-            shape = [text_token_num, self.fd_config.model_config.hidden_size],
-            fill_value = 1,
-            dtype = hidden_states.dtype,
-        )
-        image_input = paddle.full(
-            shape = [image_token_num, self.fd_config.model_config.hidden_size],
-            fill_value = 1,
-            dtype = hidden_states.dtype,
-        )
-        text_index = paddle.zeros_like(token_type_ids)
-        image_index = paddle.zeros_like(token_type_ids)
+        text_input = self.text_input_buffer[:text_token_num]
+        image_input = self.image_input_buffer[:image_token_num]
+        text_index = self.text_index_buffer[:token_num]
+        image_index = self.image_index_buffer[:token_num]
+
+        text_input.fill_(1.0)
+        if image_token_num > 0:
+            image_input.fill_(1.0)
+
+        text_index.zero_()
+        image_index.zero_()
+
         text_image_index_out(token_type_ids, text_index, image_index)
 
         vl_moe_meta = VLMoEMeta(
@@ -435,32 +439,32 @@ class Ernie4_5_VLModel(nn.Layer):
             image_input=image_input,
             text_index=text_index,
             image_index=image_index,
-            token_type_ids=token_type_ids,
-            fake_hidden_states=None,
+            token_type_ids=None,
         )
 
         return vl_moe_meta
+
+    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding)
 
     def forward(
         self,
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-        vl_moe_meta,
+        mm_args,
     ):
         hidden_states = input_embeddings
-        
-        image_mask = ids_remove_padding == self.im_patch_id
-        
-        image_token_num = image_mask.sum()
-        if self.fd_config.parallel_config.use_ep is True:
-            vl_moe_meta.fake_hidden_states = paddle.empty(
-                shape=[0, self.fd_config.model_config.hidden_size],
-                dtype=paddle.get_default_dtype(),
-            )
-            vl_moe_meta.text_input = vl_moe_meta.fake_hidden_states
 
+        image_mask = ids_remove_padding == self.im_patch_id
+        token_type_ids = image_mask.cast("int32")
+        image_token_num = image_mask.sum()
+
+        # vl_moe_meta = mm_args.get("vl_moe_meta")
+        vl_moe_meta = mm_args
+        vl_moe_meta.token_type_ids = token_type_ids
         residual = None
+
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](
                 forward_meta,
@@ -471,9 +475,6 @@ class Ernie4_5_VLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        # -----------------------
-        hidden_states = hidden_states.cast("float32")
-        
         max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time.squeeze(-1), k=1)
         hidden_states = extract_text_token_output(
             max_seq_len,
@@ -481,10 +482,9 @@ class Ernie4_5_VLModel(nn.Layer):
             image_token_num.cast("int32"),
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
-            hidden_states,
+            hidden_states.cast("float32"),
         ).cast(self._dtype)
-        # -----------------------
-        logger.info("End of transformer")
+
         out = self.norm(hidden_states)
 
         return out
@@ -588,38 +588,47 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         ):
             self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
             self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
-        
+
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
-        input_embeddings = self.ernie.embed_tokens(ids_remove_padding=ids_remove_padding)
-        if image_features is not None and len(
-            image_features
-        ) != 0:
-            input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self._dtype)
+        input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        if image_features is not None and len(image_features) != 0:
+            input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
-    def prepare_VLMoEMeta(
-        self, 
+    def set_up_buffer(self, share_inputs):
+        self.ernie.text_input_buffer = share_inputs["text_input"]
+        self.ernie.image_input_buffer = share_inputs["image_input"]
+        self.ernie.text_index_buffer = share_inputs["text_index"]
+        self.ernie.image_index_buffer = share_inputs["image_index"]
+
+    def prepare_VLMoEMeta(self, input_embedding: paddle.Tensor, ids_remove_padding: paddle.Tensor) -> VLMoEMeta:
+        return self.ernie.prepare_VLMoEMeta(input_embedding=input_embedding, ids_remove_padding=ids_remove_padding)
+
+    def init_mm_data(
+        self,
         input_embedding: paddle.Tensor,
-        ids_remove_padding: paddle.Tensor
-    ) -> VLMoEMeta:
-        return self.ernie.prepare_VLMoEMeta(input_embedding=input_embedding, ids_remove_padding=ids_remove_padding) 
+        ids_remove_padding: paddle.Tensor,
+    ):
+        vl_moe_meta = self.prepare_VLMoEMeta(input_embedding=input_embedding, ids_remove_padding=ids_remove_padding)
+
+        return {"vl_moe_meta": vl_moe_meta}
 
     def forward(
         self,
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-        vl_moe_meta: VLMoEMeta,
+        mm_args,
     ):
         hidden_states = self.ernie(
             input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
-            vl_moe_meta=vl_moe_meta,
+            mm_args=mm_args,
         )
 
         return hidden_states
