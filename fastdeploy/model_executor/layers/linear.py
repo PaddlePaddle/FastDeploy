@@ -162,11 +162,6 @@ class LinearBase(nn.Layer):
         self.linear_shift = None
         self.linear_smooth = None
 
-        if fd_config.model_config.is_quantized:
-            self.weight_key = f"{prefix}.quant_weight"
-            self.weight_scale_key = f"{prefix}.weight_scale"
-            self.act_scale_key = f"{prefix}.activation_scale"
-
     def load_prequant_weight(self, state_dict: dict):
         """
         Load the prequantized weight from the state dictionary.
