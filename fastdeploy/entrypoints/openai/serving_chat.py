@@ -49,11 +49,11 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips, max_waiting_timeout):
+    def __init__(self, engine_client, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
-        self.max_waiting_timeout = max_waiting_timeout
+        self.max_waiting_time = max_waiting_time
         self.host_ip = get_host_ip()
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
@@ -95,13 +95,13 @@ class OpenAIServingChat:
 
         del current_req_dict
         try:
-            api_server_logger.info(f"{self.engine_client.semaphore.status()}")
+            api_server_logger.debug(f"{self.engine_client.semaphore.status()}")
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
         except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_timeout}")
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
         if request.stream:
             return self.chat_completion_stream_generator(request, request_id, request.model, prompt_token_ids)
