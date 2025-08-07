@@ -371,59 +371,66 @@ public:
                     int warp_k_compute_offset) {
 
         CUTLASS_TRACE_DEVICE(" ElementOperand not fp8");
-        if constexpr (kUnpackInterval != 1) {
-            // unsupport now
-            arch::device_breakpoint();
-        }
+        CUTLASS_TRACE_DEVICE(" kUnpackInterval = %d, kExpansionFactor = %d, kUnpackFactor = %d", kUnpackInterval, kExpansionFactor, kUnpackFactor);
+        CUTLASS_TRACE_DEVICE(" MmaOperator::IteratorB::InstructionShape::kRow = %d", MmaOperator::IteratorB::InstructionShape::kRow);
+        CUTLASS_TRACE_DEVICE(" kWarpIterationsAlongN = %d", kWarpIterationsAlongN);
+        CUTLASS_TRACE_DEVICE(" MmaOperator::FragmentB::kElements = %d", MmaOperator::FragmentB::kElements);
+        
+        CUTLASS_TRACE_DEVICE(" InstructionShape::kN = %d", InstructionShape::kN);
 
-        typename Uint2Converter::source_type source_frag;
+        // if constexpr (kUnpackInterval != 1) {
+        //     // unsupport now
+        //     arch::device_breakpoint();
+        // }
 
-        int in_offset = warp_k_compute_offset * kUnpackInterval;
+        // typename Uint2Converter::source_type source_frag;
 
-        uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
-        uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
+        // int in_offset = warp_k_compute_offset * kUnpackInterval;
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
-            ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
-        }
-        FragmentInputUnpack unpacked_frag = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
+        // uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
+        // uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
 
-        // dequantize local_scale
-        if (warp_k_compute_offset == 0) {
-            using LocalScaleConverter = detail::LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>;
+        // CUTLASS_PRAGMA_UNROLL
+        // for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+        //     ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
+        // }
+        // FragmentInputUnpack unpacked_frag = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
 
-            // special for TileRows = 64
-            int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
-            LocalScaleConverter::Apply(local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
-        }
+        // // dequantize local_scale
+        // if (warp_k_compute_offset == 0) {
+        //     using LocalScaleConverter = detail::LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>;
 
-        // unscale
-        // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
-        // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
-        const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
+        //     // special for TileRows = 64
+        //     int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
+        //     LocalScaleConverter::Apply(local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
+        // }
 
-        using Type = typename detail::DataTypeTraits<ElementOperand>::Type;
-        using DualType = typename detail::DataTypeTraits<ElementOperand>::DualType;
+        // // unscale
+        // // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
+        // // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
+        // const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
 
-        Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
-        DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag);
-        DualType const* scale_ptr = reinterpret_cast<DualType const*>(&scale_frag_);
+        // using Type = typename detail::DataTypeTraits<ElementOperand>::Type;
+        // using DualType = typename detail::DataTypeTraits<ElementOperand>::DualType;
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
-            int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
+        // Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
+        // DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag);
+        // DualType const* scale_ptr = reinterpret_cast<DualType const*>(&scale_frag_);
 
-            DualType scalex2 = scale_ptr[mma_n_iter / 2];
+        // CUTLASS_PRAGMA_UNROLL
+        // for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
+        //     int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
 
-            CUTLASS_PRAGMA_UNROLL
-            for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
-                DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
-                DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
-                output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value.x;
-                output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
-            }
-        }
+        //     DualType scalex2 = scale_ptr[mma_n_iter / 2];
+
+        //     CUTLASS_PRAGMA_UNROLL
+        //     for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
+        //         DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
+        //         DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
+        //         output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value.x;
+        //         output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
+        //     }
+        // }
     }
 
     /// Add an offset to pointer in units of elements.

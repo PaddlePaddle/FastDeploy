@@ -204,6 +204,7 @@ public:
 private:
     static constexpr int kColumnsInterleaved = LayoutB::kColumnsInterleaved;
     static constexpr int kRowsPerTile = LayoutB::kRowsPerTile;
+
     static_assert(!(MmaCore::Shape::kN % kColumnsInterleaved), "ThreadblockShape must be disivle by kColumnsInterleaved");
     static_assert(kRowsPerTile == MmaCore::Shape::kK, "");
 
@@ -213,6 +214,7 @@ private:
 
     using IteratorShapeB = MatrixShape<
         MmaCore::Shape::kK * kColumnsInterleaved, MmaCore::Shape::kN / kColumnsInterleaved>;
+
     using InterleavedThreadMapB = transform::PitchLinearWarpRakedThreadMap<
         layout::PitchLinearShape<IteratorShapeB::kRow, IteratorShapeB::kColumn>,
         ThreadMapB::kThreads,
@@ -226,6 +228,9 @@ public:
     using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
         IteratorShapeB, ElementB, layout::ColumnMajor, 0, InterleavedThreadMapB,
         AccessTypeB>;
+
+    static_assert((IteratorB::Shape::kRow == 512), "aaaaaaaa");
+    static_assert((IteratorB::Shape::kColumn == 64), "aaaaaaaa");
 
 private:
     // Define iterators over tiles from extra quant params for B operand

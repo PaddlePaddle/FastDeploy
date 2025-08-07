@@ -217,8 +217,8 @@ public:
     /// group-wise quant params
     FragmentLocalScale warp_frag_local_scale_;
 
-    using WarpDequantFp16FragmentB = typename cutlass::Array<ElementSuperScale, WarpTransformedFragmentB::kElements>;
-    WarpDequantFp16FragmentB warp_dequant_frag_B_[2];
+    using WarpSuperScaleFragmentB = typename cutlass::Array<ElementSuperScale, WarpTransformedFragmentB::kElements>;
+    WarpSuperScaleFragmentB warp_dequant_frag_B_[2];
   };
 
   using ElementA = typename IteratorA::Element;
@@ -596,6 +596,8 @@ public:
     int stage)
   {
     const int mma_stage = stage - Base::kStages + 1;
+    // CUTLASS_TRACE_DEVICE(" Base::kWarpGemmIterationsPerLoadForB = %d", Base::kWarpGemmIterationsPerLoadForB);
+
 
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
@@ -610,6 +612,7 @@ public:
         ++this->warp_tile_iterator_B_;
       }
 
+      CUTLASS_TRACE_DEVICE(" Base::kWarpGemmIterations = %d", Base::kWarpGemmIterations);
       // load next-tile of group-wise local_scale from shared memory
       if (warp_mma_k == Base::kWarpGemmIterations - 1) {
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
@@ -620,15 +623,6 @@ public:
       this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
       ++this->warp_tile_iterator_A_;
 
-      // // dequantizes next warp-tile
-      // warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-      //                              pipe_state.warp_frag_code_scale_,
-      //                              pipe_state.warp_frag_code_zp_,
-      //                              pipe_state.warp_frag_super_scale_,
-      //                              pipe_state.warp_loaded_frag_B_,
-      //                              pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
-      //                              ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
-      //                              (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
       if constexpr (platform::is_same<ElementA, cutlass::float_e4m3_t>::value) {
         // dequantizes next warp-tile
@@ -642,7 +636,7 @@ public:
                                     (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
 
         constexpr cutlass::FloatRoundStyle RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
-        constexpr int ConversionVectorWidth = PipeState::WarpDequantFp16FragmentB::kElements;
+        constexpr int ConversionVectorWidth = PipeState::WarpSuperScaleFragmentB::kElements;
         using Converter
             = cutlass::NumericArrayConverter<ElementA, ElementSuperScale, ConversionVectorWidth, RoundStyle>;
         pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2] = Converter::convert(pipe_state.warp_dequant_frag_B_[(warp_mma_k + 1) % 2]);
@@ -657,6 +651,17 @@ public:
                                     ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
                                     (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
       }
+
+      // uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_frag_local_scale_.data());
+      // if (static_cast<int>(reg_uint8_ptr[0]) != 1) {
+      //   CUTLASS_TRACE_DEVICE("warp_mma_k = %d, warp_frag_local_scale_=[%d, %d, %d, %d, %d, %d, %d, %d]",
+      //       warp_mma_k,
+      //       static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
+      //       static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
+      //       static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
+      //       static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]));
+      // }
+
 
       // Execute the current warp-tile of MMA operations
       if constexpr (Detail::kStagedAccumulation) {
@@ -679,6 +684,43 @@ public:
           pipe_state.warp_frag_B_[warp_mma_k % 2],
           accum);
       }
+
+
+#if 0
+      CUTLASS_TRACE_DEVICE(" warp_loaded_frag_B_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+            static_cast<float>(pipe_state.warp_loaded_frag_B_[0]), static_cast<float>(pipe_state.warp_loaded_frag_B_[1]),
+            static_cast<float>(pipe_state.warp_loaded_frag_B_[2]), static_cast<float>(pipe_state.warp_loaded_frag_B_[3]),
+            static_cast<float>(pipe_state.warp_loaded_frag_B_[4]), static_cast<float>(pipe_state.warp_loaded_frag_B_[5]),
+            static_cast<float>(pipe_state.warp_loaded_frag_B_[6]), static_cast<float>(pipe_state.warp_loaded_frag_B_[7]));
+
+      CUTLASS_TRACE_DEVICE(" pipe_state.warp_frag_B_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+            static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][0]), static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][1]),
+            static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][2]), static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][3]),
+            static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][4]), static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][5]),
+            static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][6]), static_cast<float>(pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2][7]));
+            
+      CUTLASS_TRACE_DEVICE(" tile_A[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][0]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][1]),
+            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][2]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][3]),
+            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][4]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][5]),
+            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][6]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][7]));
+
+      CUTLASS_TRACE_DEVICE(" tile_B[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][0]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][1]),
+            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][2]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][3]),
+            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][4]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][5]),
+            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][6]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][7]));
+
+      CUTLASS_TRACE_DEVICE(" tile_C[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+            static_cast<float>(accum[0]), static_cast<float>(accum[1]),
+            static_cast<float>(accum[2]), static_cast<float>(accum[3]),
+            static_cast<float>(accum[4]), static_cast<float>(accum[5]),
+            static_cast<float>(accum[6]), static_cast<float>(accum[7]),
+            static_cast<float>(accum[8]), static_cast<float>(accum[9]),
+            static_cast<float>(accum[10]), static_cast<float>(accum[11]),
+            static_cast<float>(accum[12]), static_cast<float>(accum[13]),
+            static_cast<float>(accum[14]), static_cast<float>(accum[15]));
+#endif
 
       // Except for the last warp-tile, all warp-tiles issue their share of
       // global->shared fragment copies
@@ -769,16 +811,32 @@ public:
 
     if constexpr (platform::is_same<ElementA, cutlass::float_e4m3_t>::value) {
       warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                  pipe_state.warp_frag_code_scale_,
-                                  pipe_state.warp_frag_code_zp_,
-                                  pipe_state.warp_frag_super_scale_,
-                                  pipe_state.warp_loaded_frag_B_,
-                                  pipe_state.warp_dequant_frag_B_[0],
-                                  0,
-                                  0);
+                                   pipe_state.warp_frag_code_scale_,
+                                   pipe_state.warp_frag_code_zp_,
+                                   pipe_state.warp_frag_super_scale_,
+                                   pipe_state.warp_loaded_frag_B_,
+                                   pipe_state.warp_dequant_frag_B_[0],
+                                   0,
+                                   0);
       constexpr cutlass::FloatRoundStyle RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
-      constexpr int ConversionVectorWidth = PipeState::WarpDequantFp16FragmentB::kElements;
+      constexpr int ConversionVectorWidth = PipeState::WarpSuperScaleFragmentB::kElements;
+      // CUTLASS_TRACE_DEVICE(" input dequant b elem = %d", PipeState::WarpLoadedFragmentB::kElements);
+      // CUTLASS_TRACE_DEVICE(" output dequant b elem = %d", PipeState::WarpSuperScaleFragmentB::kElements);
+      // CUTLASS_TRACE_DEVICE(" after convert dequant b elem = %d", PipeState::WarpTransformedFragmentB::kElements);
 
+      // CUTLASS_TRACE_DEVICE(" WarpTransformedFragmentA elem = %d", PipeState::WarpTransformedFragmentA::kElements);
+
+      // CUTLASS_TRACE_DEVICE(" IteratorA::Shape::kRow = %d, IteratorA::Shape::kColumn = %d", IteratorA::Shape::kRow, IteratorA::Shape::kColumn);
+      // CUTLASS_TRACE_DEVICE(" IteratorB::Shape::kRow = %d, IteratorB::Shape::kColumn = %d", IteratorB::Shape::kRow, IteratorB::Shape::kColumn);
+
+      // CUTLASS_TRACE_DEVICE(" Operator::FragmentA::kElements = %d", Operator::FragmentA::kElements);
+      // CUTLASS_TRACE_DEVICE(" Operator::FragmentB::kElements = %d", Operator::FragmentB::kElements);
+      // CUTLASS_TRACE_DEVICE(" Operator::TransformedFragmentA::kElements = %d", Operator::TransformedFragmentA::kElements);
+      // CUTLASS_TRACE_DEVICE(" Operator::TransformedFragmentB::kElements = %d", Operator::TransformedFragmentB::kElements);
+
+      // CUTLASS_TRACE_DEVICE(" Operator::IteratorB::InstructionShape::kRow = %d, kColumn = %d", Operator::IteratorB::InstructionShape::kRow, Operator::IteratorB::InstructionShape::kColumn);
+
+      // warp_frag_B_ 应该是fp8
       using Converter
           = cutlass::NumericArrayConverter<ElementA, ElementSuperScale, ConversionVectorWidth, RoundStyle>;
       pipe_state.warp_frag_B_[0] = Converter::convert(pipe_state.warp_dequant_frag_B_[0]);
@@ -794,15 +852,31 @@ public:
                                   0);
     }
 
-    // // Dequantize B to in register
-    // warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-    //                              pipe_state.warp_frag_code_scale_,
-    //                              pipe_state.warp_frag_code_zp_,
-    //                              pipe_state.warp_frag_super_scale_,
-    //                              pipe_state.warp_loaded_frag_B_,
-    //                              pipe_state.warp_frag_B_[0],
-    //                              0,
-    //                              0);
+      // uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
+      // CUTLASS_TRACE_DEVICE(" warp_loaded_frag_B_=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d], %d bytes",
+      //     static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
+      //     static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
+      //     static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
+      //     static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]),
+      //     static_cast<int>(reg_uint8_ptr[8]), static_cast<int>(reg_uint8_ptr[9]),
+      //     static_cast<int>(reg_uint8_ptr[10]), static_cast<int>(reg_uint8_ptr[11]),
+      //     static_cast<int>(reg_uint8_ptr[12]), static_cast<int>(reg_uint8_ptr[13]),
+      //     static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]),
+      //     sizeof_bits<typename PipeState::WarpLoadedFragmentB>::value / 8);
+
+      // // int8 -> half
+      // CUTLASS_TRACE_DEVICE(" warp_dequant_frag_B_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(pipe_state.warp_dequant_frag_B_[0][0]), static_cast<float>(pipe_state.warp_dequant_frag_B_[0][1]),
+      //       static_cast<float>(pipe_state.warp_dequant_frag_B_[0][2]), static_cast<float>(pipe_state.warp_dequant_frag_B_[0][3]),
+      //       static_cast<float>(pipe_state.warp_dequant_frag_B_[0][4]), static_cast<float>(pipe_state.warp_dequant_frag_B_[0][5]),
+      //       static_cast<float>(pipe_state.warp_dequant_frag_B_[0][6]), static_cast<float>(pipe_state.warp_dequant_frag_B_[0][7]));
+            
+      // CUTLASS_TRACE_DEVICE(" warp_frag_B_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(pipe_state.warp_frag_B_[0][0]), static_cast<float>(pipe_state.warp_frag_B_[0][1]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[0][2]), static_cast<float>(pipe_state.warp_frag_B_[0][3]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[0][4]), static_cast<float>(pipe_state.warp_frag_B_[0][5]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[0][6]), static_cast<float>(pipe_state.warp_frag_B_[0][7]));
+
 
     if constexpr (Detail::kStagedAccumulation) {
       pipe_state.tmp_accum_.clear();

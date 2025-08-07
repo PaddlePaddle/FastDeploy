@@ -605,7 +605,7 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
             
     switch (gemm_config.tile_config) {
       // dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
-      dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
+      dispatch_gemm_config_macro(16, 256, 128, 16, 64, 128);
 
       // if (tile_shape_k == 64) {
       //       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
