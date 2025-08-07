@@ -59,14 +59,12 @@ class TestModel1(paddle.nn.Layer):
         # sublayer1 use cuda graph
         sub_meta1 = forward_meta
         sublayer1_output = self.sublayer1(ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1)
-        # print(f"sublayer1_output data ptr: {sublayer1_output.data_ptr()}")
 
         # sublayer2 use cuda graph
         sub_meta2 = ForwardMeta(
             input_ids=sublayer1_output, ids_remove_padding=sublayer1_output, step_use_cudagraph=True
         )
         sublayer2_output = self.sublayer2(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
-        # print(f"sublayer2_output data ptr: {sublayer2_output.data_ptr()}")
 
         return sublayer2_output
 
@@ -101,16 +99,13 @@ def run_test_case():
 
     # Triger Capture
     _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    # print("-------- after dummy run --------")
 
     # Reaplay
     _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
     output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    # print("-------- after replay --------")
 
     # Corrent output
     output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    # print("-------- after corrent forward --------")
 
     assert output1 == output1_correct
 
