@@ -37,7 +37,6 @@ class UnquantizedLinearMethod(QuantMethodBase):
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         extra_weight_attrs is a dictionary that may include parameters like:
-        - split_axis: specifies which axis to split the weight tensor on (for distributed weight partitioning)
         - output_dim: determines whether the split is applied along the output dimension (rows) or input dimension (columns)
         - weight_loader: a callable or method responsible for loading the weight data
         """
@@ -51,9 +50,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             layer.weight,
             {"weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config))},
         )
-        if hasattr(layer, "nranks") and layer.nranks > 0:
-            split_axis = extra_weight_attrs.get("split_axis")
-            _set_var_distributed(layer.weight, split_axis=split_axis)
+        if hasattr(layer, "nranks") and layer.nranks > 1:
             set_weight_attrs(layer.weight, {"output_dim": extra_weight_attrs.get("output_dim")})
 
     def process_loaded_weights(self, layer, weights) -> None:
@@ -125,6 +122,10 @@ class LinearBase(nn.Layer):
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
+        elif fd_config.model_config.is_quantized and not skip_quant:
+            self.weight_key = f"{prefix}.quant_weight"
+            self.weight_scale_key = f"{prefix}.weight_scale"
+            self.act_scale_key = f"{prefix}.activation_scale"
         else:
             self.weight_key = f"{prefix}.weight"
         self.bias_key = f"{prefix}.bias"
@@ -173,7 +174,11 @@ class LinearBase(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the prequantized weights and scales.
         """
-        self.quant_method.process_prequanted_weights(self, state_dict)
+        if isinstance(self.quant_method, UnquantizedLinearMethod):
+            # for gate
+            self.load_weight(state_dict)
+        else:
+            self.quant_method.process_prequanted_weights(self, state_dict)
 
     def load_weight(self, state_dict: dict):
         """
@@ -333,18 +338,18 @@ class ColumnParallelLinear(LinearBase):
         assert self.quant_method is not None
         self.quant_method.create_weights(
             self,
-            split_axis=1,
             output_dim=True,
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
         )
-
-        if self.with_bias:
-            if self.nranks > 0:
+        if self.nranks > 0:
+            _set_var_distributed(self.weight, split_axis=1)
+            if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
-                set_weight_attrs(self.bias, {"output_dim": True})
+                if self.nranks > 1:
+                    set_weight_attrs(self.bias, {"output_dim": True})
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -669,15 +674,19 @@ class RowParallelLinear(LinearBase):
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
         )
+        if self.nranks > 0:
+            _set_var_distributed(self.weight, split_axis=0)
+            if self.with_bias:
+                # col parallel
+                _set_var_distributed(self.bias, split_axis=0)
+                if self.nranks > 1:
+                    set_weight_attrs(
+                        self.bias,
+                        {
+                            "output_dim": False,
+                        },
+                    )
 
-        if self.with_bias:
-            _set_var_distributed(self.bias, split_axis=0)
-            set_weight_attrs(
-                self.bias,
-                {
-                    "output_dim": False,
-                },
-            )
         self.reduce_results = reduce_results
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
