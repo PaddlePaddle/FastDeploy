@@ -484,11 +484,16 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
     pynvml.nvmlShutdown()
 
+    paddle_reserved = paddle.device.cuda.max_memory_reserved(gpu_id)
+    paddle_allocated = paddle.device.cuda.max_memory_allocated(gpu_id)
+
     print(
         f"\n{title}:",
         f"\n\tDevice Total memory: {meminfo.total}",
         f"\n\tDevice Used memory: {meminfo.used}",
         f"\n\tDevice Free memory: {meminfo.free}",
+        f"\n\tPaddle max memory Reserved: {paddle_reserved}",
+        f"\n\tPaddle max memory Allocated: {paddle_allocated}",
     )
 
 

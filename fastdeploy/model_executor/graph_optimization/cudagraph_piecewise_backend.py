@@ -62,15 +62,7 @@ class CudaGraphPiecewiseBackend:
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.batch_size_to_captured_size = fd_config.graph_opt_config.batch_size_to_captured_size
 
-        # Runtime batch size -> ConcreteSizeEntry
-        self.concrete_size_entries: Dict[int, ConcreteSizeEntry] = {}
-
-        for shape in self.cudagraph_capture_sizes:
-            self.concrete_size_entries[shape] = ConcreteSizeEntry(runtime_bs=shape)
-
-        logger.info(
-            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, " "Created all batch sizes entry."
-        )
+        self._create_entry_dict()
 
     def __call__(self, **kwargs):
         # Get batch size
@@ -128,3 +120,29 @@ class CudaGraphPiecewiseBackend:
         entry.cuda_graph.replay()
         logger.debug(f"[CUDA GRAPH] CUDAGraph replayed for batch size {padding_batch_size}")
         return entry.output_buffer
+
+    def _create_entry_dict(self):
+        """ """
+        # Runtime batch size -> ConcreteSizeEntry
+        self.concrete_size_entries: Dict[int, ConcreteSizeEntry] = {}
+
+        for shape in self.cudagraph_capture_sizes:
+            self.concrete_size_entries[shape] = ConcreteSizeEntry(runtime_bs=shape)
+
+        logger.info(
+            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, " "Created all batch sizes entry."
+        )
+
+    def clear_graph(self):
+        """ """
+        # Clear graphs
+        for id, entry in self.concrete_size_entries.items():
+            if entry.cuda_graph:
+                del entry.cuda_graph
+                logger.debug(f"[CUDA GRAPH] The CUDAGraph with shape {id} has been cleared.")
+
+        del self.concrete_size_entries
+        paddle.device.cuda.empty_cache()
+
+        # Create new entrys
+        self._create_entry_dict()

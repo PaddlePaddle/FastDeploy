@@ -89,7 +89,7 @@ class TestModel1(paddle.nn.Layer):
         self.fd_config = fd_config
 
         self.sublayer1 = TestCase1SubLayer1(self.fd_config)
-        self.sublayer2 = TestCase1SubLayer2(self.fd_config)
+        self.sublayer2 = TestCase1SubLayer2(self.fd_config)  # Attention
         self.sublayer3 = TestCase1SubLayer3(self.fd_config)
 
         self.sublayer2_output_buffer = paddle.zeros([1])
@@ -101,9 +101,7 @@ class TestModel1(paddle.nn.Layer):
         sublayer1_output = self.sublayer1(ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1)
 
         # sublayer2 not use cuda garph
-        sub_meta2 = ForwardMeta(
-            input_ids=sublayer1_output, ids_remove_padding=sublayer1_output, step_use_cudagraph=False
-        )
+        sub_meta2 = ForwardMeta(input_ids=sublayer1_output, ids_remove_padding=sublayer1_output)
         sublayer2_output = self.sublayer2(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
         self.sublayer2_output_buffer.copy_(sublayer2_output, False)
 
