@@ -23,6 +23,11 @@ import os
 
 
 def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
+
+    if moba_attention is None:
+        return
+    if get_cur_cu_seq_len_k is None:
+        return
     max_seq_len = int(128 * 1024)
     moba_encoder_top_k_left = int(10)
     moba_encoder_top_k_right = int(15)
