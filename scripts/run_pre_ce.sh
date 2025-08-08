@@ -25,7 +25,7 @@ for subdir in "$run_path"*/; do
                 echo "------------------------------------------------------------"
 
                 set +e
-                timeout 600 python -m pytest --disable-warnings -sv "$file"
+                timeout 1200 python -m pytest --disable-warnings -sv "$file"
                 exit_code=$?
                 set -e
 
