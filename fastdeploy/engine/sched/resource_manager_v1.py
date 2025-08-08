@@ -195,7 +195,6 @@ class ResourceManagerV1(ResourceManager):
                 )
                 request.num_image_end = img_num_per_boundary[new_boundary_idx]
 
-            request.num_image_end = img_num_per_boundary[new_boundary_idx]
             request.image_type_ids_start = np.sum(grid_thw[: request.num_image_start, 0])
             request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
             request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
