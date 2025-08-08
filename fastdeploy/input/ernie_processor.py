@@ -19,7 +19,6 @@ import os
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
-from fastdeploy import envs
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.text_processor import BaseDataProcessor
 from fastdeploy.utils import data_processor_logger
@@ -47,25 +46,6 @@ class ErnieProcessor(BaseDataProcessor):
 
         self.model_name_or_path = model_name_or_path
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
-        self._init_config()
-
-        self.decode_status = dict()
-        self.thinking_parser_dict = dict()
-        self._load_tokenizer()
-        data_processor_logger.info(
-            f"tokenizer information: bos_token is {self.tokenizer.bos_token} \
-                                   {self.tokenizer.bos_token_id}, \
-                                   eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
-        )
-        self.eos_token_ids = [self.tokenizer.eos_token_id]
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
-        self.reasoning_parser = None
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
-
-    def _init_config(self):
-        self.use_hf_tokenizer = int(envs.FD_USE_HF_TOKENIZER) == 1
 
         # Generation config
         try:
@@ -76,6 +56,23 @@ class ErnieProcessor(BaseDataProcessor):
                 f"generation_config field in the model config, details={e}"
             )
             self.generation_config = None
+
+        self.decode_status = dict()
+        self.thinking_parser_dict = dict()
+        self._load_tokenizer()
+        data_processor_logger.info(
+            f"tokenizer information: bos_token is {self.tokenizer.bos_token} \
+                                   {self.tokenizer.bos_token_id}, \
+                                   eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
+        )
+        from paddleformers.trl.llm_utils import get_eos_token_id
+
+        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
+        self.eos_token_id_len = len(self.eos_token_ids)
+        self.pad_token_id = self.get_pad_id()
+        self.reasoning_parser = None
+        if reasoning_parser_obj:
+            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """
