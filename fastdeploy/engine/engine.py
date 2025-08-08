@@ -964,7 +964,9 @@ class LLMEngine:
         exit sub services
         """
         self.running = False
+        llm_logger.info("Engine shut down, exiting sub services...")
 
+        # Clear cache manager process
         if hasattr(self, "cache_manager_processes"):
             self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
             self.resource_manager.cache_manager.cache_ready_signal.clear()
@@ -974,6 +976,8 @@ class LLMEngine:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
                     print(f"Error extracting file: {e}")
+
+        # Clear signals
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
@@ -982,15 +986,22 @@ class LLMEngine:
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
         self.model_weights_status_signal.clear()
+
+        # Clear worker process
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
                 print(f"Error extracting sub services: {e}")
 
+        # Clear engine worker queue
         self.engine_worker_queue.cleanup()
+
+        # Clear zmq server
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
+
+        # Clear DP processes
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 p.join()
