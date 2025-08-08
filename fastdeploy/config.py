@@ -938,10 +938,10 @@ class FDConfig:
 
     def __init__(
         self,
-        model_config: ModelConfig,
-        cache_config: CacheConfig,
-        parallel_config: ParallelConfig,
-        load_config: LoadConfig,
+        model_config: ModelConfig = None,
+        cache_config: CacheConfig = None,
+        parallel_config: ParallelConfig = None,
+        load_config: LoadConfig = None,
         commit_config: CommitConfig = CommitConfig(),
         scheduler_config: SchedulerConfig = None,
         device_config: DeviceConfig = None,
@@ -967,6 +967,7 @@ class FDConfig:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         early_stop_config: Optional[Dict[str, Any]] = None,
+        test_mode=False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -980,7 +981,8 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-
+        if test_mode:
+            return
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
