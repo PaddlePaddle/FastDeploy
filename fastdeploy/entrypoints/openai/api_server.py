@@ -45,7 +45,7 @@ from fastdeploy.metrics.metrics import (
     get_filtered_metrics,
     main_process_metrics,
 )
-from fastdeploy.metrics.trace_util import inject_to_metadata, instrument
+from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     FlexibleArgumentParser,
@@ -272,6 +272,7 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
+    fd_start_span("FD_START")
 
     try:
         uvicorn.run(

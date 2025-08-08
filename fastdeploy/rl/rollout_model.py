@@ -156,12 +156,12 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
         # Helper function to add layer mappings
         def _add_layer_mappings(layer_idx: int):
             # MoE specific mappings
-            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_weight"] = (
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.weight"] = (
                 f"{base_name}.{layer_idx}.mlp.gate.weight"
             )
 
             if self.fd_config.model_config.moe_use_aux_free:
-                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = (
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.experts.gate_correction_bias"] = (
                     f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
                 )
 
@@ -169,7 +169,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
             for expert_idx in range(self.fd_config.model_config.moe_num_experts):
                 for ph in place_holders:
                     # up_gate_proj (up_gate_proj)
-                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
                     if up_gate_proj_key not in self.infer_to_train_mapping:
                         self.infer_to_train_mapping[up_gate_proj_key] = []
                     self.infer_to_train_mapping[up_gate_proj_key].append(
@@ -177,7 +177,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
                     )
 
                     # down_proj (down_proj)
-                    down_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.experts.down_proj_weight"
                     if down_proj_key not in self.infer_to_train_mapping:
                         self.infer_to_train_mapping[down_proj_key] = []
                     self.infer_to_train_mapping[down_proj_key].append(
@@ -230,13 +230,13 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
         def _add_expert_mappings(layer_idx: int, moe_tag: str, expert_start: int):
             # MoE specific mappings
             gate_suffix = "" if moe_tag == "text" else "_1"
-            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_weight"] = (
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate.weight"] = (
                 f"{base_name}.{layer_idx}.mlp.gate.weight{gate_suffix}"
             )
 
             if self.fd_config.model_config.moe_use_aux_free:
                 self.infer_to_train_mapping[
-                    f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_correction_bias"
+                    f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.experts.gate_correction_bias"
                 ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
 
             # Initialize defaultdict for expert weights
@@ -255,12 +255,12 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
                 expert_num_per_rank,
             ):
                 for ph in place_holders:
-                    expert_mappings[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.up_gate_proj_weight"].append(
-                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
-                    )
-                    expert_mappings[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.down_proj_weight"].append(
-                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
-                    )
+                    expert_mappings[
+                        f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.experts.up_gate_proj_weight"
+                    ].append(f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}")
+                    expert_mappings[
+                        f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.experts.down_proj_weight"
+                    ].append(f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}")
             self.infer_to_train_mapping.update(expert_mappings)
 
         moe_layer_start_index = self.fd_config.model_config.moe_layer_start_index
@@ -375,12 +375,12 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
         # Helper function to add layer mappings
         def _add_layer_mappings(layer_idx: int):
             # MoE specific mappings
-            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate_weight"] = (
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.weight"] = (
                 f"{base_name}.{layer_idx}.mlp.gate.weight"
             )
 
             if self.fd_config.moe_config.moe_use_aux_free:
-                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = (
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.experts.gate_correction_bias"] = (
                     f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
                 )
 
@@ -388,7 +388,7 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
             for expert_idx in range(self.fd_config.moe_config.num_experts):
                 for ph in place_holders:
                     # up_gate_proj (up_gate_proj)
-                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.up_gate_proj_weight"
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
                     if up_gate_proj_key not in self.infer_to_train_mapping:
                         self.infer_to_train_mapping[up_gate_proj_key] = []
                     self.infer_to_train_mapping[up_gate_proj_key].append(
@@ -396,7 +396,7 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
                     )
 
                     # down_proj (down_proj)
-                    down_proj_key = f"{base_name}.{layer_idx}.mlp.down_proj_weight"
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.experts.down_proj_weight"
                     if down_proj_key not in self.infer_to_train_mapping:
                         self.infer_to_train_mapping[down_proj_key] = []
                     self.infer_to_train_mapping[down_proj_key].append(
