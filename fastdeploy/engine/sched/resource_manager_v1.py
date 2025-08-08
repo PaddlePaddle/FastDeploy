@@ -199,7 +199,7 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         # Allocation for next decoding blocks
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
-                            llm_logger.debug(
+                            llm_logger.info(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
                             request.block_tables.extend(
@@ -223,7 +223,7 @@ class ResourceManagerV1(ResourceManager):
                         num_decoding_req_nums += 1
                         token_budget -= 1
                 else:  # need to prefill
-                    llm_logger.debug(
+                    llm_logger.info(
                         f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                     )
                     num_new_tokens = request.prompt_token_ids_len - request.num_computed_tokens
@@ -258,7 +258,7 @@ class ResourceManagerV1(ResourceManager):
                             request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
-                            llm_logger.debug(
+                            llm_logger.info(
                                 f"schedule prefill task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -283,7 +283,7 @@ class ResourceManagerV1(ResourceManager):
                             request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
-                            llm_logger.debug(
+                            llm_logger.info(
                                 f"schedule preempted task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
