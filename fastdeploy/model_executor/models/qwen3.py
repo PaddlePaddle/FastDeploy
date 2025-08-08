@@ -335,6 +335,10 @@ class Qwen3PretrainedModel(PretrainedModel):
         return None
 
     @classmethod
+    def arch_name(self):
+        return "Qwen3ForCausalLM"
+
+    @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
 
         from paddleformers.transformers.conversion_utils import split_or_merge_func

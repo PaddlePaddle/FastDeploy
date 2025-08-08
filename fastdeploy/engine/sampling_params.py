@@ -218,20 +218,22 @@ class SamplingParams:
                 prompt_token_ids = tokenizer.encode(text=prompt, add_special_tokens=False)["input_ids"]
 
                 if len(prompt_token_ids) != 1:
-                    logger.warning(
-                        f"Skip bad_words: {prompt}."
-                        f"Bad words should be a single token."
-                        f"Got tokens: {prompt_token_ids}."
-                    )
+                    if not add_prefix_space:
+                        logger.warning(
+                            f"Skip bad_words: <{prompt}>."
+                            f"Bad words should be a single token."
+                            f"Got tokens: {prompt_token_ids}."
+                        )
                     continue
 
                 if prompt_token_ids[0] > tokenizer.vocab_size:
-                    logger.warning(
-                        f"Skip bad_words: {prompt}."
-                        f"All token id values should be satisfying:"
-                        f" 0 <= token_id < {tokenizer.vocab_size}."
-                        f"Got token: {prompt_token_ids}."
-                    )
+                    if not add_prefix_space:
+                        logger.warning(
+                            f"Skip bad_words: <{prompt}>."
+                            f"All token id values should be satisfying:"
+                            f" 0 <= token_id < {tokenizer.vocab_size}."
+                            f"Got token: {prompt_token_ids}."
+                        )
                     continue
 
                 if prompt_token_ids not in self._bad_words_token_ids:

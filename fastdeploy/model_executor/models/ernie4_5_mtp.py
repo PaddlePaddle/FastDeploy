@@ -47,6 +47,10 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         return None
 
     @classmethod
+    def arch_name(self):
+        return "Ernie4_5_MTPForCausalLM"
+
+    @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
         """
         get_tensor_parallel_mappings

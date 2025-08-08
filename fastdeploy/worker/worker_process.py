@@ -257,11 +257,11 @@ class PaddleDisWorkerProc:
                     f"num_insert_requests: {len(req_dicts)}"
                 )
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model()
+            self.worker.execute_model(num_running_requests)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
@@ -338,7 +338,7 @@ class PaddleDisWorkerProc:
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if not self.worker.model_runner.not_need_stop():
                 if self.ranks > 1:
@@ -349,7 +349,7 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model(req_dicts)
+            self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
@@ -723,7 +723,12 @@ def run_worker_proc() -> None:
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
+
+        worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
+    else:
+        worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()
@@ -748,4 +753,7 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
+    from fastdeploy.plugins.model_register import load_model_register_plugins
+
+    load_model_register_plugins()
     run_worker_proc()

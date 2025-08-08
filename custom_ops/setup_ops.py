@@ -294,6 +294,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
+        "gpu_ops/merge_prefill_decode_output.cu",
     ]
 
     # pd_disaggregation
@@ -408,6 +409,7 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
         nvcc_compile_args += ["-DENABLE_BF16"]
         # moe
+        os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
         sources += find_end_files("gpu_ops/moe/", ".cu")
@@ -495,6 +497,9 @@ elif paddle.is_compiled_with_cuda():
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
+        sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
 
     setup(
         name="fastdeploy_ops",
@@ -534,9 +539,12 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/stop_generation_multi_ends.cu",
                 "gpu_ops/step.cu",
                 "gpu_ops/token_penalty_multi_scores.cu",
+                "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
+                "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
             ],
             include_dirs=["iluvatar_ops/runtime", "gpu_ops"],

@@ -199,7 +199,7 @@ class LLMEngine:
             self.launched_cache_manager_signal.value[0] = 1
 
         self.worker_proc = self._start_worker_service()
-        console_logger.info("Waitting worker processes ready...")
+        console_logger.info("Waiting worker processes ready...")
         time.sleep(5)
         self.worker_init_status = dict()
         if not self.check_worker_initialize_status():
@@ -373,6 +373,8 @@ class LLMEngine:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+
+            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
                 available_blocks=self.resource_manager.available_block_num(),
                 block_size=self.cfg.cache_config.block_size,
@@ -422,7 +424,7 @@ class LLMEngine:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error("Engine stops inserting zmq task into scheduler")
+                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
@@ -500,6 +502,7 @@ class LLMEngine:
             enable_thinking = kwargs.get("enable_thinking", None)
         request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
+        request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
         request.set(
             "max_tokens",
@@ -526,6 +529,26 @@ class LLMEngine:
             )
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
+
+        if request.get("stop_seqs_len") is not None:
+            stop_seqs_len = request.get("stop_seqs_len")
+            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            if len(stop_seqs_len) > max_stop_seqs_num:
+                error_msg = (
+                    f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
+                    "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
+                )
+                llm_logger.error(error_msg)
+                raise EngineError(error_msg, error_code=400)
+            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            for single_stop_seq_len in stop_seqs_len:
+                if single_stop_seq_len > stop_seqs_max_len:
+                    error_msg = (
+                        f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
+                        "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
+                    )
+                    llm_logger.error(error_msg)
+                    raise EngineError(error_msg, error_code=400)
 
         if self.guided_decoding_checker is not None:
             request, err_msg = self.guided_decoding_checker.schema_format(request)
@@ -938,7 +961,10 @@ class LLMEngine:
         )
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([1], dtype=np.int32)
+            if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+                get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
+            else:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,

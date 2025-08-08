@@ -20,6 +20,20 @@ from typing import NamedTuple, Optional
 import paddle
 
 
+class Logprob(NamedTuple):
+    """
+    A named tuple containing information about a token's log probability.
+    """
+
+    logprob: float
+    rank: Optional[int] = None
+    decoded_token: Optional[str] = None
+
+
+# [{token_id, logprob}] for tokens sampled from the top-k
+SampleLogprobs = list[dict[int, Logprob]]
+
+
 class LogprobsLists(NamedTuple):
     """ """
 
@@ -36,6 +50,17 @@ class LogprobsLists(NamedTuple):
             self.logprob_token_ids[start:end],
             self.logprobs[start:end],
             self.sampled_token_ranks[start:end],
+        )
+
+    def slice_columns(self, start: int, end: int):
+        """
+        Slice columns (per-row top-k logprobs and token IDs).
+        Keeps the number of requests unchanged.
+        """
+        return LogprobsLists(
+            [row[start:end] for row in self.logprob_token_ids],
+            [row[start:end] for row in self.logprobs],
+            self.sampled_token_ranks,  # unchanged
         )
 
 
