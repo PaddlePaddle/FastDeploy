@@ -383,6 +383,7 @@ class TokenProcessor:
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
+                    task.output_token_ids.append(token_id)
                     result.outputs.logprob = float(scores[i, 0])
                     # Construct top_logprobs
                     topk_token_ids = tokens[i, :].tolist()
