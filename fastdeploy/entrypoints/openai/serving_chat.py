@@ -49,10 +49,11 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips):
+    def __init__(self, engine_client, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
+        self.max_waiting_time = max_waiting_time
         self.host_ip = get_host_ip()
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
@@ -93,6 +94,14 @@ class OpenAIServingChat:
             return ErrorResponse(code=400, message=str(e))
 
         del current_req_dict
+        try:
+            api_server_logger.debug(f"{self.engine_client.semaphore.status()}")
+            if self.max_waiting_time < 0:
+                await self.engine_client.semaphore.acquire()
+            else:
+                await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+        except Exception:
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
         if request.stream:
             return self.chat_completion_stream_generator(request, request_id, request.model, prompt_token_ids)
@@ -310,6 +319,8 @@ class OpenAIServingChat:
             yield f"data: {error_data}\n\n"
         finally:
             dealer.close()
+            self.engine_client.semaphore.release()
+            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
@@ -383,6 +394,7 @@ class OpenAIServingChat:
                 if task_is_finished:
                     break
         finally:
+            self.engine_client.semaphore.release()
             dealer.close()
 
         choices = []
