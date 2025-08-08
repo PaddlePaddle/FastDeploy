@@ -29,7 +29,11 @@ std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
 
   // need_batch_random
   if (seed == -1) {
+#ifdef PADDLE_WITH_COREX
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(probs.place()));
+#else
     phi::GPUContext* dev_ctx = static_cast<phi::GPUContext*>(phi::DeviceContextPool::Instance().Get(probs.place()));
+#endif
     auto gen_cuda = dev_ctx->GetGenerator();
     auto seed_offset = gen_cuda->IncrementOffset(32 * batch_size);
     philox_seed = seed_offset.first;

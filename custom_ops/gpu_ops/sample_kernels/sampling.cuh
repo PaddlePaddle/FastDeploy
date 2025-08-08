@@ -212,9 +212,15 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
     prob_greater_than_threshold[j] = pred(prob_vec[j]) ? prob_vec[j] : 0;
     valid[j] = pred(prob_vec[j]) && (i * BLOCK_THREADS + tx) * VEC_SIZE + j < d;
   }
+#ifdef PADDLE_WITH_COREX
+  float aggregate_local =
+      BlockReduce<float, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage->block_prim.reduce)
+          .Sum(prob_greater_than_threshold);
+#else
   float aggregate_local =
       BlockReduce<float, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage->block_prim.reduce)
           .Sum<VEC_SIZE>(prob_greater_than_threshold);
+#endif
   if (tx == 0) {
     temp_storage->block_aggregate.value = aggregate_local;
   }
@@ -226,8 +232,13 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
       DeterministicInclusiveSum<VEC_SIZE, BLOCK_THREADS, SCAN_ALGORITHM, REDUCE_ALGORITHM>(
           prob_greater_than_threshold, inclusive_cdf, temp_storage);
     } else {
+#ifdef PADDLE_WITH_COREX
+      BlockScan<float, BLOCK_THREADS, SCAN_ALGORITHM>(temp_storage->block_prim.scan)
+          .InclusiveSum(prob_greater_than_threshold, inclusive_cdf);
+#else
       BlockScan<float, BLOCK_THREADS, SCAN_ALGORITHM>(temp_storage->block_prim.scan)
           .InclusiveSum<VEC_SIZE>(prob_greater_than_threshold, inclusive_cdf);
+#endif
 
       __syncthreads();
     }
@@ -239,11 +250,21 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
 
     bool greater_than_u_diff[VEC_SIZE];
 #ifdef SAMPLING_CUB_SUBTRACTLEFT_DEFINED
-    BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
-        .SubtractLeft<VEC_SIZE>(greater_than_u, greater_than_u_diff, BoolDiffOp());
+    #ifdef PADDLE_WITH_COREX
+      BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
+          .SubtractLeft(greater_than_u, greater_than_u_diff, BoolDiffOp());
+    #else
+      BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
+          .SubtractLeft<VEC_SIZE>(greater_than_u, greater_than_u_diff, BoolDiffOp());
+    #endif
 #else
-    BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
-        .FlagHeads<VEC_SIZE>(greater_than_u_diff, greater_than_u, BoolDiffOp(), 0);
+    #ifdef PADDLE_WITH_COREX
+      BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
+          .FlagHeads(greater_than_u_diff, greater_than_u, BoolDiffOp(), 0);
+    #else
+      BlockAdjacentDifference<bool, BLOCK_THREADS>(temp_storage->block_prim.adj_diff)
+          .FlagHeads<VEC_SIZE>(greater_than_u_diff, greater_than_u, BoolDiffOp(), 0);
+    #endif
 #endif
     __syncthreads();
 
@@ -355,18 +376,30 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs, IdType* output,
             (probs_vec[j] > pivot_1 && (i * BLOCK_THREADS + tx) * VEC_SIZE + j < d)};
       }
 
+#ifdef PADDLE_WITH_COREX
+      aggregate_gt_pivot_0 +=
+          BlockReduce<ValueCount<float>, BLOCK_THREADS>(temp_storage.block_prim.reduce_value_count)
+              .Sum(probs_gt_pivot_0);
+#else
       aggregate_gt_pivot_0 +=
           BlockReduce<ValueCount<float>, BLOCK_THREADS>(temp_storage.block_prim.reduce_value_count)
               .Sum<VEC_SIZE>(probs_gt_pivot_0);
+#endif
       if (tx == 0) {
         temp_storage.block_aggregate.pair = aggregate_gt_pivot_0;
       }
       __syncthreads();
       aggregate_gt_pivot_0 = temp_storage.block_aggregate.pair;
 
+#ifdef PADDLE_WITH_COREX
+      aggregate_gt_pivot_1 +=
+          BlockReduce<ValueCount<float>, BLOCK_THREADS>(temp_storage.block_prim.reduce_value_count)
+              .Sum(probs_gt_pivot_1);
+#else
       aggregate_gt_pivot_1 +=
           BlockReduce<ValueCount<float>, BLOCK_THREADS>(temp_storage.block_prim.reduce_value_count)
               .Sum<VEC_SIZE>(probs_gt_pivot_1);
+#endif
       if (tx == 0) {
         temp_storage.block_aggregate.pair = aggregate_gt_pivot_1;
       }
@@ -466,16 +499,26 @@ __global__ void TopPSamplingFromProbKernel(DType* probs, IdType* output,
         probs_gt_pivot_1[j] = (probs_vec[j] > pivot_1) ? probs_vec[j] : 0;
       }
 
+#ifdef PADDLE_WITH_COREX
+      aggregate_gt_pivot_0 += BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
+                                  .Sum(probs_gt_pivot_0);
+#else
       aggregate_gt_pivot_0 += BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
                                   .Sum<VEC_SIZE>(probs_gt_pivot_0);
+#endif
       if (tx == 0) {
         temp_storage.block_aggregate.value = aggregate_gt_pivot_0;
       }
       __syncthreads();
       aggregate_gt_pivot_0 = temp_storage.block_aggregate.value;
 
+#ifdef PADDLE_WITH_COREX
+      aggregate_gt_pivot_1 += BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
+                                  .Sum(probs_gt_pivot_1);
+#else
       aggregate_gt_pivot_1 += BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
                                   .Sum<VEC_SIZE>(probs_gt_pivot_1);
+#endif
       if (tx == 0) {
         temp_storage.block_aggregate.value = aggregate_gt_pivot_1;
       }
@@ -521,9 +564,15 @@ __device__ __forceinline__ float GetMaxValue(float* in_data, uint32_t row_idx, u
     for (uint32_t j = 0; j < VEC_SIZE; ++j) {
       in_data_[j] = in_data_vec[j];
     }
+#ifdef PADDLE_WITH_COREX
+    max_val = max(
+        max_val, BlockReduce<float, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
+                     .Reduce(in_data_, cub::Max()));
+#else
     max_val = max(
         max_val, BlockReduce<float, BLOCK_THREADS, REDUCE_ALGORITHM>(temp_storage.block_prim.reduce)
                      .Reduce<VEC_SIZE>(in_data_, cub::Max()));
+#endif
     __syncthreads();
   }
   if (tx == 0) {
@@ -605,7 +654,11 @@ __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType*
   const uint32_t bx = blockIdx.x, tx = threadIdx.x;
   const uint32_t row_idx = bx;
   const uint32_t k = top_k_arr[row_idx] == 0 ? d : top_k_arr[row_idx];
+#ifdef PADDLE_WITH_COREX
+  double pivot = std::numeric_limits<float>::infinity(), normalizer = 1;
+#else
   double pivot = -cuda::std::numeric_limits<float>::infinity(), normalizer = 1;
+#endif
   vec_t<float, VEC_SIZE> probs_vec;
   if (k < d) {
     extern __shared__ __align__(alignof(RenormTempStorage<BLOCK_THREADS, REDUCE_ALGO>))
@@ -659,14 +712,26 @@ __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType*
           }
         }
 
+#ifdef PADDLE_WITH_COREX
+        aggregate_gt_pivot_0 += BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
+                                    temp_storage.block_prim.reduce_value_count)
+                                    .Sum(probs_gt_pivot_0_pair);
+#else
         aggregate_gt_pivot_0 += BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                                     temp_storage.block_prim.reduce_value_count)
                                     .Sum<VEC_SIZE>(probs_gt_pivot_0_pair);
+#endif
         __syncthreads();
 
+#ifdef PADDLE_WITH_COREX
+        aggregate_gt_pivot_1 += BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
+                                    temp_storage.block_prim.reduce_value_count)
+                                    .Sum(probs_gt_pivot_1_pair);
+#else
         aggregate_gt_pivot_1 += BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                                     temp_storage.block_prim.reduce_value_count)
                                     .Sum<VEC_SIZE>(probs_gt_pivot_1_pair);
+#endif
         __syncthreads();
       }
       min_gt_low =

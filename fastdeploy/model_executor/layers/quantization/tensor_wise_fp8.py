@@ -82,7 +82,7 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         self.weight_dtype = "float8_e4m3fn"
 
     def create_weights(self, layer, **extra_weight_attrs):
-
+        layer.weight_dtype = "float8_e4m3fn"
         layer.weight = layer.create_parameter(
             shape=layer.weight_shape,
             dtype=layer.weight_dtype,
