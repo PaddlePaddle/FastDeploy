@@ -876,7 +876,7 @@ class LLMEngine:
             create=True,
         )
 
-        # exist_task_signal 用于各worker进程感知是否有新Task需要处理
+        # exist_task_signal: Used by each worker process to detect whether there is a new task to be processed
         exist_task_signal_data = np.zeros([self.cfg.parallel_config.data_parallel_size], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
@@ -886,7 +886,7 @@ class LLMEngine:
             create=True,
         )
 
-        # exist_swapped_task_signal 用于engine感知worker中是否存在swapped task
+        # exist_swapped_task_signal: Used by the engine to detect whether there is a swapped task in the worker
         exist_swapped_task_signal_data = np.zeros([self.cfg.parallel_config.data_parallel_size], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
@@ -896,7 +896,7 @@ class LLMEngine:
             create=True,
         )
 
-        # exist_prefill_task_signal 用于各worker进程感知是否进行prefill
+        # exist_prefill_task_signal: Used by each worker process to detect whether to prefill
         exist_prefill_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_prefill_task_signal = IPCSignal(
             name="exist_prefill_task_signal",
@@ -906,7 +906,7 @@ class LLMEngine:
             create=True,
         )
 
-        # launched_cache_manager_signal 用于感知engine是否启动了cache_manager
+        # launched_cache_manager_signal: Used to detect whether the engine has started cache_manager
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
@@ -917,7 +917,7 @@ class LLMEngine:
                 create=True,
             )
 
-        # launched_expert_service_signal 用于感知各个expet_servic是否启动成功
+        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
@@ -930,7 +930,7 @@ class LLMEngine:
                 create=True,
             )
 
-        # loaded_model_signal 用于感知各个worker是否完成模型加载
+        # loaded_model_signal: Used to detect whether each worker has completed model loading
         loaded_model_signal_data = np.zeros([1], dtype=np.int32)
         self.loaded_model_signal = IPCSignal(
             name="loaded_model_signal",
@@ -940,7 +940,7 @@ class LLMEngine:
             create=True,
         )
 
-        # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
+        # worker_live_signal: Used by the engine to detect whether each worker process is alive and record the time of each step
         worker_healthy_live_recorded_time_array = np.zeros(shape=[self.cfg.worker_num_per_node], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
@@ -1174,7 +1174,7 @@ class LLMEngine:
             llm_logger.error(f"Error happend while adding request, details={e}")
             raise EngineError(str(e), error_code=400)
 
-        # 获取当前请求的结果
+        # Get the result of the current request
         for result in self._get_generated_tokens(req_id):
             is_end = result.finished
             if stream and not is_end:
