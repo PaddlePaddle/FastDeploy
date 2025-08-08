@@ -28,6 +28,7 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    int64_t *next_tokens,
                                    const int64_t *end_ids,
                                    const int *seq_lens,
+                                   const int *src_batch_ids,
                                    const int bs,
                                    const int end_length,
                                    const int64_t *pre_ids,
@@ -41,37 +42,42 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    bool prefill_one_step_stop) {
     int tid = threadIdx.x;
     int bid = blockIdx.x;
+    int ori_bid = bid;
     if (tid >= stop_seqs_bs) return;
     if (bid < bs) {
+        if (src_batch_ids) {
+            // mapping to original batch id
+            ori_bid = src_batch_ids[bid];
+        }
         if(tid == 0){
             if (prefill_one_step_stop) {
-                stop_flags[bid] = true;
-                if (seq_lens[bid] == 0) {
+                stop_flags[ori_bid] = true;
+                if (seq_lens[ori_bid] == 0) {
                     topk_ids[bid] = -1;
                 }
-                next_tokens[bid] = topk_ids[bid];
+                next_tokens[ori_bid] = topk_ids[bid];
             } else {
-                if (stop_flags[bid]) {
-                    if (seq_lens[bid] == 0) {
+                if (stop_flags[ori_bid]) {
+                    if (seq_lens[ori_bid] == 0) {
                         topk_ids[bid] = -1;
                     } else {
                         topk_ids[bid] = end_ids[0];
-                        next_tokens[bid] = end_ids[0];
+                        next_tokens[ori_bid] = end_ids[0];
                     }
                 } else {
-                    next_tokens[bid] = topk_ids[bid];
+                    next_tokens[ori_bid] = topk_ids[bid];
                 }
             }
             if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
-                stop_flags[bid] = true;
+                stop_flags[ori_bid] = true;
             }
         }
         // dealing stop_seqs
-        const int stop_seq_len = (stop_seqs_len + bid * stop_seqs_bs)[tid];
+        const int stop_seq_len = (stop_seqs_len + ori_bid * stop_seqs_bs)[tid];
         if (stop_seq_len <= 0) return;
-        const int64_t *stop_seq_now = stop_seqs + bid * stop_seqs_bs + tid * stop_seqs_max_len;
-        const int64_t *pre_ids_now = pre_ids + bid * pre_ids_len;
-        const int64_t step_idx_now = step_idx[bid];
+        const int64_t *stop_seq_now = stop_seqs + ori_bid * stop_seqs_bs * stop_seqs_max_len + tid * stop_seqs_max_len;
+        const int64_t *pre_ids_now = pre_ids + ori_bid * pre_ids_len;
+        const int64_t step_idx_now = step_idx[ori_bid];
 
         bool is_end = true;
         int count = 1;
@@ -83,8 +89,8 @@ __global__ void set_value_by_flags(bool *stop_flags,
             }
         }
         if (is_end) {
-            next_tokens[bid] = end_ids[0];
-            stop_flags[bid] = true;
+            next_tokens[ori_bid] = end_ids[0];
+            stop_flags[ori_bid] = true;
             topk_ids[bid] = end_ids[0];
         }
     }
@@ -99,6 +105,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
+                       const paddle::optional<paddle::Tensor> &src_batch_ids,
                        const bool beam_search) {
     PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
     PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
@@ -128,6 +135,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
         const_cast<int64_t *>(next_tokens.data<int64_t>()),
         end_ids.data<int64_t>(),
         seq_lens.data<int>(),
+        src_batch_ids ? src_batch_ids.get().data<int>() : nullptr,
         bs_now,
         end_length,
         pre_ids.data<int64_t>(),
@@ -142,7 +150,17 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
 }
 
 PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
-    .Inputs({"topk_ids", "stop_flags", "seq_lens", "end_ids", "next_tokens", "pre_ids", "step_idx", "stop_seqs", "stop_seqs_len"})
+    .Inputs({
+        "topk_ids", 
+        "stop_flags", 
+        "seq_lens", 
+        "end_ids", 
+        "next_tokens", 
+        "pre_ids", 
+        "step_idx", 
+        "stop_seqs", 
+        "stop_seqs_len",
+        paddle::Optional("src_batch_ids")})
     .Attrs({"beam_search: bool"})
     .Outputs({"topk_ids_out", "stop_flags_out", "next_tokens_out"})
     .SetInplaceMap({{"topk_ids", "topk_ids_out"},

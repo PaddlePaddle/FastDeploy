@@ -259,7 +259,8 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
                            const paddle::Tensor &seq_lens_encoder,
                            const paddle::Tensor &seq_lens_decoder,
                            const paddle::Tensor &step_idx,
-                           const paddle::Tensor &stop_flags);
+                           const paddle::Tensor &stop_flags,
+                           const paddle::optional<paddle::Tensor> &decode_states);
 
 paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor &tmp_out,     // [token_num, dim_embed]
@@ -279,6 +280,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
+                       const paddle::optional<paddle::Tensor> &src_batch_ids,
                        const bool beam_search);
 
 

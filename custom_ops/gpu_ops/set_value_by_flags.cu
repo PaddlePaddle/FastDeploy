@@ -25,11 +25,16 @@ __global__ void set_value_by_flag_and_id(const bool *stop_flags,
                                          const int *seq_lens_encoder,
                                          const int *seq_lens_decoder,
                                          const int64_t *step_idx,
+                                         const int *decode_states,
                                          int bs,
                                          int length,
                                          int length_input_ids) {
     int tid = threadIdx.x;
     if (tid < bs && !stop_flags[tid]) {
+        if (decode_states) {
+            // just deal text mode
+            if (decode_states[tid] != 0) return;
+        }
         int64_t *pre_ids_all_now = pre_ids_all + tid * length;
         const int64_t *input_ids_now = input_ids + tid * length_input_ids;
         const int seq_len_dec = seq_lens_decoder[tid];
@@ -51,7 +56,8 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
                            const paddle::Tensor &seq_lens_encoder,
                            const paddle::Tensor &seq_lens_decoder,
                            const paddle::Tensor &step_idx,
-                           const paddle::Tensor &stop_flags) {
+                           const paddle::Tensor &stop_flags,
+                           const paddle::optional<paddle::Tensor> &decode_states) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(stop_flags.place()));
     auto cu_stream = dev_ctx->stream();
@@ -71,6 +77,7 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
         seq_lens_encoder.data<int>(),
         seq_lens_decoder.data<int>(),
         step_idx.data<int64_t>(),
+        decode_states ? decode_states.get().data<int>() : nullptr,
         bs,
         length,
         length_input_ids);
@@ -83,7 +90,8 @@ PD_BUILD_STATIC_OP(set_value_by_flags_and_idx)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "step_idx",
-             "stop_flags"})
+             "stop_flags",
+             paddle::Optional("decode_states")})
     .Outputs({"pre_ids_all_out"})
     .SetInplaceMap({{"pre_ids_all", "pre_ids_all_out"}})
     .SetKernelFn(PD_KERNEL(SetValueByFlagsAndIdx));

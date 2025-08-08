@@ -19,15 +19,19 @@ __global__ inline void min_length_logits_process(T *logits,
                                                  const int64_t *cur_len,
                                                  const int64_t *min_len,
                                                  const int64_t *eos_token_id,
+                                                 const int *src_batch_ids,
                                                  const int64_t bs,
                                                  const int64_t vocab_size,
                                                  const int64_t eos_len) {
     int bi = threadIdx.x;
     if (bi >= bs) return;
-    if (cur_len[bi] < 0) {
+    // mapping to ori batch_id
+    int ori_bi = bi;
+    if (src_batch_ids) ori_bi = src_batch_ids[bi];
+    if (cur_len[ori_bi] < 0) {
         return;
     }
-    if (cur_len[bi] < min_len[bi]) {
+    if (cur_len[ori_bi] < min_len[ori_bi]) {
         for (int i = 0; i < eos_len; i++) {
             logits[bi * vocab_size + eos_token_id[i]] = -1e10;
         }
@@ -40,15 +44,19 @@ __global__ inline void min_length_logits_process<half>(
     const int64_t *cur_len,
     const int64_t *min_len,
     const int64_t *eos_token_id,
+    const int *src_batch_ids,
     const int64_t bs,
     const int64_t vocab_size,
     const int64_t eos_len) {
     int bi = threadIdx.x;
     if (bi >= bs) return;
-    if (cur_len[bi] < 0) {
+    // mapping to ori batch_id
+    int ori_bi = bi;
+    if (src_batch_ids) ori_bi = src_batch_ids[bi];
+    if (cur_len[ori_bi] < 0) {
         return;
     }
-    if (cur_len[bi] < min_len[bi]) {
+    if (cur_len[ori_bi] < min_len[ori_bi]) {
         for (int i = 0; i < eos_len; i++) {
             logits[bi * vocab_size + eos_token_id[i]] = -1e4;
         }
@@ -59,6 +67,7 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
                                     const int64_t *prompt_ids,
                                     const int64_t *prompt_len,
                                     const int64_t *cur_len,
+                                    const int *stc_batch_ids,
                                     int *repeat_times,
                                     int *is_repeated,
                                     const int64_t bs,
@@ -66,13 +75,15 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
                                     const int64_t max_dec_len,
                                     const int64_t max_model_len) {
     int64_t bi = blockIdx.x;
-    if (cur_len[bi] < 0) {
+    int ori_bi = bi;
+    if (stc_batch_ids) ori_bi = stc_batch_ids[bi];
+    if (cur_len[ori_bi] < 0) {
         return;
     }
-    const int64_t prompt_len_now = prompt_len[bi];
+    const int64_t prompt_len_now = prompt_len[ori_bi];
     int64_t tid = threadIdx.x;
-    const int64_t *prompt_now = prompt_ids + bi * max_model_len;
-    const int64_t *pre_ids_now = pre_ids + bi * max_dec_len;
+    const int64_t *prompt_now = prompt_ids + ori_bi * max_model_len;
+    const int64_t *pre_ids_now = pre_ids + ori_bi * max_dec_len;
     int *repeat_times_now = repeat_times + bi * vocab_size;
     int *is_repeated_now = is_repeated + bi * vocab_size;
     const int64_t loop_len = prompt_len_now > max_dec_len ? prompt_len_now : max_dec_len;
@@ -100,17 +111,20 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
                                              const T *frequency_score,
                                              const T *presence_score,
                                              const float *temperatures,
+                                             const int *stc_batch_ids,
                                              T *logits,
                                              const int64_t bs,
                                              const int64_t vocab_size) {
     int bi = blockIdx.x;
+    int ori_bi = bi;
+    if (stc_batch_ids) ori_bi = stc_batch_ids[bi];
     int tid = threadIdx.x;
     T *logits_now = logits + bi * vocab_size;
     const int *repeat_times_now = repeat_times + bi * vocab_size;
     const int *is_repeated_now = is_repeated + bi * vocab_size;
-    float alpha = static_cast<float>(penalty_scores[bi]);
-    float beta = static_cast<float>(frequency_score[bi]);
-    float gamma = static_cast<float>(presence_score[bi]);
+    float alpha = static_cast<float>(penalty_scores[ori_bi]);
+    float beta = static_cast<float>(frequency_score[ori_bi]);
+    float gamma = static_cast<float>(presence_score[ori_bi]);
     for (int i = tid; i < vocab_size; i += blockDim.x) {
         int times = repeat_times_now[i];
         float logit_now = static_cast<float>(logits_now[i]);
@@ -120,7 +134,7 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
         if (times != 0) {
             logit_now = logit_now - times * beta - gamma;
         }
-        logits_now[i] = static_cast<T>(logit_now / temperatures[bi]);
+        logits_now[i] = static_cast<T>(logit_now / temperatures[ori_bi]);
     }
 }
 
@@ -152,7 +166,8 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
                                        const paddle::Tensor &bad_tokens,
                                        const paddle::Tensor &cur_len,
                                        const paddle::Tensor &min_len,
-                                       const paddle::Tensor &eos_token_id) {
+                                       const paddle::Tensor &eos_token_id,
+                                       const paddle::optional<paddle::Tensor> &src_batch_ids) {
     typedef PDTraits<D> traits_;
     typedef typename traits_::DataType DataType_;
     typedef typename traits_::data_t data_t;
@@ -182,6 +197,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         cur_len.data<int64_t>(),
         min_len.data<int64_t>(),
         eos_token_id.data<int64_t>(),
+        src_batch_ids ? src_batch_ids.get().data<int>() : nullptr,
         bs,
         vocab_size,
         eos_len);
@@ -197,6 +213,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         prompt_ids.data<int64_t>(),
         prompt_len.data<int64_t>(),
         cur_len.data<int64_t>(),
+        src_batch_ids ? src_batch_ids.get().data<int>() : nullptr,
         repeat_times.data<int>(),
         is_repeated.data<int>(),
         bs,
@@ -220,6 +237,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(presence_score.data<data_t>())),
         temperatures.data<float>(),
+        src_batch_ids ? src_batch_ids.get().data<int>() : nullptr,
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(logits.data<data_t>())),
         bs,
@@ -251,7 +269,8 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
                              const paddle::Tensor &bad_tokens,
                              const paddle::Tensor &cur_len,
                              const paddle::Tensor &min_len,
-                             const paddle::Tensor &eos_token_id) {
+                             const paddle::Tensor &eos_token_id,
+                             const paddle::optional<paddle::Tensor> &src_batch_ids) {
     switch (logits.type()) {
         case paddle::DataType::BFLOAT16: {
             return token_penalty_multi_scores_kernel<
@@ -266,7 +285,8 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
                                             bad_tokens,
                                             cur_len,
                                             min_len,
-                                            eos_token_id);
+                                            eos_token_id,
+                                            src_batch_ids);
         }
         case paddle::DataType::FLOAT16: {
             return token_penalty_multi_scores_kernel<
@@ -281,7 +301,8 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
                                            bad_tokens,
                                            cur_len,
                                            min_len,
-                                           eos_token_id);
+                                           eos_token_id,
+                                           src_batch_ids);
         }
         case paddle::DataType::FLOAT32: {
             return token_penalty_multi_scores_kernel<
@@ -296,7 +317,8 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
                                            bad_tokens,
                                            cur_len,
                                            min_len,
-                                           eos_token_id);
+                                           eos_token_id,
+                                           src_batch_ids);
         }
         default: {
             PD_THROW(
@@ -319,7 +341,8 @@ PD_BUILD_STATIC_OP(get_token_penalty_multi_scores)
              "bad_tokens",
              "cur_len",
              "min_len",
-             "eos_token_id"})
+             "eos_token_id",
+             paddle::Optional("src_batch_ids")})
     .Outputs({"logits_out"})
     .SetInplaceMap({{"logits", "logits_out"}})
     .SetKernelFn(PD_KERNEL(TokenPenaltyMultiScores));
