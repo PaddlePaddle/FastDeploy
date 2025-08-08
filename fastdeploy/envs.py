@@ -82,6 +82,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")),
     # set trace attribute job_id.
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
+    # support max connections
+    "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
 }
 
 

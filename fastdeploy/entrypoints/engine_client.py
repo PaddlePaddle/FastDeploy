@@ -24,7 +24,7 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, api_server_logger
+from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
 
 
 class EngineClient:
@@ -44,6 +44,7 @@ class EngineClient:
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
+        workers=1,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -76,6 +77,7 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
+        self.semaphore = StatefulSemaphore((envs.FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
 
     def create_zmq_client(self, model, mode):
         """
