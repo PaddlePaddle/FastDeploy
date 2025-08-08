@@ -285,7 +285,7 @@ class FusedMoE(nn.Layer):
                 dtype="float32",
             )
         up_gate_proj_output_dim = self.moe_intermediate_size * 2
-        if self.moe_quant_type in ["fp8", "wint8"]:
+        if self.moe_quant_type in ["block_wise_fp8", "wint8"]:
             up_gate_proj_weight_shape = [
                 self.num_local_experts,
                 up_gate_proj_output_dim,
@@ -309,9 +309,10 @@ class FusedMoE(nn.Layer):
             ]
 
         # Create parameters
-        if self.moe_quant_type == "fp8":
+        if self.moe_quant_type == "block_wise_fp8":
             # (TODO:gaoziyuan)
-            pass
+            self.weight_dtype = "float8_e4m3fn"
+            self.init_block_wise_fp8_scale()
         elif self.moe_quant_type == "wint8":
             self.weight_dtype = "int8"
             self.init_weight_only_scale()
@@ -340,6 +341,21 @@ class FusedMoE(nn.Layer):
         self.down_proj_weight_scale = self.create_parameter(
             shape=[self.num_local_experts, self.hidden_size],
             dtype=self._dtype,
+        )
+
+    def init_block_wise_fp8_scale(self):
+        """
+        Initialize the weight scale.
+        """
+        self.up_gate_proj_weight_scale = self.create_parameter(
+            shape=[self.num_local_experts, self.moe_intermediate_size * 2 // 128, self.hidden_size // 128],
+            dtype="float32",
+            is_bias=False,
+        )
+        self.down_proj_weight_scale = self.create_parameter(
+            shape=[self.num_local_experts, self.hidden_size // 128, self.moe_intermediate_size // 128],
+            dtype="float32",
+            is_bias=False,
         )
 
     def load_experts_weight(
