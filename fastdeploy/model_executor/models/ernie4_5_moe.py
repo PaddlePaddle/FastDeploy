@@ -304,6 +304,15 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):  
+        if hidden_states is None or hidden_states.shape[0] == 0:
+            
+            hidden_states = paddle.empty([0,8192], dtype="bfloat16")
+            residual = paddle.empty([0,8192], dtype="bfloat16")
+            topk_idx = paddle.empty([0,8], dtype="int64")
+            topk_weights = paddle.empty([0,8], dtype="float32")
+            
+            return hidden_states, residual, topk_idx, topk_weights
+
         hidden_states, residual = self.input_layernorm(hidden_states, residual)
 
 
@@ -340,73 +349,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None):
-
-        IsH20 = self.fd_config.parallel_config.is_H20
-        IsH100 = self.fd_config.parallel_config.is_H100
-        runner = self.mlp.fused_moe.quant_method.ep_decoder_runner
-
-        if IsH20:
-            hidden_states, residual, topk_idx, topk_weights = self.forward_attn(forward_meta, hidden_states, residual)
-
-            _, handle, event, a2e_isend_hook = runner.buffer.a2e_isend_two_stage_v3(
-                hidden_states,
-                topk_idx,
-                topk_weights,
-                runner.num_max_tokens,
-                runner.num_experts,
-                use_fp8=runner.use_fp8,
-            )
-            event.current_stream_wait()
-            a2e_isend_hook_event = a2e_isend_hook()
-            a2e_isend_hook_event.current_stream_wait()
-
-
-            e2a_x, e2a_event, e2a_irecv_hook = runner.buffer.e2a_irecv_two_stage_v3(
-                topk_idx,
-                topk_weights,
-                handle,
-                dispatch_use_fp8=runner.use_fp8,
-                out=None,
-            )
-            e2a_event.current_stream_wait()
-            e2a_irecv_hook_event = e2a_irecv_hook()
-            e2a_irecv_hook_event.current_stream_wait()
-
-            return e2a_x, residual
-
-        else:
-            (
-                packed_recv_x,
-                packed_recv_count,
-                rdma_send_flags,
-                handle,
-                event,
-                a2e_irecv_hook,
-            ) = runner.buffer.a2e_irecv_two_stage_v3(
-                runner.hidden,
-                runner.top_k,
-                runner.num_max_tokens,
-                runner.num_experts,
-                use_fp8=runner.use_fp8,
-            )
-            event.current_stream_wait()
-            a2e_irecv_hook_event = a2e_irecv_hook()
-            a2e_irecv_hook_event.current_stream_wait()
-
-            ffn_out = self.compute_moe_ffn(packed_recv_x, packed_recv_count)
-
-            e2a_event, e2a_isend_hook = runner.buffer.e2a_isend_two_stage_v3(
-                ffn_out, 
-                runner.top_k,
-                handle,
-                dispatch_use_fp8=runner.use_fp8,
-                out=None,
-            )
-            e2a_event.current_stream_wait()
-            e2a_isend_hook_event = e2a_isend_hook()
-            e2a_isend_hook_event.current_stream_wait()
-            
-            return None, None
+        pass
 
 @support_graph_optimization
 class Ernie4_5_Model(nn.Layer):
@@ -471,7 +414,7 @@ class Ernie4_5_Model(nn.Layer):
 
         IsH20 = self.fd_config.parallel_config.is_H20
         # 暂时设置成1!
-        split_num = 1
+        split_num = 3
         all_hidden_states = [None] * split_num
         forward_metas = [None] * split_num
         all_residual = [None] * split_num
@@ -518,23 +461,194 @@ class Ernie4_5_Model(nn.Layer):
             # MoE 机器啥也不需要做！
             pass
 
-        # 下面第3层开始H20和MoE机器！！一起跑啦！
-        for mc_id in range(split_num):
-            hidden_states = all_hidden_states[mc_id]
-            residual = all_residual[mc_id]
-            mc_forward_meta = forward_metas[mc_id]
+        print(len([a for a in all_hidden_states if a is not None]))
+        print("大王啊")
 
-            for i in range(3, self.num_layers):
-                hidden_states, residual = self.layers[i](mc_forward_meta,
-                                                                hidden_states,
-                                                                residual)
+        IsH20 = self.fd_config.parallel_config.is_H20
+        IsH100 = self.fd_config.parallel_config.is_H100
+        runner = self.layers[3].mlp.fused_moe.quant_method.ep_decoder_runner
 
-            if IsH20:
-                hidden_states = hidden_states + residual
-                all_hidden_states[mc_id] = hidden_states
-        
+
+
+        attention_input = [None] * split_num
+        attention_out = [None] * split_num
+        for i in range(split_num):
+            attention_input[i] = [None] * 3
+            attention_out[i] = [None] * 4
+            
+            # 这个是永远不改变的！
+            attention_input[i][0] = forward_metas[i]
+            # 下面俩是动态变化的！
+            attention_input[i][1] = all_hidden_states[i]
+            attention_input[i][2] = all_residual[i]
+
+        handles = [None] * split_num
+        send_events = [None] * split_num
+        send_hooks = [None] * split_num
+        recv_events = [None] * split_num
+        recv_hooks = [None] * split_num
+
+        def send_sync(j):
+            print("send_sync", j)
+            send_events[j].current_stream_wait()
+
+            tmp = send_hooks[j]()
+            tmp.current_stream_wait()
+
+        def receive_sync(j):
+            print("receive_sync", j)
+            recv_events[j].current_stream_wait()
+            tmp = recv_hooks[j]()
+            tmp.current_stream_wait()
+
+        # 先只搞第三层！
         if IsH20:
-            hidden_states = paddle.concat(all_hidden_states, axis=0)
+            def compute_atten(layer_id, i):
+                hidden_states, residual, topk_idx, topk_weights = self.layers[layer_id].forward_attn(attention_input[i][0], attention_input[i][1], attention_input[i][2])
+                
+                attention_out[i] = [hidden_states, residual, topk_idx, topk_weights]
+                attention_input[i][2] = attention_out[i][1]
+            
+            def a2e_send(i):
+                print("send", i)
+                _, handle, event, a2e_isend_hook = runner.buffer.a2e_isend_two_stage_v3(
+                    attention_out[i][0],
+                    attention_out[i][2],
+                    attention_out[i][3],
+                    runner.num_max_tokens,
+                    runner.num_experts,
+                    use_fp8=runner.use_fp8,
+                )
+                handles[i] = handle
+                send_events[i] = event
+                send_hooks[i] = a2e_isend_hook
+
+            def e2a_receive(i):
+                print("receive", i)
+                e2a_x, event, e2a_irecv_hook = runner.buffer.e2a_irecv_two_stage_v3(
+                    attention_out[i][2],
+                    attention_out[i][3],
+                    handles[i],
+                    dispatch_use_fp8=runner.use_fp8,
+                    out=None,
+                )
+
+                recv_events[i] = event
+                recv_hooks[i] = e2a_irecv_hook
+
+                attention_input[i][1] = e2a_x
+
+            compute_atten(3,0)
+            a2e_send(0)
+
+            compute_atten(3,1)
+            send_sync(0)
+            a2e_send(1)
+
+            e2a_receive(0)
+            compute_atten(3,2)
+            send_sync(1)
+            a2e_send(2)
+
+            for layer_id in range(4, self.num_layers):
+                for j in range(split_num):
+                    # 当前batch接受同步一下，接受来自 layer_id-1 层 MoE 的输入！
+                    receive_sync(j)
+                    # 下一个batch准备接受layer_id-1层的数据！
+                    e2a_receive( (j+1) % split_num )
+                    # 当前batch计算attention！
+                    compute_atten(layer_id, j)
+                    # 上一个batch send同步！
+                    send_sync((j+split_num-1) % split_num)
+                    # 当前batch发送数据给MoE！
+                    a2e_send(j)
+            
+            # 处理一下尾巴！
+            receive_sync(0)
+            e2a_receive(1)
+            send_sync(2)
+
+            receive_sync(1)
+            e2a_receive(2)
+
+            receive_sync(2)
+
+        else:
+            # 搞一个大槽子放东西！
+            moe_input = [None] * split_num
+            for i in range(split_num):
+                moe_input[i] = [None] * 2
+            moe_out = [None] * split_num
+
+            def a2e_receive(i):
+                print("receive", i)
+                (
+                    packed_recv_x,
+                    packed_recv_count,
+                    rdma_send_flags,
+                    handle,
+                    event,
+                    a2e_irecv_hook,
+                ) = runner.buffer.a2e_irecv_two_stage_v3(
+                    runner.hidden,
+                    runner.top_k,
+                    runner.num_max_tokens,
+                    runner.num_experts,
+                    use_fp8=runner.use_fp8,
+                )
+                handles[i] = handle
+                recv_events[i] = event
+                recv_hooks[i] = a2e_irecv_hook
+
+                moe_input[i][0] = packed_recv_x
+                moe_input[i][1] = packed_recv_count
+
+            def compute_moe(layer_id, i):
+                ffn_out = self.layers[layer_id].compute_moe_ffn(moe_input[i][0], moe_input[i][1])
+                moe_out[i] = ffn_out
+
+            def e2a_send(i):
+                print("send", i)
+                event, e2a_isend_hook = runner.buffer.e2a_isend_two_stage_v3(
+                    moe_out[i], 
+                    runner.top_k,
+                    handles[i],
+                    dispatch_use_fp8=runner.use_fp8,
+                    out=None,
+                )
+                send_events[i] = event
+                send_hooks[i] = e2a_isend_hook
+
+
+            a2e_receive(0)
+
+            for layer_id in range(3, self.num_layers):
+                for j in range(split_num):
+                    # 当前batch接收同步一下，接受来自 layer_id 层 Attention 的输出！
+                    receive_sync(j)
+                    # 下一个batch准备接受layer_id层的attention 输出！
+                    if layer_id == self.num_layers - 1 and j == 2:
+                        # 此时我没有下一个batch，所以skip！
+                        pass
+                    else:
+                        a2e_receive( (j+1) % split_num )
+                    # 当前batch计算moe！
+                    compute_moe(layer_id, j)
+                    # 上一个batch send同步！
+                    if layer_id == 3 and j == 0:
+                        # 此时我没有上一个batch，所以skip！
+                        pass
+                    else:
+                        send_sync((j+split_num-1) % split_num)
+                    # 当前batch发送数据发给attention！
+                    e2a_send(j)
+            # 处理一下尾巴！
+            send_sync(2)
+
+        if IsH20:
+            hidden_states = paddle.concat([attention_input[0][1], attention_input[1][1], attention_input[2][1]], axis=0)
+            residuals = paddle.concat([attention_input[0][2], attention_input[1][2], attention_input[2][2]], axis=0)
+            hidden_states = hidden_states + residuals
             out = self.norm(hidden_states)
             return out
         else:
