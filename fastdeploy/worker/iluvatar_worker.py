@@ -106,18 +106,17 @@ class IluvatarWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
-        num_running_requests: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
+        output = self.model_runner.execute_model(model_forward_batch)
         return output
 
-    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
+        self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
