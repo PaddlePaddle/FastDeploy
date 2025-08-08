@@ -128,10 +128,16 @@ def rejection_top_p_sampling(
     rejection_top_p_sampling
     """
     try:
-        from fastdeploy.model_executor.ops.gpu import (
-            rejection_top_p_sampling,
-            top_k_renorm_probs,
-        )
+        if current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import (
+                rejection_top_p_sampling,
+                top_k_renorm_probs,
+            )
+        else:
+            from fastdeploy.model_executor.ops.gpu import (
+                rejection_top_p_sampling,
+                top_k_renorm_probs,
+            )
 
         if paddle.count_nonzero(top_k) == 0:
             ids = rejection_top_p_sampling(

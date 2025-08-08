@@ -498,6 +498,8 @@ elif paddle.is_compiled_with_cuda():
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
 
     setup(
         name="fastdeploy_ops",
@@ -537,9 +539,12 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/stop_generation_multi_ends.cu",
                 "gpu_ops/step.cu",
                 "gpu_ops/token_penalty_multi_scores.cu",
+                "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
+                "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
             ],
             include_dirs=["iluvatar_ops/runtime", "gpu_ops"],
