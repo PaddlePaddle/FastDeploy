@@ -248,7 +248,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_rope_kernel<T, 4, 0, 128, is_scale_channel_wise, IsFP8>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -271,7 +272,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   }
 }
