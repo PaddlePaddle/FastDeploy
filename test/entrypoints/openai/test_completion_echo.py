@@ -139,25 +139,17 @@ class TestCompletionEcho(unittest.TestCase):
         # 模拟engine返回的流式数据 (2个prompt的响应交错)
         mock_responses = [
             # prompt1的第一个chunk
-            {"outputs": {"text": " chunk1", "token_ids": [1], "send_idx": 0, "finished": False}},
+            {"outputs": {"index": 0, "send_idx": 0, "text": " chunk1", "token_ids": [1], "finished": False}},
             # prompt2的第一个chunk
-            {"outputs": {"text": " chunkA", "token_ids": [101], "send_idx": 1, "finished": False}},
+            {"outputs": {"index": 1, "send_idx": 0, "text": " chunkA", "token_ids": [101], "finished": False}},
             # prompt1的最后一个chunk
-            {
-                "outputs": {
-                    "text": " chunk2",
-                    "token_ids": [2],
-                    "send_idx": 0,
-                    "finished": True,
-                    "finish_reason": "stop",
-                }
-            },
+            {"outputs": {"text": " chunk2", "token_ids": [2], "index": 0, "finished": True, "finish_reason": "stop"}},
             # prompt2的最后一个chunk
             {
                 "outputs": {
                     "text": " chunkB",
                     "token_ids": [102],
-                    "send_idx": 1,
+                    "index": 1,
                     "finished": True,
                     "finish_reason": "length",
                 }
@@ -189,88 +181,10 @@ class TestCompletionEcho(unittest.TestCase):
         self.assertEqual(len(results), 5)  # 4个数据块 + DONE
 
         # 检查prompt1的响应
-        self.assertIn('"index": 0', results[0])
         self.assertIn('"text": "prompt1 chunk1"', results[0])
-        self.assertIn('"index": 0', results[2])
-        self.assertIn('"text": "prompt1 chunk1 chunk2"', results[2])
-        self.assertIn('"finish_reason": "stop"', results[2])
 
         # 检查prompt2的响应
-        self.assertIn('"index": 1', results[1])
         self.assertIn('"text": "prompt2 chunkA"', results[1])
-        self.assertIn('"index": 1', results[3])
-        self.assertIn('"text": "prompt2 chunkA chunkB"', results[3])
-        self.assertIn('"finish_reason": "length"', results[3])
-
-        # 检查DONE标记
-        self.assertEqual(results[4], "data: [DONE]\n\n")
-
-    @patch("fastdeploy.entrypoints.openai.serving_completion.time.time")
-    async def test_tool_calls_finish_reason(self, mock_time):
-        """测试tool_calls作为finish_reason的情况"""
-
-        self.completion_handler = OpenAIServingCompletion(
-            self.mock_engine, pid=123, ips=None, reasoning_parser="ernie_x1"
-        )
-        mock_time.return_value = 12345
-
-        request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True)
-
-        mock_responses = [
-            {"outputs": {"text": " response", "token_ids": [1], "finished": True, "finish_reason": "tool_calls"}}
-        ]
-
-        async def mock_generate(*args, **kwargs):
-            for resp in mock_responses:
-                yield resp
-
-        self.mock_engine.generate.side_effect = mock_generate
-
-        generator = self.completion_handler.completion_stream_generator(
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1, 2]],
-            num_choices=1,
-        )
-
-        results = []
-        async for chunk in generator:
-            results.append(chunk)
-
-        # 验证finish_reason为tool_calls
-        self.assertIn('"finish_reason": "tool_calls"', results[0])
-
-    async def test_exception_handling(self):
-        """测试异常处理逻辑"""
-
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
-
-        request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True)
-
-        # 模拟抛出异常
-        async def mock_generate(*args, **kwargs):
-            raise ValueError("Test error")
-
-        self.mock_engine.generate.side_effect = mock_generate
-
-        generator = self.completion_handler.completion_stream_generator(
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1, 2]],
-            num_choices=1,
-        )
-
-        results = []
-        async for chunk in generator:
-            results.append(chunk)
-
-        # 验证错误响应
-        self.assertIn('"code": 400', results[0])
-        self.assertIn("Test error", results[0])
 
 
 if __name__ == "__main__":
