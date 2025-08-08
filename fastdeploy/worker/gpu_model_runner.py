@@ -648,25 +648,6 @@ class GPUModelRunner(ModelRunnerBase):
             dtype=self.model_config.dtype,
         )
 
-        self.share_inputs["text_input"] = paddle.full(
-            [self.parallel_config.max_num_batched_tokens, self.model_config.hidden_size],
-            fill_value=1,
-            dtype=self.model_config.dtype,
-        )
-        self.share_inputs["image_input"] = paddle.full(
-            [self.parallel_config.max_num_batched_tokens, self.model_config.hidden_size],
-            fill_value=1,
-            dtype=self.model_config.dtype,
-        )
-        self.share_inputs["text_index"] = paddle.zeros(
-            [self.parallel_config.max_num_batched_tokens],
-            dtype="int32",
-        )
-        self.share_inputs["image_index"] = paddle.zeros(
-            [self.parallel_config.max_num_batched_tokens],
-            dtype="int32",
-        )
-
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
@@ -1034,7 +1015,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 3. Run model
             if self.enable_mm:
-                self.model.set_up_buffer(self.share_inputs)
                 input_embeddings = self.model.get_input_embeddings(
                     self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"]
                 )
@@ -1312,7 +1292,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
-            self.model.set_up_buffer(self.share_inputs)
             input_embeddings = self.model.get_input_embeddings(
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],

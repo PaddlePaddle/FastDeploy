@@ -30,6 +30,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.graph_optimization.decorator import (
+    mm_buffer,
     support_graph_optimization,
 )
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
@@ -341,6 +342,30 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         return hidden_states, residual
 
 
+@mm_buffer(
+    {
+        "text_input": {
+            "shape": ["parallel_config.max_num_batched_tokens", "model_config.hidden_size"],
+            "dtype": "model_config.dtype",
+            "value": 1,
+        },
+        "image_input": {
+            "shape": ["parallel_config.max_num_batched_tokens", "model_config.hidden_size"],
+            "dtype": "model_config.dtype",
+            "value": 1,
+        },
+        "text_index": {
+            "shape": ["parallel_config.max_num_batched_tokens"],
+            "dtype": "int32",
+            "value": 0,
+        },
+        "image_index": {
+            "shape": ["parallel_config.max_num_batched_tokens"],
+            "dtype": "int32",
+            "value": 0,
+        },
+    }
+)
 @support_graph_optimization
 class Ernie4_5_VLModel(nn.Layer):
     def __init__(
@@ -360,11 +385,6 @@ class Ernie4_5_VLModel(nn.Layer):
         self._dtype = fd_config.model_config.dtype
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
         self.fd_config = fd_config
-
-        self.text_input_buffer = None
-        self.image_input_buffer = None
-        self.text_index_buffer = None
-        self.image_index_buffer = None
 
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
@@ -420,10 +440,10 @@ class Ernie4_5_VLModel(nn.Layer):
         image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
-        text_input = self.text_input_buffer[:text_token_num]
-        image_input = self.image_input_buffer[:image_token_num]
-        text_index = self.text_index_buffer[:token_num]
-        image_index = self.image_index_buffer[:token_num]
+        text_input = self._mm_buffers["text_input"][:text_token_num]
+        image_input = self._mm_buffers["image_input"][:image_token_num]
+        text_index = self._mm_buffers["text_index"][:token_num]
+        image_index = self._mm_buffers["image_index"][:token_num]
 
         text_input.fill_(1.0)
         if image_token_num > 0:
@@ -594,12 +614,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         if image_features is not None and len(image_features) != 0:
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
-
-    def set_up_buffer(self, share_inputs):
-        self.ernie.text_input_buffer = share_inputs["text_input"]
-        self.ernie.image_input_buffer = share_inputs["image_input"]
-        self.ernie.text_index_buffer = share_inputs["text_index"]
-        self.ernie.image_index_buffer = share_inputs["image_index"]
 
     def init_mm_data(
         self,
