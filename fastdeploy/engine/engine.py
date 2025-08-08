@@ -961,7 +961,10 @@ class LLMEngine:
         )
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([1], dtype=np.int32)
+            if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+                get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
+            else:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
