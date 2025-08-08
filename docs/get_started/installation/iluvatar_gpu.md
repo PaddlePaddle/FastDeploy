@@ -1,12 +1,12 @@
 # Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on iluvatar machine
-The current version of the software merely serves as a demonstration demo for the Iluvatar CoreX combined with the Fastdeploy inference framework for large models. There may be issues when running the latest ERNIE4.5 model, and we will conduct repairs and performance optimization in the future. Subsequent versions will provide customers with a more stable version.
+The current version of the software merely serves as a demonstration demo for the Iluvatar CoreX combined with the Fastdeploy inference framework for large models. Running the latest ERNIE4.5 300B model on the GSM8K dataset takes about 6.3 hours.
 
 ## Machine Preparation
-First, you need to prepare a machine with the following configurations:
+First, the `TP=16` when running the ERNIE4.5 300B model and so you need to prepare a machine with the following configurations:
 
 | CPU | Memory | Card | Hard Disk|
 | :---: | :---: | :---: | :---: |
-| x86 | 1TB| 8xBI150| 1TB|
+| x86 | 1TB| 16xBI150| 1TB|
 
 Currently, the entire model needs to be loaded into the host memory, which requires more than 600GB of host memory. This issue will be optimized in subsequent versions.
 
@@ -46,6 +46,7 @@ script list below:
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
 export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
 export FD_DEBUG=1
 python3 run_demo.py
 ```
@@ -64,7 +65,7 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=256)
 
 # load the model
-llm = LLM(model="/home/paddle/ernie-4_5-21b-a3b-bf16-paddle", tensor_parallel_size=4, max_model_len=8192, static_decode_blocks=0, quantization='wint8')
+llm = LLM(model="/home/paddle/ernie-4_5-21b-a3b-bf16-paddle", tensor_parallel_size=4, max_model_len=8192, static_decode_blocks=0, block_size=16, quantization='wint8')
 
 # Perform batch inference
 outputs = llm.generate(prompts, sampling_params)
@@ -117,4 +118,282 @@ Now, let's break down each step:
 
 **Step 3: Drawing the
 The largest ocean is  the Pacific Ocean, covering an area of approximately â¦ [3], The first scientific expeditions to determine the ocean's depth were the Challenger expedition (1872â1876) and the U.S. Navy Hydrographic Office survey (1877â1879). The oceanic crust is thin and irregular, consisting of upward moving magma from the mantle below, and cooling and solidifying on the surface. The shallowest parts of the ocean are called the continental shelves. Large tides are caused mainly by the alignment of the Sun, Moon, and Earth during new or full moons. The origin of the word "ocean" is not clear. The first global oceanic topography survey was completed by the Challenger expedition (1872â1876). [57] The sound speed in the ocean is primarily a function of water temperature and salinity, and varies with depth. The deep-ocean floor is mostly flat and devoid of life, with the exception of seamounts and various underwater volcanic features, including seamounts and hydrothermal vents. [73] Today, the five ocean
+```
+
+## Run ernie4.5 300B model with the GSM8K dataset
+
+1. Download GSM8K dataset
+
+```bash
+wget https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl
+```
+
+2. Prepare `bench_gsm8k.py`
+
+```python
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+""" Fastdeploy + ERNIE-4.5-Turbo 的指标评估 """
+# adapted from https://github.com/sgl-project/sglang/blob/main/benchmark/gsm8k/bench_other.py
+import argparse
+import ast
+import json
+import re
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+import requests
+from tqdm import tqdm
+
+INVALID = -9999999
+
+
+def call_generate(prompt, **kwargs):
+    """
+    Generates response based on the input prompt.
+
+    Args:
+        prompt (str): The input prompt text.
+        **kwargs: Keyword arguments, including server IP address and port number.
+
+    Returns:
+        str: The response generated based on the prompt.
+
+    """
+    url = f"http://{kwargs['ip']}:{kwargs['port']}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    data = {
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        "temperature": 0.6,
+        "max_tokens": 2047,
+        "top_p": 0.95,
+        "do_sample": True,
+    }
+
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    out = response.json()
+    return out["choices"][0]["message"]["content"]
+
+
+def get_one_example(lines, i, include_answer):
+    """
+    Retrieves a question-answer example from the given list of text lines.
+
+    Args:
+        lines (list of dict): A list of question-answer pairs.
+        i (int): The index of the question-answer pair to retrieve from lines.
+        include_answer (bool): Whether to include the answer in the returned string.
+
+    Returns:
+        str: A formatted question-answer string in the format "Question: <question>\nAnswer: <answer>".
+
+    """
+    ret = "Question: " + lines[i]["question"] + "\nAnswer:"
+    if include_answer:
+        ret += " " + lines[i]["answer"]
+    return ret
+
+
+def get_few_shot_examples(lines, k):
+    """
+    Selects k examples from the given list of text lines and concatenates them into a single string.
+
+    Args:
+        lines (list): A list containing text lines.
+        k (int): The number of examples to select.
+
+    Returns:
+        str: A string composed of k examples, separated by two newline characters.
+    """
+    ret = ""
+    for i in range(k):
+        ret += get_one_example(lines, i, True) + "\n\n"
+    return ret
+
+
+def get_answer_value(answer_str):
+    """
+    Extracts numerical values from an answer string and returns them.
+
+    Args:
+        answer_str (str): The string containing the answer.
+
+    Returns:
+        The extracted numerical value; returns "INVALID" if extraction fails.
+    """
+    answer_str = answer_str.replace(",", "")
+    numbers = re.findall(r"\d+", answer_str)
+    if len(numbers) < 1:
+        return INVALID
+    try:
+        return ast.literal_eval(numbers[-1])
+    except SyntaxError:
+        return INVALID
+
+
+def read_jsonl(filename: str):
+    """
+    Reads a JSONL file.
+
+    Args:
+        filename (str): Path to the JSONL file.
+
+    Yields:
+        dict: A dictionary object corresponding to each line in the JSONL file.
+    """
+    with open(filename) as fin:
+        for line in fin:
+            if line.startswith("#"):
+                continue
+            yield json.loads(line)
+
+
+def main(args):
+    """
+    Process inputs and generate answers by calling the model in parallel using a thread pool.
+
+    Args:
+        args (argparse.Namespace):
+            - num_questions (int): Number of questions to process.
+            - num_shots (int): Number of few-shot learning examples.
+            - ip (str): IP address of the model service.
+            - port (int): Port number of the model service.
+            - parallel (int): Number of questions to process in parallel.
+            - result_file (str): File path to store the results.
+
+    Returns:
+        None
+
+    """
+    # Read data
+    filename = "test.jsonl"
+
+    lines = list(read_jsonl(filename))
+
+    # Construct prompts
+    num_questions = args.num_questions
+    num_shots = args.num_shots
+    few_shot_examples = get_few_shot_examples(lines, num_shots)
+
+    questions = []
+    labels = []
+    for i in range(len(lines[:num_questions])):
+        questions.append(get_one_example(lines, i, False))
+        labels.append(get_answer_value(lines[i]["answer"]))
+    assert all(l != INVALID for l in labels)
+
+    states = [None] * len(labels)
+
+    # Use thread pool
+    def get_one_answer(i):
+        answer = call_generate(
+            prompt=few_shot_examples + questions[i],
+            # stop=["Question", "Assistant:", "<|separator|>"],
+            ip=args.ip,
+            port=args.port,
+        )
+        states[i] = answer
+
+    tic = time.time()
+    if args.parallel == 1:
+        for i in tqdm(range(len(questions))):
+            get_one_answer(i)
+    else:
+        with ThreadPoolExecutor(args.parallel) as executor:
+            list(
+                tqdm(
+                    executor.map(get_one_answer, list(range(len(questions)))),
+                    total=len(questions),
+                )
+            )
+
+    latency = time.time() - tic
+    preds = []
+    for i in range(len(states)):
+        preds.append(get_answer_value(states[i]))
+
+    # Compute accuracy
+    acc = np.mean(np.array(preds) == np.array(labels))
+    invalid = np.mean(np.array(preds) == INVALID)
+
+    # Print results
+    print(f"Accuracy: {acc:.3f}")
+    print(f"Invalid: {invalid:.3f}")
+    print(f"Latency: {latency:.3f} s")
+
+    with open(args.result_file, "a") as fout:
+        value = {
+            "task": "gsm8k",
+            "backend": "paddlepaddle",
+            "num_gpus": 1,
+            "latency": round(latency, 3),
+            "accuracy": round(acc, 3),
+            "num_requests": args.num_questions,
+            "other": {
+                "num_questions": args.num_questions,
+                "parallel": args.parallel,
+            },
+        }
+        fout.write(json.dumps(value) + "\n")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=str, default="8188")
+    parser.add_argument("--num-shots", type=int, default=10)
+    parser.add_argument("--data-path", type=str, default="test.jsonl")
+    parser.add_argument("--num-questions", type=int, default=1319)
+    parser.add_argument("--result-file", type=str, default="result.jsonl")
+    parser.add_argument("--parallel", type=int, default=1)
+    args = parser.parse_args()
+    main(args)
+```
+
+3. Prepare `run_bench.sh`
+
+```bash
+#!/bin/bash
+export PADDLE_XCCL_BACKEND=iluvatar_gpu
+export INFERENCE_MSG_QUEUE_ID=232132
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
+
+python3 -m fastdeploy.entrypoints.openai.api_server --model "/home/paddle/ernie-45t" --port 8188 --tensor-parallel-size 16 --block-size 16 --static-decode-blocks 0 --quantization wint8
+```
+
+4. Running the Script
+
+Firstly, open a terminal and run:
+```bash
+./run_bench.sh
+```
+After the service is ready, open another terminal and run:
+```bash
+python3 -u bench_gsm8k.py --port 8188 --num-questions 1319 --num-shots 5 --parallel 8
+```
+It takes about 6.3 hours to run the GSM8K dataset.
+
+```
+Accuracy: 0.964
+Invaild: 0.000
+Latency: 22918.186 s
 ```

@@ -1,0 +1,162 @@
+name: Base Test
+description: "Run Base Tests"
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      FASTDEPLOY_WHEEL_URL:
+        description: "URL of the FastDeploy Wheel."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+      MODEL_CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  base_tests:
+    runs-on: [self-hosted, GPU-h20-1Cards]
+    steps:
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+            set -x
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            BASE_BRANCH="${{ github.base_ref }}"
+
+            # Clean the repository directory before starting
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            -e "REPO_NAME=${REPO_NAME}" \
+            ${docker_image} /bin/bash -c '
+              if [ -d ${REPO_NAME} ]; then
+                echo "Directory ${REPO_NAME} exists, removing it..."
+                rm -rf ${REPO_NAME}*
+              fi
+            '
+
+            wget -q ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git log -n 3 --oneline
+
+      - name: Run FastDeploy Base Tests
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fastdeploy_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
+          CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+        run: |
+            runner_name="${{ runner.name }}"
+            last_char="${runner_name: -1}"
+
+            if [[ "$last_char" =~ [0-7] ]]; then
+              DEVICES="$last_char"
+            else
+              DEVICES="0"
+            fi
+
+            FLASK_PORT=$((42068 + DEVICES * 100))
+            FD_API_PORT=$((42088 + DEVICES * 100))
+            FD_ENGINE_QUEUE_PORT=$((42058 + DEVICES * 100))
+            FD_METRICS_PORT=$((42078 + DEVICES * 100))
+            echo "Test ENV Parameter:"
+            echo "========================================================="
+            echo "FLASK_PORT=${FLASK_PORT}"
+            echo "FD_API_PORT=${FD_API_PORT}"
+            echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+            echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+            echo "DEVICES=${DEVICES}"
+            echo "========================================================="
+
+            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+            echo "CACHE_DIR is set to ${CACHE_DIR}"
+            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+              touch "${CACHE_DIR}/gitconfig"
+            fi
+            if [ ! -d "${MODEL_CACHE_DIR}" ]; then
+              echo "Error: MODEL_CACHE_DIR '${MODEL_CACHE_DIR}' does not exist."
+              exit 1
+            fi
+
+            PARENT_DIR=$(dirname "$WORKSPACE")
+
+            docker run --rm --ipc=host --pid=host --net=host \
+            -v $(pwd):/workspace \
+            -w /workspace \
+            -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
+            -e "FD_API_PORT=${FD_API_PORT}" \
+            -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+            -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+            -e "FLASK_PORT=${FLASK_PORT}" \
+            -v "${MODEL_CACHE_DIR}:/MODELDATA" \
+            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+            -v "${CACHE_DIR}/.cache:/root/.cache" \
+            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+            -e TZ="Asia/Shanghai" \
+            --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
+            # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+
+            pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
+            pip config set install.trusted-host  pip.baidu.com
+            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+            python -m pip install ${fastdeploy_wheel_url}
+            python -m pip install pytest
+
+            wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
+            chmod +x ./llm-deploy-linux-amd64
+            ./llm-deploy-linux-amd64 -python python3.10 \
+            -model_name ERNIE-4.5-0.3B-Paddle \
+            -model_path /MODELDATA \
+            --skip install
+
+            git config --global --add safe.directory /workspace/FastDeploy
+            cd FastDeploy
+            pushd test/ce/deploy
+            python3.10 deploy.py > dd.log 2>&1 &
+            sleep 3
+            curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
+              -H "Content-Type: application/json" \
+              -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
+
+            curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+            popd
+
+            pushd test/ce/server
+            export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
+            export TEMPLATE=TOKEN_LOGPROB
+            TEST_EXIT_CODE=0
+            python -m pytest -sv . || TEST_EXIT_CODE=$?
+            popd
+            echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
+            '
+            if [ -f ./FastDeploy/exit_code.env ]; then
+              source ./FastDeploy/exit_code.env
+              cat ./FastDeploy/exit_code.env >> $GITHUB_ENV
+            fi
+            echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}"
+            exit ${TEST_EXIT_CODE}

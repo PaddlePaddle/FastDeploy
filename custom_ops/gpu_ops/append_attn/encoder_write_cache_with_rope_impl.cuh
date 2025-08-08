@@ -432,13 +432,13 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
   LoadT src_vec;
   LoadEmbT cos_emb_vec;
   LoadEmbT sin_emb_vec;
-  int64_t global_warp_idx = blockDim.x * blockIdx.x + threadIdx.x;
-  int64_t all_warp_num = gridDim.x * blockDim.x;
+  int64_t global_warp_idx = blockDim.y * blockIdx.x + threadIdx.y;
+  int64_t all_warp_num = gridDim.x * blockDim.y;
   const int half_lastdim = last_dim / 2;
   const int offset = (q_num_head + kv_num_head) * last_dim;
   const int all_head_num = elem_cnt / last_dim;
   for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_num; gloabl_hi += all_warp_num) {
-    int64_t linear_index = gloabl_hi * last_dim + threadIdx.y * VecSize;
+    int64_t linear_index = gloabl_hi * last_dim + threadIdx.x * VecSize;
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
@@ -478,13 +478,13 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
     float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
     LoadT q_norm_vec, k_norm_vec;
     if (hi < q_num_head) {
-      Load<T, VecSize>(&q_norm_weight[threadIdx.y * VecSize], &q_norm_vec);
+      Load<T, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
       #pragma unroll
       for (int i = 0; i < VecSize; i++) {
         src_vec[i] = static_cast<T>(static_cast<float>(src_vec[i]) * row_inv_var * static_cast<float>(q_norm_vec[i]));
       }
     } else {
-      Load<T, VecSize>(&k_norm_weight[threadIdx.y * VecSize], &k_norm_vec);
+      Load<T, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
       for (int i = 0; i < VecSize; i++) {
         src_vec[i] = static_cast<T>(static_cast<float>(src_vec[i]) * row_inv_var * static_cast<float>(k_norm_vec[i]));
       }
@@ -1690,13 +1690,13 @@ void gqa_rotary_qk_norm_variable(
   const int blocksize = 128;
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
-  dim3 Blocks(grid_size/kWarpSize, kWarpSize, 1);
+  dim3 Block_Size(kWarpSize, blocksize/kWarpSize, 1);
 
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
 
   GQAVariableLengthRotaryQKNormKernel<T, PackSize>
-      <<<grid_size, Blocks, 0, stream>>>(
+      <<<grid_size, Block_Size, 0, stream>>>(
           reinterpret_cast<const T *>(qkv_input),
           cos_emb,
           sin_emb,

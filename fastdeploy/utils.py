@@ -15,6 +15,7 @@
 """
 
 import argparse
+import asyncio
 import codecs
 import importlib
 import logging
@@ -302,6 +303,16 @@ def set_random_seed(seed: int) -> None:
         random.seed(seed)
         np.random.seed(seed)
         paddle.seed(seed)
+
+
+def get_limited_max_value(max_value):
+    def validator(value):
+        value = float(value)
+        if value > max_value:
+            raise argparse.ArgumentTypeError(f"The value cannot exceed {max_value}")
+        return value
+
+    return validator
 
 
 def download_model(url, output_dir, temp_tar):
@@ -651,6 +662,61 @@ def deprecated_kwargs_warning(**kwargs):
     for arg in DEPRECATED_ARGS:
         if arg in kwargs:
             console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
+
+
+class StatefulSemaphore:
+    __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
+
+    """
+    StatefulSemaphore is a class that wraps an asyncio.Semaphore and provides additional stateful information.
+    """
+
+    def __init__(self, value: int):
+        """
+        StatefulSemaphore constructor
+        """
+        if value < 0:
+            raise ValueError("Value must be non-negative.")
+        self._semaphore = asyncio.Semaphore(value)
+        self._max_value = value
+        self._acquired_count = 0
+        self._last_reset = time.monotonic()
+
+    async def acquire(self):
+        await self._semaphore.acquire()
+        self._acquired_count += 1
+
+    def release(self):
+        self._semaphore.release()
+
+        self._acquired_count = max(0, self._acquired_count - 1)
+
+    def locked(self) -> bool:
+        return self._semaphore.locked()
+
+    @property
+    def available(self) -> int:
+        return self._max_value - self._acquired_count
+
+    @property
+    def acquired(self) -> int:
+        return self._acquired_count
+
+    @property
+    def max_value(self) -> int:
+        return self._max_value
+
+    @property
+    def uptime(self) -> float:
+        return time.monotonic() - self._last_reset
+
+    def status(self) -> dict:
+        return {
+            "available": self.available,
+            "acquired": self.acquired,
+            "max_value": self.max_value,
+            "uptime": round(self.uptime, 2),
+        }
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
