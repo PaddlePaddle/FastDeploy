@@ -432,6 +432,7 @@ class TokenProcessor:
             tokens = tokens[2 : batch + 2]
 
         batch_result = list()
+        llm_logger.info("engine has output token batch")
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
                 continue
@@ -534,6 +535,7 @@ class TokenProcessor:
                 batch_result.append(result)
 
         self.postprocess(batch_result)
+        llm_logger.info("token processor has finished put_results")
 
     def _record_metrics(self, task, current_time, token_ids):
         """Record all metrics for a task"""
