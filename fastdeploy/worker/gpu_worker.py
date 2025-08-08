@@ -68,7 +68,11 @@ class GpuWorker(WorkerBase):
 
             gc.collect()
             paddle.device.cuda.empty_cache()
-            if self.parallel_config.enable_custom_all_reduce:
+            if (
+                self.parallel_config.enable_custom_all_reduce
+                and self.parallel_config.tensor_parallel_size > 1
+                and paddle.is_compiled_with_cuda()
+            ):
                 from fastdeploy.distributed.communication import use_custom_allreduce
 
                 use_custom_allreduce()
