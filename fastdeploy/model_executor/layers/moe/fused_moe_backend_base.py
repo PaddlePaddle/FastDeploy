@@ -210,4 +210,3 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
                 shape=gate_correction_bias_shape,
                 dtype="float32",
             )
-            set_weight_attrs(layer.gate_correction_bias, extra_weight_attrs)

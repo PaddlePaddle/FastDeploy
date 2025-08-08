@@ -173,11 +173,11 @@ class FusedMoE(nn.Layer):
                 expert_param.copy_(loaded_weight, False)
         else:
             # 2.gate up splited in disk
-            assert shard_id in ["gate", "down", "up", "gate_bias"]
+            assert shard_id in ["gate", "down", "up"]
             if current_platform.is_cuda():
-                SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1, "gate_bias": -1}
+                SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
             else:
-                SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0, "gate_bias": -1}
+                SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
             self._load_expert_weight(
                 param=param,
                 expert_id=expert_id,
@@ -231,10 +231,6 @@ class FusedMoE(nn.Layer):
         )
         expert_param.copy_(loaded_weight, False)
 
-    def _load_gate_bias_weight(self, param, loaded_weight):
-        loaded_weight = get_tensor(loaded_weight)
-        param.copy_(loaded_weight, False)
-
     def _load_expert_weight(
         self,
         param,
@@ -243,14 +239,11 @@ class FusedMoE(nn.Layer):
         loaded_weight,
         shard_id,
     ):
+        expert_param = param[expert_id]
         if shard_id == "down":
-            expert_param = param[expert_id]
             self._load_down_weight(expert_param, shard_dim, loaded_weight, shard_id)
         elif shard_id in ["gate", "up"]:
-            expert_param = param[expert_id]
             self._load_gate_up_weight(expert_param, shard_dim, loaded_weight, shard_id)
-        elif shard_id in ["gate_bias"]:
-            self._load_gate_bias_weight(param, loaded_weight)
 
     @classmethod
     def make_expert_params_mapping(
