@@ -635,11 +635,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
     def init_mm_data(
         self,
-        input_embedding: paddle.Tensor,
+        input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
     ):
         vl_moe_meta = self.ernie.prepare_vl_moe_meta(
-            input_embedding=input_embedding, ids_remove_padding=ids_remove_padding
+            input_embeddings=input_embeddings, ids_remove_padding=ids_remove_padding
         )
         return {"vl_moe_meta": vl_moe_meta}
 
