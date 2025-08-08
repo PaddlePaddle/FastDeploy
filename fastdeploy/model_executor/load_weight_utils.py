@@ -66,7 +66,7 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
     """
     with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
         weight_list = json.load(f)["weight_map"]
-    filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
+    filtered_map = {k: v for k, v in weight_list.items() if ".experts." not in k}
     num_local_ffn_keys = []
 
     from itertools import chain
