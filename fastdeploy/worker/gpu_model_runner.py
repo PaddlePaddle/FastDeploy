@@ -661,7 +661,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
-        # self.share_inputs["seq_lens_this_time"]=0
 
         # TODO(gongshaotian): move to models
         if not self.enable_mm:
