@@ -100,10 +100,10 @@ class ResourceManagerV1(ResourceManager):
     
     def reschedule_preempt_task(self, request_id):
         with self.lock:
-            assert request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests
-            request = self.requests[request_id]
-            self.waiting.appendleft(request)
-            self.to_be_rescheduled_request_id_set.remove(request_id) 
+            if request_id in self.to_be_rescheduled_request_id_set and request_id in self.waiting:
+                request = self.requests[request_id]
+                self.waiting.appendleft(request)
+                self.to_be_rescheduled_request_id_set.remove(request_id) 
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         can_schedule = True
@@ -389,8 +389,9 @@ class ResourceManagerV1(ResourceManager):
             return False
 
     def add_request(self, request: Request) -> None:
-        self.waiting.append(request)
-        self.requests[request.request_id] = request
+        with self.lock:
+            self.waiting.append(request)
+            self.requests[request.request_id] = request
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
@@ -417,9 +418,15 @@ class ResourceManagerV1(ResourceManager):
                     if request is None:
                         # Invalid request ID.
                         continue
-                    request.status = RequestStatus.FINISHED
-                    self.running.remove(request)
-                    self._free_blocks(request)
+                    if request in self.running:  # normally run and finished
+                        self.running.remove(request)
+                        request.status = RequestStatus.FINISHED
+                        self._free_blocks(request)
+                    if request.request_id in self.to_be_rescheduled_request_id_set: # finished after preempted, blocks have been recycled.
+                        self.to_be_rescheduled_request_id_set.remove(request.request_id) # just remove from to_be_rescheduled_request_id_set
+                    if request in self.waiting:  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
+                        raise RuntimeError(f"request {request.request_id} scheduled into waiting list, after finished")
+
                     self.tasks_list[request.idx] = None
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
