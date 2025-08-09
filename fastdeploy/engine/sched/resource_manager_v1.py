@@ -75,6 +75,7 @@ class ResourceManagerV1(ResourceManager):
         self.running: list[Request] = []
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
+        self.to_be_rescheduled_request_id_set = set()
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -96,6 +97,12 @@ class ResourceManagerV1(ResourceManager):
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
+    
+    def reschedule_preempt_task(self, request_id):
+        assert request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests
+        request = self.requests[request_id]
+        self.waiting.appendleft(request)
+        self.to_be_rescheduled_request_id_set.remove(request_id) 
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         can_schedule = True
@@ -106,7 +113,7 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req.num_computed_tokens = 0
                 preempted_req.prefill_block_num = 0
                 self._free_blocks(preempted_req)
-                self.waiting.appendleft(preempted_req)
+                self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
                 if preempted_req == request:
@@ -228,7 +235,7 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         # Allocation for next decoding blocks
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
-                            llm_logger.debug(
+                            llm_logger.info(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
                             request.block_tables.extend(
@@ -252,7 +259,7 @@ class ResourceManagerV1(ResourceManager):
                         num_decoding_req_nums += 1
                         token_budget -= 1
                 else:  # need to prefill
-                    llm_logger.debug(
+                    llm_logger.info(
                         f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                     )
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
@@ -295,6 +302,9 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
+                            llm_logger.info(
+                                f"schedule prefill task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
+                            )
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
                             request.schedule_start_time = time.time()
@@ -319,6 +329,9 @@ class ResourceManagerV1(ResourceManager):
                             request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
+                            llm_logger.info(
+                                f"schedule preempted task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
+                            )
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens

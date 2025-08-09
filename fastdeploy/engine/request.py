@@ -128,7 +128,7 @@ class Request:
             request_id=d["request_id"],
             prompt=d.get("prompt"),
             prompt_token_ids=d.get("prompt_token_ids"),
-            prompt_token_ids_len=d.get("prompt_token_ids_len"),
+            prompt_token_ids_len=d.get("prompt_token_ids_len", "0"),
             messages=d.get("messages"),
             system=d.get("system"),
             history=d.get("history"),
@@ -226,7 +226,11 @@ class Request:
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
             f"draft_token_ids={self.draft_token_ids}, "
-            f"sampling_params={self.sampling_params})"
+            f"sampling_params={self.sampling_params}),"
+            f"prompt_token_ids_len={self.prompt_token_ids_len},"
+            f"need_prefill_tokens={self.need_prefill_tokens},"
+            f"output_token_lens={len(self.output_token_ids)},"
+            f"num_total_tokens={self.num_total_tokens}"
         )
 
 
