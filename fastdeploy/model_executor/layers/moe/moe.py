@@ -110,6 +110,7 @@ class FusedMoE(nn.Layer):
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
 
         self.expert_id_offset = expert_id_offset
+        self.gate_up_dict = {}
 
         # used for deepseek_v3
         self.topk_method = topk_method
@@ -185,12 +186,10 @@ class FusedMoE(nn.Layer):
         )
 
     def _load_gate_up_weight(self, expert_param, shard_dim, loaded_weight, shard_id):
+        assert shard_id in ["gate", "up"]
         tensor_size = expert_param.shape[shard_dim] // 2
-        if shard_id == "gate":
-            expert_param = expert_param[..., :tensor_size] if shard_dim else expert_param[:tensor_size, ...]
-        elif shard_id == "up":
-            expert_param = expert_param[..., tensor_size:] if shard_dim else expert_param[tensor_size:, ...]
-
+        expert_shape = expert_param.shape
+        expert_shape[shard_dim] = tensor_size
         if self.tp_size > 1:
             size = loaded_weight.get_shape()[-1]
             block_size = size // self.tp_size
@@ -200,12 +199,14 @@ class FusedMoE(nn.Layer):
 
         loaded_weight = get_tensor(loaded_weight)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
+        if expert_shape != loaded_weight.shape:
             loaded_weight = loaded_weight.transpose([1, 0])
-        assert expert_param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        assert expert_shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_shape})"
         )
-        expert_param.copy_(loaded_weight, False)
+        self.gate_up_dict[shard_id] = loaded_weight
+        if len(self.gate_up_dict) == 2:
+            expert_param.set_value(paddle.concat([self.gate_up_dict["gate"], self.gate_up_dict["up"]], axis=shard_dim))
 
     def _load_down_weight(self, expert_param, shard_dim, loaded_weight, shard_id):
         if self.tp_size > 1:
@@ -508,10 +509,11 @@ class FusedMoE(nn.Layer):
                 gate_correction_bias_tensor = self.extract_gate_correction_bias(
                     self.gate_correction_bias_key, state_dict
                 )
+                if self.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                    gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(self.gate_correction_bias.shape)
                 self.gate_correction_bias.set_value(gate_correction_bias_tensor)
             else:
                 self.gate_correction_bias = None
-
         else:
             self.gate_correction_bias = None
 
