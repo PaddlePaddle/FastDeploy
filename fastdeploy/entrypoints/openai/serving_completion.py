@@ -413,8 +413,7 @@ class OpenAIServingCompletion:
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
             # prompt_text = final_res["prompt"]
-            if request.prompt is not None:
-                prompt_text = request.prompt
+            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
@@ -431,20 +430,12 @@ class OpenAIServingCompletion:
                     aggregated_logprobs.text_offset.extend(logprobs_res.text_offset)
 
             if request.echo:
-                assert prompt_text is not None
-                if request.max_tokens == 0:
-                    token_ids = prompt_token_ids
-                    output_text = prompt_text
+                token_ids = [*prompt_token_ids, *output["token_ids"]]
+                if isinstance(prompt_text, list):
+                    # 处理多个prompt的情况
+                    output_text = prompt_text[idx] + output["text"]
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
-                    if isinstance(prompt_text, list):
-                        # 处理多个prompt的情况
-                        if len(prompt_text) > idx:
-                            output_text = prompt_text[idx] + output["text"]
-                        else:
-                            output_text = prompt_text[0] + output["text"]
-                    else:
-                        output_text = prompt_text + output["text"]
+                    output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]

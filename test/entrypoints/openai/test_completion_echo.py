@@ -1,199 +1,139 @@
-import unittest
-from unittest.mock import MagicMock, patch
+import os
 
-from fastdeploy.entrypoints.openai.serving_completion import (
-    CompletionRequest,
-    OpenAIServingCompletion,
-)
+import openai
+import pytest
 
+# Read ports from environment variables; use default values if not set
+FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
+FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
+FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
 
-class TestCompletionEcho(unittest.TestCase):
-    def setUp(self):
-        # 初始化测试环境
-        self.mock_engine = MagicMock()
-        self.completion_handler = None  # 将在测试中初始化
-        self.max_waiting_time = 300  # 添加缺失的参数
+# List of ports to clean before and after tests
+PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
 
-    async def test_single_prompt_non_streaming(self):
-        """测试单prompt非流式响应"""
-
-        self.completion_handler = OpenAIServingCompletion(
-            self.mock_engine, pid=123, ips=None, max_waiting_time=self.max_waiting_time
-        )
-
-        # 准备测试数据
-        request = CompletionRequest(prompt="test prompt", max_tokens=10, echo=True, logprobs=1)
-
-        # 模拟engine返回
-        mock_output = {
-            "outputs": {
-                "text": " generated text",
-                "token_ids": [1, 2, 3],
-                "top_logprobs": {"token1": -0.1, "token2": -0.2},
-                "finished": True,
-            },
-            "output_token_ids": len([1, 2, 3]),  # 修正为token数量而不是token列表
-        }
-        self.mock_engine.generate.return_value = [mock_output]
-
-        # 调用测试方法
-        response = self.completion_handler.request_output_to_completion_response(
-            final_res_batch=[mock_output],
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1, 2]],
-            completion_batched_token_ids=[[3, 4, 5]],
-        )
-
-        # 验证结果
-        self.assertEqual(response.choices[0].text, "test prompt generated text")
-
-    @patch("fastdeploy.entrypoints.openai.serving_completion.time.time")
-    async def test_single_prompt_streaming(self, mock_time):
-        """测试单prompt流式响应"""
-
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
-        mock_time.return_value = 12345
-
-        # 准备测试数据
-        request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True, echo=True)
-
-        # 模拟engine返回的流式数据
-        mock_responses = [
-            {"outputs": {"text": " chunk1", "token_ids": [1], "send_idx": 0, "finished": False}},
-            {"outputs": {"text": " chunk2", "token_ids": [2], "finished": True, "finish_reason": "stop"}},
-        ]
-
-        # 模拟异步generate方法
-        async def mock_generate(*args, **kwargs):
-            for resp in mock_responses:
-                yield resp
-
-        self.mock_engine.generate.side_effect = mock_generate
-
-        # 调用测试方法并收集结果
-        generator = self.completion_handler.completion_stream_generator(
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1, 2]],
-            num_choices=1,
-        )
-
-        results = []
-        async for chunk in generator:
-            results.append(chunk)
-
-        # 验证结果
-        self.assertEqual(len(results), 3)  # 2个数据块 + DONE
-        self.assertIn('"text": "test prompt chunk1"', results[0])
-        self.assertIn('"text": "test prompt chunk2"', results[1])
-
-    async def test_multi_prompt_non_streaming(self):
-        """测试多prompt非流式响应"""
-
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
-
-        # 准备测试数据 (2个prompt)
-        request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, echo=True)
-
-        # 模拟engine返回 (2个结果)
-        mock_outputs = [
-            {
-                "outputs": {"text": " response1", "token_ids": [1, 2], "top_logprobs": None, "finished": True},
-                "output_token_ids": len([1, 2]),  # 修正为token数量而不是token列表
-            },
-            {
-                "outputs": {"text": " response2", "token_ids": [3, 4], "top_logprobs": None, "finished": True},
-                "output_token_ids": len([3, 4]),  # 修正为token数量而不是token列表
-            },
-        ]
-        self.mock_engine.generate.return_value = mock_outputs
-
-        # 调用测试方法
-        response = self.completion_handler.request_output_to_completion_response(
-            final_res_batch=mock_outputs,
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1], [2]],  # 2个prompt的token ids
-            completion_batched_token_ids=[[1, 2], [3, 4]],  # 2个completion的token ids
-        )
-
-        # 验证结果
-        self.assertEqual(len(response.choices), 2)
-        self.assertEqual(response.choices[0].text, "prompt1 response1")
-        self.assertEqual(response.choices[1].text, "prompt2 response2")
-
-    @patch("fastdeploy.entrypoints.openai.serving_completion.time.time")
-    async def test_multi_prompt_streaming(self, mock_time):
-        """测试多prompt流式响应"""
-
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
-        mock_time.return_value = 12345
-
-        # 准备测试数据 (2个prompt)
-        request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, stream=True, echo=True)
-
-        # 模拟engine返回的流式数据 (2个prompt的响应交错)
-        mock_responses = [
-            # prompt1的第一个chunk
-            {"outputs": {"index": 0, "send_idx": 0, "text": " chunk1", "token_ids": [1], "finished": False}},
-            # prompt2的第一个chunk
-            {"outputs": {"index": 1, "send_idx": 0, "text": " chunkA", "token_ids": [101], "finished": False}},
-            # prompt1的最后一个chunk
-            {"outputs": {"text": " chunk2", "token_ids": [2], "index": 0, "finished": True, "finish_reason": "stop"}},
-            # prompt2的最后一个chunk
-            {
-                "outputs": {
-                    "text": " chunkB",
-                    "token_ids": [102],
-                    "index": 1,
-                    "finished": True,
-                    "finish_reason": "length",
-                }
-            },
-        ]
-
-        # 模拟异步generate方法
-        async def mock_generate(*args, **kwargs):
-            for resp in mock_responses:
-                yield resp
-
-        self.mock_engine.generate.side_effect = mock_generate
-
-        # 调用测试方法并收集结果
-        generator = self.completion_handler.completion_stream_generator(
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1], [101]],  # 2个prompt的token ids
-            num_choices=2,
-        )
-
-        results = []
-        async for chunk in generator:
-            results.append(chunk)
-
-        # 验证结果
-        self.assertEqual(len(results), 5)  # 4个数据块 + DONE
-
-        # 检查prompt1的响应
-        self.assertIn('"text": "prompt1 chunk1"', results[0])
-
-        # 检查prompt2的响应
-        self.assertIn('"text": "prompt2 chunkA"', results[1])
+# ==========================
+# OpenAI Client chat.completions Test
+# ==========================
 
 
-if __name__ == "__main__":
-    import asyncio
+@pytest.fixture
+def openai_client():
+    ip = "0.0.0.0"
+    service_http_port = str(FD_API_PORT)
+    client = openai.Client(
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
+    )
+    return client
 
-    async def run_tests():
-        unittest.main()
 
-    asyncio.run(run_tests())
+def test_non_streaming_prompt_echo_response(openai_client, capsys):
+    """
+    测试非流式 completion 中的 echo 选项功能。
+    测试以下行号相关的功能：
+    - 310, 311: 与 prompt 处理和 echo 标志相关的逻辑
+    - 313, 314: 与多个 prompt 处理相关的逻辑
+    - 316: 与文本拼接相关的逻辑
+    - 318, 319: 与 token IDs 和文本处理相关的逻辑
+    """
+    # 测试单个 prompt 的 echo 功能
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=10,
+        stream=False,
+        echo=True,
+    )
+    assert response_0.choices[0].text.startswith("Hello, how are you?")
+
+    # 验证 token IDs 是否正确返回（测试 318, 319 相关功能）
+    assert hasattr(response_0.choices[0], "prompt_token_ids") or hasattr(response_0.choices[0], "token_ids")
+
+    # 测试多个 prompts 的 echo 功能
+    prompts = ["Hello, how are you?", "What is your name?"]
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt=prompts,
+        temperature=1,
+        max_tokens=10,
+        stream=False,
+        echo=True,
+    )
+    for i in range(len(response_1.choices)):
+        assert response_1.choices[i].text.startswith(prompts[i])
+        # 验证 token IDs 是否正确返回
+        assert hasattr(response_1.choices[i], "prompt_token_ids") or hasattr(response_1.choices[i], "token_ids")
+
+
+def test_streaming_prompt_echo_response(openai_client, capsys):
+    """
+    测试流式 completion 中的 echo 选项功能。
+    测试以下行号相关的功能：
+    - 409, 410: 与流式响应中的第一个 token 处理相关的逻辑
+    - 433: 与流式响应中的文本拼接相关的逻辑
+    - 435, 436: 与多个流式 prompt 处理相关的逻辑
+    - 438: 与流式响应中的 token IDs 处理相关的逻辑
+    - 440: 与流式响应中的 finish_reason 处理相关的逻辑
+    """
+    # 测试单个 prompt 的流式 echo 功能
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=10,
+        stream=True,
+        echo=True,
+    )
+    output = []
+    for chunk in response_0:
+        if hasattr(chunk.choices[0], "text"):
+            output.append(chunk.choices[0].text)
+        # 测试 438 相关的 token IDs 处理
+        if hasattr(chunk.choices[0], "prompt_token_ids"):
+            assert isinstance(chunk.choices[0].prompt_token_ids, list)
+        if hasattr(chunk.choices[0], "completion_token_ids"):
+            assert isinstance(chunk.choices[0].completion_token_ids, list)
+
+    assert "".join(output).startswith("Hello, how are you?")
+
+    # 测试多个 prompts 的流式 echo 功能
+    prompts = ["Hello, how are you?", "What is your name?"]
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt=prompts,
+        temperature=1,
+        max_tokens=10,
+        stream=True,
+        echo=True,
+    )
+    outputs = {i: [] for i in range(len(prompts))}
+    first_responses = [False] * len(prompts)  # 标记是否已经收到每个prompt的第一个响应
+
+    for chunk in response_1:
+        if chunk == "data: [DONE]":
+            break
+
+        for choice in chunk.choices:
+            index = choice.index
+            text = choice.text
+            if text is not None:
+                outputs[index].append(text)
+
+            # 测试 409, 410 相关的第一个响应处理
+            if not first_responses[index] and text is not None:
+                assert text.startswith(
+                    prompts[index]
+                ), f"Prompt {index} first response '{text}' doesn't match prompt '{prompts[index]}'"
+                first_responses[index] = True
+
+            # 测试 438 相关的 token IDs 处理
+            if hasattr(choice, "prompt_token_ids"):
+                assert isinstance(choice.prompt_token_ids, list)
+            if hasattr(choice, "completion_token_ids"):
+                assert isinstance(choice.completion_token_ids, list)
+
+    # 验证所有 prompts 都收到了响应
+    assert all(first_responses)
+    for i in range(len(prompts)):
+        assert "".join(outputs[i]).startswith(prompts[i])
