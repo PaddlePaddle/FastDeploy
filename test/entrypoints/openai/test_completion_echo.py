@@ -12,11 +12,14 @@ class TestCompletionEcho(unittest.TestCase):
         # 初始化测试环境
         self.mock_engine = MagicMock()
         self.completion_handler = None  # 将在测试中初始化
+        self.max_waiting_time = 300  # 添加缺失的参数
 
-    def test_single_prompt_non_streaming(self):
+    async def test_single_prompt_non_streaming(self):
         """测试单prompt非流式响应"""
 
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
+        self.completion_handler = OpenAIServingCompletion(
+            self.mock_engine, pid=123, ips=None, max_waiting_time=self.max_waiting_time
+        )
 
         # 准备测试数据
         request = CompletionRequest(prompt="test prompt", max_tokens=10, echo=True, logprobs=1)
@@ -89,7 +92,7 @@ class TestCompletionEcho(unittest.TestCase):
         self.assertIn('"text": "test prompt chunk1"', results[0])
         self.assertIn('"text": "test prompt chunk2"', results[1])
 
-    def test_multi_prompt_non_streaming(self):
+    async def test_multi_prompt_non_streaming(self):
         """测试多prompt非流式响应"""
 
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
@@ -188,4 +191,9 @@ class TestCompletionEcho(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    import asyncio
+
+    async def run_tests():
+        unittest.main()
+
+    asyncio.run(run_tests())
