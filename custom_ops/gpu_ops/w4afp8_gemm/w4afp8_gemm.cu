@@ -77,16 +77,17 @@ void DisPatchW4AFp8Gemm(
             max_tokens,
             stream)
     } else {
-        GEMM_SWITCH_FP16(
-            M, K, batch_size, token_padding_size, kBlockN, TailN,
-            weight,
-            input,
-            out,
-            weight_scale,
-            input_row_sum,
-            tokens,
-            max_tokens,
-            stream)
+        PD_THROW("Only supported dtype in ['FP16'].");
+        // GEMM_SWITCH_FP16(
+        //     M, K, batch_size, token_padding_size, kBlockN, TailN,
+        //     weight,
+        //     input,
+        //     out,
+        //     weight_scale,
+        //     input_row_sum,
+        //     tokens,
+        //     max_tokens,
+        //     stream)
     }
 }
 
