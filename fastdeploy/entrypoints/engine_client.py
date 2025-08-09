@@ -21,12 +21,13 @@ import numpy as np
 
 from fastdeploy import envs
 from fastdeploy.engine.config import ModelConfig
+from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, api_server_logger
+from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
 
 
 class EngineClient:
@@ -47,6 +48,7 @@ class EngineClient:
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
+        workers=1,
     ):
         import fastdeploy.model_executor.models  # noqa: F401
 
@@ -77,7 +79,7 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
-
+        self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",

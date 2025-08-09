@@ -22,9 +22,9 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
 from fastdeploy.model_executor.load_weight_utils import (
+    fast_weights_iterator,
     get_all_safetensors,
     measure_time,
-    safetensors_weights_iterator,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.model_base import ModelRegistry
@@ -49,7 +49,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
     @measure_time
     def load_weights(self, model, fd_config: FDConfig) -> None:
         _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
-        weights_iterator = safetensors_weights_iterator(safetensor_files)
+        weights_iterator = fast_weights_iterator(safetensor_files)
         model.load_weights(weights_iterator)
         self.clean_memory_fragments()
 
