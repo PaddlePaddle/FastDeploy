@@ -100,7 +100,7 @@ class ResourceManagerV1(ResourceManager):
     
     def reschedule_preempt_task(self, request_id):
         with self.lock:
-            if request_id in self.to_be_rescheduled_request_id_set and request_id in self.waiting:
+            if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id) 
