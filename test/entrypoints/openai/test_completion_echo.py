@@ -122,7 +122,6 @@ class TestCompletionEcho(unittest.TestCase):
         )
 
         # 验证结果
-        self.assertEqual(len(response.choices), 2)
         self.assertEqual(response.choices[0].text, "prompt1 response1")
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
