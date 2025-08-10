@@ -59,8 +59,8 @@ class ExpertService:
         self.cfg.disaggregate_info = None
 
         self.scheduler = cfg.scheduler_config.scheduler()
-
-        self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
+        if cfg.splitwise_role != "mixed":
+            self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 

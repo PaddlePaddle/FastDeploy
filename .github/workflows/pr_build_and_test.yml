@@ -19,7 +19,7 @@ jobs:
     needs: clone
     uses: ./.github/workflows/_build_linux.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "89,90"
       WITH_NIGHTLY_BUILD: "OFF"
@@ -39,7 +39,7 @@ jobs:
     needs: [clone,build]
     uses: ./.github/workflows/_unit_test_coverage.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
 
@@ -48,7 +48,7 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_logprob_test_linux.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelCache"
@@ -61,3 +61,13 @@ jobs:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:fastdeploy-ciuse-cuda126
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+
+  base_test:
+    name: Run Base Tests
+    needs: [clone,build]
+    uses: ./.github/workflows/_base_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelCache"
