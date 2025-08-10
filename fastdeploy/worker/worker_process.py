@@ -244,7 +244,6 @@ class PaddleDisWorkerProc:
         """
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
-            num_running_requests = 0
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
 
@@ -272,7 +271,6 @@ class PaddleDisWorkerProc:
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         while True:
-            num_running_requests = 0
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.exist_task_signal.value[0] = 2
