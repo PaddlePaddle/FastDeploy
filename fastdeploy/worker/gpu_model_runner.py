@@ -941,7 +941,6 @@ class GPUModelRunner(ModelRunnerBase):
                 cache_kvs_list.append(value_cache)
 
             self.share_inputs["caches"] = cache_kvs_list
-
         else:
             for i in range(self.model_config.num_hidden_layers):
                 cache_kvs[f"key_caches_{i}"] = paddle.full(
