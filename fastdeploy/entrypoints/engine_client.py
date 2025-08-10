@@ -19,13 +19,15 @@ import uuid
 
 import numpy as np
 
+from fastdeploy import envs
 from fastdeploy.engine.config import ModelConfig
+from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, api_server_logger
+from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
 
 
 class EngineClient:
@@ -46,6 +48,7 @@ class EngineClient:
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
+        workers=1,
     ):
         import fastdeploy.model_executor.models  # noqa: F401
 
@@ -76,7 +79,7 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
-
+        self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -153,6 +156,26 @@ class EngineClient:
             )
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
+
+        if "stop_seqs_len" in task:
+            stop_seqs_len = task["stop_seqs_len"]
+            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            if len(stop_seqs_len) > max_stop_seqs_num:
+                error_msg = (
+                    f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
+                    "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
+                )
+                api_server_logger.error(error_msg)
+                raise EngineError(error_msg, error_code=400)
+            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            for single_stop_seq_len in stop_seqs_len:
+                if single_stop_seq_len > stop_seqs_max_len:
+                    error_msg = (
+                        f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
+                        "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
+                    )
+                    api_server_logger.error(error_msg)
+                    raise EngineError(error_msg, error_code=400)
 
         task["preprocess_end_time"] = time.time()
         preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]

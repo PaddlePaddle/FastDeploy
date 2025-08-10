@@ -41,20 +41,28 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope, get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
-from fastdeploy.model_executor.ops.gpu import (
-    recover_decode_task,
-    set_value_by_flags_and_idx,
-    share_external_data,
-)
+from fastdeploy.platforms import current_platform
+
+if current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
+
+    recover_decode_task = None
+    share_external_data = None
+else:
+    from fastdeploy.model_executor.ops.gpu import (
+        recover_decode_task,
+        set_value_by_flags_and_idx,
+        share_external_data,
+    )
+
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
     pre_process,
     rebuild_padding,
     step_cuda,
 )
-from fastdeploy.platforms import current_platform
 
-if not current_platform.is_dcu():
+if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
 from fastdeploy import envs
