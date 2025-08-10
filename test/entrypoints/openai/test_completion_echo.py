@@ -16,7 +16,7 @@ class TestCompletionEcho(unittest.TestCase):
     def test_single_prompt_non_streaming(self):
         """测试单prompt非流式响应"""
 
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
+        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
         # 准备测试数据
         request = CompletionRequest(prompt="test prompt", max_tokens=10, echo=True, logprobs=1)
@@ -51,7 +51,7 @@ class TestCompletionEcho(unittest.TestCase):
     async def test_single_prompt_streaming(self, mock_time):
         """测试单prompt流式响应"""
 
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
+        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
         mock_time.return_value = 12345
 
         # 准备测试数据
@@ -92,7 +92,7 @@ class TestCompletionEcho(unittest.TestCase):
     def test_multi_prompt_non_streaming(self):
         """测试多prompt非流式响应"""
 
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
+        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
         # 准备测试数据 (2个prompt)
         request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, echo=True)
@@ -130,7 +130,7 @@ class TestCompletionEcho(unittest.TestCase):
     async def test_multi_prompt_streaming(self, mock_time):
         """测试多prompt流式响应"""
 
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None)
+        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
         mock_time.return_value = 12345
 
         # 准备测试数据 (2个prompt)
@@ -207,4 +207,26 @@ class TestCompletionEcho(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    import asyncio
+    import unittest
+
+    class AsyncTestResult(unittest.TextTestResult):
+        def startTest(self, test):
+            super().startTest(test)
+            if asyncio.iscoroutinefunction(test):
+                self._setup_async_test(test)
+
+        def _setup_async_test(self, test):
+            def run_async_test():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(test())
+                loop.close()
+
+            test_method = run_async_test
+            test_method._testMethodName = test._testMethodName
+            test_method.__name__ = test.__name__
+            test_method.__qualname__ = test.__qualname__
+            setattr(test.__class__, test._testMethodName, test_method)
+
+    unittest.main(testRunner=unittest.TextTestRunner(resultclass=AsyncTestResult))
