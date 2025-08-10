@@ -325,20 +325,34 @@ class DeepseekV3MLAAttention(nn.Layer):
             dtype=layernorm_out.dtype,
         )
 
+        # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
+        query = self.q_a_proj(layernorm_out)
+        query = self.q_a_layernorm(query)
+        query = self.q_b_proj(query)
+        query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+        query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+
+        compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
+        compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
+        key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+        compressed_kv = self.kv_a_layernorm(compressed_kv)
+
+        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+
+
+
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
-            query = self.q_a_proj(layernorm_out)
-            query = self.q_a_layernorm(query)
-            query = self.q_b_proj(query)
-
-            query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
-
-            compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
-            compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
-            key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-            compressed_kv = self.kv_a_layernorm(compressed_kv)
-
-            query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+            # NOTE: (changwenbin) This is redundant code, we will delete it shortly.
+            # query = self.q_a_proj(layernorm_out)
+            # query = self.q_a_layernorm(query)
+            # query = self.q_b_proj(query)
+            # query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            # query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+            # compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
+            # compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
+            # key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+            # compressed_kv = self.kv_a_layernorm(compressed_kv)
+            # query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
             key_value = self.kv_b_proj(compressed_kv)
             key_value = key_value.reshape(
@@ -365,7 +379,14 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k_pe=key_pe,
                 forward_meta=forward_meta,
             )
-
+            # B = fmha_out_prefill.shape[0]
+            # fmha_out_prefill = fmha_out_prefill.reshape(
+            #     [B, self.num_attention_heads_tp, self.qk_head_dim]
+            # )[:, :, :self.v_head_dim].reshape(
+            #     [B, self.num_attention_heads_tp * self.v_head_dim]
+            # )
+            # fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
+            
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
@@ -373,20 +394,18 @@ class DeepseekV3MLAAttention(nn.Layer):
 
             fmha_out = fmha_out + fmha_out_prefill
         if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
-            query = self.q_a_proj(layernorm_out)
-            query = self.q_a_layernorm(query)
-            ln_out_or_q_c = query
-
-            compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
-            compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
-            key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-            compressed_kv = self.kv_a_layernorm(compressed_kv)
-
-            query = self.q_b_proj(ln_out_or_q_c)
-            query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-
-            query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
-            query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+            # NOTE: (changwenbin) This is redundant code, we will delete it shortly.
+            # query = self.q_a_proj(layernorm_out)
+            # query = self.q_a_layernorm(query)
+            # ln_out_or_q_c = query
+            # compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
+            # compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
+            # key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+            # compressed_kv = self.kv_a_layernorm(compressed_kv)
+            # query = self.q_b_proj(ln_out_or_q_c)
+            # query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            # query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+            # query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
