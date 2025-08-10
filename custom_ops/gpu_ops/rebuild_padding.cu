@@ -14,6 +14,8 @@
 
 #include "helper.h"  // NOLINT
 
+#define BLOCK_SIZE 128
+
 template <typename T, int VecSize>
 __global__ void RebuildPaddingKernel(T *output_data,
                                      const T *input_data,
@@ -27,17 +29,26 @@ __global__ void RebuildPaddingKernel(T *output_data,
     using LoadT = AlignedVector<T, VecSize>;
     LoadT src_vec;
     const int global_idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+    // Precompute the shared memory offset for the sequence lengths
+    __shared__ int shared_cu_seqlens_q[BLOCK_SIZE];
+
+    if (threadIdx.x < BLOCK_SIZE && threadIdx.x < blockDim.x) {
+        shared_cu_seqlens_q[threadIdx.x] = cu_seqlens_q[threadIdx.x];
+    }
+    __syncthreads();
+
     for (int i = global_idx * VecSize; i < elem_nums;
          i += gridDim.x * blockDim.x * VecSize) {
         const int bi = i / dim_embed;
         const int bias_idx = i % dim_embed;
-        int seq_id = 0;
-        if (seq_len_this_time[bi] == 0) continue;
-        if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
-        if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
 
-        const int ori_token_idx =
-            cu_seqlens_q[bi] + seq_id;
+        // Check if the sequence length is valid
+        if (seq_len_this_time[bi] == 0 || (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0)) continue;
+
+        int seq_id = seq_len_encoder[bi] > 0 ? seq_len_encoder[bi] - 1 : 0;
+
+        const int ori_token_idx = shared_cu_seqlens_q[bi] + seq_id;
         const int src_offset = ori_token_idx * dim_embed + bias_idx;
         Load<T, VecSize>(&input_data[src_offset], &src_vec);
         Store<T, VecSize>(src_vec, &output_data[i]);
@@ -58,6 +69,14 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
                                            const int bsz) {
     AlignedVector<T, VecSize> src_vec;
     const int64_t global_idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+    // Precompute shared memory for cu_seqlens_q
+    __shared__ int shared_cu_seqlens_q[BLOCK_SIZE];
+    if (threadIdx.x < BLOCK_SIZE && threadIdx.x < blockDim.x) {
+        shared_cu_seqlens_q[threadIdx.x] = cu_seqlens_q[threadIdx.x];
+    }
+    __syncthreads();
+
     for (int64_t i = global_idx * VecSize; i < output_elem_nums;
          i += gridDim.x * blockDim.x * VecSize) {
         const int out_token_id = i / dim_embed;
@@ -65,21 +84,20 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
 
         const int bi = ori_token_id / max_input_length;
 
-        int seq_id = 0;
-        if (seq_len_this_time[bi] == 0) continue;
-        if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
+        // Skip the invalid sequences
+        if (seq_len_this_time[bi] == 0 || (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0)) continue;
 
-        if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
+        int seq_id = seq_len_encoder[bi] > 0 ? seq_len_encoder[bi] - 1 : 0;
 
-        const int cum_offset_bi = bi * max_input_length - cu_seqlens_q[bi];
+        const int cum_offset_bi = bi * max_input_length - shared_cu_seqlens_q[bi];
         const int input_token_id = ori_token_id - cum_offset_bi + seq_id;
         const int bias_idx = i % dim_embed;
 
-        Load<T, VecSize>(&input_data[input_token_id * dim_embed + bias_idx],
-                         &src_vec);
+        Load<T, VecSize>(&input_data[input_token_id * dim_embed + bias_idx], &src_vec);
         Store<T, VecSize>(src_vec, &output_data[i]);
     }
 }
+
 
 
 
