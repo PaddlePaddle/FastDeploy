@@ -339,8 +339,6 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
-
-
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
             # NOTE: (changwenbin) This is redundant code, we will delete it shortly.
             # query = self.q_a_proj(layernorm_out)
@@ -379,18 +377,16 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k_pe=key_pe,
                 forward_meta=forward_meta,
             )
-            # B = fmha_out_prefill.shape[0]
-            # fmha_out_prefill = fmha_out_prefill.reshape(
-            #     [B, self.num_attention_heads_tp, self.qk_head_dim]
-            # )[:, :, :self.v_head_dim].reshape(
-            #     [B, self.num_attention_heads_tp * self.v_head_dim]
-            # )
-            # fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
-            
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+            B = fmha_out_prefill.shape[0]
+            fmha_out_prefill = fmha_out_prefill.reshape([B, self.num_attention_heads_tp, self.qk_head_dim])[
+                :, :, : self.v_head_dim
+            ].reshape([B, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
+
+            # fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            # fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
+            # fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+            # fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
             fmha_out = fmha_out + fmha_out_prefill
         if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
