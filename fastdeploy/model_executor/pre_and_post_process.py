@@ -181,7 +181,8 @@ def post_process_normal(
         )
 
         stop_wo_think = (
-            (sampler_output.sampled_token_ids == model_output.eos_token_id) | (model_output.reasoning_index == 0)
+            (sampler_output.sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
+            | (model_output.reasoning_index == 0)
         ) & (model_output.need_think_end > 0)
         sampler_output.sampled_token_ids = paddle.where(
             stop_wo_think,
@@ -211,7 +212,7 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_iluvatar():
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,

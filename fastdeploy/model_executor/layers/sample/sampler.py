@@ -282,7 +282,9 @@ class Sampler(nn.Layer):
 
         probs = min_p_sampling(probs, sampling_metadata.min_p)
 
-        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, seed=sampling_metadata.seed[0, 0]
+        )
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
@@ -445,8 +447,8 @@ class MTPSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-            share_inputs["seq_lens_decoder"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
             max_model_len,
         )
         probs = F.softmax(logits)

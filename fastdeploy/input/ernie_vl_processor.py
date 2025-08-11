@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-import os
-
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
@@ -35,10 +33,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
     ):
-        self.use_hf_tokenizer = False
-
-        if "merge_llm_model" in model_name_or_path:
-            model_name_or_path = os.path.dirname(model_name_or_path)
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         tokenizer_path = model_name_or_path
         preprocessor_path = model_name_or_path
@@ -55,13 +49,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
         self.decode_status = dict()
         self._load_tokenizer()
-        self.eos_token_ids = [self.tokenizer.eos_token_id]
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
-        self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
-        self.reasoning_parser = None
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
         # Generation config
         try:
@@ -71,6 +58,17 @@ class ErnieMoEVLProcessor(ErnieProcessor):
                 f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
             )
             self.generation_config = None
+
+        # self.eos_token_ids = [self.tokenizer.eos_token_id]
+        from paddleformers.trl.llm_utils import get_eos_token_id
+
+        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
+        self.eos_token_id_len = len(self.eos_token_ids)
+        self.pad_token_id = self.get_pad_id()
+        self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
+        self.reasoning_parser = None
+        if reasoning_parser_obj:
+            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
     def get_pad_id(self):
         """get pad id"""
