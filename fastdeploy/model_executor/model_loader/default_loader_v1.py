@@ -36,6 +36,10 @@ class DefaultModelLoaderV1(BaseModelLoader):
     """ModelLoader that can load registered models"""
 
     def __init__(self, load_config: LoadConfig):
+        assert not load_config.is_inflight_quant, (
+            "Dynamic quantization requires running with --load_choices 'inflight_quant' "
+            "or load_choices='inflight_quant'."
+        )
         super().__init__(load_config)
 
     def download_model(self, model_config: ModelConfig) -> None:
