@@ -944,7 +944,7 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
     assert output_0 not in output_1
 
 
-def test_streaming_chat_base(openai_client, chat_param):
+def streaming_chat_base(openai_client, chat_param):
     """
     Test streaming chat base functionality with the local service
     """
@@ -965,7 +965,7 @@ def test_streaming_chat_base(openai_client, chat_param):
     return "".join(output)
 
 
-def test_non_streaming_chat_base(openai_client, chat_param):
+def non_streaming_chat_base(openai_client, chat_param):
     """
     Test non streaming chat base functionality with the local service
     """
@@ -1006,7 +1006,7 @@ def test_structured_outputs_json_schema(openai_client):
     }
     json_chat_param.update(chat_param)
 
-    response = test_streaming_chat_base(openai_client, json_chat_param)
+    response = streaming_chat_base(openai_client, json_chat_param)
     try:
         json.loads(response)
         is_valid = True
@@ -1015,7 +1015,7 @@ def test_structured_outputs_json_schema(openai_client):
 
     assert is_valid, f"json_schema streaming response: {response} is not a valid json"
 
-    response = test_non_streaming_chat_base(openai_client, json_chat_param)
+    response = non_streaming_chat_base(openai_client, json_chat_param)
     try:
         json.loads(response)
         is_valid = True
@@ -1054,7 +1054,7 @@ def test_structured_outputs_json_schema(openai_client):
         },
     }
     json_schema_param.update(chat_param)
-    response = test_streaming_chat_base(openai_client, json_schema_param)
+    response = streaming_chat_base(openai_client, json_schema_param)
     try:
         json_schema_response = json.loads(response)
         is_valid = True
@@ -1069,7 +1069,7 @@ def test_structured_outputs_json_schema(openai_client):
         genre.value for genre in BookType
     }, f"json_schema streaming response: {json_schema_response['genre']} is not a valid book-type"
 
-    response = test_non_streaming_chat_base(openai_client, json_schema_param)
+    response = non_streaming_chat_base(openai_client, json_schema_param)
     try:
         json_schema_response = json.loads(response)
         is_valid = True
@@ -1163,10 +1163,10 @@ def test_structured_outputs_structural_tag(openai_client):
     }
 
     expect_str = '<function=get_current_date>{"timezone": "Asia/Shanghai"}</function>'
-    response = test_streaming_chat_base(openai_client, structural_tag_param)
+    response = streaming_chat_base(openai_client, structural_tag_param)
     assert response == expect_str, f"structural_tag streaming response: {response} is not as expected"
 
-    response = test_non_streaming_chat_base(openai_client, structural_tag_param)
+    response = non_streaming_chat_base(openai_client, structural_tag_param)
     assert response == expect_str, f"structural_tag non_streaming response: {response} is not as expected"
 
 
@@ -1183,14 +1183,14 @@ def test_structured_outputs_choice(openai_client):
         },
     }
 
-    response = test_streaming_chat_base(openai_client, choice_param)
+    response = streaming_chat_base(openai_client, choice_param)
     assert response in [
         "Ping An Finance Centre",
         "China Resources Headquarters",
         "KK100",
         "Diwang Mansion",
     ], f"choice streaming response: {response} is not as expected"
-    response = test_non_streaming_chat_base(openai_client, choice_param)
+    response = non_streaming_chat_base(openai_client, choice_param)
     assert response in [
         "Ping An Finance Centre",
         "China Resources Headquarters",
@@ -1217,11 +1217,11 @@ def test_structured_outputs_regex(openai_client):
 
     import re
 
-    response = test_streaming_chat_base(openai_client, regex_param)
+    response = streaming_chat_base(openai_client, regex_param)
     assert re.fullmatch(
         r"^https:\/\/www\.[a-zA-Z]+\.com\/?$", response
     ), f"regex streaming response: {response} is not as expected"
-    response = test_non_streaming_chat_base(openai_client, regex_param)
+    response = non_streaming_chat_base(openai_client, regex_param)
     assert re.fullmatch(
         r"^https:\/\/www\.[a-zA-Z]+\.com\/?$", response
     ), f"regex non_streaming response: {response} is not as expected"
@@ -1268,7 +1268,7 @@ def test_structured_outputs_grammar(openai_client):
     import re
 
     pattern = r'^<h1( style="font-family: \'(Arial|Times New Roman|Courier New)\'(; font-weight: (normal|bold))?|; font-weight: (normal|bold)(; font-family: \'(Arial|Times New Roman|Courier New)\')?)")?>[A-Za-z0-9 ]+</h1>$'
-    response = test_streaming_chat_base(openai_client, grammar_param)
+    response = streaming_chat_base(openai_client, grammar_param)
     assert re.fullmatch(pattern, response), f"grammar streaming response: {response} is not as expected"
-    response = test_non_streaming_chat_base(openai_client, grammar_param)
+    response = non_streaming_chat_base(openai_client, grammar_param)
     assert re.fullmatch(pattern, response), f"grammar non_streaming response: {response} is not as expected"
