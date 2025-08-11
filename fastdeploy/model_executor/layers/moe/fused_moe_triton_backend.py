@@ -19,7 +19,7 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.utils import create_and_set_parameter, get_tensor
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -52,9 +52,65 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         """process_prequanted_weights"""
         pass
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
+        """
+        self.weight_dtype = "int8"
+        self.default_dtype = layer._helper.get_default_dtype()
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
+        ]
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        Triton MoE load weight process.
         """
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
@@ -90,25 +146,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             quanted_weight = paddle.round(quanted_weight).astype("int8")
             quanted_weight_scale = quanted_weight_scale / max_bound
 
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=quanted_weight.shape,
-                    dtype=quanted_weight.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
             getattr(layer, weight_name).set_value(quanted_weight)
-
-            setattr(
-                layer,
-                scale_name,
-                layer.create_parameter(
-                    shape=quanted_weight_scale.shape,
-                    dtype=quanted_weight_scale.dtype,
-                ),
-            )
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def apply(
@@ -264,6 +302,14 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         Triton Group Gemm to compute Fused MoE.
         """
         self.quant_method = quant_method
+        self.added_wfp8afp8_attrs = [
+            "up_gate_proj_weight",
+            "down_proj_weight",
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+            "up_gate_proj_in_scale",
+            "down_proj_in_scale",
+        ]
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
         """process_prequanted_weights"""
@@ -280,15 +326,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
         up_gate_proj_tensor = paddle.stack(up_gate_proj_tensor, axis=0).view(paddle.float8_e4m3fn)
         down_proj_tensor = paddle.stack(down_proj_tensor, axis=0).view(paddle.float8_e4m3fn)
-
-        added_wfp8afp8_attrs = [
-            "up_gate_proj_weight",
-            "down_proj_weight",
-            "up_gate_proj_weight_scale",
-            "down_proj_weight_scale",
-            "up_gate_proj_in_scale",
-            "down_proj_in_scale",
-        ]
 
         def _extract_scale_tensor(key_template):
             result = []
@@ -312,26 +349,58 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
                 down_proj_in_scale,
             ]
         ):
-            name = added_wfp8afp8_attrs[idx]
-            setattr(
-                layer,
-                name,
-                layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
+            name = self.added_wfp8afp8_attrs[idx]
             if weight_tensor.dtype == paddle.float8_e4m3fn:
                 getattr(layer, name).copy_(weight_tensor, False)
             else:
                 getattr(layer, name).set_value(weight_tensor)
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
         """
-        pass
+        self.weight_dtype = paddle.float8_e4m3fn
+        self.default_dtype = layer._helper.get_default_dtype()
+        up_gate_proj_weight_name = self.added_wfp8afp8_attrs[0]
+        down_proj_weight_name = self.added_wfp8afp8_attrs[1]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size,
+        ]
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        for idx in range(2, len(self.added_wfp8afp8_attrs)):
+            setattr(
+                layer,
+                self.added_wfp8afp8_attrs[idx],
+                layer.create_parameter(
+                    shape=[layer.num_local_experts],
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
 
     def apply(
         self,
@@ -531,14 +600,76 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         raise NotImplementedError
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+        """
+        Triton MoE create weight process.
+        """
+        self.weight_dtype = paddle.float8_e4m3fn
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size,
+        ]
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[
+                    layer.num_local_experts,
+                    layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
+                    layer.hidden_size // self.quant_config.weight_block_size[1],
+                ],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[
+                    layer.num_local_experts,
+                    layer.hidden_size // self.quant_config.weight_block_size[0],
+                    layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+                ],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Triton MoE create weight process.
         """
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
-
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             scale_name = self.added_scale_attrs[idx]
@@ -554,11 +685,11 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
             quanted_weight = quanted_weight.transpose([0, 2, 1]).contiguous().view(paddle.float8_e4m3fn)
-            create_and_set_parameter(layer, weight_name, quanted_weight)
+            getattr(layer, weight_name).copy_(quanted_weight, False)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
             quanted_weight_scale = quanted_weight_scale.transpose([0, 2, 1]).contiguous()
-            create_and_set_parameter(layer, scale_name, quanted_weight_scale)
+            getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def check(self, layer: nn.Layer, up_gate_proj_weights, down_proj_weights):
         """
