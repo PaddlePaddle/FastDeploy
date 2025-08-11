@@ -36,6 +36,7 @@ from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
+from fastdeploy.logger import get_logger
 
 T = TypeVar("T")
 
@@ -183,38 +184,38 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
             os.remove(str(self.base_log_path.with_name(file_name)))
 
 
-def get_logger(name, file_name, without_formater=False, print_to_console=False):
-    """
-    get logger
-    """
-    log_dir = envs.FD_LOG_DIR
-    if not os.path.exists(log_dir):
-        os.mkdir(log_dir)
-    is_debug = int(envs.FD_DEBUG)
-    logger = logging.getLogger(name)
-    if is_debug:
-        logger.setLevel(level=logging.DEBUG)
-    else:
-        logger.setLevel(level=logging.INFO)
+# def get_logger(name, file_name, without_formater=False, print_to_console=False):
+#     """
+#     get logger
+#     """
+#     log_dir = envs.FD_LOG_DIR
+#     if not os.path.exists(log_dir):
+#         os.mkdir(log_dir)
+#     is_debug = int(envs.FD_DEBUG)
+#     logger = logging.getLogger(name)
+#     if is_debug:
+#         logger.setLevel(level=logging.DEBUG)
+#     else:
+#         logger.setLevel(level=logging.INFO)
 
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
+#     for handler in logger.handlers[:]:
+#         logger.removeHandler(handler)
 
-    LOG_FILE = f"{log_dir}/{file_name}"
-    backup_count = int(envs.FD_LOG_BACKUP_COUNT)
-    handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
-    formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
+#     LOG_FILE = f"{log_dir}/{file_name}"
+#     backup_count = int(envs.FD_LOG_BACKUP_COUNT)
+#     handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
+#     formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
 
-    console_handler = logging.StreamHandler()
-    if not without_formater:
-        handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    if print_to_console:
-        logger.addHandler(console_handler)
-    handler.propagate = False
-    console_handler.propagate = False
-    return logger
+#     console_handler = logging.StreamHandler()
+#     if not without_formater:
+#         handler.setFormatter(formatter)
+#         console_handler.setFormatter(formatter)
+#     logger.addHandler(handler)
+#     if print_to_console:
+#         logger.addHandler(console_handler)
+#     handler.propagate = False
+#     console_handler.propagate = False
+#     return logger
 
 
 def str_to_datetime(date_string):
