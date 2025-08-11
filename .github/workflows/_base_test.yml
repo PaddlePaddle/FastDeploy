@@ -150,7 +150,7 @@ jobs:
             export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
             export TEMPLATE=TOKEN_LOGPROB
             TEST_EXIT_CODE=0
-            python -m pytest -sv test_base_chat.py || TEST_EXIT_CODE=$?
+            python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py || TEST_EXIT_CODE=$?
             popd
             echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
             '
