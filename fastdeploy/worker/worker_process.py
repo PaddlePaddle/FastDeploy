@@ -431,7 +431,19 @@ class PaddleDisWorkerProc:
 
     def load_model(self) -> None:
         """Load weights and create model"""
+
         self.worker.load_model()
+        loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
+        if self.ranks > 1:
+            paddle.distributed.barrier()
+        self.loaded_model_signal.value[0] = 1
 
 
 def parse_args():
@@ -723,7 +735,12 @@ def run_worker_proc() -> None:
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
+
+        worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
+    else:
+        worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()

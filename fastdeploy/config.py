@@ -27,6 +27,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import check_unified_ckpt, get_logger
 
 logger = get_logger("config", "config.log")
@@ -124,6 +125,8 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.pad_token_id: int = -1
+        self.eos_tokens_lens: int = 2
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -257,10 +260,6 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
-        #
-        self.pad_token_id: int = -1
-        #
-        self.eos_tokens_lens: int = 2
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role
@@ -733,7 +732,7 @@ class CacheConfig:
         self.gpu_memory_utilization = 0.9
         self.num_gpu_blocks_override = None
         self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 2
+        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
         self.prealloc_dec_block_slot_num_threshold = 5
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
