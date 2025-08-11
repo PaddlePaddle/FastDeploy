@@ -42,7 +42,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # splited by comma, such as 0,1,2.
     "CUDA_VISIBLE_DEVICES": lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
     # Whether to use HuggingFace tokenizer.
-    "FD_USE_HF_TOKENIZER": lambda: os.getenv("FD_USE_HF_TOKENIZER", 0),
+    "FD_USE_HF_TOKENIZER": lambda: bool(int(os.getenv("FD_USE_HF_TOKENIZER", "0"))),
     # Set the high watermark (HWM) for receiving data during ZMQ initialization
     "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 10000),
     # cache kv quant params directory
@@ -61,7 +61,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether transition from standalone PD decoupling to centralized inference
     "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
     # Whether to use fastsafetensor load weight (0 or 1)
-    "FD_USE_FASTSAFETENSOR": lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
+    "FD_USE_FASTSAFETENSOR": lambda: bool(int(os.getenv("FD_USE_FASTSAFETENSOR", "0"))),
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
     # Whether to use aggregate send.

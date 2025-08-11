@@ -1,4 +1,5 @@
 # FastDeploy 环境变量说明
+
 FastDeploy 的环境变量保存在了代码库根目录下 fastdeploy/envs.py 文件中，以下是其对应的中文版说明：
 
 ```python
@@ -37,7 +38,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # 是否使用 HuggingFace 分词器
     "FD_USE_HF_TOKENIZER":
-    lambda: os.getenv("FD_USE_HF_TOKENIZER", 0),
+    lambda: bool(int(os.getenv("FD_USE_HF_TOKENIZER", 0))),
 
     # 设置 ZMQ 初始化期间接收数据的高水位标记（HWM）
     "FD_ZMQ_SNDHWM":
