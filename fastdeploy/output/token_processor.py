@@ -329,8 +329,9 @@ class TokenProcessor:
                 if recovery_stop:
                     llm_logger.info(f"recovery stop signal found at task {task_id}")
                 if not recovery_stop and token_id < 0:
-                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
-                        self.resource_manager.reschedule_preempt_task(task_id)
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            self.resource_manager.reschedule_preempt_task(task_id)
                     continue
 
             if task.get("prefill_chunk_info", None) is not None:
