@@ -468,6 +468,7 @@ class Ernie4_5_Model(nn.Layer):
         IsH100 = self.fd_config.parallel_config.is_H100
         runner = self.layers[3].mlp.fused_moe.quant_method.ep_decoder_runner
 
+        paddle.distributed.barrier()
 
 
         attention_input = [None] * split_num
@@ -488,15 +489,23 @@ class Ernie4_5_Model(nn.Layer):
         recv_events = [None] * split_num
         recv_hooks = [None] * split_num
 
+        self.barrier_id = -1
+        def zkk_barrier():
+            self.barrier_id += 1
+            #paddle.device.synchronize()
+            #paddle.distributed.barrier()
+            #print("到达", self.barrier_id)
+            #paddle.device.synchronize()
+
         def send_sync(j):
-            print("send_sync", j)
+            #print(f"send_sync({j})")
             send_events[j].current_stream_wait()
 
             tmp = send_hooks[j]()
             tmp.current_stream_wait()
 
         def receive_sync(j):
-            print("receive_sync", j)
+            #print(f"receive_sync({j})")
             recv_events[j].current_stream_wait()
             tmp = recv_hooks[j]()
             tmp.current_stream_wait()
@@ -504,13 +513,14 @@ class Ernie4_5_Model(nn.Layer):
         # 先只搞第三层！
         if IsH20:
             def compute_atten(layer_id, i):
+                #print(f"compute_atten({layer_id}, {i})")
                 hidden_states, residual, topk_idx, topk_weights = self.layers[layer_id].forward_attn(attention_input[i][0], attention_input[i][1], attention_input[i][2])
                 
                 attention_out[i] = [hidden_states, residual, topk_idx, topk_weights]
                 attention_input[i][2] = attention_out[i][1]
             
             def a2e_send(i):
-                print("send", i)
+                #print(f"a2e_send({i})")
                 _, handle, event, a2e_isend_hook = runner.buffer.a2e_isend_two_stage_v3(
                     attention_out[i][0],
                     attention_out[i][2],
@@ -524,7 +534,7 @@ class Ernie4_5_Model(nn.Layer):
                 send_hooks[i] = a2e_isend_hook
 
             def e2a_receive(i):
-                print("receive", i)
+                #print(f"e2a_receive({i})")
                 e2a_x, event, e2a_irecv_hook = runner.buffer.e2a_irecv_two_stage_v3(
                     attention_out[i][2],
                     attention_out[i][3],
@@ -542,37 +552,52 @@ class Ernie4_5_Model(nn.Layer):
             a2e_send(0)
 
             compute_atten(3,1)
+            zkk_barrier()
             send_sync(0)
+            zkk_barrier()
             a2e_send(1)
+            zkk_barrier()
 
             e2a_receive(0)
             compute_atten(3,2)
+            zkk_barrier()
             send_sync(1)
+            zkk_barrier()
             a2e_send(2)
 
             for layer_id in range(4, self.num_layers):
                 for j in range(split_num):
                     # 当前batch接受同步一下，接受来自 layer_id-1 层 MoE 的输入！
+                    zkk_barrier()
                     receive_sync(j)
+                    zkk_barrier()
                     # 下一个batch准备接受layer_id-1层的数据！
                     e2a_receive( (j+1) % split_num )
                     # 当前batch计算attention！
                     compute_atten(layer_id, j)
                     # 上一个batch send同步！
+                    zkk_barrier()
                     send_sync((j+split_num-1) % split_num)
                     # 当前batch发送数据给MoE！
+                    zkk_barrier()
                     a2e_send(j)
             
+            zkk_barrier()
             # 处理一下尾巴！
             receive_sync(0)
+            zkk_barrier()
             e2a_receive(1)
+            zkk_barrier()
             send_sync(2)
 
+            zkk_barrier()
             receive_sync(1)
+            zkk_barrier()
             e2a_receive(2)
 
             receive_sync(2)
 
+            paddle.device.synchronize()
         else:
             # 搞一个大槽子放东西！
             moe_input = [None] * split_num
@@ -581,7 +606,7 @@ class Ernie4_5_Model(nn.Layer):
             moe_out = [None] * split_num
 
             def a2e_receive(i):
-                print("receive", i)
+                #print(f"a2e_receive({i})")
                 (
                     packed_recv_x,
                     packed_recv_count,
@@ -604,11 +629,12 @@ class Ernie4_5_Model(nn.Layer):
                 moe_input[i][1] = packed_recv_count
 
             def compute_moe(layer_id, i):
+                #print(f"compute_moe({layer_id}, {i})")
                 ffn_out = self.layers[layer_id].compute_moe_ffn(moe_input[i][0], moe_input[i][1])
                 moe_out[i] = ffn_out
 
             def e2a_send(i):
-                print("send", i)
+                #print(f"e2a_send({i})")
                 event, e2a_isend_hook = runner.buffer.e2a_isend_two_stage_v3(
                     moe_out[i], 
                     runner.top_k,
@@ -625,12 +651,14 @@ class Ernie4_5_Model(nn.Layer):
             for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
                     # 当前batch接收同步一下，接受来自 layer_id 层 Attention 的输出！
+                    zkk_barrier()
                     receive_sync(j)
                     # 下一个batch准备接受layer_id层的attention 输出！
                     if layer_id == self.num_layers - 1 and j == 2:
                         # 此时我没有下一个batch，所以skip！
                         pass
                     else:
+                        zkk_barrier()
                         a2e_receive( (j+1) % split_num )
                     # 当前batch计算moe！
                     compute_moe(layer_id, j)
@@ -639,11 +667,15 @@ class Ernie4_5_Model(nn.Layer):
                         # 此时我没有上一个batch，所以skip！
                         pass
                     else:
+                        zkk_barrier()
                         send_sync((j+split_num-1) % split_num)
                     # 当前batch发送数据发给attention！
+                    zkk_barrier()
                     e2a_send(j)
             # 处理一下尾巴！
             send_sync(2)
+
+            paddle.device.synchronize()
 
         if IsH20:
             hidden_states = paddle.concat([attention_input[0][1], attention_input[1][1], attention_input[2][1]], axis=0)
