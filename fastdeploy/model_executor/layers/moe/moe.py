@@ -22,7 +22,9 @@ from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.models.utils import slice_fn
+from fastdeploy.model_executor.utils import slice_fn
+
+# from fastdeploy.model_executor.models.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 

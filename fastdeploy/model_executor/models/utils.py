@@ -42,6 +42,7 @@ from tqdm import tqdm
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import slice_fn
 
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
@@ -52,20 +53,6 @@ def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
         return
     for key, value in param_attr_map.items():
         setattr(param, key, value)
-
-
-def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
-    if hasattr(weight_or_paramter, "get_shape"):
-        shape = weight_or_paramter.get_shape()
-    else:
-        shape = weight_or_paramter.shape
-    if len(shape) == 1:
-        weight_or_paramter = weight_or_paramter[start:end]
-    elif output_dim:
-        weight_or_paramter = weight_or_paramter[..., start:end]
-    else:
-        weight_or_paramter = weight_or_paramter[start:end, ...]
-    return weight_or_paramter
 
 
 def default_weights_processor(fd_config: FDConfig) -> None:

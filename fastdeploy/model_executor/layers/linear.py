@@ -707,7 +707,6 @@ class RowParallelLinear(LinearBase):
             inflight_quant=fd_config.quant_config and not skip_quant,
         )
         if self.nranks > 0:
-            _set_var_distributed(self.weight, split_axis=0)
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=0)

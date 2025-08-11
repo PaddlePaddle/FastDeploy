@@ -25,9 +25,9 @@ from fastdeploy.model_executor.load_weight_utils import (
     ORI_WEIGHT_NAME,
     QUANT_SCALE_NAME,
     QUANT_WEIGHT_NAME,
+    fast_weights_iterator,
     get_all_safetensors,
     measure_time,
-    safetensors_weights_iterator,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.model_base import ModelRegistry
@@ -82,7 +82,7 @@ class InflightQuantModelLoader(BaseModelLoader):
             unquantized_model.eval()
         # 2.Get weight iterator
         _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
-        weights_iterator = safetensors_weights_iterator(safetensor_files)
+        weights_iterator = fast_weights_iterator(safetensor_files)
         # 3.Get an iterator over the processed weights (e.g., tensor parallel splitting) .
         unquantized_params_dict = dict(unquantized_model.named_parameters())
         processed_weights_iterator = unquantized_model.processed_weights(weights_iterator, unquantized_params_dict)

@@ -297,7 +297,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                         for preprocessed_weight in weights_processor(param, loaded_weight, None)
                     )
 
-        if self.tie_word_embeddings:
+        if self.tie_word_embeddings and is_processed:
             self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()
