@@ -96,6 +96,7 @@ class LinearBase(nn.Layer):
         """
         if self.skip_quant:
             self.weight_dtype = self._dtype
+        # print(f"LinearBase : self.weight_dtype : {self.weight_dtype}")
         self.weight = self.create_parameter(
             shape=self.weight_shape,
             dtype=self.weight_dtype,
@@ -286,6 +287,8 @@ class ColumnParallelLinear(LinearBase):
         """
         if self.skip_quant:
             self.weight_dtype = self._dtype
+
+        # print(f"self.weight_dtype : {self.weight_dtype}")
         self.weight = self.create_parameter(
             shape=self.weight_shape,
             dtype=self.weight_dtype,
@@ -458,7 +461,9 @@ class QKVParallelLinear(ColumnParallelLinear):
                 self.hidden_size,
             ])
             weight_tensor = paddle.transpose(weight_tensor, perm=[1, 0])
-
+        print(f"self.fd_config.quant_config : {self.fd_config.quant_config}")
+        print(f"weight_tensor.dtype : {weight_tensor.dtype}")
+        print(f"self.quant_method : {self.quant_method}")
         if self.fd_config.quant_config:
             self.quant_method.process_loaded_weights(self, weight_tensor)
         else:
@@ -474,7 +479,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         # weight
         assert self.weight_key is not None, 'weight_key should not be None.'
         # qkv fused in disk
-
+        print(f"self.fd_config.model_config.is_quantized : {self.fd_config.model_config.is_quantized}")
         if self.fd_config.model_config.is_quantized:
             self.load_prequant_weight(state_dict)
         else:

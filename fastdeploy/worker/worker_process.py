@@ -107,6 +107,9 @@ class PaddleDisWorkerProc():
         self.ranks = ranks
         self.local_rank = local_rank
         self.fd_config = fd_config
+        # print(f"fd_config.parallel_config : {fd_config.parallel_config}")
+        # for key, value in fd_config.parallel_config.__dict__.items():
+        #     print(f"key : {key}, value : {value}")
         self.parallel_config = fd_config.parallel_config
 
         # TODO(gongshaotian): Use worker factory to get worker
@@ -566,6 +569,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     device_config = DeviceConfig(vars(args))
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(vars(args))
+    # parallel_config 是从args里面获取的数据
     parallel_config = ParallelConfig(vars(args))
     load_config = LoadConfig(vars(args))
 
@@ -626,7 +630,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if quant_config_name is None:
         quant_config = None
     else:
+        print(f"=====quant_config_name ====: {quant_config_name}")
         quant_cls = get_quantization_config(quant_config_name)
+        print(f"量化类: {quant_cls}")
         quant_config = quant_cls.from_config(quantization_config)
 
     # Log quantization info
@@ -674,6 +680,9 @@ def run_worker_proc() -> None:
 
     # Get fd_config
     fd_config = initialize_fd_config(args, ranks, local_rank)
+    
+    print(f"fd_config : {fd_config}")
+    # print(f"fd_config.quant_config.get_quant_method() : {fd_config.quant_config.get_quant_method()}")
 
     # Create worker process
     worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
@@ -682,12 +691,16 @@ def run_worker_proc() -> None:
     worker_proc.init_device()
 
     # Load model
+    print(f"=======================开始模型加载======================")
     worker_proc.load_model()
+    print(f"=======================模型加载已完成======================")
     logger.info("determine_num_available_blocks")
     worker_proc.determine_num_available_blocks()
+    print(f"=======================显存评估已完成======================")
 
     # Trigger CUDAGraph capture
     worker_proc.worker.graph_optimize_and_warm_up_model()
+    print(f"=======================warm_up已完成======================")
 
     # Initialize health status
     worker_proc.init_health_status()

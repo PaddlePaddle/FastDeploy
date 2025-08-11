@@ -532,7 +532,7 @@ class XPUModelRunner(ModelRunnerBase):
     def load_model(self) -> None:
         """ load or download model """
         logger.info(
-            f"Starting to load model {self.model_config.architectures[0]}")
+            f"开始加载模型 Starting to load model {self.model_config.architectures[0]}")
         time_before_load = time.perf_counter()
         # 1. Load original model
         self.model = get_model_from_loader(fd_config=self.fd_config)
@@ -543,7 +543,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         time_after_load = time.perf_counter()
         logger.info(
-            f"Model loading took {time_after_load - time_before_load} seconds")
+            f"模型加载总共耗时 Model loading took {time_after_load - time_before_load} seconds")
 
     def get_model(self) -> nn.Layer:
         """ get current model """
@@ -563,8 +563,10 @@ class XPUModelRunner(ModelRunnerBase):
         """
         cache_kvs = {}
         max_block_num = self.num_gpu_blocks
+        print(f"初始化initialize_kv_cache max_block_num : {max_block_num}")
 
         cache_type = self.parallel_config.dtype
+        print(f"cache_type : {cache_type}")
 
         if (self.quant_config
                 and hasattr(self.quant_config, "kv_cache_quant_type")
@@ -701,10 +703,13 @@ class XPUModelRunner(ModelRunnerBase):
         self._prepare_inputs()
 
         # 2. Padding inputs for cuda grph
-
-        # 3. Execute model
-        model_output = self.model(self.share_inputs["ids_remove_padding"],
-                                  self.forward_meta)
+        print(f"==============执行前，模型所有参数=====================：")
+        for param in self.model.parameters():
+            print(f"参数名称: {param.name}, 参数形状: {param.shape}, 数据类型: {param.dtype}")
+            # print(f"参数值: {param.numpy()}")
+        print("-" * 50)
+            # 3. Execute model
+        model_output = self.model(self.share_inputs["ids_remove_padding"],self.forward_meta)
 
         hiddden_states = xpu_process_output(model_output,
                                             self.share_inputs["cum_offsets"],
@@ -758,6 +763,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Prepare the profile run by setting the block number and initializing the KV cache."""
         paddle.device.xpu.empty_cache()
         self.num_gpu_blocks = self.parallel_config.total_block_num
+        # print(f"self.num_gpu_blocks : {self.num_gpu_blocks}")
         self.initialize_kv_cache()
 
     def profile_run(self) -> None:

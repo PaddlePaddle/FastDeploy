@@ -167,7 +167,55 @@ class XPUAttentionBackend(AttentionBackend):
         k_quant_scale = getattr(layer, "cache_k_scale", None)
         v_quant_scale = getattr(layer, "cache_v_scale", None)
 
+
+        print(f"qkv.dtype : {qkv.dtype}")
+        print(f"qkv.shape: {qkv.shape}")
+        print(f"forward_meta.caches[2 * layer.layer_id].dtype : {forward_meta.caches[2 * layer.layer_id].dtype}")
+        print(f"forward_meta.caches[2 * layer.layer_id + 1]: {forward_meta.caches[2 * layer.layer_id + 1].dtype}")
+        print(f"k_quant_scale : {k_quant_scale.dtype}")
+        print(f"v_quant_scale : {v_quant_scale.dtype}")
+        # raise "this is a error"
+
+        # print(f"q dtype : {q.dtype}")
+        # print(f"k dtype : {k.dtype}")
+        # print(f"v dtype : {v.dtype}")
+        # if k_quant_scale is not None:
+        #     print(f"k_quant_scale.dtype : {k_quant_scale.dtype}")
+        # if v_quant_scale is not None:
+        #     print(f"v_quant_scale.dtype : {v_quant_scale.dtype}")
+        # print(f"forward_meta.caches[2 * layer.layer_id].dtype : {forward_meta.caches[2 * layer.layer_id].dtype}")
+        # print(f"forward_meta.caches[2 * layer.layer_id + 1].dtype : {forward_meta.caches[2 * layer.layer_id + 1].dtype}")
+        if k_quant_scale is not None:
+            k_quant_scale = paddle.cast(k_quant_scale, dtype='float32')
+            
+        if v_quant_scale is not None:
+            v_quant_scale = paddle.cast(v_quant_scale, dtype='float32')
+
+
+        forward_meta.caches[2 * layer.layer_id] = paddle.cast(forward_meta.caches[2 * layer.layer_id], dtype='bfloat16')
+        forward_meta.caches[2 * layer.layer_id+1] = paddle.cast(forward_meta.caches[2 * layer.layer_id+1], dtype='bfloat16')
+
         from fastdeploy.model_executor.ops.xpu import block_attn
+        # print(f"qkv.dtype : {qkv.dtype}")
+        # print(f"forward_meta.caches[2 * layer.layer_id].dtype : {forward_meta.caches[2 * layer.layer_id].dtype}")
+        # print(f"forward_meta.caches[2 * layer.layer_id + 1]: {forward_meta.caches[2 * layer.layer_id + 1].dtype}")
+        # print(f"forward_meta.cum_offsets.dtype: {forward_meta.cum_offsets.dtype}")
+        # print(f"metadata.rotary_embs : {metadata.rotary_embs.dtype}")
+        # print(f"metadata.rotary_embs : {metadata.rotary_embs.dtype}")
+
+        # print(f"metadata.block_tables : {metadata.block_tables.dtype}")
+        
+        # print(f"k_quant_scale : {k_quant_scale.dtype}")
+        # print(f"v_quant_scale : {v_quant_scale.dtype}")
+
+        # print(f"forward_meta.enc_batch : {forward_meta.enc_batch.dtype}")
+        # print(f"forward_meta.dec_batch : {forward_meta.dec_batch.dtype}")
+        # print(f"forward_meta.total_enc_len : {forward_meta.total_enc_len.dtype}")    
+        # print(f"forward_meta.encoder_seq_lod_cpu : {forward_meta.encoder_seq_lod_cpu.dtype}")
+        # print(f"forward_meta.encoder_batch_map_cpu: {forward_meta.encoder_batch_map_cpu.dtype}")
+        # print(f"forward_meta.decoder_context_len_cpu: {forward_meta.decoder_context_len_cpu.dtype}")
+        # print(f"forward_meta.decoder_batch_map_cpu: {forward_meta.decoder_batch_map_cpu.dtype}")    
+        
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -186,4 +234,5 @@ class XPUAttentionBackend(AttentionBackend):
             forward_meta.decoder_context_len_cpu,
             forward_meta.decoder_batch_map_cpu,
         )
+        print(f"block_attention 计算完成")
         return res

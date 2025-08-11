@@ -93,7 +93,7 @@ class XpuWorker(WorkerBase):
         total_memory = xpu_get_total_global_memory(self.local_rank)
         used_memory = xpu_get_used_global_memory(self.local_rank)
         free_memory = xpu_get_free_global_memory(self.local_rank)
-
+        # 这个时候已经加载完模型了，所以used_memory已经是加载的权重了
         logger.info(f"Before warm up, total_memory: {total_memory}, \
                     used_memory: {used_memory}, free_memory: {free_memory}")
 
@@ -104,6 +104,9 @@ class XpuWorker(WorkerBase):
         used_memory = xpu_get_used_global_memory(self.local_rank)
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
+        # print(f"单个block的内存占用:{model_block_memory_used}")
+        # print(f"总的block数目: {self.parallel_config.total_block_num}")
+        # print(f"可用的available_kv_cache_memory: {available_kv_cache_memory}")
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 
         self.model_runner.clear_block_table()

@@ -78,8 +78,11 @@ class LLMEngine(object):
         Returns:
             LLMEngine: Instance of the LLMEngine class.
         """
+        print(f"cls 是什么: {cls}")
+        print(f"engine_args 是 : {engine_args}")
         # Create the engine configs.
         config = engine_args.create_engine_config()
+        # print(f"启动 LLM Engine Config : {config}")
         # Create the LLMEngine.
         return cls(cfg=config)
 

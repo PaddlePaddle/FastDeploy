@@ -51,26 +51,32 @@ class MixQuantConfig(QuantConfigBase):
 
     @classmethod
     def from_config(cls, config: dict) -> "MixQuantConfig":
-        return cls(config['dense_quant_type'], config['moe_quant_type'],
-                   config.get('kv_cache_quant_type', None),
-                   config.get('image_moe_quant_type', None))
+        return cls(config['dense_quant_type'], config['moe_quant_type'],config.get('kv_cache_quant_type', None),config.get('image_moe_quant_type', None))
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
+        # print(f"调用get_quant_method, 三种量化类型分别是self.dense_quant_type: {self.dense_quant_type}, self.moe_quant_type: {self.moe_quant_type}, self.kv_cache_quant_type: {self.kv_cache_quant_type}")
+        # print(f"get_quant_method 这层是: {layer}")
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
                 return get_quantization_config(
                     self.image_moe_quant_type).from_config(
                         {}).get_quant_method(layer)
             else:
-                return get_quantization_config(
+                f = get_quantization_config(
                     self.moe_quant_type).from_config(
                         {}).get_quant_method(layer)
+                # print(f"FusedMoE 的量化方法是: {f}")
+                return f
         elif isinstance(layer, Attention):
             if self.kv_cache_quant_type is not None:
-                return (get_quantization_config("kvcache").from_config(
+                f = (get_quantization_config("kvcache").from_config(
                     self.kv_cache_quant_type).get_quant_method(layer))
+                # print(f"kvcache 的量化方法是: {f}")
+                return f
             else:
                 return None
         else:
-            return get_quantization_config(self.dense_quant_type).from_config(
+            f = get_quantization_config(self.dense_quant_type).from_config(
                 {}).get_quant_method(layer)
+            # print(f"普通层的量化方法是: {f}")
+            return f

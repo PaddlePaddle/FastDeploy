@@ -99,6 +99,7 @@ class Attention(nn.Layer):
             logger.info(
                 f"Attention is running in cache kv {self.kvcache_quant_method.cache_quant_config.quant_type} mode"
             )
+        print(f"对于Attention的KV, 使用{self.kvcache_quant_method}进行量化" if self.kvcache_quant_method else "对于Attention的KV, 不进行量化")
 
     def load_state_dict(self, state_dict: Dict[str,
                                                paddle.Tensor | np.ndarray]):

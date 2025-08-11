@@ -244,6 +244,8 @@ class Ernie4_5_Attention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
+        # for param in self.qkv_proj.parameters():
+        #     print(f"Ernie4_5_Attention param {param.name}, {param.dtype}")
         qkv_out = self.qkv_proj(hidden_states)
 
         attn_out = self.attn(
@@ -395,6 +397,9 @@ class Ernie4_5_Model(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
+            # xpu_model = self.layers[i]
+            # for param in xpu_model.parameters():
+            #     print(f"param: {param.name} : {param.dtype}")
             hidden_states, residual = self.layers[i](forward_meta,
                                                             hidden_states,
                                                             residual)

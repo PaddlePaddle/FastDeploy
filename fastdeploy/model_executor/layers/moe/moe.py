@@ -162,6 +162,7 @@ class FusedMoE(nn.Layer):
             self.init_weight_only_scale()
 
         # up_gate_proj parameters
+        print(f"up_gate_proj_weight : self.weight_dtype")
         self.up_gate_proj_weight = self.create_parameter(
             shape=up_gate_proj_weight_shape,
             dtype=self.weight_dtype,
@@ -246,10 +247,13 @@ class FusedMoE(nn.Layer):
             AssertionError: If required weight keys are missing or number of weights
                 doesn't match number of local experts.
         """
+        print(f"self.weight_key_map : {self.weight_key_map}")
         up_gate_proj_expert_weight_key = self.weight_key_map.get(
             "up_gate_proj_expert_weight_key", None)
+        print(f"mlp 第一层专家权重的名字: {up_gate_proj_expert_weight_key}")
         down_proj_expert_weight_key = self.weight_key_map.get(
             "down_proj_expert_weight_key", None)
+        print(f"mlp 第二层专家权重的名字: {down_proj_expert_weight_key}")
         assert up_gate_proj_expert_weight_key is not None, "up_gate_proj_expert_weight_key should not be none."
         assert down_proj_expert_weight_key is not None, "down_proj_expert_weight_key should not be none."
 
@@ -306,6 +310,8 @@ class FusedMoE(nn.Layer):
         if self.fd_config.model_config.is_quantized:
             self.quant_method.process_prequanted_weights(self, state_dict)
         else:
+            print(f"moe.py self.quant_method { self.quant_method}")
+            print(f"moe.py self.quant_method.create_weights { self.quant_method.create_weights}")
             self.quant_method.create_weights(self, state_dict)
 
     def forward(self, x: paddle.Tensor):

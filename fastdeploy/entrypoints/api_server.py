@@ -108,6 +108,7 @@ def launch_api_server(args) -> None:
 
 def main():
     """main函数"""
+    print(f"./fastdeploy/entrypoints/api_server.py是启动入口")
     parser = FlexibleArgumentParser()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")

@@ -38,8 +38,12 @@ template <> struct fused_moe_ffn_trait<bfloat16, bfloat16> {
 template <> struct fused_moe_ffn_trait<bfloat16, int8_t> {
     using GEMM_TYPE = float;
 };
+// template <> struct fused_moe_ffn_trait<bfloat16, int4_t> {
+//     using GEMM_TYPE = int4_wo_int15;
+// };
+
 template <> struct fused_moe_ffn_trait<bfloat16, int4_t> {
-    using GEMM_TYPE = int4_wo_int15;
+    using GEMM_TYPE = int4_wo_int8;
 };
 
 template <typename TX, typename TW>
@@ -51,6 +55,7 @@ std::vector<paddle::Tensor> MoeLayerKernel(
     const paddle::optional<paddle::Tensor> &down_proj_bias,
     const paddle::optional<paddle::Tensor> &up_gate_proj_weight_scale,
     const paddle::optional<paddle::Tensor> &down_proj_weight_scale,
+    const paddle::optional<paddle::Tensor> &up_gate_proj_in_scale,
     const paddle::optional<paddle::Tensor> &down_proj_in_scale, // not support
     const std::string &quant_method, const int moe_top_k,
     const bool moe_group) {
@@ -69,8 +74,11 @@ std::vector<paddle::Tensor> MoeLayerKernel(
     auto up_gate_proj_dims = up_gate_proj_weight.shape();
     PD_CHECK(x_dims.size() == 2, "x_dims.size() shoud be 2.");
     PD_CHECK(up_gate_proj_dims.size() == 3, "up_gate_proj_dims.size() should be 3.");
-    PD_CHECK(down_proj_in_scale.get_ptr() == nullptr, "down_proj_in_scale not support.");
-    if (quant_method == "weight_only_int4") {
+    // PD_CHECK(down_proj_in_scale.get_ptr() == nullptr, "down_proj_in_scale not support.");
+    // std::cout << "quant_method : " << quant_method << std::endl;
+    // std::cout << "x_dims[1] " << x_dims[1] << std::endl;
+    // std::cout << "up_gate_proj_dims[2] " << up_gate_proj_dims[2] << std::endl;
+    if (quant_method == "weight_only_int4" || quant_method == "w4a8") {
         PD_CHECK(x_dims[1] == up_gate_proj_dims[2] * 2,
                  "x_dims[1] should equal to up_gate_proj_dims[2], (weight must be "
                  "[e,n,k]).");
@@ -167,8 +175,8 @@ std::vector<paddle::Tensor> MoeLayerKernel(
                 const_cast<float *>(down_proj_bias.get_ptr()->data<float>()),
                 xftblock::DataType::DT_FLOAT, down_proj_bias.get_ptr()->shape());
         }
-        // std::cout << "[Op Debug] start init moe_ffn weight and bias" <<
-        // std::endl; MoeFFNWeight
+        // std::cout << "[Op Debug] start init moe_ffn weight and bias" << std::endl; 
+        // MoeFFNWeight
         xftblock::MoeFFNWeight moe_ffn_w_struct;
         moe_ffn_w_struct.gate_weight = &xgate_w;
         moe_ffn_w_struct.ffn_inter_weights = xup_gate_proj_w.get();
@@ -185,6 +193,10 @@ std::vector<paddle::Tensor> MoeLayerKernel(
         // std::cout << "[Op Debug] pre in xvfblock moe_ffn" << std::endl;
 
         using XPU_TGEMM = typename fused_moe_ffn_trait<XPU_TX, XPU_TW>::GEMM_TYPE;
+        std::cout << "xpu_moe_layer 算子 XPU_TX " << typeid(XPU_TX).name() << std::endl;
+        std::cout << "xpu_moe_layer 算子 XPU_TW " << typeid(XPU_TW).name() << std::endl;
+        std::cout << "xpu_moe_layer 算子 XPU_TGEMM " << typeid(XPU_TGEMM).name() << std::endl;
+        
         ret = baidu::xpu::xftblock::moe_ffn_block_sorted_castte_per_token<
             XPU_TX, XPU_TW, XPU_TX, XPU_TGEMM>(&xctx, &xin, &xout, moe_ffn_w_struct,
                                             moe_ffn_param);
@@ -208,6 +220,14 @@ MoeLayer(const paddle::Tensor &x, const paddle::Tensor &gate_weight,
          const bool moe_group) {
     const auto x_type = x.dtype();
     const auto w_type = up_gate_proj_weight.dtype();
+    const auto gate_weight_type = gate_weight.dtype();
+    // const auto gate_correction_bias_type = gate_correction_bias.dtype();
+    const auto down_proj_weight_type = down_proj_weight.dtype();
+    // const auto up_gate_proj_bias_type = up_gate_proj_bias.dtype();
+    // const auto down_proj_bias_type = down_proj_bias.dtype();
+    // const auto up_gate_proj_weight_scale_type = up_gate_proj_weight_scale.dtype();
+    // const auto down_proj_weight_scale_type = down_proj_weight_scale.dtype();
+    // const auto down_proj_in_scale_type = down_proj_in_scale.dtype();
 
 #define APPLY_MOE_LAYER_KERNEL(TX, TW)                                         \
     return MoeLayerKernel<TX, TW>(                                             \
@@ -216,6 +236,18 @@ MoeLayer(const paddle::Tensor &x, const paddle::Tensor &gate_weight,
         down_proj_in_scale, quant_method, moe_top_k, moe_group);
 
     // TODO(mayang02): how to use quant_method?
+    std::cout << "=============== MoeLayer ======\n";
+    std::cout << "x_type " << x_type << std::endl;
+    std::cout << "gate_weight_type " << gate_weight_type << std::endl;
+    // std::cout << "gate_correction_bias_type " << gate_correction_bias_type << std::endl;
+    std::cout << "down_proj_weight_type " << down_proj_weight_type << std::endl;
+    // std::cout << "up_gate_proj_bias_type " << up_gate_proj_bias_type << std::endl;
+    // std::cout << "down_proj_bias_type " << down_proj_bias_type << std::endl;
+    // std::cout << "up_gate_proj_weight_scale_type " << up_gate_proj_weight_scale_type << std::endl;
+    // std::cout << "down_proj_weight_scale_type " << down_proj_weight_scale_type << std::endl;
+    // std::cout << "down_proj_in_scale_type " << down_proj_in_scale_type << std::endl;
+    std::cout << "w_type " << w_type << std::endl;
+
     if (x_type == paddle::DataType::BFLOAT16 &&
         w_type == paddle::DataType::BFLOAT16) {
         APPLY_MOE_LAYER_KERNEL(paddle::bfloat16, paddle::bfloat16);
@@ -225,7 +257,9 @@ MoeLayer(const paddle::Tensor &x, const paddle::Tensor &gate_weight,
     } else if (x_type == paddle::DataType::BFLOAT16 &&
                quant_method == "weight_only_int4") {
         APPLY_MOE_LAYER_KERNEL(paddle::bfloat16, int4_t);
-    } else {
+    } else if(x_type == paddle::DataType::BFLOAT16 && quant_method=="w4a8"){
+        APPLY_MOE_LAYER_KERNEL(paddle::bfloat16, int4_t);
+    }else{
         PD_THROW("MoeLayer not support x_type==%d, w_type==%d",
                  static_cast<int>(x_type), static_cast<int>(w_type));
         return {};

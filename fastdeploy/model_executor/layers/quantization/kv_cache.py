@@ -110,13 +110,16 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         load_scale
         """
+        print(f"Attention正在加载cacheK_scale,{self.cache_k_scale_name} 的参数类型为{state_dict[self.cache_k_scale_name].dtype} shape: {state_dict[self.cache_k_scale_name].shape} ")
+        print(f"Attention正在加载cacheV_scale,{self.cache_v_scale_name} 的参数类型为{state_dict[self.cache_v_scale_name].dtype} shape: {state_dict[self.cache_v_scale_name].shape} ")
+        print(f"paddle默认的数据类型: {paddle.get_default_dtype()}")
         cache_k_scale_tensor = get_tensor(
             state_dict.pop(self.cache_k_scale_name)).cast(
                 paddle.get_default_dtype()).reshape_([-1])
         cache_v_scale_tensor = get_tensor(
             state_dict.pop(self.cache_v_scale_name)).cast(
                 paddle.get_default_dtype()).reshape_([-1])
-
+        print(f"self.cache_quant_config.max_bound : {self.cache_quant_config.max_bound}")
         cache_k_scale = self.cache_quant_config.max_bound / cache_k_scale_tensor
         cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
         cache_k_out_scale = cache_k_scale_tensor / self.cache_quant_config.max_bound

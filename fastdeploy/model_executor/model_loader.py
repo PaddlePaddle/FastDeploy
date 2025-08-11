@@ -118,6 +118,14 @@ class DefaultModelLoader(BaseModelLoader):
             fd_config,
             return_numpy=True,
         )
+
+        print(f"这是加载的state_dict的内容")
+        for key, value in state_dict.items():
+            print(f"key: {key}, value shape: {value.shape}, value.type: {value.dtype}")
+        print(f"模型已经从磁盘加载到内存，现在开始设置XPU权重")
+        print(f"模型结构是这样的 : {model}")
+
+        # print(f"模型要开始设置state_dict了: 这里模型是{model}, 调用方法是{model.set_state_dict}")
         model.set_state_dict(state_dict)
         self.clean_memory_fragments(state_dict)
         return model

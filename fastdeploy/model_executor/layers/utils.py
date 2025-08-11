@@ -379,4 +379,5 @@ def create_and_set_parameter(layer: nn.Layer, name: str,
             dtype=tensor.dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         ))
+    # print(f"utils create_and_set_parameter {name} : {tensor.dtype}")
     getattr(layer, name).set_value(tensor)

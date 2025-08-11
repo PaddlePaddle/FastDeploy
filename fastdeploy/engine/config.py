@@ -291,6 +291,7 @@ class CacheConfig:
         calculate block num
         """
         self.dec_token_num = self.enc_dec_block_num * self.block_size
+        print(f"self.enc_dec_block_num : {self.enc_dec_block_num}")
         if self.num_gpu_blocks_override is not None:
             self.total_block_num = self.num_gpu_blocks_override
             self.prefill_kvcache_block_num = int(self.total_block_num *
@@ -299,6 +300,10 @@ class CacheConfig:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 +
                          self.dec_token_num) // self.block_size
+            print(f"length : {length}")
+            print(f"block_num : {block_num}")
+            print(f"self.dec_token_num : {self.dec_token_num}")
+            print(f"number_of_tasks : {number_of_tasks}")
             self.total_block_num = block_num * number_of_tasks
             self.prefill_kvcache_block_num = self.total_block_num
             llm_logger.info(

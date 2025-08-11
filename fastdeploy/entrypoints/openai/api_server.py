@@ -82,6 +82,7 @@ def load_engine():
     api_server_logger.info(
         f"FastDeploy LLM API server starting... {os.getpid()}")
     engine_args = EngineArgs.from_cli_args(args)
+    print(f"engine_args : {engine_args}")
     engine = LLMEngine.from_engine_args(engine_args)
 
     if not engine.start(api_server_pid=os.getpid()):
@@ -426,4 +427,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print(f"./fastdeploy/entrypoints/openai/api_server.py是启动入口")
     main()
