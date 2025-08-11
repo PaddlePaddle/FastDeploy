@@ -62,9 +62,10 @@ class ErnieProcessor(BaseDataProcessor):
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
-        self.tool_parser = tool_parser_obj
+        self.tool_parser_obj = tool_parser_obj
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
+
     def _init_config(self):
         self.use_hf_tokenizer = int(envs.FD_USE_HF_TOKENIZER) == 1
 
@@ -205,6 +206,12 @@ class ErnieProcessor(BaseDataProcessor):
             response_dict.outputs.reasoning_content = reasoning_content
         else:
             response_dict.outputs.text = full_text
+        if self.tool_parser_obj:
+            tool_parser = self.tool_parser_obj(self.tokenizer)
+            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+            if tool_call_info.tools_called:
+                response_dict.outputs.tool_calls = tool_call_info.tool_calls
+                response_dict.outputs.text = tool_call_info.content
         data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
         if response_dict.outputs.text == "" and response_dict.outputs.reasoning_content == "":
             return None
@@ -251,10 +258,9 @@ class ErnieProcessor(BaseDataProcessor):
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:
                 response_dict["outputs"]["text"] = full_text
-            if self.tool_parser:
-                tool_parser = self.tool_parser(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(
-                    full_text, response_dict)
+            if self.tool_parser_obj:
+                tool_parser = self.tool_parser_obj(self.tokenizer)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
@@ -276,7 +282,6 @@ class ErnieProcessor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
-            
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
@@ -295,9 +300,9 @@ class ErnieProcessor(BaseDataProcessor):
             response_dict["outputs"]["reasoning_content"] = reasoning_content
         else:
             response_dict["outputs"]["text"] = delta_text
-        if self.tool_parser:
+        if self.tool_parser_obj:
             if req_id not in self.tool_parsers:
-                self.tool_parsers[req_id] = self.tool_parser(self.tokenizer)
+                self.tool_parsers[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parsers[req_id]
             tool_call = tool_parser.extract_tool_calls_streaming(
                 previous_texts,
@@ -306,7 +311,7 @@ class ErnieProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                response_dict
+                response_dict,
             )
             response_dict["outputs"]["tool_delta_message"] = tool_call
         if is_end:

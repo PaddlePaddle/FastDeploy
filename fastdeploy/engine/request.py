@@ -41,6 +41,25 @@ class RequestType(Enum):
     PREEMPTED = 2
 
 
+class ToolCall:
+    """
+    Tool call.
+    """
+
+    id: str = None
+    type: Literal["function"] = "function"
+    function: FunctionCall
+
+
+class DeltaFunctionCall:
+    """
+    Delta function call.
+    """
+
+    name: Optional[str] = None
+    arguments: Optional[str] = None
+
+
 @dataclass
 class Request:
     def __init__(
@@ -249,6 +268,7 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
         """

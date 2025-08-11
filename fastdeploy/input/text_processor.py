@@ -181,7 +181,7 @@ class DataProcessor(BaseDataProcessor):
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
-        self.tool_parser = tool_parser_obj
+        self.tool_parser_obj = tool_parser_obj
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
         self.tokenizer.pad_token_id = self.pad_token_id
@@ -330,6 +330,12 @@ class DataProcessor(BaseDataProcessor):
         else:
             # 模型不支持思考,并且没单独设置enable_thinking为false
             response_dict.outputs.text = full_text
+        if self.tool_parser_obj:
+            tool_parser = self.tool_parser_obj(self.tokenizer)
+            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+            if tool_call_info.tools_called:
+                response_dict.outputs.tool_calls = tool_call_info.tool_calls
+                response_dict.outputs.text = tool_call_info.content
         data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
 
         return response_dict
@@ -360,10 +366,9 @@ class DataProcessor(BaseDataProcessor):
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:
                 response_dict["outputs"]["text"] = full_text
-            if self.tool_parser:
-                tool_parser = self.tool_parser(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(
-                    full_text, response_dict)
+            if self.tool_parser_obj:
+                tool_parser = self.tool_parser_obj(self.tokenizer)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
@@ -404,9 +409,9 @@ class DataProcessor(BaseDataProcessor):
             response_dict["outputs"]["reasoning_content"] = reasoning_content
         else:
             response_dict["outputs"]["text"] = delta_text
-        if self.tool_parser and not is_end:
+        if self.tool_parser_obj and not is_end:
             if req_id not in self.tool_parsers:
-                self.tool_parsers[req_id] = self.tool_parser(self.tokenizer)
+                self.tool_parsers[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parsers[req_id]
             tool_call = tool_parser.extract_tool_calls_streaming(
                 previous_texts,
@@ -415,7 +420,7 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                response_dict
+                response_dict,
             )
             response_dict["outputs"]["tool_delta_message"] = tool_call
         if is_end:
