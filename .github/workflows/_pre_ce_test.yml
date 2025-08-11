@@ -105,6 +105,7 @@ jobs:
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e "${MODEL_CACHE_DIR}=/ModelData:ro" \
+          -e "MODEL_PATH=/ModelData" \
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
