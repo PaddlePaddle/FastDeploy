@@ -72,6 +72,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
             # 验证结果
             self.assertEqual(mock_response["outputs"]["text"], "test prompttest output")
+            self.assertEqual(request.prompt, "test prompt")
 
     def test_multi_prompt_non_streaming(self):
         """测试多prompt非流式响应"""
@@ -142,8 +143,8 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             # 验证结果
             self.assertEqual(mock_responses[0]["outputs"]["text"], "prompt1 response1")
             self.assertEqual(mock_responses[1]["outputs"]["text"], "prompt2 response2")
+            self.assertEqual(request.prompt, ["prompt1", "prompt2"])
 
 
 if __name__ == "__main__":
     unittest.main()
-    #     self.assertEqual(results[4], "data: [DONE]\n\n")

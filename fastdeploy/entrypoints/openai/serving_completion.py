@@ -236,7 +236,7 @@ class OpenAIServingCompletion:
 
     async def _echo_back_prompt(self, request, res, idx):
         # 如果是第一个响应片段，拼接prompt到text前
-        if res["outputs"].get("send_idx", -1) == 0 and request.prompt is not None and request.echo:
+        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
             if isinstance(request.prompt, list):
                 prompt_text = request.prompt[idx]
             else:
