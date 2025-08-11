@@ -40,7 +40,7 @@ from fastdeploy.worker.output import LogprobsLists
 
 
 class OpenAIServingCompletion:
-    def __init__(self, models, engine_client, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
@@ -68,7 +68,7 @@ class OpenAIServingCompletion:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
-        if request.model == "default":
+        if request.model == "default" or self.models.model_paths[0].verification is False:
             request.model = self.models.model_name()
         if not self.models.is_supported_model(request.model):
             err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
