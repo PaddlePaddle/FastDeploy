@@ -45,7 +45,7 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         if self.quant_config.name() == "weight_only_int4":
             layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-        layer.weight = layer.create_parameter(
+        layer.quant_weight = layer.create_parameter(
             shape=layer.weight_shape,
             dtype=layer.weight_dtype,
             is_bias=False,
@@ -62,5 +62,5 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         loaded_weights using xpu special quantization
         """
         quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(weight, self.quant_config.algo, -1, -1)
-        layer.weight.set_value(paddle.transpose(quanted_weight_tensor, [1, 0]))
+        layer.quant_weight.set_value(paddle.transpose(quanted_weight_tensor, [1, 0]))
         layer.weight_scale.set_value(weight_scale_tensor)

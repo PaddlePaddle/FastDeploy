@@ -46,7 +46,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
 
-        layer.weight = layer.create_parameter(
+        layer.quant_weight = layer.create_parameter(
             shape=layer.weight_shape,
             dtype=layer.weight_dtype,
             is_bias=False,
@@ -69,7 +69,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
-        layer.weight.set_value(quant_weight)
+        layer.quant_weight.set_value(quant_weight)
         layer.weight_scale.set_value(weight_scale.astype(paddle.get_default_dtype()))
 
     def process_loaded_weights(self, layer, weight) -> None:
@@ -79,14 +79,14 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             self.group_size,  # group_size
         )
 
-        layer.weight.set_value(quanted_weight_tensor)
+        layer.quant_weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
 
     @paddle.no_grad()
     def apply(self, layer, x):
         linear_out = linear_quant(
             lhs=x,
-            rhs=layer.weight,
+            rhs=layer.quant_weight,
             scale=layer.weight_scale,
             bias=None,
             group_size=self.group_size,
