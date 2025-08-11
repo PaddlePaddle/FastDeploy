@@ -91,40 +91,52 @@ class ErnieProcessor(BaseDataProcessor):
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
+
+        # processing stop_sequences
         stop_sequences = request.get("stop", [])
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request.set("stop_token_ids", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
 
+        # processing prompt_token_ids
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
-            if request.prompt is None and request.messages is None:
-                raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
             if request.prompt is not None:
-                prompt = request.prompt if request.prompt is not None else request.messages[0]
-                prompt = prompt[0] if isinstance(prompt, list) else prompt
-                tokens = self.tokenizer.tokenize(prompt)
-                token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                request.prompt_token_ids = token_ids
-                data_processor_logger.info(f"req_id:{request.request_id}, tokens:{tokens}, token_ids: {token_ids}")
-            else:
+                # prompt = request.prompt if request.prompt is not None else request.messages[0]
+                prompt = request.prompt
+                assert isinstance(prompt, str) or (
+                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
+                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+
+                if isinstance(prompt, list):  # if prompt is a token id list
+                    request["prompt_token_ids"] = prompt
+                else:
+                    tokens = self.tokenizer.tokenize(prompt)
+                    token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+                    request.prompt_token_ids = token_ids
+                    data_processor_logger.debug(
+                        f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
+                    )
+            elif request.messages is not None:
                 request.prompt_token_ids = self.messages2ids(request.to_dict())
+            else:
+                raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
 
         if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
+
+        # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
         if request.get("max_tokens") is None:
-            request.set(
-                "max_tokens",
-                max(1, max_model_len - len(request.prompt_token_ids)),
-            )
+            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
-        data_processor_logger.info(f"Processed request {request}")
+
+        data_processor_logger.info(f"Processed request: {request}")
         return request
 
     def process_request_dict(self, request, max_model_len=None):
@@ -151,19 +163,25 @@ class ErnieProcessor(BaseDataProcessor):
 
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
-            if request.get("prompt") is None and request.get("messages") is None:
-                raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
             if request.get("prompt"):
                 prompt = request.get("prompt")
-                prompt = prompt[0] if isinstance(prompt, list) else prompt
-
-                tokens = self.tokenizer.tokenize(prompt)
-                token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                request["prompt_token_ids"] = token_ids
-                req_id = request.get("request_id", None)
-                data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
-            else:
+                assert isinstance(prompt, str) or (
+                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
+                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+                if isinstance(prompt, list):  # if prompt is a token id list
+                    request["prompt_token_ids"] = prompt
+                else:
+                    tokens = self.tokenizer.tokenize(prompt)
+                    token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+                    request["prompt_token_ids"] = token_ids
+                    data_processor_logger.debug(
+                        f"request_ids: {request.get('request_id')}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
+                    )
+            elif request.get("messages"):
                 request["prompt_token_ids"] = self.messages2ids(request)
+            else:
+                raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
+
         if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
 
@@ -177,8 +195,8 @@ class ErnieProcessor(BaseDataProcessor):
             request["temperature"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
-        data_processor_logger.info(f"Processed request {request}")
 
+        data_processor_logger.info(f"Processed request dict: {request}")
         return request
 
     def process_response(self, response_dict, **kwargs):

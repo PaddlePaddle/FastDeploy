@@ -96,19 +96,19 @@ class EngineClient:
         self.zmq_client = ZmqClient(model, mode)
         self.zmq_client.connect()
 
-    def format_and_add_data(self, prompts: dict):
+    def format_and_add_data(self, req_dict: dict):
         """
         Format the request data and send the request to the server.
         """
-        if "request_id" not in prompts:
+        if "request_id" not in req_dict:
             request_id = str(uuid.uuid4())
-            prompts["request_id"] = request_id
+            req_dict["request_id"] = request_id
 
-        if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.max_model_len - 1
+        if "max_tokens" not in req_dict:
+            req_dict["max_tokens"] = self.max_model_len - 1
 
-        self.add_requests(prompts)
-        return prompts["prompt_token_ids"]
+        self.add_requests(req_dict)
+        return req_dict["prompt_token_ids"]
 
     def add_requests(self, task):
         """
