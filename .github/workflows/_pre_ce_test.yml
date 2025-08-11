@@ -78,9 +78,25 @@ jobs:
             gpu_id=0
             DEVICES="0,1"
           fi
-          FD_API_PORT=$((9180 + gpu_id * 100))
-          FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))
-          FD_METRICS_PORT=$((9170 + gpu_id * 100))
+
+          FLASK_PORT=$((42068 + DEVICES * 100))
+          FD_API_PORT=$((42088 + DEVICES * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICES * 100))
+          FD_METRICS_PORT=$((42078 + DEVICES * 100))
+          echo "Test ENV Parameter:"
+          echo "========================================================="
+          echo "FLASK_PORT=${FLASK_PORT}"
+          echo "FD_API_PORT=${FD_API_PORT}"
+          echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+          echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "DEVICES=${DEVICES}"
+          echo "========================================================="
+
+          CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+          echo "CACHE_DIR is set to ${CACHE_DIR}"
+          if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+            touch "${CACHE_DIR}/gitconfig"
+          fi
 
           PARENT_DIR=$(dirname "$WORKSPACE")
           echo "PARENT_DIR:$PARENT_DIR"
