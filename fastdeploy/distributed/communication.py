@@ -20,8 +20,6 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
-from fastdeploy.distributed.parallel_state import get_tensor_model_parallel_world_size
-
 _TP_AR = None
 
 
@@ -39,10 +37,9 @@ def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024):
     hcg = fleet.get_hybrid_communicate_group()
     model_parallel_group = hcg.get_model_parallel_group()
     global _TP_AR
-    if get_tensor_model_parallel_world_size() > 1 and paddle.is_compiled_with_cuda():
-        from fastdeploy.distributed.custom_all_reduce import CustomAllreduce
+    from fastdeploy.distributed.custom_all_reduce import CustomAllreduce
 
-        _TP_AR = CustomAllreduce(model_parallel_group, custom_all_reduce_max_bytes)
+    _TP_AR = CustomAllreduce(model_parallel_group, custom_all_reduce_max_bytes)
 
 
 try:

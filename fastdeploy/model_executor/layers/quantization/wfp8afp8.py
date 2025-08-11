@@ -69,12 +69,18 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
         super().__init__()
         self.quant_config = quant_config
 
-    def create_weights(self, layer):
+    def create_weights(self, layer, **extra_weight_attrs):
         """ """
         layer.weight_shape.reverse()
         layer.weight_dtype = "float8_e4m3fn"
         # TODO(YuanRisheng): set weight logic should be moved to process_loaded_weights func
         self.skip_quant = False
+        layer.create_parameter(
+            shape=layer.weight_shape,
+            dtype=layer.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
         layer.weight_scale = layer.create_parameter(
             shape=[1],
             dtype="float32",

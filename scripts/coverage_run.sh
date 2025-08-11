@@ -38,7 +38,6 @@ disabled_tests=(
   operators/test_fused_moe.py
   layers/test_repetition_early_stopper.py
   operators/test_stop_generation_multi_ends.py
-  utils/test_download.py
   graph_optimization/test_cuda_graph.py
 )
 is_disabled() {
