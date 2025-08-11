@@ -30,7 +30,7 @@ from fastdeploy.worker.metax_model_runner import MetaxModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 
-logger = get_logger("gpu_worker", "gpu_worker.log")
+logger = get_logger("metax_worker", "metax_worker.log")
 
 
 class MetaxWorker(WorkerBase):
@@ -61,10 +61,6 @@ class MetaxWorker(WorkerBase):
 
             gc.collect()
             paddle.device.cuda.empty_cache()
-            if self.parallel_config.enable_custom_all_reduce:
-                from fastdeploy.distributed.communication import use_custom_allreduce
-
-                use_custom_allreduce()
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
@@ -197,15 +193,6 @@ class MetaxWorker(WorkerBase):
             self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
         else:
             self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
-
-    def graph_optimize_and_warm_up_model(self) -> None:
-        """
-        Perform the warm-up and the graph optimization
-        """
-        if self.model_runner.graph_opt_level >= 1:
-            self.model_runner.sot_warmup()
-        # Triger cuda grpah capture
-        self.model_runner.capture_model()
 
     def check_health(self) -> bool:
         """ """
