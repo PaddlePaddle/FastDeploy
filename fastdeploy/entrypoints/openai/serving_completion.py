@@ -40,11 +40,12 @@ from fastdeploy.worker.output import LogprobsLists
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, ips):
+    def __init__(self, engine_client, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
+        self.max_waiting_time = max_waiting_time
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
                 self.master_ip = self.master_ip[0]
@@ -113,6 +114,14 @@ class OpenAIServingCompletion:
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
+
+            try:
+                if self.max_waiting_time < 0:
+                    await self.engine_client.semaphore.acquire()
+                else:
+                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+            except Exception:
+                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -221,6 +230,7 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
             raise
         finally:
+            self.engine_client.semaphore.release()
             if dealer is not None:
                 dealer.close()
 
@@ -371,6 +381,7 @@ class OpenAIServingCompletion:
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
+            self.engine_client.semaphore.release()
             if dealer is not None:
                 dealer.close()
             yield "data: [DONE]\n\n"

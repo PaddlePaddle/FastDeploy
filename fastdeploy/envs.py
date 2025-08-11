@@ -84,6 +84,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
+    # support max connections
+    "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
 }
 
 

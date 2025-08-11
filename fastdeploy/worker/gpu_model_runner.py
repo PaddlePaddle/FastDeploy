@@ -222,11 +222,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         req_len = len(req_dicts)
         has_prefill_task = False
+        has_decode_task = False
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
-                logger.debug(f"Handle prefill request {request} at idx {idx}")
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
@@ -272,6 +272,7 @@ class GPUModelRunner(ModelRunnerBase):
                     )
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
+                logger.debug(f"Handle prefill request {request} at idx {idx} prefill_start_index {prefill_start_index} prefill_end_index {prefill_end_index} need_prefilled_token_num {len(input_ids)}")
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
@@ -300,6 +301,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
+                    has_decode_task = True
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
@@ -345,7 +348,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
-        if has_prefill_task:
+        if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
@@ -798,7 +801,7 @@ class GPUModelRunner(ModelRunnerBase):
             output_padding_offset,
         ) = pre_process(
             self.share_inputs["input_ids"],
-            self.share_inputs["seq_lens_this_time"],
+            getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
             self.speculative_decoding,
             (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             self.share_inputs["seq_lens_encoder"],
@@ -883,7 +886,7 @@ class GPUModelRunner(ModelRunnerBase):
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            seq_lens_this_time=getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
