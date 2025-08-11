@@ -246,6 +246,11 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         return "Qwen3ForCausalLM"
 
     @paddle.no_grad()
+    def after_load_weights(self) -> None:
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+
+    @paddle.no_grad()
     def processed_weights(self, weights_iterator, params_dict, is_processed=False) -> None:
         """
         Load model parameters from a given weights_iterator object.
@@ -296,9 +301,6 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                         (loaded_weight_name, loaded_weight_name, param, preprocessed_weight, None, None)
                         for preprocessed_weight in weights_processor(param, loaded_weight, None)
                     )
-
-        if self.tie_word_embeddings and is_processed:
-            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

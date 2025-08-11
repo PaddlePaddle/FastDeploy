@@ -45,18 +45,14 @@ class DefaultModelLoaderV1(BaseModelLoader):
     def download_model(self, model_config: ModelConfig) -> None:
         pass
 
-    def clean_memory_fragments(self) -> None:
+    def _clean_memory_fragments(self) -> None:
         """clean_memory_fragments"""
         if current_platform.is_cuda():
             paddle.device.cuda.empty_cache()
             paddle.device.synchronize()
 
-    @measure_time
-    def load_weights(self, model, fd_config: FDConfig) -> None:
-        _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
-        weights_iterator = fast_weights_iterator(safetensor_files)
-        params_dict = dict(model.named_parameters())
-        processed_weights_iterator = model.processed_weights(weights_iterator, params_dict)
+    def _load_weights_into_param(self, model, processed_weights_iterator):
+        """_load_weights_into_param"""
         for loaded_weight_name, _, model_param, preprocessed_weight, shard_id, expert_id in processed_weights_iterator:
             load_weights_into_param = getattr(
                 model_param, "load_weights_into_param", default_load_weights_into_param()
@@ -65,7 +61,17 @@ class DefaultModelLoaderV1(BaseModelLoader):
                 load_weights_into_param(model_param, preprocessed_weight, expert_id, shard_id)
             else:
                 load_weights_into_param(model_param, preprocessed_weight, shard_id)
-        self.clean_memory_fragments()
+        if hasattr(model, "after_load_weights"):
+            model.after_load_weights()
+
+    @measure_time
+    def _load_weights(self, model, fd_config: FDConfig) -> None:
+        _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
+        weights_iterator = fast_weights_iterator(safetensor_files)
+        params_dict = dict(model.named_parameters())
+        processed_weights_iterator = model.processed_weights(weights_iterator, params_dict)
+        self._load_weights_into_param(model, processed_weights_iterator)
+        self._clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         architectures = fd_config.model_config.architectures[0]
@@ -90,5 +96,5 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             return model
 
-        self.load_weights(model, fd_config)
+        self._load_weights(model, fd_config)
         return model
