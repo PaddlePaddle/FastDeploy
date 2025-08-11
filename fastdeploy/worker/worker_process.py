@@ -244,7 +244,6 @@ class PaddleDisWorkerProc:
         """
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
-            num_running_requests = 0
 
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
@@ -272,8 +271,6 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
-        num_running_requests = 0
-
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -434,7 +431,19 @@ class PaddleDisWorkerProc:
 
     def load_model(self) -> None:
         """Load weights and create model"""
+
         self.worker.load_model()
+        loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
+        if self.ranks > 1:
+            paddle.distributed.barrier()
+        self.loaded_model_signal.value[0] = 1
 
 
 def parse_args():

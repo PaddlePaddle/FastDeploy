@@ -137,6 +137,9 @@ metadata: Optional[dict] = None
 
 额外采样参数的支持如下：
 ```python
+bad_words: Optional[List[str]] = None
+# 禁止生成的词汇列表，模型会避免输出这些词（默认 None 表示不限制）。
+
 top_k: Optional[int] = None
 # 限制每一步生成时只考虑概率最高的 K 个 token，用于控制随机性（默认 None 表示不限制）。
 
