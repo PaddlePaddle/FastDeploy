@@ -6,6 +6,8 @@
 |:-----------------------------------|:----------| :----- |
 | ```port```                         | `int`       | 仅服务化部署需配置，服务HTTP请求端口号，默认8000 |
 | ```metrics_port```                 | `int`       | 仅服务化部署需配置，服务监控Metrics端口号，默认8001 |
+| ```max_waiting_time```             | `int`       | 仅服务化部署需配置，服务请求建立连接最大等待时间，默认-1 表示无等待时间限制|
+| ```max_concurrency```              | `int`       | 仅服务化部署需配置，服务实际建立连接数目，默认512 |
 | ```engine_worker_queue_port```     | `int`       | FastDeploy内部引擎进程通信端口, 默认8002 |
 | ```cache_queue_port```             | `int`       | FastDeploy内部KVCache进程通信端口, 默认8003 |
 | ```max_model_len```                | `int`       | 推理默认最大支持上下文长度，默认2048 |

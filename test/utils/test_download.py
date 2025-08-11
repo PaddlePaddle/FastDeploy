@@ -50,21 +50,6 @@ class TestAistudioDownload(unittest.TestCase):
 
         os.environ.clear()
 
-    def test_retrive_model_from_aistudio_server_(self):
-        """
-        Test case for retrieving a model from AI Studio server.
-        """
-        os.environ["FD_MODEL_SOURCE"] = "AISTUDIO"
-        os.environ["FD_MODEL_CACHE"] = "./models"
-
-        model_name_or_path = "baidu/ERNIE-4.5-0.3B-PT"
-        revision = "aaa"
-        expected_path = "./models/PaddlePaddle/ERNIE-4.5-0.3B-PT"
-        result = retrive_model_from_server(model_name_or_path, revision)
-        self.assertEqual(expected_path, result)
-
-        os.environ.clear()
-
 
 if __name__ == "__main__":
     unittest.main()

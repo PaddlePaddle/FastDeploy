@@ -8,6 +8,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 |:--------------|:----|:-----------|
 | ```port``` | `int` | Only required for service deployment, HTTP service port number, default: 8000 |
 | ```metrics_port``` | `int` | Only required for service deployment, metrics monitoring port number, default: 8001 |
+| ```max_waiting_time``` | `int` | Only required for service deployment, maximum wait time for establishing a connection upon service request. Default: -1 (indicates no wait time limit).|
+| ```max_concurrency```  | `int` | Only required for service deployment, the actual number of connections established by the service, default 512 |
 | ```engine_worker_queue_port``` | `int` | FastDeploy internal engine communication port, default: 8002 |
 | ```cache_queue_port``` | `int` | FastDeploy internal KVCache process communication port, default: 8003 |
 | ```max_model_len``` | `int` | Default maximum supported context length for inference, default: 2048 |
