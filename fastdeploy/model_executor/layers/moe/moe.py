@@ -110,7 +110,6 @@ class FusedMoE(nn.Layer):
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
 
         self.expert_id_offset = expert_id_offset
-        self.gate_up_dict = {}
 
         # used for deepseek_v3
         self.topk_method = topk_method
