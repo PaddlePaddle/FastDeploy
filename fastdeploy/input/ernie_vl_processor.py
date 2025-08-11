@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-import os
-
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
@@ -35,10 +33,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
     ):
-        self.use_hf_tokenizer = False
-
-        if "merge_llm_model" in model_name_or_path:
-            model_name_or_path = os.path.dirname(model_name_or_path)
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         tokenizer_path = model_name_or_path
         preprocessor_path = model_name_or_path

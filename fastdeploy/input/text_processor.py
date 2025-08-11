@@ -34,7 +34,6 @@ class BaseDataProcessor(ABC):
         Returns:
             None
         """
-        self.use_hf_tokenizer = int(envs.FD_USE_HF_TOKENIZER) == 1
         self.tokenizer = self._load_tokenizer()
         self.tokenizer.bos_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.bos_token)
         self.tokenizer.cls_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.cls_token)
@@ -417,7 +416,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[int]: token ids list
         """
-        if self.use_hf_tokenizer:
+        if envs.FD_USE_HF_TOKENIZER:
             tokens = self.tokenizer(
                 text,
                 return_tensors="np",
@@ -475,7 +474,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[str]: strings
         """
-        if self.use_hf_tokenizer:
+        if envs.FD_USE_HF_TOKENIZER:
             if task_id not in self.decode_status:
                 # history token ids & history token strings & befer decode str
                 self.decode_status[task_id] = [[], [], ""]
@@ -520,7 +519,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             tokenizer (AutoTokenizer)
         """
-        if self.use_hf_tokenizer:
+        if envs.FD_USE_HF_TOKENIZER:
             from transformers import AutoTokenizer
 
             return AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=False)
@@ -541,7 +540,7 @@ class DataProcessor(BaseDataProcessor):
         """
         results_all = ""
         if task_id in self.decode_status:
-            if self.use_hf_tokenizer:
+            if envs.FD_USE_HF_TOKENIZER:
                 results_all = self.decode_status[task_id][2]
             else:
                 results_all = "".join(self.decode_status[task_id][3])
