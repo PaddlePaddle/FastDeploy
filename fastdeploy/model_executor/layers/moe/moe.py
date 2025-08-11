@@ -513,7 +513,6 @@ class FusedMoE(nn.Layer):
                 self.gate_correction_bias.set_value(gate_correction_bias_tensor)
             else:
                 self.gate_correction_bias = None
-
         else:
             self.gate_correction_bias = None
 
