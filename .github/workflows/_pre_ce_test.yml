@@ -77,12 +77,13 @@ jobs:
         run: |
           runner_name="${{ runner.name }}"
           CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
-          gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-          FLASK_PORT=$((42068 + DEVICES * 100))
-          FD_API_PORT=$((42088 + DEVICES * 100))
-          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICES * 100))
-          FD_METRICS_PORT=$((42078 + DEVICES * 100))
+          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -104,13 +105,13 @@ jobs:
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
-          -e "${MODEL_CACHE_DIR}=/ModelData:ro" \
+          -v "${MODEL_CACHE_DIR}=/ModelData:ro" \
           -e "MODEL_PATH=/ModelData" \
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "fd_wheel_url=${fd_wheel_url}" \
-          --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+          --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
