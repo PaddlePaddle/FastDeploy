@@ -89,7 +89,7 @@ class OpenAIServingCompletion:
                     raise ValueError(
                         "If prompt_token_ids is provided, its type should be one of: list[int], list[list[int]]"
                     )
-                # reset `prompt_token_ids` because token ids are expected to be passed in `prompt`
+                # reset `prompt_token_ids` to avoid data processor directly using it; let data processor fill it
                 request.prompt_token_ids = None
             else:
                 if isinstance(request.prompt, str):
