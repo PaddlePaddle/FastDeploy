@@ -150,7 +150,12 @@ jobs:
             export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
             export TEMPLATE=TOKEN_LOGPROB
             TEST_EXIT_CODE=0
-            python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py || TEST_EXIT_CODE=$?
+            python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py || TEST_EXIT_CODE=1
+            curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+              -H "Content-Type: application/json" \
+              -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
+            curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+            python -m pytest -sv test_repetition_early_stop.py || TEST_EXIT_CODE=1
             popd
             echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
             '
