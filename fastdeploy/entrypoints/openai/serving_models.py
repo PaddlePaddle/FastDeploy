@@ -30,6 +30,7 @@ from fastdeploy.utils import api_server_logger, get_host_ip
 class ModelPath:
     name: str
     model_path: str
+    verification: bool = False
 
 
 class OpenAIServingModels:
@@ -64,6 +65,8 @@ class OpenAIServingModels:
         """
         Check whether the specified model is supported.
         """
+        if self.model_paths[0].verification is False:
+            return True
         if model_name == "default":
             return True
         return any(model.name == model_name for model in self.model_paths)

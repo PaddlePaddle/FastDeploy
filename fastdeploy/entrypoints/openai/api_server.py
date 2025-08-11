@@ -126,9 +126,11 @@ async def lifespan(app: FastAPI):
 
     if args.served_model_name is not None:
         served_model_names = args.served_model_name
+        verification = True
     else:
         served_model_names = args.model
-    model_paths = [ModelPath(name=served_model_names, model_path=args.model)]
+        verification = False
+    model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
     engine_client = EngineClient(
         args.model,
