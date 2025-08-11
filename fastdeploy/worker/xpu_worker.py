@@ -145,9 +145,13 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
+        num_running_requests: Optional[int] = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
+
         output = self.model_runner.execute_model(model_forward_batch)
+
         return output
 
     def exist_prefill(self):
@@ -156,7 +160,7 @@ class XpuWorker(WorkerBase):
         """
         return self.model_runner.exist_prefill()
 
-    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int = -1) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
