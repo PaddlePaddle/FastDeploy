@@ -16,7 +16,8 @@ app = Flask(__name__)
 
 
 def get_base_port():
-    nv_visible_devices = os.environ.get("NVIDIA_VISIBLE_DEVICES", "")
+    """获取base port"""
+    nv_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "")
     if not nv_visible_devices or nv_visible_devices.lower() == "all":
         return 8000
     # 提取第一个数字
@@ -26,14 +27,37 @@ def get_base_port():
     return 8000
 
 
+def is_port_in_use(port):
+    """检查端口是否被占用"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("localhost", port)) == 0
+
+
+def get_available_port(env_key: str, default_start: int):
+    """从环境变量读取端口，如果未设置或已被占用，则从default_start开始寻找空闲端口"""
+    port_str = os.environ.get(env_key)
+    if port_str and port_str.isdigit():
+        port = int(port_str)
+        if not is_port_in_use(port):
+            return port
+        else:
+            print(f"Warning: Port {port} from {env_key} is in use, searching for a free port...")
+
+    # 从 default_start 开始查找空闲端口
+    port = default_start
+    while is_port_in_use(port):
+        port += 1
+    return port
+
+
 # 默认参数值
 PID_FILE = "pid_port"
 LOG_FILE = "server.log"
 base_port = get_base_port()
-FLASK_PORT = int(os.environ.get("FLASK_PORT", base_port + 1))
-FD_API_PORT = int(os.environ.get("FD_API_PORT", base_port + 2))
-FD_ENGINE_QUEUE_PORT = int(os.environ.get("FD_ENGINE_QUEUE_PORT", base_port + 3))
-FD_METRICS_PORT = int(os.environ.get("FD_METRICS_PORT", base_port + 4))
+FLASK_PORT = get_available_port("FLASK_PORT", base_port + 1)
+FD_API_PORT = get_available_port("FD_API_PORT", FLASK_PORT + 1)
+FD_ENGINE_QUEUE_PORT = get_available_port("FD_ENGINE_QUEUE_PORT", FD_API_PORT + 1)
+FD_METRICS_PORT = get_available_port("FD_METRICS_PORT", FD_ENGINE_QUEUE_PORT + 1)
 DEFAULT_PARAMS = {
     "--port": FD_API_PORT,
     "--engine-worker-queue-port": FD_ENGINE_QUEUE_PORT,
@@ -73,12 +97,6 @@ def merge_configs(base_config, override_config):
     return merged
 
 
-def is_port_in_use(port):
-    """检查端口是否被占用"""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("localhost", port)) == 0
-
-
 def get_server_pid():
     """获取服务进程ID PORT"""
     if os.path.exists(PID_FILE):
@@ -105,7 +123,8 @@ def is_server_running():
     try:
         response = requests.get(health_check_endpoint, timeout=2)
         return response.status_code == 200, result
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to check server health: {e}")
         return False, result
 
 
@@ -158,14 +177,14 @@ def stop_server(signum=None, frame=None):
     except Exception as e:
         print(f"Failed to stop server: {e}")
 
-        for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]:
-            try:
-                output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-                for pid in output.splitlines():
-                    os.kill(int(pid), signal.SIGKILL)
-                    print(f"Killed process on port {port}, pid={pid}")
-            except Exception as e:
-                print(f"Failed to killed process on port: {e}")
+    for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]:
+        try:
+            output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
+            for pid in output.splitlines():
+                os.kill(int(pid), signal.SIGKILL)
+                print(f"Killed process on port {port}, pid={pid}")
+        except Exception as e:
+            print(f"Failed to killed process on port: {e}")
     # 若log目录存在，则重命名为log_timestamp
     if os.path.isdir("./log"):
         os.rename("./log", "./log_{}".format(time.strftime("%Y%m%d%H%M%S")))
@@ -196,6 +215,7 @@ def start_service():
         base_config = DEFAULT_PARAMS
 
         override_config = request.get_json() or {}
+        print("override_config", override_config)
 
         final_config = merge_configs(base_config, override_config)
 
