@@ -137,6 +137,9 @@ When sending requests using openai.Client, these parameters need to be placed in
 
 The following sampling parameters are supported.
 ```python
+bad_words: Optional[List[int]] = None
+# List of forbidden words that the model should avoid generating (default None means no restriction).
+
 top_k: Optional[int] = None
 # Limits the consideration to the top K tokens with the highest probability at each generation step, used to control randomness (default None means no limit).
 
