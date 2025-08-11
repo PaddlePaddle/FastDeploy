@@ -14,11 +14,11 @@
 
 <p align="center">
      <a href="https://trendshift.io/repositories/4046" target="_blank"><img src="https://trendshift.io/api/badge/repositories/4046" alt="PaddlePaddle%2FFastDeploy | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a></br>
-    <a href="https://paddlepaddle.github.io/FastDeploy/zh/get_started/installation/nvidia_gpu/"><b> Installation </b></a>
+    <a href="https://paddlepaddle.github.io/FastDeploy/zh/get_started/installation/nvidia_gpu/"><b> 安装指导 </b></a>
     |
-    <a href="https://paddlepaddle.github.io/FastDeploy/zh/get_started/quick_start"><b> Quick Start </b></a>
+    <a href="https://paddlepaddle.github.io/FastDeploy/zh/get_started/quick_start"><b> 快速入门 </b></a>
     |
-    <a href="https://paddlepaddle.github.io/FastDeploy/zh/supported_models/"><b> Supported Models </b></a>
+    <a href="https://paddlepaddle.github.io/FastDeploy/zh/supported_models/"><b> 支持模型列表 </b></a>
 
 </p>
 
