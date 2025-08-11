@@ -1,15 +1,16 @@
+import ast
+import json
 import os
-import subprocess
+import re
 import signal
 import socket
-import requests
-import time
-import yaml
-import ast
-import re
-import json
+import subprocess
 import sys
-from flask import Flask, jsonify, request, Response
+import time
+
+import requests
+import yaml
+from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
 
@@ -20,7 +21,7 @@ def get_base_port():
     if not nv_visible_devices or nv_visible_devices.lower() == "all":
         return 8000
     # 提取第一个数字
-    match = re.search(r'\d+', nv_visible_devices)
+    match = re.search(r"\d+", nv_visible_devices)
     if match:
         return int(match.group(0)) * 100 + 8000
     return 8000
@@ -29,7 +30,7 @@ def get_base_port():
 def is_port_in_use(port):
     """检查端口是否被占用"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
+        return s.connect_ex(("localhost", port)) == 0
 
 
 def get_available_port(env_key: str, default_start: int):
@@ -69,7 +70,9 @@ def build_command(config):
     """根据配置构建启动命令"""
     # 基础命令
     cmd = [
-        "python", "-m", "fastdeploy.entrypoints.openai.api_server",
+        "python",
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
     ]
 
     # 添加配置参数
@@ -97,7 +100,7 @@ def merge_configs(base_config, override_config):
 def get_server_pid():
     """获取服务进程ID PORT"""
     if os.path.exists(PID_FILE):
-        with open(PID_FILE, 'r') as f:
+        with open(PID_FILE, "r") as f:
             data = yaml.safe_load(f)
             return data
     return None
@@ -109,21 +112,19 @@ def is_server_running():
     if pid_port is None:
         return False, {"status": "Server not running..."}
 
-    server_pid, port = pid_port["PID"], pid_port["PORT"]
+    _, port = pid_port["PID"], pid_port["PORT"]
     health_check_endpoint = f"http://0.0.0.0:{port}/health"
 
     if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, 'r') as f:
+        with open(LOG_FILE, "r") as f:
             msg = f.readlines()
     result = parse_tqdm_progress(msg)
 
     try:
-        response = requests.get(
-            health_check_endpoint,
-            timeout=2
-        )
+        response = requests.get(health_check_endpoint, timeout=2)
         return response.status_code == 200, result
     except requests.exceptions.RequestException as e:
+        print(f"Failed to check server health: {e}")
         return False, result
 
 
@@ -147,15 +148,11 @@ def parse_tqdm_progress(log_lines):
                     "speed": data["speed"],
                     "eta": data["eta"],
                     "elapsed": data["elapsed"],
-                    "bar": data["bar"].strip()
+                    "bar": data["bar"].strip(),
                 },
-                "raw_line": line.strip()
+                "raw_line": line.strip(),
             }
-    return {
-        "status": "服务启动中",
-        "progress": {},
-        "raw_line": log_lines[-1] if log_lines else "server.log为空"
-    }
+    return {"status": "服务启动中", "progress": {}, "raw_line": log_lines[-1] if log_lines else "server.log为空"}
 
 
 def stop_server(signum=None, frame=None):
@@ -189,8 +186,8 @@ def stop_server(signum=None, frame=None):
         except Exception as e:
             print(f"Failed to killed process on port: {e}")
     # 若log目录存在，则重命名为log_timestamp
-    if os.path.isdir('./log'):
-        os.rename('./log', './log_{}'.format(time.strftime("%Y%m%d%H%M%S")))
+    if os.path.isdir("./log"):
+        os.rename("./log", "./log_{}".format(time.strftime("%Y%m%d%H%M%S")))
 
     if signum:
         sys.exit(0)
@@ -203,7 +200,7 @@ signal.signal(signal.SIGINT, stop_server)
 signal.signal(signal.SIGTERM, stop_server)
 
 
-@app.route('/start', methods=['POST'])
+@app.route("/start", methods=["POST"])
 def start_service():
     """启动大模型推理服务"""
     # 检查服务是否已在运行
@@ -211,7 +208,7 @@ def start_service():
         return Response(
             json.dumps({"status": "error", "message": "服务已启动，无需start"}, ensure_ascii=False),
             status=400,
-            content_type='application/json'
+            content_type="application/json",
         )
 
     try:
@@ -235,7 +232,7 @@ def start_service():
         return Response(
             json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
             status=500,
-            content_type='application/json'
+            content_type="application/json",
         )
 
     print("cmd", cmd)
@@ -244,17 +241,11 @@ def start_service():
         # 设置环境变量并启动进程
         env = os.environ.copy()
 
-        with open(LOG_FILE, 'w') as log:
-            process = subprocess.Popen(
-                cmd,
-                stdout=log,
-                stderr=log,
-                env=env,
-                start_new_session=True
-            )
+        with open(LOG_FILE, "w") as log:
+            process = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
 
         # 保存进程ID,port到yaml文件
-        with open(PID_FILE, 'w') as f:
+        with open(PID_FILE, "w") as f:
             yaml.dump({"PID": process.pid, "PORT": final_config["--port"]}, f)
 
         json_data = {
@@ -267,24 +258,20 @@ def start_service():
             "port_info": {
                 "api_port": FD_API_PORT,
                 "queue_port": FD_ENGINE_QUEUE_PORT,
-                "metrics_port": FD_METRICS_PORT
-            }
+                "metrics_port": FD_METRICS_PORT,
+            },
         }
 
-        return Response(
-            json.dumps(json_data, ensure_ascii=False),
-            status=200,
-            content_type='application/json'
-        )
+        return Response(json.dumps(json_data, ensure_ascii=False), status=200, content_type="application/json")
     except Exception as e:
         return Response(
             json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
             status=500,
-            content_type='application/json'
+            content_type="application/json",
         )
 
 
-@app.route('/switch', methods=['POST'])
+@app.route("/switch", methods=["POST"])
 def switch_service():
     """切换模型服务"""
     # kill掉已有服务
@@ -311,7 +298,7 @@ def switch_service():
         return Response(
             json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
             status=500,
-            content_type='application/json'
+            content_type="application/json",
         )
 
     print("cmd", cmd)
@@ -320,17 +307,11 @@ def switch_service():
         # 设置环境变量并启动进程
         env = os.environ.copy()
 
-        with open(LOG_FILE, 'w') as log:
-            process = subprocess.Popen(
-                cmd,
-                stdout=log,
-                stderr=log,
-                env=env,
-                start_new_session=True
-            )
+        with open(LOG_FILE, "w") as log:
+            process = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
 
         # 保存进程ID,port到yaml文件
-        with open(PID_FILE, 'w') as f:
+        with open(PID_FILE, "w") as f:
             yaml.dump({"PID": process.pid, "PORT": final_config["--port"]}, f)
 
         json_data = {
@@ -343,53 +324,41 @@ def switch_service():
             "port_info": {
                 "api_port": FD_API_PORT,
                 "queue_port": FD_ENGINE_QUEUE_PORT,
-                "metrics_port": FD_METRICS_PORT
-            }
+                "metrics_port": FD_METRICS_PORT,
+            },
         }
 
-        return Response(
-            json.dumps(json_data, ensure_ascii=False),
-            status=200,
-            content_type='application/json'
-        )
+        return Response(json.dumps(json_data, ensure_ascii=False), status=200, content_type="application/json")
     except Exception as e:
         return Response(
             json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
             status=500,
-            content_type='application/json'
+            content_type="application/json",
         )
 
 
-@app.route('/status', methods=['GET', 'POST'])
+@app.route("/status", methods=["GET", "POST"])
 def service_status():
     """检查服务状态"""
     health, msg = is_server_running()
 
     if not health:
-        return Response(
-            json.dumps(msg, ensure_ascii=False),
-            status=500,
-            content_type='application/json'
-        )
+        return Response(json.dumps(msg, ensure_ascii=False), status=500, content_type="application/json")
 
     # 检查端口是否监听
     ports_status = {
         "api_port": FD_API_PORT if is_port_in_use(FD_API_PORT) else None,
         "queue_port": FD_ENGINE_QUEUE_PORT if is_port_in_use(FD_ENGINE_QUEUE_PORT) else None,
-        "metrics_port": FD_METRICS_PORT if is_port_in_use(FD_METRICS_PORT) else None
+        "metrics_port": FD_METRICS_PORT if is_port_in_use(FD_METRICS_PORT) else None,
     }
 
     msg["status"] = "服务启动完成"
     msg["ports_status"] = ports_status
 
-    return Response(
-        json.dumps(msg, ensure_ascii=False),
-        status=200,
-        content_type='application/json'
-    )
+    return Response(json.dumps(msg, ensure_ascii=False), status=200, content_type="application/json")
 
 
-@app.route('/stop', methods=['POST'])
+@app.route("/stop", methods=["POST"])
 def stop_service():
     """停止大模型推理服务"""
     res, status_code = stop_server()
@@ -397,39 +366,35 @@ def stop_service():
     return res, status_code
 
 
-@app.route('/config', methods=['GET'])
+@app.route("/config", methods=["GET"])
 def get_config():
     """获取当前server配置"""
     health, msg = is_server_running()
 
     if not health:
-        return Response(
-            json.dumps(msg, ensure_ascii=False),
-            status=500,
-            content_type='application/json'
-        )
+        return Response(json.dumps(msg, ensure_ascii=False), status=500, content_type="application/json")
 
     if not os.path.exists("log/api_server.log"):
         return Response(
             json.dumps({"message": "api_server.log不存在"}, ensure_ascii=False),
             status=500,
-            content_type='application/json'
+            content_type="application/json",
         )
 
     try:
         # 筛选出包含"args:"的行
-        with open("log/api_server.log", 'r') as f:
+        with open("log/api_server.log", "r") as f:
             lines = [line for line in f.readlines() if "args:" in line]
 
         last_line = lines[-1] if lines else ""
 
         # 使用正则表达式提取JSON格式的配置
-        match = re.search(r'args\s*[:：]\s*(.*)', last_line)
+        match = re.search(r"args\s*[:：]\s*(.*)", last_line)
         if not match:
             return Response(
                 json.dumps({"message": "api_server.log中没有args信息，请检查log"}, ensure_ascii=False),
                 status=500,
-                content_type='application/json'
+                content_type="application/json",
             )
 
         # 尝试解析JSON
@@ -437,22 +402,20 @@ def get_config():
         config_data = ast.literal_eval(config_json)
         print("config_data", config_data, type(config_data))
         return Response(
-            json.dumps({"server_config": config_data}, ensure_ascii=False),
-            status=200,
-            content_type='application/json'
+            json.dumps({"server_config": config_data}, ensure_ascii=False), status=200, content_type="application/json"
         )
 
     except Exception as e:
         return Response(
             json.dumps({"message": "api_server.log解析失败，请检查log", "error": str(e)}, ensure_ascii=False),
             status=500,
-            content_type='application/json'
+            content_type="application/json",
         )
 
 
-@app.route('/wait_for_infer', methods=['POST'])
+@app.route("/wait_for_infer", methods=["POST"])
 def wait_for_infer():
-    timeout = int(request.args.get('timeout', 120))  # 可选超时时间，默认120秒
+    timeout = int(request.args.get("timeout", 120))  # 可选超时时间，默认120秒
     interval = 2
     response_interval = 10
     start_time = time.time()
@@ -470,7 +433,7 @@ def wait_for_infer():
                 ports_status = {
                     "api_port": FD_API_PORT if is_port_in_use(FD_API_PORT) else None,
                     "queue_port": FD_ENGINE_QUEUE_PORT if is_port_in_use(FD_ENGINE_QUEUE_PORT) else None,
-                    "metrics_port": FD_METRICS_PORT if is_port_in_use(FD_METRICS_PORT) else None
+                    "metrics_port": FD_METRICS_PORT if is_port_in_use(FD_METRICS_PORT) else None,
                 }
                 msg["status"] = "服务启动完成"
                 msg["ports_status"] = ports_status
@@ -478,10 +441,11 @@ def wait_for_infer():
                 break
 
             if elapsed >= timeout:
+
                 def tail_file(path, lines=50):
                     try:
                         with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                            return ''.join(f.readlines()[-lines:])
+                            return "".join(f.readlines()[-lines:])
                     except Exception as e:
                         return f"[无法读取 {path}]: {e}\n"
 
@@ -501,12 +465,12 @@ def wait_for_infer():
 
             time.sleep(interval)
 
-    return Response(generate(), status=200, content_type='text/plain')
+    return Response(generate(), status=200, content_type="text/plain")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(f"FLASK_PORT: {FLASK_PORT}")
     print(f"FD_API_PORT: {FD_API_PORT}")
     print(f"FD_ENGINE_QUEUE_PORT: {FD_ENGINE_QUEUE_PORT}")
     print(f"FD_METRICS_PORT: {FD_METRICS_PORT}")
-    app.run(host='0.0.0.0', port=FLASK_PORT, debug=False)
+    app.run(host="0.0.0.0", port=FLASK_PORT, debug=False)
