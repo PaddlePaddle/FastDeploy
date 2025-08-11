@@ -61,15 +61,15 @@ class OpenAIServingModels:
             return True
         return False
 
-    def is_supported_model(self, model_name) -> bool:
+    def is_supported_model(self, model_name) -> tuple[bool, str]:
         """
         Check whether the specified model is supported.
         """
         if self.model_paths[0].verification is False:
-            return True
+            return True, self.model_name()
         if model_name == "default":
-            return True
-        return any(model.name == model_name for model in self.model_paths)
+            return True, self.model_name()
+        return any(model.name == model_name for model in self.model_paths), model_name
 
     def model_name(self) -> str:
         """
