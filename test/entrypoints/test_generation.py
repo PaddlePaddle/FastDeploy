@@ -3,14 +3,14 @@
 
 import weakref
 import unittest
-
+import os
 
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import get_random_port
 
-MODEL_NAME = "/root/PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle"
+MODEL_NAME = os.get_env("MODEL_PATH") + "/ERNIE-4.5-0.3B-Paddle"
 
 
 class TestGeneration(unittest.TestCase):
