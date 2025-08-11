@@ -420,10 +420,11 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
     def load_weights_into_param(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         assert loaded_shard_id in ["gate", "up"]
         output_dim = getattr(param, "output_dim", None)
+        tensor_size = param.shape[output_dim] // 2
         if loaded_shard_id == "gate":
-            param = slice_fn(param, output_dim, start=0, end=self.output_size // 2)
+            param = slice_fn(param, output_dim, start=0, end=tensor_size)
         elif loaded_shard_id == "up":
-            param = slice_fn(param, output_dim, start=self.output_size // 2, end=self.output_size)
+            param = slice_fn(param, output_dim, start=tensor_size, end=tensor_size * 2)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -533,23 +534,24 @@ class QKVParallelLinear(ColumnParallelLinear):
     def load_weights_into_param(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         assert loaded_shard_id in ["q", "k", "v"]
         output_dim = getattr(param, "output_dim", None)
+        head_dim = param.shape[output_dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
         if loaded_shard_id == "q":
-            param = slice_fn(param, output_dim, 0, self.num_heads_per_rank * self.head_dim)
+            param = slice_fn(param, output_dim, 0, self.num_heads_per_rank * head_dim)
 
         elif loaded_shard_id == "k":
             param = slice_fn(
                 param,
                 output_dim,
-                self.num_heads_per_rank * self.head_dim,
-                (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim,
+                self.num_heads_per_rank * head_dim,
+                (self.num_heads_per_rank + self.kv_num_heads_per_rank) * head_dim,
             )
 
         elif loaded_shard_id == "v":
             param = slice_fn(
                 param,
                 output_dim,
-                (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim,
-                (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * self.head_dim,
+                (self.num_heads_per_rank + self.kv_num_heads_per_rank) * head_dim,
+                (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * head_dim,
             )
 
         assert param.shape == loaded_weight.shape, (

@@ -177,7 +177,6 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         if self.quant_config.name() == "wint4":
             layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-
         layer.quant_weight = layer.create_parameter(
             shape=layer.weight_shape,
             dtype=layer.weight_dtype,
