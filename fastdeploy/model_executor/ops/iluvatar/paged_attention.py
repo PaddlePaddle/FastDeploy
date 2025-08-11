@@ -39,8 +39,11 @@ def paged_attention(
     softcap: float = 0.0,
     use_cuda_graph: bool = False,
     use_sqrt_alibi: bool = False,
+    merged_qkv: bool = False,
     k: paddle.Tensor = None,
     v: paddle.Tensor = None,
+    rope_sin: paddle.Tensor = None,
+    rope_cos: paddle.Tensor = None,
 ):
     output = paged_attn(
         q,
@@ -51,6 +54,8 @@ def paged_attention(
         alibi_slopes,
         k,
         v,
+        rope_sin,
+        rope_cos,
         num_kv_heads,
         scale,
         block_size,
@@ -61,5 +66,6 @@ def paged_attention(
         softcap,
         use_cuda_graph,
         use_sqrt_alibi,
+        merged_qkv,
     )
     return output[0] if isinstance(output, list) else output

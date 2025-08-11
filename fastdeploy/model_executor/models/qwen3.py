@@ -286,6 +286,9 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight)
 
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
         """
@@ -333,6 +336,10 @@ class Qwen3PretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Qwen3ForCausalLM"
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):

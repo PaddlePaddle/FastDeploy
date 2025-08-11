@@ -24,6 +24,7 @@ from fastsafetensors import SafeTensorsFileLoader, SingleGroup
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from paddleformers.utils.log import logger
+from paddleformers.utils.safetensors import fast_safe_open
 from safetensors import safe_open
 from tqdm import tqdm
 
@@ -65,7 +66,7 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
     """
     with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
         weight_list = json.load(f)["weight_map"]
-    filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
+    filtered_map = {k: v for k, v in weight_list.items() if ".experts." not in k}
     num_local_ffn_keys = []
 
     from itertools import chain
@@ -155,9 +156,7 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
     return state_dict
 
 
-def safetensors_weights_iterator(
-    safe_tensor_list: list[str],
-):
+def safetensors_weights_iterator(safe_tensor_list: list[str]):
     """
     safetensors_weights_iterator
     """
@@ -165,8 +164,20 @@ def safetensors_weights_iterator(
         safe_tensor_list,
         desc="Loading safetensors checkpoint shards",
     ):
-        from paddleformers.utils.safetensors import fast_safe_open
+        with safe_open(st_file, framework="np") as f:
+            for name in f.keys():
+                param = f.get_tensor(name)
+                yield name, param
 
+
+def fast_weights_iterator(safe_tensor_list: list[str]):
+    """
+    paddleformers' iterator for safetensors
+    """
+    for st_file in tqdm(
+        safe_tensor_list,
+        desc="Loading safetensors checkpoint shards",
+    ):
         with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
                 param = f.get_slice(name)
@@ -215,6 +226,7 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int, use_fastsafete
     """
     load_pre_sharded_checkpoint
     """
+
     state_dict = {}
     _, safetensor_files = get_all_safetensors(os.path.join(model_path, f"rank{local_rank}"))
     weights_iterator = safetensors_weights_iterator(safetensor_files)

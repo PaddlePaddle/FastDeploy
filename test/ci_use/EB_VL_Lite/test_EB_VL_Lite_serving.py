@@ -129,8 +129,8 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
         )
 
-    # Wait up to 300 seconds for API server to be ready
-    for _ in range(300):
+    # Wait up to 10 minutes for API server to be ready
+    for _ in range(10 * 60):
         if is_port_open("127.0.0.1", FD_API_PORT):
             print(f"API server is up on port {FD_API_PORT}")
             break
@@ -493,7 +493,7 @@ def test_chat_with_thinking(openai_client, capsys):
         temperature=1,
         stream=False,
         max_tokens=10,
-        extra_body={"enable_thinking": True},
+        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
     )
     assert response.choices[0].message.reasoning_content is not None
 
@@ -504,7 +504,7 @@ def test_chat_with_thinking(openai_client, capsys):
         temperature=1,
         stream=False,
         max_tokens=10,
-        extra_body={"enable_thinking": False},
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
     assert response.choices[0].message.reasoning_content is None
 
@@ -514,7 +514,11 @@ def test_chat_with_thinking(openai_client, capsys):
         model="default",
         messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
         temperature=1,
-        extra_body={"enable_thinking": True, "reasoning_max_tokens": reasoning_max_tokens, "return_token_ids": True},
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+            "return_token_ids": True,
+        },
         stream=True,
         max_tokens=10,
     )

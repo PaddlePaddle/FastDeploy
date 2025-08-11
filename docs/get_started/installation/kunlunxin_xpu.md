@@ -5,8 +5,8 @@
 - OS: Linux
 - Python: 3.10
 - XPU Model: P800
-- XPU Driver Version: ≥ 5.0.21.10
-- XPU Firmware Version: ≥ 1.31
+- XPU Driver Version: ≥ 5.0.21.26
+- XPU Firmware Version: ≥ 1.48
 
 Verified platform:
 - CPU: INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
@@ -15,8 +15,8 @@ Verified platform:
 - OS: CentOS release 7.6 (Final)
 - Python: 3.10
 - XPU Model: P800 (OAM Edition)
-- XPU Driver Version: 5.0.21.10
-- XPU Firmware Version: 1.31
+- XPU Driver Version: 5.0.21.26
+- XPU Firmware Version: 1.48
 
 **Note:** Currently, only INTEL or Hygon CPU-based P800 (OAM Edition) servers have been verified. Other CPU types and P800 (PCIe Edition) servers have not been tested yet.
 

@@ -258,9 +258,13 @@ inline std::pair<int, int> GetCudaComputeCapability() {
 
 /******************* math *******************/
 __forceinline__ __device__ float ptx_rcp(float x) {
+#ifdef PADDLE_WITH_COREX
+  return __ivcorex_rcpf(x);
+#else
   float y;
   asm volatile("rcp.approx.ftz.f32 %0, %1;" : "=f"(y) : "f"(x));
   return y;
+#endif
 }
 
 template <typename T1, typename T2>

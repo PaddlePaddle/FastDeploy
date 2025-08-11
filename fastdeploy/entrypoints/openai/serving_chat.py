@@ -49,10 +49,11 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips):
+    def __init__(self, engine_client, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
+        self.max_waiting_time = max_waiting_time
         self.host_ip = get_host_ip()
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
@@ -76,6 +77,7 @@ class OpenAIServingChat:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+
         if request.user is not None:
             request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
         else:
@@ -92,6 +94,14 @@ class OpenAIServingChat:
             return ErrorResponse(code=400, message=str(e))
 
         del current_req_dict
+        try:
+            api_server_logger.debug(f"{self.engine_client.semaphore.status()}")
+            if self.max_waiting_time < 0:
+                await self.engine_client.semaphore.acquire()
+            else:
+                await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+        except Exception:
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
         if request.stream:
             return self.chat_completion_stream_generator(request, request_id, request.model, prompt_token_ids)
@@ -129,11 +139,11 @@ class OpenAIServingChat:
             if request.max_streaming_response_tokens is not None
             else (request.metadata or {}).get("max_streaming_response_tokens", 1)
         )  # dierctly passed & passed in metadata
-        enable_thinking = (
-            request.enable_thinking
-            if request.enable_thinking is not None
-            else (request.metadata or {}).get("enable_thinking")
-        )
+
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+
         include_stop_str_in_output = request.include_stop_str_in_output
 
         stream_options = request.stream_options
@@ -225,18 +235,11 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     delta_text = output["text"]
-                    raw_top_logprobs = output["top_logprobs"]
-                    logprobs_res = None
-                    if raw_top_logprobs is not None:
-                        top_logprobs = LogprobsLists(
-                            logprob_token_ids=raw_top_logprobs[0],
-                            logprobs=raw_top_logprobs[1],
-                            sampled_token_ranks=raw_top_logprobs[2],
-                        )
-                        logprobs_res = self.build_logprobs_response(
-                            request_logprobs=request.logprobs,
-                            response_logprobs=top_logprobs,
-                            request_top_logprobs=request.top_logprobs,
+                    output_top_logprobs = output["top_logprobs"]
+                    logprobs_res: Optional[LogProbs] = None
+                    if request.logprobs and output_top_logprobs is not None:
+                        logprobs_res = self._create_chat_logprobs(
+                            output_top_logprobs, request.logprobs, request.top_logprobs
                         )
 
                     previous_num_tokens += len(output["token_ids"])
@@ -316,6 +319,8 @@ class OpenAIServingChat:
             yield f"data: {error_data}\n\n"
         finally:
             dealer.close()
+            self.engine_client.semaphore.release()
+            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
@@ -330,11 +335,10 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         final_res = None
-        enable_thinking = (
-            request.enable_thinking
-            if request.enable_thinking is not None
-            else (request.metadata or {}).get("enable_thinking")
-        )
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+
         include_stop_str_in_output = request.include_stop_str_in_output
 
         try:
@@ -376,17 +380,10 @@ class OpenAIServingChat:
                     completion_token_ids.extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
                     output = data["outputs"]
-                    raw_top_logprobs = output["top_logprobs"]
-                    if raw_top_logprobs is not None:
-                        top_logprobs = LogprobsLists(
-                            logprob_token_ids=raw_top_logprobs[0],
-                            logprobs=raw_top_logprobs[1],
-                            sampled_token_ranks=raw_top_logprobs[2],
-                        )
-                        logprobs_res = self.build_logprobs_response(
-                            request_logprobs=request.logprobs,
-                            response_logprobs=top_logprobs,
-                            request_top_logprobs=request.top_logprobs,
+                    output_top_logprobs = output["top_logprobs"]
+                    if output_top_logprobs is not None:
+                        logprobs_res = self._create_chat_logprobs(
+                            output_top_logprobs, request.logprobs, request.top_logprobs
                         )
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents.extend(logprobs_res.content)
@@ -397,6 +394,7 @@ class OpenAIServingChat:
                 if task_is_finished:
                     break
         finally:
+            self.engine_client.semaphore.release()
             dealer.close()
 
         choices = []
@@ -449,7 +447,36 @@ class OpenAIServingChat:
             usage=usage,
         )
 
-    def build_logprobs_response(
+    def _create_chat_logprobs(
+        self,
+        output_top_logprobs,
+        request_logprobs: Optional[bool] = None,
+        request_top_logprobs: Optional[int] = None,
+    ) -> Optional[LogProbs]:
+        """Create OpenAI-style logprobs for chat completions."""
+        if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
+            return None
+        logprobs_res: Optional[LogProbs] = None
+        for logprob_token_ids, logprobs, sampled_token_ranks in zip(
+            output_top_logprobs[0], output_top_logprobs[1], output_top_logprobs[2]
+        ):
+            top_logprobs = LogprobsLists(
+                logprob_token_ids=[logprob_token_ids],
+                logprobs=[logprobs],
+                sampled_token_ranks=[sampled_token_ranks],
+            )
+            step_logprobs_res = self._build_logprobs_response(
+                request_logprobs=request_logprobs,
+                response_logprobs=top_logprobs,
+                request_top_logprobs=request_top_logprobs,
+            )
+            if logprobs_res is None:
+                logprobs_res = step_logprobs_res
+            else:
+                logprobs_res.content.extend(step_logprobs_res.content)
+        return logprobs_res
+
+    def _build_logprobs_response(
         self,
         request_logprobs: bool,
         response_logprobs: Optional[LogprobsLists],
@@ -486,12 +513,10 @@ class OpenAIServingChat:
                 token_str = self.engine_client.data_processor.process_logprob_response(
                     [tid], clean_up_tokenization_spaces=False
                 )
-                # token_bytes = token_str.encode("utf-8", errors="replace")
-                entry = LogProbEntry(
-                    token=token_str,
-                    logprob=lp,
-                    # bytes=list(token_bytes)
-                )
+                token_bytes = token_str.encode("utf-8", errors="replace")
+                if "\ufffd" in token_str:
+                    token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                entry = LogProbEntry(token=token_str, logprob=lp, bytes=list(token_bytes))
                 top_logprob_entries.append(entry)
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
             sampled_entry = LogProbEntry(
@@ -504,6 +529,6 @@ class OpenAIServingChat:
             return LogProbs(content=[sampled_entry])
 
         except Exception as e:
-            api_server_logger.error("Error in build_logprobs_response: %s", e)
+            api_server_logger.error("Error in _build_logprobs_response: %s", e)
             api_server_logger.error(traceback.format_exc())
             return None

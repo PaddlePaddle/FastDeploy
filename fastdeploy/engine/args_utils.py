@@ -30,8 +30,9 @@ from fastdeploy.config import (
     TaskOption,
 )
 from fastdeploy.engine.config import Config
+from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import FlexibleArgumentParser
+from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -316,6 +317,11 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    seed: int = 0
+    """
+    Random seed to use for initialization. If not set, defaults to 0.
+    """
+
     enable_early_stop: bool = False
     """
     Flag to enable early stop. Default is False (disabled).
@@ -339,6 +345,13 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.enable_logprob:
+            if self.speculative_config is not None:
+                raise NotImplementedError("Logprob does not support speculation_config.")
+            if self.enable_expert_parallel:
+                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
+            if not current_platform.is_cuda():
+                raise NotImplementedError("Only CUDA platform supports logprob.")
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -409,7 +422,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--enable-mm",
-            action="store_true",
+            action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
             help="Flag to enable multi-modal model.",
         )
@@ -483,6 +496,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--seed",
+            type=int,
+            default=EngineArgs.seed,
+            help="Random seed for initialization. If not specified, defaults to 0.",
         )
         model_group.add_argument(
             "--enable-early-stop",
@@ -902,7 +921,7 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            enable_mm=self.enable_mm,
+            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
