@@ -113,6 +113,8 @@ class LLMEngine:
 
         self.start_queue_service()
 
+        self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
+
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
                 cfg.max_num_seqs, cfg, cfg.tensor_parallel_size, cfg.splitwise_role
@@ -633,11 +635,15 @@ class LLMEngine:
                                         if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                                             self.insert_tasks([task])
                                         else:
+                                            if not self.enable_decode_cache_task:
+                                                task.error_msg = "Not enough resources"
                                             new_waiting.append(task)
-
                                     if new_waiting:
-                                        self.waiting_requests.extend(new_waiting)
-                                        llm_logger.info(f"Added {len(new_waiting)} tasks to waiting queue")
+                                        if not self.enable_decode_cache_task:
+                                            self.split_connector.send_cache_infos(new_waiting, -1)
+                                        else:
+                                            self.waiting_requests.extend(new_waiting)
+                                            llm_logger.info(f"Added {len(new_waiting)} tasks to waiting queue")
 
                     else:
                         time.sleep(0.001)
@@ -808,6 +814,22 @@ class LLMEngine:
 
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+            if self.cfg.splitwise_role != "mixed":
+                status, msg = self.split_connector.check_decode_allocated(task)
+                if not status:
+                    llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=task.request_id,
+                                finished=True,
+                                error_code=500,
+                                error_msg=msg,
+                            )
+                        ]
+                    )
+                    tasks.remove(task)
+                    continue
             if task.sampling_params.bad_words is not None:
                 task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
