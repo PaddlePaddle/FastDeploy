@@ -1,11 +1,15 @@
 import os
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
+from fastdeploy.engine.request import Request
+from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
+from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
+from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 
 
 class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
@@ -16,6 +20,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         """
         self.input_chat_template = "unit test \n"
         self.mock_engine = MagicMock()
+        self.tokenizer = MagicMock()
 
     def test_load_chat_template_non(self):
         result = load_chat_template(None)
@@ -86,6 +91,60 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.semaphore.status = MagicMock(return_value="mock_status")
         chat_completion = await self.chat_completion_handler.create_chat_completion(request)
         self.assertEqual("hello", chat_completion["chat_template"])
+
+    @patch("fastdeploy.input.ernie_vl_processor.ErnieMoEVLProcessor.__init__")
+    def test_vl_processor(self, mock_class):
+        mock_class.return_value = None
+        vl_processor = ErnieMoEVLProcessor()
+        mock_request = Request.from_dict({"request_id": "123"})
+
+        def mock_apply_default_parameters(request):
+            return request
+
+        def mock_process_request(request, max_model_len):
+            return request
+
+        vl_processor._apply_default_parameters = mock_apply_default_parameters
+        vl_processor.process_request_dict = mock_process_request
+        result = vl_processor.process_request(mock_request, chat_template="hello")
+        self.assertEqual("hello", result.chat_template)
+
+    @patch("fastdeploy.entrypoints.llm.LLM.__init__")
+    def test_llm_load(self, mock_class):
+        mock_class.return_value = None
+        llm = LLM()
+        llm.llm_engine = MagicMock()
+        llm.default_sampling_params = MagicMock()
+        llm.chat_template = "hello"
+
+        def mock_run_engine(req_ids, **kwargs):
+            return req_ids
+
+        def mock_add_request(**kwargs):
+            return kwargs.get("chat_template")
+
+        llm._run_engine = mock_run_engine
+        llm._add_request = mock_add_request
+        result = llm.chat(["hello"], sampling_params=SamplingParams(1))
+        self.assertEqual("hello", result)
+
+    @patch("fastdeploy.entrypoints.llm.LLM.__init__")
+    def test_llm(self, mock_class):
+        mock_class.return_value = None
+        llm = LLM()
+        llm.llm_engine = MagicMock()
+        llm.default_sampling_params = MagicMock()
+
+        def mock_run_engine(req_ids, **kwargs):
+            return req_ids
+
+        def mock_add_request(**kwargs):
+            return kwargs.get("chat_template")
+
+        llm._run_engine = mock_run_engine
+        llm._add_request = mock_add_request
+        result = llm.chat(["hello"], sampling_params=SamplingParams(1), chat_template="hello")
+        self.assertEqual("hello", result)
 
 
 if __name__ == "__main__":
