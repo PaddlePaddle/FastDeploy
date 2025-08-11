@@ -18,6 +18,7 @@ import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
+import os
 
 from fastdeploy.config import (
     CacheConfig,
