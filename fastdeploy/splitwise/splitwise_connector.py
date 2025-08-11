@@ -503,6 +503,7 @@ class SplitwiseConnector:
                         index=task["outputs"]["index"],
                         send_idx=0,
                         token_ids=task["outputs"]["token_ids"],
+                        draft_token_ids=task["outputs"]["draft_token_ids"],
                     ),
                     finished=True,
                 )

@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import signal
 import threading
@@ -293,6 +294,9 @@ class ExpertService:
                 cur_task_idx = self.resource_manager.req_dict[task.request_id]
                 del self.resource_manager.req_dict[task.request_id]
                 cur_task = self.resource_manager.tasks_list[cur_task_idx]
+                cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
+                if self.cfg.speculative_config.method in ["mtp"] and self.cfg.splitwise_role == "decode":
+                    cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
                 if task.error_code != 200:
                     self.resource_manager.stop_flags[cur_task_idx] = True
                     self.resource_manager.tasks_list[cur_task_idx] = None
