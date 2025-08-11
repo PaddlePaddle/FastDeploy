@@ -361,7 +361,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         if layer.ep_size > 1:
             for expert_idx in ep_rank_to_expert_id_list:
                 scale_tensor = get_tensor(
-                    get_tensor(
+                    (
                         state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)]
                         if up_gate_proj_expert_in_scale_key.format(expert_idx) in state_dict
                         else up_gate_proj_expert_in_scale_key.format(expert_idx)
