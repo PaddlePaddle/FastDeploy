@@ -4,6 +4,7 @@
 ## 1. Environment Preparation
 ### 1.1 Support Status
 The minimum number of cards required for deployment on the following hardware is as follows:
+
 | Device [GPU Mem] | WINT4 | WINT8 | BFLOAT16 |
 |:----------:|:----------:|:------:| :------:|
 | H20 [144G] | 8 | 8 |  8 |

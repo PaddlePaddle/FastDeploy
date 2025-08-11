@@ -2,7 +2,8 @@
 ## Environmental Preparation
 ### 1.1 Hardware requirements
 The minimum number of GPUs required to deploy `ERNIE-4.5-21B-A3B` on the following hardware for each quantization is as follows:
-|  | WINT8 | WINT4 | FP8 |
+
+| | WINT8 | WINT4 | FP8 |
 |-----|-----|-----|-----|
 |H800 80GB| 1 | 1 | 1 |
 |A800 80GB| 1 | 1 | / |
