@@ -208,11 +208,15 @@ class GPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
-                logger.debug(f"Handle prefill request {request} at idx {idx}")
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
                 input_ids = request.prompt_token_ids + request.output_token_ids
+                logger.debug(
+                    f"Handle prefill request {request} at idx {idx}, "
+                    f"{prefill_start_index=}, {prefill_end_index=}, "
+                    f"need_prefilled_token_num={len(input_ids)}"
+                )
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
