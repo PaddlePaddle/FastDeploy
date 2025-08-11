@@ -273,6 +273,7 @@ class PaddleDisWorkerProc:
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         num_running_requests = 0
+
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
