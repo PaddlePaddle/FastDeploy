@@ -30,6 +30,7 @@ from fastdeploy.config import (
     TaskOption,
 )
 from fastdeploy.engine.config import Config
+from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
 
@@ -344,6 +345,13 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.enable_logprob:
+            if self.speculative_config is not None:
+                raise NotImplementedError("Logprob does not support speculation_config.")
+            if self.enable_expert_parallel:
+                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
+            if not current_platform.is_cuda():
+                raise NotImplementedError("Only CUDA platform supports logprob.")
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
