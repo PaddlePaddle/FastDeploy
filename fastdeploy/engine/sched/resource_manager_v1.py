@@ -234,8 +234,7 @@ class ResourceManagerV1(ResourceManager):
                     llm_logger.debug(
                         f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                     )
-                    num_new_tokens = request.prompt_token_ids_len - request.num_computed_tokens
-                    num_new_tokens = min(num_new_tokens, token_budget)
+                    num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
