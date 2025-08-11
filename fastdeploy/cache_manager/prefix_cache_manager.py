@@ -362,8 +362,6 @@ class PrefixCacheManager:
         logger.info(
             f"allocate_cpu_blocks: {allocated_block_ids}, len(self.cpu_free_block_list) {len(self.cpu_free_block_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
         return allocated_block_ids
 
     def recycle_cpu_blocks(self, cpu_block_ids):
@@ -378,8 +376,6 @@ class PrefixCacheManager:
                 heapq.heappush(self.cpu_free_block_list, cpu_block_id)
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def issue_swap_task(
         self,
