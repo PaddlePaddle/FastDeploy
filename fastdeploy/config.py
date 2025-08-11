@@ -733,7 +733,10 @@ class CacheConfig:
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
         self.num_gpu_blocks_override = None
-        self.kv_cache_ratio = 0.75
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.kv_cache_ratio = 1.0
+        else:
+            self.kv_cache_ratio = 0.75
         self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
         self.prealloc_dec_block_slot_num_threshold = 5
         self.cache_dtype = "bfloat16"
