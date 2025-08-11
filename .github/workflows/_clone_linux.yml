@@ -14,8 +14,7 @@ on:
         value: ${{ jobs.code-clone.outputs.repo_archive_url }}
 jobs:
   code-clone:
-    runs-on:
-      group: HK-Clone
+    runs-on: ubuntu-latest
     outputs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:

@@ -73,8 +73,13 @@ jobs:
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
-          set -x
+          if [[ "$IS_PR" == "true" ]]; then
+            echo "Running on PR"
+          else
+            echo "Not a PR"
+          fi
           runner_name="${{ runner.name }}"
           CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
@@ -133,6 +138,7 @@ jobs:
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
+          -e "IS_PR=${IS_PR}" \
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
 
           git config --global --add safe.directory /workspace/FastDeploy
@@ -160,9 +166,13 @@ jobs:
           coverage combine coveragedata/
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
-          diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+          if [[ "$IS_PR" == "true" ]]; then
+            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+          else
+            echo "Not a PR, skipping diff-cover"
+          fi
           echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
-          python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
           '
           if [ -f FastDeploy/exit_code.env ]; then
             cat FastDeploy/exit_code.env >> $GITHUB_ENV
@@ -224,6 +234,7 @@ jobs:
           echo "All tests passed"
 
       - name: Verify Code Coverage Threshold (80%)
+        if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
           cd FastDeploy
