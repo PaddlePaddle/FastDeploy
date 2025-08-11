@@ -670,7 +670,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize input embeddings buffer
         self.share_inputs["input_embeds"] = paddle.zeros(
-            [self.parallel_config.max_num_batched_tokens, self.model_config.hidden_size],
+            [self.parallel_config.max_model_len, self.model_config.hidden_size],
             dtype=self.model_config.dtype,
         )
 

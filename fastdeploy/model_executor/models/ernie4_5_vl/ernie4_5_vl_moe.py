@@ -362,22 +362,22 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
 @mm_buffer(
     {
         "text_input": {
-            "shape": ["parallel_config.max_num_batched_tokens", "model_config.hidden_size"],
+            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "image_input": {
-            "shape": ["parallel_config.max_num_batched_tokens", "model_config.hidden_size"],
+            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "text_index": {
-            "shape": ["parallel_config.max_num_batched_tokens"],
+            "shape": ["parallel_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "image_index": {
-            "shape": ["parallel_config.max_num_batched_tokens"],
+            "shape": ["parallel_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
