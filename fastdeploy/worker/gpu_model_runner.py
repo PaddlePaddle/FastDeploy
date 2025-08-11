@@ -795,7 +795,7 @@ class GPUModelRunner(ModelRunnerBase):
             output_padding_offset,
         ) = pre_process(
             self.share_inputs["input_ids"],
-            self.share_inputs["seq_lens_this_time"],
+            getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
             self.speculative_decoding,
             (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             self.share_inputs["seq_lens_encoder"],
@@ -880,7 +880,7 @@ class GPUModelRunner(ModelRunnerBase):
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            seq_lens_this_time=getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
