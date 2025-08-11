@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from .append_attention import append_attention
+from .append_attention import append_attention, append_attention_with_output
 from .get_block_shape_and_split_kv_block import get_block_shape_and_split_kv_block
 from .gqa_rope_write_cache import gqa_rope_write_cache
 from .init_kv_signal_per_query import init_kv_signal_per_query
@@ -25,6 +25,7 @@ from .pre_cache_len_concat import pre_cache_len_concat
 __all__ = [
     "get_block_shape_and_split_kv_block",
     "append_attention",
+    "append_attention_with_output",
     "open_shm_and_get_meta_signal",
     "init_signal_layerwise",
     "gqa_rope_write_cache",
