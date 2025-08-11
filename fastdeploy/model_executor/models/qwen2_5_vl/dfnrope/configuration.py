@@ -1,0 +1,98 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+from paddleformers.transformers.configuration_utils import PretrainedConfig
+
+__all__ = [
+    "DFNRopeVisionTransformerConfig",
+]
+
+
+# qwen2_5 视觉参数
+"""
+  "vision_config": {
+    "depth": 32,
+    "hidden_act": "silu",
+    "hidden_size": 1280,
+    "intermediate_size": 3420,
+    "num_heads": 16,
+    "in_chans": 3,
+    "out_hidden_size": 3584,
+    "patch_size": 14,
+    "spatial_merge_size": 2,
+    "spatial_patch_size": 14,
+    "window_size": 112,
+    "fullatt_block_indexes": [
+      7,
+      15,
+      23,
+      31
+    ],
+    "tokens_per_second": 2,
+    "temporal_patch_size": 2
+  },
+"""
+
+# qwen 的 hidden_size 对应 embed_dim
+# qwen 的 out_hidden_size 对应 hidden_size
+# qwen 的 intermediate_size 是 qwen_vision_block 里 mlp 的 mlp_hidden_dim
+# qwen 的 fullatt_block_indexes 是区分vit部分不同attention的layer_index
+
+class DFNRopeVisionTransformerConfig(PretrainedConfig):
+    r"""
+    This is the configuration class to store the configuration of a [`~ErnieModel`]. It is used to instantiate an Ernie
+    model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
+    defaults will yield a similar configuration to that of the Ernie-7B.
+    Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
+    documentation from [`PretrainedConfig`] for more information.
+    """
+
+    model_type = "DFNRope_vision_transformer"
+
+    def __init__(
+        self,
+        depth=32,
+        embed_dim=1280,
+        hidden_size=3584,
+        hidden_act="quick_gelu",
+        mlp_ratio=4,
+        num_heads=16,
+        in_channels=3,
+        patch_size=14,
+        spatial_merge_size=2,
+        attn_implementation="eager",  # new added
+        pp_data_balance=False,
+        recompute=False,
+        vit_first_fwd_bsz=128,
+        vit_num_recompute_layers=10000,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        self.depth = depth
+        self.embed_dim = embed_dim
+        self.hidden_size = hidden_size
+        self.hidden_act = hidden_act
+        self.mlp_ratio = mlp_ratio
+        self.num_heads = num_heads
+        self.in_channels = in_channels
+        self.patch_size = patch_size
+        self.spatial_merge_size = spatial_merge_size
+        self.attn_implementation = attn_implementation
+        self.pp_data_balance = pp_data_balance
+        self.recompute = recompute
+        self.vit_first_fwd_bsz = vit_first_fwd_bsz
+        self.vit_num_recompute_layers = vit_num_recompute_layers
