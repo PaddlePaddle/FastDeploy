@@ -326,7 +326,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         )
 
     @paddle.no_grad()
-    def load_weights(self, weights_iterator) -> None:
+    def processed_weights(self, weights_iterator, params_dict) -> None:
         """
         Load model parameters from a given weights_iterator object.
 
@@ -334,7 +334,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.models.utils import default_weights_processor
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -358,8 +358,11 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                 if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]
-                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                weight_loader(param, loaded_weight, shard_id)
+                weights_processor = getattr(param, "weights_processor", default_weights_processor(self.fd_config))
+                yield from (
+                    (loaded_weight_name, model_param_name, param, preprocessed_weight, shard_id, None)
+                    for preprocessed_weight in weights_processor(param, loaded_weight, shard_id)
+                )
                 break
             else:
                 for mapping in expert_params_mapping:
@@ -370,15 +373,24 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                     if model_param_name not in params_dict:
                         continue
                     param = params_dict[model_param_name]
-                    weight_loader = param.weight_loader
-                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    weights_processor = param.weights_processor
+                    yield from (
+                        (loaded_weight_name, model_param_name, param, preprocessed_weight, shard_id, expert_id)
+                        for preprocessed_weight in weights_processor(
+                            param, loaded_weight, shard_id=shard_id, expert_id=expert_id
+                        )
+                    )
                     break
                 else:
                     if loaded_weight_name not in params_dict:
                         continue
                     param = params_dict[loaded_weight_name]
-                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                    weight_loader(param, loaded_weight)
+                    weights_processor = getattr(param, "weights_processor", default_weights_processor(self.fd_config))
+                    weights_processor(param, loaded_weight)
+                    yield from (
+                        (loaded_weight_name, model_param_name, param, preprocessed_weight, None, None)
+                        for preprocessed_weight in weights_processor(param, loaded_weight)
+                    )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

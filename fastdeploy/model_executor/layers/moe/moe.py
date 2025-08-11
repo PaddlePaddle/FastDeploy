@@ -22,6 +22,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.models.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
@@ -35,7 +36,6 @@ def get_moe_method():
     """
     return moe method based on device platform
     """
-    from fastdeploy.platforms import current_platform
 
     if current_platform.is_cuda():
         from .fused_moe_cutlass_backend import CutlassMoEMethod
@@ -152,10 +152,18 @@ class FusedMoE(nn.Layer):
                     and is_supported_moe_backend is not None
                     and is_supported_moe_backend(self.quant_method)
                 ):
-                    self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+                    self.quant_method.create_weights(
+                        self,
+                        weights_processor=self.weights_processor,
+                        load_weights_into_param=self.load_weights_into_param,
+                    )
             else:
                 # w_fp16 a_fp16
-                self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+                self.quant_method.create_weights(
+                    self,
+                    weights_processor=self.weights_processor,
+                    load_weights_into_param=self.load_weights_into_param,
+                )
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
@@ -164,32 +172,58 @@ class FusedMoE(nn.Layer):
             tp_size={self.tp_size}."
         )
 
-    def weight_loader(self, param, loaded_weight, expert_id, shard_id: Optional[str] = None):
-        from fastdeploy.platforms import current_platform
+    def _load_down_weight_into_param(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        expert_param.copy_(loaded_weight, False)
 
-        if shard_id is None:
-            # 1.gate up fused in disk
-            return
-        # 2.gate up splited in disk
+    def _load_gate_up_weight_into_param(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
+        tensor_size = expert_param.shape[shard_dim] // 2
+        if shard_id == "gate":
+            expert_param = slice_fn(expert_param, shard_dim, start=0, end=tensor_size)
+        elif shard_id == "up":
+            expert_param = slice_fn(expert_param, shard_dim, start=tensor_size, end=tensor_size * 2)
+
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        expert_param.copy_(loaded_weight, False)
+
+    def _load_expert_weight_into_param(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
+        if shard_id == "down":
+            self._load_down_weight_into_param(expert_param, shard_dim, loaded_weight, shard_id)
+        elif shard_id in ["gate", "up"]:
+            self._load_gate_up_weight_into_param(expert_param, shard_dim, loaded_weight, shard_id)
+
+    def load_weights_into_param(self, param, loaded_weight, expert_id: int, shard_id: Optional[str] = None):
         assert shard_id in ["gate", "down", "up"]
+        SHARD_ID_TO_SHARDED_DIM = getattr(param, "SHARD_ID_TO_SHARDED_DIM")
         expert_param = param[expert_id]
-        if current_platform.is_cuda():
-            SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
-        else:
-            SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
-        self._load_expert_weight(
+        self._load_expert_weight_into_param(
             expert_param=expert_param,
             shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
             loaded_weight=loaded_weight,
             shard_id=shard_id,
         )
 
-    def _load_gate_up_weight(self, expert_param, shard_dim, loaded_weight, shard_id):
-        tensor_size = expert_param.shape[shard_dim] // 2
-        if shard_id == "gate":
-            expert_param = expert_param[..., :tensor_size] if shard_dim else expert_param[:tensor_size, ...]
-        elif shard_id == "up":
-            expert_param = expert_param[..., tensor_size:] if shard_dim else expert_param[tensor_size:, ...]
+    def weights_processor(self, param, loaded_weight, expert_id: int, shard_id: Optional[str] = None):
+        if shard_id is None:
+            # 1.gate up fused in disk
+            return
+        # 2.gate up splited in disk
+        assert shard_id in ["gate", "down", "up"]
+        SHARD_ID_TO_SHARDED_DIM = getattr(param, "SHARD_ID_TO_SHARDED_DIM")
+        expert_param = param[expert_id]
+
+        yield from self._processed_expert_weight(
+            expert_param=expert_param,
+            shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+            loaded_weight=loaded_weight,
+            shard_id=shard_id,
+        )
+
+    def _processed_gate_up_weight(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
 
         if self.tp_size > 1:
             size = loaded_weight.get_shape()[-1]
@@ -199,15 +233,13 @@ class FusedMoE(nn.Layer):
             loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
         loaded_weight = get_tensor(loaded_weight)
-        # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
-        assert expert_param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
-        )
-        expert_param.copy_(loaded_weight, False)
 
-    def _load_down_weight(self, expert_param, shard_dim, loaded_weight, shard_id):
+        # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
+        if not current_platform.is_cuda():
+            loaded_weight = loaded_weight.transpose([1, 0])
+        yield loaded_weight
+
+    def _processed_down_weight(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
         if self.tp_size > 1:
             size = loaded_weight.get_shape()[shard_dim]
             block_size = size // self.tp_size
@@ -215,45 +247,45 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = loaded_weight[shard_offset:shard_size, ...]
         loaded_weight = get_tensor(loaded_weight)
-        # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
-        assert expert_param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
-        )
-        expert_param.copy_(loaded_weight, False)
 
-    def _load_expert_weight(
+        # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
+        if not current_platform.is_cuda():
+            loaded_weight = loaded_weight.transpose([1, 0])
+        yield loaded_weight
+
+    def _processed_expert_weight(
         self,
         expert_param,
-        shard_dim,
+        shard_dim: int,
         loaded_weight,
-        shard_id,
+        shard_id: str,
     ):
         if shard_id == "down":
-            self._load_down_weight(expert_param, shard_dim, loaded_weight, shard_id)
+            yield from self._processed_down_weight(expert_param, shard_dim, loaded_weight, shard_id)
+
         elif shard_id in ["gate", "up"]:
-            self._load_gate_up_weight(expert_param, shard_dim, loaded_weight, shard_id)
+
+            yield from self._processed_gate_up_weight(expert_param, shard_dim, loaded_weight, shard_id)
 
     @classmethod
     def make_expert_params_mapping(
         cls,
-        ckpt_gate_proj_name: str,
         ckpt_down_proj_name: str,
-        ckpt_up_proj_name: str,
         param_gate_up_proj_name: str,
         param_down_proj_name: str,
         num_experts: int,
         ckpt_expert_key_name: str = "experts",
+        ckpt_gate_proj_name: Optional[str] = None,
+        ckpt_up_proj_name: Optional[str] = None,
         ckpt_gate_up_proj_name: Optional[str] = None,
     ) -> list[tuple[str, str, int, str]]:
-        param_name_maping = [
-            ("gate", ckpt_gate_proj_name),
-            ("down", ckpt_down_proj_name),
-            ("up", ckpt_up_proj_name),
-        ]
-        if ckpt_gate_up_proj_name:
+        param_name_maping = [("down", ckpt_down_proj_name)]
+        if ckpt_gate_up_proj_name is not None:
             param_name_maping.append((None, ckpt_gate_up_proj_name))
+        elif ckpt_gate_proj_name is not None:
+            param_name_maping.append(("gate", ckpt_gate_proj_name))
+        elif ckpt_up_proj_name is not None:
+            param_name_maping.append(("up", ckpt_up_proj_name))
 
         return [
             # (param_name, weight_name, expert_id, shard_id)

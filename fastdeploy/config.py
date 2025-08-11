@@ -666,6 +666,7 @@ class LoadChoices(str, Enum):
     DEFAULT = "default"
     # only support qwen3-bf16 now
     DEFAULT_V1 = "default_v1"
+    INFLIGHT_QUANT = "inflight_quant"
 
 
 class LoadConfig:
@@ -685,6 +686,7 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
+        self.is_inflight_quant = False
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None

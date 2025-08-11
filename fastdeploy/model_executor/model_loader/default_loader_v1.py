@@ -28,6 +28,7 @@ from fastdeploy.model_executor.load_weight_utils import (
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.model_base import ModelRegistry
+from fastdeploy.model_executor.models.utils import default_load_weights_into_param
 from fastdeploy.platforms import current_platform
 
 
@@ -50,7 +51,16 @@ class DefaultModelLoaderV1(BaseModelLoader):
     def load_weights(self, model, fd_config: FDConfig) -> None:
         _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
         weights_iterator = fast_weights_iterator(safetensor_files)
-        model.load_weights(weights_iterator)
+        params_dict = dict(model.named_parameters())
+        processed_weights_iterator = model.processed_weights(weights_iterator, params_dict)
+        for loaded_weight_name, _, model_param, preprocessed_weight, shard_id, expert_id in processed_weights_iterator:
+            load_weights_into_param = getattr(
+                model_param, "load_weights_into_param", default_load_weights_into_param()
+            )
+            if expert_id is not None:
+                load_weights_into_param(model_param, preprocessed_weight, expert_id, shard_id)
+            else:
+                load_weights_into_param(model_param, preprocessed_weight, shard_id)
         self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:

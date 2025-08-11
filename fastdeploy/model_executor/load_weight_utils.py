@@ -34,6 +34,10 @@ from fastdeploy.model_executor.models.tp_utils import (
 )
 from fastdeploy.platforms import current_platform
 
+ORI_WEIGHT_NAME = "weight"
+QUANT_WEIGHT_NAME = "quant_weight"
+QUANT_SCALE_NAME = "weight_scale"
+
 
 def measure_time(func):
     def wrapper(*args, **kwargs):

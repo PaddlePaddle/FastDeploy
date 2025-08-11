@@ -21,6 +21,7 @@ from typing import Optional
 import paddle
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
+from fastdeploy.model_executor.models.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..moe import FusedMoE
@@ -172,23 +173,50 @@ class WeightOnlyLinearMethod(QuantMethodBase):
 
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
         weight_scale_shape = [layer.weight_shape[1]]
-
         layer.weight_shape.reverse()
         if self.quant_config.name() == "wint4":
             layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
 
-        layer.weight = layer.create_parameter(
+        layer.quant_weight = layer.create_parameter(
             shape=layer.weight_shape,
             dtype=layer.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
+        inflight_quant = extra_weight_attrs.get("inflight_quant", None)
+        output_dim = extra_weight_attrs.get("output_dim")
+        output_dim = not output_dim
+        weight_loader = extra_weight_attrs.get("weight_loader")
+        load_weights_into_param = extra_weight_attrs.get("load_weights_into_param")
+        weight_attrs = {
+            "weight_loader": weight_loader,
+            "load_weights_into_param": load_weights_into_param,
+            "output_dim": output_dim,
+        }
+        if inflight_quant:
+            weight_attrs = {**weight_attrs, "quant_method": self.apply_weight_quantization}
+        set_weight_attrs(
+            layer.quant_weight,
+            {
+                **weight_attrs,
+            },
+        )
+
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,
             dtype=layer._dtype,
             is_bias=False,
+        )
+
+        set_weight_attrs(
+            layer.weight_scale,
+            {
+                "weight_loader": weight_loader,
+                "output_dim": output_dim,
+                "load_weights_into_param": load_weights_into_param,
+            },
         )
 
     @abstractmethod
@@ -198,7 +226,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def apply(self, layer, x):
         linear_out = weight_only_linear(
             x,
-            weight=layer.weight,
+            weight=layer.quant_weight,
             bias=layer.bias if layer.add_bias else None,
             weight_scale=layer.weight_scale,
             weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
@@ -230,8 +258,16 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
-        layer.weight.set_value(quant_weight)
+        layer.quant_weight.set_value(quant_weight)
         layer.weight_scale.set_value(weight_scale.astype(paddle.get_default_dtype()))
+
+    def apply_weight_quantization(self, unquantized_weight):
+        quanted_weight_tensor, weight_scale_tensor = weight_quantize(
+            unquantized_weight,
+            algo=self.quant_config.algo,
+            arch=self.quant_config.weight_only_linear_arch,
+        )
+        return (quanted_weight_tensor, weight_scale_tensor.astype(paddle.get_default_dtype()))
 
     def process_loaded_weights(self, layer, weight) -> None:
 
@@ -241,5 +277,5 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             arch=self.quant_config.weight_only_linear_arch,
         )
 
-        layer.weight.set_value(quanted_weight_tensor)
+        layer.quant_weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))

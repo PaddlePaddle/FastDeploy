@@ -656,10 +656,11 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     quant_config_name = None
     if quantization_config is not None and quantization_config.get("quantization", None) is None:
         raise ValueError("quantization_config should have a key named 'quantization' for specify quant config.")
-
+    is_inflight_quant = False
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
     elif args.quantization != "None":
+        is_inflight_quant = True
         quantization_config = {}
         quant_config_name = args.quantization
         quantization_config["quantization"] = quant_config_name
@@ -678,7 +679,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     else:
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
-
+    load_config.is_inflight_quant = is_inflight_quant
     # Log quantization info
     logger.info("===========quantization_config==============")
     if quant_config is not None:

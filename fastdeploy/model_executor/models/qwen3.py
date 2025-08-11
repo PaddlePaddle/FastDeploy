@@ -246,7 +246,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         return "Qwen3ForCausalLM"
 
     @paddle.no_grad()
-    def load_weights(self, weights_iterator) -> None:
+    def processed_weights(self, weights_iterator, params_dict, is_processed=False) -> None:
         """
         Load model parameters from a given weights_iterator object.
 
@@ -254,7 +254,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.models.utils import default_weights_processor
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -267,7 +267,6 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None),
         ]
 
-        params_dict = dict(self.named_parameters())
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -276,15 +275,27 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]
-                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                weight_loader(param, loaded_weight, shard_id)
+                if is_processed:
+                    yield loaded_weight_name, model_param_name, param, loaded_weight, shard_id, None
+                else:
+                    weights_processor = getattr(param, "weights_processor", default_weights_processor(self.fd_config))
+                    yield from (
+                        (loaded_weight_name, model_param_name, param, preprocessed_weight, shard_id, None)
+                        for preprocessed_weight in weights_processor(param, loaded_weight, shard_id)
+                    )
                 break
             else:
                 if loaded_weight_name not in params_dict:
                     continue
                 param = params_dict[loaded_weight_name]
-                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                weight_loader(param, loaded_weight)
+                if is_processed:
+                    yield loaded_weight_name, loaded_weight_name, param, loaded_weight, None, None
+                else:
+                    weights_processor = getattr(param, "weights_processor", default_weights_processor(self.fd_config))
+                    yield from (
+                        (loaded_weight_name, loaded_weight_name, param, preprocessed_weight, None, None)
+                        for preprocessed_weight in weights_processor(param, loaded_weight, None)
+                    )
 
         if self.tie_word_embeddings:
             self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
@@ -301,7 +312,11 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+            if hasattr(self.lm_head.linear, "weight"):
+                self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+            else:
+                # for ep
+                self.lm_head.linear.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 

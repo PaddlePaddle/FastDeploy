@@ -54,41 +54,53 @@ def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
         setattr(param, key, value)
 
 
-def default_weight_loader(fd_config: FDConfig) -> None:
+def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
+    if hasattr(weight_or_paramter, "get_shape"):
+        shape = weight_or_paramter.get_shape()
+    else:
+        shape = weight_or_paramter.shape
+    if len(shape) == 1:
+        weight_or_paramter = weight_or_paramter[start:end]
+    elif output_dim:
+        weight_or_paramter = weight_or_paramter[..., start:end]
+    else:
+        weight_or_paramter = weight_or_paramter[start:end, ...]
+    return weight_or_paramter
+
+
+def default_weights_processor(fd_config: FDConfig) -> None:
     """Default weight loader"""
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
-        try:
-            output_dim = getattr(param, "output_dim", None)
-            # Tensor parallelism splits the weight along the output_dim
-            if output_dim is not None:
-                dim = -1 if output_dim else 0
-                size = loaded_weight.get_shape()[dim]
-                block_size = size // fd_config.parallel_config.tensor_parallel_size
-                shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
-                shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
-                if output_dim:
-                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
-                else:
-                    loaded_weight = loaded_weight[shard_offset:shard_size, ...]
 
-            loaded_weight = get_tensor(loaded_weight)
-            # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
-            if param.dtype != loaded_weight.dtype:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        output_dim = getattr(param, "output_dim", None)
+        # Tensor parallelism splits the weight along the output_dim
+        if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+            dim = -1 if output_dim else 0
+            size = loaded_weight.get_shape()[dim]
+            block_size = size // fd_config.parallel_config.tensor_parallel_size
+            shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
+            shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+            loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
-            if param.shape != loaded_weight.shape:
-                try:
-                    param = param.reshape(loaded_weight.shape)
-                except ValueError as e:
-                    raise ValueError(
-                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
-                    )
+        loaded_weight = get_tensor(loaded_weight)
+        # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+        if param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(param.dtype)
+        yield loaded_weight
 
-            param.copy_(loaded_weight, False)
-        except Exception:
-            raise
+    return fn
+
+
+def default_load_weights_into_param():
+    def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
+        if param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(param.dtype)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(loaded_weight, False)
 
     return fn
 

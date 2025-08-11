@@ -23,8 +23,10 @@ from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.models.utils import (
-    default_weight_loader,
+    default_load_weights_into_param,
+    default_weights_processor,
     set_weight_attrs,
+    slice_fn,
 )
 from fastdeploy.platforms import current_platform
 
@@ -37,8 +39,10 @@ class UnquantizedLinearMethod(QuantMethodBase):
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         extra_weight_attrs is a dictionary that may include parameters like:
+        - split_axis: axis along which to split the tensor in a distributed environment
         - output_dim: determines whether the split is applied along the output dimension (rows) or input dimension (columns)
-        - weight_loader: a callable or method responsible for loading the weight data
+        - weights_processor: a callable or method responsible for processing weight data
+        - load_weights_into_param:Loads the given weight tensor into the specified model parameter.
         """
         layer.weight = layer.create_parameter(
             shape=layer.weight_shape,
@@ -46,12 +50,21 @@ class UnquantizedLinearMethod(QuantMethodBase):
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
+        split_axis = extra_weight_attrs.get("split_axis")
+        if hasattr(layer, "nranks") and layer.nranks > 0:
+            _set_var_distributed(layer.weight, split_axis=split_axis)
         set_weight_attrs(
             layer.weight,
-            {"weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config))},
+            {
+                **extra_weight_attrs,
+                "weights_processor": extra_weight_attrs.get(
+                    "weights_processor", default_weights_processor(layer.fd_config)
+                ),
+                "load_weights_into_param": extra_weight_attrs.get(
+                    "load_weights_into_param", default_load_weights_into_param()
+                ),
+            },
         )
-        if hasattr(layer, "nranks") and layer.nranks > 1:
-            set_weight_attrs(layer.weight, {"output_dim": extra_weight_attrs.get("output_dim")})
 
     def process_loaded_weights(self, layer, weights) -> None:
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
@@ -158,6 +171,7 @@ class LinearBase(nn.Layer):
                 is_bias=True,
             )
 
+        self.is_quantized = fd_config.model_config.is_quantized
         # smooth quant
         self.linear_shift = None
         self.linear_smooth = None
@@ -270,9 +284,17 @@ class ReplicatedLinear(LinearBase):
         assert self.quant_method is not None
         self.quant_method.create_weights(
             self,
-            weight_loader=(
-                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+            weights_processor=(
+                self.weights_processor
+                if hasattr(self, "weights_processor")
+                else default_weights_processor(self.fd_config)
             ),
+            load_weights_into_param=(
+                self.load_weights_into_param
+                if hasattr(self, "load_weights_into_param")
+                else default_load_weights_into_param()
+            ),
+            inflight_quant=fd_config.quant_config and not skip_quant,
         )
 
 
@@ -327,17 +349,23 @@ class ColumnParallelLinear(LinearBase):
         self.quant_method.create_weights(
             self,
             output_dim=True,
-            weight_loader=(
-                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+            weights_processor=(
+                self.weights_processor
+                if hasattr(self, "weights_processor")
+                else default_weights_processor(self.fd_config)
             ),
+            load_weights_into_param=(
+                self.load_weights_into_param
+                if hasattr(self, "load_weights_into_param")
+                else default_load_weights_into_param()
+            ),
+            inflight_quant=fd_config.quant_config and not skip_quant,
         )
+
         if self.nranks > 0:
-            _set_var_distributed(self.weight, split_axis=1)
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
-                if self.nranks > 1:
-                    set_weight_attrs(self.bias, {"output_dim": True})
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -390,31 +418,33 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             skip_quant=skip_quant,
         )
 
-    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+    def load_weights_into_param(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        assert loaded_shard_id in ["gate", "up"]
+        output_dim = getattr(param, "output_dim", None)
+        if loaded_shard_id == "gate":
+            param = slice_fn(param, output_dim, start=0, end=self.output_size // 2)
+        elif loaded_shard_id == "up":
+            param = slice_fn(param, output_dim, start=self.output_size // 2, end=self.output_size)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(loaded_weight, False)
+
+    def weights_processor(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         # 1.fused gate_up in disk
         # 2.split gate up
         assert loaded_shard_id in ["gate", "up"]
         output_dim = getattr(param, "output_dim", None)
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None:
+        if output_dim is not None and self.nranks > 1:
             dim = -1
             size = loaded_weight.get_shape()[dim]
             block_size = size // self.nranks
             shard_offset = self.local_rank * block_size
             shard_size = (self.local_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
-
+            loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
         loaded_weight = get_tensor(loaded_weight)
-
-        if loaded_shard_id == "gate":
-            param = param[:, : self.output_size // 2]
-        elif loaded_shard_id == "up":
-            param = param[:, self.output_size // 2 :]
-
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        param.copy_(loaded_weight, False)
+        yield loaded_weight
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -484,33 +514,44 @@ class QKVParallelLinear(ColumnParallelLinear):
             add_bias=add_bias,
         )
 
-    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+    def weights_processor(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         # 1.fused qkv in disk
         # 2.split q k v
         assert loaded_shard_id in ["q", "k", "v"]
         output_dim = getattr(param, "output_dim", None)
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None:
+        if output_dim is not None and self.nranks > 1:
             dim = -1
             size = loaded_weight.get_shape()[dim]
             block_size = size // self.nranks
             shard_offset = self.local_rank * block_size
             shard_size = (self.local_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
+            loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
         loaded_weight = get_tensor(loaded_weight)
+        yield loaded_weight
 
+    def load_weights_into_param(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        assert loaded_shard_id in ["q", "k", "v"]
+        output_dim = getattr(param, "output_dim", None)
         if loaded_shard_id == "q":
-            param = param[:, : self.num_heads_per_rank * self.head_dim]
+            param = slice_fn(param, output_dim, 0, self.num_heads_per_rank * self.head_dim)
+
         elif loaded_shard_id == "k":
-            param = param[
-                :,
-                self.num_heads_per_rank
-                * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
-                * self.head_dim,
-            ]
+            param = slice_fn(
+                param,
+                output_dim,
+                self.num_heads_per_rank * self.head_dim,
+                (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim,
+            )
+
         elif loaded_shard_id == "v":
-            param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
+            param = slice_fn(
+                param,
+                output_dim,
+                (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim,
+                (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * self.head_dim,
+            )
 
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
@@ -653,9 +694,17 @@ class RowParallelLinear(LinearBase):
             self,
             split_axis=0,
             output_dim=False,
-            weight_loader=(
-                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
+            weights_processor=(
+                self.weights_processor
+                if hasattr(self, "weights_processor")
+                else default_weights_processor(self.fd_config)
             ),
+            load_weights_into_param=(
+                self.load_weights_into_param
+                if hasattr(self, "load_weights_into_param")
+                else default_load_weights_into_param()
+            ),
+            inflight_quant=fd_config.quant_config and not skip_quant,
         )
         if self.nranks > 0:
             _set_var_distributed(self.weight, split_axis=0)
@@ -669,6 +718,17 @@ class RowParallelLinear(LinearBase):
                             "output_dim": False,
                         },
                     )
+
+        if self.nranks > 0:
+            if self.with_bias:
+                # col parallel
+                _set_var_distributed(self.bias, split_axis=0)
+                set_weight_attrs(
+                    self.bias,
+                    {
+                        "output_dim": False,
+                    },
+                )
 
         self.reduce_results = reduce_results
 

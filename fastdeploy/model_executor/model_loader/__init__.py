@@ -20,6 +20,9 @@ from fastdeploy.model_executor.model_loader.default_loader import DefaultModelLo
 from fastdeploy.model_executor.model_loader.default_loader_v1 import (
     DefaultModelLoaderV1,
 )
+from fastdeploy.model_executor.model_loader.inflight_quant_loader import (
+    InflightQuantModelLoader,
+)
 
 
 def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
@@ -27,6 +30,8 @@ def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
 
     if load_config.load_choices == LoadChoices.DEFAULT_V1:
         return DefaultModelLoaderV1(load_config)
+    elif load_config.load_choices == LoadChoices.INFLIGHT_QUANT:
+        return InflightQuantModelLoader(load_config)
 
     return DefaultModelLoader(load_config)
 
