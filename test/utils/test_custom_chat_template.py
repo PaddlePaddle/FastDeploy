@@ -1,7 +1,7 @@
 import os
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch, AsyncMock
 
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
@@ -50,7 +50,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
     async def test_serving_chat(self):
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "你好"}])
         self.chat_completion_handler = OpenAIServingChat(
-            self.mock_engine, pid=123, ips=None, chat_template=self.input_chat_template
+            self.mock_engine, pid=123, ips=None, max_waiting_time=-1, chat_template=self.input_chat_template
         )
 
         async def mock_chat_completion_full_generator(request, request_id, model_name, prompt_token_ids):
@@ -61,13 +61,16 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
         self.chat_completion_handler.engine_client.format_and_add_data = mock_format_and_add_data
+        self.chat_completion_handler.engine_client.semaphore = AsyncMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=None)
+        self.chat_completion_handler.engine_client.semaphore.status = MagicMock(return_value="mock_status")
         chat_completiom = await self.chat_completion_handler.create_chat_completion(request)
         self.assertEqual(self.input_chat_template, chat_completiom["chat_template"])
 
     async def test_serving_chat_cus(self):
-        request = ChatCompletionRequest(messages=[{"role": "user", "content": "你好"}], chat_template="hello")
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}], chat_template="hello")
         self.chat_completion_handler = OpenAIServingChat(
-            self.mock_engine, pid=123, ips=None, chat_template=self.input_chat_template
+            self.mock_engine, pid=123, ips=None, max_waiting_time=10, chat_template=self.input_chat_template
         )
 
         async def mock_chat_completion_full_generator(request, request_id, model_name, prompt_token_ids):
@@ -78,6 +81,9 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
         self.chat_completion_handler.engine_client.format_and_add_data = mock_format_and_add_data
+        self.chat_completion_handler.engine_client.semaphore = AsyncMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=None)
+        self.chat_completion_handler.engine_client.semaphore.status = MagicMock(return_value="mock_status")
         chat_completion = await self.chat_completion_handler.create_chat_completion(request)
         self.assertEqual("hello", chat_completion["chat_template"])
 
