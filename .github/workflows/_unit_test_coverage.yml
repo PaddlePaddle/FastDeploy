@@ -103,7 +103,6 @@ jobs:
             python -m pip install coverage
             python -m pip install diff-cover
             python -m pip install ${fd_wheel_url}
-            python -m pip install -r scripts/unittest_requirement.txt
             if [ -d "test/plugins" ]; then
                 cd test/plugins
                 python setup.py install
@@ -162,7 +161,7 @@ jobs:
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
-      - name: Determine Unit Succ
+      - name: Check Unit Test Success
         shell: bash
         run: |
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
@@ -182,7 +181,7 @@ jobs:
           fi
           echo "All tests passed"
 
-      - name: Determine whether the coverage rate reaches 80%
+      - name: Verify Code Coverage Threshold (80%)
         shell: bash
         run: |
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
