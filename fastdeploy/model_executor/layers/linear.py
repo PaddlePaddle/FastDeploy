@@ -379,7 +379,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.output_size = output_size
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
-        self.gate_up_dict = {}
 
         super().__init__(
             fd_config=fd_config,
@@ -406,13 +405,16 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
         loaded_weight = get_tensor(loaded_weight)
-        param_shape = [param.shape[0], param.shape[1] // 2]
-        assert param_shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param_shape})"
+
+        if loaded_shard_id == "gate":
+            param = param[:, : self.output_size // 2]
+        elif loaded_shard_id == "up":
+            param = param[:, self.output_size // 2 :]
+
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        self.gate_up_dict[loaded_shard_id] = loaded_weight
-        if len(self.gate_up_dict) == 2:
-            param.set_value(paddle.concat([self.gate_up_dict["gate"], self.gate_up_dict["up"]], axis=-1))
+        param.copy_(loaded_weight, False)
 
     def load_state_dict(self, state_dict: dict):
         """
