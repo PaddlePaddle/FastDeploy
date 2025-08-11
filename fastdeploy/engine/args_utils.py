@@ -865,7 +865,7 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                self.max_num_batched_tokens = 8192
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg

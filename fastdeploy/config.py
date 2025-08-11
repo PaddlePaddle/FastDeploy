@@ -726,7 +726,10 @@ class CacheConfig:
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
         self.num_gpu_blocks_override = None
-        self.kv_cache_ratio = 0.75
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.kv_cache_ratio = 1.0
+        else:
+            self.kv_cache_ratio = 0.75
         self.enc_dec_block_num = 2
         self.prealloc_dec_block_slot_num_threshold = 5
         self.cache_dtype = "bfloat16"
@@ -811,7 +814,10 @@ class CacheConfig:
         self.dec_token_num = self.enc_dec_block_num * self.block_size
         if self.num_gpu_blocks_override is not None:
             self.total_block_num = self.num_gpu_blocks_override
-            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.prefill_kvcache_block_num = self.total_block_num
+            else:
+                self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -824,7 +830,10 @@ class CacheConfig:
         reset gpu block number
         """
         self.total_block_num = num_gpu_blocks
-        self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.prefill_kvcache_block_num = self.total_block_num
+        else:
+            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         logger.info(
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
