@@ -28,6 +28,7 @@ from tqdm import tqdm
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
@@ -35,7 +36,6 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 from fastdeploy.worker.output import Logprob, LogprobsLists
-from fastdeploy.entrypoints.chat_utils import load_chat_template
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
@@ -228,17 +228,18 @@ class LLM:
 
         if sampling_params_len != 1 and len(messages) != sampling_params_len:
             raise ValueError("messages and sampling_params must be the same length.")
-        
+
         if chat_template is None:
             chat_template = self.chat_template
 
         messages_len = len(messages)
         for i in range(messages_len):
-            messages[i] = {"messages": messages[i], "chat_template": chat_template}
+            messages[i] = {"messages": messages[i]}
         req_ids = self._add_request(
             prompts=messages,
             sampling_params=sampling_params,
             chat_template_kwargs=chat_template_kwargs,
+            chat_template=chat_template,
         )
 
         topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
@@ -251,7 +252,7 @@ class LLM:
         self,
         prompts,
         sampling_params,
-        chat_template_kwargs: Optional[dict[str, Any]] = None,
+        **kwargs,
     ):
         """
             添加一个请求到 LLM Engine，并返回该请求的 ID。
@@ -292,10 +293,7 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
-            enable_thinking = None
-            if chat_template_kwargs is not None:
-                enable_thinking = chat_template_kwargs.get("enable_thinking", None)
-            self.llm_engine.add_requests(tasks, current_sampling_params, enable_thinking=enable_thinking)
+            self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 
     def _decode_token(self, token_id: int) -> str:

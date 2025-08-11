@@ -88,6 +88,7 @@ class ErnieProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -139,6 +140,7 @@ class ErnieProcessor(BaseDataProcessor):
             str: error message
         """
         request = self._apply_default_parameters(request)
+        request["enable_thinking"] = request.get("chat_template_kwargs", {}).get("enable_thinking")
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
@@ -309,7 +311,7 @@ class ErnieProcessor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
-            chat_template=request_or_messages.get("chat_template", None)
+            chat_template=request_or_messages.get("chat_template", None),
         )
 
         req_id = None

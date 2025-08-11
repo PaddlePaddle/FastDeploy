@@ -85,9 +85,9 @@ class OpenAIServingChat:
         api_server_logger.info(f"create chat completion request: {request_id}")
 
         try:
-            if request.chat_template is None:
-                request.chat_template = self.chat_template
             current_req_dict = request.to_dict_for_infer(request_id)
+            if "chat_template" not in current_req_dict:
+                current_req_dict["chat_template"] = self.chat_template
             current_req_dict["arrival_time"] = time.time()
             prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
             if isinstance(prompt_token_ids, np.ndarray):

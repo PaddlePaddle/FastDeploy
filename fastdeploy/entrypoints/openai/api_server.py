@@ -28,6 +28,7 @@ from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -54,7 +55,6 @@ from fastdeploy.utils import (
     is_port_available,
     retrive_model_from_server,
 )
-from fastdeploy.entrypoints.chat_utils import load_chat_template
 
 parser = FlexibleArgumentParser()
 parser.add_argument("--port", default=8000, type=int, help="port to the http server")
@@ -65,6 +65,7 @@ parser.add_argument("--controller-port", default=-1, type=int, help="port for co
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
+chat_template = load_chat_template(args.chat_template)
 
 llm_engine = None
 
@@ -105,7 +106,6 @@ async def lifespan(app: FastAPI):
         pid = os.getppid()
     else:
         pid = os.getpid()
-    chat_template = load_chat_template(args.chat_template)
     api_server_logger.info(f"{pid}")
     engine_client = EngineClient(
         args.model,
