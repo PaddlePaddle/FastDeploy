@@ -436,9 +436,6 @@ class OpenAIServingCompletion:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
 
-            num_generated_tokens += final_res["output_token_ids"]
-            num_prompt_tokens += len(prompt_token_ids)
-
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
 
             choice_data = CompletionResponseChoice(
@@ -453,6 +450,10 @@ class OpenAIServingCompletion:
                 finish_reason=finish_reason,
             )
             choices.append(choice_data)
+
+            num_generated_tokens += final_res["output_token_ids"]
+
+            num_prompt_tokens += len(prompt_token_ids)
 
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
