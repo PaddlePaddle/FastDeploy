@@ -161,10 +161,10 @@ class MetricsManager:
     prefix_ssd_cache_token_num: "Gauge"
     batch_size: "Gauge"
     max_batch_size: "Gauge"
-    available_block_num: "Gauge"
-    free_block_num: "Gauge"
-    max_block_num: "Gauge"
-    available_resource: "Gauge"
+    available_gpu_block_num: "Gauge"
+    free_gpu_block_num: "Gauge"
+    max_gpu_block_num: "Gauge"
+    available_gpu_resource: "Gauge"
     requests_number: "Counter"
     send_cache_failed_num: "Counter"
     first_token_latency: "Gauge"
@@ -311,28 +311,28 @@ class MetricsManager:
             "description": "Maximum batch size determined when service started",
             "kwargs": {},
         },
-        "available_block_num": {
+        "available_gpu_block_num": {
             "type": Gauge,
-            "name": "fastdeploy:available_block_num",
-            "description": "Number of available blocks in cache, including prefix caching blocks that are not officially released",
+            "name": "fastdeploy:available_gpu_block_num",
+            "description": "Number of available gpu blocks in cache, including prefix caching blocks that are not officially released",
             "kwargs": {},
         },
-        "free_block_num": {
+        "free_gpu_block_num": {
             "type": Gauge,
-            "name": "fastdeploy:free_block_num",
+            "name": "fastdeploy:free_gpu_block_num",
             "description": "Number of free blocks in cache",
             "kwargs": {},
         },
-        "max_block_num": {
+        "max_gpu_block_num": {
             "type": Gauge,
-            "name": "fastdeploy:max_block_num",
+            "name": "fastdeploy:max_gpu_block_num",
             "description": "Number of total blocks determined when service started",
             "kwargs": {},
         },
-        "available_resource":{
+        "available_gpu_resource": {
             "type": Gauge,
-            "name": "fastdeploy:available_resource",
-            "description": "Available blocks percentage, i.e. block_num / max_block_num",
+            "name": "fastdeploy:available_gpu_resource",
+            "description": "Available blocks percentage, i.e. available_gpu_block_num / max_gpu_block_num",
             "kwargs": {},
         },
         "requests_number": {
