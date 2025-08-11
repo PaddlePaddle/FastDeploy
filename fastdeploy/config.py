@@ -27,6 +27,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import check_unified_ckpt, get_logger
 
 logger = get_logger("config", "config.log")
@@ -733,7 +734,7 @@ class CacheConfig:
         self.gpu_memory_utilization = 0.9
         self.num_gpu_blocks_override = None
         self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 2
+        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
         self.prealloc_dec_block_slot_num_threshold = 5
         self.cache_dtype = "bfloat16"
         self.model_cfg = None

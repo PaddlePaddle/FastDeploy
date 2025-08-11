@@ -15,15 +15,6 @@
 #include "helper.h"
 #include "iluvatar_context.h"
 
-#define CUINFER_CHECK(func)                                                              \
-    do {                                                                                 \
-        cuinferStatus_t status = (func);                                                 \
-        if (status != CUINFER_STATUS_SUCCESS) {                                          \
-            std::cerr << "Error in file " << __FILE__ << " on line " << __LINE__ << ": " \
-                      << cuinferGetErrorString(status) << std::endl;                     \
-            throw std::runtime_error("CUINFER_CHECK ERROR");                            \
-        }                                                                                \
-    } while (0)
 
 template <paddle::DataType T>
 void PagedAttnKernel(const paddle::Tensor& q,
@@ -34,6 +25,8 @@ void PagedAttnKernel(const paddle::Tensor& q,
                      const paddle::optional<paddle::Tensor> &alibi_slopes,
                      const paddle::optional<paddle::Tensor> &k,
                      const paddle::optional<paddle::Tensor> &v,
+                     const paddle::optional<paddle::Tensor> &rope_sin,
+                     const paddle::optional<paddle::Tensor> &rope_cos,
                      int num_kv_heads,
                      float scale,
                      int block_size,
@@ -44,6 +37,7 @@ void PagedAttnKernel(const paddle::Tensor& q,
                      float softcap,
                      bool enable_cuda_graph,
                      bool use_sqrt_alibi,
+                     bool merged_qkv,
                      paddle::Tensor& out) {
     if (alibi_slopes) {
         PADDLE_ENFORCE_EQ(alibi_slopes.get().dtype(),
@@ -75,14 +69,6 @@ void PagedAttnKernel(const paddle::Tensor& q,
                       true,
                       common::errors::InvalidArgument(
                           "paged_attention expects k_cache is contiguous"));
-    PADDLE_ENFORCE_EQ(v_cache.dtype(),
-                      dtype,
-                      common::errors::InvalidArgument(
-                          "v_cache dtype must be the same as query dtype"));
-    PADDLE_ENFORCE_EQ(v_cache.is_contiguous(),
-                      true,
-                      common::errors::InvalidArgument(
-                          "paged_attention expects v_cache is contiguous"));
     PADDLE_ENFORCE_EQ(block_table.dtype(),
                       paddle::DataType::INT32,
                       common::errors::InvalidArgument(
@@ -99,14 +85,14 @@ void PagedAttnKernel(const paddle::Tensor& q,
                       true,
                       common::errors::InvalidArgument(
                           "paged_attention expects seq_lens is contiguous"));
-
     // check dim and shape
-    // out: [num_seqs, num_heads, head_size]
-    // q: [num_seqs, num_heads, head_size]
-    // k_chache: [num_blocks, kv_num_heads, block_size, head_size]
-    // v_chache: [num_blocks, kv_num_heads, block_size, head_size]
+    // k_cache: [num_blocks, kv_num_heads, block_size, head_size]
+    // v_cache: [num_blocks, kv_num_heads, block_size, head_size]
     // block_table: [num_seqs, max_num_blocks_per_seq]
     // seq_lens: [num_seqs]
+    // q and out:
+    // merged_qkv = false: [num_seqs, num_heads, head_size]
+    // merged_qkv = true: [num_seqs, num_heads+2*num_kv_heads, head_size]
 
     const auto& q_dims = q.dims();
     PADDLE_ENFORCE_EQ(q_dims.size(),
@@ -119,11 +105,6 @@ void PagedAttnKernel(const paddle::Tensor& q,
                       common::errors::InvalidArgument(
                           "paged_attn receive out dims is "
                           "[num_seqs, num_heads, head_size]"));
-    PADDLE_ENFORCE_EQ(k_cache.dims(),
-                      v_cache.dims(),
-                      common::errors::InvalidArgument(
-                          "paged_attn requires k_cache size is the "
-                          "same as v_cache"));
 
     const auto& kv_cache_dims = k_cache.dims();
     PADDLE_ENFORCE_EQ(kv_cache_dims.size(),
@@ -146,7 +127,7 @@ void PagedAttnKernel(const paddle::Tensor& q,
                           "paged_attn receive seq_lens dims is [num_seqs]"));
 
     int num_seqs = q_dims[0];
-    int num_heads = q_dims[1];
+    int num_heads = merged_qkv ? q_dims[1] - 2 * num_kv_heads : q_dims[1];
     int head_size = q_dims[2];
     int max_num_blocks_per_seq = block_table_dims[1];
     int q_stride = q.strides()[0];
@@ -178,22 +159,28 @@ void PagedAttnKernel(const paddle::Tensor& q,
     const float *alibi_slopes_ptr = alibi_slopes ? alibi_slopes.get().data<float>() : nullptr;
     const void *key_ptr = k ? k.get().data() : nullptr;
     const void *value_ptr = v ? v.get().data() : nullptr;
-
-    size_t workspace_size = 0;
-    void* workspace_ptr = nullptr;
-    CUINFER_CHECK(cuInferPageAttentionGetWorkspaceV7(
-      num_seqs, num_heads, num_kv_heads, head_size, block_size, max_context_len, &workspace_size));
-
-    CUDA_CHECK(cudaMalloc((void**)&workspace_ptr, workspace_size));
-    CUDA_CHECK(cudaMemset(workspace_ptr, 0xff, workspace_size));
+    const float *rope_sin_ptr = merged_qkv ? rope_sin.get().data<float>() : nullptr;
+    const float *rope_cos_ptr = merged_qkv ? rope_cos.get().data<float>() : nullptr;
 
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(q.place()));
-    auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
     cuinferHandle_t cuinfer_handle = iluvatar::getContextInstance()->getIxInferHandle();
+
+    size_t workspace_size = 0;
+    CUINFER_CHECK(cuInferPageAttentionGetWorkspaceV7(num_seqs,
+                                                     num_heads,
+                                                     num_kv_heads,
+                                                     head_size,
+                                                     block_size,
+                                                     max_context_len,
+                                                     &workspace_size));
+    auto* allocator = paddle::GetAllocator(q.place());
+    phi::Allocator::AllocationPtr tmp_workspace = allocator->Allocate(workspace_size);
+    void* workspace_ptr = tmp_workspace->ptr();
 
     PageAttentionWithKVCacheArguments args{
             static_cast<float>(scale), 1.0, 1.0, static_cast<float>(softcap), window_left, window_right,
-            causal, use_sqrt_alibi, enable_cuda_graph, false, alibi_slopes_ptr, key_ptr, value_ptr, workspace_ptr};
+            causal, use_sqrt_alibi, enable_cuda_graph, false, alibi_slopes_ptr, key_ptr, value_ptr,
+            workspace_ptr, merged_qkv, rope_sin_ptr, rope_cos_ptr};
     CUINFER_CHECK(cuInferPageAttentionV7(cuinfer_handle,
                                          out.data(),
                                          data_type,
@@ -216,8 +203,6 @@ void PagedAttnKernel(const paddle::Tensor& q,
                                          block_table.data<int32_t>(),
                                          seq_lens.data<int32_t>(),
                                          args));
-
-    CUDA_CHECK(cudaFree(workspace_ptr));
 }
 
 std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
@@ -228,6 +213,8 @@ std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
                                       const paddle::optional<paddle::Tensor> &alibi_slopes,
                                       const paddle::optional<paddle::Tensor> &k,
                                       const paddle::optional<paddle::Tensor> &v,
+                                      const paddle::optional<paddle::Tensor> &rope_sin,
+                                      const paddle::optional<paddle::Tensor> &rope_cos,
                                       int num_kv_heads,
                                       float scale,
                                       int block_size,
@@ -237,10 +224,15 @@ std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
                                       int window_right,
                                       float softcap,
                                       bool enable_cuda_graph,
-                                      bool use_sqrt_alibi) {
+                                      bool use_sqrt_alibi,
+                                      bool merged_qkv) {
 
     const auto dtype = q.dtype();
-    auto out = paddle::empty_like(q, dtype);
+    auto out_shape = q.shape();
+    if (merged_qkv) {
+        out_shape[1] -=  2 * num_kv_heads;
+    }
+    auto out = paddle::empty(out_shape, dtype, q.place());
 
     switch (dtype) {
         case paddle::DataType::BFLOAT16:
@@ -252,6 +244,8 @@ std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
                                                         alibi_slopes,
                                                         k,
                                                         v,
+                                                        rope_sin,
+                                                        rope_cos,
 						                                num_kv_heads,
                                                         scale,
                                                         block_size,
@@ -262,6 +256,7 @@ std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
                                                         softcap,
                                                         enable_cuda_graph,
                                                         use_sqrt_alibi,
+                                                        merged_qkv,
                                                         out);
             break;
         case paddle::DataType::FLOAT16:
@@ -273,6 +268,8 @@ std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
                                                        alibi_slopes,
                                                        k,
                                                        v,
+                                                       rope_sin,
+                                                       rope_cos,
 						                               num_kv_heads,
                                                        scale,
                                                        block_size,
@@ -283,6 +280,7 @@ std::vector<paddle::Tensor> PagedAttn(const paddle::Tensor& q,
                                                        softcap,
                                                        enable_cuda_graph,
                                                        use_sqrt_alibi,
+                                                       merged_qkv,
                                                        out);
             break;
         default:
@@ -298,8 +296,28 @@ std::vector<std::vector<int64_t>> PagedAttnInferShape(const std::vector<int64_t>
                                                       const std::vector<int64_t>& seq_lens_shape,
                                                       const std::vector<int64_t>& alibi_slopes_shape,
                                                       const std::vector<int64_t>& k_shape,
-                                                      const std::vector<int64_t>& v_shape) {
-    return {q_shape};
+                                                      const std::vector<int64_t>& v_shape,
+                                                      const std::vector<int64_t>& rope_sin_shape,
+                                                      const std::vector<int64_t>& rope_cos_shape,
+                                                      int num_kv_heads,
+                                                      float scale,
+                                                      int block_size,
+                                                      int max_context_len,
+                                                      bool causal,
+                                                      int window_left,
+                                                      int window_right,
+                                                      float softcap,
+                                                      bool enable_cuda_graph,
+                                                      bool use_sqrt_alibi,
+                                                      bool merged_qkv) {
+    if (merged_qkv) {
+        int64_t num_tokens = q_shape[0];
+        int64_t num_heads = q_shape[1] - 2 * num_kv_heads;
+        int64_t head_dim = q_shape[2];
+        return {{num_tokens, num_heads, head_dim}};
+    } else {
+        return {q_shape};
+    }
 }
 
 std::vector<paddle::DataType> PagedAttnInferDtype(const paddle::DataType& q_dtype,
@@ -309,13 +327,29 @@ std::vector<paddle::DataType> PagedAttnInferDtype(const paddle::DataType& q_dtyp
                                                   const paddle::DataType& seq_lens_dtype,
                                                   const paddle::DataType& alibi_slopes_dtype,
                                                   const paddle::DataType& k_dtype,
-                                                  const paddle::DataType& v_dtype) {
+                                                  const paddle::DataType& v_dtype,
+                                                  const paddle::DataType& rope_sin_dtype,
+                                                  const paddle::DataType& rope_cos_dtype,
+                                                  int num_kv_heads,
+                                                  float scale,
+                                                  int block_size,
+                                                  int max_context_len,
+                                                  bool causal,
+                                                  int window_left,
+                                                  int window_right,
+                                                  float softcap,
+                                                  bool enable_cuda_graph,
+                                                  bool use_sqrt_alibi,
+                                                  bool merged_qkv) {
     return {q_dtype};
 }
 
 
 PD_BUILD_STATIC_OP(paged_attn)
-    .Inputs({"q", "k_cache", "v_cache", "block_table", "seq_lens", paddle::Optional("alibi_slopes"), paddle::Optional("k"), paddle::Optional("v")})
+    .Inputs({"q", "k_cache", "v_cache", "block_table", "seq_lens",
+             paddle::Optional("alibi_slopes"), paddle::Optional("k"),
+             paddle::Optional("v"), paddle::Optional("rope_sin"),
+             paddle::Optional("rope_cos")})
     .Outputs({"out"})
     .Attrs({"num_kv_heads:int",
             "scale:float",
@@ -326,12 +360,8 @@ PD_BUILD_STATIC_OP(paged_attn)
             "window_right:int",
             "softcap:float",
 	        "enable_cuda_graph:bool",
-            "use_sqrt_alibi:bool"})
+            "use_sqrt_alibi:bool",
+            "merged_qkv:bool"})
     .SetKernelFn(PD_KERNEL(PagedAttn))
     .SetInferShapeFn(PD_INFER_SHAPE(PagedAttnInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PagedAttnInferDtype));
-
-
-PYBIND11_MODULE(fastdeploy_ops, m) {
-    m.def("paged_attn", &PagedAttn, "paged attn function");
-}
