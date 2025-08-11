@@ -7,23 +7,16 @@
 Boundary value checking for API parameters
 """
 
-import json
 
-from core import (
-    TEMPLATE,
-    URL,
-    build_request_payload,
-    send_request,
-)
+from core import TEMPLATE, URL, build_request_payload, send_request
+
 
 def test_max_min_1_token():
     data = {
         "stream": False,
         "messages": [{"role": "user", "content": "非洲的首都是？"}],
         "max_tokens": 1,
-        "metadata": {
-                "min_tokens": 1
-            },
+        "metadata": {"min_tokens": 1},
     }
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(URL, payload).json()

@@ -97,13 +97,13 @@ class ResourceManagerV1(ResourceManager):
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
-    
+
     def reschedule_preempt_task(self, request_id):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
                 self.waiting.appendleft(request)
-                self.to_be_rescheduled_request_id_set.remove(request_id) 
+                self.to_be_rescheduled_request_id_set.remove(request_id)
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         can_schedule = True
@@ -422,9 +422,15 @@ class ResourceManagerV1(ResourceManager):
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
                         self._free_blocks(request)
-                    if request.request_id in self.to_be_rescheduled_request_id_set: # finished after preempted, blocks have been recycled.
-                        self.to_be_rescheduled_request_id_set.remove(request.request_id) # just remove from to_be_rescheduled_request_id_set
-                    if request in self.waiting:  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
+                    if (
+                        request.request_id in self.to_be_rescheduled_request_id_set
+                    ):  # finished after preempted, blocks have been recycled.
+                        self.to_be_rescheduled_request_id_set.remove(
+                            request.request_id
+                        )  # just remove from to_be_rescheduled_request_id_set
+                    if (
+                        request in self.waiting
+                    ):  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
                         raise RuntimeError(f"request {request.request_id} scheduled into waiting list, after finished")
 
                     self.tasks_list[request.idx] = None
