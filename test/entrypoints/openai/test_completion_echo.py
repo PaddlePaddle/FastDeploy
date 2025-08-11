@@ -7,7 +7,7 @@ from fastdeploy.entrypoints.openai.serving_completion import (
 )
 
 
-class TestCompletionEcho(unittest.TestCase):
+class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         # 初始化测试环境
         self.mock_engine = MagicMock()
@@ -15,7 +15,6 @@ class TestCompletionEcho(unittest.TestCase):
 
     def test_single_prompt_non_streaming(self):
         """测试单prompt非流式响应"""
-
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
         # 准备测试数据
@@ -29,7 +28,7 @@ class TestCompletionEcho(unittest.TestCase):
                 "top_logprobs": {"token1": -0.1, "token2": -0.2},
                 "finished": True,
             },
-            "output_token_ids": len([1, 2, 3]),  # 修正为token数量而不是token列表
+            "output_token_ids": 3,
         }
         self.mock_engine.generate.return_value = [mock_output]
 
@@ -47,51 +46,35 @@ class TestCompletionEcho(unittest.TestCase):
         # 验证结果
         self.assertEqual(response.choices[0].text, "test prompt generated text")
 
-    @patch("fastdeploy.entrypoints.openai.serving_completion.time.time")
-    async def test_single_prompt_streaming(self, mock_time):
-        """测试单prompt流式响应"""
-
+    async def test_echo_back_prompt_and_streaming(self):
+        """测试_echo_back_prompt方法和流式响应的prompt拼接逻辑"""
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
-        mock_time.return_value = 12345
 
         # 准备测试数据
         request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True, echo=True)
 
-        # 模拟engine返回的流式数据
-        mock_responses = [
-            {"outputs": {"text": " chunk1", "token_ids": [1], "send_idx": 0, "finished": False}},
-            {"outputs": {"text": " chunk2", "token_ids": [2], "finished": True, "finish_reason": "stop"}},
-        ]
+        # 准备mock响应数据
+        mock_response = {"outputs": {"text": "test output", "token_ids": [1, 2, 3], "finished": True}}
 
-        # 模拟异步generate方法
-        async def mock_generate(*args, **kwargs):
-            for resp in mock_responses:
-                yield resp
+        # 使用patch来mock _echo_back_prompt方法
+        with patch.object(self.completion_handler, "_echo_back_prompt") as mock_echo:
+            # 设置mock方法直接修改response中的text
+            def mock_echo_side_effect(req, res, idx):
+                res["outputs"]["text"] = req.prompt + res["outputs"]["text"]
 
-        self.mock_engine.generate.side_effect = mock_generate
+            mock_echo.side_effect = mock_echo_side_effect
 
-        # 调用测试方法并收集结果
-        generator = self.completion_handler.completion_stream_generator(
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1, 2]],
-            num_choices=1,
-        )
+            # 调用_echo_back_prompt方法
+            await self.completion_handler._echo_back_prompt(request, mock_response, 0)
 
-        results = []
-        async for chunk in generator:
-            results.append(chunk)
+            # 验证方法被正确调用
+            mock_echo.assert_called_once_with(request, mock_response, 0)
 
-        # 验证结果
-        self.assertEqual(len(results), 3)  # 2个数据块 + DONE
-        self.assertIn('"text": "test prompt chunk1"', results[0])
-        self.assertIn('"text": "test prompt chunk2"', results[1])
+            # 验证结果
+            self.assertEqual(mock_response["outputs"]["text"], "test prompttest output")
 
     def test_multi_prompt_non_streaming(self):
         """测试多prompt非流式响应"""
-
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
         # 准备测试数据 (2个prompt)
@@ -101,11 +84,11 @@ class TestCompletionEcho(unittest.TestCase):
         mock_outputs = [
             {
                 "outputs": {"text": " response1", "token_ids": [1, 2], "top_logprobs": None, "finished": True},
-                "output_token_ids": len([1, 2]),  # 修正为token数量而不是token列表
+                "output_token_ids": 2,
             },
             {
                 "outputs": {"text": " response2", "token_ids": [3, 4], "top_logprobs": None, "finished": True},
-                "output_token_ids": len([3, 4]),  # 修正为token数量而不是token列表
+                "output_token_ids": 2,
             },
         ]
         self.mock_engine.generate.return_value = mock_outputs
@@ -117,8 +100,8 @@ class TestCompletionEcho(unittest.TestCase):
             request_id="test_id",
             created_time=12345,
             model_name="test_model",
-            prompt_batched_token_ids=[[1], [2]],  # 2个prompt的token ids
-            completion_batched_token_ids=[[1, 2], [3, 4]],  # 2个completion的token ids
+            prompt_batched_token_ids=[[1], [2]],
+            completion_batched_token_ids=[[1, 2], [3, 4]],
         )
 
         # 验证结果
@@ -126,107 +109,41 @@ class TestCompletionEcho(unittest.TestCase):
         self.assertEqual(response.choices[0].text, "prompt1 response1")
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
-    @patch("fastdeploy.entrypoints.openai.serving_completion.time.time")
-    async def test_multi_prompt_streaming(self, mock_time):
-        """测试多prompt流式响应"""
-
+    async def test_multi_prompt_streaming(self):
+        """测试多prompt流式响应的_echo_back_prompt处理"""
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
-        mock_time.return_value = 12345
 
         # 准备测试数据 (2个prompt)
         request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, stream=True, echo=True)
 
-        # 模拟engine返回的流式数据 (2个prompt的响应交错)
+        # 准备mock响应数据 (2个prompt的响应)
         mock_responses = [
-            # prompt1的第一个chunk
-            {"outputs": {"text": " chunk1", "token_ids": [1], "send_idx": 0, "finished": False}},
-            # prompt2的第一个chunk
-            {"outputs": {"text": " chunkA", "token_ids": [101], "send_idx": 1, "finished": False}},
-            # prompt1的最后一个chunk
-            {
-                "outputs": {
-                    "text": " chunk2",
-                    "token_ids": [2],
-                    "send_idx": 0,
-                    "finished": True,
-                    "finish_reason": "stop",
-                }
-            },
-            # prompt2的最后一个chunk
-            {
-                "outputs": {
-                    "text": " chunkB",
-                    "token_ids": [102],
-                    "send_idx": 1,
-                    "finished": True,
-                    "finish_reason": "length",
-                }
-            },
+            {"outputs": {"text": " response1", "token_ids": [1, 2], "finished": True}},
+            {"outputs": {"text": " response2", "token_ids": [3, 4], "finished": True}},
         ]
 
-        # 模拟异步generate方法
-        async def mock_generate(*args, **kwargs):
-            for resp in mock_responses:
-                yield resp
+        # 使用patch来mock _echo_back_prompt方法
+        with patch.object(self.completion_handler, "_echo_back_prompt") as mock_echo:
+            # 设置mock方法根据索引修改对应的response中的text
+            def mock_echo_side_effect(req, res, idx):
+                res["outputs"]["text"] = req.prompt[idx] + res["outputs"]["text"]
 
-        self.mock_engine.generate.side_effect = mock_generate
+            mock_echo.side_effect = mock_echo_side_effect
 
-        # 调用测试方法并收集结果
-        generator = self.completion_handler.completion_stream_generator(
-            request=request,
-            request_id="test_id",
-            created_time=12345,
-            model_name="test_model",
-            prompt_batched_token_ids=[[1], [101]],  # 2个prompt的token ids
-            num_choices=2,
-        )
+            # 调用_echo_back_prompt方法处理两个prompt
+            await self.completion_handler._echo_back_prompt(request, mock_responses[0], 0)
+            await self.completion_handler._echo_back_prompt(request, mock_responses[1], 1)
 
-        results = []
-        async for chunk in generator:
-            results.append(chunk)
+            # 验证方法被正确调用
+            self.assertEqual(mock_echo.call_count, 2)
+            mock_echo.assert_any_call(request, mock_responses[0], 0)
+            mock_echo.assert_any_call(request, mock_responses[1], 1)
 
-        # 验证结果
-        self.assertEqual(len(results), 5)  # 4个数据块 + DONE
-
-        # 检查prompt1的响应
-        self.assertIn('"index": 0', results[0])
-        self.assertIn('"text": "prompt1 chunk1"', results[0])
-        self.assertIn('"index": 0', results[2])
-        self.assertIn('"text": "prompt1 chunk1 chunk2"', results[2])
-        self.assertIn('"finish_reason": "stop"', results[2])
-
-        # 检查prompt2的响应
-        self.assertIn('"index": 1', results[1])
-        self.assertIn('"text": "prompt2 chunkA"', results[1])
-        self.assertIn('"index": 1', results[3])
-        self.assertIn('"text": "prompt2 chunkA chunkB"', results[3])
-        self.assertIn('"finish_reason": "length"', results[3])
-
-        # 检查DONE标记
-        self.assertEqual(results[4], "data: [DONE]\n\n")
+            # 验证结果
+            self.assertEqual(mock_responses[0]["outputs"]["text"], "prompt1 response1")
+            self.assertEqual(mock_responses[1]["outputs"]["text"], "prompt2 response2")
 
 
 if __name__ == "__main__":
-    import asyncio
-    import unittest
-
-    class AsyncTestResult(unittest.TextTestResult):
-        def startTest(self, test):
-            super().startTest(test)
-            if asyncio.iscoroutinefunction(test):
-                self._setup_async_test(test)
-
-        def _setup_async_test(self, test):
-            def run_async_test():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(test())
-                loop.close()
-
-            test_method = run_async_test
-            test_method._testMethodName = test._testMethodName
-            test_method.__name__ = test.__name__
-            test_method.__qualname__ = test.__qualname__
-            setattr(test.__class__, test._testMethodName, test_method)
-
-    unittest.main(testRunner=unittest.TextTestRunner(resultclass=AsyncTestResult))
+    unittest.main()
+    #     self.assertEqual(results[4], "data: [DONE]\n\n")

@@ -234,6 +234,15 @@ class OpenAIServingCompletion:
             if dealer is not None:
                 dealer.close()
 
+    async def _echo_back_prompt(self, request, res, idx):
+        # 如果是第一个响应片段，拼接prompt到text前
+        if res["outputs"].get("send_idx", -1) == 0 and request.prompt is not None and request.echo:
+            if isinstance(request.prompt, list):
+                prompt_text = request.prompt[idx]
+            else:
+                prompt_text = request.prompt
+            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+
     async def completion_stream_generator(
         self,
         request: CompletionRequest,
@@ -317,12 +326,7 @@ class OpenAIServingCompletion:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
                     # 如果是第一个响应片段，拼接prompt到text前
-                    if res["outputs"].get("send_idx", -1) == 0 and request.prompt is not None:
-                        if isinstance(request.prompt, list):
-                            prompt_text = request.prompt[idx]
-                        else:
-                            prompt_text = request.prompt
-                        res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
