@@ -79,8 +79,8 @@ def test_top_p_exceed_1():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("object") == "error", "top_p > 1 应触发校验异常"
-    assert "top_p value can only be defined" in resp.get("message", ""), "未返回预期的 top_p 错误信息"
+    assert resp.get("detail").get("object") == "error", "top_p > 1 应触发校验异常"
+    assert "top_p value can only be defined" in resp.get("detail").get("message", ""), "未返回预期的 top_p 错误信息"
 
 
 def test_mixed_valid_invalid_fields():

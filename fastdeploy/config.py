@@ -125,6 +125,8 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.pad_token_id: int = -1
+        self.eos_tokens_lens: int = 2
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -258,10 +260,6 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
-        #
-        self.pad_token_id: int = -1
-        #
-        self.eos_tokens_lens: int = 2
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role

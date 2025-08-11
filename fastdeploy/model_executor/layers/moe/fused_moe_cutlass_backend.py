@@ -52,7 +52,7 @@ def get_moe_scores(
     compute moe scores using e_score_correction_bias.
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
-    scores_with_bias = scores + e_score_correction_bias.unsqueeze(0)
+    scores_with_bias = scores + e_score_correction_bias
     scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,

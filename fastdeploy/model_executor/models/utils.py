@@ -78,9 +78,13 @@ def default_weight_loader(fd_config: FDConfig) -> None:
             if param.dtype != loaded_weight.dtype:
                 loaded_weight = loaded_weight.cast(param.dtype)
 
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
+            if param.shape != loaded_weight.shape:
+                try:
+                    param = param.reshape(loaded_weight.shape)
+                except ValueError as e:
+                    raise ValueError(
+                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
+                    )
 
             param.copy_(loaded_weight, False)
         except Exception:
