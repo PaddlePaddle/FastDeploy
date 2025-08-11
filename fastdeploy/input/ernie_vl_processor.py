@@ -209,6 +209,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
+            request["text_after_process"] = request.get("prompt")
             outputs = self.ernie_processor.text2ids(request["prompt"], images, videos)
         elif request.get("messages"):
             messages = request["messages"]
