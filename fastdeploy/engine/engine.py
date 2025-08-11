@@ -464,6 +464,7 @@ class LLMEngine:
                     request = Request.from_dict(data)
                     start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
 
+                    main_process_metrics.requests_number.inc()
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
@@ -1021,7 +1022,6 @@ class LLMEngine:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
                 print(f"Error extracting sub services: {e}")
-
 
         for worker_queue in self.engine_worker_queue_server:
             worker_queue.cleanup()
