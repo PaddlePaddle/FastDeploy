@@ -23,8 +23,6 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
-
-# from fastdeploy.model_executor.models.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
@@ -141,6 +139,11 @@ class FusedMoE(nn.Layer):
                 )
             self.quant_method.init_ep(self)
 
+        inflight_quant = moe_quant_config and (
+            not self.fd_config.model_config.is_quantized
+            or self.fd_config.model_config.is_quantized
+            and not getattr(self.fd_config.quant_config, "is_permuted", True)
+        )
         if fd_config.load_config.dynamic_load_weight:
             # It's for RL to build model
             self.init_moe_weights()
@@ -158,6 +161,7 @@ class FusedMoE(nn.Layer):
                         self,
                         weights_processor=self.weights_processor,
                         load_weights_into_param=self.load_weights_into_param,
+                        inflight_quant=inflight_quant,
                     )
             else:
                 # w_fp16 a_fp16
@@ -165,6 +169,7 @@ class FusedMoE(nn.Layer):
                     self,
                     weights_processor=self.weights_processor,
                     load_weights_into_param=self.load_weights_into_param,
+                    inflight_quant=inflight_quant,
                 )
 
         logger.info(
@@ -202,72 +207,36 @@ class FusedMoE(nn.Layer):
         assert shard_id in ["gate", "down", "up"]
         SHARD_ID_TO_SHARDED_DIM = getattr(param, "SHARD_ID_TO_SHARDED_DIM")
         expert_param = param[expert_id]
-        self._load_expert_weight_into_param(
-            expert_param=expert_param,
-            shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
-            loaded_weight=loaded_weight,
-            shard_id=shard_id,
-        )
+        if shard_id in SHARD_ID_TO_SHARDED_DIM:
+            self._load_expert_weight_into_param(
+                expert_param=expert_param,
+                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+                loaded_weight=loaded_weight,
+                shard_id=shard_id,
+            )
+        else:
+            # for down_scale
+            expert_param.copy_(loaded_weight, False)
 
-    def weights_processor(self, param, loaded_weight, expert_id: int, shard_id: Optional[str] = None):
+    def weights_processor(self, param, loaded_weight, shard_id: Optional[str] = None):
         if shard_id is None:
             # 1.gate up fused in disk
             return
         # 2.gate up splited in disk
         assert shard_id in ["gate", "down", "up"]
         SHARD_ID_TO_SHARDED_DIM = getattr(param, "SHARD_ID_TO_SHARDED_DIM")
-        expert_param = param[expert_id]
-
-        yield from self._processed_expert_weight(
-            expert_param=expert_param,
-            shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
-            loaded_weight=loaded_weight,
-            shard_id=shard_id,
-        )
-
-    def _processed_gate_up_weight(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
-
-        if self.tp_size > 1:
-            size = loaded_weight.get_shape()[-1]
+        if shard_id in SHARD_ID_TO_SHARDED_DIM and self.tp_size > 1:
+            shard_dim = SHARD_ID_TO_SHARDED_DIM[shard_id]
+            dim = -1 if shard_dim else 0
+            size = loaded_weight.get_shape()[dim]
             block_size = size // self.tp_size
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
-
+            loaded_weight = slice_fn(loaded_weight, shard_dim, shard_offset, shard_size)
         loaded_weight = get_tensor(loaded_weight)
-
-        # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
         if not current_platform.is_cuda():
             loaded_weight = loaded_weight.transpose([1, 0])
         yield loaded_weight
-
-    def _processed_down_weight(self, expert_param, shard_dim: int, loaded_weight, shard_id: str):
-        if self.tp_size > 1:
-            size = loaded_weight.get_shape()[shard_dim]
-            block_size = size // self.tp_size
-            shard_offset = self.tp_rank * block_size
-            shard_size = (self.tp_rank + 1) * block_size
-            loaded_weight = loaded_weight[shard_offset:shard_size, ...]
-        loaded_weight = get_tensor(loaded_weight)
-
-        # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if not current_platform.is_cuda():
-            loaded_weight = loaded_weight.transpose([1, 0])
-        yield loaded_weight
-
-    def _processed_expert_weight(
-        self,
-        expert_param,
-        shard_dim: int,
-        loaded_weight,
-        shard_id: str,
-    ):
-        if shard_id == "down":
-            yield from self._processed_down_weight(expert_param, shard_dim, loaded_weight, shard_id)
-
-        elif shard_id in ["gate", "up"]:
-
-            yield from self._processed_gate_up_weight(expert_param, shard_dim, loaded_weight, shard_id)
 
     @classmethod
     def make_expert_params_mapping(
@@ -284,9 +253,9 @@ class FusedMoE(nn.Layer):
         param_name_maping = [("down", ckpt_down_proj_name)]
         if ckpt_gate_up_proj_name is not None:
             param_name_maping.append((None, ckpt_gate_up_proj_name))
-        elif ckpt_gate_proj_name is not None:
+        if ckpt_gate_proj_name is not None:
             param_name_maping.append(("gate", ckpt_gate_proj_name))
-        elif ckpt_up_proj_name is not None:
+        if ckpt_up_proj_name is not None:
             param_name_maping.append(("up", ckpt_up_proj_name))
 
         return [

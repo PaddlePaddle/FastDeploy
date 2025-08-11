@@ -15,8 +15,16 @@
 """
 
 from contextlib import contextmanager
+from typing import Any, Optional
 
 import paddle
+
+
+def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
+    if param_attr_map is None:
+        return
+    for key, value in param_attr_map.items():
+        setattr(param, key, value)
 
 
 def slice_fn(weight_or_paramter, output_dim, start, end, step=1):

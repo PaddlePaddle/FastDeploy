@@ -21,6 +21,7 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_tensor
@@ -93,8 +94,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
-                layer.up_gate_proj_weight,
-                layer.down_proj_weight,
+                getattr(layer, self.added_weight_attrs[0]),
+                getattr(layer, self.added_weight_attrs[1]),
                 None,
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -106,8 +107,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
             token_nums_per_expert,
-            layer.up_gate_proj_weight,
-            layer.down_proj_weight,
+            getattr(layer, self.added_weight_attrs[0]),
+            getattr(layer, self.added_weight_attrs[1]),
             None,
             (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
             (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -627,6 +628,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         self.default_dtype = layer._helper.get_default_dtype()
         self.weight_dtype = "int8"
 
+        self.added_weight_attrs = ["up_gate_proj_quant_weight", "down_proj_quant_weight"]
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
         if self.moe_quant_type == "weight_only_int4":
@@ -653,6 +655,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 layer.hidden_size,
                 layer.moe_intermediate_size,
             ]
+        # layer.up_gate_proj_quant_weight
         setattr(
             layer,
             up_gate_proj_weight_name,
@@ -662,6 +665,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        # layer.down_proj_quant_weight
         setattr(
             layer,
             down_proj_weight_name,
@@ -671,7 +675,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
-        # weight_scale
+        # layer.up_gate_proj_weight_scale
         setattr(
             layer,
             self.added_scale_attrs[0],
@@ -681,6 +685,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        # layer.down_proj_weight_scale
         setattr(
             layer,
             self.added_scale_attrs[1],
@@ -690,6 +695,23 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+
+        inflight_quant = extra_weight_attrs.get("inflight_quant", None)
+        moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+        if inflight_quant is True:
+            moe_extra_weight_attrs = {**moe_extra_weight_attrs, "quant_method": self.apply_weight_quantization}
+        set_weight_attrs(layer.up_gate_proj_quant_weight, moe_extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_quant_weight, moe_extra_weight_attrs)
+        scale_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "up": 0}}
+        set_weight_attrs(layer.up_gate_proj_weight_scale, scale_extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_weight_scale, scale_extra_weight_attrs)
+
+    def apply_weight_quantization(self, unquantized_weight):
+        quanted_weight_tensor, weight_scale_tensor = weight_quantize(
+            unquantized_weight,
+            algo=self.moe_quant_type,
+        )
+        return (quanted_weight_tensor, weight_scale_tensor)
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """

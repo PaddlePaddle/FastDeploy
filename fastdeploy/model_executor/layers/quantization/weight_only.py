@@ -21,7 +21,7 @@ from typing import Optional
 import paddle
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
-from fastdeploy.model_executor.models.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..moe import FusedMoE
@@ -188,14 +188,14 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         inflight_quant = extra_weight_attrs.get("inflight_quant", None)
         output_dim = extra_weight_attrs.get("output_dim")
         output_dim = not output_dim
-        weight_loader = extra_weight_attrs.get("weight_loader")
+        weights_processor = extra_weight_attrs.get("weights_processor")
         load_weights_into_param = extra_weight_attrs.get("load_weights_into_param")
         weight_attrs = {
-            "weight_loader": weight_loader,
+            "weights_processor": weights_processor,
             "load_weights_into_param": load_weights_into_param,
             "output_dim": output_dim,
         }
-        if inflight_quant:
+        if inflight_quant is True:
             weight_attrs = {**weight_attrs, "quant_method": self.apply_weight_quantization}
         set_weight_attrs(
             layer.quant_weight,
@@ -213,7 +213,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         set_weight_attrs(
             layer.weight_scale,
             {
-                "weight_loader": weight_loader,
+                "weights_processor": weights_processor,
                 "output_dim": output_dim,
                 "load_weights_into_param": load_weights_into_param,
             },

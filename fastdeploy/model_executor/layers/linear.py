@@ -25,9 +25,8 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethod
 from fastdeploy.model_executor.models.utils import (
     default_load_weights_into_param,
     default_weights_processor,
-    set_weight_attrs,
-    slice_fn,
 )
+from fastdeploy.model_executor.utils import set_weight_attrs, slice_fn
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor

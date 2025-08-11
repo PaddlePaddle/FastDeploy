@@ -253,10 +253,19 @@ class Qwen3ForCausalLM(ModelForCasualLM):
     @paddle.no_grad()
     def processed_weights(self, weights_iterator, params_dict, is_processed=False) -> None:
         """
-        Load model parameters from a given weights_iterator object.
+        process weights from a given weights_iterator object.
 
         Args:
-            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+            weights_iterator: iterator yielding weight tuples
+            params_dict: dict of model parameters by name
+            is_processed: whether weights are already preprocessed (default False)
+            weights_iterator (Iterator):
+        Yield the following items:
+            loaded_weight_name: name of the weight as loaded from storage
+            model_param_name: parameter name used in the model
+            param: model parameter object
+            preprocessed_weight: weight after preprocessing (e.g., slicing or normalization)
+            shard_id: ID for tensor parallel shard or partition
         """
 
         from fastdeploy.model_executor.models.utils import default_weights_processor
