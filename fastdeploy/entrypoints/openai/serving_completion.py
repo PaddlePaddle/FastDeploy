@@ -15,37 +15,26 @@
 """
 
 import asyncio
-import aiozmq
 import json
-from aiozmq import zmq
-from asyncio import FIRST_COMPLETED, AbstractEventLoop, Task
 import time
-from collections.abc import AsyncGenerator, AsyncIterator
-from collections.abc import Sequence as GenericSequence
-from typing import Optional, Union, cast, TypeVar, List
 import uuid
-from fastapi import Request
+from typing import List
 
-from fastdeploy.entrypoints.openai.protocol import (
-    ErrorResponse,
-    CompletionRequest,
-    CompletionResponse,
-    CompletionStreamResponse,
-    CompletionResponseStreamChoice,
-    CompletionResponseChoice,
-    UsageInfo,
-    DeltaToolCall,
-    DeltaFunctionCall,
-    ToolCall,
-    FunctionCall
-)
-from fastdeploy.utils import api_server_logger
+import aiozmq
+from aiozmq import zmq
+
 from fastdeploy.engine.request import RequestOutput
+from fastdeploy.entrypoints.openai.protocol import (
+    CompletionRequest, CompletionResponse, CompletionResponseChoice,
+    CompletionResponseStreamChoice, CompletionStreamResponse, ErrorResponse,
+    UsageInfo)
+from fastdeploy.utils import api_server_logger
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid):
+    def __init__(self, engine_client, pid, max_waiting_time):
         self.engine_client = engine_client
+        self.max_waiting_time = max_waiting_time
         self.pid = pid
 
     async def create_completion(self, request: CompletionRequest):
@@ -98,6 +87,13 @@ class OpenAIServingCompletion:
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
+            try:
+                if self.max_waiting_time < 0:
+                    await self.engine_client.semaphore.acquire()
+                else:
+                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+            except Exception:
+                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -195,6 +191,7 @@ class OpenAIServingCompletion:
         finally:
             if dealer is not None:
                 dealer.close()
+                self.engine_client.semaphore.release()
 
 
     async def completion_stream_generator(
@@ -327,6 +324,7 @@ class OpenAIServingCompletion:
             del request
             if dealer is not None:
                 dealer.close()
+                self.engine_client.semaphore.release()
             yield "data: [DONE]\n\n"
 
 
@@ -353,13 +351,13 @@ class OpenAIServingCompletion:
             if request.echo:
                 assert prompt_text is not None
                 if request.max_tokens == 0:
-                    token_ids = prompt_token_ids
+                    # token_ids = prompt_token_ids
                     output_text = prompt_text
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
+                    # token_ids = [*prompt_token_ids, *output["token_ids"]]
                     output_text = prompt_text + output["text"]
             else:
-                token_ids = output["token_ids"]
+                # token_ids = output["token_ids"]
                 output_text = output["text"]
 
             choice_data = CompletionResponseChoice(

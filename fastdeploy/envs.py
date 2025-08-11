@@ -121,6 +121,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # set traec exporter_otlp_headers.
     "EXPORTER_OTLP_HEADERS":
     lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
+    # support max connections
+    "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
 }
 
 

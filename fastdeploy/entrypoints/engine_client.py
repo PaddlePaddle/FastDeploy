@@ -14,17 +14,16 @@
 # limitations under the License.
 """
 
-import zmq
 import time
-from random import randint
 import uuid
+
 import numpy as np
 
+from fastdeploy import envs
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.engine.request import Request
-from fastdeploy.inter_communicator import ZmqClient, IPCSignal
+from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import api_server_logger, EngineError
+from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
 
 
 class EngineClient:
@@ -33,7 +32,7 @@ class EngineClient:
     """
 
     def __init__(self, tokenizer, max_model_len, tensor_parallel_size, pid, limit_mm_per_prompt, mm_processor_kwargs,
-                 enable_mm=False, reasoning_parser=None):
+                 enable_mm=False, reasoning_parser=None, workers=1):
         input_processor = InputPreprocessor(tokenizer,
                                             reasoning_parser,
                                             limit_mm_per_prompt,
@@ -57,6 +56,7 @@ class EngineClient:
             dtype=np.int32,
             suffix=pid,
             create=False)
+        self.semaphore = StatefulSemaphore((envs.FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
 
     def create_zmq_client(self, model, mode):
         """
@@ -75,7 +75,6 @@ class EngineClient:
         if "request_id" not in prompts:
             request_id = str(uuid.uuid4())
             prompts["request_id"] = request_id
-        query_list = []
 
         if "max_tokens" not in prompts:
             prompts["max_tokens"] = self.max_model_len - 1
@@ -178,7 +177,7 @@ class EngineClient:
 
         if data.get("temperature"):
             if data["temperature"] < 0:
-                raise ValueError(f"temperature must be non-negative")
+                raise ValueError("temperature must be non-negative")
 
 
         if data.get("presence_penalty"):
