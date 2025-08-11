@@ -95,8 +95,7 @@ jobs:
             cd FastDeploy
             python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
-            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-
+            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
             python -m pip install coverage
             python -m pip install diff-cover
@@ -159,7 +158,7 @@ jobs:
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
-      - name: Determine Unit Succ and whether the coverage rate reaches 80%
+      - name: Check Unit Test Success
         shell: bash
         run: |
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
@@ -177,7 +176,11 @@ jobs:
             fi
             exit "$TEST_EXIT_CODE"
           fi
+          echo "All tests passed"
 
+      - name: Verify Code Coverage Threshold (80%)
+        shell: bash
+        run: |
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
             filename=$(basename "$diff_cov_result_json_url")
@@ -197,7 +200,7 @@ jobs:
             fi
             exit "$COVERAGE_EXIT_CODE"
           fi
-          echo "All tests and coverage passed"
+          echo "coverage passed"
           exit 0
 
   diff_coverage_report:
