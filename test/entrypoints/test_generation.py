@@ -35,11 +35,11 @@ class TestGeneration(unittest.TestCase):
         """Set up test environment before any tests run"""
         try:
             llm = LLM(
-                    model=MODEL_NAME,
-                    max_num_batched_tokens=4096,
-                    tensor_parallel_size=1,
-                    engine_worker_queue_port=os.getenv("FD_ENGINE_QUEUE_PORT"),
-                )
+                model=MODEL_NAME,
+                max_num_batched_tokens=4096,
+                tensor_parallel_size=1,
+                engine_worker_queue_port=os.getenv("FD_ENGINE_QUEUE_PORT"),
+            )
             cls.llm = weakref.proxy(llm)
         except Exception as e:
             return
