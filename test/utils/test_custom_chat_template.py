@@ -164,7 +164,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(True, result["enable_thinking"])
 
     @patch("fastdeploy.input.ernie_processor.ErnieProcessor.__init__")
-    def test_text_processor_process(self, mock_class):
+    def test_ernie_processor_process(self, mock_class):
         mock_class.return_value = None
         ernie_processor = ErnieProcessor()
         mock_request = Request.from_dict(
@@ -188,7 +188,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("hello", result.chat_template)
 
     @patch("fastdeploy.input.ernie_processor.ErnieProcessor.__init__")
-    def test_text_processor_process_request_dict(self, mock_class):
+    def test_ernie_processor_process_request_dict(self, mock_class):
         mock_class.return_value = None
         ernie_processor = ErnieProcessor()
 
