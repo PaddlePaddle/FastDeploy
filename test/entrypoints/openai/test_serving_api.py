@@ -40,8 +40,11 @@ class TestServingAPI(unittest.TestCase):
         for port in PORTS_TO_CLEAN:
             kill_process_on_port(port)
 
-        base_path = os.getenv("MODEL_PATH", ".")
-        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
+        base_path = os.getenv("MODEL_PATH")
+        if base_path:
+            model_path = os.path.join(base_path, "paddle/ERNIE-4.5-21B-A3B-Paddle")
+        else:
+            model_path = "PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 
         cmd = [
             sys.executable,
