@@ -66,7 +66,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [离线推理](./docs/zh/offline_inference.md)
 - [在线服务](./docs/zh/online_serving/README.md)
 - [模型支持列表](./docs/zh/supported_models.md)
-- [最佳实践](./docs/zh/optimal_deployment/README.md)
+- [最佳实践](./docs/zh/best_practices/README.md)
 
 ## 支持模型列表
 

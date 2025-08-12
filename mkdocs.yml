@@ -106,12 +106,12 @@ nav:
       - 'Scheduler': online_serving/scheduler.md
   - 'Offline Inference': offline_inference.md
   - Optimal Deployment:
-      - ERNIE-4.5-0.3B: optimal_deployment/ERNIE-4.5-0.3B-Paddle.md
-      - ERNIE-4.5-21B-A3B: optimal_deployment/ERNIE-4.5-21B-A3B-Paddle.md
-      - ERNIE-4.5-300B-A47B: optimal_deployment/ERNIE-4.5-300B-A47B-Paddle.md
-      - ERNIE-4.5-VL-28B-A3B: optimal_deployment/ERNIE-4.5-VL-28B-A3B-Paddle.md
-      - ERNIE-4.5-VL-424B-A47B: optimal_deployment/ERNIE-4.5-VL-424B-A47B-Paddle.md
-      - FAQ: optimal_deployment/FAQ.md
+      - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md
+      - ERNIE-4.5-21B-A3B: best_practices/ERNIE-4.5-21B-A3B-Paddle.md
+      - ERNIE-4.5-300B-A47B: best_practices/ERNIE-4.5-300B-A47B-Paddle.md
+      - ERNIE-4.5-VL-28B-A3B: best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md
+      - ERNIE-4.5-VL-424B-A47B: best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md
+      - FAQ: best_practices/FAQ.md
   - Quantization:
       - 'Overview': quantization/README.md
       - 'Online Quantization': quantization/online_quantization.md

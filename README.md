@@ -69,7 +69,7 @@ Learn how to use FastDeploy through our documentation:
 - [Offline Inference Development](./docs/offline_inference.md)
 - [Online Service Deployment](./docs/online_serving/README.md)
 - [Full Supported Models List](./docs/supported_models.md)
-- [Best Practices](./docs/optimal_deployment/README.md)
+- [Best Practices](./docs/best_practices/README.md)
 
 ## Supported Models
 
