@@ -114,9 +114,8 @@ jobs:
           # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
-          pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
-          pip config set install.trusted-host  pip.baidu.com
-          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+          pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
           python -m pip install ${fastdeploy_wheel_url}
 
           wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
