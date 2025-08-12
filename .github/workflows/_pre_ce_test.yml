@@ -99,8 +99,6 @@ jobs:
             touch "${CACHE_DIR}/gitconfig"
           fi
 
-          PARENT_DIR=$(dirname "$WORKSPACE")
-          echo "PARENT_DIR:$PARENT_DIR"
           docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
