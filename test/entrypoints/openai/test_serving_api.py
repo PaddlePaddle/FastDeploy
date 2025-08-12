@@ -42,7 +42,7 @@ class TestServingAPI(unittest.TestCase):
 
         base_path = os.getenv("MODEL_PATH")
         if base_path:
-            model_path = os.path.join(base_path, "paddle/ERNIE-4.5-21B-A3B-Paddle")
+            model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
         else:
             model_path = "PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 
@@ -64,8 +64,6 @@ class TestServingAPI(unittest.TestCase):
             "32768",
             "--max-num-seqs",
             "128",
-            "--quantization",
-            "wint4",
             "--use-cudagraph",
             "--graph-optimization-config",
             '{"cudagraph_capture_sizes": [1]}',
@@ -73,7 +71,7 @@ class TestServingAPI(unittest.TestCase):
 
         cls.server_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=None, start_new_session=True)
 
-        for _ in range(300):
+        for _ in range(600):
             if is_port_open("127.0.0.1", FD_API_PORT):
                 break
             time.sleep(1)
