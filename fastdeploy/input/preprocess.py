@@ -18,8 +18,8 @@ from typing import Any, Dict, Optional
 
 from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.config import ModelConfig
-from fastdeploy.reasoning import ReasoningParserManager
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
+from fastdeploy.reasoning import ReasoningParserManager
 
 
 class InputPreprocessor:
@@ -84,7 +84,7 @@ class InputPreprocessor:
                 self.processor = DataProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
-                    tool_parser_obj=tool_parser_obj
+                    tool_parser_obj=tool_parser_obj,
                 )
             else:
                 from fastdeploy.input.ernie_processor import ErnieProcessor
@@ -92,7 +92,7 @@ class InputPreprocessor:
                 self.processor = ErnieProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
-                    tool_parser_obj=tool_parser_obj
+                    tool_parser_obj=tool_parser_obj,
                 )
         else:
             if not ErnieArchitectures.contains_ernie_arch(architectures):

@@ -94,6 +94,7 @@ class DeltaToolCall(BaseModel):
     index: int
     function: Optional[DeltaFunctionCall] = None
 
+
 class ExtractedToolCallInformation(BaseModel):
     # indicate if tools were called
     tools_called: bool
@@ -104,6 +105,7 @@ class ExtractedToolCallInformation(BaseModel):
     # content - per OpenAI spec, content AND tool calls can be returned rarely
     # But some models will do this intentionally
     content: Optional[str] = None
+
 
 class FunctionDefinition(BaseModel):
     """

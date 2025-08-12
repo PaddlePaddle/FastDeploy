@@ -27,7 +27,6 @@ import zmq
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
-from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -42,6 +41,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,

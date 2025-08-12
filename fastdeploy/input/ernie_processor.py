@@ -249,7 +249,9 @@ class ErnieProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            if enable_thinking and self.reasoning_parser:
+            if self.reasoning_parser and (
+                enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+            ):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -284,7 +286,9 @@ class ErnieProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        if enable_thinking and self.reasoning_parser:
+        if self.reasoning_parser and (
+            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+        ):
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
