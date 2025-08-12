@@ -114,14 +114,14 @@ class TestServingAPI(unittest.TestCase):
         default_kwargs.update(**kwargs)
         return self.client.completions.create(**default_kwargs)
 
-    def test_non_streaming_chat_base(self):
+    def test_basic_non_streaming_chat(self):
         """
         Test case for basic non-streaming chat
         """
         response = self.create_chat()
         self.assertTrue(response.choices[0].message.content)
 
-    def test_streaming_chat_base(self):
+    def test_basic_streaming_chat(self):
         """
         Test case for basic streaming chat
         """
@@ -131,14 +131,14 @@ class TestServingAPI(unittest.TestCase):
             output += chunk.choices[0].delta.content
         self.assertTrue(output)
 
-    def test_non_streaming_completion_base(self):
+    def test_basic_non_streaming_completion(self):
         """
         Test case for basic non-streaming completion
         """
         response = self.create_completion()
         self.assertTrue(response.choices[0].text)
 
-    def test_streaming_completion_base(self):
+    def test_basic_streaming_completion(self):
         """
         Test case for basic streaming completion
         """
@@ -148,7 +148,7 @@ class TestServingAPI(unittest.TestCase):
             output += chunk.choices[0].text
         self.assertTrue(output)
 
-    def test_non_streaming_chat_with_stop_str(self):
+    def test_stop_str_non_streaming_chat(self):
         """
         Test case for setting `include_stop_str_in_output` in non-streaming chat
         """
@@ -158,7 +158,7 @@ class TestServingAPI(unittest.TestCase):
         response = self.create_chat(extra_body={"include_stop_str_in_output": False})
         self.assertFalse(response.choices[0].message.content.endswith("</s>"))
 
-    def test_non_streaming_completion_with_stop_str(self):
+    def test_stop_str_non_streaming_completion(self):
         """
         Test case for setting `include_stop_str_in_output` in non-streaming completion
         """
@@ -168,7 +168,7 @@ class TestServingAPI(unittest.TestCase):
         response = self.create_completion(max_tokens=1024, extra_body={"include_stop_str_in_output": True})
         self.assertTrue(response.choices[0].text.endswith("</s>"))
 
-    def test_streaming_chat_with_stop_str(self):
+    def test_stop_str_streaming_chat(self):
         """
         Test case for setting `include_stop_str_in_output` in streaming chat
         """
@@ -190,7 +190,7 @@ class TestServingAPI(unittest.TestCase):
             last_token = chunk.choices[0].delta.content
         self.assertNotEqual(last_token, "</s>")
 
-    def test_streaming_completion_with_stop_str(self):
+    def test_stop_str_streaming_completion(self):
         """
         Test case for setting `include_stop_str_in_output` in streaming completion
         """
@@ -209,7 +209,7 @@ class TestServingAPI(unittest.TestCase):
             last_token = chunk.choices[0].text
         self.assertTrue(last_token.endswith("</s>"))
 
-    def test_non_streaming_chat_with_return_token_ids(self):
+    def test_return_token_ids_non_streaming_chat(self):
         """
         Test case for setting `return_token_ids` in non-streaming chat
         """
@@ -234,7 +234,7 @@ class TestServingAPI(unittest.TestCase):
         self.assertIsNone(response.choices[0].message.prompt_token_ids)
         self.assertIsNone(response.choices[0].message.completion_token_ids)
 
-    def test_streaming_chat_with_return_token_ids(self):
+    def test_return_token_ids_streaming_chat(self):
         """
         Tese case for setting `return_token_ids` in streaming chat
         """
@@ -266,7 +266,7 @@ class TestServingAPI(unittest.TestCase):
             self.assertIsNone(delta.prompt_token_ids)
             self.assertIsNone(delta.completion_token_ids)
 
-    def test_non_streaming_completion_with_return_token_ids(self):
+    def test_return_token_ids_non_streaming_completion(self):
         """
         Test case for setting `return_token_ids` in non-streaming completion
         """
@@ -284,7 +284,7 @@ class TestServingAPI(unittest.TestCase):
         self.assertIsNone(response.choices[0].prompt_token_ids)
         self.assertIsNone(response.choices[0].completion_token_ids)
 
-    def test_streaming_completion_with_return_token_ids(self):
+    def test_return_token_ids_streaming_completion(self):
         """
         Test case for setting `return_token_ids` in streaming completion
         """
@@ -313,7 +313,7 @@ class TestServingAPI(unittest.TestCase):
             self.assertIsNone(choice.prompt_token_ids)
             self.assertIsNone(choice.completion_token_ids)
 
-    def test_non_streaming_completion_with_prompt_token_ids(self):
+    def test_prompt_token_ids_non_streaming_completion(self):
         """
         Test case for passing token ids via `prompt_token_ids` or `prompt` in non-streaming completion
         """
@@ -345,7 +345,7 @@ class TestServingAPI(unittest.TestCase):
         self.assertEqual(len(response.choices), 2)
         self.assertEqual(response.usage.prompt_tokens, 8)
 
-    def test_streaming_completion_with_prompt_token_ids(self):
+    def test_prompt_token_ids_streaming_completion(self):
         """
         Test case for passing token ids via `prompt_token_ids` or `prompt` in streaming completion
         """
@@ -405,7 +405,7 @@ class TestServingAPI(unittest.TestCase):
                 sum_prompt_tokens += chunk.usage.prompt_tokens
         self.assertEqual(sum_prompt_tokens, 8)
 
-    def test_non_streaming_chat_with_disable_chat_template(self):
+    def test_disable_chat_template_non_streaming_chat(self):
         """
         Test case for setting `disable_chat_template` in non-streaming chat
         """
@@ -426,7 +426,7 @@ class TestServingAPI(unittest.TestCase):
         self.assertGreater(len(disabled_response.choices), 0)
         self.assertEqual(enabled_response.choices[0].message.content, disabled_response.choices[0].message.content)
 
-    def test_non_streaming_chat_with_min_tokens(self):
+    def test_min_tokens_non_streaming_chat(self):
         """
         Test case for setting `min_tokens` in non-streaming chat
         """
@@ -437,7 +437,7 @@ class TestServingAPI(unittest.TestCase):
         )
         self.assertGreaterEqual(response.usage.completion_tokens, min_tokens)
 
-    def test_non_streaming_chat_with_min_max_token_equals_one(self):
+    def test_min_max_token_equals_one_non_streaming_chat(self):
         """
         Test case for chat/completion when min_tokens equals max_tokens equals 1.
         Verify it returns exactly one token.
@@ -448,7 +448,7 @@ class TestServingAPI(unittest.TestCase):
         # Verify usage shows exactly 1 completion token
         self.assertEqual(response.usage.completion_tokens, 1)
 
-    def test_non_streaming_chat_with_bad_words(self):
+    def test_bad_words_non_streaming_chat(self):
         """
         Test case for setting `bad_words` in non-streaming chat
         """
@@ -464,7 +464,7 @@ class TestServingAPI(unittest.TestCase):
         for w in words0[-5:]:
             self.assertNotIn(w, words1)
 
-    def test_streaming_chat_with_bad_words(self):
+    def test_bad_words_streaming_chat(self):
         """
         Test case for setting `bad_words` in streaming chat
         """
@@ -491,7 +491,7 @@ class TestServingAPI(unittest.TestCase):
         for w in words0[-5:]:
             self.assertNotIn(w, words1)
 
-    def test_non_streaming_completion_with_bad_words(self):
+    def test_bad_words_non_streaming_completion(self):
         """
         Test case for setting `bad_words` in non-streaming completion
         """
@@ -507,7 +507,7 @@ class TestServingAPI(unittest.TestCase):
         for w in words0[-5:]:
             self.assertNotIn(w, words1)
 
-    def test_streaming_completion_with_bad_words(self):
+    def test_bad_words_streaming_completion(self):
         """
         Test case for setting `bad_words` in streaming completion
         """
