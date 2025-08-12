@@ -333,7 +333,7 @@ class OpenAIServingCompletion:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
                     output_tokens[idx] += 1
-                    if self.engine_client.data_processor.tool_parser and not res["finished"]:
+                    if self.engine_client.data_processor._obj and not res["finished"]:
                         tool_delta_message = output["tool_delta_message"]
                         if tool_delta_message is None:
                             continue
@@ -365,7 +365,7 @@ class OpenAIServingCompletion:
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output
+                            request.max_tokens, output_tokens[idx], output, tool_called
                         )
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
