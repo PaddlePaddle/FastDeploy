@@ -18,6 +18,7 @@ import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
+import os
 
 from fastdeploy.config import (
     CacheConfig,
@@ -884,7 +885,10 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192 # if set to max_model_len, it's easy to be OOM
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg

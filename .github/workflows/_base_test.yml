@@ -118,8 +118,7 @@ jobs:
             -v "${CACHE_DIR}/ConfigDir:/root/.config" \
             -e TZ="Asia/Shanghai" \
             --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-            # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-            python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -149,7 +148,7 @@ jobs:
             export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
             export TEMPLATE=TOKEN_LOGPROB
             TEST_EXIT_CODE=0
-            python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py || TEST_EXIT_CODE=1
+            python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py test_evil_cases.py || TEST_EXIT_CODE=1
             curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
               -H "Content-Type: application/json" \
               -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
