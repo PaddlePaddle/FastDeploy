@@ -41,7 +41,7 @@ class TestServingAPI(unittest.TestCase):
             kill_process_on_port(port)
 
         base_path = os.getenv("MODEL_PATH", ".")
-        model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
+        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
 
         cmd = [
             sys.executable,
@@ -61,14 +61,14 @@ class TestServingAPI(unittest.TestCase):
             "32768",
             "--max-num-seqs",
             "128",
+            "--quantization",
+            "wint4",
             "--use-cudagraph",
             "--graph-optimization-config",
             '{"cudagraph_capture_sizes": [1]}',
         ]
 
-        cls.server_proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True
-        )
+        cls.server_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=None, start_new_session=True)
 
         for _ in range(300):
             if is_port_open("127.0.0.1", FD_API_PORT):
