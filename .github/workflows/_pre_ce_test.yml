@@ -110,11 +110,15 @@ jobs:
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "FLASK_PORT=${FLASK_PORT}" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install ${fd_wheel_url}
+          for port in $FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT; do
+            lsof -t -i :$port | xargs -r kill -9 || true
+          done
           bash scripts/run_pre_ce.sh
           '
