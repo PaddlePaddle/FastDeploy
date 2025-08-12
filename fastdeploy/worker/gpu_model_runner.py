@@ -1555,12 +1555,20 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
         paddle.device.cuda.empty_cache()
+
+        # Clear CudaGraph
+        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
         """ " Dynamic model loader use to update parameters use for RL"""
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
+
+        # Recapture CudaGraph
+        self.capture_model()
+
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def padding_cudagraph_inputs(self) -> None:
