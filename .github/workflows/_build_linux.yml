@@ -125,9 +125,7 @@ jobs:
               export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
             fi
             python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-            pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
-            pip config set install.trusted-host  pip.baidu.com
-            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
             python -m pip install --upgrade pip
             python -m pip install -r requirements.txt
