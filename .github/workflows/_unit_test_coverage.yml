@@ -120,11 +120,8 @@ jobs:
             git config --global --add safe.directory /workspace/FastDeploy
             cd FastDeploy
             python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-
-            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-
-            python -m pip install coverage
-            python -m pip install diff-cover
+            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+            python -m pip install -r scripts/unittest_requirement.txt
             python -m pip install ${fd_wheel_url}
             if [ -d "test/plugins" ]; then
                 cd test/plugins
