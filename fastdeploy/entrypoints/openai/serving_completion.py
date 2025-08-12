@@ -361,9 +361,11 @@ class OpenAIServingCompletion:
                         )
 
                     choices.append(delta_message)
+                    output_tokens[idx] += 1
+
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output, tool_called
+                            request.max_tokens, output_tokens[idx], output
                         )
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
