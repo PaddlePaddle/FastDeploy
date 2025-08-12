@@ -144,9 +144,9 @@ def append_attention(
         raise NotImplementedError
 
 
-# TODO: merge w/o output append attention after finishing developing sub-graph cudagraph capture
-
-
+# TODO: (mengyuan) merge w/o output version append attention after
+#       finishing developing sub-graph cudagraph capture to reduce
+#       compilation volume
 def append_attention_with_output(
     qkv: paddle.Tensor,
     key_cache: paddle.Tensor,
