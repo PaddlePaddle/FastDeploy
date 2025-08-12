@@ -161,6 +161,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["outputs"]["text"], "!")
 
     async def test_1_echo_is_false(self):
+        """测试echo为False时，_echo_back_prompt不拼接prompt"""
         request = CompletionRequest(echo=False, prompt="Hello")
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
