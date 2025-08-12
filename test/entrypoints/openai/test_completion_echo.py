@@ -135,6 +135,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(request.prompt, ["prompt1", "prompt2"])
 
     async def test_echo_back_prompt_and_streaming1(self):
+        """测试_echo_back_prompt方法和流式响应的prompt拼接逻辑"""
         request = CompletionRequest(echo=True, prompt=["Hello", "World"])
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
