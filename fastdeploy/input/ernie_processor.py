@@ -106,7 +106,7 @@ class ErnieProcessor(BaseDataProcessor):
                 ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
 
                 if isinstance(prompt, list):  # if prompt is a token id list
-                    request["prompt_token_ids"] = prompt
+                    request.prompt_token_ids = prompt
                 else:
                     tokens = self.tokenizer.tokenize(prompt)
                     token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
