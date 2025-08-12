@@ -234,6 +234,15 @@ class OpenAIServingCompletion:
             if dealer is not None:
                 dealer.close()
 
+    def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
+        if max_tokens is None or token_num != max_tokens:
+            if tool_called:
+                return "tool_calls"
+            else:
+                return "stop"
+        else:
+            return "length"
+
     async def completion_stream_generator(
         self,
         request: CompletionRequest,
@@ -337,7 +346,8 @@ class OpenAIServingCompletion:
                             arrival_time=arrival_time,
                             logprobs=logprobs_res,
                         )
-                        tool_called = True
+                        if tool_delta_message.tool_calls:
+                            tool_called = True
                     else:
                         delta_message = CompletionResponseStreamChoice(
                             index=idx,
@@ -352,12 +362,9 @@ class OpenAIServingCompletion:
 
                     choices.append(delta_message)
                     if res["finished"]:
-                        if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
-                            chunk.choices[0].finish_reason = "stop"
-                            if tool_called:
-                                chunk.choices[0].finish_reason = "tool_calls"
-                        else:
-                            chunk.choices[0].finish_reason = "length"
+                        choices[-1].finish_reason = self.calc_finish_reason(
+                            request.max_tokens, output_tokens[idx], output, tool_called
+                        )
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
