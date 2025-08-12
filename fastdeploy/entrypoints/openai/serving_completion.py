@@ -331,7 +331,7 @@ class OpenAIServingCompletion:
                             index=idx,
                             text=output["text"],
                             completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                            tool_calls=delta_message.tool_calls,
+                            tool_calls=tool_delta_message.tool_calls,
                             reasoning_content=output.get("reasoning_content"),
                             arrival_time=arrival_time,
                             logprobs=logprobs_res,
