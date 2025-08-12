@@ -13,12 +13,11 @@
 # limitations under the License.
 
 import argparse
-from cmath import log
 import json
 import logging
 import math
 import os
-from typing import Tuple, List
+from typing import List, Tuple
 
 from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.gemm import get_smem_config
 
@@ -32,7 +31,6 @@ def generate_kn_pairs(args, model_cfg: dict) -> Tuple[List, List, List]:
     hidden_size = model_cfg["hidden_size"]
     intermediate_size = model_cfg["intermediate_size"]
     moe_intermediate_size = model_cfg["moe_intermediate_size"]
-    moe_num_experts = model_cfg["moe_num_experts"]
     num_attention_heads = model_cfg["num_attention_heads"]
     num_key_value_heads = model_cfg["num_key_value_heads"]
     head_dim = int(hidden_size / num_attention_heads)
@@ -44,7 +42,7 @@ def generate_kn_pairs(args, model_cfg: dict) -> Tuple[List, List, List]:
     grouped_gemm_contiguous_kn_pairs = []
     grouped_gemm_masked_kn_pairs = []
     if tp_size > 1 and ep_size == 1:
-        logger.debug(f"Generating kn pairs for tensor parallel.")
+        logger.debug("Generating kn pairs for tensor parallel.")
         # Dense normal gemm
         gemm_kn_pairs.extend(
             [
@@ -63,7 +61,7 @@ def generate_kn_pairs(args, model_cfg: dict) -> Tuple[List, List, List]:
             ]
         )
         if has_shared_experts:
-            logger.debug(f"Generating kn pairs for models with shared experts.")
+            logger.debug("Generating kn pairs for models with shared experts.")
             gemm_kn_pairs.extend(
                 [
                     [hidden_size, int(moe_intermediate_size * 4 / tp_size)],
@@ -71,7 +69,7 @@ def generate_kn_pairs(args, model_cfg: dict) -> Tuple[List, List, List]:
                 ]
             )
     elif tp_size == 1 and ep_size > 1:
-        logger.debug(f"Generating kn pairs for expert parallel.")
+        logger.debug("Generating kn pairs for expert parallel.")
         # Dense normal gemm
         gemm_kn_pairs.extend(
             [
@@ -96,7 +94,7 @@ def generate_kn_pairs(args, model_cfg: dict) -> Tuple[List, List, List]:
             ]
         )
         if has_shared_experts:
-            logger.debug(f"Generating kn pairs for models with shared experts.")
+            logger.debug("Generating kn pairs for models with shared experts.")
             gemm_kn_pairs.extend(
                 [
                     [hidden_size, int(moe_intermediate_size * 4)],

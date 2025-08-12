@@ -34,7 +34,7 @@ python generate_config.py \
 Arguments:
 - `--model`: Path to model directory containing config.json
 - `--tensor-parallel-size`: Tensor parallel size (default: 1)
-- `--expert-parallel-size`: Expert parallel size (default: 8) 
+- `--expert-parallel-size`: Expert parallel size (default: 8)
 - `--has-shared-experts`: Whether model has shared experts (default: False)
 - `--output`: Output config file path (default: ./deep_gemm_pre_compile_config.jsonl)
 
