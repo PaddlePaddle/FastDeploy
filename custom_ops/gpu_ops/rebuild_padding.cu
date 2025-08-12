@@ -14,7 +14,6 @@
 
 #include "helper.h"  // NOLINT
 
-#define BLOCK_SIZE 128
 
 template <typename T, int VecSize>
 __global__ void RebuildPaddingKernel(T *output_data,
