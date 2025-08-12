@@ -106,7 +106,6 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
     async def test_multi_prompt_streaming(self):
-        """测试多prompt流式响应的_echo_back_prompt处理"""
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
         request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, stream=True, echo=True)
