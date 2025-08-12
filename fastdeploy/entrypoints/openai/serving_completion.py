@@ -242,6 +242,15 @@ class OpenAIServingCompletion:
             else:
                 prompt_text = request.prompt
             res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+            
+    def calc_finish_reason(self, max_tokens, token_num, output):
+        if max_tokens is None or token_num != max_tokens:
+            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+                return "tool_calls"
+            else:
+                return "stop"
+        else:
+            return "length"
 
     async def completion_stream_generator(
         self,
@@ -345,18 +354,12 @@ class OpenAIServingCompletion:
                             logprobs=logprobs_res,
                         )
                     )
-                    if res["finished"]:
-                        if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
-                            chunk.choices[0].finish_reason = "stop"
-                            if (
-                                self.engine_client.reasoning_parser == "ernie_x1"
-                                and output.get("finish_reason", "") == "tool_calls"
-                            ):
-                                chunk.choices[0].finish_reason = "tool_calls"
-                        else:
-                            chunk.choices[0].finish_reason = "length"
-
                     output_tokens[idx] += 1
+
+                    if res["finished"]:
+                        choices[-1].finish_reason = self.calc_finish_reason(
+                            request.max_tokens, output_tokens[idx], output
+                        )
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
@@ -444,6 +447,8 @@ class OpenAIServingCompletion:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
 
+            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
+
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
@@ -453,7 +458,7 @@ class OpenAIServingCompletion:
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=aggregated_logprobs,
-                finish_reason=None,
+                finish_reason=finish_reason,
             )
             choices.append(choice_data)
 
