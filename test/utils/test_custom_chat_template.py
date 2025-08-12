@@ -3,13 +3,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
+import numpy as np
+
 from fastdeploy.engine.request import Request
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
+from fastdeploy.input.ernie_processor import ErnieProcessor
 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
+from fastdeploy.input.text_processor import DataProcessor
 
 
 class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
@@ -108,6 +112,106 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         vl_processor.process_request_dict = mock_process_request
         result = vl_processor.process_request(mock_request, chat_template="hello")
         self.assertEqual("hello", result.chat_template)
+
+    @patch("fastdeploy.input.text_processor.DataProcessor.__init__")
+    def test_text_processor_process_request(self, mock_class):
+        mock_class.return_value = None
+        text_processor = DataProcessor()
+        mock_request = Request.from_dict(
+            {"request_id": "123", "prompt": "hi", "max_tokens": 128, "temperature": 1, "top_p": 1}
+        )
+
+        def mock_apply_default_parameters(request):
+            return request
+
+        def mock_process_request(request, max_model_len):
+            return request
+
+        def mock_text2ids(text, max_model_len):
+            return [1]
+
+        text_processor._apply_default_parameters = mock_apply_default_parameters
+        text_processor.process_request_dict = mock_process_request
+        text_processor.text2ids = mock_text2ids
+        text_processor.eos_token_ids = [1]
+        result = text_processor.process_request(mock_request, chat_template="hello")
+        self.assertEqual("hello", result.chat_template)
+
+    @patch("fastdeploy.input.text_processor.DataProcessor.__init__")
+    def test_text_processor_process_request_dict(self, mock_class):
+        mock_class.return_value = None
+        text_processor = DataProcessor()
+
+        def mock_apply_default_parameters(request):
+            return request
+
+        text_processor._apply_default_parameters = mock_apply_default_parameters
+
+        def mock_text2ids(text, max_model_len):
+            return np.array([1, 2, 3])
+
+        text_processor.text2ids = mock_text2ids
+        text_processor.eos_token_ids = [1]
+        mock_request_dict = {
+            "request_id": "123",
+            "prompt": "hi",
+            "max_tokens": 128,
+            "temperature": 1,
+            "top_p": 1,
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
+        result = text_processor.process_request_dict(mock_request_dict)
+        self.assertEqual(True, result["enable_thinking"])
+
+    @patch("fastdeploy.input.ernie_processor.ErnieProcessor.__init__")
+    def test_text_processor_process(self, mock_class):
+        mock_class.return_value = None
+        ernie_processor = ErnieProcessor()
+        mock_request = Request.from_dict(
+            {"request_id": "123", "messages": ["hi"], "max_tokens": 128, "temperature": 1, "top_p": 1}
+        )
+
+        def mock_apply_default_parameters(request):
+            return request
+
+        def mock_process_request(request, max_model_len):
+            return request
+
+        def mock_messages2ids(text):
+            return [1]
+
+        ernie_processor._apply_default_parameters = mock_apply_default_parameters
+        ernie_processor.process_request_dict = mock_process_request
+        ernie_processor.messages2ids = mock_messages2ids
+        ernie_processor.eos_token_ids = [1]
+        result = ernie_processor.process_request(mock_request, chat_template="hello")
+        self.assertEqual("hello", result.chat_template)
+
+    @patch("fastdeploy.input.ernie_processor.ErnieProcessor.__init__")
+    def test_text_processor_process_request_dict(self, mock_class):
+        mock_class.return_value = None
+        ernie_processor = ErnieProcessor()
+
+        def mock_apply_default_parameters(request):
+            return request
+
+        ernie_processor._apply_default_parameters = mock_apply_default_parameters
+
+        def mock_messages2ids(text):
+            return np.array([1, 2, 3])
+
+        ernie_processor.messages2ids = mock_messages2ids
+        ernie_processor.eos_token_ids = [1]
+        mock_request_dict = {
+            "request_id": "123",
+            "messages": ["hi"],
+            "max_tokens": 128,
+            "temperature": 1,
+            "top_p": 1,
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
+        result = ernie_processor.process_request_dict(mock_request_dict)
+        self.assertEqual(True, result["enable_thinking"])
 
     @patch("fastdeploy.entrypoints.llm.LLM.__init__")
     def test_llm_load(self, mock_class):
