@@ -10,7 +10,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import get_random_port
 
-MODEL_NAME = os.getenv("MODEL_PATH") + "/ERNIE-4.5-0.3B-Paddle"
+MODEL_NAME = os.getenv("MODEL_PATH") + "/ernie-45-21b-a3b-bf16-paddle"
 
 
 class TestGeneration(unittest.TestCase):
@@ -33,14 +33,16 @@ class TestGeneration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test environment before any tests run"""
-        cls.llm = weakref.proxy(
-            LLM(
-                model=MODEL_NAME,
-                max_num_batched_tokens=4096,
-                tensor_parallel_size=1,
-                engine_worker_queue_port=get_random_port(),
-            )
-        )
+        try:
+            llm = LLM(
+                    model=MODEL_NAME,
+                    max_num_batched_tokens=4096,
+                    tensor_parallel_size=1,
+                    engine_worker_queue_port=os.getenv("FD_ENGINE_QUEUE_PORT"),
+                )
+            cls.llm = weakref.proxy(llm)
+        except Exception as e:
+            return
 
     @classmethod
     def tearDownClass(cls):
