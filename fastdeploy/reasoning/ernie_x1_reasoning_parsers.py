@@ -44,7 +44,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
         if not self.model_tokenizer:
             raise ValueError("The model tokenizer must be passed to the ReasoningParser constructor.")
 
-        self.think_end_token_id = self.model_tokenizer.vocab.get("\n</think>\n\n")
+        self.think_end_token_id = self.model_tokenizer.vocab.get("</think>")
         if self.think_end_token_id is None:
             raise RuntimeError("Could not find think end token id in tokenizer vocabulary")
 
