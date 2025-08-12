@@ -180,6 +180,7 @@ jobs:
       - name: Check Unit Test Success
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
             if [ -z "${unittest_failed_url}" ]; then
               echo "No diff unit failed file URL provided."
@@ -199,14 +200,16 @@ jobs:
       - name: Verify Code Coverage Threshold (80%)
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
+            filename=$(basename "$diff_cov_result_json_url")
             if [ -z "${diff_cov_result_json_url}" ]; then
               echo "No diff cov result file URL provided."
             else
-              wget ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
             fi
-            filename=$(basename "$diff_cov_result_json_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               if command -v jq >/dev/null 2>&1; then
