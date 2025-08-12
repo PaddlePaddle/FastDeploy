@@ -264,6 +264,7 @@ class DataProcessor(BaseDataProcessor):
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if "prompt" in request:
+                request["text_after_process"] = request["prompt"]
                 request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len).tolist()
             elif "messages" in request:
                 if self.tokenizer.chat_template is None:
@@ -335,6 +336,7 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
+            response_dict["outputs"]["raw_prediction"] = full_text
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
@@ -364,7 +366,7 @@ class DataProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-
+        response_dict["outputs"]["raw_prediction"] = delta_text
         if enable_thinking and self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
@@ -455,6 +457,7 @@ class DataProcessor(BaseDataProcessor):
             add_special_tokens=False,
             return_tensors="pd",
         )
+        request["text_after_process"] = spliced_message
         req_id = None
         tokens = self.tokenizer.tokenize(spliced_message)
         if isinstance(request, dict):
