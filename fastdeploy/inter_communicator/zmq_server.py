@@ -223,17 +223,15 @@ class ZmqTcpServer(ZmqServerBase):
         Recieve control command from client
         """
         self._ensure_socket()
-        while self.running:
-            try:
-                client, _, task_data = self.socket.recv_multipart(flags=zmq.NOBLOCK)
-                task = msgpack.unpackb(task_data)
-                task_id_str = task["task_id"]
-            except zmq.Again:
-                time.sleep(0.001)
-                continue
-            with self.mutex:
-                self.req_dict[task_id_str] = client
-            return task
+        try:
+            client, _, task_data = self.socket.recv_multipart(flags=zmq.NOBLOCK)
+            task = msgpack.unpackb(task_data)
+            task_id_str = task["task_id"]
+        except zmq.Again:
+            return None
+        with self.mutex:
+            self.req_dict[task_id_str] = client
+        return task
 
     def response_for_control_cmd(self, task_id, result):
         """

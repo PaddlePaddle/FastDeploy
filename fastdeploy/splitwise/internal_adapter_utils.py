@@ -71,7 +71,11 @@ class InternalAdapter:
         """
         while True:
             try:
-                task = self.recv_control_cmd_server.recv_control_cmd()
+                with self.response_lock:
+                    task = self.recv_control_cmd_server.recv_control_cmd()
+                if task is None:
+                    time.sleep(0.001)
+                    continue
                 logger.info(f"Recieve control task: {task}")
                 task_id_str = task["task_id"]
                 if task["cmd"] == "get_payload":
