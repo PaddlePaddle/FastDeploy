@@ -196,7 +196,6 @@ def test_prompt_only_spaces():
         ],
         "stream": False,
         "max_tokens": 10,
-        "model": "gpt-3.5-turbo"
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -272,7 +271,6 @@ def test_stop_empty_string():
             }
         ],
         "max_tokens": 10,
-        "model": "gpt-3.5-turbo",
         "stop": ""  # 空字符串
     }
     payload = build_request_payload(TEMPLATE, data)
@@ -292,7 +290,6 @@ def test_stop_multiple_strings():
             }
         ],
         "max_tokens": 50,
-        "model": "gpt-3.5-turbo",
         "stop": ["。", "！", "？"]  # 多个停止条件
     }
     payload = build_request_payload(TEMPLATE, data)
@@ -313,7 +310,6 @@ def test_stop_with_special_characters():
             }
         ],
         "max_tokens": 50,
-        "model": "gpt-3.5-turbo",
         "stop": "!@#$%^&*()"  # 包含特殊字符
     }
     payload = build_request_payload(TEMPLATE, data)
@@ -394,12 +390,12 @@ def test_model_with_special_characters():
         ],
         "stream": False,
         "max_tokens": 10,
-        "model": "gpt-3.5-turbo!@#"  # 包含特殊字符
+        "model": "!@#"  # 包含特殊字符
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert resp.get("object") == "chat.completion", "不存在的 model 应触发校验异常"
-    assert "gpt-3.5-turbo!@#" in resp.get("model"), "未返回预期的 model 信息"
+    assert "!@#" in resp.get("model"), "未返回预期的 model 信息"
     assert len(resp.get("choices")[0].get("message").get("content")) > 0, "模型名为model 参数为非法格式，未正常生成回复"
 
 
@@ -414,7 +410,6 @@ def test_max_tokens_negative():
         ],
         "stream": False,
         "max_tokens": -10,  # 负数
-        "model": "gpt-3.5-turbo"
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -433,7 +428,6 @@ def test_max_tokens_min():
         ],
         "stream": False,
         "max_tokens": 0,  # 最小值
-        "model": "gpt-3.5-turbo"
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
