@@ -484,6 +484,8 @@ class GraphOptimizationConfig:
         """ Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
+        self.cudagraph_capture_prefill: bool = False
+        """Now cudagraph only capture decode, whether to capture prefill """
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = None

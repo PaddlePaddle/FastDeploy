@@ -114,6 +114,10 @@ class CudaGraphPiecewiseBackend:
                 new_grpah.capture_begin()
                 output = entry.runnable(**kwargs)
                 new_grpah.capture_end()
+            new_grpah.print_to_dot_files(
+                f"/root/paddlejob/workspace/env_run/output/liujundong01/FastDeploy/debug/lazy_capture_bsz{batch_size}",
+                1 << 0,
+            )
 
             # Store output buffer
             entry.cuda_graph = new_grpah
