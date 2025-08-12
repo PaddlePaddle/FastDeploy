@@ -32,11 +32,19 @@ class Test(unittest.TestCase):
         self.num_experts = 128
         self.top_k = 8
 
-    def moe_topk_select_ref(self, gate_out: paddle.Tensor, top_k: int, apply_norm_weight: bool):
+    def moe_topk_select_ref(self, gate_out: paddle.Tensor, bias: paddle.Tensor, top_k: int, apply_norm_weight: bool):
         gate_out_after_softmax = paddle.nn.functional.softmax(gate_out, axis=-1)
         topk_weights_ref, topk_ids_ref = paddle.topk(gate_out_after_softmax, k=top_k, axis=-1)
+
+        if bias is not None:
+            gate_out_after_softmax_bias = gate_out_after_softmax + bias
+            _, topk_ids_ref = paddle.topk(gate_out_after_softmax_bias, k=top_k, axis=-1)
+            batch_indices = paddle.arange(gate_out.shape[0]).unsqueeze(-1).expand_as(topk_ids_ref)
+            topk_weights_ref = gate_out_after_softmax.gather_nd(paddle.stack([batch_indices, topk_ids_ref], axis=-1))
+
         if apply_norm_weight:
             topk_weights_ref = topk_weights_ref / topk_weights_ref.sum(axis=-1, keepdim=True)
+
         return topk_ids_ref, topk_weights_ref
 
     def test_moe_topk_select(self):
@@ -44,30 +52,36 @@ class Test(unittest.TestCase):
         Check moe_topk_select.
         """
         gate_out = paddle.rand([self.batch_size, self.num_experts], dtype="float32")
+        gate_correction_bias = paddle.rand([1, self.num_experts], dtype="float32")
+        gate_correction_bias = gate_correction_bias / 10.0
 
-        for apply_norm_weight in [False, True]:
-            topk_ids_ref, topk_weights_ref = self.moe_topk_select_ref(gate_out, self.top_k, apply_norm_weight)
-            for fused in [False, True]:
-                topk_ids, topk_weights = moe_topk_select(
-                    gate_out,
-                    None,  # gate_correction_bias
-                    self.top_k,
-                    apply_norm_weight,  # apply_norm_weight,
-                    fused,  # fused
+        for apply_norm_weight in [True, False]:
+            for bias in [None, gate_correction_bias]:
+                topk_ids_ref, topk_weights_ref = self.moe_topk_select_ref(
+                    gate_out, bias, self.top_k, apply_norm_weight
                 )
-                np.testing.assert_allclose(
-                    topk_ids_ref,
-                    topk_ids,
-                    rtol=1e-05,
-                    atol=1e-05,
-                )
+                for fused in [True, False]:
+                    topk_ids, topk_weights = moe_topk_select(
+                        gate_out,
+                        bias,
+                        self.top_k,
+                        apply_norm_weight,
+                        fused,
+                    )
 
-                np.testing.assert_allclose(
-                    topk_weights_ref,
-                    topk_weights,
-                    rtol=1e-05,
-                    atol=1e-05,
-                )
+                    np.testing.assert_allclose(
+                        topk_ids_ref,
+                        topk_ids,
+                        rtol=1e-05,
+                        atol=1e-05,
+                    )
+
+                    np.testing.assert_allclose(
+                        topk_weights_ref,
+                        topk_weights,
+                        rtol=1e-05,
+                        atol=1e-05,
+                    )
 
 
 if __name__ == "__main__":
