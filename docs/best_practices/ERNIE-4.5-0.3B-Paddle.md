@@ -1,16 +1,20 @@
-# ERNIE-4.5-300B-A47B
+# ERNIE-4.5-0.3B
 ## Environmental Preparation
 ### 1.1 Hardware requirements
-The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the following hardware for each quantization is as follows:
-|  | WINT8 | WINT4 | FP8 | WINT2 | W4A8 |
-|-----|-----|-----|-----|-----|-----|
-|H800 80GB| 8 | 4 | 8 | 2 | 4 |
-|A800 80GB| 8 | 4 | / | 2 | 4 |
+The minimum number of GPUs required to deploy `ERNIE-4.5-0.3B` on the following hardware for each quantization is as follows:
+
+| | WINT8 | WINT4 | FP8 |
+|-----|-----|-----|-----|
+|H800 80GB| 1 | 1 | 1 |
+|A800 80GB| 1 | 1 | / |
+|H20 96GB| 1 | 1 | 1 |
+|L20 48GB| 1 | 1 | 1 |
+|A30 40GB| 1 | 1 | / |
+|A10 24GB| 1 | 1 | / |
 
 **Tips:**
-1. To modify the number of deployment GPUs, specify `--tensor-parallel-size 4` in starting command.
-2. Since only 4-GPSs quantization scale is provided, the W4A8 model needs to be deployed on 4 GPUs.
-3. For hardware not listed in the table, you can estimate whether it can be deployed based on the GPU memory.
+1. To modify the number of deployment GPUs, specify `--tensor-parallel-size 2` in starting command.
+2. For hardware not listed in the table, you can estimate whether it can be deployed based on the GPU memory.
 
 ### 1.2 Install fastdeploy
 - Installation: For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
@@ -22,8 +26,8 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the follo
 Start the service by following command:
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-       --tensor-parallel-size 8 \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
+       --tensor-parallel-size 1 \
        --quantization wint4 \
        --max-model-len 32768 \
        --kv-cache-ratio 0.75 \
@@ -62,25 +66,19 @@ Add the following lines to the startup parameters, where `--enable-prefix-cachin
 --enable-chunked-prefill
 ```
 
-#### 2.2.4 MTP (Multi-Token Prediction)
+#### 2.2.4 CudaGraph
 **Idea:**
-By predicting multiple tokens at once, the number of decoding steps is reduced to significantly speed up the generation speed, while maintaining the generation quality through certain strategies. For details, please refer to [Speculative Decoding](../features/speculative_decoding.md)。
+CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achieves efficient execution and optimization of GPU tasks by capturing CUDA operation sequences into a graph structure. The core idea of CUDAGraph is to encapsulate a series of GPU computing and memory operations into a re-executable graph, thereby reducing CPU-GPU communication overhead, reducing kernel startup latency, and improving overall computing performance.
 
 **How to enable:**
 Add the following lines to the startup parameters
 ```
---speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
+--use-cudagraph
 ```
-
-#### 2.2.5 W4A8C8 Quantization
-**Idea:**
-Quantization can achieve model compression, reduce GPU memory usage and speed up inference. To achieve better inference results, per-channel symmetric 4-bit quantization is used for MoE weights. static per-tensor symmetric 8-bit quantization is used for activation. And static per-channel symmetric 8-bit quantization is used for KVCache.
-
-**How to enable:**
-Just specify the corresponding model name in the startup command, `baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle`
-```
---model baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle
-```
+Notes:
+1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../parameters.md) for related configuration parameter descriptions
+2. When CUDAGraph is enabled, only single-card inference is supported, that is, `--tensor-parallel-size 1`
+3. When CUDAGraph is enabled, it is not supported to enable `Chunked Prefill` and `Prefix Caching` at the same time
 
 #### 2.2.6 Rejection Sampling
 **Idea:**
@@ -90,37 +88,6 @@ Rejection sampling is to generate samples from a proposal distribution that is e
 Add the following environment variables before starting
 ```
 export FD_SAMPLING_CLASS=rejection
-```
-
-#### 2.2.7 Disaggregated Deployment
-**Idea:** Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.
-
-**How to enable:** Take the deployment of a single machine with 8 GPUs and 1P1D (4 GPUs each) as an example. Compared with the default hybrid deployment method, `--splitwise-role` is required to specify the role of the node. And the GPUs and logs of the two nodes are isolated through the environment variables `FD_LOG_DIR` and `CUDA_VISIBLE_DEVICES`.
-```
-export FD_LOG_DIR="log_prefill"
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-       --port 8180 --metrics-port 8181 \
-       --engine-worker-queue-port 8182 \
-       --cache-queue-port 8183 \
-       --tensor-parallel-size 4 \
-       --quantization wint4 \
-       --splitwise-role "prefill"
-```
-```
-export FD_LOG_DIR="log_decode"
-export CUDA_VISIBLE_DEVICES=4,5,6,7
-# Note that innode-prefill-ports is specified as the Prefill serviceengine-worker-queue-port
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle\
-       --port 8184 --metrics-port 8185 \
-       --engine-worker-queue-port 8186 \
-       --cache-queue-port 8187 \
-       --tensor-parallel-size 4 \
-       --quantization wint4 \
-       --innode-prefill-ports 8182 \
-       --splitwise-role "decode"
 ```
 
 ## FAQ
