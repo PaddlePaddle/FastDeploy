@@ -302,20 +302,19 @@ class ErnieProcessor(BaseDataProcessor):
         else:
             response_dict["outputs"]["text"] = delta_text
         if self.tool_parser_obj:
-            # if req_id not in self.tool_parsers:
-            #     self.tool_parsers[req_id] = self.tool_parser_obj(self.tokenizer)
-            # tool_parser = self.tool_parsers[req_id]
-            # tool_call = tool_parser.extract_tool_calls_streaming(
-            #     previous_texts,
-            #     previous_texts + delta_text,
-            #     delta_text,
-            #     previous_token_ids,
-            #     previous_token_ids + token_ids,
-            #     token_ids,
-            #     response_dict,
-            # )
-            # response_dict["outputs"]["tool_delta_message"] = tool_call
-            response_dict["outputs"]["tool_delta_message"] = None
+            if req_id not in self.tool_parsers:
+                self.tool_parsers[req_id] = self.tool_parser_obj(self.tokenizer)
+            tool_parser = self.tool_parsers[req_id]
+            tool_call = tool_parser.extract_tool_calls_streaming(
+                previous_texts,
+                previous_texts + delta_text,
+                delta_text,
+                previous_token_ids,
+                previous_token_ids + token_ids,
+                token_ids,
+                response_dict,
+            )
+            response_dict["outputs"]["tool_delta_message"] = tool_call
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
