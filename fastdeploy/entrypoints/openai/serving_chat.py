@@ -243,7 +243,7 @@ class OpenAIServingChat:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
-                    if self.engine_client.data_processor.tool_parser and not res["finished"]:
+                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
                         tool_delta_message = output["tool_delta_message"]
                         if tool_delta_message is None:
                             continue

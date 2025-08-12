@@ -82,7 +82,7 @@ class LLM:
         model = retrive_model_from_server(model, revision)
         tool_parser_plugin = kwargs.get("tool_parser_plugin")
         if tool_parser_plugin:
-            ToolParserManager.import_tool_parser(args.tool_parser_plugin)
+            ToolParserManager.import_tool_parser(tool_parser_plugin)
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,

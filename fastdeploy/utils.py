@@ -23,9 +23,9 @@ import os
 import random
 import re
 import socket
+import sys
 import tarfile
 import time
-import sys
 from datetime import datetime
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
@@ -630,6 +630,7 @@ def is_list_of(
 
     assert_never(check)
 
+
 def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
     """
     Import a Python file according to its file path.
@@ -644,6 +645,7 @@ def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
 
 def version():
     """

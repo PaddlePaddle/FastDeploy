@@ -445,8 +445,7 @@ class EngineArgs:
             "--tool-call-parser",
             type=str,
             default=EngineArgs.tool_call_parser,
-            help="Flag specifies the tool call parser to use for extracting"
-            "tool call from the model output",
+            help="Flag specifies the tool call parser to use for extracting" "tool call from the model output",
         )
         model_group.add_argument(
             "--tool-parser-plugin",
@@ -944,6 +943,7 @@ class EngineArgs:
             mm_processor_kwargs=self.mm_processor_kwargs,
             # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
+            tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
