@@ -235,14 +235,13 @@ class OpenAIServingCompletion:
                 dealer.close()
 
     async def _echo_back_prompt(self, request, res, idx):
-        # 如果是第一个响应片段，拼接prompt到text前
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
             if isinstance(request.prompt, list):
                 prompt_text = request.prompt[idx]
             else:
                 prompt_text = request.prompt
             res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
-            
+
     def calc_finish_reason(self, max_tokens, token_num, output):
         if max_tokens is None or token_num != max_tokens:
             if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
