@@ -40,11 +40,12 @@ from fastdeploy.worker.output import LogprobsLists
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, ips):
+    def __init__(self, engine_client, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
+        self.max_waiting_time = max_waiting_time
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
                 self.master_ip = self.master_ip[0]
@@ -113,6 +114,14 @@ class OpenAIServingCompletion:
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
+
+            try:
+                if self.max_waiting_time < 0:
+                    await self.engine_client.semaphore.acquire()
+                else:
+                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+            except Exception:
+                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -221,8 +230,18 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
             raise
         finally:
+            self.engine_client.semaphore.release()
             if dealer is not None:
                 dealer.close()
+
+    def calc_finish_reason(self, max_tokens, token_num, output):
+        if max_tokens is None or token_num != max_tokens:
+            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+                return "tool_calls"
+            else:
+                return "stop"
+        else:
+            return "length"
 
     async def completion_stream_generator(
         self,
@@ -324,18 +343,12 @@ class OpenAIServingCompletion:
                             logprobs=logprobs_res,
                         )
                     )
-                    if res["finished"]:
-                        if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
-                            chunk.choices[0].finish_reason = "stop"
-                            if (
-                                self.engine_client.reasoning_parser == "ernie_x1"
-                                and output.get("finish_reason", "") == "tool_calls"
-                            ):
-                                chunk.choices[0].finish_reason = "tool_calls"
-                        else:
-                            chunk.choices[0].finish_reason = "length"
-
                     output_tokens[idx] += 1
+
+                    if res["finished"]:
+                        choices[-1].finish_reason = self.calc_finish_reason(
+                            request.max_tokens, output_tokens[idx], output
+                        )
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
@@ -371,6 +384,7 @@ class OpenAIServingCompletion:
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
+            self.engine_client.semaphore.release()
             if dealer is not None:
                 dealer.close()
             yield "data: [DONE]\n\n"
@@ -422,6 +436,8 @@ class OpenAIServingCompletion:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
 
+            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
+
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
@@ -431,7 +447,7 @@ class OpenAIServingCompletion:
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=aggregated_logprobs,
-                finish_reason=None,
+                finish_reason=finish_reason,
             )
             choices.append(choice_data)
 

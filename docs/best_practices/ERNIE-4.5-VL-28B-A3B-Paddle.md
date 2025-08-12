@@ -1,14 +1,18 @@
 
-# ERNIE-4.5-VL-424B-A47B-Paddle
+# ERNIE-4.5-VL-28B-A3B-Paddle
 
 ## 1. Environment Preparation
 ### 1.1 Support Status
+
 The minimum number of cards required for deployment on the following hardware is as follows:
+
 | Device [GPU Mem] | WINT4 | WINT8 | BFLOAT16 |
 |:----------:|:----------:|:------:| :------:|
-| H20 [144G] | 8 | 8 |  8 |
-| A100 [80G] | 8 | 8 |  - |
-| H800 [80G] | 8 | 8 |  - |
+| A30 [24G] | 2 | 2 | 4 |
+| L20 [48G] | 1 | 1 | 2 |
+| H20 [144G] | 1 | 1 |  1 |
+| A100 [80G] | 1 | 1 |  1 |
+| H800 [80G] | 1 | 1 |  1 |
 
 ### 1.2 Install Fastdeploy
 
@@ -20,27 +24,46 @@ Installation process reference documentation [FastDeploy GPU Install](../get_sta
 
 ## 2.How to Use
 ### 2.1 Basic: Launching the Service
-**Example 1:** Deploying a 128K context service on 8x H800 GPUs.
+**Example 1:** Deploying a 32K Context Service on a Single RTX 4090 GPU
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 python -m fastdeploy.entrypoints.openai.api_server \
-  --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle \
+  --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
   --port 8180 \
   --metrics-port 8181 \
   --engine-worker-queue-port 8182 \
-  --tensor-parallel-size 8 \
-  --max-model-len 131072 \
-  --max-num-seqs 16 \
+  --tensor-parallel-size 1 \
+  --max-model-len 32768 \
+  --max-num-seqs 256 \
   --limit-mm-per-prompt '{"image": 100, "video": 100}' \
   --reasoning-parser ernie-45-vl \
-  --gpu-memory-utilization 0.8 \
+  --gpu-memory-utilization 0.9 \
   --enable-chunked-prefill \
   --max-num-batched-tokens 384 \
   --quantization wint4 \
   --enable-mm
 ```
+**Example 2:** Deploying a 128K Context Service on Dual H800 GPUs
+```shell
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 
+python -m fastdeploy.entrypoints.openai.api_server \
+  --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
+  --port 8180 \
+  --metrics-port 8181 \
+  --engine-worker-queue-port 8182 \
+  --tensor-parallel-size 2 \
+  --max-model-len 131072 \
+  --max-num-seqs 256 \
+  --limit-mm-per-prompt '{"image": 100, "video": 100}' \
+  --reasoning-parser ernie-45-vl \
+  --gpu-memory-utilization 0.9 \
+  --enable-chunked-prefill \
+  --max-num-batched-tokens 384 \
+  --quantization wint4 \
+  --enable-mm
+```
 An example is a set of configurations that can run stably while also delivering relatively good performance. If you have further requirements for precision or performance, please continue reading the content below.
 ### 2.2 Advanced: How to Achieve Better Performance
 
@@ -77,14 +100,14 @@ An example is a set of configurations that can run stably while also delivering 
 - **Parameters：** `--quantization`
 
 - **Supported precision types：**
-  - wint4 (Suitable for most users)
-  - wint8
-  - bfloat16 (When the `--quantization` parameter is not set, bfloat16 is used by default.)
+  - WINT4 (Suitable for most users)
+  - WINT8
+  - BFLOAT16 (When the `--quantization` parameter is not set, BFLOAT16 is used by default.)
 
 - **Recommendation：**
-  - Unless you have extremely stringent precision requirements, we strongly recommend using wint4 quantization. This will significantly reduce memory consumption and increase throughput.
-  - If slightly higher precision is required, you may try wint8.
-  - Only consider using bfloat16 if your application scenario demands extreme precision, as it requires significantly more GPU memory.
+  - Unless you have extremely stringent precision requirements, we strongly recommend using WINT4 quantization. This will significantly reduce memory consumption and increase throughput.
+  - If slightly higher precision is required, you may try WINT8.
+  - Only consider using BFLOAT16 if your application scenario demands extreme precision, as it requires significantly more GPU memory.
 
 ## 3. FAQ
 **Note:** Deploying multimodal services requires adding parameters to the configuration `--enable-mm`.
@@ -92,8 +115,10 @@ An example is a set of configurations that can run stably while also delivering 
 ### 3.1 Out of Memory
 If the service prompts "Out of Memory" during startup, please try the following solutions:
 1. Ensure no other processes are occupying GPU memory;
-2. Use wint4/wint8 quantization and enable chunked prefill;
-3. Reduce context length and maximum sequence count as needed.
+2. Use WINT4/WINT8 quantization and enable chunked prefill;
+3. Reduce context length and maximum sequence count as needed;
+4. Increase the number of GPU cards for deployment (e.g., 2 or 4 cards) by modifying the parameter `--tensor-parallel-size 2` or `--tensor-parallel-size 4`.
 
 If the service starts normally but later reports insufficient memory, try:
-1. Adjust the initial GPU memory utilization ratio by modifying `--gpu-memory-utilization`.
+1. Adjust the initial GPU memory utilization ratio by modifying `--gpu-memory-utilization`;
+2. Increase the number of deployment cards (parameter adjustment as above).

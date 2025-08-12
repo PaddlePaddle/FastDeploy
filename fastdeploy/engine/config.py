@@ -245,7 +245,10 @@ class Config:
             if self.cache_config.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192 # if set to max_model_len, it's easy to be OOM
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
@@ -293,10 +296,11 @@ class Config:
         )
 
         if not self.cache_config.enable_chunked_prefill:
-            assert self.max_num_batched_tokens >= self.max_model_len, (
-                f"max_num_batched_tokens: {self.max_num_batched_tokens} "
-                f"should be larger than or equal to max_model_len: {self.max_model_len}"
-            )
+            if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                assert self.max_num_batched_tokens >= self.max_model_len, (
+                    f"max_num_batched_tokens: {self.max_num_batched_tokens} "
+                    f"should be larger than or equal to max_model_len: {self.max_model_len}"
+                )
         else:
             assert self.max_num_batched_tokens >= self.cache_config.block_size, (
                 f"max_num_batched_tokens: {self.max_num_batched_tokens} "
