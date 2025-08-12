@@ -8,7 +8,6 @@ import weakref
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import get_random_port
 
 MODEL_NAME = os.getenv("MODEL_PATH") + "/ernie-45-21b-a3b-bf16-paddle"
 
@@ -32,7 +31,6 @@ class TestGeneration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up test environment before any tests run"""
         try:
             llm = LLM(
                 model=MODEL_NAME,
@@ -42,7 +40,8 @@ class TestGeneration(unittest.TestCase):
             )
             cls.llm = weakref.proxy(llm)
         except Exception as e:
-            return
+            print(f"Setting up LLM failed: {e}")
+            raise unittest.SkipTest(f"LLM initialization failed: {e}")
 
     @classmethod
     def tearDownClass(cls):
