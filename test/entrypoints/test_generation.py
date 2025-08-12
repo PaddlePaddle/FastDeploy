@@ -9,7 +9,7 @@ from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
-MODEL_NAME = os.getenv("MODEL_PATH") + "/ernie-45-21b-a3b-bf16-paddle"
+MODEL_NAME = os.getenv("MODEL_PATH") + "/ernie-4_5-21b-a3b-bf16-paddle"
 
 
 class TestGeneration(unittest.TestCase):
