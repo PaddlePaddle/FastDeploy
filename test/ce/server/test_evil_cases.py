@@ -227,7 +227,7 @@ def test_sql_injection():
         "messages": [
             {
                 "role": "user",
-                "content": "SELECT * FROM users WHERE username = 'admin' AND password = 'password';"  # SQL 注入攻击
+                "content": "SELECT * FROM users WHERE username = 'admin' OR '1'='1';"  # SQL 注入攻击
             }
         ],
         "stream": False,
