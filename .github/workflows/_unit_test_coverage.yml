@@ -182,13 +182,14 @@ jobs:
         run: |
           cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
               echo "No diff unit failed file URL provided."
             else
-              wget ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
             fi
             echo "Unit tests failed (exit code 8)"
-            filename=$(basename "$unittest_failed_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               cat "${filename}"
