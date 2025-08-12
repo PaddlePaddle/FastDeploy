@@ -75,7 +75,8 @@ parser.add_argument("--max-concurrency", default=512, type=int, help="max concur
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
-
+if args.tool_parser_plugin:
+    ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
 
 
@@ -117,8 +118,6 @@ async def lifespan(app: FastAPI):
 
     if args.tokenizer is None:
         args.tokenizer = args.model
-    if args.tool_parser_plugin:
-        ToolParserManager.import_tool_parser(args.tool_parser_plugin)
     if current_process().name != "MainProcess":
         pid = os.getppid()
     else:

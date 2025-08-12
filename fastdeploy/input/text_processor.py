@@ -409,7 +409,8 @@ class DataProcessor(BaseDataProcessor):
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
-            del self.tool_parsers[req_id]
+            if req_id in self.tool_parsers:
+                del self.tool_parsers[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):
