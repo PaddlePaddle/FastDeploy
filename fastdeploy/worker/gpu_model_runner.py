@@ -1557,7 +1557,8 @@ class GPUModelRunner(ModelRunnerBase):
         paddle.device.cuda.empty_cache()
 
         # Clear CudaGraph
-        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+        if self.use_cudagraph:
+            self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
@@ -1567,7 +1568,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache()
 
         # Recapture CudaGraph
-        self.capture_model()
+        if self.use_cudagraph:
+            self.capture_model()
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
