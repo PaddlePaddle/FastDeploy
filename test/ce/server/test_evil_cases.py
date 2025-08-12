@@ -205,28 +205,6 @@ def test_prompt_only_spaces():
     assert len(response_content) > 0, "messages content为空，未正常生成回复"
     
 
-@pytest.mark.skip("不会控制content_tokens，暂时先跳过")
-def test_content_tokens_max():
-    """测试 content_tokens 达到最大值时的行为"""
-    # 生成足够多的 token
-    tokens = ["我"] * 32767  # 确保输入的 token 数量为 32767
-    input_text = " ".join(tokens)  # 将 token 连接成一个字符串
-    data = {
-        "messages": [
-            {
-                "role": "user",
-                "content": input_text  # 假设最大 prompt_tokens 为 2048
-            }
-        ],
-        "stream": False,
-        "max_tokens": 10,
-    }
-    payload = build_request_payload(TEMPLATE, data)
-    resp = send_request(URL, payload).json()
-    assert resp.get("object") == "chat.completion", "应返回 chat.completion 对象"
-    assert resp.get("usage").get("prompt_tokens") == 32767, "prompt_tokens 应达到最大值"
-
-
 def test_illegal_characters():
     """测试非法字符输入是否被正确处理"""
     data = {
