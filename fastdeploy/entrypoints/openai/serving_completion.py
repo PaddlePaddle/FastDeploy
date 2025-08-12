@@ -322,6 +322,7 @@ class OpenAIServingCompletion:
                     logprobs_res: Optional[CompletionLogprobs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
+
                     output_tokens[idx] += 1
                     if self.engine_client.data_processor.tool_parser and not res["finished"]:
                         tool_delta_message = output["tool_delta_message"]

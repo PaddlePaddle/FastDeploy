@@ -42,6 +42,9 @@ class RequestType(Enum):
     PREEMPTED = 2
 
 
+print("test")
+
+
 @dataclass
 class Request:
     def __init__(
