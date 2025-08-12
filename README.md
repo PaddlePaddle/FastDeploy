@@ -1,3 +1,4 @@
+English | [简体中文](README_CN.md) 
 <p align="center">
   <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://github.com/user-attachments/assets/42b0039f-39e3-4279-afda-6d1865dfbffb" width="500"></a>
 </p>
@@ -68,7 +69,7 @@ Learn how to use FastDeploy through our documentation:
 - [Offline Inference Development](./docs/offline_inference.md)
 - [Online Service Deployment](./docs/online_serving/README.md)
 - [Full Supported Models List](./docs/supported_models.md)
-- [Optimal Deployment](./docs/optimal_deployment/README.md)
+- [Best Practices](./docs/best_practices/README.md)
 
 ## Supported Models
 

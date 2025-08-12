@@ -183,6 +183,7 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 * min_p(float): Minimum probability relative to the maximum probability for a token to be considered (>0 filters low-probability tokens to improve quality)
 * max_tokens(int): Maximum generated tokens (input + output)
 * min_tokens(int): Minimum forced generation length
+* bad_words(list[str]): Prohibited words
 
 ### 2.5 fastdeploy.engine.request.RequestOutput
 

@@ -64,7 +64,10 @@ class PrefixCacheManager:
         self.speculative_config = config.speculative_config
         self.local_data_parallel_id = local_data_parallel_id
 
-        self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.num_gpu_blocks = self.cache_config.total_block_num
+        else:
+            self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
