@@ -134,7 +134,6 @@ class OpenAIServingChat:
         previous_num_tokens = 0
         num_prompt_tokens = 0
         num_choices = 1
-        tool_called = False
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -249,7 +248,8 @@ class OpenAIServingChat:
                             continue
                         delta_message = tool_delta_message
                         delta_message.reasoning_content = output.get("reasoning_content")
-                        tool_called = True
+                        if delta_message.tool_calls:
+                            tool_called = True
                     else:
                         delta_message = DeltaMessage(
                             content=delta_text,
