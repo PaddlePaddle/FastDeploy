@@ -1,13 +1,102 @@
 site_name: 'FastDeploy 2.0: Large Language Model Deployement'
+repo_url: https://github.com/PaddlePaddle/FastDeploy
+repo_name: FastDeploy
+
+theme:
+  name: material
+  highlightjs: true
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)" # 浅色
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)" # 深色
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          site_name: 'FastDeploy 2.0: Large Language Model Deployement'
+          build: true
+        - locale: zh
+          name: 简体中文
+          site_name: 飞桨大语言模型推理部署工具包
+          link: /zh/
+          nav_translations:
+            FastDeploy 2.0: FastDeploy 2.0
+            Quick Start: 快速入门
+            Installation: 安装
+            Nvidia GPU: 英伟达 GPU
+            KunlunXin XPU: 昆仑芯 XPU
+            HYGON DCU: 海光 DCU
+            Enflame S60: 燧原 S60
+            Iluvatar CoreX: 天数 CoreX
+            Quick Deployment For ERNIE-4.5-0.3B: ERNIE-4.5-0.3B快速部署
+            Quick Deployment for ERNIE-4.5-VL-28B-A3B: ERNIE-4.5-VL-28B-A3B快速部署
+            ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B快速部署
+            ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B快速部署
+            Online Serving: 在线服务
+            OpenAI-Compitable API Server: 兼容 OpenAI 协议的服务化部署
+            Monitor Metrics: 监控Metrics
+            Scheduler: 调度器
+            Offline Inference: 离线推理
+            Optimal Deployment: 最佳实践
+            ERNIE-4.5-0.3B: ERNIE-4.5-0.3B
+            ERNIE-4.5-21B-A3B: ERNIE-4.5-21B-A3B
+            ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B
+            ERNIE-4.5-VL-28B-A3B: ERNIE-4.5-VL-28B-A3B
+            ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B
+            FAQ: 常见问题
+            Quantization: 量化
+            Overview: 概述
+            Online Quantization: 在线量化
+            WINT2 Quantization: WINT2量化
+            Features: 特性
+            Prefix Caching: 前缀缓存
+            Disaggregation: 分离式部署
+            Chunked Prefill: 分块预填充
+            Load Balance: 负载均衡
+            Speculative Decoding: 投机解码
+            Structured Outputs: 结构化输出
+            Reasoning Output: 思考链内容
+            Early Stop: 早停功能
+            Plugins: 插件机制
+            Sampling: 采样策略
+            Supported Models: 支持模型列表
+            Benchmark: 基准测试
+            Usage: 用法
+            Log Description: 日志说明
+            Code Overview: 代码概述
+            Environment Variables: 环境变量
+
 nav:
   - 'FastDeploy 2.0': index.md
   - 'Quick Start':
       - Installation:
           - 'Nvidia GPU': get_started/installation/nvidia_gpu.md
           - 'KunlunXin XPU': get_started/installation/kunlunxin_xpu.md
+          - 'HYGON DCU': get_started/installation/hygon_dcu.md
           - 'Enflame S60': get_started/installation/Enflame_gcu.md
           - 'Iluvatar CoreX': get_started/installation/iluvatar_gpu.md
-      - 'Quick Deployment For ERNIE-4.5-0.3B-Paddle': get_started/quick_start.md
+      - 'Quick Deployment For ERNIE-4.5-0.3B': get_started/quick_start.md
       - 'Quick Deployment for ERNIE-4.5-VL-28B-A3B': get_started/quick_start_vl.md
       - 'ERNIE-4.5-300B-A47B': get_started/ernie-4.5.md
       - 'ERNIE-4.5-VL-424B-A47B': get_started/ernie-4.5-vl.md
@@ -16,28 +105,32 @@ nav:
       - 'Monitor Metrics': online_serving/metrics.md
       - 'Scheduler': online_serving/scheduler.md
   - 'Offline Inference': offline_inference.md
-  - Quantiation:
+  - Optimal Deployment:
+      - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md
+      - ERNIE-4.5-21B-A3B: best_practices/ERNIE-4.5-21B-A3B-Paddle.md
+      - ERNIE-4.5-300B-A47B: best_practices/ERNIE-4.5-300B-A47B-Paddle.md
+      - ERNIE-4.5-VL-28B-A3B: best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md
+      - ERNIE-4.5-VL-424B-A47B: best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md
+      - FAQ: best_practices/FAQ.md
+  - Quantization:
       - 'Overview': quantization/README.md
       - 'Online Quantization': quantization/online_quantization.md
       - 'WINT2 Quantization': quantization/wint2.md
   - Features:
       - 'Prefix Caching': features/prefix_caching.md
-      - 'Disaggration': features/disaggregated.md
+      - 'Disaggregation': features/disaggregated.md
       - 'Chunked Prefill': features/chunked_prefill.md
       - 'Load Balance': features/load_balance.md
       - 'Speculative Decoding': features/speculative_decoding.md
       - 'Structured Outputs': features/structured_outputs.md
       - 'Reasoning Output': features/reasoning_output.md
+      - 'Early Stop': features/early_stop.md
+      - 'Plugins': features/plugins.md
+      - 'Sampling': features/sampling.md
   - 'Supported Models': supported_models.md
   - Benchmark: benchmark.md
   - Usage:
       - 'Log Description': usage/log.md
       - 'Code Overview': usage/code_overview.md
       - 'Environment Variables': usage/environment_variables.md
-theme:
-  name: 'material'
-  highlightjs: true
-  icon:
-    repo: fontawesome/brands/github
-repo_url: https://github.com/PaddlePaddle/FastDeploy
-repo_name: FastDeploy
+
