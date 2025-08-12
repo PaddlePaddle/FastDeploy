@@ -236,7 +236,7 @@ class OpenAIServingCompletion:
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
-            if tool_called:
+            if tool_called or output.get("tool_call"):
                 return "tool_calls"
             else:
                 return "stop"
@@ -452,6 +452,8 @@ class OpenAIServingCompletion:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
 
+            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
+
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
@@ -461,7 +463,7 @@ class OpenAIServingCompletion:
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
-                finish_reason=None,
+                finish_reason=finish_reason,
             )
             choices.append(choice_data)
 
