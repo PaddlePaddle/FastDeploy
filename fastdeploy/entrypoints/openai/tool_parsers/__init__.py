@@ -13,9 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from .abstract_tool_parser import ToolParser, ToolParserManager
+from .ernie_x1_tool_parser import ErnieX1ToolParser
 
 __all__ = [
     "ToolParser",
     "ToolParserManager",
+    "ErnieX1ToolParser",
 ]
