@@ -267,9 +267,8 @@ class PaddleDisWorkerProc:
             paddle.distributed.all_gather(tmps, tmp)
             tmps = paddle.concat(tmps,axis=0)
             tmp = tmps.sum().item()
-            if tmp < self.worker.model_runner.parallel_config.attn_group.nranks:
-                # 先不推理，必须等到Attn每张卡上都有数据！
-                # 我才开始推理！
+            if tmp == 0:
+                # 先不推理，必须等到某张卡上有数据，我们才一起推理！
                 time.sleep(0.1)
                 continue
             else:

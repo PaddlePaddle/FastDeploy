@@ -279,7 +279,16 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
-    ):
+    ):  
+
+        
+        if hidden_states.shape[0] == 0:
+            # 当某张卡上的输入shape为0的时候！
+            # 直接返回一个大空的东西！
+            hidden_states = paddle.empty([0,8192], dtype="bfloat16")
+            residual = paddle.empty([0,8192], dtype="bfloat16")
+            return hidden_states, residual
+
         if residual is None:
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
