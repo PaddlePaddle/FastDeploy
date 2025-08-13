@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: ""
+      MODEL_CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   run_tests_with_coverage:
@@ -67,11 +72,26 @@ jobs:
           fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
         run: |
             set -x
             runner_name="${{ runner.name }}"
             CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
-            gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+            DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+            DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
+
+            FLASK_PORT=$((42068 + DEVICE_PORT * 100))
+            FD_API_PORT=$((42088 + DEVICE_PORT * 100))
+            FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
+            FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+            echo "Test ENV Parameter:"
+            echo "========================================================="
+            echo "FLASK_PORT=${FLASK_PORT}"
+            echo "FD_API_PORT=${FD_API_PORT}"
+            echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+            echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+            echo "DEVICES=${DEVICES}"
+            echo "========================================================="
 
             CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
             echo "CACHE_DIR is set to ${CACHE_DIR}"
@@ -86,18 +106,21 @@ jobs:
             -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
             -v "${CACHE_DIR}/.cache:/root/.cache" \
             -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+            -v "${MODEL_CACHE_DIR}:/ModelData:ro" \
+            -e "MODEL_PATH=/ModelData" \
+            -e "FD_API_PORT=${FD_API_PORT}" \
+            -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+            -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+            -e "FLASK_PORT=${FLASK_PORT}" \
             -e TZ="Asia/Shanghai" \
             -e "fd_wheel_url=${fd_wheel_url}" \
             -e "BASE_REF=${BASE_REF}" \
-            --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+            --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
 
             git config --global --add safe.directory /workspace/FastDeploy
             cd FastDeploy
-            # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-            python -m pip install paddlepaddle-gpu==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
-            pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
-            pip config set install.trusted-host  pip.baidu.com
             pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
             python -m pip install coverage
@@ -154,32 +177,40 @@ jobs:
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
-      - name: Determine Unit Succ and whether the coverage rate reaches 80%
+      - name: Check Unit Test Success
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
               echo "No diff unit failed file URL provided."
             else
-              wget ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
             fi
             echo "Unit tests failed (exit code 8)"
-            filename=$(basename "$unittest_failed_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               cat "${filename}"
             fi
             exit "$TEST_EXIT_CODE"
           fi
+          echo "All tests passed"
 
+      - name: Verify Code Coverage Threshold (80%)
+        shell: bash
+        run: |
+          cd FastDeploy
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
+            filename=$(basename "$diff_cov_result_json_url")
             if [ -z "${diff_cov_result_json_url}" ]; then
               echo "No diff cov result file URL provided."
             else
-              wget ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
             fi
-            filename=$(basename "$diff_cov_result_json_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               if command -v jq >/dev/null 2>&1; then
@@ -190,7 +221,7 @@ jobs:
             fi
             exit "$COVERAGE_EXIT_CODE"
           fi
-          echo "All tests and coverage passed"
+          echo "coverage passed"
           exit 0
 
   diff_coverage_report:

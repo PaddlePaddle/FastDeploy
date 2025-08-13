@@ -183,6 +183,7 @@ for output in outputs:
 * min_p(float): token入选的最小概率阈值(相对于最高概率token的比值，设为>0可通过过滤低概率token来提升文本生成质量)
 * max_tokens(int): 限制模型生成的最大token数量（包括输入和输出）
 * min_tokens(int): 强制模型生成的最少token数量，避免过早结束
+* bad_words(list[str]): 禁止生成的词列表, 防止模型生成不希望出现的词
 
 ### 2.5 fastdeploy.engine.request.RequestOutput
 
