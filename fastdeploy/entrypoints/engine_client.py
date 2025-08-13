@@ -135,7 +135,7 @@ class EngineClient:
         Returns:
             None
         """
-        api_server_logger.info(f"add_requests:{task} in [thread.{threading.current_thread().name}]")
+        api_server_logger.debug(f"add_requests:{task} in [thread.{threading.current_thread().name}]")
         task["preprocess_start_time"] = time.time()
         try:
             self.data_processor.process_request_dict(task, self.max_model_len)

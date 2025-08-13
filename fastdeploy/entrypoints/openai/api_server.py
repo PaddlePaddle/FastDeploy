@@ -71,6 +71,7 @@ parser.add_argument(
     type=int,
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
+parser.add_argument("--data-processor-max-workers", default=5, type=int, help="Maximum workers of data processor")
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
@@ -137,6 +138,7 @@ async def lifespan(app: FastAPI):
         args.enable_logprob,
         args.workers,
         args.tool_call_parser,
+        args.data_processor_max_workers,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     chat_handler = OpenAIServingChat(engine_client, pid, args.ips, args.max_waiting_time)
