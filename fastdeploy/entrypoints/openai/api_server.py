@@ -165,7 +165,7 @@ async def connection_manager():
         yield
     except asyncio.TimeoutError:
         api_server_logger.info(f"Reach max request release: {connection_semaphore.status()}")
-        raise HTTPException(status_code=429, detail="Too many requests")
+        raise HTTPException(status_code=429, detail=f"Too many requests, current max concurrency is {args.max_concurrency}")
 
 
 def wrap_streaming_generator(original_generator: AsyncGenerator):
