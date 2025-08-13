@@ -99,6 +99,25 @@ jobs:
             touch "${CACHE_DIR}/gitconfig"
           fi
 
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
+
+          echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
+
+          for port in "${PORTS[@]}"; do
+              PIDS=$(lsof -t -i :$port || true)
+              if [ -n "$PIDS" ]; then
+                  echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
+                  echo "$PIDS" | xargs -r kill -9
+                  echo "Port $port cleared" | tee -a $LOG_FILE
+              else
+                  echo "Port $port is free" | tee -a $LOG_FILE
+              fi
+          done
+
+          echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
+
           docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
@@ -115,8 +134,5 @@ jobs:
           cd FastDeploy
           python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install ${fd_wheel_url}
-          for port in $FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT; do
-            lsof -t -i :$port | xargs -r kill -9 || true
-          done
           bash scripts/run_pre_ce.sh
           '
