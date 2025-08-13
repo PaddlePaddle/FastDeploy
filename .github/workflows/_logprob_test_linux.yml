@@ -91,11 +91,12 @@ jobs:
 
           PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
           LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
 
           echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
 
           for port in "${PORTS[@]}"; do
-              PIDS=$(lsof -t -i :$port)
+              PIDS=$(lsof -t -i :$port || true)
               if [ -n "$PIDS" ]; then
                   echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
                   echo "$PIDS" | xargs -r kill -9
