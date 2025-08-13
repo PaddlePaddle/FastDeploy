@@ -81,6 +81,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
                     "tensor_parallel_size": self.tp_size,
                     "expert_parallel_size": self.ep_size,
                     "expert_parallel_rank": self.ep_rank,
+                    "data_parallel_size": self.ep_size,
                 }
             ),
             quant_config=BlockWiseFP8Config(weight_block_size=[64, 64]) if use_deepgemm else None,
