@@ -100,6 +100,7 @@ class OpenAIServingCompletion:
 
         api_server_logger.info(f"start inference for request {num_choices}")
         prompt_batched_token_ids = []
+        text_after_process_list = []
         try:
             for idx, prompt in enumerate(request_prompts):
                 request_id_idx = f"{request_id}-{idx}"
@@ -109,6 +110,7 @@ class OpenAIServingCompletion:
                     prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
+                    text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                 except Exception as e:
                     return ErrorResponse(message=str(e), code=400)
@@ -131,6 +133,7 @@ class OpenAIServingCompletion:
                     created_time=created_time,
                     model_name=request.model,
                     prompt_batched_token_ids=prompt_batched_token_ids,
+                    text_after_process_list=text_after_process_list,
                 )
             else:
                 try:
@@ -141,6 +144,7 @@ class OpenAIServingCompletion:
                         created_time=created_time,
                         model_name=request.model,
                         prompt_batched_token_ids=prompt_batched_token_ids,
+                        text_after_process_list=text_after_process_list,
                     )
                 except Exception as e:
                     return ErrorResponse(code=400, message=str(e))
@@ -156,6 +160,7 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
+        text_after_process_list: list(),
     ):
         """
         Process the full completion request with multiple choices.
@@ -225,6 +230,7 @@ class OpenAIServingCompletion:
                 model_name=model_name,
                 prompt_batched_token_ids=prompt_batched_token_ids,
                 completion_batched_token_ids=completion_batched_token_ids,
+                text_after_process_list=text_after_process_list,
             )
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
@@ -234,6 +240,15 @@ class OpenAIServingCompletion:
                 dealer.close()
                 self.engine_client.semaphore.release()
 
+    def calc_finish_reason(self, max_tokens, token_num, output):
+        if max_tokens is None or token_num != max_tokens:
+            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+                return "tool_calls"
+            else:
+                return "stop"
+        else:
+            return "length"
+
     async def completion_stream_generator(
         self,
         request: CompletionRequest,
@@ -242,6 +257,7 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
+        text_after_process_list: list(),
     ):
         """
         Process the stream completion request.
@@ -300,6 +316,7 @@ class OpenAIServingCompletion:
                                         index=idx,
                                         text="",
                                         prompt_token_ids=list(prompt_batched_token_ids[idx]),
+                                        text_after_process=text_after_process_list[idx],
                                         completion_token_ids=None,
                                     )
                                 ],
@@ -328,24 +345,19 @@ class OpenAIServingCompletion:
                             text=output["text"],
                             prompt_token_ids=None,
                             completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
+                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
                             tool_calls=output.get("tool_call_content"),
                             reasoning_content=output.get("reasoning_content"),
                             arrival_time=arrival_time,
                             logprobs=logprobs_res,
                         )
                     )
-                    if res["finished"]:
-                        if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
-                            chunk.choices[0].finish_reason = "stop"
-                            if (
-                                self.engine_client.reasoning_parser == "ernie_x1"
-                                and output.get("finish_reason", "") == "tool_calls"
-                            ):
-                                chunk.choices[0].finish_reason = "tool_calls"
-                        else:
-                            chunk.choices[0].finish_reason = "length"
-
                     output_tokens[idx] += 1
+
+                    if res["finished"]:
+                        choices[-1].finish_reason = self.calc_finish_reason(
+                            request.max_tokens, output_tokens[idx], output
+                        )
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
@@ -394,6 +406,7 @@ class OpenAIServingCompletion:
         model_name: str,
         prompt_batched_token_ids: list(),
         completion_batched_token_ids: list(),
+        text_after_process_list: list(),
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
@@ -432,16 +445,20 @@ class OpenAIServingCompletion:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
 
+            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
+
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
+                raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=aggregated_logprobs,
-                finish_reason=None,
+                finish_reason=finish_reason,
             )
             choices.append(choice_data)
 
