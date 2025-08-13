@@ -293,10 +293,9 @@ class MTPProposer(Proposer):
         self.model_inputs["substep"] = 0
 
         # Input tokens
-        self.model_inputs["draft_tokens"] = \
-            paddle.full(shape=[self.max_num_seqs, self.max_draft_token_num + 1], 
-                        fill_value=-1, 
-                        dtype="int64")
+        self.model_inputs["draft_tokens"] = paddle.full(
+            shape=[self.max_num_seqs, self.max_draft_token_num + 1], fill_value=-1, dtype="int64"
+        )
 
         self.model_inputs["encoder_block_lens"] = paddle.clone(self.main_model_inputs["encoder_block_lens"])
 
@@ -633,14 +632,6 @@ class MTPProposer(Proposer):
             self.main_model_inputs["seq_lens_encoder"],
             self.main_model_inputs["stop_flags"],
         )
-        # print("============== MTP Fin one step ===========\n")
-        # print(f"draft_tokens:", self.model_inputs["draft_tokens"])
-        # print(f"seq_lens_this_time:", self.model_inputs["seq_lens_this_time"])
-        # print(f"seq_lens_encoder:", self.model_inputs["seq_lens_encoder"])
-        # print(f"seq_lens_decoder:", self.model_inputs["seq_lens_decoder"])
-        # print(f"step_idx:", self.model_inputs["step_idx"])
-        # print(f"stop_flags:", self.model_inputs["stop_flags"])
-        # print("======================================\n")
 
         mtp_step_paddle(
             self.main_model_inputs["stop_flags"],
