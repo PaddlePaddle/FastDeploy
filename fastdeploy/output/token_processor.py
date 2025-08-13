@@ -525,7 +525,8 @@ class TokenProcessor:
             for token_id in token_ids:
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
-                    result.outputs.token_ids.append(token_id)
+                    if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
+                        result.outputs.token_ids.append(token_id)
                     task.output_token_ids.append(token_id)
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
