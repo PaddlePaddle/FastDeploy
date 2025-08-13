@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
 
@@ -249,6 +250,7 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
         """
