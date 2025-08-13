@@ -295,7 +295,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts)
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
@@ -675,7 +675,7 @@ class GCUModelRunner(ModelRunnerBase):
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
         self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
 
         # Get the attention backend
@@ -1062,9 +1062,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         self._update_chunked_prefill(model_forward_batch)
         self._add_cache(model_forward_batch)
-        self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
-        )
+        self.seq_lens_this_time_buffer.copy_(self.share_inputs["seq_lens_this_time"], False)
         return None
 
     def _add_cache(self, model_forward_batch) -> None:
