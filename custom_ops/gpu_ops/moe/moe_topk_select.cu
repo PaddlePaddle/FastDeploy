@@ -55,6 +55,7 @@ void moe_topk_select_kernel(const T* input,
     break;                                                                       \
   }
   int64_t tem_num_experts = num_experts;
+  // when bias is not none, set tem_num_experts to 0 to follow the default branch
   if(bias != nullptr)  tem_num_experts = 0;
   switch (tem_num_experts) {
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(2)
