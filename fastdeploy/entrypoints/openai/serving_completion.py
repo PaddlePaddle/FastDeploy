@@ -342,7 +342,6 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
-                    # 如果是第一个响应片段，拼接prompt到text前
                     await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
@@ -446,7 +445,6 @@ class OpenAIServingCompletion:
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            # prompt_text = final_res["prompt"]
             prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
@@ -466,7 +464,6 @@ class OpenAIServingCompletion:
             if request.echo:
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
                 if isinstance(prompt_text, list):
-                    # 处理多个prompt的情况
                     output_text = prompt_text[idx] + output["text"]
                 else:
                     output_text = prompt_text + output["text"]
