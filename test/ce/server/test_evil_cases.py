@@ -106,8 +106,8 @@ def test_stop_seq_exceed_num():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("object") == "error", "stop 超出个数应触发异常"
-    assert "exceeds the limit max_stop_seqs_num" in resp.get("message", ""), "未返回预期的报错信息"
+    assert resp.get("detail").get("object") == "error", "stop 超出个数应触发异常"
+    assert "exceeds the limit max_stop_seqs_num" in resp.get("detail").get("message", ""), "未返回预期的报错信息"
 
 
 def test_stop_seq_exceed_length():
@@ -120,5 +120,5 @@ def test_stop_seq_exceed_length():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("object") == "error", "stop 超出长度应触发异常"
-    assert "exceeds the limit stop_seqs_max_len" in resp.get("message", ""), "未返回预期的报错信息"
+    assert resp.get("detail").get("object") == "error", "stop 超出长度应触发异常"
+    assert "exceeds the limit stop_seqs_max_len" in resp.get("detail").get("message", ""), "未返回预期的报错信息"
