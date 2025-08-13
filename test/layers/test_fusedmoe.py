@@ -176,7 +176,8 @@ class TestFusedMoE(unittest.TestCase):
         os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
         fused_moe = FuseMoEWrapper(self.model_config, 1, ep_size, ep_rank)
         out = fused_moe.forward(hidden_states, gating)
-        self.clear_tmp()
+        if ep_rank == 0:
+            self.clear_tmp()
         return out
 
 
