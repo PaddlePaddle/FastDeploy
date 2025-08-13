@@ -23,6 +23,7 @@ import os
 import random
 import re
 import socket
+import sys
 import tarfile
 import time
 from datetime import datetime
@@ -628,6 +629,22 @@ def is_list_of(
         return all(isinstance(v, typ) for v in value)
 
     assert_never(check)
+
+
+def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
+    """
+    Import a Python file according to its file path.
+    """
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None:
+        raise ModuleNotFoundError(f"No module named '{module_name}'")
+
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def version():
