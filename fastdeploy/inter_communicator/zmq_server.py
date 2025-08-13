@@ -249,7 +249,7 @@ class ZmqTcpServer(ZmqServerBase):
 
         with self.mutex:
             self.req_dict.pop(task_id, None)
-        llm_logger.info(f"response control cmd finished, task_id: {task_id}")
+        llm_logger.debug(f"response control cmd finished, task_id: {task_id}")
 
     def close(self):
         """
