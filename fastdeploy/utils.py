@@ -18,7 +18,6 @@ import argparse
 import asyncio
 import codecs
 import importlib
-import json
 import logging
 import os
 import random
@@ -735,41 +734,6 @@ class StatefulSemaphore:
             "max_value": self.max_value,
             "uptime": round(self.uptime, 2),
         }
-
-
-def truncate_text(data, n=10240):
-    """
-    截断数据中的文本内容，支持两种格式：
-    1. 包含 'prompt' 字段的数据
-    2. 包含 'messages' 列表的数据
-    """
-    if isinstance(data, str):
-        data = json.loads(data)
-
-    import copy
-
-    data = copy.deepcopy(data)
-
-    # 处理 prompt 字段
-    if "prompt" in data:
-        text = data["prompt"]
-        if len(text.encode("utf-8")) > n:
-            # 确保截断后的字节数不超过限制
-            start_bytes = text.encode("utf-8")[:n].decode("utf-8", errors="ignore")
-            end_bytes = text.encode("utf-8")[-n:].decode("utf-8", errors="ignore")
-            data["prompt"] = f"{start_bytes}...{end_bytes}"
-
-    # 处理 messages 字段
-    if "messages" in data:
-        for message in data["messages"]:
-            content = message.get("content", "")
-            if len(content.encode("utf-8")) > n:
-                # 确保截断后的字节数不超过限制
-                start_bytes = content.encode("utf-8")[:n].decode("utf-8", errors="ignore")
-                end_bytes = content.encode("utf-8")[-n:].decode("utf-8", errors="ignore")
-                message["content"] = f"{start_bytes}...{end_bytes}"
-
-    return data
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
