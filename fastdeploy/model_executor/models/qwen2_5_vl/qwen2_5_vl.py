@@ -57,161 +57,19 @@ if current_platform.is_cuda():
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+''' 没必要再创建qwen2_5_VL*类了，直接用qwen2model即可 '''
+# class Qwen2_5_VLMLP(Qwen2MLP):
+#     pass
 
-class Qwen2_5_VLMLP(Qwen2MLP):
-    pass
+# class Qwen2_5_VLAttention(Qwen2Attention):
+#     pass
 
-
-class Qwen2_5_VLAttention(Qwen2Attention):
-    pass
-
-
-class Qwen2_5_VLDecoderLayer(Qwen2DecoderLayer):
-    pass
-
-
-@support_graph_optimization
-class Qwen2_5_VLModel(Qwen2Model):
-    pass
+# class Qwen2_5_VLDecoderLayer(Qwen2DecoderLayer):
+#     pass
 
 # @support_graph_optimization
-# class Qwen2_5_VLModel(nn.Layer):
-#     def __init__(
-#         self,
-#         fd_config: FDConfig = None,
-#     ):
-#         """
-#         Initializer for the Ernie4_5_VLModel class.
-
-#         Args:
-
-#         """
-#         super().__init__()
-
-#         self.num_layers = fd_config.model_config.num_hidden_layers
-#         self.im_patch_id = fd_config.model_config.im_patch_id
-#         self._dtype = fd_config.model_config.dtype
-#         fd_config.model_config.pretrained_config.prefix_name = "qwen2"
-#         self.fd_config = fd_config
-
-#         self.embed_tokens = VocabParallelEmbedding(
-#             fd_config=fd_config,
-#             num_embeddings=fd_config.model_config.vocab_size,
-#             embedding_dim=fd_config.model_config.hidden_size,
-#             params_dtype=paddle.get_default_dtype,
-#             prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
-#         )
-
-#         self.layers = nn.LayerList(
-#             [
-#                 Qwen2_5_VLDecoderLayer(
-#                     fd_config=fd_config,
-#                     prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}",
-#                 )
-#                 for i in range(self.num_layers)
-#             ]
-#         )
-
-#         self.norm = RMSNorm(
-#             fd_config,
-#             hidden_size=fd_config.model_config.hidden_size,
-#             eps=fd_config.model_config.rms_norm_eps,
-#             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
-#         )
-
-#     def load_state_dict(self, state_dict):
-#         """
-#         Load model parameters from a given state dictionary.
-
-#         Args:
-#             state_dict (dict[str, np.ndarray | paddle.Tensor]):
-#                 A dictionary containing model parameters, where keys are parameter names
-#                 and values are NumPy arrays or PaddlePaddle tensors.
-#         """
-#         self.embed_tokens.load_state_dict(state_dict)
-#         self.norm.load_state_dict(state_dict)
-#         for i in range(self.num_layers):
-#             logger.info(f"Start load layer {i}")
-#             self.layers[i].load_state_dict(state_dict)
-
-#     def forward(
-#         self,
-#         ids_remove_padding: paddle.Tensor,
-#         image_features: Optional[paddle.Tensor],
-#         forward_meta: ForwardMeta,
-#     ):
-#         text_input = None
-#         image_input = None
-#         text_index = None
-#         image_index = None
-#         fake_hidden_states = None
-
-#         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-#         token_num, hidden_dim = hidden_states.shape
-
-#         # -----------------------
-#         image_mask = ids_remove_padding == self.im_patch_id
-#         image_token_num = image_mask.sum()
-#         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
-
-#         token_type_ids = image_mask.cast("int32")
-#         if self.fd_config.parallel_config.use_ep is True:
-#             fake_hidden_states = paddle.empty(
-#                 shape=[0, self.fd_config.model_config.hidden_size],
-#                 dtype=paddle.get_default_dtype(),
-#             )
-#             text_input = fake_hidden_states
-
-#         if image_token_num > 0:
-#             hidden_states[image_mask] = image_features.cast(self._dtype)
-#             text_input = paddle.ones(
-#                 shape=[text_token_num, hidden_dim],
-#                 dtype=self._dtype,
-#             )
-#             image_input = paddle.ones(
-#                 shape=[image_token_num, hidden_dim],
-#                 dtype=self._dtype,
-#             )
-#             text_index = paddle.zeros_like(image_mask, dtype="int32")
-#             image_index = paddle.zeros_like(image_mask, dtype="int32")
-#             text_image_index_out(token_type_ids, text_index, image_index)
-
-#         # vl_moe_meta = VLMoEMeta(
-#         #     text_input=text_input,
-#         #     image_input=image_input,
-#         #     text_index=text_index,
-#         #     image_index=image_index,
-#         #     token_type_ids=token_type_ids,
-#         #     fake_hidden_states=fake_hidden_states,
-#         # )
-#         # -----------------------
-
-#         residual = None
-#         for i in range(self.num_layers):
-#             hidden_states, residual = self.layers[i](
-#                 forward_meta,
-#                 hidden_states,
-#                 residual,
-#                 # vl_moe_meta,
-#             )
-
-#         hidden_states = hidden_states + residual
-
-#         # -----------------------
-#         max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
-#         hidden_states = extract_text_token_output(
-#             max_seq_len,
-#             max_seq_len_index.cast("int32"),
-#             image_token_num.cast("int32"),
-#             forward_meta.seq_lens_this_time,
-#             forward_meta.cu_seqlens_q,
-#             hidden_states.cast("float32"),
-#         ).cast(self._dtype)
-#         # -----------------------
-
-#         out = self.norm(hidden_states)
-
-#         return out
+# class Qwen2_5_VLModel(Qwen2Model):
+#     pass
 
 
 @MultimodalRegistry.register_model()
@@ -227,11 +85,13 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         """
         super(Qwen2_5_VLForConditionalGeneration, self).__init__(fd_config)
         # ----------- vision model ------------
-        self.vision_model = self._init_vision_model(fd_config.model_config)
-        # -----------  resampler_model ------------   qwen 没有这部分操作
+        self.visual = self._init_vision_model(fd_config.model_config)
+        # -----------  resampler_model ------------   qwen2_5_VL 没有这部分操作
         # self.resampler_model = self._init_resampler_model_model(fd_config.model_config)
         # -----------  language model -------------
-        self.qwen = Qwen2_5_VLModel(fd_config=fd_config)
+        # 在 vllm 里也是直接用的 qwen2_model
+        # 未知：需要保证 FD 的 qwen2 和 vllm 的 qwen2 完全对齐
+        self.model = Qwen2Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -248,27 +108,10 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             DFNRopeVisionTransformerPretrainedModel,
         )
 
-        vision_model = DFNRopeVisionTransformerPretrainedModel(model_config, prefix_name="vision_model")
-        vision_model = paddle.amp.decorate(models=vision_model, level="O2", dtype="bfloat16")
-        vision_model.eval()
-        return vision_model
-
-    # def _init_resampler_model_model(self, model_config) -> nn.Layer:
-    #     from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import (
-    #         VariableResolutionResamplerModel,
-    #     )
-
-    #     resampler_model = VariableResolutionResamplerModel(
-    #         model_config.vision_config.hidden_size,
-    #         model_config.hidden_size,
-    #         model_config.spatial_conv_size,
-    #         model_config.temporal_conv_size,
-    #         config=model_config,
-    #         prefix_name="resampler_model",
-    #     )
-    #     resampler_model = paddle.amp.decorate(models=resampler_model, level="O2", dtype="bfloat16")
-    #     resampler_model.eval()
-    #     return resampler_model
+        visual = DFNRopeVisionTransformerPretrainedModel(model_config, prefix_name="vision_model")
+        visual = paddle.amp.decorate(models=visual, level="O2", dtype="bfloat16")
+        visual.eval()
+        return visual
 
     @classmethod
     def name(self):
@@ -284,9 +127,9 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.qwen.load_state_dict(state_dict)
-        self.vision_model.load_state_dict(state_dict)
-        self.resampler_model.load_state_dict(state_dict)
+        self.model.load_state_dict(state_dict)
+        self.visual.load_state_dict(state_dict)
+        # self.resampler_model.load_state_dict(state_dict)
         # if self.tie_word_embeddings:
         #     self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         # else:
@@ -320,7 +163,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.qwen(
+        hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             forward_meta=forward_meta,

@@ -50,6 +50,7 @@ __all__ = [
 # qwen 的 out_hidden_size 对应 hidden_size
 # qwen 的 intermediate_size 是 qwen_vision_block 里 mlp 的 mlp_hidden_dim
 # qwen 的 fullatt_block_indexes 是区分vit部分不同attention的layer_index
+# spatial_patch_size 和 tokens_per_second 在vllm里没用到
 
 class DFNRopeVisionTransformerConfig(PretrainedConfig):
     r"""
@@ -65,34 +66,30 @@ class DFNRopeVisionTransformerConfig(PretrainedConfig):
     def __init__(
         self,
         depth=32,
-        embed_dim=1280,
-        hidden_size=3584,
-        hidden_act="quick_gelu",
-        mlp_ratio=4,
+        hidden_size=1280,
+        out_hidden_size=3584,
+        intermediate_size=3420,
+        hidden_act="silu",
         num_heads=16,
         in_channels=3,
         patch_size=14,
         spatial_merge_size=2,
-        attn_implementation="eager",  # new added
-        pp_data_balance=False,
-        recompute=False,
-        vit_first_fwd_bsz=128,
-        vit_num_recompute_layers=10000,
+        window_size=112,
+        fullatt_block_indexes=[7, 15, 23, 31],
+        temporal_patch_size=2,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
         self.depth = depth
-        self.embed_dim = embed_dim
         self.hidden_size = hidden_size
+        self.out_hidden_size = out_hidden_size
         self.hidden_act = hidden_act
-        self.mlp_ratio = mlp_ratio
+        self.intermediate_size = intermediate_size
         self.num_heads = num_heads
         self.in_channels = in_channels
         self.patch_size = patch_size
         self.spatial_merge_size = spatial_merge_size
-        self.attn_implementation = attn_implementation
-        self.pp_data_balance = pp_data_balance
-        self.recompute = recompute
-        self.vit_first_fwd_bsz = vit_first_fwd_bsz
-        self.vit_num_recompute_layers = vit_num_recompute_layers
+        self.window_size = window_size
+        self.fullatt_block_indexes = fullatt_block_indexes
+        self.temporal_patch_size = temporal_patch_size
