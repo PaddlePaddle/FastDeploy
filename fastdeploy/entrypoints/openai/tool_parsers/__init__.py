@@ -14,15 +14,11 @@
 # limitations under the License.
 """
 
-from .abs_reasoning_parsers import ReasoningParser, ReasoningParserManager
-from .ernie_vl_reasoning_parsers import ErnieVLReasoningParser
-from .ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
-from .qwen3_reasoning_parsers import Qwen3ReasoningParser
+from .abstract_tool_parser import ToolParser, ToolParserManager
+from .ernie_x1_tool_parser import ErnieX1ToolParser
 
 __all__ = [
-    "ReasoningParser",
-    "ReasoningParserManager",
-    "ErnieVLReasoningParser",
-    "Qwen3ReasoningParser",
-    "ErnieX1ReasoningParser",
+    "ToolParser",
+    "ToolParserManager",
+    "ErnieX1ToolParser",
 ]
