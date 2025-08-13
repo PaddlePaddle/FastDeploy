@@ -207,6 +207,14 @@ class OpenAIServingCompletion:
             if dealer is not None:
                 dealer.close()
 
+    async def _echo_back_prompt(self, request, res, idx):
+        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
+            if isinstance(request.prompt, list):
+                prompt_text = request.prompt[idx]
+            else:
+                prompt_text = request.prompt
+            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+
     async def completion_stream_generator(
         self,
         request: CompletionRequest,
@@ -290,6 +298,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
 
                     choices.append(
@@ -374,7 +383,7 @@ class OpenAIServingCompletion:
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            prompt_text = final_res["prompt"]
+            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
@@ -384,8 +393,12 @@ class OpenAIServingCompletion:
                     token_ids = prompt_token_ids
                     output_text = prompt_text
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
-                    output_text = prompt_text + output["text"]
+                    if isinstance(prompt_text, list):
+                        token_ids = [*prompt_token_ids, *output["token_ids"]]
+                        output_text = prompt_text[idx] + output["text"]
+                    else:
+                        token_ids = [*prompt_token_ids, *output["token_ids"]]
+                        output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
