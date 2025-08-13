@@ -23,10 +23,10 @@ for subdir in "$run_path"*/; do
                 echo "Running pytest on $(realpath "$file")"
                 echo "------------------------------------------------------------"
 
-                set +e
+                #set +e
                 timeout 600 python -m pytest --disable-warnings -sv "$file"
                 exit_code=$?
-                set -e
+                #set -e
 
                 if [ $exit_code -ne 0 ]; then
                     if [ -f "${subdir%/}/log/workerlog.0" ]; then
