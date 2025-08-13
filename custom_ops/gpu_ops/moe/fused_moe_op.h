@@ -570,6 +570,7 @@ template <typename T,
           int NUM_EXPERTS,
           int WARPS_PER_CTA,
           int BYTES_PER_LDG,
+          bool Norm_Weights = false,
           typename IdxT = int>
 __launch_bounds__(WARPS_PER_CTA * WARP_SIZE) __global__
     void topk_gating_softmax(const T* input,
@@ -628,6 +629,7 @@ __launch_bounds__(WARPS_PER_CTA * WARP_SIZE) __global__
   // We compute row offset for each thread sub-group
   const int thread_row_in_warp = threadIdx.x / THREADS_PER_ROW;
   const int thread_row = warp_base_row + thread_row_in_warp;
+  const int thread_row_in_cta = thread_row - cta_base_row;
 
   // Threads with indices out of bounds should early exit here.
   if (thread_row >= num_rows) return;
@@ -642,6 +644,9 @@ __launch_bounds__(WARPS_PER_CTA * WARP_SIZE) __global__
   const int thread_group_idx = threadIdx.x % THREADS_PER_ROW;
   const int first_elt_read_by_thread = thread_group_idx * ELTS_PER_LDG;
   const T* thread_read_ptr = thread_row_ptr + first_elt_read_by_thread;
+
+  T weight_sum = static_cast<T>(0);
+  extern __shared__ T row_output[];
 
   // Determine the pointer type to use to read in the data depending on the
   // BYTES_PER_LDG template param. In theory, this can support all powers of 2
@@ -765,7 +770,14 @@ __launch_bounds__(WARPS_PER_CTA * WARP_SIZE) __global__
       // global memory. (This will be a single) thread per row of the
       // input/output matrices.
       const int idx = k * thread_row + k_idx;
-      output[idx] = T(max_val);
+      if constexpr (Norm_Weights) {
+        const int idx_in_cta = k * thread_row_in_cta + k_idx;
+        row_output[idx_in_cta] = T(max_val);
+        weight_sum += T(max_val);
+      }
+      else {
+        output[idx] = T(max_val);
+      }
       indices[idx] = should_process_row ? expert : NUM_EXPERTS;
       source_rows[idx] = k_idx * num_rows + thread_row;
     }
@@ -788,6 +800,16 @@ __launch_bounds__(WARPS_PER_CTA * WARP_SIZE) __global__
       }
     }
   }
+  if constexpr (Norm_Weights) {
+#pragma unroll
+    for (int k_idx = 0; k_idx < k; ++k_idx) {
+      if (thread_group_idx == 0) {
+        const int idx = k * thread_row + k_idx;
+        const int idx_in_cta = k * thread_row_in_cta + k_idx;
+        output[idx] = row_output[idx_in_cta] / weight_sum;
+      }
+    }
+  }
 }
 
 namespace detail {
@@ -807,7 +829,7 @@ struct TopkConstants {
 };
 }  // namespace detail
 
-template <typename T, int EXPERTS, int WARPS_PER_TB, typename IdxT = int>
+template <typename T, int EXPERTS, int WARPS_PER_TB, bool Norm_Weights = false, typename IdxT = int>
 void topk_gating_softmax_launcher_helper(const T* input,
                                          T* output,
                                          IdxT* indices,
@@ -826,8 +848,9 @@ void topk_gating_softmax_launcher_helper(const T* input,
   const int num_blocks = (num_warps + WARPS_PER_TB - 1) / WARPS_PER_TB;
 
   dim3 block_dim(WARP_SIZE, WARPS_PER_TB);
-  topk_gating_softmax<T, VPT, EXPERTS, WARPS_PER_TB, BYTES_PER_LDG>
-      <<<num_blocks, block_dim, 0, stream>>>(
+  static constexpr int ROWS_PER_CTA = WARPS_PER_TB * ROWS_PER_WARP;
+  topk_gating_softmax<T, VPT, EXPERTS, WARPS_PER_TB, BYTES_PER_LDG, Norm_Weights>
+      <<<num_blocks, block_dim, ROWS_PER_CTA * k * sizeof(T), stream>>>(
           input, output, num_rows, indices, source_row, k);
 }
 
