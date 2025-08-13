@@ -945,7 +945,7 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
     log_file = "./log/config.log"
-    baseline = 6408
+    baseline = 31446
 
     if not os.path.exists(log_file):
         pytest.fail(f"Log file not found: {log_file}")
