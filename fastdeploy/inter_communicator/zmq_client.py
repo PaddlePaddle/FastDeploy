@@ -67,6 +67,7 @@ class ZmqClient:
         """
         self.router = self.context.socket(zmq.ROUTER)
         self.router.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
+        self.router.setsockopt(zmq.ROUTER_MANDATORY, 1)
         self.router.setsockopt(zmq.SNDTIMEO, -1)
         self.router.bind(f"ipc://{self.router_path}")
 
@@ -111,7 +112,6 @@ class ZmqClient:
         """
         if self.router is None:
             raise RuntimeError("Router socket not created. Call create_router() first.")
-
         while self.running:
             with self.mutex:
                 if req_id not in self.req_dict:
@@ -124,7 +124,8 @@ class ZmqClient:
                         continue
                 else:
                     break
-
+        if self.req_dict[req_id] == -1:
+            return
         try:
             start_send = time.time()
             if self.aggregate_send:
@@ -133,7 +134,9 @@ class ZmqClient:
                 result = msgpack.packb([response.to_dict() for response in data])
             self.router.send_multipart([self.req_dict[req_id], b"", result])
             llm_logger.debug(f"send_multipart result: {req_id} len {len(data)} elapse: {time.time()-start_send}")
-
+        except zmq.ZMQError as e:
+            llm_logger.error(f"[{req_id}] zmq error: {e}")
+            self.req_dict[req_id] = -1
         except Exception as e:
             llm_logger.error(f"Send result to zmq client failed: {e}")
 

@@ -165,8 +165,6 @@ async def connection_manager():
         yield
     except asyncio.TimeoutError:
         api_server_logger.info(f"Reach max request release: {connection_semaphore.status()}")
-        if connection_semaphore.locked():
-            connection_semaphore.release()
         raise HTTPException(status_code=429, detail="Too many requests")
 
 
@@ -254,9 +252,11 @@ async def create_chat_completion(request: ChatCompletionRequest):
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
+                api_server_logger.info(f"release: {connection_semaphore.status()}")
                 return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
             elif isinstance(generator, ChatCompletionResponse):
                 connection_semaphore.release()
+                api_server_logger.info(f"release: {connection_semaphore.status()}")
                 return JSONResponse(content=generator.model_dump())
             else:
                 wrapped_generator = wrap_streaming_generator(generator)
