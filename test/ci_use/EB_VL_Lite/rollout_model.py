@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import argparse
-import difflib
 
 from paddleformers.trl.llm_utils import init_dist_env
 
@@ -50,23 +49,35 @@ for k, v in actor_eval_model.get_name_mappings_to_training().items():
     content += f"{k}:{v}\n"
 
 
-def compare_strings(a: str, b: str) -> bool:
-    if a == b:
-        print("✅ 两个字符串完全一致")
-        return True
+def compare_strings_line_by_line(a: str, b: str) -> bool:
+    """
+    Compare two multiline strings line by line.
 
-    print("❌ 字符串不一致，差异如下（上下文差异显示）：")
-    diff = difflib.ndiff(a.splitlines(), b.splitlines())
-    for line in diff:
-        if line.startswith("- ") or line.startswith("+ "):
-            print(line)
+    Returns:
+        True if all lines match exactly in order and content.
+        False if any line differs or the number of lines is not equal.
+    """
+    a_lines = a.splitlines()
+    b_lines = b.splitlines()
 
-    return False
+    if len(a_lines) != len(b_lines):
+        print(f"❌ Mismatch in number of lines: expected {len(a_lines)}, but got {len(b_lines)}.")
+        return False
+
+    for i, (line_a, line_b) in enumerate(zip(a_lines, b_lines)):
+        if line_a != line_b:
+            print(f"❌ Difference found on line {i + 1}:")
+            print(f"  Expected: {repr(line_a)}")
+            print(f"  Actual  : {repr(line_b)}")
+            return False
+
+    print("✅ All lines match exactly.")
+    return True
 
 
 with open("baseline.txt", "r", encoding="utf-8") as f:
     baseline = f.read()
-    assert compare_strings(baseline, content), (
+    assert compare_strings_line_by_line(baseline, content), (
         "In the unittest of RL scenario, your modification "
         "caused inconsistency in the content before and after. Please fix it. "
         "Can request assistance from yuanlehome or gzy19990617 (github id)."

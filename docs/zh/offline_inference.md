@@ -39,7 +39,7 @@ for output in outputs:
 ```python
 from fastdeploy.entrypoints.llm import LLM
 # 加载模型
-llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
 
 outputs = llm.chat(
     messages=[
@@ -127,7 +127,7 @@ for message in messages:
             })
 
 sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
-llm = LLM(model=PATH, tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+llm = LLM(model=PATH, tensor_parallel_size=1, max_model_len=32768, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
 outputs = llm.generate(prompts={
     "prompt": prompt,
     "multimodal_data": {
@@ -183,6 +183,7 @@ for output in outputs:
 * min_p(float): token入选的最小概率阈值(相对于最高概率token的比值，设为>0可通过过滤低概率token来提升文本生成质量)
 * max_tokens(int): 限制模型生成的最大token数量（包括输入和输出）
 * min_tokens(int): 强制模型生成的最少token数量，避免过早结束
+* bad_words(list[str]): 禁止生成的词列表, 防止模型生成不希望出现的词
 
 ### 2.5 fastdeploy.engine.request.RequestOutput
 

@@ -1,0 +1,4 @@
+sympy
+tqdm
+openai
+datasets

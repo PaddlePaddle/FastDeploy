@@ -15,20 +15,25 @@
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
 from fastdeploy.config import (
     CacheConfig,
+    EarlyStopConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    ModelConfig,
+    ParallelConfig,
     SpeculativeConfig,
     TaskOption,
 )
-from fastdeploy.engine.config import Config, ModelConfig, ParallelConfig
+from fastdeploy.engine.config import Config
+from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import FlexibleArgumentParser
+from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -88,6 +93,14 @@ class EngineArgs:
     reasoning_parser: str = None
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
+    """
+    tool_call_parser: str = None
+    """
+    specifies the tool call parser  to use for extracting tool call from the model output
+    """
+    tool_parser_plugin: str = None
+    """
+    tool parser plugin used to register user defined tool parsers
     """
     enable_mm: bool = False
     """
@@ -313,12 +326,41 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    seed: int = 0
+    """
+    Random seed to use for initialization. If not set, defaults to 0.
+    """
+
+    enable_early_stop: bool = False
+    """
+    Flag to enable early stop. Default is False (disabled).
+    """
+
+    early_stop_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for early stop.
+    """
+
+    load_choices: str = "default"
+    """The format of the model weights to load.
+        Options include:
+        - "default": default loader.
+        - "new_loader": new  loader.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.enable_logprob:
+            if self.speculative_config is not None:
+                raise NotImplementedError("Logprob does not support speculation_config.")
+            if self.enable_expert_parallel:
+                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
+            if not current_platform.is_cuda():
+                raise NotImplementedError("Only CUDA platform supports logprob.")
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -389,7 +431,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--enable-mm",
-            action="store_true",
+            action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
             help="Flag to enable multi-modal model.",
         )
@@ -399,6 +441,18 @@ class EngineArgs:
             default=EngineArgs.reasoning_parser,
             help="Flag specifies the reasoning parser to use for extracting "
             "reasoning content from the model output",
+        )
+        model_group.add_argument(
+            "--tool-call-parser",
+            type=str,
+            default=EngineArgs.tool_call_parser,
+            help="Flag specifies the tool call parser to use for extracting" "tool call from the model output",
+        )
+        model_group.add_argument(
+            "--tool-parser-plugin",
+            type=str,
+            default=EngineArgs.tool_parser_plugin,
+            help="tool parser plugin used to register user defined tool parsers",
         )
         model_group.add_argument(
             "--speculative-config",
@@ -464,6 +518,24 @@ class EngineArgs:
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
         )
+        model_group.add_argument(
+            "--seed",
+            type=int,
+            default=EngineArgs.seed,
+            help="Random seed for initialization. If not specified, defaults to 0.",
+        )
+        model_group.add_argument(
+            "--enable-early-stop",
+            action="store_true",
+            default=EngineArgs.enable_early_stop,
+            help="Enable early stopping during generation.",
+        )
+        model_group.add_argument(
+            "--early-stop-config",
+            type=json.loads,
+            default=EngineArgs.early_stop_config,
+            help="the config for early stop.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -516,6 +588,16 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
+        )
+
+        # Load group
+        load_group = parser.add_argument_group("Load Configuration")
+        load_group.add_argument(
+            "--load_choices",
+            type=str,
+            default=EngineArgs.load_choices,
+            help="The format of the model weights to load.\
+                 default/new_loader.",
         )
 
         # CacheConfig parameters group
@@ -790,17 +872,6 @@ class EngineArgs:
 
         return SchedulerConfig(**params)
 
-    def create_parallel_config(self) -> ParallelConfig:
-        """
-        Create and return a ParallelConfig object based on the current settings.
-        """
-        return ParallelConfig(
-            tensor_parallel_size=self.tensor_parallel_size,
-            enable_expert_parallel=self.enable_expert_parallel,
-            data_parallel_size=self.data_parallel_size,
-            enable_custom_all_reduce=self.enable_custom_all_reduce,
-        )
-
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
         Create and retuan a GraphOptimizationConfig object based on the current settings.
@@ -811,15 +882,22 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
+    def create_early_stop_config(self) -> EarlyStopConfig:
+        """
+        Create and retuan an EarlyStopConfig object based on the current settings.
+        """
+        early_stop_args = asdict(self)
+        if self.early_stop_config is not None:
+            for k, v in self.early_stop_config.items():
+                early_stop_args[k] = v
+        return EarlyStopConfig(early_stop_args)
+
     def create_engine_config(self) -> Config:
         """
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
-        all_dict["model_cfg"] = model_cfg
-        cache_cfg = CacheConfig(all_dict)
-        load_cfg = LoadConfig(all_dict)
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
@@ -827,11 +905,23 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+
+        all_dict = asdict(self)
+        all_dict["model_cfg"] = model_cfg
+        cache_cfg = CacheConfig(all_dict)
+        load_cfg = LoadConfig(all_dict)
+        parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
         speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
+
+        early_stop_cfg = self.create_early_stop_config()
+        early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
         assert not (
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
@@ -844,7 +934,7 @@ class EngineArgs:
             tokenizer=self.tokenizer,
             cache_config=cache_cfg,
             load_config=load_cfg,
-            parallel_config=self.create_parallel_config(),
+            parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
             tensor_parallel_size=self.tensor_parallel_size,
             max_num_seqs=self.max_num_seqs,
@@ -855,8 +945,9 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            enable_mm=self.enable_mm,
+            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
+            tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
@@ -866,4 +957,6 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob=self.enable_logprob,
+            early_stop_config=early_stop_cfg,
+            load_choices=self.load_choices,
         )

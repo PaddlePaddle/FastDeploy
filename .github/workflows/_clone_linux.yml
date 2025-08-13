@@ -68,7 +68,7 @@ jobs:
             branch_name=${{ github.ref_name }}
             target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}
           fi
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          wget -O bos_tools.py -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
           ls

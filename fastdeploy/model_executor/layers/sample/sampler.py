@@ -26,6 +26,9 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
 )
+from fastdeploy.model_executor.layers.sample.early_stopper import (
+    get_early_stopper_cls_from_stragegy,
+)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
@@ -165,7 +168,7 @@ class Sampler(nn.Layer):
     Sampler for normal generation.
     """
 
-    def __init__(self):
+    def __init__(self, fd_config: FDConfig = None):
         """ """
         super().__init__()
         if (
@@ -174,12 +177,22 @@ class Sampler(nn.Layer):
             or current_platform.is_iluvatar()
             or current_platform.is_gcu()
             or current_platform.is_dcu()
+            or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
 
         self.processor = SamplerProcessor()
+        # Can only be created when fd_config.early_stopper_config.enable_early_stop = True
+        if (
+            fd_config is not None
+            and fd_config.early_stop_config is not None
+            and fd_config.early_stop_config.enable_early_stop
+        ):
+            early_stopper_cls = get_early_stopper_cls_from_stragegy(fd_config.early_stop_config.strategy)
+            self.early_stopper = early_stopper_cls()
+            self.early_stopper.initialize(fd_config.parallel_config.max_num_seqs, fd_config.early_stop_config)
 
     def apply_logits_processor(
         self,
@@ -270,11 +283,17 @@ class Sampler(nn.Layer):
 
         probs = min_p_sampling(probs, sampling_metadata.min_p)
 
-        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, seed=sampling_metadata.seed[0, 0]
+        )
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
         )
+        if sampling_metadata.enable_early_stop:
+            # will set the stop batch in stop_flags
+            assert sampling_metadata.stop_flags is not None, "need stop_flags for eary stop"
+            self.early_stopper.process(probs, next_tokens, sampling_metadata.stop_flags)
 
         self.processor.update_output_tokens(next_tokens, skip_idx_list)
 
@@ -429,8 +448,8 @@ class MTPSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-            share_inputs["seq_lens_decoder"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
             max_model_len,
         )
         probs = F.softmax(logits)

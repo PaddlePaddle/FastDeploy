@@ -5,8 +5,8 @@
 - OS: Linux
 - Python: 3.10
 - XPU Model: P800
-- XPU Driver Version: ≥ 5.0.21.10
-- XPU Firmware Version: ≥ 1.31
+- XPU Driver Version: ≥ 5.0.21.26
+- XPU Firmware Version: ≥ 1.48
 
 Verified platform:
 - CPU: INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
@@ -15,8 +15,8 @@ Verified platform:
 - OS: CentOS release 7.6 (Final)
 - Python: 3.10
 - XPU Model: P800 (OAM Edition)
-- XPU Driver Version: 5.0.21.10
-- XPU Firmware Version: 1.31
+- XPU Driver Version: 5.0.21.26
+- XPU Firmware Version: 1.48
 
 **Note:** Currently, only INTEL or Hygon CPU-based P800 (OAM Edition) servers have been verified. Other CPU types and P800 (PCIe Edition) servers have not been tested yet.
 
@@ -25,9 +25,9 @@ Verified platform:
 ```bash
 mkdir Work
 cd Work
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.3
 docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
-    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0 \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.3 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
 ```
@@ -49,7 +49,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### Install FastDeploy (**Do NOT install via PyPI source**)
 
 ```bash
-python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-xpu==2.0.3 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 Alternatively, you can install the latest version of FastDeploy (Not recommended)
