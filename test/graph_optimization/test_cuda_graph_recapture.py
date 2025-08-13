@@ -5,7 +5,6 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
-from fastdeploy.utils import print_gpu_memory_use
 
 
 @support_graph_optimization
@@ -84,24 +83,24 @@ def run_test_case():
 
     # Run Test Case1
     test_model1 = TestModel1(fd_config=fd_config)
-    input_tensor1 = paddle.ones([1, 32768])
+    input_tensor1 = paddle.ones([1])
     forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
     # Triger Capture
-    print_gpu_memory_use(0, "before capture")
+    # print_gpu_memory_use(0, "before capture")
     _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    print_gpu_memory_use(0, "after capture")
+    # print_gpu_memory_use(0, "after capture")
     # Reaplay
     output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
     # Destory
-    print_gpu_memory_use(0, "before destory")
+    # print_gpu_memory_use(0, "before destory")
     test_model1.clear_grpah_opt_backend()
-    print_gpu_memory_use(0, "after destory")
+    # print_gpu_memory_use(0, "after destory")
 
     # Triger Capture
-    print_gpu_memory_use(0, "before recapture")
+    # print_gpu_memory_use(0, "before recapture")
     _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    print_gpu_memory_use(0, "after recapture")
+    # print_gpu_memory_use(0, "after recapture")
     # Reaplay
     output2 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
