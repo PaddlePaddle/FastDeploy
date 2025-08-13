@@ -125,6 +125,9 @@ class ZmqClient:
                 else:
                     break
         if self.req_dict[req_id] == -1:
+            if data[-1].finished:
+                with self.mutex:
+                    self.req_dict.pop(req_id, None)
             return
         try:
             start_send = time.time()
