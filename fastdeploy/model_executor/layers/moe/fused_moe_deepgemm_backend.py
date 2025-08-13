@@ -32,11 +32,75 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
     DeepGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for DeepGemm backend.
     """
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         deepgemm create weight process.
         """
+        print("create_weight_deep_geem_______")
+        self.weight_dtype = paddle.float8_e4m3fn
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size,
+        ]
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[
+                    layer.num_local_experts,
+                    layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
+                    layer.hidden_size // self.quant_config.weight_block_size[1],
+                ],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[
+                    layer.num_local_experts,
+                    layer.hidden_size // self.quant_config.weight_block_size[0],
+                    layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+                ],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
 
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        deepgemm create weight process.
+        """
+        print("loadweight_deep_gemm_______")
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
@@ -56,11 +120,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
             quanted_weight = quanted_weight.transpose([0, 2, 1]).contiguous()
-            create_and_set_parameter(layer, weight_name, quanted_weight)
+            getattr(layer, weight_name).copy_(quanted_weight, False)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
             quanted_weight_scale = quanted_weight_scale.transpose([0, 2, 1]).contiguous()
-            create_and_set_parameter(layer, scale_name, quanted_weight_scale)
+            getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict):
         """
