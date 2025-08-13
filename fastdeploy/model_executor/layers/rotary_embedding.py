@@ -51,6 +51,10 @@ class ErnieRotaryEmbedding:
             # shape: [B, S, D]
             rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
             return rot_emb
+        elif paddle.is_compiled_with_custom_device("metax_gpu"):
+            # shape: [B, S, D]
+            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
+            emb = paddle.stack([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
         else:
             # shape: [B, S, D/2]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
