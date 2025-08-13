@@ -107,7 +107,7 @@ class OpenAIServingCompletion:
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                 try:
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
@@ -209,7 +209,7 @@ class OpenAIServingCompletion:
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
 
-                    self.engine_client.data_processor.process_response_dict(
+                    await self.engine_client.process_response_dict(
                         data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
                     )
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
@@ -325,7 +325,7 @@ class OpenAIServingCompletion:
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_dict(
+                    await self.engine_client.process_response_dict(
                         res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
                     )
                     if res["metrics"].get("first_token_time") is not None:

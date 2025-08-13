@@ -14,8 +14,11 @@
 # limitations under the License.
 """
 
+import asyncio
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -50,6 +53,7 @@ class EngineClient:
         enable_logprob=False,
         workers=1,
         tool_parser=None,
+        data_processor_max_workers=5,
     ):
         import fastdeploy.model_executor.models  # noqa: F401
 
@@ -58,6 +62,10 @@ class EngineClient:
             self.enable_mm = True
         else:
             self.enable_mm = False
+
+        self.data_processor_pool = ThreadPoolExecutor(
+            max_workers=data_processor_max_workers, thread_name_prefix="data_processor"
+        )
 
         input_processor = InputPreprocessor(
             tokenizer,
@@ -98,7 +106,7 @@ class EngineClient:
         self.zmq_client = ZmqClient(model, mode)
         self.zmq_client.connect()
 
-    def format_and_add_data(self, prompts: dict):
+    async def format_and_add_data(self, prompts: dict):
         """
         Format the request data and send the request to the server.
         """
@@ -109,7 +117,11 @@ class EngineClient:
         if "max_tokens" not in prompts:
             prompts["max_tokens"] = self.max_model_len - 1
 
-        self.add_requests(prompts)
+        # self.add_requests(prompts)
+        api_server_logger.debug(f"format_and_add_data in [thread.{threading.current_thread().name}]")
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(self.data_processor_pool, self.add_requests, prompts)
+
         return prompts["prompt_token_ids"]
 
     def add_requests(self, task):
@@ -123,7 +135,7 @@ class EngineClient:
         Returns:
             None
         """
-
+        api_server_logger.info(f"add_requests:{task} in [thread.{threading.current_thread().name}]")
         task["preprocess_start_time"] = time.time()
         try:
             self.data_processor.process_request_dict(task, self.max_model_len)
@@ -341,3 +353,18 @@ class EngineClient:
             return False, "clear model weight timeout"
         time.sleep(1)
         return True, ""
+
+    async def process_response_dict(self, response_dict, stream, enable_thinking, include_stop_str_in_output):
+        """
+        async process response dict
+        """
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            self.data_processor_pool,
+            lambda: self.data_processor.process_response_dict(
+                response_dict=response_dict,
+                stream=stream,
+                enable_thinking=enable_thinking,
+                include_stop_str_in_output=include_stop_str_in_output,
+            ),
+        )
