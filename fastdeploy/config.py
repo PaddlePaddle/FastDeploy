@@ -974,6 +974,7 @@ class FDConfig:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         early_stop_config: Optional[Dict[str, Any]] = None,
+        tool_parser: str = None,
         test_mode=False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
@@ -1002,6 +1003,7 @@ class FDConfig:
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
         self.ips = ips
+        self.tool_parser = tool_parser
 
         if self.ips is None:
             self.master_ip = "0.0.0.0"
