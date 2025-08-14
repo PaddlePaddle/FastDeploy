@@ -1715,5 +1715,6 @@ class GPUModelRunner(ModelRunnerBase):
             base=self.model_config.rope_theta,
             max_position=self.parallel_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            model_type=self.model_config.model_type,
         )
         return rope_emb
