@@ -98,7 +98,7 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
     {"role": "user", "content": "How old are you"}
   ],
   "top_p": 0.8,
-  "top_k": 50
+  "top_k": 20
 }'
 ```
 
@@ -118,7 +118,7 @@ response = client.chat.completions.create(
     ],
     stream=True,
     top_p=0.8,
-    extra_body={"top_k": 50}
+    extra_body={"top_k": 20}
 )
 for chunk in response:
     if chunk.choices[0].delta:
@@ -161,8 +161,7 @@ response = client.chat.completions.create(
     ],
     stream=True,
     top_p=0.8,
-    extra_body={"top_k": 20},
-    min_p=0.1
+    extra_body={"top_k": 20, "min_p": 0.1}
 )
 for chunk in response:
     if chunk.choices[0].delta:

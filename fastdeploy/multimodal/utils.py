@@ -88,8 +88,6 @@ def process_image_data(image_data, mime_type, url):
 
 def http_to_pil_image(url):
     """http_to_pil_image"""
-    if is_public_url(url) and int(os.getenv("DOWNLOAD_WITH_TP_SERVER", "0")):
-        return http_to_pil_image_with_tp_server(url)
 
     response = requests.get(url)
     if response.status_code != 200:
@@ -104,61 +102,6 @@ def http_to_pil_image(url):
     pil_image = process_image_data(image_data, mime_type, url)
 
     return pil_image
-
-
-def http_to_pil_image_with_tp_server(url, retry_time=6):
-    """cnap平台没有外网访问权限，需要使用tp服务下载图片"""
-    proxies = [
-        {"http": "http://10.229.197.142:8807"},
-        {"http": "http://10.229.197.161:8804"},
-        {"http": "http://10.229.198.143:8804"},
-        {"http": "http://10.122.108.164:8807"},
-        {"http": "http://10.122.108.165:8807"},
-        {"http": "http://10.122.108.166:8807"},
-        {"http": "http://10.122.108.168:8801"},
-        {"http": "http://10.122.150.146:8802"},
-        {"http": "http://10.122.150.158:8802"},
-        {"http": "http://10.122.150.164:8801"},
-        {"http": "http://10.143.51.38:8813"},
-        {"http": "http://10.143.103.42:8810"},
-        {"http": "http://10.143.194.45:8804"},
-        {"http": "http://10.143.226.25:8801"},
-        {"http": "http://10.143.236.12:8807"},
-        {"http": "http://10.143.238.36:8807"},
-        {"http": "http://10.144.71.30:8807"},
-        {"http": "http://10.144.73.16:8804"},
-        {"http": "http://10.144.138.36:8801"},
-        {"http": "http://10.144.152.40:8810"},
-        {"http": "http://10.144.199.29:8810"},
-        {"http": "http://10.144.251.29:8813"},
-    ]
-    headers = {
-        "X-Tp-Authorization": "Basic RVJOSUVMaXRlVjpFUk5JRUxpdGVWXzFxYXo0cmZ2M2VkYzV0Z2Iyd3N4LWJmZS10cA==",
-        "scheme": "https",
-    }
-
-    new_url = url.replace("https://", "http://") if url.startswith("https://") else url
-
-    # 代理可能不稳定，需要重试
-    for idx in range(retry_time):
-        try:
-            response = requests.get(new_url, headers=headers, proxies=random.choice(proxies))
-            if response.status_code == 200:
-                image_data = io.BytesIO(response.content)
-
-                mime_type = response.headers.get("Content-Type")
-                if mime_type is None:
-                    mime_type, _ = mimetypes.guess_type(url)
-
-                data_processor_logger.info(f"Detected MIME type: {mime_type}")  # 调试信息
-                pil_image = process_image_data(image_data, mime_type, url)
-
-                return pil_image
-        except Exception as e:
-            data_processor_logger.error(f"Failed to download the image, idx: {idx}, URL: {url}, error: {e}")
-
-    raise Exception(f"Failed to download the image from URL: {url}")
-
 
 def base64_to_pil_image(base64_string):
     """base64_to_pil_image"""

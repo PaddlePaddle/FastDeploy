@@ -424,7 +424,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            if hasattr(self.lm_head, "linear"):
+                self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            else:  # ep
+                self.lm_head.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 

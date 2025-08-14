@@ -177,6 +177,7 @@ class Sampler(nn.Layer):
             or current_platform.is_iluvatar()
             or current_platform.is_gcu()
             or current_platform.is_dcu()
+            or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
         else:
@@ -447,8 +448,8 @@ class MTPSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-            share_inputs["seq_lens_decoder"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
             max_model_len,
         )
         probs = F.softmax(logits)
