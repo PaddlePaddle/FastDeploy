@@ -43,7 +43,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             image_preprocessor_name=preprocessor_path,
             **processor_kwargs,
         )
-        
+
         # self.ernie_processor.eval()
         self.image_patch_id = self.ernie_processor.image_token_id
         self.spatial_conv_size = self.ernie_processor.spatial_conv_size
@@ -258,18 +258,12 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             outs["images"] = np.vstack(outs["images"])
             outs["grid_thw"] = np.vstack(outs["grid_thw"])
             outs["image_type_ids"] = np.array(outs["image_type_ids"])
-        
-        # outs["images"] = np.array(outs["images"])
-        # outs["grid_thw"] = np.array(outs["grid_thw"])
-        # # outs["pixel_values_videos"] = np.array(outs["pixel_values_videos"])
-        # # outs["video_grid_thw"] = np.array(outs["video_grid_thw"])
-        # outs["image_type_ids"] = np.array(outs["image_type_ids"])
 
         outs["image_patch_id"] = self.image_patch_id
         # Convert lists to arrays
         outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
         outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
-        outs["position_ids"] = np.array(outs["position_ids"], dtype=np.int64)
+        outs["position_ids"] = np.concatenate(outs["position_ids"], axis=1)
 
         return outs
 

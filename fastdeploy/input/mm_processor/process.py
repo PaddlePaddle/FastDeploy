@@ -46,6 +46,7 @@ class DataProcessor:
         image_max_pixels: int = 12845056,
         video_min_pixels: int = 3136,
         video_max_pixels: int = 12845056,
+        tokens_per_second: int = 2,
         **kwargs,
     ) -> None:
         # Tokenizer and image preprocessor
@@ -72,6 +73,8 @@ class DataProcessor:
 
         self.vision_start = "<|vision_start|>"
         self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
+
+        self.tokens_per_second = tokens_per_second
 
         self.role_prefixes = {
             "system": "",
@@ -193,7 +196,7 @@ class DataProcessor:
                     video_bytes = image_message.get("video")
                     if video_bytes is None:
                         continue
-                    frames = self._load_and_process_video(video_bytes)
+                    frames, meta = self._load_and_process_video(video_bytes)
                     # -----------
                     # mm_parser = MultiModalPartParser()
                     # fimg = mm_parser.parse_image("file:///home/liudongdong/github/FastDeploy/data/images/demo.jpeg")
@@ -201,7 +204,7 @@ class DataProcessor:
                     #     frames[i] = fimg.copy()
 
                     outputs["video_cnt"] += 1
-                    self._add_video(frames, outputs)
+                    self._add_video(frames, meta, outputs)
 
                 vision_message_index += 1
 
@@ -215,43 +218,73 @@ class DataProcessor:
         outputs["input_ids"].extend(tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * len(tokens))
 
-        start = outputs["cur_position"]
-        for i in range(len(tokens)):
-            outputs["position_ids"].append([start + i] * 3)
-        outputs["cur_position"] += len(tokens)
+        position_ids = self._compute_1d_positions(outputs["cur_position"], len(tokens))
+        outputs["position_ids"].append(position_ids)
+        outputs["cur_position"] = position_ids.max() + 1
+    
+    def _compute_1d_positions(self, start_pos: int, tokens_num: int) -> np.ndarray:
+        text_array = np.arange(tokens_num).reshape(1, -1)
+        text_index = np.broadcast_to(text_array, (3, tokens_num))
+        position = text_index + start_pos
+        return position
 
     def _add_image(self, img, outputs: Dict) -> None:
         ret = self.image_processor.preprocess(images=[img.convert("RGB")])
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
+        grid_thw =  ret["grid_thw"].tolist()
 
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        outputs["grid_thw"].append(ret["grid_thw"])
+        outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].append(0)
 
-        pos_ids = self._compute_3d_positions(1, ret["grid_thw"][1], ret["grid_thw"][2], outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
+        t, h, w = grid_thw
+        position_ids = self._compute_3d_positions2(outputs["cur_position"], t,h,w, 0)
 
-    def _add_video(self, frames, outputs: Dict) -> None:
+        outputs["position_ids"].append(position_ids)
+        outputs["cur_position"] = position_ids.max() + 1
+
+    def _add_video(self, frames, meta: Dict, outputs: Dict) -> None:
         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
         ret = self.image_processor.preprocess(images=pixel_stack)
+
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
+        grid_thw =  ret["grid_thw"].tolist()
 
         outputs["input_ids"].extend([self.video_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        outputs["grid_thw"].append(ret["grid_thw"])
-        # outputs["pixel_values_videos"].append(ret["pixel_values"])
-        # outputs["video_grid_thw"].append(ret["grid_thw"])
-        outputs["image_type_ids"].extend([1] * ret["grid_thw"][0])
+        outputs["grid_thw"].append(grid_thw)
+        outputs["image_type_ids"].extend([1] * grid_thw[0])
 
-        pos_ids = self._compute_3d_positions(ret["grid_thw"][0], ret["grid_thw"][1], ret["grid_thw"][2], outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
+        fps = meta["fps"] 
+        second_per_grid_t = self.temporal_conv_size / fps
+        t, h, w = grid_thw
+        position_ids = self._compute_3d_positions2(outputs["cur_position"], t,h,w, second_per_grid_t)
+
+        outputs["position_ids"].append(position_ids)
+        outputs["cur_position"] = position_ids.max() + 1
+    
+    def _compute_3d_positions2(self, start_pos: int, t: int, h: int, w: int, second_per_grid_t:float) -> np.ndarray:
+        h //= self.spatial_conv_size
+        w //= self.spatial_conv_size
+
+        tn = np.arange(t).reshape(-1, 1)
+        tn = np.broadcast_to(tn, (t, h * w))
+        tn = tn * second_per_grid_t * self.tokens_per_second
+        t_index = tn.flatten()
+
+        hn = np.arange(h).reshape(1, -1, 1)
+        h_index = np.broadcast_to(hn, (t, h, w)).flatten()
+
+        wn = np.arange(w).reshape(1, 1, -1)
+        w_index = np.broadcast_to(wn, (t, h, w)).flatten()
+
+        position = np.stack([t_index, h_index, w_index]) + start_pos
+        return position
 
     def _load_and_process_video(self, url: str) -> List[Image.Image]:
         reader, meta = read_video_decord(url)
@@ -262,18 +295,7 @@ class DataProcessor:
             image = Image.fromarray(frame, "RGB")
             frames.append(image)
 
-        return frames
-
-    def _compute_3d_positions(self, t: int, h: int, w: int, start_idx: int) -> List[List[int]]:
-        # Downsample time if needed
-        t_eff = t // self.temporal_conv_size if t != 1 else 1
-        gh, gw = h // self.spatial_conv_size, w // self.spatial_conv_size
-        time_idx = np.repeat(np.arange(t_eff), gh * gw)
-        h_idx = np.tile(np.repeat(np.arange(gh), gw), t_eff)
-        w_idx = np.tile(np.arange(gw), t_eff * gh)
-
-        coords = list(zip(time_idx, h_idx, w_idx))
-        return [[start_idx + ti, start_idx + hi, start_idx + wi] for ti, hi, wi in coords]
+        return frames, meta
 
     def apply_chat_template(self, request):
         """
