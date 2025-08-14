@@ -271,29 +271,32 @@ class FusedMoE(nn.Layer):
     @classmethod
     def make_expert_params_mapping(
         cls,
-        ckpt_gate_proj_name: str,
-        ckpt_down_proj_name: str,
-        ckpt_up_proj_name: str,
-        param_gate_up_proj_name: str,
-        param_down_proj_name: str,
         num_experts: int,
-        ckpt_expert_key_name: str = "experts",
+        ckpt_gate_proj_name: Optional[str] = None,
+        ckpt_up_proj_name: Optional[str] = None,
+        ckpt_down_proj_name: Optional[str] = None,
         ckpt_gate_up_proj_name: Optional[str] = None,
+        param_gate_up_proj_name: Optional[str] = None,
+        param_down_proj_name: Optional[str] = None,
+        ckpt_expert_key_name: str = "experts",
     ) -> list[tuple[str, str, int, str]]:
-        param_name_maping = [
-            ("gate", ckpt_gate_proj_name),
-            ("down", ckpt_down_proj_name),
-            ("up", ckpt_up_proj_name),
-        ]
+        param_name_maping = []
+
         if ckpt_gate_up_proj_name:
             param_name_maping.append((None, ckpt_gate_up_proj_name))
+        if ckpt_gate_proj_name:
+            param_name_maping.append(("gate", ckpt_gate_proj_name))
+        if ckpt_down_proj_name:
+            param_name_maping.append(("down", ckpt_down_proj_name))
+        if ckpt_up_proj_name:
+            param_name_maping.append(("up", ckpt_up_proj_name))
 
         return [
             # (param_name, weight_name, expert_id, shard_id)
             (
                 (
                     param_gate_up_proj_name
-                    if weight_name in [ckpt_gate_proj_name, ckpt_up_proj_name]
+                    if weight_name in [ckpt_gate_proj_name, ckpt_up_proj_name, ckpt_gate_up_proj_name]
                     else param_down_proj_name
                 ),
                 f"{ckpt_expert_key_name}.{expert_id}.{weight_name}.",

@@ -432,30 +432,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
-    def make_expert_params_mapping(self):
-        expert_params_mapping = []
-        if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
-            # (param_name, weight_name, shard_id)
-            param_name_maping = [
-                ("experts.up_gate_proj_", "up_gate_proj", None),
-                ("experts.down_proj_", "down_proj", "down"),
-            ]
-            expert_params_mapping = [
-                # (param_name, weight_name, expert_id, shard_id)
-                (
-                    param_name,
-                    f"experts.{expert_id}.{weight_name}.",
-                    expert_id,
-                    shard_id,
-                )
-                for expert_id in range(self.fd_config.model_config.moe_num_experts)
-                for param_name, weight_name, shard_id in param_name_maping
-            ]
-            expert_params_mapping.append(
-                ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, "gate_bias")
-            )
-        return expert_params_mapping
-
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
         """
@@ -473,8 +449,19 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None, None),
         ]
 
-        expert_params_mapping = self.make_expert_params_mapping()
-
+        expert_params_mapping = []
+        if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
+            expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                num_experts=self.fd_config.model_config.moe_num_experts,
+                ckpt_down_proj_name="down_proj",
+                ckpt_gate_up_proj_name="up_gate_proj",
+                param_gate_up_proj_name="experts.up_gate_proj_",
+                param_down_proj_name="experts.down_proj_",
+            )
+            expert_params_mapping.append(
+                ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, "gate_bias")
+            )
+            logger.info(f"expert params mapping:{expert_params_mapping}")
         all_param_mapping = general_params_mapping + expert_params_mapping
 
         params_dict = dict(self.named_parameters())
