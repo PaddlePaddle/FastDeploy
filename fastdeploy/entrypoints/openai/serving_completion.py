@@ -463,19 +463,14 @@ class OpenAIServingCompletion:
 
             if request.echo:
                 assert prompt_text is not None
-                if request.max_tokens == 0:
-                    token_ids = prompt_token_ids
-                    output_text = prompt_text
+                token_ids = [*prompt_token_ids, *output["token_ids"]]
                 if isinstance(prompt_text, list):
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
                     output_text = prompt_text[idx] + output["text"]
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
                     output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
             choice_data = CompletionResponseChoice(
