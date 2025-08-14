@@ -307,13 +307,13 @@ class OpenAIServingChat:
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        if res["finished"]:
+                            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 
                 if choices:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    if res["finished"]:
-                        api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                     choices = []
 
             if include_usage:
@@ -424,7 +424,7 @@ class OpenAIServingChat:
             role="assistant",
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call_content"),
+            tool_calls=output.get("tool_call"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             text_after_process=text_after_process if request.return_token_ids else None,
@@ -462,13 +462,15 @@ class OpenAIServingChat:
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0)),
         )
         work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
-        return ChatCompletionResponse(
+        res = ChatCompletionResponse(
             id=request_id,
             created=created_time,
             model=model_name,
             choices=choices,
             usage=usage,
         )
+        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        return res
 
     def _create_chat_logprobs(
         self,
