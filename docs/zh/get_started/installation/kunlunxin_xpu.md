@@ -8,6 +8,7 @@
 - XPU 驱动版本：≥ 5.0.21.26
 - XPU 固件版本：≥ 1.48
 
+
 已验证的平台：
 - CPU：INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
 - 内存：2T
@@ -18,6 +19,7 @@
 - XPU 驱动版本：5.0.21.26
 - XPU 固件版本：1.48
 
+
 **注：** 目前只验证过 INTEL 或海光 CPU OAM 版 P800 服务器，暂未验证其它 CPU 和 PCIe 版 P800 服务器。
 
 ## 1. 使用 Docker 安装（推荐）
@@ -25,9 +27,9 @@
 ```bash
 mkdir Work
 cd Work
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.3
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
 docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
-    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.3 \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
 ```
@@ -37,7 +39,7 @@ docker exec -it fastdeploy-xpu /bin/bash
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
@@ -49,7 +51,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### 安装 FastDeploy（**注意不要通过 pypi 源安装**）
 
 ```bash
-python -m pip install fastdeploy-xpu==2.0.3 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-xpu==2.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 或者你也可以安装最新版 FastDeploy（不推荐）
@@ -63,7 +65,7 @@ python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/pa
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
