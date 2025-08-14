@@ -73,6 +73,7 @@ void AppendAttentionKernel(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& out_linear_shifts,
     const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
@@ -419,6 +420,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& out_linear_shifts,
     const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
@@ -505,6 +507,10 @@ std::vector<paddle::Tensor> AppendAttention(
         qkv.place());
   }
 
+  if (mask_offset) {
+    meta_data.mask_offset = mask_offset.get().data<int>();
+  }
+
   auto dispatch_by_template = [&](auto temp_args) -> void {
       AppendAttentionKernel<type2value<decltype(temp_args)>::value>(
           meta_data,
@@ -541,6 +547,7 @@ std::vector<paddle::Tensor> AppendAttention(
           cache_v_zp,
           out_linear_shifts,
           out_linear_smooths,
+          mask_offset,
           kv_signal_data,
           q_norm_weight,
           k_norm_weight,
@@ -778,6 +785,7 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const paddle::optional<std::vector<int64_t>>& cache_v_zp_shape,
     const paddle::optional<std::vector<int64_t>>& out_linear_shifts_shape,
     const paddle::optional<std::vector<int64_t>>& out_linear_smooths_shape,
+    const paddle::optional<std::vector<int64_t>>& mask_offset_shape,
     const paddle::optional<std::vector<int64_t>>& kv_signal_data_shape,
     const paddle::optional<std::vector<int64_t>>& q_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& k_norm_weight_shape,
@@ -841,6 +849,7 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const paddle::optional<paddle::DataType>& cache_v_zp_dtype,
     const paddle::optional<paddle::DataType>& out_linear_shifts_dtype,
     const paddle::optional<paddle::DataType>& out_linear_smooths_dtype,
+    const paddle::optional<paddle::DataType>& mask_offset_dtype,
     const paddle::optional<paddle::DataType>& kv_signal_data_dtype,
     const paddle::optional<paddle::DataType>& q_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& k_norm_weight_dtype,
@@ -1036,13 +1045,15 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("cache_v_zp"),
              paddle::Optional("out_linear_shifts"),
              paddle::Optional("out_linear_smooths"),
+             paddle::Optional("mask_offset"),
              paddle::Optional("kv_signal_data"),
-              paddle::Optional("q_norm_weight"),
-              paddle::Optional("k_norm_weight")})
+             paddle::Optional("q_norm_weight"),
+             paddle::Optional("k_norm_weight")})
     .Outputs({"fmha_out", "qkv_out", "key_cache_out", "value_cache_out"})
     .SetInplaceMap({{"key_cache", "key_cache_out"},
                     {"value_cache", "value_cache_out"}})
-    .Attrs({"compute_type: std::string",
+    .Attrs({"rms_norm_eps: float",
+            "compute_type: std::string",
             "cache_quant_type: std::string",
             "use_neox_rotary_style: bool",
             "rope_3d: bool",
@@ -1057,7 +1068,7 @@ PD_BUILD_STATIC_OP(append_attention)
             "speculate_max_draft_token_num: int",
             "causal: bool",
             "speculate_decoder: bool",
-            "rms_norm_eps: float"})
+            })
     .SetKernelFn(PD_KERNEL(AppendAttention))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(AppendAttentionInferDtype));

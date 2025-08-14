@@ -165,7 +165,8 @@ class TestFusedMoeConsistency(unittest.TestCase):
             permute_indices_per_token,
             top_k_weights,
             top_k_indices,
-        ) = moe_expert_dispatch(hidden_states, scores, None, self.top_k, False, topk_only_mode=True)
+            expert_idx_per_token,
+        ) = moe_expert_dispatch(hidden_states, scores, None, None, self.top_k, False, topk_only_mode=True)
 
         # Process through experts
         ffn_out = moe_expert_ffn(

@@ -564,6 +564,72 @@ elif paddle.is_compiled_with_custom_device("gcu"):
             ]
         ),
     )
+elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
+    maca_path = os.getenv("MACA_PATH", "/opt/maca")
+    json_dir = "third_party/nlohmann_json"
+    if not os.path.exists(json_dir) or not os.listdir(json_dir):
+        if not os.path.exists(json_dir):
+            os.makedirs(json_dir)
+        clone_git_repo("v3.11.3", "https://gitee.com/learnlov/mirrors_nlohmann_json.git", json_dir)
+        if not os.listdir(json_dir):
+            raise ValueError("Git clone nlohmann_json failed!")
+    sources = [
+        "gpu_ops/save_with_output.cc",
+        "gpu_ops/set_mask_value.cu",
+        "gpu_ops/set_value_by_flags.cu",
+        "gpu_ops/ngram_mask.cu",
+        "gpu_ops/gather_idx.cu",
+        "gpu_ops/get_output_ep.cc",
+        "gpu_ops/token_penalty_multi_scores.cu",
+        "gpu_ops/token_penalty_only_once.cu",
+        "gpu_ops/stop_generation.cu",
+        "gpu_ops/stop_generation_multi_ends.cu",
+        "gpu_ops/set_flags.cu",
+        "gpu_ops/fused_get_rope.cu",
+        "gpu_ops/get_padding_offset.cu",
+        "gpu_ops/update_inputs.cu",
+        "gpu_ops/update_inputs_beam.cu",
+        "gpu_ops/beam_search_softmax.cu",
+        "gpu_ops/rebuild_padding.cu",
+        "gpu_ops/step.cu",
+        "gpu_ops/step_reschedule.cu",
+        "gpu_ops/step_system_cache.cu",
+        "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/read_data_ipc.cu",
+        "gpu_ops/dequant_int8.cu",
+        "gpu_ops/share_external_data.cu",
+        "gpu_ops/extract_text_token_output.cu",
+        "gpu_ops/moe/tritonmoe_preprocess.cu",
+        "gpu_ops/moe/moe_topk_select.cu",
+        "gpu_ops/recover_decode_task.cu",
+    ]
+
+    sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
+    sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
+
+    setup(
+        name="fastdeploy_ops",
+        ext_modules=CUDAExtension(
+            sources=sources,
+            extra_compile_args={
+                "cxx": ["-O3"],
+                "nvcc": [
+                    "-O3",
+                    "-Ithird_party/nlohmann_json/include",
+                    "-Igpu_ops",
+                    "-DPADDLE_DEV",
+                    "-DPADDLE_WITH_CUSTOM_DEVICE_METAX_GPU",
+                ],
+            },
+            library_dirs=[os.path.join(maca_path, "lib")],
+            extra_link_args=["-lruntime_cu"],
+            include_dirs=[
+                os.path.join(maca_path, "include"),
+                os.path.join(maca_path, "include/mcr"),
+                os.path.join(maca_path, "include/common"),
+            ],
+        ),
+    )
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 

@@ -63,6 +63,7 @@ class AppendAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
+    mask_offset: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
@@ -299,6 +300,7 @@ class AppendAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
+                metadata.mask_offset,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
@@ -353,6 +355,7 @@ class AppendAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
+                metadata.mask_offset,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),

@@ -77,6 +77,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &out_linear_shifts,
     const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,

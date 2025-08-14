@@ -148,7 +148,7 @@ class BaseDataProcessor(ABC):
 
 
 class DataProcessor(BaseDataProcessor):
-    def __init__(self, model_name_or_path, reasoning_parser_obj=None):
+    def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
         """
             Initializes the DecodeStatus object.
 
@@ -165,9 +165,17 @@ class DataProcessor(BaseDataProcessor):
 
         self.model_name_or_path = model_name_or_path
 
-        self._init_config()
+        # Generation config
+        try:
+            self.generation_config = GenerationConfig.from_pretrained(self.model_name_or_path)
+        except Exception as e:
+            data_processor_logger.warning(
+                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
+            )
+            self.generation_config = None
 
         self.decode_status = dict()
+        self.tool_parsers = dict()
         self.tokenizer = self._load_tokenizer()
         data_processor_logger.info(
             f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
@@ -180,33 +188,10 @@ class DataProcessor(BaseDataProcessor):
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
+        self.tool_parser_obj = tool_parser_obj
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
         self.tokenizer.pad_token_id = self.pad_token_id
-
-    def _init_config(self):
-        """
-            初始化配置，包括模型名称、使用Hugging Face Tokenizer等。
-
-        Args:
-            无参数，但是会从环境变量中获取一些配置信息。
-
-        Returns:
-            无返回值，直接修改了类的属性。
-
-        Raises:
-            无异常抛出。
-        """
-        self.use_hf_tokenizer = int(envs.FD_USE_HF_TOKENIZER) == 1
-
-        # Generation config
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(self.model_name_or_path)
-        except Exception as e:
-            data_processor_logger.warning(
-                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
-            )
-            self.generation_config = None
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """
@@ -281,6 +266,7 @@ class DataProcessor(BaseDataProcessor):
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if "prompt" in request:
+                request["text_after_process"] = request["prompt"]
                 request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len).tolist()
             elif "messages" in request:
                 if self.tokenizer.chat_template is None:
@@ -328,6 +314,12 @@ class DataProcessor(BaseDataProcessor):
         else:
             # 模型不支持思考,并且没单独设置enable_thinking为false
             response_dict.outputs.text = full_text
+        if self.tool_parser_obj:
+            tool_parser = self.tool_parser_obj(self.tokenizer)
+            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+            if tool_call_info.tools_called:
+                response_dict.outputs.tool_calls = tool_call_info.tool_calls
+                response_dict.outputs.text = tool_call_info.content
         data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
 
         return response_dict
@@ -352,12 +344,19 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
+            response_dict["outputs"]["raw_prediction"] = full_text
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:
                 response_dict["outputs"]["text"] = full_text
+            if self.tool_parser_obj:
+                tool_parser = self.tool_parser_obj(self.tokenizer)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+                if tool_call_info.tools_called:
+                    response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
+                    response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
         return response_dict
@@ -381,7 +380,7 @@ class DataProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-
+        response_dict["outputs"]["raw_prediction"] = delta_text
         if enable_thinking and self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
@@ -395,9 +394,25 @@ class DataProcessor(BaseDataProcessor):
             response_dict["outputs"]["reasoning_content"] = reasoning_content
         else:
             response_dict["outputs"]["text"] = delta_text
+        if self.tool_parser_obj and not is_end:
+            if req_id not in self.tool_parsers:
+                self.tool_parsers[req_id] = self.tool_parser_obj(self.tokenizer)
+            tool_parser = self.tool_parsers[req_id]
+            tool_call = tool_parser.extract_tool_calls_streaming(
+                previous_texts,
+                previous_texts + delta_text,
+                delta_text,
+                previous_token_ids,
+                previous_token_ids + token_ids,
+                token_ids,
+                response_dict,
+            )
+            response_dict["outputs"]["tool_delta_message"] = tool_call
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
+            if req_id in self.tool_parsers:
+                del self.tool_parsers[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):
@@ -433,7 +448,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[int]: token ids list
         """
-        if self.use_hf_tokenizer:
+        if envs.FD_USE_HF_TOKENIZER:
             tokens = self.tokenizer(
                 text,
                 return_tensors="np",
@@ -472,6 +487,7 @@ class DataProcessor(BaseDataProcessor):
             add_special_tokens=False,
             return_tensors="pd",
         )
+        request["text_after_process"] = spliced_message
         req_id = None
         tokens = self.tokenizer.tokenize(spliced_message)
         if isinstance(request, dict):
@@ -491,7 +507,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[str]: strings
         """
-        if self.use_hf_tokenizer:
+        if envs.FD_USE_HF_TOKENIZER:
             if task_id not in self.decode_status:
                 # history token ids & history token strings & befer decode str
                 self.decode_status[task_id] = [[], [], ""]
@@ -536,7 +552,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             tokenizer (AutoTokenizer)
         """
-        if self.use_hf_tokenizer:
+        if envs.FD_USE_HF_TOKENIZER:
             from transformers import AutoTokenizer
 
             return AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=False)
@@ -557,7 +573,7 @@ class DataProcessor(BaseDataProcessor):
         """
         results_all = ""
         if task_id in self.decode_status:
-            if self.use_hf_tokenizer:
+            if envs.FD_USE_HF_TOKENIZER:
                 results_all = self.decode_status[task_id][2]
             else:
                 results_all = "".join(self.decode_status[task_id][3])
