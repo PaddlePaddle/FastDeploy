@@ -75,6 +75,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.gcu_worker import GcuWorker
 
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_maca():
+        from fastdeploy.worker.metax_worker import MetaxWorker
+
+        return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:

@@ -68,7 +68,7 @@ void moe_topk_select_kernel(const T* input,
           moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
               input, softmax, num_experts, num_rows);
           if (apply_norm_weight) {
-            moe_top_k_normed<T, TPB>
+            moe_top_k<T, TPB, true>
                 <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(softmax,
                                                                  bias,
                                                                  output,
@@ -78,7 +78,7 @@ void moe_topk_select_kernel(const T* input,
                                                                  k,
                                                                  num_rows);
           } else {
-            moe_top_k<T, TPB>
+            moe_top_k<T, TPB, false>
                 <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
                                                                   bias,
                                                                   output,
@@ -93,7 +93,7 @@ void moe_topk_select_kernel(const T* input,
       else {
           assert(k<=TPB);
           if (apply_norm_weight) {
-            moe_softmax_top_k_normed_fused<T, TPB>
+            moe_softmax_top_k_fused<T, TPB, true>
                 <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(input,
                                                                  bias,
                                                                  output,
@@ -103,7 +103,7 @@ void moe_topk_select_kernel(const T* input,
                                                                  k,
                                                                  num_rows);
           } else {
-            moe_softmax_top_k_fused<T, TPB>
+            moe_softmax_top_k_fused<T, TPB, false>
                 <<<config_topk.block_per_grid, TPB, 0, stream>>>(input,
                                                                   bias,
                                                                   output,
