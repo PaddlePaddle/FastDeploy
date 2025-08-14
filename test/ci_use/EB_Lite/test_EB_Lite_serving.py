@@ -823,7 +823,7 @@ def test_non_streaming_chat_with_bad_words(openai_client, capsys):
         temperature=1,
         top_p=0.0,
         max_tokens=20,
-        extra_body={"bad_words": bad_tokens[-10:], "return_token_ids": True},
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
         stream=False,
     )
     assert hasattr(response_1, "choices")
