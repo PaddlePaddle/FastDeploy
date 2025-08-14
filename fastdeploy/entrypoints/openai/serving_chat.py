@@ -102,7 +102,7 @@ class OpenAIServingChat:
                 return ErrorResponse(code=400, message=str(e))
 
             del current_req_dict
-            
+
             if request.stream:
                 return self.chat_completion_stream_generator(
                     request, request_id, request.model, prompt_token_ids, text_after_process
@@ -116,6 +116,7 @@ class OpenAIServingChat:
                     return ErrorResponse(code=400, message=str(e))
         except Exception:
             return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+
     def _create_streaming_error_response(self, message: str) -> str:
         error_response = ErrorResponse(
             code=400,
