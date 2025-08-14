@@ -24,6 +24,7 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
@@ -74,6 +75,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.gcu_worker import GcuWorker
 
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_maca():
+        from fastdeploy.worker.metax_worker import MetaxWorker
+
+        return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -289,8 +294,9 @@ class PaddleDisWorkerProc:
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-
-                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
+                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                    ):
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:

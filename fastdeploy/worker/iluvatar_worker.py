@@ -88,6 +88,7 @@ class IluvatarWorker(GpuWorker):
         return int(float(os.getenv("FD_ILUVATAR_KVCACHE_MEM", "3")) * 1024**3)
 
 
+# TODO (yuzhe.wu): move it int work_process.py after baidu reconstructs the logic of workproc
 class IluvatarPaddleDisWorkerProc(PaddleDisWorkerProc):
     """
     Paddle Distributed wrapper for fastdeploy.worker.Worker,
