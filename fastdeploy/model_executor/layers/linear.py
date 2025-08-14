@@ -395,7 +395,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk.
-            if self.fd_config.model_config.pretrained_config.tensor_parallel_degree != 1:
+            if self.nranks != 1:
                 shard_offsets = [
                     # (shard_id, shard_offset, shard_size)
                     ("gate", 0, self.output_size * self.nranks // 2),
@@ -507,7 +507,7 @@ class QKVParallelLinear(ColumnParallelLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
-            if self.fd_config.model_config.pretrained_config.tensor_parallel_degree != 1:
+            if self.nranks != 1:
                 shard_offsets = [
                     # (shard_id, shard_offset, shard_size)
                     ("q", 0, self.num_heads * self.head_dim),
