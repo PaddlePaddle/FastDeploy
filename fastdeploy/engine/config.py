@@ -85,7 +85,6 @@ class Config:
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
         reasoning_parser: str = None,
-        tool_parser: str = None,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_logprob: bool = False,
@@ -166,7 +165,6 @@ class Config:
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
         self.reasoning_parser = reasoning_parser
-        self.tool_parser = tool_parser
         self.graph_optimization_config = graph_optimization_config
         self.early_stop_config = early_stop_config
         self.guided_decoding_backend = guided_decoding_backend
@@ -241,7 +239,10 @@ class Config:
                 if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    if paddle.is_compiled_with_xpu():
+                        self.max_num_batched_tokens = self.max_model_len
+                    else:
+                        self.max_num_batched_tokens = 8192
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)

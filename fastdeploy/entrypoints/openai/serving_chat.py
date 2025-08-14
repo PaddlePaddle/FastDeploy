@@ -141,7 +141,6 @@ class OpenAIServingChat:
         previous_num_tokens = 0
         num_prompt_tokens = 0
         num_choices = 1
-        tool_called = False
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -246,28 +245,20 @@ class OpenAIServingChat:
                     output = res["outputs"]
                     delta_text = output["text"]
                     output_top_logprobs = output["top_logprobs"]
-                    previous_num_tokens += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
-                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
-                        tool_delta_message = output["tool_delta_message"]
-                        if tool_delta_message is None:
-                            continue
-                        delta_message = tool_delta_message
-                        delta_message.reasoning_content = output.get("reasoning_content")
-                        if delta_message.tool_calls:
-                            tool_called = True
-                    else:
-                        delta_message = DeltaMessage(
-                            content=delta_text,
-                            reasoning_content=output.get("reasoning_content"),
-                            prompt_token_ids=None,
-                            completion_token_ids=None,
-                            tool_calls=None,
-                        )
+
+                    previous_num_tokens += len(output["token_ids"])
+                    delta_message = DeltaMessage(
+                        content=delta_text,
+                        reasoning_content=output.get("reasoning_content"),
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        tool_calls=output.get("tool_call_content", []),
+                    )
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -285,7 +276,10 @@ class OpenAIServingChat:
                         max_tokens = request.max_completion_tokens or request.max_tokens
                         if has_no_token_limit or previous_num_tokens != max_tokens:
                             choice.finish_reason = "stop"
-                            if tool_called:
+                            if (
+                                self.engine_client.reasoning_parser == "ernie_x1"
+                                and output.get("finish_reason", "") == "tool_calls"
+                            ):
                                 choice.finish_reason = "tool_calls"
                         else:
                             choice.finish_reason = "length"
@@ -425,7 +419,7 @@ class OpenAIServingChat:
             role="assistant",
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call"),
+            tool_calls=output.get("tool_call_content"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             text_after_process=text_after_process if request.return_token_ids else None,
@@ -445,7 +439,7 @@ class OpenAIServingChat:
         max_tokens = request.max_completion_tokens or request.max_tokens
         if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
-            if output.get("tool_call"):
+            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
