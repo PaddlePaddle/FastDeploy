@@ -104,7 +104,6 @@ class ToolCall(BaseModel):
     id: str = None
     type: Literal["function"] = "function"
     function: FunctionCall
-    index: int
 
 
 class DeltaFunctionCall(BaseModel):
@@ -126,6 +125,18 @@ class DeltaToolCall(BaseModel):
     type: Optional[Literal["function"]] = None
     index: int
     function: Optional[DeltaFunctionCall] = None
+
+
+class ExtractedToolCallInformation(BaseModel):
+    # indicate if tools were called
+    tools_called: bool
+
+    # extracted tool calls
+    tool_calls: Optional[list[ToolCall]] = None
+
+    # content - per OpenAI spec, content AND tool calls can be returned rarely
+    # But some models will do this intentionally
+    content: Optional[str] = None
 
 
 class FunctionDefinition(BaseModel):
@@ -158,6 +169,8 @@ class ChatMessage(BaseModel):
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -215,6 +228,8 @@ class DeltaMessage(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
 
 
 class ChatCompletionResponseStreamChoice(BaseModel):
@@ -251,6 +266,8 @@ class CompletionResponseChoice(BaseModel):
     text: str
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
@@ -293,6 +310,8 @@ class CompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
