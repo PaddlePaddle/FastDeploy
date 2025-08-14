@@ -636,7 +636,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -799,7 +801,7 @@ class GPUModelRunner(ModelRunnerBase):
             output_padding_offset,
         ) = pre_process(
             self.share_inputs["input_ids"],
-            getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
+            self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
             (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             self.share_inputs["seq_lens_encoder"],
@@ -884,7 +886,7 @@ class GPUModelRunner(ModelRunnerBase):
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            seq_lens_this_time=getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
@@ -1584,6 +1586,8 @@ class GPUModelRunner(ModelRunnerBase):
         In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
         """
         # In init_attention_metadata, the decode buffer has already been cleared
+        if self.use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
         return
 
     def _init_image_preprocess(self) -> None:
