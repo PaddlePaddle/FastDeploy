@@ -34,7 +34,6 @@ EGG_DIR="fastdeploy.egg-info"
 
 # custom_ops directory config
 OPS_SRC_DIR="custom_ops"
-OPS_TMP_DIR_BASE="tmp_base"
 OPS_TMP_DIR="tmp"
 
 # command line log config
@@ -71,25 +70,20 @@ function copy_ops(){
     PY_VERSION="py${PY_MAIN_VERSION}.${PY_SUB_VERSION}"
     SYSTEM_VERSION=`${python} -c "import platform; print(platform.system().lower())"`
     PROCESSOR_VERSION=`${python} -c "import platform; print(platform.processor())"`
-    WHEEL_BASE_NAME="fastdeploy_base_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
     WHEEL_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
     WHEEL_CPU_NAME="fastdeploy_cpu_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
-      mkdir -p ../fastdeploy/model_executor/ops/base
-      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
-      echo -e "BASE and ROCM ops have been copy to fastdeploy"
+      echo -e "ROCM ops have been copy to fastdeploy"
       return
     fi
-    mkdir -p ../fastdeploy/model_executor/ops/base
     is_cuda=`$python -c "import paddle; print(paddle.is_compiled_with_cuda())"`
     if [ "$is_cuda" = "True" ]; then
       DEVICE_TYPE="gpu"
-      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
-      echo -e "BASE and CUDA ops have been copy to fastdeploy"
+      echo -e "CUDA ops have been copy to fastdeploy"
       return
     fi
 
@@ -112,9 +106,8 @@ function copy_ops(){
     if_corex=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))"`
     if [ "$if_corex" = "True" ]; then
       DEVICE_TYPE="iluvatar-gpu"
-      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/iluvatar
-      echo -e "BASE and Iluvatar ops have been copy to fastdeploy"
+      echo -e "Iluvatar ops have been copy to fastdeploy"
       return
     fi
 
@@ -137,19 +130,15 @@ function copy_ops(){
     fi
 
     DEVICE_TYPE="cpu"
-    cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
     cd ../../../../
     cp -r ${OPS_TMP_DIR}/${WHEEL_CPU_NAME}/* ../fastdeploy/model_executor/ops/cpu
-    echo -e "BASE and CPU ops have been copy to fastdeploy"
+    echo -e "CPU ops have been copy to fastdeploy"
     return
 }
 
 function build_and_install_ops() {
   cd $OPS_SRC_DIR
   export no_proxy=bcebos.com,paddlepaddle.org.cn,${no_proxy}
-  echo -e "${BLUE}[build]${NONE} build and install fastdeploy_base_ops..."
-  ${python} setup_ops_base.py install --install-lib ${OPS_TMP_DIR_BASE}
-  find ${OPS_TMP_DIR_BASE} -type f -name "*.o" -exec rm -f {} \;
   echo -e "${BLUE}[build]${NONE} build and install fastdeploy_ops..."
   TMP_DIR_REAL_PATH=`readlink -f ${OPS_TMP_DIR}`
   is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
@@ -223,7 +212,6 @@ function cleanup() {
   fi
 
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
-  rm -rf $OPS_SRC_DIR/$OPS_TMP_DIR_BASE
   rm -rf $OPS_SRC_DIR/$OPS_TMP_DIR
 }
 
