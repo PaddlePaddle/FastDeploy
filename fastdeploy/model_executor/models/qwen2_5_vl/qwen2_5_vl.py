@@ -72,6 +72,100 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 #     pass
 
 
+@support_graph_optimization
+class Qwen2_5_VLModel(nn.Layer):
+    def __init__(
+        self,
+        fd_config: FDConfig = None,
+    ):
+        """
+        Initializer for the Ernie4_5_VLModel class.
+
+        Args:
+
+        """
+        super().__init__()
+
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        self.image_token_id = fd_config.model_config.image_token_id
+        self._dtype = fd_config.model_config.dtype
+        fd_config.model_config.pretrained_config.prefix_name = "qwen2"
+        self.fd_config = fd_config
+
+        self.embed_tokens = VocabParallelEmbedding(
+            fd_config=fd_config,
+            num_embeddings=fd_config.model_config.vocab_size,
+            embedding_dim=fd_config.model_config.hidden_size,
+            params_dtype=paddle.get_default_dtype,
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
+        )
+
+        self.layers = nn.LayerList(
+            [
+                Qwen2DecoderLayer(
+                    fd_config=fd_config,
+                    prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}",
+                )
+                for i in range(self.num_layers)
+            ]
+        )
+
+        self.norm = RMSNorm(
+            fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
+        )
+
+    def load_state_dict(self, state_dict):
+        """
+        Load model parameters from a given state dictionary.
+
+        Args:
+            state_dict (dict[str, np.ndarray | paddle.Tensor]):
+                A dictionary containing model parameters, where keys are parameter names
+                and values are NumPy arrays or PaddlePaddle tensors.
+        """
+        self.embed_tokens.load_state_dict(state_dict)
+        self.norm.load_state_dict(state_dict)
+        for i in range(self.num_layers):
+            logger.info(f"Start load layer {i}")
+            self.layers[i].load_state_dict(state_dict)
+
+    def forward(
+        self,
+        ids_remove_padding: paddle.Tensor,
+        image_features: Optional[paddle.Tensor],
+        forward_meta: ForwardMeta,
+    ):
+
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
+        # -----------------------
+        # 将 image_embeds 替换 input_embeds 里的 image占位符
+        image_mask = ids_remove_padding == self.image_token_id
+        image_token_num = image_mask.sum()
+
+        if image_token_num > 0:
+            hidden_states[image_mask] = image_features.cast(self._dtype)
+
+        # -----------------------
+
+        residual = None
+        for i in range(self.num_layers):
+            hidden_states, residual = self.layers[i](
+                forward_meta,
+                hidden_states,
+                residual,
+            )
+
+        hidden_states = hidden_states + residual
+
+        out = self.norm(hidden_states)
+
+        return out
+
+
 @MultimodalRegistry.register_model()
 class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     """
@@ -91,7 +185,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         # -----------  language model -------------
         # 在 vllm 里也是直接用的 qwen2_model
         # 未知：需要保证 FD 的 qwen2 和 vllm 的 qwen2 完全对齐
-        self.model = Qwen2Model(fd_config=fd_config)
+        self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -108,7 +202,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             DFNRopeVisionTransformerPretrainedModel,
         )
 
-        visual = DFNRopeVisionTransformerPretrainedModel(model_config, prefix_name="vision_model")
+        visual = DFNRopeVisionTransformerPretrainedModel(model_config, prefix_name="visual")
         visual = paddle.amp.decorate(models=visual, level="O2", dtype="bfloat16")
         visual.eval()
         return visual
@@ -163,6 +257,8 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
+        # 在 gpu_model_runner.py 中，针对多模态，先调用 vision model 然后调用 language model
+        # image_features 就是 vision model 的输出，image_embeds
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
