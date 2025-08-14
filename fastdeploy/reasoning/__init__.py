@@ -16,7 +16,6 @@
 
 from .abs_reasoning_parsers import ReasoningParser, ReasoningParserManager
 from .ernie_vl_reasoning_parsers import ErnieVLReasoningParser
-from .ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
 from .qwen3_reasoning_parsers import Qwen3ReasoningParser
 
 __all__ = [
@@ -24,5 +23,4 @@ __all__ = [
     "ReasoningParserManager",
     "ErnieVLReasoningParser",
     "Qwen3ReasoningParser",
-    "ErnieX1ReasoningParser",
 ]

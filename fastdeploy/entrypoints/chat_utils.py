@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import uuid
 from copy import deepcopy
 from typing import List, Literal, Union
 from urllib.parse import urlparse
@@ -157,7 +156,3 @@ def parse_chat_messages(messages):
 
         conversation.append({"role": role, "content": parsed_content})
     return conversation
-
-
-def random_tool_call_id() -> str:
-    return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"
