@@ -138,29 +138,37 @@ class DPLocalScheduler(LocalScheduler):
         required_total_blocks = 0
         current_prefill_tokens = 0
         start_batch_time = time.time()
+        requests: List[Request] = []
+
+        def _batch_token():
+            nonlocal start_batch_time
+            nonlocal batch
+            batch_ids = self.ids[self.ids_read_cursor : self.ids_read_cursor + batch]
+            has_timeout = time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT
+            return batch_ids or has_timeout
 
         with self.requests_not_empty:
             while True:
                 batch_ids = self.requests_not_empty.wait_for(
-                    lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
+                    lambda: _batch_token,
                     self.wait_request_timeout,
                 )
-                requests: List[Request] = []
-                for request_id in batch_ids:
-                    request = self.requests[request_id]
-                    required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
-                    current_prefill_tokens += request.prompt_tokens_ids_len
-                    required_total_blocks += required_input_blocks + reserved_output_blocks
-                    if required_total_blocks > available_blocks:
-                        break
-                    if current_prefill_tokens > max_num_batched_tokens:
-                        break
+                if batch_ids is not True:
+                    for request_id in batch_ids:
+                        request = self.requests[request_id]
+                        required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
+                        current_prefill_tokens += request.prompt_tokens_ids_len
+                        required_total_blocks += required_input_blocks + reserved_output_blocks
+                        if required_total_blocks > available_blocks:
+                            break
+                        if current_prefill_tokens > max_num_batched_tokens:
+                            break
 
-                    requests.append(request.raw)
-                    start_batch_time = time.time()
-                    if len(requests) >= batch:
-                        break
-                self.ids_read_cursor += len(requests)
+                        requests.append(request.raw)
+                        start_batch_time = time.time()
+                        if len(requests) >= batch:
+                            break
+                    self.ids_read_cursor += len(requests)
                 if (
                     (current_prefill_tokens > max_num_batched_tokens)
                     or (len(requests) >= batch)
