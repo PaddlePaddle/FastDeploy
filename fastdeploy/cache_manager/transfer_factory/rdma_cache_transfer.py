@@ -61,18 +61,12 @@ class RDMACommManager:
         Connect to remote gpu and write cache.
         """
         assert self.splitwise_role == "prefill", "only prefill can call this method"
-        addr = f"{ip}:{port!s}"
-        if addr in self.connected_rdma:
-            return True
         ret = self.messager.is_connected(ip, str(port))
         if ret:
-            self.connected_rdma.add(addr)
             return True
 
         ret = self.messager.connect(ip, str(port))
         logger.info(f"connect to remote rdma address {ip}:{port} status is {ret}")
-        if ret == 0:
-            self.connected_rdma.add(addr)
         return ret == 0
 
     def write_cache(self, ip, port, local_block_ids, remote_block_ids, layer_idx):
