@@ -1,5 +1,5 @@
-name: Base Test
-description: "Run Base Tests"
+name: Accuracy Test
+description: "Run Accuracy Tests"
 
 on:
   workflow_call:
@@ -157,7 +157,7 @@ jobs:
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
           popd
 
-          pushd test/ce/server
+          pushd test/ce/accuracy_cases
           export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
           export TEMPLATE=TOKEN_LOGPROB
           export MODEL_SIZE=0.3B
