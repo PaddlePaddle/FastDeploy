@@ -160,7 +160,7 @@ jobs:
           pushd test/ce/server
           export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
           export TEMPLATE=TOKEN_LOGPROB
-          export MODEL=ERNIE-4.5-0.3B-Paddle
+          export MODEL_SIZE=ERNIE-4.5-0.3B-Paddle
           TEST_EXIT_CODE=0
           python gsm8k.py || TEST_EXIT_CODE=1
           popd
