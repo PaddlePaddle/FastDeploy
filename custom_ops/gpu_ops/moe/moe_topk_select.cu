@@ -44,13 +44,19 @@ void moe_topk_select_kernel(const T* input,
   static constexpr int WARPS_PER_TB = 4;
 
   #define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
-  case N: {                                                                    \
-    topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(                   \
-        input, output, indices, source_row, num_rows, num_experts, k, stream); \
-    break;                                                                     \
+  case N: {                                                                      \
+    if (apply_norm_weight) {                                                     \
+      topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB, true>(             \
+          input, output, indices, source_row, num_rows, num_experts, k, stream); \
+    } else {                                                                     \
+      topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB, false>(            \
+          input, output, indices, source_row, num_rows, num_experts, k, stream); \
+    }                                                                            \
+    break;                                                                       \
   }
   int64_t tem_num_experts = num_experts;
-  if(bias != nullptr || apply_norm_weight)  tem_num_experts = 0;
+  // when bias is not none, set tem_num_experts to 0 to follow the default branch
+  if(bias != nullptr)  tem_num_experts = 0;
   switch (tem_num_experts) {
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(2)
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(4)
