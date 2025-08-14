@@ -24,9 +24,12 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (
+    CacheConfig,
     DecodingConfig,
     DeviceConfig,
+    EarlyStopConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -40,7 +43,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger, none_or_str
+from fastdeploy.utils import get_logger
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -72,6 +75,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.gcu_worker import GcuWorker
 
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_maca():
+        from fastdeploy.worker.metax_worker import MetaxWorker
+
+        return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -100,7 +107,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
         tokenizer = ErnieBotTokenizer.from_pretrained(
-            fd_config.parallel_config.model_name_or_path,
+            fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
             padding_side="right",
             use_fast=False,
@@ -140,6 +147,7 @@ class PaddleDisWorkerProc:
         self.local_rank = local_rank
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
+        self.cache_config = fd_config.cache_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -242,6 +250,7 @@ class PaddleDisWorkerProc:
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
+            num_running_requests = 0
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
 
@@ -254,11 +263,11 @@ class PaddleDisWorkerProc:
                     f"num_insert_requests: {len(req_dicts)}"
                 )
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model()
+            self.worker.execute_model(num_running_requests)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
@@ -268,6 +277,7 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
+        num_running_requests = 0
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -280,14 +290,16 @@ class PaddleDisWorkerProc:
                 paddle.distributed.barrier()
 
             self.insert_step = False
-            self.worker_healthy_live_signal.value[self.local_rank] = int(time.time())
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
-                        if self.nnode > 1:
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
+                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                    ):
+                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
@@ -334,7 +346,7 @@ class PaddleDisWorkerProc:
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if not self.worker.model_runner.not_need_stop():
                 if self.ranks > 1:
@@ -345,7 +357,7 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model(req_dicts)
+            self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
@@ -404,7 +416,7 @@ class PaddleDisWorkerProc:
 
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
-        if self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
                 name="launched_cache_manager_signal",
@@ -427,7 +439,19 @@ class PaddleDisWorkerProc:
 
     def load_model(self) -> None:
         """Load weights and create model"""
+
         self.worker.load_model()
+        loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
+        if self.ranks > 1:
+            paddle.distributed.barrier()
+        self.loaded_model_signal.value[0] = 1
 
 
 def parse_args():
@@ -437,7 +461,7 @@ def parse_args():
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument(
         "-m",
-        "--model_name_or_path",
+        "--model",
         type=str,
         default="./output",
         help="model dir",
@@ -474,34 +498,10 @@ def parse_args():
         help="enable chunked prefill",
     )
     parser.add_argument(
-        "--speculative_method",
+        "--speculative_config",
+        type=json.loads,
         default=None,
-        type=none_or_str,
-        choices=[
-            None,
-            "ngram",
-            "mtp",
-        ],
-    )
-    parser.add_argument(
-        "--speculative_max_draft_token_num",
-        default=1,
-        type=int,
-    )
-    parser.add_argument(
-        "--speculative_model_name_or_path",
-        default="",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_model_quantization",
-        default="WINT8",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_benchmark_mode",
-        default="False",
-        type=str,
+        help="Configation of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -532,6 +532,12 @@ def parse_args():
         type=int,
         default=1,
         help="expert parallel size",
+    )
+    parser.add_argument(
+        "--data_parallel_size",
+        type=int,
+        default=1,
+        help="data parallel size",
     )
     parser.add_argument(
         "--enable_expert_parallel",
@@ -587,6 +593,19 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
+    parser.add_argument(
+        "--early_stop_config",
+        type=json.loads,
+        default=None,
+        help="Configuration of early stop.",
+    )
+
+    parser.add_argument(
+        "--load_choices",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/new_loader.",
+    )
 
     args = parser.parse_args()
     return args
@@ -605,8 +624,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
     decoding_config = DecodingConfig(vars(args))
-    speculative_config = SpeculativeConfig(vars(args))
+    speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
+    cache_config = CacheConfig(vars(args))
     parallel_config.tensor_parallel_size = args.tensor_parallel_size
     parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
     parallel_config.expert_parallel_size = args.expert_parallel_size
@@ -627,14 +647,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     load_config = LoadConfig(vars(args))
 
-    graph_opt_config = GraphOptimizationConfig()
-    if args.graph_optimization_config is not None:
-        graph_opt_config = GraphOptimizationConfig(
-            use_cudagraph=args.graph_optimization_config["use_cudagraph"],
-            graph_opt_level=args.graph_optimization_config["graph_opt_level"],
-            cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"],
-            sot_warmup_sizes=args.graph_optimization_config["sot_warmup_sizes"],
-        )
+    graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
+
+    early_stop_config = EarlyStopConfig(args.early_stop_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -707,6 +722,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
+        early_stop_config=early_stop_config,
+        cache_config=cache_config,
     )
     update_fd_config_for_mm(fd_config)
 
@@ -726,7 +743,12 @@ def run_worker_proc() -> None:
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
+
+        worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
+    else:
+        worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()
@@ -751,4 +773,7 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
+    from fastdeploy.plugins.model_register import load_model_register_plugins
+
+    load_model_register_plugins()
     run_worker_proc()

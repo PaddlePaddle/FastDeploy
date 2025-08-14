@@ -27,6 +27,7 @@ struct AppendAttnMetaData {
   int head_dims;
   int head_dims_v;
   int max_blocks_per_seq;
+  const int *mask_offset = nullptr;
 };
 
 __forceinline__ __host__ __device__ int div_up(int a, int b) {
@@ -430,6 +431,9 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
   } else if (group_size == 12) {                             \
     constexpr size_t GROUP_SIZE = 12;                        \
     __VA_ARGS__                                              \
+  } else if (group_size == 14) {                             \
+    constexpr size_t GROUP_SIZE = 14;                        \
+    __VA_ARGS__                                              \
   } else if (group_size == 16) {                             \
     constexpr size_t GROUP_SIZE = 16;                        \
     __VA_ARGS__                                              \
@@ -473,6 +477,9 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
 #define DISPATCH_CAUSAL(causal, CAUSAL, ...) \
   if (causal) {                              \
     constexpr bool CAUSAL = true;            \
+    __VA_ARGS__                              \
+  } else {                                   \
+    constexpr bool CAUSAL = false;           \
     __VA_ARGS__                              \
   }
 
@@ -558,4 +565,38 @@ template <typename T, bool IsFP8>inline __device__ static void convert_c8(T * re
   } else {
     convert_int8(result, source);
   }
+}
+
+constexpr int kWarpSize = 32;
+
+template<typename T>
+inline __device__ void WelfordCombine1(T b_m2, T* m2) {
+  *m2 += b_m2;
+}
+
+template<typename T, int thread_group_width = kWarpSize>
+__inline__ __device__ void WelfordWarpReduce(T thread_m2, T* m2) {
+  *m2 = thread_m2;
+  for (int mask = thread_group_width / 2; mask > 0; mask >>= 1) {
+    T b_m2 = __shfl_xor_sync(0xffffffff, *m2, mask);
+    WelfordCombine1(b_m2, m2);
+  }
+}
+
+template<typename T, int thread_group_width = kWarpSize>
+__inline__ __device__ void WelfordWarpAllReduce(T thread_m2, T* m2) {
+  WelfordWarpReduce<T, thread_group_width>(thread_m2, m2);
+}
+
+template <typename T>
+__inline__ __device__ T Rsqrt(T x);
+
+template <>
+__inline__ __device__ float Rsqrt<float>(float x) {
+  return rsqrt(x);
+}
+
+template <>
+__inline__ __device__ double Rsqrt<double>(double x) {
+  return rsqrt(x);
 }

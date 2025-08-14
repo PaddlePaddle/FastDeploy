@@ -102,7 +102,7 @@ void moe_redundant_topk_select_kernel(const T* input,
       else {
           assert(k<=TPB);
           if (apply_norm_weight) {
-            moe_softmax_top_k_normed_fused<T, TPB>
+            moe_softmax_top_k_fused<T, TPB, true>
                 <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(input,
                                                                  bias,
                                                                  output,
@@ -112,7 +112,7 @@ void moe_redundant_topk_select_kernel(const T* input,
                                                                  k,
                                                                  num_rows);
           } else {
-            moe_softmax_top_k_fused<T, TPB>
+            moe_softmax_top_k_fused<T, TPB, false>
                 <<<config_topk.block_per_grid, TPB, 0, stream>>>(input,
                                                                   bias,
                                                                   output,
@@ -254,7 +254,7 @@ std::vector<paddle::DataType> MoERedundantTopKSelectKernelInferDtype(
 }
 
 
-PD_BUILD_OP(moe_redundant_topk_select)
+PD_BUILD_STATIC_OP(moe_redundant_topk_select)
     .Inputs({"gating_logits", "expert_id_to_ep_rank_array", "expert_in_rank_num_list", "tokens_per_expert_stats_list", paddle::Optional("bias")})
     .Outputs({"topk_ids",
               "topk_weights",

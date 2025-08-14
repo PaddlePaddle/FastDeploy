@@ -38,17 +38,12 @@ class BlockAttentionMetadata(AttentionMetadata):
     BlockAttentionMetadata
     """
 
-    max_len_kv: paddle.Tensor = None
-    set_max_lengths: int = -1
     encoder_batch_ids: paddle.Tensor = None
     encoder_tile_ids_per_batch: paddle.Tensor = None
     encoder_num_blocks: paddle.Tensor = None
     kv_batch_ids: paddle.Tensor = None
     kv_tile_ids_per_batch: paddle.Tensor = None
     kv_num_blocks: paddle.Tensor = None
-    decoder_batch_ids: paddle.Tensor = None
-    decoder_tile_ids_per_batch: paddle.Tensor = None
-    decoder_num_blocks: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
@@ -56,8 +51,6 @@ class BlockAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: int = -1
-    decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
@@ -79,13 +72,15 @@ class BlockAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
     ):
         """
         BlockAttentionBackend __init__
         """
         super().__init__()
         self.attention_metadata: BlockAttentionMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
         self.rope_theta = 10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         self.rank = fd_config.parallel_config.tensor_parallel_rank

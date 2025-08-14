@@ -77,7 +77,11 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &out_linear_shifts,
     const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
     const int max_input_length, const float quant_max_bound,
@@ -235,8 +239,14 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
-    const int encoder_block_shape_q, const int decoder_block_shape_q,
-    const int group_size, const int block_size,
+    paddle::Tensor &decoder_batch_ids,          // Inplace
+    paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    const int encoder_block_shape_q,
+    const int decoder_block_shape_q,
+    const int group_size,
+    const int block_size,
     const int decoder_step_token_num);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
@@ -266,13 +276,12 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &seq_lens,
                        const paddle::Tensor &end_ids,
                        const paddle::Tensor &next_tokens,
+                       const paddle::Tensor &pre_ids,
+                       const paddle::Tensor &step_idx,
+                       const paddle::Tensor &stop_seqs,
+                       const paddle::Tensor &stop_seqs_len,
                        const bool beam_search);
 
-void GetStopFlagsMultiSeqs(
-    const paddle::Tensor &topk_ids, const paddle::Tensor &pre_ids,
-    const paddle::Tensor &step_idx, const paddle::Tensor &stop_flags,
-    const paddle::Tensor &seq_lens, const paddle::Tensor &stop_seqs,
-    const paddle::Tensor &stop_seqs_len, const paddle::Tensor &end_ids);
 
 void UpdateInputes(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &not_need_stop, // only on cpu
@@ -318,7 +327,7 @@ std::vector<paddle::Tensor> ExtractTextTokenOutput(
     const paddle::Tensor &max_seq_len, const paddle::Tensor &max_seq_len_index,
     const paddle::Tensor &mm_token_num_len,
     const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &cu_seqlens_q, const paddle::Tensor &score_text);
+    const paddle::Tensor &cu_seqlens_q, const paddle::Tensor &hidden_states);
 
 std::vector<paddle::Tensor> MoEDeepGEMMPermute(const paddle::Tensor &x,
                                                const paddle::Tensor &topk_idx,
@@ -756,6 +765,17 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
+void MergePrefillDecodeOutput(
+        const paddle::Tensor &encoder_res,
+        const paddle::Tensor &decoder_res,
+        const paddle::Tensor &seq_lens_encoder,
+        const paddle::Tensor &seq_lens_decoder,
+        const paddle::Tensor &seq_lens_this_time,
+        const paddle::Tensor &cu_seq_q,
+        const int head_num,
+        const int head_dim,
+        const int max_token);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -765,7 +785,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * moe/fused_moe/moe_redundant_topk_select.cu
    * moe_redundant_topk_select
    */
-  m.def("f_moe_redundant_topk_select", &MoERedundantTopKSelectKernel,
+  m.def("moe_redundant_topk_select", &MoERedundantTopKSelectKernel,
         py::arg("gating_logits"), py::arg("expert_id_to_ep_rank_array"),
         py::arg("expert_in_rank_num_list"),
         py::arg("tokens_per_expert_stats_list"), py::arg("bias"),
@@ -954,12 +974,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("set_stop_value_multi_ends", &GetStopFlagsMulti,
         "update_inputs function");
 
-  /**
-   * stop_generation_multi_stop_seqs.cu
-   * set_stop_value_multi_seqs
-   */
-  m.def("set_stop_value_multi_seqs", &GetStopFlagsMultiSeqs,
-        "update_inputs function");
 
   /**
    * update_inputs.cu
@@ -1112,4 +1126,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("mtp_step_paddle",&MTPStepPaddle, "mtp_step_paddle function");
 
   m.def("speculate_step_paddle",&SpeculateStepPaddle, "speculate_step_paddle function");
+
+  m.def("merge_prefill_decode_output", &MergePrefillDecodeOutput, "merge_prefill_decode_output function");
 }

@@ -14,9 +14,8 @@
 # limitations under the License.
 """
 
-import os
-
 import numpy as np
+from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
 from fastdeploy.input.ernie_processor import ErnieProcessor
@@ -33,11 +32,8 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         limit_mm_per_prompt=None,
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
+        tool_parser_obj=None,
     ):
-        self.use_hf_tokenizer = False
-
-        if "merge_llm_model" in model_name_or_path:
-            model_name_or_path = os.path.dirname(model_name_or_path)
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         tokenizer_path = model_name_or_path
         preprocessor_path = model_name_or_path
@@ -52,15 +48,30 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         self.image_patch_id = self.ernie_processor.image_patch_id
         self.spatial_conv_size = self.ernie_processor.spatial_conv_size
 
+        self.tool_parsers = dict()
         self.decode_status = dict()
         self._load_tokenizer()
-        self.eos_token_ids = [self.tokenizer.eos_token_id]
+
+        # Generation config
+        try:
+            self.generation_config = GenerationConfig.from_pretrained(model_name_or_path)
+        except Exception as e:
+            data_processor_logger.warning(
+                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
+            )
+            self.generation_config = None
+
+        # self.eos_token_ids = [self.tokenizer.eos_token_id]
+        from paddleformers.trl.llm_utils import get_eos_token_id
+
+        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
         self.reasoning_parser = None
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
+        self.tool_parser_obj = tool_parser_obj
 
     def get_pad_id(self):
         """get pad id"""
@@ -75,12 +86,34 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         """
         self.tokenizer = self.ernie_processor.tokenizer
 
+    def _apply_default_parameters(self, request):
+        """
+        Apply default value for parameters in request
+        """
+
+        def set_value(req, key, value):
+            value = getattr(self.generation_config, key, value)
+            if isinstance(req, dict):
+                if key not in req:
+                    req[key] = value
+            else:
+                if req.get(key) is None:
+                    req.set(key, value)
+
+        set_value(request, "top_p", 0.7)
+        set_value(request, "temperature", 1.0)
+        set_value(request, "repetition_penalty", 1.0)
+        set_value(request, "frequency_penalty", 0.0)
+        set_value(request, "presence_penalty", 0.0)
+        return request
+
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
         task = request.to_dict()
         task["enable_thinking"] = kwargs.get("enable_thinking", True)
         self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
+        request = self._apply_default_parameters(request)
 
         return request
 
@@ -162,6 +195,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
 
+        request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
@@ -178,6 +212,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
+            request["text_after_process"] = request.get("prompt")
             outputs = self.ernie_processor.text2ids(request["prompt"], images, videos)
         elif request.get("messages"):
             messages = request["messages"]
@@ -191,7 +226,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
-        request["prompt_token_ids"] = outputs["input_ids"]
+        request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
@@ -227,6 +262,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             outs["grid_thw"] = np.vstack(outs["grid_thw"])
             outs["image_type_ids"] = np.array(outs["image_type_ids"])
 
+        outs["image_patch_id"] = self.image_patch_id
         # Convert lists to arrays
         outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
         outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)

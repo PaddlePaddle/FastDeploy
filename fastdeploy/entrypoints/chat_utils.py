@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import uuid
 from copy import deepcopy
 from typing import List, Literal, Union
 from urllib.parse import urlparse
@@ -27,8 +28,8 @@ from openai.types.chat import (
 )
 from typing_extensions import Required, TypeAlias, TypedDict
 
-from fastdeploy.input.multimodal.image import ImageMediaIO
-from fastdeploy.input.multimodal.video import VideoMediaIO
+from fastdeploy.multimodal.image import ImageMediaIO
+from fastdeploy.multimodal.video import VideoMediaIO
 
 
 class VideoURL(TypedDict, total=False):
@@ -156,3 +157,7 @@ def parse_chat_messages(messages):
 
         conversation.append({"role": role, "content": parsed_content})
     return conversation
+
+
+def random_tool_call_id() -> str:
+    return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"

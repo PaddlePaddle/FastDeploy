@@ -1,7 +1,7 @@
 """
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License"
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 
 from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.config import ModelConfig
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.reasoning import ReasoningParserManager
 
 
@@ -48,6 +49,7 @@ class InputPreprocessor:
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         enable_mm: bool = False,
+        tool_parser: str = None,
     ) -> None:
 
         self.model_name_or_path = model_name_or_path
@@ -55,6 +57,7 @@ class InputPreprocessor:
         self.enable_mm = enable_mm
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
+        self.tool_parser = tool_parser
 
     def create_processor(self):
         """
@@ -68,9 +71,12 @@ class InputPreprocessor:
             DataProcessor or MultiModalRegistry.Processor (Union[DataProcessor, MultiModalRegistry.Processor]): 数据处理器。
         """
         reasoning_parser_obj = None
+        tool_parser_obj = None
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
-        architectures = ModelConfig(self.model_name_or_path).architectures
+        if self.tool_parser:
+            tool_parser_obj = ToolParserManager.get_tool_parser(self.tool_parser)
+        architectures = ModelConfig({"model": self.model_name_or_path}).architectures[0]
         if not self.enable_mm:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.text_processor import DataProcessor
@@ -78,6 +84,7 @@ class InputPreprocessor:
                 self.processor = DataProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
                 )
             else:
                 from fastdeploy.input.ernie_processor import ErnieProcessor
@@ -85,10 +92,11 @@ class InputPreprocessor:
                 self.processor = ErnieProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
                 )
         else:
-            if not architectures.startswith("Ernie4_5_VLMoeForConditionalGeneration"):
-                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe model.")
+            if not ErnieArchitectures.contains_ernie_arch(architectures):
+                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VL model.")
             else:
                 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 
@@ -97,5 +105,6 @@ class InputPreprocessor:
                     limit_mm_per_prompt=self.limit_mm_per_prompt,
                     mm_processor_kwargs=self.mm_processor_kwargs,
                     reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
                 )
         return self.processor

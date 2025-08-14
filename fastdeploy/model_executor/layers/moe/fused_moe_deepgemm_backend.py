@@ -71,7 +71,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
-        up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = layer.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,
@@ -79,13 +79,29 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
-        for i in range(layer.num_local_experts):
-            expert_idx = layer.expert_id_offset + i
+        for expert_idx in logical_expert_ids:
+            up_gate_proj_expert_weight_scale_key_name = up_gate_proj_expert_weight_scale_key.format(expert_idx)
+            down_proj_expert_weight_scale_key_name = down_proj_expert_weight_scale_key.format(expert_idx)
+
             up_gate_proj_weight_scale.append(
-                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+                get_tensor(
+                    (
+                        state_dict.pop(up_gate_proj_expert_weight_scale_key_name)
+                        if up_gate_proj_expert_weight_scale_key_name in state_dict
+                        else up_gate_proj_expert_weight_scale_key_name
+                    ),
+                    layer.fd_config.model_config.model,
+                )
             )
             down_proj_weight_scale.append(
-                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+                get_tensor(
+                    (
+                        state_dict.pop(down_proj_expert_weight_scale_key_name)
+                        if down_proj_expert_weight_scale_key_name in state_dict
+                        else down_proj_expert_weight_scale_key_name
+                    ),
+                    layer.fd_config.model_config.model,
+                )
             )
 
         up_gate_proj_weight = (
@@ -110,11 +126,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
@@ -217,11 +234,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
@@ -287,20 +305,33 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
+        gate_out = gate(x.cast("float32"))
 
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight
-            False,
-        )
+        if layer.topk_method == "noaux_tc":
+            from .ep import get_moe_scores
+
+            _, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+            )
+        else:
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,  # apply_norm_weight
+                False,
+            )
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 

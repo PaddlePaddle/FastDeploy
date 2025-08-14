@@ -33,6 +33,7 @@ from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
+from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
@@ -42,6 +43,7 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MLP,
 )
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -72,6 +74,93 @@ class VLMoEMeta:
     fake_hidden_states: Optional[paddle.Tensor] = None
 
 
+class Ernie4_5_VLMoeBlock(nn.Layer):
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str, moe_tag: str, expert_id_offset: int) -> None:
+        super().__init__()
+        moe_quant_type = ""
+        if hasattr(fd_config, "quant_config") and fd_config.quant_config is not None:
+            moe_quant_type = getattr(fd_config.quant_config, "name", lambda: "")()
+
+        if moe_quant_type == "tensor_wise_fp8" or (
+            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+        ):
+            weight_key_map = {
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        else:
+            # wint4/wint8/bfloat16
+            weight_key_map = {
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
+            }
+        moe_intermediate_size = (
+            fd_config.model_config.moe_intermediate_size[0]
+            if moe_tag == "Text"
+            else fd_config.model_config.moe_intermediate_size[1]
+        )
+        num_experts = (
+            fd_config.model_config.moe_num_experts[0]
+            if moe_tag == "Text"
+            else fd_config.model_config.moe_num_experts[1]
+        )
+        self.experts = FusedMoE(
+            fd_config=fd_config,
+            reduce_results=False,
+            moe_intermediate_size=moe_intermediate_size,
+            num_experts=num_experts,
+            expert_id_offset=expert_id_offset,
+            top_k=fd_config.model_config.moe_k,
+            layer_idx=layer_id,
+            moe_tag=moe_tag,
+            weight_key_map=weight_key_map,
+        )
+
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=num_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+            weight_key="weight" if moe_tag == "Text" else "weight_1",
+        )
+
+        if moe_tag == "Text":
+            self.experts.extract_gate_correction_bias = self.extract_gate_correction_bias_text
+        elif moe_tag == "Image":
+            self.experts.extract_gate_correction_bias = self.extract_gate_correction_bias_image
+
+    def forward(self, hidden_states: paddle.Tensor):
+        out = self.experts(hidden_states, self.gate)
+        return out
+
+    def extract_gate_correction_bias_text(self, gate_correction_bias_key, state_dict):
+        """
+        extract_gate_correction_bias function.
+        """
+        gate_correction_bias_tensor = get_tensor(state_dict[gate_correction_bias_key]).astype("float32")
+        return gate_correction_bias_tensor[0].unsqueeze(0)
+
+    def extract_gate_correction_bias_image(self, gate_correction_bias_key, state_dict):
+        """
+        extract_gate_correction_bias function.
+        """
+        gate_correction_bias_tensor = get_tensor(state_dict[gate_correction_bias_key]).astype("float32")
+        return gate_correction_bias_tensor[1].unsqueeze(0)
+
+    def load_state_dict(self, state_dict):
+        self.experts.load_state_dict(state_dict)
+        self.gate.load_state_dict(state_dict)
+
+
 class Ernie4_5_VLMoE(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
@@ -98,43 +187,10 @@ class Ernie4_5_VLMoE(nn.Layer):
 
         assert text_moe_layer_start_index <= text_moe_layer_end_index
 
-        moe_quant_type = ""
-        if hasattr(fd_config, "quant_config") and fd_config.quant_config is not None:
-            moe_quant_type = getattr(fd_config.quant_config, "name", lambda: "")()
-
         if layer_id >= text_moe_layer_start_index and layer_id <= text_moe_layer_end_index:
-            if moe_quant_type == "tensor_wise_fp8" or (
-                moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
-            ):
-                weight_key_map = {
-                    "gate_weight_key": f"{prefix}.gate.weight",
-                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                    "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                    "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                    "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                    "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
-                }
-            else:
-                weight_key_map = {
-                    "gate_weight_key": f"{prefix}.gate.weight",
-                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
-                }
-            self.text_fused_moe = FusedMoE(
-                fd_config=fd_config,
-                reduce_results=False,
-                moe_intermediate_size=fd_config.model_config.moe_intermediate_size[0],
-                num_experts=fd_config.model_config.moe_num_experts[0],
-                expert_id_offset=0,
-                top_k=fd_config.model_config.moe_k,
-                layer_idx=layer_id,
-                moe_tag="Text",
-                weight_key_map=weight_key_map,
+            self.text_fused_moe = Ernie4_5_VLMoeBlock(
+                fd_config=fd_config, layer_id=layer_id, prefix=f"{prefix}", moe_tag="Text", expert_id_offset=0
             )
-            self.text_fused_moe.extract_gate_correction_bias = self.extract_gate_correction_bias_text
         else:
             self.text_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
@@ -145,38 +201,13 @@ class Ernie4_5_VLMoE(nn.Layer):
 
         assert image_moe_layer_start_index <= image_moe_layer_end_index
         if layer_id >= image_moe_layer_start_index and layer_id <= image_moe_layer_end_index:
-            if moe_quant_type == "tensor_wise_fp8" or (
-                moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
-            ):
-                weight_key_map = {
-                    "gate_weight_key": f"{prefix}.gate.weight_1",
-                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                    "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                    "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                    "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                    "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
-                }
-            else:
-                weight_key_map = {
-                    "gate_weight_key": f"{prefix}.gate.weight_1",
-                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
-                }
-            self.image_fused_moe = FusedMoE(
+            self.image_fused_moe = Ernie4_5_VLMoeBlock(
                 fd_config=fd_config,
-                reduce_results=False,
-                moe_intermediate_size=fd_config.model_config.moe_intermediate_size[1],
-                num_experts=fd_config.model_config.moe_num_experts[1],
-                expert_id_offset=fd_config.model_config.moe_num_experts[0],
-                top_k=fd_config.model_config.moe_k,
-                layer_idx=layer_id,
+                layer_id=layer_id,
+                prefix=f"{prefix}",
                 moe_tag="Image",
-                weight_key_map=weight_key_map,
+                expert_id_offset=fd_config.model_config.moe_num_experts[0],
             )
-            self.image_fused_moe.extract_gate_correction_bias = self.extract_gate_correction_bias_image
         else:
             self.image_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
@@ -194,25 +225,11 @@ class Ernie4_5_VLMoE(nn.Layer):
                 reduce_results=False,
             )
 
-    def extract_gate_correction_bias_text(self, gate_correction_bias_key, state_dict):
-        """
-        extract_gate_correction_bias function.
-        """
-        gate_correction_bias_tensor = get_tensor(state_dict[gate_correction_bias_key]).astype("float32")
-        return gate_correction_bias_tensor[0].unsqueeze(0)
-
-    def extract_gate_correction_bias_image(self, gate_correction_bias_key, state_dict):
-        """
-        extract_gate_correction_bias function.
-        """
-        gate_correction_bias_tensor = get_tensor(state_dict[gate_correction_bias_key]).astype("float32")
-        return gate_correction_bias_tensor[1].unsqueeze(0)
-
     def load_state_dict(self, state_dict):
         self.text_fused_moe.load_state_dict(state_dict)
         self.image_fused_moe.load_state_dict(state_dict)
-        if self.text_fused_moe.moe_use_gate_correction_bias:
-            state_dict.pop(self.text_fused_moe.gate_correction_bias_key)
+        if self.text_fused_moe.experts.moe_use_gate_correction_bias:
+            state_dict.pop(self.text_fused_moe.experts.gate_correction_bias_key)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
@@ -418,17 +435,16 @@ class Ernie4_5_VLModel(nn.Layer):
         text_index = None
         image_index = None
         fake_hidden_states = None
-        image_token_num = 0
 
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        token_num, hidden_dim = hidden_states.shape
 
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
-        token_type_ids = image_mask.cast("int32")
-        token_num = hidden_states.shape[0]
-        image_token_num = paddle.count_nonzero(token_type_ids)
+        image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
+        token_type_ids = image_mask.cast("int32")
         if self.fd_config.parallel_config.use_ep is True:
             fake_hidden_states = paddle.empty(
                 shape=[0, self.fd_config.model_config.hidden_size],
@@ -436,20 +452,18 @@ class Ernie4_5_VLModel(nn.Layer):
             )
             text_input = fake_hidden_states
 
-        if image_mask.any():
+        if image_token_num > 0:
             hidden_states[image_mask] = image_features.cast(self._dtype)
-            text_input = paddle.full(
-                shape=[text_token_num, hidden_states.shape[1]],
-                fill_value=1,
+            text_input = paddle.ones(
+                shape=[text_token_num, hidden_dim],
                 dtype=self._dtype,
             )
-            image_input = paddle.full(
-                shape=[image_token_num, hidden_states.shape[1]],
-                fill_value=1,
+            image_input = paddle.ones(
+                shape=[image_token_num, hidden_dim],
                 dtype=self._dtype,
             )
-            text_index = paddle.zeros_like(token_type_ids)
-            image_index = paddle.zeros_like(token_type_ids)
+            text_index = paddle.zeros_like(image_mask, dtype="int32")
+            image_index = paddle.zeros_like(image_mask, dtype="int32")
             text_image_index_out(token_type_ids, text_index, image_index)
 
         vl_moe_meta = VLMoEMeta(
@@ -474,21 +488,14 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = hidden_states + residual
 
         # -----------------------
-        hidden_states = hidden_states.cast("float32")
-        score_text = hidden_states
-
-        if image_input is not None:
-            token_type_ids = token_type_ids.reshape([-1])
-            text_pos_shifted = token_type_ids[:token_num] == 0
-            score_text = hidden_states[text_pos_shifted.reshape([-1])]
-        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time.squeeze(-1), k=1)
+        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
             image_token_num.cast("int32"),
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
-            score_text,
+            hidden_states.cast("float32"),
         ).cast(self._dtype)
         # -----------------------
 
@@ -497,6 +504,7 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@MultimodalRegistry.register_model()
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
@@ -613,7 +621,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
     """
-    Ernie4_5_PretrainedModel
+    Ernie4_5_MoePretrainedModel
     """
 
     config_class = FDConfig
@@ -623,6 +631,10 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Ernie4_5_VLMoeForConditionalGeneration"
 
     from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
     from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid

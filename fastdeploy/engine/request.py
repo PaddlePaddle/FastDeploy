@@ -24,8 +24,9 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists
+from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
 
 
 class RequestStatus(Enum):
@@ -60,6 +61,7 @@ class Request:
         preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
+        disable_chat_template: bool = False,
         disaggregate_info: Optional[dict] = None,
         draft_token_ids: Optional[list[int]] = None,
         guided_json: Optional[Any] = None,
@@ -87,6 +89,7 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
         # speculative method in disaggregate-mode
@@ -103,6 +106,7 @@ class Request:
         # Multi-modal related
         self.multimodal_inputs = multimodal_inputs
         self.multimodal_data = multimodal_data
+        self.multimodal_img_boundaries = None
 
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier
@@ -115,6 +119,7 @@ class Request:
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
         self.idx = None
+        self.need_prefill_tokens = self.prompt_token_ids_len
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -136,6 +141,7 @@ class Request:
             preprocess_end_time=d.get("preprocess_end_time"),
             multimodal_inputs=d.get("multimodal_inputs"),
             multimodal_data=d.get("multimodal_data"),
+            disable_chat_template=d.get("disable_chat_template"),
             disaggregate_info=d.get("disaggregate_info"),
             draft_token_ids=d.get("draft_token_ids"),
             guided_json=d.get("guided_json", None),
@@ -180,6 +186,7 @@ class Request:
             "preprocess_end_time": self.preprocess_end_time,
             "multimodal_inputs": self.multimodal_inputs,
             "multimodal_data": self.multimodal_data,
+            "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
@@ -239,9 +246,11 @@ class CompletionOutput:
     token_ids: list[int]
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
+    logprobs: Optional[SampleLogprobs] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
         """
@@ -253,6 +262,7 @@ class CompletionOutput:
             "token_ids": self.token_ids,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
+            "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
@@ -275,7 +285,8 @@ class CompletionOutput:
             f"text={self.text!r}, "
             f"token_ids={self.token_ids}, "
             f"draft_token_ids={self.draft_token_ids}, "
-            f"reasoning_content={self.reasoning_content!r}"
+            f"reasoning_content={self.reasoning_content!r}, "
+            f"logprobs={self.logprobs}, "
         )
 
 
@@ -384,16 +395,20 @@ class RequestOutput:
 
     def add(self, next_output: RequestOutput) -> None:
         """Merge RequestOutput into this one"""
-
         self.prompt = next_output.prompt
         self.prompt_token_ids = next_output.prompt_token_ids
         self.finished |= next_output.finished
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
+
         if next_output.metrics.arrival_time is not None and self.metrics.inference_start_time is not None:
             self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
         if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
             self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
+        if next_output.outputs.top_logprobs is not None:
+            self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
+            self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
+            self.outputs.top_logprobs.sampled_token_ranks.extend(next_output.outputs.top_logprobs.sampled_token_ranks)
 
     def __repr__(self) -> str:
         return (
@@ -401,8 +416,9 @@ class RequestOutput:
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
             f"outputs={self.outputs}, "
+            f"finished={self.finished}, "
+            f"num_cached_tokens={self.num_cached_tokens}, "
             f"metrics={self.metrics}, "
-            f"num_cached_tokens={self.num_cached_tokens})"
         )
 
     @classmethod

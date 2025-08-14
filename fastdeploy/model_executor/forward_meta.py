@@ -37,6 +37,8 @@ class ForwardMode(IntEnum):
     DECODE = auto()
     # Mixed mode
     MIXED = auto()
+    # Native mode
+    NATIVE = auto()
 
     def is_prefill(self):
         """Is Extend mode"""
@@ -49,6 +51,10 @@ class ForwardMode(IntEnum):
     def is_mixed(self):
         """Is Mixed mode"""
         return self == ForwardMode.MIXED
+
+    def is_native(self):
+        """Is Native mode"""
+        return self == ForwardMode.NATIVE
 
 
 @dataclass
@@ -77,6 +83,10 @@ class ForwardMeta:
     decoder_batch_ids: Optional[paddle.Tensor] = None
     # Tile ID for each batch of the decoder. Used by attention backend.
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    # The number of blocks that attention backend can use in decode stage
+    decoder_num_blocks_cpu: Optional[paddle.Tensor] = None
+    # Recorded multiple lengths related to prefill or decode
+    max_len_tensor_cpu: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None

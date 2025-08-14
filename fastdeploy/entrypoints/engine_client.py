@@ -19,11 +19,15 @@ import uuid
 
 import numpy as np
 
+from fastdeploy import envs
+from fastdeploy.engine.config import ModelConfig
+from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, api_server_logger
+from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
 
 
 class EngineClient:
@@ -33,24 +37,37 @@ class EngineClient:
 
     def __init__(
         self,
+        model_name_or_path,
         tokenizer,
         max_model_len,
         tensor_parallel_size,
         pid,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        enable_mm=False,
+        # enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
+        enable_logprob=False,
+        workers=1,
+        tool_parser=None,
     ):
+        import fastdeploy.model_executor.models  # noqa: F401
+
+        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
+        if MultimodalRegistry.contains_model(architectures):
+            self.enable_mm = True
+        else:
+            self.enable_mm = False
+
         input_processor = InputPreprocessor(
             tokenizer,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            enable_mm,
+            self.enable_mm,
+            tool_parser,
         )
-        self.enable_mm = enable_mm
+        self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
@@ -64,7 +81,7 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
-
+        self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -142,6 +159,26 @@ class EngineClient:
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
+        if "stop_seqs_len" in task:
+            stop_seqs_len = task["stop_seqs_len"]
+            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            if len(stop_seqs_len) > max_stop_seqs_num:
+                error_msg = (
+                    f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
+                    "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
+                )
+                api_server_logger.error(error_msg)
+                raise EngineError(error_msg, error_code=400)
+            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            for single_stop_seq_len in stop_seqs_len:
+                if single_stop_seq_len > stop_seqs_max_len:
+                    error_msg = (
+                        f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
+                        "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
+                    )
+                    api_server_logger.error(error_msg)
+                    raise EngineError(error_msg, error_code=400)
+
         task["preprocess_end_time"] = time.time()
         preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
         api_server_logger.info(
@@ -199,6 +236,44 @@ class EngineClient:
 
         if data.get("stream_options") and not data.get("stream"):
             raise ValueError("Stream options can only be defined when `stream=True`.")
+
+        # logprobs
+        logprobs = data.get("logprobs")
+        top_logprobs = None
+
+        if isinstance(logprobs, bool) and logprobs:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+            top_logprobs = data.get("top_logprobs")
+        elif isinstance(logprobs, int):
+            top_logprobs = logprobs
+        elif logprobs:
+            raise ValueError("Invalid type for 'logprobs'")
+
+        # enable_logprob
+        if top_logprobs:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if not isinstance(top_logprobs, int):
+                err_type = type(top_logprobs).__name__
+                err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if top_logprobs < 0:
+                err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
+
+            if top_logprobs > 20:
+                err_msg = "Invalid value for 'top_logprobs': must be <= 20."
+                api_server_logger.error(err_msg)
+                raise ValueError(err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """

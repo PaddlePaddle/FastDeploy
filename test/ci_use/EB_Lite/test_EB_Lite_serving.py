@@ -357,7 +357,7 @@ def test_non_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": True},
+        extra_body={"include_stop_str_in_output": True},
         stream=False,
     )
     # Assertions to check the response structure
@@ -370,13 +370,32 @@ def test_non_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": False},
+        extra_body={"include_stop_str_in_output": False},
         stream=False,
     )
     # Assertions to check the response structure
     assert hasattr(response, "choices")
     assert len(response.choices) > 0
     assert not response.choices[0].message.content.endswith("</s>")
+
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        stream=False,
+    )
+    assert not response.choices[0].text.endswith("</s>")
+
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        extra_body={"include_stop_str_in_output": True},
+        stream=False,
+    )
+    assert response.choices[0].text.endswith("</s>")
 
 
 def test_streaming_with_stop_str(openai_client):
@@ -388,7 +407,7 @@ def test_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": True},
+        extra_body={"include_stop_str_in_output": True},
         stream=True,
     )
     # Assertions to check the response structure
@@ -402,7 +421,7 @@ def test_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        metadata={"include_stop_str_in_output": False},
+        extra_body={"include_stop_str_in_output": False},
         stream=True,
     )
     # Assertions to check the response structure
@@ -410,6 +429,29 @@ def test_streaming_with_stop_str(openai_client):
     for chunk in response:
         last_token = chunk.choices[0].delta.content
     assert last_token != "</s>"
+
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        max_tokens=10,
+        stream=True,
+    )
+    last_token = ""
+    for chunk in response_1:
+        last_token = chunk.choices[0].text
+    assert not last_token.endswith("</s>")
+
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        max_tokens=10,
+        extra_body={"include_stop_str_in_output": True},
+        stream=True,
+    )
+    last_token = ""
+    for chunk in response_1:
+        last_token = chunk.choices[0].text
+    assert last_token.endswith("</s>")
 
 
 def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
@@ -662,3 +704,297 @@ def test_streaming_completion_with_prompt_token_ids(openai_client, capsys):
         else:
             assert hasattr(chunk.usage, "prompt_tokens")
             assert chunk.usage.prompt_tokens == 9
+
+
+def test_non_streaming_chat_completion_disable_chat_template(openai_client, capsys):
+    """
+    Test disable_chat_template option in chat functionality with the local service.
+    """
+    enabled_response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        max_tokens=10,
+        temperature=0.0,
+        top_p=0,
+        extra_body={"disable_chat_template": False},
+        stream=False,
+    )
+    assert hasattr(enabled_response, "choices")
+    assert len(enabled_response.choices) > 0
+
+    # from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+    # tokenizer = ErnieBotTokenizer.from_pretrained("PaddlePaddle/ERNIE-4.5-0.3B-Paddle", trust_remote_code=True)
+    # prompt = tokenizer.apply_chat_template([{"role": "user", "content": "Hello, how are you?"}], tokenize=False)
+    prompt = "<|begin_of_sentence|>User: Hello, how are you?\nAssistant: "
+    disabled_response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=10,
+        temperature=0,
+        top_p=0,
+        extra_body={"disable_chat_template": True},
+        stream=False,
+    )
+    assert hasattr(disabled_response, "choices")
+    assert len(disabled_response.choices) > 0
+    assert enabled_response.choices[0].message.content == disabled_response.choices[0].message.content
+
+
+def test_non_streaming_chat_with_min_tokens(openai_client, capsys):
+    """
+    Test min_tokens option in non-streaming chat functionality with the local service
+    """
+    min_tokens = 1000
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        max_tokens=1010,
+        extra_body={"min_tokens": min_tokens},
+        stream=False,
+    )
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens")
+    assert response.usage.completion_tokens >= min_tokens
+
+
+def test_non_streaming_min_max_token_equals_one(openai_client, capsys):
+    """
+    Test chat/completion when min_tokens equals max_tokens equals 1.
+    Verify it returns exactly one token.
+    """
+    # Test non-streaming chat
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        max_tokens=1,
+        temperature=0.0,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+    # Verify usage shows exactly 1 completion token
+    assert hasattr(response, "usage")
+    assert response.usage.completion_tokens == 1
+
+
+def test_non_streaming_chat_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in non-streaming chat functionality with the local service
+    """
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
+    else:
+        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+    response_0 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        stream=False,
+        extra_body={"return_token_ids": True},
+    )
+
+    assert hasattr(response_0, "choices")
+    assert len(response_0.choices) > 0
+    assert hasattr(response_0.choices[0], "message")
+    assert hasattr(response_0.choices[0].message, "completion_token_ids")
+    assert isinstance(response_0.choices[0].message.completion_token_ids, list)
+
+    from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+
+    tokenizer = ErnieBotTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    output_tokens_0 = []
+    output_ids_0 = []
+    for ids in response_0.choices[0].message.completion_token_ids:
+        output_tokens_0.append(tokenizer.decode(ids))
+        output_ids_0.append(ids)
+
+    # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
+    response_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
+        stream=False,
+    )
+    assert hasattr(response_1, "choices")
+    assert len(response_1.choices) > 0
+    assert hasattr(response_1.choices[0], "message")
+    assert hasattr(response_1.choices[0].message, "completion_token_ids")
+    assert isinstance(response_1.choices[0].message.completion_token_ids, list)
+    assert not any(ids in response_1.choices[0].message.completion_token_ids for ids in bad_token_ids)
+
+
+def test_streaming_chat_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in streaming chat functionality with the local service
+    """
+    response_0 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        stream=True,
+        extra_body={"return_token_ids": True},
+    )
+    output_tokens_0 = []
+    output_ids_0 = []
+    is_first_chunk = True
+    for chunk in response_0:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "content")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+            output_tokens_0.append(chunk.choices[0].delta.content)
+            output_ids_0.extend(chunk.choices[0].delta.completion_token_ids)
+
+    # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
+    response_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
+        stream=True,
+    )
+    output_tokens_1 = []
+    output_ids_1 = []
+    is_first_chunk = True
+    for chunk in response_1:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "content")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+            output_tokens_1.append(chunk.choices[0].delta.content)
+            output_ids_1.extend(chunk.choices[0].delta.completion_token_ids)
+    assert not any(ids in output_ids_1 for ids in bad_token_ids)
+
+
+def test_non_streaming_completion_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in non-streaming completion functionality with the local service
+    """
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
+    else:
+        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        stream=False,
+        extra_body={"return_token_ids": True},
+    )
+    assert hasattr(response_0, "choices")
+    assert len(response_0.choices) > 0
+    assert hasattr(response_0.choices[0], "completion_token_ids")
+    assert isinstance(response_0.choices[0].completion_token_ids, list)
+
+    from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+
+    tokenizer = ErnieBotTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    output_tokens_0 = []
+    output_ids_0 = []
+    for ids in response_0.choices[0].completion_token_ids:
+        output_tokens_0.append(tokenizer.decode(ids))
+        output_ids_0.append(ids)
+
+    # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
+        stream=False,
+    )
+    assert hasattr(response_1, "choices")
+    assert len(response_1.choices) > 0
+    assert hasattr(response_0.choices[0], "completion_token_ids")
+    assert isinstance(response_0.choices[0].completion_token_ids, list)
+    assert not any(ids in response_1.choices[0].completion_token_ids for ids in bad_token_ids)
+
+
+def test_streaming_completion_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in streaming completion functionality with the local service
+    """
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        stream=True,
+        extra_body={"return_token_ids": True},
+    )
+    output_tokens_0 = []
+    output_ids_0 = []
+    is_first_chunk = True
+    for chunk in response_0:
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert hasattr(chunk, "choices")
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], "text")
+            assert hasattr(chunk.choices[0], "completion_token_ids")
+            output_tokens_0.append(chunk.choices[0].text)
+            output_ids_0.extend(chunk.choices[0].completion_token_ids)
+
+    # add bad words
+    bad_token_ids = output_ids_0[6:10]
+    bad_tokens = output_tokens_0[6:10]
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
+        stream=True,
+    )
+    output_tokens_1 = []
+    output_ids_1 = []
+    is_first_chunk = True
+    for chunk in response_1:
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert hasattr(chunk, "choices")
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], "text")
+            assert hasattr(chunk.choices[0], "completion_token_ids")
+            output_tokens_1.append(chunk.choices[0].text)
+            output_ids_1.extend(chunk.choices[0].completion_token_ids)
+    assert not any(ids in output_ids_1 for ids in bad_token_ids)

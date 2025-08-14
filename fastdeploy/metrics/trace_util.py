@@ -1,4 +1,5 @@
 import json
+import os
 
 from fastapi import FastAPI
 from opentelemetry import trace
@@ -176,7 +177,22 @@ def start_span(span_name, request, kind=trace.SpanKind.CLIENT):
             return
         # extract Trace context from request.metadata.trace_carrier
         ctx = extract_from_metadata(request)
-        with tracer.start_as_current_span(span_name, context=ctx, kind=kind):
+        with tracer.start_as_current_span(span_name, context=ctx, kind=kind) as span:
+            span.set_attribute("job_id", os.getenv("FD_JOB_ID", default="null"))
+            pass
+    except:
+        pass
+
+
+def fd_start_span(span_name, kind=trace.SpanKind.CLIENT):
+    """
+    when fd start, start a new span show start success
+    """
+    try:
+        if not traces_enable:
+            return
+        with tracer.start_as_current_span(span_name, kind=kind) as span:
+            span.set_attribute("job_id", os.getenv("FD_JOB_ID", default="null"))
             pass
     except:
         pass
@@ -191,7 +207,8 @@ def start_span_request(span_name, request, kind=trace.SpanKind.CLIENT):
             return
         # extract Trace context from request.metadata.trace_carrier
         ctx = extract_from_request(request)
-        with tracer.start_as_current_span(span_name, context=ctx, kind=kind):
+        with tracer.start_as_current_span(span_name, context=ctx, kind=kind) as span:
+            span.set_attribute("job_id", os.getenv("FD_JOB_ID", default="null"))
             pass
     except:
         pass

@@ -113,6 +113,7 @@ class Qwen2Attention(nn.Layer):
         """ """
         self.qkv_proj.load_state_dict(state_dict)
         self.o_proj.load_state_dict(state_dict)
+        self.attn.load_state_dict(state_dict)
 
     def forward(
         self,
@@ -353,6 +354,10 @@ class Qwen2PretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Qwen2ForCausalLM"
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):

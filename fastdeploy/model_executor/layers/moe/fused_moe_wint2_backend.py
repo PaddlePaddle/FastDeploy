@@ -88,7 +88,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         up_gate_proj_expert_code_zp_key = layer.weight_key_map.get("up_gate_proj_expert_code_zp_key", None)
         down_proj_expert_code_zp_key = layer.weight_key_map.get("down_proj_expert_code_zp_key", None)
 
-        up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.load_experts_weight(
             state_dict,
             up_gate_proj_expert_weight_key,
             down_proj_expert_weight_key,
@@ -135,6 +135,17 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         up_gate_proj_code_zp = paddle.stack(up_gate_proj_code_zp, axis=0)
         down_proj_code_zp = paddle.stack(down_proj_code_zp, axis=0)
 
+        # Here we pre-arrange the n-dim weight matrix
+        w1_shape = up_gate_proj_weight.shape
+        up_gate_proj_weight = up_gate_proj_weight.reshape([w1_shape[0], w1_shape[1] // 16, 16, w1_shape[2] // 8, 8])
+        up_gate_proj_weight = paddle.transpose(up_gate_proj_weight, perm=[0, 3, 1, 4, 2])
+        up_gate_proj_weight = up_gate_proj_weight.reshape(w1_shape)
+
+        w2_shape = down_proj_weight.shape
+        down_proj_weight = down_proj_weight.reshape([w2_shape[0], w2_shape[1] // 16, 16, w2_shape[2] // 8, 8])
+        down_proj_weight = paddle.transpose(down_proj_weight, perm=[0, 3, 1, 4, 2])
+        down_proj_weight = down_proj_weight.reshape(w2_shape)
+
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
             "down_proj_weight": down_proj_weight,
@@ -160,12 +171,12 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
-
+        gate_out = gate(x.cast("float32"))
         from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
 
         (
@@ -231,12 +242,12 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
-
+        gate_out = gate(x.cast("float32"))
         from fastdeploy.model_executor.ops.triton_ops import moe_wint2_ffn_kernel
 
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(

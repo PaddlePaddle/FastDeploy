@@ -191,6 +191,29 @@ def test_chat_completion(llm):
             pytest.fail(f"Chat case {i + 1} failed")
 
 
+def test_seed(llm):
+    """
+    Test chat completion with same seed
+    """
+    prompt = "请介绍下中国的四大发明，用一句话概述每个发明。"
+    sampling_params = SamplingParams(temperature=0.1, seed=1, max_tokens=100)
+    num_runs = 5
+
+    results = []
+    try:
+        for i in range(num_runs):
+            outputs = llm.generate(prompt, sampling_params)
+            results.append(outputs[0].outputs.text)
+
+        assert all([result == results[0] for result in results]), "Results are not identical."
+        print("All results are identical.")
+
+    except Exception:
+        print("Failed during prompt generation.")
+        traceback.print_exc()
+        pytest.fail("Prompt generation test failed")
+
+
 if __name__ == "__main__":
     """
     Main entry point for the test script.

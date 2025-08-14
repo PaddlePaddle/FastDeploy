@@ -126,6 +126,16 @@ function copy_ops(){
       return
     fi
 
+    is_maca=`$python -c "import paddle; print(paddle.device.is_compiled_with_custom_device('metax_gpu'))"`
+    if [ "$is_maca" = "True" ]; then
+      DEVICE_TYPE="metax_gpu"
+      mkdir -p ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
+      echo -e "MACA ops have been copy to fastdeploy"
+      return
+    fi
+
     DEVICE_TYPE="cpu"
     cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
     cd ../../../../
