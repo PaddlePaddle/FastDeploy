@@ -153,7 +153,7 @@ class AdaptiveImageProcessor(BaseImageProcessor):
             The max pixels of the image to resize the image.
         patch_size (`int`, *optional*, defaults to 14):
             The spacial patch size of the vision encoder.
-        temporal_patch_size (`int`, *optional*, defaults to 2):
+        temporal_conv_size (`int`, *optional*, defaults to 2):
             The temporal conv size in resampler.
         merge_size (`int`, *optional*, defaults to 2):
             The merge size of the vision encoder to llm encoder.
@@ -179,7 +179,7 @@ class AdaptiveImageProcessor(BaseImageProcessor):
         min_pixels: int = 56 * 56,
         max_pixels: int = 28 * 28 * 1280,
         patch_size: int = 14,
-        temporal_patch_size: int = 2,
+        temporal_conv_size: int = 2,
         merge_size: int = 2,
         **kwargs,
     ) -> None:
@@ -195,7 +195,7 @@ class AdaptiveImageProcessor(BaseImageProcessor):
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
         self.patch_size = patch_size
-        self.temporal_patch_size = temporal_patch_size
+        self.temporal_conv_size = temporal_conv_size
         self.merge_size = merge_size
         self.size = {"min_pixels": min_pixels, "max_pixels": max_pixels}
         self.do_convert_rgb = do_convert_rgb
@@ -332,18 +332,10 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                     resample=resample,
                     data_format=input_data_format,
                 )
-            
-            if do_rescale and do_normalize:
-                image_mean = np.array(image_mean, dtype=np.float32)  * (1.0 / rescale_factor)
-                image_std = np.array(image_std, dtype=np.float32)  * (1.0 / rescale_factor)
-                do_rescale = False
-
             if do_rescale:
-                image = image.astype("float32")
                 image = rescale(image, scale=rescale_factor, data_format=input_data_format)
 
             if do_normalize:
-                image = image.astype("float32")
                 image = normalize(
                     image=image,
                     mean=image_mean,
@@ -352,21 +344,14 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                 )
 
             image = to_channel_dimension_format(image, data_format, input_channel_dim=input_data_format)  # [C, H, W]
+
             processed_images.append(image)
-
         patches = np.array(processed_images)
-        if patches.shape[0] % self.temporal_patch_size != 0:
-            repeats = np.repeat(
-                patches[-1][np.newaxis], self.temporal_patch_size - (patches.shape[0] % self.temporal_patch_size), axis=0
-            )
-            patches = np.concatenate([patches, repeats], axis=0)
-
         if data_format == ChannelDimension.LAST:
             patches = patches.transpose([0, 3, 1, 2])
-        
-        grid_t, channel = patches.shape[:2]
-        grid_t = grid_t // self.temporal_patch_size
 
+        channel = patches.shape[1]  # [time, C, H, W]
+        grid_t = patches.shape[0]
         grid_h, grid_w = (
             resized_height // self.patch_size,
             resized_width // self.patch_size,
@@ -374,7 +359,6 @@ class AdaptiveImageProcessor(BaseImageProcessor):
         patches = patches.reshape(
             [
                 grid_t,
-                self.temporal_patch_size,
                 channel,
                 grid_h // self.merge_size,
                 self.merge_size,
@@ -384,15 +368,15 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                 self.patch_size,
             ]
         )
-        # [grid_t, temporal_patch_size, grid_h/merge_size, grid_w/merge_size, merge_size, merge_size, C, psz, psz]
-        patches = patches.transpose([0, 3, 6, 4, 7, 2, 1, 5, 8])
+        # [grid_t, grid_h/merge_size, grid_w/merge_size, merge_size, merge_size, C, psz, psz]
+        patches = patches.transpose([0, 2, 5, 3, 6, 1, 4, 7])
 
         flatten_patches = patches.reshape(
             [
                 grid_t * grid_h * grid_w,
-                channel * self.temporal_patch_size * self.patch_size * self.patch_size,
+                channel * self.patch_size * self.patch_size,
             ]
-        )
+        )  # [grid_t * grid_h * grid_w, C * psz * psz]
 
         return flatten_patches, (grid_t, grid_h, grid_w)
 

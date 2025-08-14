@@ -16,6 +16,9 @@
 """
 
 """ process.py """
+import copy
+import os
+from collections import defaultdict
 from typing import Any, Dict, List, Union
 
 import numpy as np
@@ -23,14 +26,45 @@ from paddleformers.transformers.image_utils import ChannelDimension
 from PIL import Image
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
+from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.utils import data_processor_logger
 
-from paddleformers.transformers import AutoTokenizer
-
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
-from .process_video import read_video_decord
+from .process_video import read_frames_decord, read_video_decord
+from .utils.render_timestamp import render_frame_timestamp
 
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
+
+
+def fancy_print(input_ids, tokenizer, image_patch_id=None):
+    """
+    input_ids: input_ids
+    tokenizer: the tokenizer of models
+    """
+    i = 0
+    res = ""
+    text_ids = []
+    real_image_token_len = 0
+    while i < len(input_ids):
+        if input_ids[i] == image_patch_id:
+            if len(text_ids) > 0:
+                res += tokenizer.decode(text_ids)
+                text_ids = []
+
+            real_image_token_len += 1
+        else:
+            if real_image_token_len != 0:
+                res += f"<|IMAGE@{real_image_token_len}|>"
+                real_image_token_len = 0
+
+            text_ids.append(input_ids[i])
+
+        i += 1
+    if len(text_ids) > 0:
+
+        res += tokenizer.decode(text_ids)
+        text_ids = []
+    return res
 
 
 class DataProcessor:
@@ -39,21 +73,29 @@ class DataProcessor:
     handling text, images, and videos with 3D positional embeddings.
     """
 
+    CLS_TOKEN = "<|begin_of_sentence|>"
+    SEP_TOKEN = "<|end_of_sentence|>"
+    EOS_TOKEN = "</s>"
+    IMG_START = "<|IMAGE_START|>"
+    IMG_END = "<|IMAGE_END|>"
+    VID_START = "<|VIDEO_START|>"
+    VID_END = "<|VIDEO_END|>"
+
     def __init__(
         self,
         tokenizer_name: str,
         image_preprocessor_name: str,
         spatial_conv_size: int = 2,
         temporal_conv_size: int = 2,
-        image_min_pixels: int = 3136,
-        image_max_pixels: int = 12845056,
-        video_min_pixels: int = 3136,
-        video_max_pixels: int = 12845056,
-        # video_target_frames: int = -1,
-        # video_frames_sample: str = "leading",
-        # video_max_frames: int = 180,
-        # video_min_frames: int = 16,
-        # video_fps: int = 2,
+        image_min_pixels: int = 4 * 28 * 28,
+        image_max_pixels: int = 6177 * 28 * 28,
+        video_min_pixels: int = 299 * 28 * 28,
+        video_max_pixels: int = 1196 * 28 * 28,
+        video_target_frames: int = -1,
+        video_frames_sample: str = "leading",
+        video_max_frames: int = 180,
+        video_min_frames: int = 16,
+        video_fps: int = 2,
         **kwargs,
     ) -> None:
         # Tokenizer and image preprocessor
@@ -73,32 +115,54 @@ class DataProcessor:
         self.video_max_pixels = video_max_pixels
 
         # Video sampling parameters
-        # self.target_frames = video_target_frames
-        # self.frames_sample = video_frames_sample
-        # self.max_frames = video_max_frames
-        # self.min_frames = video_min_frames
-        # self.fps = video_fps
+        self.target_frames = video_target_frames
+        self.frames_sample = video_frames_sample
+        self.max_frames = video_max_frames
+        self.min_frames = video_min_frames
+        self.fps = video_fps
 
         # Special tokens and IDs
-        # self.cls_token = "<|im_start|>"
-        # self.eos_token = "<|im_end|>"
-        self.vision_start = "<|vision_start|>"
-        self.vision_end = "<|vision_end|>"
-        self.image_token = "<|image_pad|>"
-        self.video_token = "<|video_pad|>"
+        self.cls_token = self.CLS_TOKEN
+        self.sep_token = self.SEP_TOKEN
+        self.eos_token = self.EOS_TOKEN
+        self.image_start = self.IMG_START
+        self.image_end = self.IMG_END
+        self.video_start = self.VID_START
+        self.video_end = self.VID_END
+        self.image_patch_id = self.tokenizer.convert_tokens_to_ids("<|IMAGE_PLACEHOLDER|>")
+        self.image_start_id = self.tokenizer.convert_tokens_to_ids(self.image_start)
+        self.video_start_id = self.tokenizer.convert_tokens_to_ids(self.video_start)
+        self.sep_token_id = self.tokenizer.convert_tokens_to_ids(self.sep_token)
+        self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.eos_token)
 
-        self.image_token_id = self.tokenizer.convert_tokens_to_ids(self.image_token)
-        self.video_token_id = self.tokenizer.convert_tokens_to_ids(self.video_token)
-
-        self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
-        self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_end)
-
+        self.token_type_mapping = self._build_token_type_mapping()
+        self.is_training = True
         self.role_prefixes = {
             "system": "",
             "user": "User: ",
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
         }
+
+    def _build_token_type_mapping(self) -> Dict[Any, int]:
+        mapping = defaultdict(lambda: IDS_TYPE_FLAG["text"])
+        for token in (
+            self.IMG_START,
+            self.IMG_END,
+            self.VID_START,
+            self.VID_END,
+        ):
+            mapping[token] = IDS_TYPE_FLAG["image"]
+        mapping[self.image_patch_id] = IDS_TYPE_FLAG["image"]
+        return mapping
+
+    def train(self) -> None:
+        """Enable training mode (produces labels)."""
+        self.is_training = True
+
+    def eval(self) -> None:
+        """Enable evaluation mode (doesn't produce labels)."""
+        self.is_training = False
 
     def text2ids(self, text, images=None, videos=None):
         """
@@ -187,46 +251,48 @@ class DataProcessor:
                     "video",
                 ]:
                     image_message_list.append(item)
-        request["messages"] = messages
 
         prompt_token_ids = self.apply_chat_template(request)
         if len(prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
-
-        vision_start_index = 0
-        vision_message_index = 0
+        image_start_index = 0
+        image_message_index = 0
         for i in range(len(prompt_token_ids)):
-            if prompt_token_ids[i] == self.vision_start_id :
-                self._add_text(prompt_token_ids[vision_start_index : i + 1], outputs)
-
-                vision_start_index = i + 1
-                image_message = image_message_list[vision_message_index]
-
+            if prompt_token_ids[i] in [
+                self.image_start_id,
+                self.video_start_id,
+            ]:
+                self._add_text(prompt_token_ids[image_start_index : i + 1], outputs)
+                image_start_index = i + 1
+                image_message = image_message_list[image_message_index]
                 if image_message["type"] == "image":
                     img = image_message.get("image")
                     if img is None:
                         continue
                     outputs["pic_cnt"] += 1
                     self._add_image(img, outputs)
-
                 elif image_message["type"] == "video":
                     video_bytes = image_message.get("video")
                     if video_bytes is None:
                         continue
                     frames = self._load_and_process_video(video_bytes, image_message)
-                    # -----------
-                    # mm_parser = MultiModalPartParser()
-                    # fimg = mm_parser.parse_image("file:///home/liudongdong/github/FastDeploy/data/images/demo.jpeg")
-                    # for i in range(len(frames)):
-                    #     frames[i] = fimg.copy()
-
                     outputs["video_cnt"] += 1
                     self._add_video(frames, outputs)
+                image_message_index += 1
+        self._add_text(prompt_token_ids[image_start_index:], outputs)
 
-                vision_message_index += 1
-
-        self._add_text(prompt_token_ids[vision_start_index:], outputs)
+        if self.is_training:
+            assert tgts, "training must give tgt !"
+            self._extract_labels(outputs, tgts)
         return outputs
+
+    def _add_special_token(self, token: Union[str, int], outputs: Dict) -> None:
+        token_id = token if isinstance(token, int) else self.tokenizer.convert_tokens_to_ids(token)
+        outputs["input_ids"].append(token_id)
+        outputs["token_type_ids"].append(self.token_type_mapping[token])
+        pos = outputs["cur_position"]
+        outputs["position_ids"].append([pos] * 3)
+        outputs["cur_position"] += 1
 
     def _add_text(self, tokens, outputs: Dict) -> None:
         if isinstance(tokens, str):
@@ -248,7 +314,7 @@ class DataProcessor:
         )[1]
         num_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
 
-        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         pos_ids = self._compute_3d_positions(1, patches_h, patches_w, outputs["cur_position"])
@@ -256,21 +322,14 @@ class DataProcessor:
         outputs["cur_position"] = np.max(pos_ids) + 1
 
         # Preprocess pixels
-        # image_mean = [0.48145466, 0.4578275, 0.40821073]
-        # image_std = [0.26862954, 0.26130258, 0.27577711]
-        # do_rescale = True
-        # do_normalize = True
         ret = self.image_preprocessor.preprocess(
             images=[img.convert("RGB")],
-            # do_normalize=do_normalize,
-            # image_mean=image_mean,
-            # image_std=image_std,
-            # do_rescale=do_rescale,
+            do_normalize=False,
+            do_rescale=False,
             predetermined_grid_thw=np.array([[patches_h, patches_w]]),
             do_convert_rgb=True,
             input_data_format=ChannelDimension.LAST,
         )
-
         outputs["images"].append(ret["pixel_values"])
         outputs["grid_thw"].append(ret["image_grid_thw"])
         outputs["image_type_ids"].append(0)
@@ -286,48 +345,112 @@ class DataProcessor:
         num_tokens = (num_frames * patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
 
         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
-
-        # rescale_factor = 1 / 255
-        # image_mean = [0.48145466, 0.4578275, 0.40821073]
-        # image_std = [0.26862954, 0.26130258, 0.27577711]
-        # do_rescale = True
-        # do_normalize = True
         ret = self.image_preprocessor.preprocess(
             images=None,
             videos=pixel_stack,
-            # do_normalize=do_normalize,
-            # image_mean=image_mean,
-            # image_std=image_std,
-            # do_rescale=do_rescale,
+            do_normalize=False,
+            do_rescale=False,
             predetermined_grid_thw=np.array([[patches_h, patches_w]] * num_frames),
             do_convert_rgb=True,
             input_data_format=ChannelDimension.LAST,
         )
-
         outputs["images"].append(ret["pixel_values_videos"])
         outputs["grid_thw"].append(ret["video_grid_thw"])
-        # outputs["pixel_values_videos"].append(ret["pixel_values_videos"])
-        # outputs["video_grid_thw"].append(ret["video_grid_thw"])
         outputs["image_type_ids"].extend([1] * num_frames)
 
-        # num_tokens = ret["video_grid_thw"]
-        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
 
         pos_ids = self._compute_3d_positions(num_frames, patches_h, patches_w, outputs["cur_position"])
         outputs["position_ids"].extend(pos_ids)
         outputs["cur_position"] = np.max(pos_ids) + 1
 
+    def _extract_labels(self, outputs: Dict, tgts: List[str]) -> None:
+        input_ids = copy.deepcopy(outputs["input_ids"])
+        labels = [self.tokenizer.ignored_index] * len(input_ids)
+
+        tgt_count = input_ids.count(self.sep_token_id)
+        assert tgt_count == len(tgts), f"len(tgts) != len(src) {len(tgts)} vs {tgt_count}"
+
+        tgt_index = 0
+        for i, token_id in enumerate(input_ids):
+            if token_id == self.sep_token_id:
+                labels_token = self.tokenizer.tokenize(tgts[tgt_index])
+                labels_token_id = self.tokenizer.convert_tokens_to_ids(labels_token)
+                labels[i - len(labels_token_id) : i] = labels_token_id
+                labels[i] = self.eos_token_id  # </s>
+                tgt_index += 1
+
+        outputs["labels"] = labels
+
     def _load_and_process_video(self, url: str, item: Dict) -> List[Image.Image]:
-        reader, meta = read_video_decord(url, save_to_disk=False)
+        reader, meta, path = read_video_decord(url, save_to_disk=False)
 
-        frames = []
-        for i in range(meta["num_of_frame"]):
-            frame = reader[i].asnumpy()
-            image = Image.fromarray(frame, "RGB")
-            frames.append(image)
+        video_frame_args = dict()
+        video_frame_args["fps"] = item.get("fps", self.fps)
+        video_frame_args["min_frames"] = item.get("min_frames", self.min_frames)
+        video_frame_args["max_frames"] = item.get("max_frames", self.max_frames)
+        video_frame_args["target_frames"] = item.get("target_frames", self.target_frames)
+        video_frame_args["frames_sample"] = item.get("frames_sample", self.frames_sample)
 
+        video_frame_args = self._set_video_frame_args(video_frame_args, meta)
+
+        frames_data, _, timestamps = read_frames_decord(
+            path,
+            reader,
+            meta,
+            target_frames=video_frame_args["target_frames"],
+            target_fps=video_frame_args["fps"],
+            frames_sample=video_frame_args["frames_sample"],
+            save_to_disk=False,
+        )
+
+        frames: List[Image.Image] = []
+        for img_array, ts in zip(frames_data, timestamps):
+            frames.append(render_frame_timestamp(img_array, ts))
+        # Ensure even number of frames for temporal conv
+        if len(frames) % 2 != 0:
+            frames.append(copy.deepcopy(frames[-1]))
         return frames
+
+    def _set_video_frame_args(self, video_frame_args, video_meta):
+        """
+        根据已知参数和优先级，设定最终的抽帧参数
+        """
+        # 优先级：video_target_frames > (video_min_frames, video_max_frames) > video_fps
+        if video_frame_args["target_frames"] > 0:
+            if video_frame_args["fps"] >= 0:
+                raise ValueError("fps must be negative if target_frames is given")
+            if (
+                video_frame_args["min_frames"] > 0
+                and video_frame_args["target_frames"] < video_frame_args["min_frames"]
+            ):
+                raise ValueError("target_frames must be larger than min_frames")
+            if (
+                video_frame_args["max_frames"] > 0
+                and video_frame_args["target_frames"] > video_frame_args["max_frames"]
+            ):
+                raise ValueError("target_frames must be smaller than max_frames")
+        else:
+            if video_frame_args["fps"] < 0:
+                raise ValueError("Must provide either positive target_fps or positive target_frames.")
+            # 先计算在video_fps下抽到的帧数
+            frames_to_extract = int(video_meta["duration"] * video_frame_args["fps"])
+            # 判断是否在目标区间内，如果不是，则取target_frames为上界或下界
+            if (
+                video_frame_args["min_frames"] > 0
+                and video_frame_args["max_frames"] > 0
+                and video_frame_args["min_frames"] > video_frame_args["max_frames"]
+            ):
+                raise ValueError("min_frames must be smaller than max_frames")
+            if video_frame_args["min_frames"] > 0 and frames_to_extract < video_frame_args["min_frames"]:
+                video_frame_args["target_frames"] = video_frame_args["min_frames"]
+                video_frame_args["fps"] = -1
+            if video_frame_args["max_frames"] > 0 and frames_to_extract > video_frame_args["max_frames"]:
+                video_frame_args["target_frames"] = video_frame_args["max_frames"]
+                video_frame_args["fps"] = -1
+
+        return video_frame_args
 
     def _compute_3d_positions(self, t: int, h: int, w: int, start_idx: int) -> List[List[int]]:
         # Downsample time if needed
@@ -347,7 +470,16 @@ class DataProcessor:
         Returns:
             tokenizer (AutoTokenizer)
         """
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, padding_side="left", use_fast=True)
+        vocab_file_names = [
+            "tokenizer.model",
+            "spm.model",
+            "ernie_token_100k.model",
+        ]
+        for i in range(len(vocab_file_names)):
+            if os.path.exists(os.path.join(self.model_name_or_path, vocab_file_names[i])):
+                ErnieBotTokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
+                break
+        self.tokenizer = ErnieBotTokenizer.from_pretrained(self.model_name_or_path)
 
     def apply_chat_template(self, request):
         """
@@ -363,17 +495,18 @@ class DataProcessor:
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
 
-        prompt_token_str = self.tokenizer.apply_chat_template(
-            request["messages"],
-            tokenize=False,
-            add_generation_prompt=request.get("add_generation_prompt", True),
+        prompt_token_str = (
+            self.tokenizer.apply_chat_template(
+                request,
+                tokenize=False,
+                add_generation_prompt=request.get("add_generation_prompt", True),
+            )
+            .replace("<|image@placeholder|>", "")
+            .replace("<|video@placeholder|>", "")
         )
-        prompt_token_str = prompt_token_str.replace(self.image_token, "").replace(self.video_token, "")
-
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         data_processor_logger.info(
             f"req_id:{request.get('request_id', ''), } tokens: {tokens}, token_ids: {token_ids}"
         )
         return token_ids
-

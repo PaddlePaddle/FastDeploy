@@ -14,9 +14,7 @@
 # limitations under the License.
 """
 
-from .process import IDS_TYPE_FLAG, DataProcessor
+from .get_image_preprocessor import get_image_preprocessor
+from .image_preprocessor_adaptive import AdaptiveImageProcessor
 
-__all__ = [
-    "DataProcessor",
-    "IDS_TYPE_FLAG",
-]
+__all__ = ["get_image_preprocessor", "AdaptiveImageProcessor"]

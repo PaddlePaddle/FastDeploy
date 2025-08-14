@@ -14,9 +14,10 @@
 # limitations under the License.
 """
 
-from .process import IDS_TYPE_FLAG, DataProcessor
+from .process import IDS_TYPE_FLAG, DataProcessor, fancy_print
 
 __all__ = [
     "DataProcessor",
+    "fancy_print",
     "IDS_TYPE_FLAG",
 ]
