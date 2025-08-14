@@ -102,6 +102,13 @@ class OpenAIServingCompletion:
         prompt_batched_token_ids = []
         text_after_process_list = []
         try:
+            if self.max_waiting_time < 0:
+                await self.engine_client.semaphore.acquire()
+            else:
+                await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+        except Exception:
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+        try:
             for idx, prompt in enumerate(request_prompts):
                 request_id_idx = f"{request_id}-{idx}"
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
@@ -116,14 +123,6 @@ class OpenAIServingCompletion:
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
-
-            try:
-                if self.max_waiting_time < 0:
-                    await self.engine_client.semaphore.acquire()
-                else:
-                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            except Exception:
-                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -221,8 +220,7 @@ class OpenAIServingCompletion:
                         valid_results[rid] = data
                         num_choices -= 1
                         break
-
-            return self.request_output_to_completion_response(
+            res = self.request_output_to_completion_response(
                 final_res_batch=valid_results,
                 request=request,
                 request_id=request_id,
@@ -232,6 +230,8 @@ class OpenAIServingCompletion:
                 completion_batched_token_ids=completion_batched_token_ids,
                 text_after_process_list=text_after_process_list,
             )
+            api_server_logger.info(f"Completion response: {res.model_dump_json()}")
+            return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
             raise
@@ -322,6 +322,9 @@ class OpenAIServingCompletion:
                                 ],
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                            api_server_logger.info(
+                                f"Completion Streaming response send_idx 0: {chunk.model_dump_json()}"
+                            )
                         first_iteration[idx] = False
 
                     self.engine_client.data_processor.process_response_dict(
@@ -358,6 +361,15 @@ class OpenAIServingCompletion:
                         choices[-1].finish_reason = self.calc_finish_reason(
                             request.max_tokens, output_tokens[idx], output
                         )
+                    send_idx = output.get("send_idx")
+                    # 只有当 send_idx 明确为 0 时才记录日志
+                    if send_idx == 0 and not request.return_token_ids:
+                        chunk_temp = chunk
+                        chunk_temp.choices = choices
+                        api_server_logger.info(
+                            f"Completion Streaming response send_idx 0: {chunk_temp.model_dump_json()}"
+                        )
+                        del chunk_temp
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
@@ -383,6 +395,7 @@ class OpenAIServingCompletion:
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
                 if choices:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
