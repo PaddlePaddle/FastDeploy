@@ -19,7 +19,7 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.models.utils import set_weight_attrs
+from fastdeploy.model_executor.layers.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase

@@ -15,6 +15,7 @@
 """
 
 import argparse
+import asyncio
 import codecs
 import importlib
 import logging
@@ -22,6 +23,7 @@ import os
 import random
 import re
 import socket
+import sys
 import tarfile
 import time
 from datetime import datetime
@@ -304,6 +306,16 @@ def set_random_seed(seed: int) -> None:
         paddle.seed(seed)
 
 
+def get_limited_max_value(max_value):
+    def validator(value):
+        value = float(value)
+        if value > max_value:
+            raise argparse.ArgumentTypeError(f"The value cannot exceed {max_value}")
+        return value
+
+    return validator
+
+
 def download_model(url, output_dir, temp_tar):
     """
     下载模型，并将其解压到指定目录。
@@ -531,16 +543,16 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             local_path = f"{local_path}/{repo_id}"
             aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
-        except Exception:
+        except requests.exceptions.ConnectTimeout:
             if os.path.exists(local_path):
                 llm_logger.error(
                     f"Failed to connect to aistudio, but detected that the model directory {local_path} exists. Attempting to start."
                 )
                 return local_path
-            else:
-                raise Exception(
-                    f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
-                )
+        except Exception:
+            raise Exception(
+                f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
+            )
     elif model_source == "MODELSCOPE":
         try:
             from modelscope.hub.snapshot_download import (
@@ -554,6 +566,12 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             local_path = f"{local_path}/{repo_id}"
             modelscope_download(repo_id=repo_id, revision=revision, local_dir=local_path)
             model_name_or_path = local_path
+        except requests.exceptions.ConnectTimeout:
+            if os.path.exists(local_path):
+                llm_logger.error(
+                    f"Failed to connect to modelscope, but detected that the model directory {local_path} exists. Attempting to start."
+                )
+                return local_path
         except Exception:
             raise Exception(
                 f"The {revision} of {model_name_or_path} is not exist. Please check the model name or revision."
@@ -613,6 +631,22 @@ def is_list_of(
     assert_never(check)
 
 
+def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
+    """
+    Import a Python file according to its file path.
+    """
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None:
+        raise ModuleNotFoundError(f"No module named '{module_name}'")
+
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
@@ -645,6 +679,61 @@ def deprecated_kwargs_warning(**kwargs):
     for arg in DEPRECATED_ARGS:
         if arg in kwargs:
             console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
+
+
+class StatefulSemaphore:
+    __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
+
+    """
+    StatefulSemaphore is a class that wraps an asyncio.Semaphore and provides additional stateful information.
+    """
+
+    def __init__(self, value: int):
+        """
+        StatefulSemaphore constructor
+        """
+        if value < 0:
+            raise ValueError("Value must be non-negative.")
+        self._semaphore = asyncio.Semaphore(value)
+        self._max_value = value
+        self._acquired_count = 0
+        self._last_reset = time.monotonic()
+
+    async def acquire(self):
+        await self._semaphore.acquire()
+        self._acquired_count += 1
+
+    def release(self):
+        self._semaphore.release()
+
+        self._acquired_count = max(0, self._acquired_count - 1)
+
+    def locked(self) -> bool:
+        return self._semaphore.locked()
+
+    @property
+    def available(self) -> int:
+        return self._max_value - self._acquired_count
+
+    @property
+    def acquired(self) -> int:
+        return self._acquired_count
+
+    @property
+    def max_value(self) -> int:
+        return self._max_value
+
+    @property
+    def uptime(self) -> float:
+        return time.monotonic() - self._last_reset
+
+    def status(self) -> dict:
+        return {
+            "available": self.available,
+            "acquired": self.acquired,
+            "max_value": self.max_value,
+            "uptime": round(self.uptime, 2),
+        }
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")

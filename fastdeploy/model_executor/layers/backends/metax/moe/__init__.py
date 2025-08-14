@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
-from paddle.distributed import fleet
+from .triton_moe_kernels import fused_moe_kernel_paddle
 
-
-def get_tensor_model_parallel_world_size():
-    """Return world size for the tensor model parallel group."""
-    hcg = fleet.get_hybrid_communicate_group()
-    mp_size = hcg.get_model_parallel_world_size()
-    return mp_size
-
-
-def get_tensor_model_parallel_rank():
-    """Return my rank for the tensor model parallel group."""
-    hcg = fleet.get_hybrid_communicate_group()
-    mp_rank = hcg.get_model_parallel_rank()
-    return mp_rank
+__all__ = [
+    "fused_moe_kernel_paddle",
+]
