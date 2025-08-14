@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-# cipher_token=WjI1fQOvhN  # do not edit this line
 from typing import Optional
 
 import paddle
@@ -68,6 +67,7 @@ class SiluAndMul(nn.Layer):
             or current_platform.is_xpu()
             or current_platform.is_iluvatar()
             or current_platform.is_dcu()
+            or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
         elif current_platform.is_gcu():

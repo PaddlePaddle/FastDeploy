@@ -45,6 +45,14 @@ elif current_platform.is_dcu():
         step_paddle,
         update_inputs,
     )
+elif current_platform.is_maca():
+    from fastdeploy.model_executor.ops.gpu import (
+        get_padding_offset,
+        save_output,
+        set_stop_value_multi_ends,
+        step_paddle,
+        update_inputs,
+    )
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
@@ -181,7 +189,8 @@ def post_process_normal(
         )
 
         stop_wo_think = (
-            (sampler_output.sampled_token_ids == model_output.eos_token_id) | (model_output.reasoning_index == 0)
+            (sampler_output.sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
+            | (model_output.reasoning_index == 0)
         ) & (model_output.need_think_end > 0)
         sampler_output.sampled_token_ids = paddle.where(
             stop_wo_think,
@@ -211,7 +220,20 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_iluvatar():
+        set_stop_value_multi_ends(
+            sampler_output.sampled_token_ids,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.eos_token_id,
+            model_output.next_tokens,
+            model_output.pre_ids,
+            model_output.step_idx,
+            model_output.stop_token_ids,
+            model_output.stop_seqs_len,
+            False,
+        )  # multi ends
+    elif current_platform.is_maca():
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
@@ -564,6 +586,18 @@ def rebuild_padding(
         from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
 
         hidden_states = rebuild_padding_cpu(
+            tmp_out,
+            cum_offsets,
+            seq_len_this_time,
+            seq_lens_decoder,
+            seq_lens_encoder,
+            output_padding_offset,
+            max_input_length,
+        )
+    elif current_platform.is_maca():
+        from fastdeploy.model_executor.ops.gpu import rebuild_padding
+
+        hidden_states = rebuild_padding(
             tmp_out,
             cum_offsets,
             seq_len_this_time,

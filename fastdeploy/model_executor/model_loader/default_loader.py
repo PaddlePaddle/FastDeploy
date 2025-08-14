@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import contextlib
+
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -62,15 +64,16 @@ class DefaultModelLoader(BaseModelLoader):
         self.clean_memory_fragments(state_dict)
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
-        context = paddle.LazyGuard()
         architectures = fd_config.model_config.architectures[0]
         logger.info(f"Starting to load model {architectures}")
-
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
             import fastdeploy.rl  # noqa
 
             architectures = architectures + "RL"
+            context = paddle.LazyGuard()
+        else:
+            context = contextlib.nullcontext()
 
         with context:
             model_cls = ModelRegistry.get_class(architectures)

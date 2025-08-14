@@ -15,6 +15,7 @@
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
@@ -30,6 +31,7 @@ from fastdeploy.config import (
     TaskOption,
 )
 from fastdeploy.engine.config import Config
+from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
 
@@ -91,6 +93,14 @@ class EngineArgs:
     reasoning_parser: str = None
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
+    """
+    tool_call_parser: str = None
+    """
+    specifies the tool call parser  to use for extracting tool call from the model output
+    """
+    tool_parser_plugin: str = None
+    """
+    tool parser plugin used to register user defined tool parsers
     """
     enable_mm: bool = False
     """
@@ -316,6 +326,11 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    seed: int = 0
+    """
+    Random seed to use for initialization. If not set, defaults to 0.
+    """
+
     enable_early_stop: bool = False
     """
     Flag to enable early stop. Default is False (disabled).
@@ -339,6 +354,13 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.enable_logprob:
+            if self.speculative_config is not None:
+                raise NotImplementedError("Logprob does not support speculation_config.")
+            if self.enable_expert_parallel:
+                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
+            if not current_platform.is_cuda():
+                raise NotImplementedError("Only CUDA platform supports logprob.")
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -421,6 +443,18 @@ class EngineArgs:
             "reasoning content from the model output",
         )
         model_group.add_argument(
+            "--tool-call-parser",
+            type=str,
+            default=EngineArgs.tool_call_parser,
+            help="Flag specifies the tool call parser to use for extracting" "tool call from the model output",
+        )
+        model_group.add_argument(
+            "--tool-parser-plugin",
+            type=str,
+            default=EngineArgs.tool_parser_plugin,
+            help="tool parser plugin used to register user defined tool parsers",
+        )
+        model_group.add_argument(
             "--speculative-config",
             type=json.loads,
             default=EngineArgs.speculative_config,
@@ -483,6 +517,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--seed",
+            type=int,
+            default=EngineArgs.seed,
+            help="Random seed for initialization. If not specified, defaults to 0.",
         )
         model_group.add_argument(
             "--enable-early-stop",
@@ -865,7 +905,10 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
@@ -904,6 +947,7 @@ class EngineArgs:
             mm_processor_kwargs=self.mm_processor_kwargs,
             # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
+            tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
