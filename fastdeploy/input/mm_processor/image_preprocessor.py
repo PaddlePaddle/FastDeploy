@@ -25,7 +25,6 @@ import PIL
 from paddleformers.transformers.feature_extraction_utils import BatchFeature
 from paddleformers.transformers.image_processing_utils import BaseImageProcessor
 from paddleformers.transformers.image_transforms import (
-    convert_to_rgb,
     normalize,
     rescale,
     resize,
@@ -148,47 +147,6 @@ def is_scaled_image(image: np.ndarray) -> bool:
     return np.min(image) >= 0 and np.max(image) <= 1
 
 
-def make_batched_images(images) -> List[List[ImageInput]]:
-    """
-    Accepts images in list or nested list format, and makes a list of images for preprocessing.
-
-    Args:
-        images (`Union[List[List[ImageInput]], List[ImageInput], ImageInput]`):
-            The input image.
-
-    Returns:
-        list: A list of images.
-    """
-    if isinstance(images, (list, tuple)) and isinstance(images[0], (list, tuple)) and is_valid_image(images[0][0]):
-        return [img for img_list in images for img in img_list]
-
-    elif isinstance(images, (list, tuple)) and is_valid_image(images[0]):
-        return images
-
-    elif is_valid_image(images):
-        return [images]
-
-    raise ValueError(f"Could not make batched images from {images}")
-
-
-# Copied from transformers.models.llava_next_video.image_processing_llava_next_video.make_batched_videos
-def make_batched_videos(videos) -> List[VideoInput]:
-    """dummy"""
-    if isinstance(videos, (list, tuple)) and isinstance(videos[0], (list, tuple)) and is_valid_image(videos[0][0]):
-        return videos
-
-    elif isinstance(videos, (list, tuple)) and is_valid_image(videos[0]):
-        if isinstance(videos[0], Image.Image):
-            return [videos]
-        elif len(videos[0].shape) == 4:
-            return [list(video) for video in videos]
-
-    elif is_valid_image(videos) and len(videos.shape) == 4:
-        return [list(videos)]
-
-    raise ValueError(f"Could not make batched video from {videos}")
-
-
 class ImageProcessor(BaseImageProcessor):
     r"""
     Constructs a adaptive image processor that dynamically resizes images based on the original images.
@@ -207,8 +165,6 @@ class ImageProcessor(BaseImageProcessor):
         image_std (`float` or `List[float]`, *optional*, defaults to `[0.26862954, 0.26130258, 0.27577711]`):
             Standard deviation to use if normalizing the image. This is a float or list of floats for each channel
             in the image.
-        do_convert_rgb (`bool`, *optional*, defaults to `True`):
-            Whether to convert the image to RGB.
         min_pixels (`int`, *optional*, defaults to `56 * 56`):
             The min pixels of the image to resize the image.
         max_pixels (`int`, *optional*, defaults to `28 * 28 * 1280`):
@@ -236,7 +192,6 @@ class ImageProcessor(BaseImageProcessor):
         do_normalize: bool = True,
         image_mean: Optional[Union[float, List[float]]] = None,
         image_std: Optional[Union[float, List[float]]] = None,
-        do_convert_rgb: bool = True,
         min_pixels: int = 56 * 56,
         max_pixels: int = 28 * 28 * 1280,
         patch_size: int = 14,
@@ -258,7 +213,6 @@ class ImageProcessor(BaseImageProcessor):
         self.temporal_patch_size = temporal_patch_size
         self.merge_size = merge_size
         self.size = {"min_pixels": min_pixels, "max_pixels": max_pixels}
-        self.do_convert_rgb = do_convert_rgb
 
     def set_pixels(self, min_pixels=None, max_pixels=None, msg=""):
         """设定pixels"""
@@ -298,7 +252,6 @@ class ImageProcessor(BaseImageProcessor):
         do_normalize: bool = True,
         image_mean: Optional[Union[float, List[float]]] = None,
         image_std: Optional[Union[float, List[float]]] = None,
-        do_convert_rgb: bool = False,
         data_format: Optional[ChannelDimension] = ChannelDimension.FIRST,
         input_data_format: Optional[Union[str, ChannelDimension]] = None,
     ):
@@ -325,8 +278,6 @@ class ImageProcessor(BaseImageProcessor):
             image_std (`float` or `List[float]`, *optional*, defaults to `self.image_std`):
                 Standard deviation to use if normalizing the image.
                 Can be a float or a list of floats corresponding to the number of channels in the image.
-            do_convert_rgb (`bool`, *optional*, defaults to `self.do_convert_rgb`):
-                Whether to convert the image to RGB.
             data_format (`ChannelDimension`, *optional*, defaults to `ChannelDimension.FIRST`):
                 The channel dimension format for the output image. Can be one of:
                 - `"channels_first"` or `ChannelDimension.FIRST`: image in (num_channels, height, width) format.
@@ -340,9 +291,6 @@ class ImageProcessor(BaseImageProcessor):
                 - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
         """
         images = make_list_of_images(images)
-
-        if do_convert_rgb:
-            images = [convert_to_rgb(image) for image in images]
 
         # All transformations expect numpy arrays.
         images = [to_numpy_array(image) for image in images]
@@ -439,12 +387,12 @@ class ImageProcessor(BaseImageProcessor):
             ]
         )
 
-        return flatten_patches, (grid_t, grid_h, grid_w)
+        return flatten_patches, np.array([grid_t, grid_h, grid_w])
 
     def preprocess(
         self,
-        images: ImageInput = None,
-        videos: VideoInput = None,
+        image: ImageInput = None,
+        video: VideoInput = None,
         size: Optional[Union[int, List[int]]] = None,
         resample: PILImageResampling = None,
         do_rescale: bool = True,
@@ -452,7 +400,6 @@ class ImageProcessor(BaseImageProcessor):
         do_normalize: bool = True,
         image_mean: Optional[Union[float, List[float]]] = None,
         image_std: Optional[Union[float, List[float]]] = None,
-        do_convert_rgb: bool = False,
         return_tensors: Optional[Union[str, TensorType]] = None,
         data_format: Optional[ChannelDimension] = ChannelDimension.FIRST,
         input_data_format: Optional[Union[str, ChannelDimension]] = None,
@@ -482,8 +429,6 @@ class ImageProcessor(BaseImageProcessor):
             image_std (`float` or `List[float]`, *optional*, defaults to `self.image_std`):
                 Image standard deviation to use for normalization. Only has an effect if `do_normalize` is set to
                 `True`.
-            do_convert_rgb (`bool`, *optional*, defaults to `self.do_convert_rgb`):
-                Whether to convert the image to RGB.
             return_tensors (`str` or `TensorType`, *optional*):
                 The type of tensors to return. Can be one of:
                 - Unset: Return a list of `np.ndarray`.
@@ -509,65 +454,41 @@ class ImageProcessor(BaseImageProcessor):
         do_normalize = do_normalize if do_normalize is not None else self.do_normalize
         image_mean = image_mean if image_mean is not None else self.image_mean
         image_std = image_std if image_std is not None else self.image_std
-        do_convert_rgb = do_convert_rgb if do_convert_rgb is not None else self.do_convert_rgb
 
-        if images is not None:
-            images = make_batched_images(images)
-        if videos is not None:
-            videos = make_batched_videos(videos)
-
-        if images is not None and not valid_images(images):
+        if image is not None and not valid_images(image):
             raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
+        if video is not None and not valid_images(video):
+            raise ValueError("Invalid frame type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
-        if images is not None:
-            pixel_values, vision_grid_thws = [], []
-            for image in images:
-                patches, image_grid_thw = self._preprocess(
-                    image,
-                    resample=resample,
-                    do_rescale=do_rescale,
-                    rescale_factor=rescale_factor,
-                    do_normalize=do_normalize,
-                    image_mean=image_mean,
-                    image_std=image_std,
-                    data_format=data_format,
-                    do_convert_rgb=do_convert_rgb,
-                    input_data_format=input_data_format,
-                )
-                pixel_values.extend(patches)
-                vision_grid_thws.append(image_grid_thw)
+        data = dict()
+        if image is not None:
+            pixel_values, image_grid_thw = self._preprocess(
+                image,
+                resample=resample,
+                do_rescale=do_rescale,
+                rescale_factor=rescale_factor,
+                do_normalize=do_normalize,
+                image_mean=image_mean,
+                image_std=image_std,
+                data_format=data_format,
+                input_data_format=input_data_format,
+            )
+            data["pixel_values"] = pixel_values
+            data["image_grid_thw"] = image_grid_thw
 
-            pixel_values = np.array(pixel_values)
-            vision_grid_thws = np.array(vision_grid_thws)
-            data = {
-                "pixel_values": pixel_values,
-                "image_grid_thw": vision_grid_thws,
-            }
-
-        if videos is not None:
-            pixel_values, vision_grid_thws = [], []
-            for images in videos:
-                patches, video_grid_thw = self._preprocess(
-                    images,
-                    resample=resample,
-                    do_rescale=do_rescale,
-                    rescale_factor=rescale_factor,
-                    do_normalize=do_normalize,
-                    image_mean=image_mean,
-                    image_std=image_std,
-                    data_format=data_format,
-                    do_convert_rgb=do_convert_rgb,
-                    input_data_format=input_data_format,
-                )
-                pixel_values.extend(patches)
-                vision_grid_thws.append(video_grid_thw)
-
-            pixel_values = np.array(pixel_values)
-            vision_grid_thws = np.array(vision_grid_thws)
-
-            data = {
-                "pixel_values_videos": pixel_values,
-                "video_grid_thw": vision_grid_thws,
-            }
+        if video is not None:
+            pixel_values_videos, video_grid_thw = self._preprocess(
+                video,
+                resample=resample,
+                do_rescale=do_rescale,
+                rescale_factor=rescale_factor,
+                do_normalize=do_normalize,
+                image_mean=image_mean,
+                image_std=image_std,
+                data_format=data_format,
+                input_data_format=input_data_format,
+            )
+            data["pixel_values_videos"] = pixel_values_videos
+            data["video_grid_thw"] = video_grid_thw
 
         return BatchFeature(data=data, tensor_type=return_tensors)

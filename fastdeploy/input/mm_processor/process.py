@@ -213,7 +213,7 @@ class DataProcessor:
                     video_bytes = image_message.get("video")
                     if video_bytes is None:
                         continue
-                    frames = self._load_and_process_video(video_bytes, image_message)
+                    frames = self._load_and_process_video(video_bytes)
                     # -----------
                     # mm_parser = MultiModalPartParser()
                     # fimg = mm_parser.parse_image("file:///home/liudongdong/github/FastDeploy/data/images/demo.jpeg")
@@ -231,6 +231,7 @@ class DataProcessor:
     def _add_text(self, tokens, outputs: Dict) -> None:
         if isinstance(tokens, str):
             tokens = self.tokenizer.encode(tokens, add_special_tokens=False)["input_ids"]
+
         outputs["input_ids"].extend(tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * len(tokens))
 
@@ -240,85 +241,45 @@ class DataProcessor:
         outputs["cur_position"] += len(tokens)
 
     def _add_image(self, img, outputs: Dict) -> None:
-        patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
-            img.height,
-            img.width,
-            min_pixels=self.image_min_pixels,
-            max_pixels=self.image_max_pixels,
-        )[1]
-        num_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
+        ret = self.image_preprocessor.preprocess(
+            image=[img.convert("RGB")],
+            input_data_format=ChannelDimension.LAST,
+        )
+        num_tokens = ret["image_grid_thw"].prod() // self.image_preprocessor.merge_size**2
 
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
-
-        pos_ids = self._compute_3d_positions(1, patches_h, patches_w, outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
-
-        # Preprocess pixels
-        # image_mean = [0.48145466, 0.4578275, 0.40821073]
-        # image_std = [0.26862954, 0.26130258, 0.27577711]
-        # do_rescale = True
-        # do_normalize = True
-        ret = self.image_preprocessor.preprocess(
-            images=[img.convert("RGB")],
-            # do_normalize=do_normalize,
-            # image_mean=image_mean,
-            # image_std=image_std,
-            # do_rescale=do_rescale,
-            # predetermined_grid_thw=np.array([[patches_h, patches_w]]),
-            do_convert_rgb=True,
-            input_data_format=ChannelDimension.LAST,
-        )
 
         outputs["images"].append(ret["pixel_values"])
         outputs["grid_thw"].append(ret["image_grid_thw"])
         outputs["image_type_ids"].append(0)
 
+        pos_ids = self._compute_3d_positions(1, ret["image_grid_thw"][1], ret["image_grid_thw"][2], outputs["cur_position"])
+        outputs["position_ids"].extend(pos_ids)
+        outputs["cur_position"] = np.max(pos_ids) + 1
+
     def _add_video(self, frames, outputs: Dict) -> None:
-        patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
-            frames[0].height,
-            frames[0].width,
-            min_pixels=self.video_min_pixels,
-            max_pixels=self.video_max_pixels,
-        )[1]
-        num_frames = len(frames)
-        num_tokens = (num_frames * patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
-
         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
-
-        # rescale_factor = 1 / 255
-        # image_mean = [0.48145466, 0.4578275, 0.40821073]
-        # image_std = [0.26862954, 0.26130258, 0.27577711]
-        # do_rescale = True
-        # do_normalize = True
         ret = self.image_preprocessor.preprocess(
-            images=None,
-            videos=pixel_stack,
-            # do_normalize=do_normalize,
-            # image_mean=image_mean,
-            # image_std=image_std,
-            # do_rescale=do_rescale,
-            # predetermined_grid_thw=np.array([[patches_h, patches_w]] * num_frames),
-            do_convert_rgb=True,
+            video=pixel_stack,
             input_data_format=ChannelDimension.LAST,
         )
+        num_tokens = ret["video_grid_thw"].prod() // self.image_preprocessor.merge_size**2
+
+        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
+        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
 
         outputs["images"].append(ret["pixel_values_videos"])
         outputs["grid_thw"].append(ret["video_grid_thw"])
         # outputs["pixel_values_videos"].append(ret["pixel_values_videos"])
         # outputs["video_grid_thw"].append(ret["video_grid_thw"])
-        outputs["image_type_ids"].extend([1] * num_frames)
+        outputs["image_type_ids"].extend([1] * ret["video_grid_thw"][0])
 
-        # num_tokens = ret["video_grid_thw"]
-        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
-
-        pos_ids = self._compute_3d_positions(num_frames, patches_h, patches_w, outputs["cur_position"])
+        pos_ids = self._compute_3d_positions(ret["video_grid_thw"][0], ret["video_grid_thw"][1], ret["video_grid_thw"][2], outputs["cur_position"])
         outputs["position_ids"].extend(pos_ids)
         outputs["cur_position"] = np.max(pos_ids) + 1
 
-    def _load_and_process_video(self, url: str, item: Dict) -> List[Image.Image]:
+    def _load_and_process_video(self, url: str) -> List[Image.Image]:
         reader, meta = read_video_decord(url)
 
         frames = []

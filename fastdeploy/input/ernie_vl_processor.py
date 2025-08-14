@@ -250,20 +250,20 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
     def pack_outputs(self, outs):
         # Stack or nullify image-related fields
-        # if not outs["images"]:
-        #     outs["images"] = None
-        #     outs["grid_thw"] = None
-        #     outs["image_type_ids"] = None
-        # else:
-        #     outs["images"] = np.vstack(outs["images"])
-        #     outs["grid_thw"] = np.vstack(outs["grid_thw"])
-        #     outs["image_type_ids"] = np.array(outs["image_type_ids"])
+        if not outs["images"]:
+            outs["images"] = None
+            outs["grid_thw"] = None
+            outs["image_type_ids"] = None
+        else:
+            outs["images"] = np.vstack(outs["images"])
+            outs["grid_thw"] = np.vstack(outs["grid_thw"])
+            outs["image_type_ids"] = np.array(outs["image_type_ids"])
         
-        outs["images"] = np.array(outs["images"])
-        outs["grid_thw"] = np.array(outs["grid_thw"])
-        # outs["pixel_values_videos"] = np.array(outs["pixel_values_videos"])
-        # outs["video_grid_thw"] = np.array(outs["video_grid_thw"])
-        outs["image_type_ids"] = np.array(outs["image_type_ids"])
+        # outs["images"] = np.array(outs["images"])
+        # outs["grid_thw"] = np.array(outs["grid_thw"])
+        # # outs["pixel_values_videos"] = np.array(outs["pixel_values_videos"])
+        # # outs["video_grid_thw"] = np.array(outs["video_grid_thw"])
+        # outs["image_type_ids"] = np.array(outs["image_type_ids"])
 
         outs["image_patch_id"] = self.image_patch_id
         # Convert lists to arrays
