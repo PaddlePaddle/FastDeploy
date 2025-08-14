@@ -581,9 +581,11 @@ class GPUModelRunner(ModelRunnerBase):
             dtype="int64",
         )
         self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["batch_id_per_token"] = paddle.full(
+            [max_num_seqs * self.parallel_config.max_model_len, 1], 0, dtype="int32"
+        )
+        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
         # AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -674,11 +676,9 @@ class GPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
-            self.share_inputs["batch_id_per_token"] = paddle.full(
-                [max_num_seqs * self.parallel_config.max_model_len, 1], 0, dtype="int32"
-            )
-            self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
-            self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+            self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+            self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
+            self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
