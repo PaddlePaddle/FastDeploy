@@ -27,7 +27,7 @@ from fastdeploy.utils import data_processor_logger
 
 from paddleformers.transformers import AutoTokenizer
 
-from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
+from .image_preprocessor import ImageProcessor
 from .process_video import read_video_decord
 
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
@@ -60,7 +60,7 @@ class DataProcessor:
         self.model_name_or_path = tokenizer_name
         self._load_tokenizer()
         self.tokenizer.ignored_index = -100
-        self.image_preprocessor = AdaptiveImageProcessor.from_pretrained(image_preprocessor_name)
+        self.image_preprocessor = ImageProcessor.from_pretrained(image_preprocessor_name)
 
         # Convolution sizes for patch aggregation
         self.spatial_conv_size = spatial_conv_size
@@ -266,7 +266,7 @@ class DataProcessor:
             # image_mean=image_mean,
             # image_std=image_std,
             # do_rescale=do_rescale,
-            predetermined_grid_thw=np.array([[patches_h, patches_w]]),
+            # predetermined_grid_thw=np.array([[patches_h, patches_w]]),
             do_convert_rgb=True,
             input_data_format=ChannelDimension.LAST,
         )
@@ -299,7 +299,7 @@ class DataProcessor:
             # image_mean=image_mean,
             # image_std=image_std,
             # do_rescale=do_rescale,
-            predetermined_grid_thw=np.array([[patches_h, patches_w]] * num_frames),
+            # predetermined_grid_thw=np.array([[patches_h, patches_w]] * num_frames),
             do_convert_rgb=True,
             input_data_format=ChannelDimension.LAST,
         )
@@ -319,7 +319,7 @@ class DataProcessor:
         outputs["cur_position"] = np.max(pos_ids) + 1
 
     def _load_and_process_video(self, url: str, item: Dict) -> List[Image.Image]:
-        reader, meta = read_video_decord(url, save_to_disk=False)
+        reader, meta = read_video_decord(url)
 
         frames = []
         for i in range(meta["num_of_frame"]):
