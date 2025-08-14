@@ -70,96 +70,109 @@ jobs:
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
         run: |
-            runner_name="${{ runner.name }}"
-            last_char="${runner_name: -1}"
+          runner_name="${{ runner.name }}"
+          CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
+          DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-            if [[ "$last_char" =~ [0-7] ]]; then
-              DEVICES="$last_char"
-            else
-              DEVICES="0"
-            fi
+          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+          echo "Test ENV Parameter:"
+          echo "========================================================="
+          echo "FLASK_PORT=${FLASK_PORT}"
+          echo "FD_API_PORT=${FD_API_PORT}"
+          echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+          echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "DEVICES=${DEVICES}"
+          echo "========================================================="
 
-            FLASK_PORT=$((42068 + DEVICES * 100))
-            FD_API_PORT=$((42088 + DEVICES * 100))
-            FD_ENGINE_QUEUE_PORT=$((42058 + DEVICES * 100))
-            FD_METRICS_PORT=$((42078 + DEVICES * 100))
-            echo "Test ENV Parameter:"
-            echo "========================================================="
-            echo "FLASK_PORT=${FLASK_PORT}"
-            echo "FD_API_PORT=${FD_API_PORT}"
-            echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
-            echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
-            echo "DEVICES=${DEVICES}"
-            echo "========================================================="
+          CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+          echo "CACHE_DIR is set to ${CACHE_DIR}"
+          if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+            touch "${CACHE_DIR}/gitconfig"
+          fi
+          if [ ! -d "${MODEL_CACHE_DIR}" ]; then
+            echo "Error: MODEL_CACHE_DIR '${MODEL_CACHE_DIR}' does not exist."
+            exit 1
+          fi
 
-            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
-            echo "CACHE_DIR is set to ${CACHE_DIR}"
-            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
-              touch "${CACHE_DIR}/gitconfig"
-            fi
-            if [ ! -d "${MODEL_CACHE_DIR}" ]; then
-              echo "Error: MODEL_CACHE_DIR '${MODEL_CACHE_DIR}' does not exist."
-              exit 1
-            fi
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
 
-            PARENT_DIR=$(dirname "$WORKSPACE")
+          echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
 
-            docker run --rm --ipc=host --pid=host --net=host \
-            -v $(pwd):/workspace \
-            -w /workspace \
-            -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
-            -e "FD_API_PORT=${FD_API_PORT}" \
-            -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
-            -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
-            -e "FLASK_PORT=${FLASK_PORT}" \
-            -v "${MODEL_CACHE_DIR}:/MODELDATA" \
-            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
-            -v "${CACHE_DIR}/.cache:/root/.cache" \
-            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
-            -e TZ="Asia/Shanghai" \
-            --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          for port in "${PORTS[@]}"; do
+              PIDS=$(lsof -t -i :$port || true)
+              if [ -n "$PIDS" ]; then
+                  echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
+                  echo "$PIDS" | xargs -r kill -9
+                  echo "Port $port cleared" | tee -a $LOG_FILE
+              else
+                  echo "Port $port is free" | tee -a $LOG_FILE
+              fi
+          done
 
-            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+          echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
 
-            python -m pip install ${fastdeploy_wheel_url}
-            python -m pip install pytest
+          docker run --rm --ipc=host --pid=host --net=host \
+          -v $(pwd):/workspace \
+          -w /workspace \
+          -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "FLASK_PORT=${FLASK_PORT}" \
+          -v "${MODEL_CACHE_DIR}:/MODELDATA" \
+          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+          -v "${CACHE_DIR}/.cache:/root/.cache" \
+          -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+          -e TZ="Asia/Shanghai" \
+          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
-            wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
-            chmod +x ./llm-deploy-linux-amd64
-            ./llm-deploy-linux-amd64 -python python3.10 \
-            -model_name ERNIE-4.5-0.3B-Paddle \
-            -model_path /MODELDATA \
-            --skip install
+          pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
-            git config --global --add safe.directory /workspace/FastDeploy
-            cd FastDeploy
-            pushd test/ce/deploy
-            python3.10 deploy.py > dd.log 2>&1 &
-            sleep 3
-            curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
-              -H "Content-Type: application/json" \
-              -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
+          python -m pip install ${fastdeploy_wheel_url}
+          python -m pip install pytest
 
-            curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
-            popd
+          wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
+          chmod +x ./llm-deploy-linux-amd64
+          ./llm-deploy-linux-amd64 -python python3.10 \
+          -model_name ERNIE-4.5-0.3B-Paddle \
+          -model_path /MODELDATA \
+          --skip install
 
-            pushd test/ce/server
-            export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
-            export TEMPLATE=TOKEN_LOGPROB
-            TEST_EXIT_CODE=0
-            python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py test_evil_cases.py || TEST_EXIT_CODE=1
-            curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
-              -H "Content-Type: application/json" \
-              -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
-            curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
-            python -m pytest -sv test_repetition_early_stop.py || TEST_EXIT_CODE=1
-            popd
-            echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
-            '
-            if [ -f ./FastDeploy/exit_code.env ]; then
-              source ./FastDeploy/exit_code.env
-              cat ./FastDeploy/exit_code.env >> $GITHUB_ENV
-            fi
-            echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}"
-            exit ${TEST_EXIT_CODE}
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          pushd test/ce/deploy
+          python3.10 deploy.py > dd.log 2>&1 &
+          sleep 3
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
+
+          curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+          popd
+
+          pushd test/ce/server
+          export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
+          export TEMPLATE=TOKEN_LOGPROB
+          TEST_EXIT_CODE=0
+          python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py test_evil_cases.py || TEST_EXIT_CODE=1
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
+          curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+          python -m pytest -sv test_repetition_early_stop.py || TEST_EXIT_CODE=1
+          popd
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
+          '
+          if [ -f ./FastDeploy/exit_code.env ]; then
+            source ./FastDeploy/exit_code.env
+            cat ./FastDeploy/exit_code.env >> $GITHUB_ENV
+          fi
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}"
+          exit ${TEST_EXIT_CODE}
