@@ -975,7 +975,6 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
     # add bad words
     bad_token_ids = output_ids_0[6:10]
     bad_tokens = output_tokens_0[6:10]
-    is_first_chunk = True
     response_1 = openai_client.completions.create(
         model="default",
         prompt="Hello, how are you?",
@@ -987,6 +986,7 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
     )
     output_tokens_1 = []
     output_ids_1 = []
+    is_first_chunk = True
     for chunk in response_1:
         if is_first_chunk:
             is_first_chunk = False
