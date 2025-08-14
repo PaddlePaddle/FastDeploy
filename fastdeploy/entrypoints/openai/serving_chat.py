@@ -83,7 +83,7 @@ class OpenAIServingChat:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            api_server_logger.info(f"current {self.engine_client.semaphore.status()}")
+            api_server_logger.debug(f"current waiting request {self.engine_client.semaphore.status()}")
 
             if request.user is not None:
                 request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
