@@ -16,6 +16,7 @@
 
 from typing import Optional
 
+import numpy as np
 import paddle
 from paddle import nn
 
@@ -107,6 +108,7 @@ class LinearBase(nn.Layer):
             or current_platform.is_iluvatar()
             or current_platform.is_gcu()
             or current_platform.is_dcu()
+            or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
         else:
@@ -391,30 +393,48 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # 1.fused gate_up in disk
-        # 2.split gate up
-        assert loaded_shard_id in ["gate", "up"]
-        output_dim = getattr(param, "output_dim", None)
-        # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None:
-            dim = -1
-            size = loaded_weight.get_shape()[dim]
-            block_size = size // self.nranks
-            shard_offset = self.local_rank * block_size
-            shard_size = (self.local_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
+        if loaded_shard_id is None:
+            # Loaded weight is already fused on disk.
+            if self.nranks != 1:
+                shard_offsets = [
+                    # (shard_id, shard_offset, shard_size)
+                    ("gate", 0, self.output_size * self.nranks // 2),
+                    ("up", self.output_size * self.nranks // 2, self.output_size * self.nranks // 2),
+                ]
+                for shard_id, shard_offset, shard_size in shard_offsets:
+                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
+                    self.weight_loader(param, loaded_weight_shard, shard_id)
+            else:
+                loaded_weight = get_tensor(loaded_weight)
+                param.copy_(loaded_weight, False)
+        else:
+            # 1.fused gate_up in disk
+            # 2.split gate up
+            assert loaded_shard_id in ["gate", "up"]
+            output_dim = getattr(param, "output_dim", None)
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1
+                if isinstance(loaded_weight, np.ndarray):
+                    size = loaded_weight.shape[dim]
+                else:
+                    size = loaded_weight.get_shape()[dim]
+                block_size = size // self.nranks
+                shard_offset = self.local_rank * block_size
+                shard_size = (self.local_rank + 1) * block_size
+                loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
-        loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = get_tensor(loaded_weight)
 
-        if loaded_shard_id == "gate":
-            param = param[:, : self.output_size // 2]
-        elif loaded_shard_id == "up":
-            param = param[:, self.output_size // 2 :]
+            if loaded_shard_id == "gate":
+                param = param[:, : self.output_size // 2]
+            elif loaded_shard_id == "up":
+                param = param[:, self.output_size // 2 :]
 
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        param.copy_(loaded_weight, False)
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+            param.copy_(loaded_weight, False)
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -485,37 +505,57 @@ class QKVParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # 1.fused qkv in disk
-        # 2.split q k v
-        assert loaded_shard_id in ["q", "k", "v"]
-        output_dim = getattr(param, "output_dim", None)
-        # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None:
-            dim = -1
-            size = loaded_weight.get_shape()[dim]
-            block_size = size // self.nranks
-            shard_offset = self.local_rank * block_size
-            shard_size = (self.local_rank + 1) * block_size
-            loaded_weight = loaded_weight[..., shard_offset:shard_size]
+        if loaded_shard_id is None:
+            # Loaded weight is already fused on disk
+            if self.nranks != 1:
+                shard_offsets = [
+                    # (shard_id, shard_offset, shard_size)
+                    ("q", 0, self.num_heads * self.head_dim),
+                    ("k", self.num_heads * self.head_dim, self.kv_num_heads * self.head_dim),
+                    ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.head_dim),
+                ]
+                for shard_id, shard_offset, shard_size in shard_offsets:
+                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
+                    self.weight_loader(param, loaded_weight_shard, shard_id)
+            else:
+                loaded_weight = get_tensor(loaded_weight)
+                split_loaded_weight = loaded_weight
+                param.copy_(split_loaded_weight, False)
+        else:
+            # 1.fused qkv in disk
+            # 2.split q k v
+            assert loaded_shard_id in ["q", "k", "v"]
+            output_dim = getattr(param, "output_dim", None)
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1
+                if isinstance(loaded_weight, np.ndarray):
+                    size = loaded_weight.shape[dim]
+                else:
+                    size = loaded_weight.get_shape()[dim]
+                block_size = size // self.nranks
+                shard_offset = self.local_rank * block_size
+                shard_size = (self.local_rank + 1) * block_size
+                loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
-        loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = get_tensor(loaded_weight)
 
-        if loaded_shard_id == "q":
-            param = param[:, : self.num_heads_per_rank * self.head_dim]
-        elif loaded_shard_id == "k":
-            param = param[
-                :,
-                self.num_heads_per_rank
-                * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
-                * self.head_dim,
-            ]
-        elif loaded_shard_id == "v":
-            param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
+            if loaded_shard_id == "q":
+                param = param[:, : self.num_heads_per_rank * self.head_dim]
+            elif loaded_shard_id == "k":
+                param = param[
+                    :,
+                    self.num_heads_per_rank
+                    * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
+                    * self.head_dim,
+                ]
+            elif loaded_shard_id == "v":
+                param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
 
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        param.copy_(loaded_weight, False)
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+            param.copy_(loaded_weight, False)
 
     def load_weight(self, state_dict: dict):
         """
@@ -720,6 +760,7 @@ class KVBatchLinear(LinearBase):
         self.v_head_dim = v_head_dim
         # Split num_attention_heads when using TP inference.
         self.num_heads_per_partition = divide(num_attention_heads, self.nranks)
+        self.local_rank = fd_config.parallel_config.tensor_parallel_rank
 
         # Initialize parent with combined dimensions
         super().__init__(
@@ -737,6 +778,63 @@ class KVBatchLinear(LinearBase):
         self.weight_key = f"{prefix}.weight"  # e.g., "kv_b_proj.weight"
         self.k_weight_key = f"{prefix.replace('kv_b_proj', 'k_b_proj')}.weight"
         self.v_weight_key = f"{prefix.replace('kv_b_proj', 'v_b_proj')}.weight"
+
+        self.k_b_proj_weight = self.create_parameter(
+            shape=[self.num_heads_per_partition, self.qk_nope_head_dim, self.kv_lora_rank],
+            dtype=self.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        self.v_b_proj_weight = self.create_parameter(
+            shape=[self.num_heads_per_partition, self.kv_lora_rank, self.v_head_dim],
+            dtype=self.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        set_weight_attrs(
+            self.k_b_proj_weight,
+            {"weight_loader": self.weight_loader},
+        )
+
+        if self.nranks > 0:
+            _set_var_distributed(self.k_b_proj_weight, split_axis=1)
+            set_weight_attrs(self.k_b_proj_weight, {"output_dim": True})
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        output_dim = getattr(param, "output_dim", None)
+        # Tensor parallelism splits the weight along the output_dim
+        if output_dim is not None:
+            dim = -1
+            size = loaded_weight.get_shape()[dim]
+            block_size = size // self.nranks
+            shard_offset = self.local_rank * block_size
+            shard_size = (self.local_rank + 1) * block_size
+            loaded_weight = loaded_weight[..., shard_offset:shard_size]
+        w = (
+            get_tensor(loaded_weight)
+            .reshape(
+                [
+                    self.kv_lora_rank,
+                    self.num_heads_per_partition,
+                    -1,
+                ]
+            )
+            .transpose(perm=[1, 2, 0])
+        )
+        if param.dtype != w.dtype:
+            w = w.cast(param.dtype)
+        # Split into K and V weights
+        # wk_b: [num_heads, qk_nope_head_dim, kv_lora_rank]
+        wk_b = w[:, : self.qk_nope_head_dim, :]
+        if self.v_head_dim is None:
+            raise ValueError("self.v_head_dim should not be None")
+        # wv_b: [num_heads, kv_lora_rank, v_head_dim]
+        wv_b = w[:, -self.v_head_dim :, :].transpose(perm=[0, 2, 1])
+
+        self.k_b_proj_weight.set_value(wk_b)
+        self.v_b_proj_weight.set_value(wv_b)
 
     def load_state_dict(self, state_dict: dict):
         """
