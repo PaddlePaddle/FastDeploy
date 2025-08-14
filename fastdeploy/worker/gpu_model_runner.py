@@ -48,6 +48,11 @@ if current_platform.is_iluvatar():
 
     recover_decode_task = None
     share_external_data = None
+elif current_platform.is_dcu():
+    from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
+
+    recover_decode_task = None
+    share_external_data = None
 else:
     from fastdeploy.model_executor.ops.gpu import (
         recover_decode_task,

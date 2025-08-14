@@ -21,6 +21,8 @@ def native_top_p_sampling(probs: paddle.Tensor, top_p: paddle.Tensor) -> tuple[p
     sorted_indices = paddle.argsort(probs, descending=True)
     sorted_probs = paddle.sort(probs, descending=True)
     cumulative_probs = paddle.cumsum(sorted_probs, axis=-1)
+    if probs.shape[0] != top_p.shape[0]:
+        top_p = paddle.slice(top_p, [0], [0], [probs.shape[0]])
     sorted_indices_to_remove = cumulative_probs > top_p
     sorted_indices_to_remove = paddle.cast(sorted_indices_to_remove, dtype="int64")
     sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()

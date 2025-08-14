@@ -101,11 +101,12 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -113,7 +114,6 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        gate_out = paddle.matmul(x.cast("float32"), layer.gate_weight)
         scores = paddle.nn.functional.softmax(gate_out, axis=-1)
         scores += layer.gate_correction_bias
         topk_weights, topk_ids = paddle.topk(scores, k=top_k, axis=-1, sorted=False)

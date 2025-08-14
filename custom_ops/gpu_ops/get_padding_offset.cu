@@ -46,7 +46,11 @@ __global__ void GetPaddingOffsetKernel(int *batch_id_per_token,
     const int ti = threadIdx.x;
     int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
     for (int i = ti; i < seq_lens[bi]; i += blockDim.x) {
+#ifdef PADDLE_WITH_HIP
+        batch_id_per_token[bi * max_seq_len - cum_offset + i] = cum_offset;
+#else
         batch_id_per_token[bi * max_seq_len - cum_offset + i] = bi;
+#endif
     }
     if (ti == 0) {
         cum_offsets_out[bi] = cum_offset;

@@ -14,12 +14,14 @@
 # limitations under the License.
 """
 
+import gc
 import time
 
 import paddle
 
 from fastdeploy.config import FDConfig
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, set_random_seed
+from fastdeploy.worker.dcu_model_runner import DCUModelRunner
 from fastdeploy.worker.gpu_worker import GpuWorker
 
 logger = get_logger("dcu_worker", "dcu_worker.log")
@@ -40,6 +42,41 @@ class DcuWorker(GpuWorker):
             rank=rank,
         )
         pass
+
+    def init_device(self):
+        """
+        Initialize device and construct model runner
+        """
+        self.max_chips_per_node = 8
+        if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda():
+            # Set evironment variable
+            self.device_ids = self.parallel_config.device_ids.split(",")
+            self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
+            paddle.device.set_device(self.device)
+            paddle.set_default_dtype(self.parallel_config.dtype)
+
+            gc.collect()
+            paddle.device.cuda.empty_cache()
+            if (
+                self.parallel_config.enable_custom_all_reduce
+                and self.parallel_config.tensor_parallel_size > 1
+                and paddle.is_compiled_with_cuda()
+            ):
+                from fastdeploy.distributed.communication import use_custom_allreduce
+
+                use_custom_allreduce()
+        else:
+            raise RuntimeError(f"Not support device type: {self.device_config.device}")
+
+        set_random_seed(self.fd_config.model_config.seed)
+        # Construct model runner
+        self.model_runner: DCUModelRunner = DCUModelRunner(
+            fd_config=self.fd_config,
+            device=self.device,
+            device_id=self.device_ids[self.local_rank % self.max_chips_per_node],
+            rank=self.rank,
+            local_rank=self.local_rank,
+        )
 
     def determine_available_memory(self) -> int:
         """
