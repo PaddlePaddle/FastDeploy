@@ -24,7 +24,11 @@ os.environ["GLOG_minloglevel"] = "2"
 os.environ["AISTUDIO_LOG"] = "critical"
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import version
+from fastdeploy.utils import version, envs
+from paddleformers.utils.log import logger as pf_logger
+if envs.FD_DEBUG != "1":
+    import logging
+    pf_logger.logger.setLevel(logging.INFO)
 
 __all__ = ["LLM", "SamplingParams", "version"]
 

@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: ""
+      MODEL_CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   run_tests_with_coverage:
@@ -67,56 +72,102 @@ jobs:
           fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
         run: |
-            set -x
-            runner_name="${{ runner.name }}"
-            CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
-            gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          set -x
+          runner_name="${{ runner.name }}"
+          CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
+          DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
-            echo "CACHE_DIR is set to ${CACHE_DIR}"
-            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
-              touch "${CACHE_DIR}/gitconfig"
-            fi
-            PARENT_DIR=$(dirname "$WORKSPACE")
-            echo "PARENT_DIR:$PARENT_DIR"
-            docker run --rm --net=host \
-            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
-            -v $(pwd):/workspace -w /workspace \
-            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
-            -v "${CACHE_DIR}/.cache:/root/.cache" \
-            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
-            -e TZ="Asia/Shanghai" \
-            -e "fd_wheel_url=${fd_wheel_url}" \
-            -e "BASE_REF=${BASE_REF}" \
-            --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+          echo "Test ENV Parameter:"
+          echo "========================================================="
+          echo "FLASK_PORT=${FLASK_PORT}"
+          echo "FD_API_PORT=${FD_API_PORT}"
+          echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+          echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "DEVICES=${DEVICES}"
+          echo "========================================================="
 
-            git config --global --add safe.directory /workspace/FastDeploy
-            cd FastDeploy
-            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+          echo "CACHE_DIR is set to ${CACHE_DIR}"
+          if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+            touch "${CACHE_DIR}/gitconfig"
+          fi
 
-            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
 
+          echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
 
-            python -m pip install coverage
-            python -m pip install diff-cover
-            python -m pip install ${fd_wheel_url}
-            export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
-            export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
-            TEST_EXIT_CODE=0
-            bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
-            git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-            echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
-            coverage combine coveragedata/
-            coverage xml -o python_coverage_all.xml
-            COVERAGE_EXIT_CODE=0
-            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
-            echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
-            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
-            '
-            if [ -f FastDeploy/exit_code.env ]; then
-              cat FastDeploy/exit_code.env >> $GITHUB_ENV
-            fi
+          for port in "${PORTS[@]}"; do
+              PIDS=$(lsof -t -i :$port || true)
+              if [ -n "$PIDS" ]; then
+                  echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
+                  echo "$PIDS" | xargs -r kill -9
+                  echo "Port $port cleared" | tee -a $LOG_FILE
+              else
+                  echo "Port $port is free" | tee -a $LOG_FILE
+              fi
+          done
+
+          echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
+
+          docker run --rm --net=host \
+          --cap-add=SYS_PTRACE --shm-size=64G \
+          -v $(pwd):/workspace -w /workspace \
+          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+          -v "${CACHE_DIR}/.cache:/root/.cache" \
+          -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+          -v "${MODEL_CACHE_DIR}:/ModelData:ro" \
+          -e "MODEL_PATH=/ModelData" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "FLASK_PORT=${FLASK_PORT}" \
+          -e TZ="Asia/Shanghai" \
+          -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "BASE_REF=${BASE_REF}" \
+          --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
+
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+
+          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+          python -m pip install coverage
+          python -m pip install diff-cover
+          python -m pip install ${fd_wheel_url}
+          if [ -d "test/plugins" ]; then
+              cd test/plugins
+              python setup.py install
+              cd ../..
+          else
+              echo "Warning: test/plugins directory not found, skipping setup.py install"
+          fi
+          export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
+          export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          TEST_EXIT_CODE=0
+          bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
+          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
+          coverage combine coveragedata/
+          coverage xml -o python_coverage_all.xml
+          COVERAGE_EXIT_CODE=0
+          diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+          echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
+          python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+          '
+          if [ -f FastDeploy/exit_code.env ]; then
+            cat FastDeploy/exit_code.env >> $GITHUB_ENV
+          fi
+
       - name: Upload unit resule and diff coverage to bos
         id: cov_upload
         shell: bash
@@ -152,32 +203,40 @@ jobs:
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
-      - name: Determine Unit Succ and whether the coverage rate reaches 80%
+      - name: Check Unit Test Success
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
               echo "No diff unit failed file URL provided."
             else
-              wget ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${unittest_failed_url} || echo "Download unittest file failed, but continuing..."
             fi
             echo "Unit tests failed (exit code 8)"
-            filename=$(basename "$unittest_failed_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               cat "${filename}"
             fi
             exit "$TEST_EXIT_CODE"
           fi
+          echo "All tests passed"
 
+      - name: Verify Code Coverage Threshold (80%)
+        shell: bash
+        run: |
+          cd FastDeploy
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
+            filename=$(basename "$diff_cov_result_json_url")
             if [ -z "${diff_cov_result_json_url}" ]; then
               echo "No diff cov result file URL provided."
             else
-              wget ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
+              rm -rf "${filename}"
+              wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
             fi
-            filename=$(basename "$diff_cov_result_json_url")
             if [ -f "${filename}" ];then
               echo "Failed test cases:"
               if command -v jq >/dev/null 2>&1; then
@@ -188,7 +247,7 @@ jobs:
             fi
             exit "$COVERAGE_EXIT_CODE"
           fi
-          echo "All tests and coverage passed"
+          echo "coverage passed"
           exit 0
 
   diff_coverage_report:
