@@ -45,6 +45,7 @@ class EngineClient:
         data_parallel_size=1,
         enable_logprob=False,
         workers=1,
+        tool_parser=None,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -52,6 +53,7 @@ class EngineClient:
             limit_mm_per_prompt,
             mm_processor_kwargs,
             enable_mm,
+            tool_parser,
         )
         self.enable_logprob = enable_logprob
         self.enable_mm = enable_mm

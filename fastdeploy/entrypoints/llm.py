@@ -28,8 +28,7 @@ from tqdm import tqdm
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
-
-# from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.utils import llm_logger, retrive_model_from_server
 from fastdeploy.worker.output import Logprob, LogprobsLists
 
@@ -73,6 +72,9 @@ class LLM:
         **kwargs,
     ):
         model = retrive_model_from_server(model, revision)
+        tool_parser_plugin = kwargs.get("tool_parser_plugin")
+        if tool_parser_plugin:
+            ToolParserManager.import_tool_parser(tool_parser_plugin)
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,
