@@ -49,6 +49,12 @@ def get_moe_method():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
         return GCUFusedMoeMethod(None)
+    elif current_platform.is_maca():
+        from fastdeploy.model_executor.layers.backends import (
+            MetaxTritonWeightOnlyMoEMethod,
+        )
+
+        return MetaxTritonWeightOnlyMoEMethod(None)
     raise NotImplementedError
 
 
@@ -508,10 +514,11 @@ class FusedMoE(nn.Layer):
                 gate_correction_bias_tensor = self.extract_gate_correction_bias(
                     self.gate_correction_bias_key, state_dict
                 )
+                if self.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                    gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(self.gate_correction_bias.shape)
                 self.gate_correction_bias.set_value(gate_correction_bias_tensor)
             else:
                 self.gate_correction_bias = None
-
         else:
             self.gate_correction_bias = None
 

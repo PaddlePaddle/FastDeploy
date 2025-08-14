@@ -128,6 +128,8 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.pad_token_id: int = -1
+        self.eos_tokens_lens: int = 2
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -267,10 +269,6 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
-        #
-        self.pad_token_id: int = -1
-        #
-        self.eos_tokens_lens: int = 2
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role
@@ -742,7 +740,10 @@ class CacheConfig:
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
         self.num_gpu_blocks_override = None
-        self.kv_cache_ratio = 0.75
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.kv_cache_ratio = 1.0
+        else:
+            self.kv_cache_ratio = 0.75
         self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
         self.prealloc_dec_block_slot_num_threshold = 5
         self.cache_dtype = "bfloat16"
@@ -827,7 +828,10 @@ class CacheConfig:
         self.dec_token_num = self.enc_dec_block_num * self.block_size
         if self.num_gpu_blocks_override is not None:
             self.total_block_num = self.num_gpu_blocks_override
-            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.prefill_kvcache_block_num = self.total_block_num
+            else:
+                self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -840,7 +844,10 @@ class CacheConfig:
         reset gpu block number
         """
         self.total_block_num = num_gpu_blocks
-        self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.prefill_kvcache_block_num = self.total_block_num
+        else:
+            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         logger.info(
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
@@ -1090,7 +1097,10 @@ class FDConfig:
             if self.cache_config.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
@@ -1135,10 +1145,11 @@ class FDConfig:
         )
 
         if not self.cache_config.enable_chunked_prefill:
-            assert self.max_num_batched_tokens >= self.max_model_len, (
-                f"max_num_batched_tokens: {self.max_num_batched_tokens} "
-                f"should be larger than or equal to max_model_len: {self.max_model_len}"
-            )
+            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                assert self.max_num_batched_tokens >= self.max_model_len, (
+                    f"max_num_batched_tokens: {self.max_num_batched_tokens} "
+                    f"should be larger than or equal to max_model_len: {self.max_model_len}"
+                )
         else:
             assert self.max_num_batched_tokens >= self.cache_config.block_size, (
                 f"max_num_batched_tokens: {self.max_num_batched_tokens} "
