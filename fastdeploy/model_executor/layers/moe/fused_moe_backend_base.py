@@ -19,7 +19,7 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.models.utils import set_weight_attrs
+from fastdeploy.model_executor.layers.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
@@ -203,3 +203,10 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
 
         set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
         set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+
+        if layer.moe_use_gate_correction_bias:
+            gate_correction_bias_shape = [1, layer.num_experts]
+            layer.gate_correction_bias = layer.create_parameter(
+                shape=gate_correction_bias_shape,
+                dtype="float32",
+            )
