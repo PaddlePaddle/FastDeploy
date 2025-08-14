@@ -78,44 +78,44 @@ class OpenAIServingChat:
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
 
-        if request.user is not None:
-            request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
-        else:
-            request_id = f"chatcmpl-{uuid.uuid4()}"
-        api_server_logger.info(f"create chat completion request: {request_id}")
-        text_after_process = None
         try:
-            current_req_dict = request.to_dict_for_infer(request_id)
-            current_req_dict["arrival_time"] = time.time()
-            prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
-            text_after_process = current_req_dict.get("text_after_process")
-            if isinstance(prompt_token_ids, np.ndarray):
-                prompt_token_ids = prompt_token_ids.tolist()
-        except Exception as e:
-            return ErrorResponse(code=400, message=str(e))
-
-        del current_req_dict
-
-        try:
-            api_server_logger.debug(f"{self.engine_client.semaphore.status()}")
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-        except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+            api_server_logger.debug(f"current waiting request {self.engine_client.semaphore.status()}")
 
-        if request.stream:
-            return self.chat_completion_stream_generator(
-                request, request_id, request.model, prompt_token_ids, text_after_process
-            )
-        else:
+            if request.user is not None:
+                request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
+            else:
+                request_id = f"chatcmpl-{uuid.uuid4()}"
+            api_server_logger.info(f"create chat completion request: {request_id}")
+            text_after_process = None
             try:
-                return await self.chat_completion_full_generator(
-                    request, request_id, request.model, prompt_token_ids, text_after_process
-                )
+                current_req_dict = request.to_dict_for_infer(request_id)
+                current_req_dict["arrival_time"] = time.time()
+                prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                text_after_process = current_req_dict.get("text_after_process")
+                if isinstance(prompt_token_ids, np.ndarray):
+                    prompt_token_ids = prompt_token_ids.tolist()
             except Exception as e:
                 return ErrorResponse(code=400, message=str(e))
+
+            del current_req_dict
+
+            if request.stream:
+                return self.chat_completion_stream_generator(
+                    request, request_id, request.model, prompt_token_ids, text_after_process
+                )
+            else:
+                try:
+                    return await self.chat_completion_full_generator(
+                        request, request_id, request.model, prompt_token_ids, text_after_process
+                    )
+                except Exception as e:
+                    return ErrorResponse(code=400, message=str(e))
+        except Exception:
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
     def _create_streaming_error_response(self, message: str) -> str:
         error_response = ErrorResponse(

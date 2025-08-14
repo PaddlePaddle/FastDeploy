@@ -165,9 +165,9 @@ async def connection_manager():
         yield
     except asyncio.TimeoutError:
         api_server_logger.info(f"Reach max request release: {connection_semaphore.status()}")
-        if connection_semaphore.locked():
-            connection_semaphore.release()
-        raise HTTPException(status_code=429, detail="Too many requests")
+        raise HTTPException(
+            status_code=429, detail=f"Too many requests, current max concurrency is {args.max_concurrency}"
+        )
 
 
 def wrap_streaming_generator(original_generator: AsyncGenerator):
@@ -180,7 +180,7 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
             async for chunk in original_generator:
                 yield chunk
         finally:
-            api_server_logger.debug(f"release: {connection_semaphore.status()}")
+            api_server_logger.debug(f"current concurrency status: {connection_semaphore.status()}")
             connection_semaphore.release()
 
     return wrapped_generator
@@ -255,9 +255,11 @@ async def create_chat_completion(request: ChatCompletionRequest):
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
+                api_server_logger.debug(f"current concurrency status: {connection_semaphore.status()}")
                 return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
             elif isinstance(generator, ChatCompletionResponse):
                 connection_semaphore.release()
+                api_server_logger.debug(f"current concurrency status: {connection_semaphore.status()}")
                 return JSONResponse(content=generator.model_dump())
             else:
                 wrapped_generator = wrap_streaming_generator(generator)
