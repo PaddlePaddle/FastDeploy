@@ -34,7 +34,7 @@ class ZmqClient:
         self.context = zmq.Context(4)
         self.socket = self.context.socket(mode)
         self.file_name = f"/dev/shm/{name}.socket"
-        self.router_path = f"./router_{name}.ipc"
+        self.router_path = f"/dev/shm/router_{name}.ipc"
 
         self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
         self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
