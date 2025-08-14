@@ -27,7 +27,7 @@ from fastdeploy.utils import data_processor_logger
 
 from paddleformers.transformers import AutoTokenizer
 
-from .image_preprocessor import ImageProcessor
+from .image_processor import ImageProcessor
 from .process_video import read_video_decord
 
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
@@ -41,30 +41,21 @@ class DataProcessor:
 
     def __init__(
         self,
-        tokenizer_name: str,
-        image_preprocessor_name: str,
-        spatial_conv_size: int = 2,
-        temporal_conv_size: int = 2,
+        model_path: str,
         image_min_pixels: int = 3136,
         image_max_pixels: int = 12845056,
         video_min_pixels: int = 3136,
         video_max_pixels: int = 12845056,
-        # video_target_frames: int = -1,
-        # video_frames_sample: str = "leading",
-        # video_max_frames: int = 180,
-        # video_min_frames: int = 16,
-        # video_fps: int = 2,
         **kwargs,
     ) -> None:
         # Tokenizer and image preprocessor
-        self.model_name_or_path = tokenizer_name
-        self._load_tokenizer()
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
         self.tokenizer.ignored_index = -100
-        self.image_preprocessor = ImageProcessor.from_pretrained(image_preprocessor_name)
+        self.image_processor = ImageProcessor.from_pretrained(model_path)
 
         # Convolution sizes for patch aggregation
-        self.spatial_conv_size = spatial_conv_size
-        self.temporal_conv_size = temporal_conv_size
+        self.spatial_conv_size = self.image_processor.merge_size
+        self.temporal_conv_size = self.image_processor.temporal_patch_size
 
         # Pixel constraints
         self.image_min_pixels = image_min_pixels
@@ -72,26 +63,15 @@ class DataProcessor:
         self.video_min_pixels = video_min_pixels
         self.video_max_pixels = video_max_pixels
 
-        # Video sampling parameters
-        # self.target_frames = video_target_frames
-        # self.frames_sample = video_frames_sample
-        # self.max_frames = video_max_frames
-        # self.min_frames = video_min_frames
-        # self.fps = video_fps
-
         # Special tokens and IDs
-        # self.cls_token = "<|im_start|>"
-        # self.eos_token = "<|im_end|>"
-        self.vision_start = "<|vision_start|>"
-        self.vision_end = "<|vision_end|>"
         self.image_token = "<|image_pad|>"
         self.video_token = "<|video_pad|>"
 
         self.image_token_id = self.tokenizer.convert_tokens_to_ids(self.image_token)
         self.video_token_id = self.tokenizer.convert_tokens_to_ids(self.video_token)
 
+        self.vision_start = "<|vision_start|>"
         self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
-        self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_end)
 
         self.role_prefixes = {
             "system": "",
@@ -241,41 +221,35 @@ class DataProcessor:
         outputs["cur_position"] += len(tokens)
 
     def _add_image(self, img, outputs: Dict) -> None:
-        ret = self.image_preprocessor.preprocess(
-            image=[img.convert("RGB")],
-            input_data_format=ChannelDimension.LAST,
-        )
-        num_tokens = ret["image_grid_thw"].prod() // self.image_preprocessor.merge_size**2
+        ret = self.image_processor.preprocess(images=[img.convert("RGB")])
+        num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
 
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        outputs["grid_thw"].append(ret["image_grid_thw"])
+        outputs["grid_thw"].append(ret["grid_thw"])
         outputs["image_type_ids"].append(0)
 
-        pos_ids = self._compute_3d_positions(1, ret["image_grid_thw"][1], ret["image_grid_thw"][2], outputs["cur_position"])
+        pos_ids = self._compute_3d_positions(1, ret["grid_thw"][1], ret["grid_thw"][2], outputs["cur_position"])
         outputs["position_ids"].extend(pos_ids)
         outputs["cur_position"] = np.max(pos_ids) + 1
 
     def _add_video(self, frames, outputs: Dict) -> None:
         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
-        ret = self.image_preprocessor.preprocess(
-            video=pixel_stack,
-            input_data_format=ChannelDimension.LAST,
-        )
-        num_tokens = ret["video_grid_thw"].prod() // self.image_preprocessor.merge_size**2
+        ret = self.image_processor.preprocess(images=pixel_stack)
+        num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
 
         outputs["input_ids"].extend([self.video_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
 
-        outputs["images"].append(ret["pixel_values_videos"])
-        outputs["grid_thw"].append(ret["video_grid_thw"])
-        # outputs["pixel_values_videos"].append(ret["pixel_values_videos"])
-        # outputs["video_grid_thw"].append(ret["video_grid_thw"])
-        outputs["image_type_ids"].extend([1] * ret["video_grid_thw"][0])
+        outputs["images"].append(ret["pixel_values"])
+        outputs["grid_thw"].append(ret["grid_thw"])
+        # outputs["pixel_values_videos"].append(ret["pixel_values"])
+        # outputs["video_grid_thw"].append(ret["grid_thw"])
+        outputs["image_type_ids"].extend([1] * ret["grid_thw"][0])
 
-        pos_ids = self._compute_3d_positions(ret["video_grid_thw"][0], ret["video_grid_thw"][1], ret["video_grid_thw"][2], outputs["cur_position"])
+        pos_ids = self._compute_3d_positions(ret["grid_thw"][0], ret["grid_thw"][1], ret["grid_thw"][2], outputs["cur_position"])
         outputs["position_ids"].extend(pos_ids)
         outputs["cur_position"] = np.max(pos_ids) + 1
 
@@ -300,15 +274,6 @@ class DataProcessor:
 
         coords = list(zip(time_idx, h_idx, w_idx))
         return [[start_idx + ti, start_idx + hi, start_idx + wi] for ti, hi, wi in coords]
-
-    def _load_tokenizer(self):
-        """
-        load tokenizer
-
-        Returns:
-            tokenizer (AutoTokenizer)
-        """
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, padding_side="left", use_fast=True)
 
     def apply_chat_template(self, request):
         """
@@ -337,4 +302,3 @@ class DataProcessor:
             f"req_id:{request.get('request_id', ''), } tokens: {tokens}, token_ids: {token_ids}"
         )
         return token_ids
-

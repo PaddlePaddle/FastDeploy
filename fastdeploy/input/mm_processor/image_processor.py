@@ -36,7 +36,7 @@ from paddleformers.transformers.image_utils import (
     PILImageResampling,
     get_image_size,
     infer_channel_dimension_format,
-    is_valid_image,
+
     make_list_of_images,
     to_numpy_array,
     valid_images,
@@ -49,10 +49,8 @@ from fastdeploy.utils import data_processor_logger
 OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
 OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
-IMAGE_FACTOR = 28
 MIN_PIXELS = 4 * 28 * 28
 MAX_PIXELS = 16384 * 28 * 28
-MAX_RATIO = 200
 
 
 VideoInput = Union[
@@ -64,11 +62,6 @@ VideoInput = Union[
     List[List["PIL.Image.Image"]],
     List[List["np.ndarrray"]],
     List[List["paddle.Tensor"]],
-]
-
-
-__all__ = [
-    "AdaptiveImageProcessor",
 ]
 
 
@@ -90,9 +83,10 @@ def floor_by_factor(number: int, factor: int) -> int:
 def smart_resize(
     height: int,
     width: int,
-    factor: int = IMAGE_FACTOR,
-    min_pixels: int = MIN_PIXELS,
-    max_pixels: int = MAX_PIXELS,
+    factor: int,
+    min_pixels: int,
+    max_pixels: int,
+    max_ratio: int = 200
 ):
     """
     Rescales the image so that the following conditions are met:
@@ -103,16 +97,16 @@ def smart_resize(
 
     3. The aspect ratio of the image is maintained as closely as possible.
     """
-    if max(height, width) / min(height, width) > MAX_RATIO:
+    if max(height, width) / min(height, width) > max_ratio:
         if height > width:
             new_width = max(factor, round_by_factor(width, factor))
-            new_height = floor_by_factor(new_width * MAX_RATIO, factor)
+            new_height = floor_by_factor(new_width * max_ratio, factor)
         else:
             new_height = max(factor, round_by_factor(height, factor))
-            new_width = floor_by_factor(new_height * MAX_RATIO, factor)
+            new_width = floor_by_factor(new_height * max_ratio, factor)
 
         data_processor_logger.info(
-            f"absolute aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)},\
+            f"absolute aspect ratio must be smaller than {max_ratio}, got {max(height, width) / min(height, width)},\
               resize to {max(new_height, new_width) / min(new_height, new_width)}"
         )
 
@@ -177,83 +171,51 @@ class ImageProcessor(BaseImageProcessor):
             The merge size of the vision encoder to llm encoder.
     """
 
-    model_input_names = [
-        "pixel_values",
-        "image_grid_thw",
-        "pixel_values_videos",
-        "video_grid_thw",
-    ]
-
     def __init__(
         self,
-        resample: PILImageResampling = PILImageResampling.BICUBIC,
-        do_rescale: bool = True,
-        rescale_factor: float = 1 / 255,
-        do_normalize: bool = True,
-        image_mean: Optional[Union[float, List[float]]] = None,
-        image_std: Optional[Union[float, List[float]]] = None,
-        min_pixels: int = 56 * 56,
-        max_pixels: int = 28 * 28 * 1280,
         patch_size: int = 14,
-        temporal_patch_size: int = 2,
         merge_size: int = 2,
+        temporal_patch_size: int = 2,
+        min_pixels: int = MIN_PIXELS,
+        max_pixels: int = MAX_PIXELS,
+        image_mean: Union[float, List[float]] = OPENAI_CLIP_MEAN,
+        image_std: Union[float, List[float]] = OPENAI_CLIP_STD,
+        rescale_factor: float = 1 / 255,
+        do_rescale: bool = True,
+        do_normalize: bool = True,
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
         **kwargs,
     ) -> None:
         """init"""
         super().__init__(**kwargs)
-        self.resample = resample
-        self.do_rescale = do_rescale
-        self.rescale_factor = rescale_factor
-        self.do_normalize = do_normalize
-        self.image_mean = image_mean if image_mean is not None else OPENAI_CLIP_MEAN
-        self.image_std = image_std if image_std is not None else OPENAI_CLIP_STD
+        self.patch_size = patch_size
+        self.merge_size = merge_size
+        self.temporal_patch_size = temporal_patch_size
+
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
-        self.patch_size = patch_size
-        self.temporal_patch_size = temporal_patch_size
-        self.merge_size = merge_size
-        self.size = {"min_pixels": min_pixels, "max_pixels": max_pixels}
 
-    def set_pixels(self, min_pixels=None, max_pixels=None, msg=""):
-        """设定pixels"""
-        if min_pixels is not None:
-            assert isinstance(min_pixels, int) and min_pixels >= 0, "min_pixels must be positive int"
-            data_processor_logger.info(f"{msg} AdaptiveImageProcessor set min_pixels = {min_pixels}")
-            self.min_pixels = min_pixels
-            self.size["min_pixels"] = int(min_pixels)
-        if max_pixels is not None:
-            assert isinstance(max_pixels, int) and max_pixels > 0, "max_pixels must be positive int"
-            data_processor_logger.info(f"{msg} AdaptiveImageProcessor set max_pixels = {max_pixels}")
-            self.max_pixels = max_pixels
-            self.size["max_pixels"] = int(max_pixels)
+        self.image_mean = image_mean
+        self.image_std = image_std
+        self.rescale_factor = rescale_factor
+        self.do_rescale = do_rescale
+        self.do_normalize = do_normalize
 
-    def get_smarted_resize(self, height, width, min_pixels=None, max_pixels=None):
-        """dummy"""
-        actual_min_pixels = min_pixels if min_pixels is not None else self.min_pixels
-        actual_max_pixels = max_pixels if max_pixels is not None else self.max_pixels
-        resized_height, resized_width = smart_resize(
-            height,
-            width,
-            factor=self.patch_size * self.merge_size,
-            min_pixels=actual_min_pixels,
-            max_pixels=actual_max_pixels,
-        )
-        return (resized_height, resized_width), (
-            resized_height // self.patch_size,
-            resized_width // self.patch_size,
-        )
+        self.resample = resample
 
     def _preprocess(
         self,
         images: Union[ImageInput, VideoInput],
-        resample: PILImageResampling = None,
-        do_rescale: bool = True,
-        rescale_factor: float = 1 / 255,
-        do_normalize: bool = True,
-        image_mean: Optional[Union[float, List[float]]] = None,
-        image_std: Optional[Union[float, List[float]]] = None,
-        data_format: Optional[ChannelDimension] = ChannelDimension.FIRST,
-        input_data_format: Optional[Union[str, ChannelDimension]] = None,
+        min_pixels: int,
+        max_pixels: int,
+        image_mean: Optional[Union[float, List[float]]],
+        image_std: Optional[Union[float, List[float]]],
+        rescale_factor: float,
+        do_rescale: bool,
+        do_normalize: bool,
+        resample: PILImageResampling,
+        data_format: Optional[ChannelDimension],
+        input_data_format: Optional[Union[str, ChannelDimension]],
     ):
         """
         Preprocess an image or batch of images. Copy of the `preprocess` method from `CLIPImageProcessor`.
@@ -309,8 +271,8 @@ class ImageProcessor(BaseImageProcessor):
             height,
             width,
             factor=self.patch_size * self.merge_size,
-            min_pixels=self.min_pixels,
-            max_pixels=self.max_pixels,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
         )
 
         processed_images = []
@@ -391,18 +353,18 @@ class ImageProcessor(BaseImageProcessor):
 
     def preprocess(
         self,
-        image: ImageInput = None,
-        video: VideoInput = None,
-        size: Optional[Union[int, List[int]]] = None,
-        resample: PILImageResampling = None,
-        do_rescale: bool = True,
-        rescale_factor: float = 1 / 255,
-        do_normalize: bool = True,
+        images: Union[ImageInput, VideoInput],
+        min_pixels: Optional[int] = None,
+        max_pixels: Optional[int] = None,
         image_mean: Optional[Union[float, List[float]]] = None,
         image_std: Optional[Union[float, List[float]]] = None,
+        rescale_factor: Optional[float] = None,
+        do_rescale: Optional[bool] = None,
+        do_normalize: Optional[bool] = None,
+        resample: Optional[PILImageResampling] = None,
         return_tensors: Optional[Union[str, TensorType]] = None,
         data_format: Optional[ChannelDimension] = ChannelDimension.FIRST,
-        input_data_format: Optional[Union[str, ChannelDimension]] = None,
+        input_data_format: Optional[Union[str, ChannelDimension]] = ChannelDimension.LAST,
     ):
         """
         Args:
@@ -447,48 +409,33 @@ class ImageProcessor(BaseImageProcessor):
                 - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
 
         """
-        size = size if size is not None else self.size
-        resample = resample if resample is not None else self.resample
-        do_rescale = do_rescale if do_rescale is not None else self.do_rescale
-        rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
-        do_normalize = do_normalize if do_normalize is not None else self.do_normalize
+        min_pixels = min_pixels if min_pixels is not None else self.min_pixels
+        max_pixels = max_pixels if max_pixels is not None else self.max_pixels
         image_mean = image_mean if image_mean is not None else self.image_mean
         image_std = image_std if image_std is not None else self.image_std
+        rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
+        do_rescale = do_rescale if do_rescale is not None else self.do_rescale
+        do_normalize = do_normalize if do_normalize is not None else self.do_normalize
+        resample = resample if resample is not None else self.resample
 
-        if image is not None and not valid_images(image):
+        if images is not None and not valid_images(images):
             raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
-        if video is not None and not valid_images(video):
-            raise ValueError("Invalid frame type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
-        data = dict()
-        if image is not None:
-            pixel_values, image_grid_thw = self._preprocess(
-                image,
-                resample=resample,
-                do_rescale=do_rescale,
-                rescale_factor=rescale_factor,
-                do_normalize=do_normalize,
-                image_mean=image_mean,
-                image_std=image_std,
-                data_format=data_format,
-                input_data_format=input_data_format,
-            )
-            data["pixel_values"] = pixel_values
-            data["image_grid_thw"] = image_grid_thw
-
-        if video is not None:
-            pixel_values_videos, video_grid_thw = self._preprocess(
-                video,
-                resample=resample,
-                do_rescale=do_rescale,
-                rescale_factor=rescale_factor,
-                do_normalize=do_normalize,
-                image_mean=image_mean,
-                image_std=image_std,
-                data_format=data_format,
-                input_data_format=input_data_format,
-            )
-            data["pixel_values_videos"] = pixel_values_videos
-            data["video_grid_thw"] = video_grid_thw
-
+        pixel_values, grid_thw = self._preprocess(
+            images,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
+            image_mean=image_mean,
+            image_std=image_std,
+            rescale_factor=rescale_factor,
+            do_rescale=do_rescale,
+            do_normalize=do_normalize,
+            resample=resample,
+            data_format=data_format,
+            input_data_format=input_data_format,
+        )
+        data = {
+            "pixel_values": pixel_values,
+            "grid_thw": grid_thw
+        }
         return BatchFeature(data=data, tensor_type=return_tensors)

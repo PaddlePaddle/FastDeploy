@@ -39,7 +39,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
 
         self.ernie_processor = DataProcessor(
-            tokenizer_name=tokenizer_path,
+            model_path=tokenizer_path,
             image_preprocessor_name=preprocessor_path,
             **processor_kwargs,
         )

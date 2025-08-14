@@ -17,8 +17,6 @@
 import io
 import os
 import decord
-# from .utils.io_utils import EXTRACTED_FRAME_DIR, get_filename
-# from .utils.video_utils import VideoReaderWrapper
 from tempfile import NamedTemporaryFile as ntf
 
 try:
