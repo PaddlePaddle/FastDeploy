@@ -545,7 +545,7 @@ def rebuild_padding(
             output_padding_offset,
             max_input_length,
         )
-        # elif current_platform.is_gcu():
+    elif current_platform.is_gcu():
         from fastdeploy.model_executor.ops.gcu import rebuild_padding
 
         hidden_states = rebuild_padding(

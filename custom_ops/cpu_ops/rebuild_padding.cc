@@ -19,6 +19,7 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
+
 template <typename T>
 void RebuildPaddingCPUImpl(T *output_data,
                            const T *input_data,
