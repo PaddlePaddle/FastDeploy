@@ -105,6 +105,67 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[0].text, "prompt1 response1")
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
+    def test_token_ids_with_max_tokens_zero(self):
+        """测试max_tokens=0时的token_ids设置"""
+        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+
+        request = CompletionRequest(prompt="test prompt", max_tokens=0, echo=True)
+
+        mock_output = {
+            "outputs": {
+                "text": "test prompt",  # max_tokens=0时直接返回prompt
+                "token_ids": [1, 2, 3],
+                "finished": True,
+            },
+            "output_token_ids": 0,
+        }
+        self.mock_engine.generate.return_value = [mock_output]
+
+        response = self.completion_handler.request_output_to_completion_response(
+            final_res_batch=[mock_output],
+            request=request,
+            request_id="test_id",
+            created_time=12345,
+            model_name="test_model",
+            prompt_batched_token_ids=[[10, 20, 30]],  # 这些应该直接作为token_ids使用
+            completion_batched_token_ids=[[1, 2, 3]],  # 这些应该被忽略
+        )
+
+        # 验证token_ids直接使用了prompt_token_ids
+        self.assertEqual(response.choices[0].text, "test prompt")
+        self.assertEqual(response.choices[0].logprobs.token_ids, [10, 20, 30])
+
+    def test_token_ids_with_max_tokens_non_zero(self):
+        """测试max_tokens>0时的token_ids设置"""
+        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+
+        request = CompletionRequest(prompt="test prompt", max_tokens=10, echo=True)
+
+        mock_output = {
+            "outputs": {
+                "text": "test prompt generated text",
+                "token_ids": [1, 2, 3],
+                "top_logprobs": {"token1": -0.1, "token2": -0.2},
+                "finished": True,
+            },
+            "output_token_ids": 3,
+        }
+        self.mock_engine.generate.return_value = [mock_output]
+
+        response = self.completion_handler.request_output_to_completion_response(
+            final_res_batch=[mock_output],
+            request=request,
+            request_id="test_id",
+            created_time=12345,
+            model_name="test_model",
+            prompt_batched_token_ids=[[10, 20, 30]],  # 这些应该和output["token_ids"]合并
+            completion_batched_token_ids=[[1, 2, 3]],
+        )
+
+        # 验证token_ids是prompt_token_ids和output["token_ids"]的合并
+        self.assertEqual(response.choices[0].text, "test prompt generated text")
+        self.assertEqual(response.choices[0].logprobs.token_ids, [10, 20, 30, 1, 2, 3])
+
     async def test_multi_prompt_streaming(self):
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 

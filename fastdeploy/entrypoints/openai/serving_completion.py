@@ -462,10 +462,15 @@ class OpenAIServingCompletion:
                     aggregated_logprobs.text_offset.extend(logprobs_res.text_offset)
 
             if request.echo:
-                token_ids = [*prompt_token_ids, *output["token_ids"]]
+                assert prompt_text is not None
+                if request.max_tokens == 0:
+                    token_ids = prompt_token_ids
+                    output_text = prompt_text
                 if isinstance(prompt_text, list):
+                    token_ids = [*prompt_token_ids, *output["token_ids"]]
                     output_text = prompt_text[idx] + output["text"]
                 else:
+                    token_ids = [*prompt_token_ids, *output["token_ids"]]
                     output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
