@@ -88,6 +88,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
     # LLMEngine recieve control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
+    # Batched token timeout in EP
+    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1"),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # Whether to enable cache task in decode node

@@ -360,6 +360,9 @@ class LLMEngine:
                     self.cfg.max_prefill_batch,
                 )
 
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    num_prefill_batch = int(self.resource_manager.available_batch())
+
                 self.resource_manager.check_and_free_block_tables()
                 tasks = self.scheduler.get_requests(
                     available_blocks=self.resource_manager.available_block_num(),

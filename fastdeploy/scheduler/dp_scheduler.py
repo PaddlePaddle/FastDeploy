@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledResponse
 from fastdeploy.scheduler.local_scheduler import LocalScheduler
-from fastdeploy.utils import scheduler_logger
+from fastdeploy.utils import envs, scheduler_logger
 
 
 class DPLocalScheduler(LocalScheduler):
@@ -106,6 +106,75 @@ class DPLocalScheduler(LocalScheduler):
                 self.ids_read_cursor = 0
             else:
                 self.ids_read_cursor -= len(expired_ids)
+
+    def get_requests(
+        self,
+        available_blocks,
+        block_size,
+        reserved_output_blocks,
+        max_num_batched_tokens,
+        batch=1,
+    ) -> List[Request]:
+        """
+        Retrieve requests from the scheduler based on available resources.
+
+        Args:
+            available_blocks: Number of available processing blocks
+            block_size: Size of each processing block
+            reserved_output_blocks: Blocks reserved for output
+            max_num_batched_tokens: Maximum tokens that can be batched
+            batch: Preferred batch size
+
+        Returns:
+            List of Request objects ready for processing
+        """
+        if available_blocks <= reserved_output_blocks or batch < 1:
+            scheduler_logger.debug(
+                f"Scheduler's resource are insufficient: available_blocks={available_blocks} "
+                f"reserved_output_blocks={reserved_output_blocks} batch={batch} "
+                f"max_num_batched_tokens={max_num_batched_tokens}"
+            )
+            return []
+        required_total_blocks = 0
+        current_prefill_tokens = 0
+        start_batch_time = time.time()
+
+        with self.requests_not_empty:
+            while True:
+                batch_ids = self.requests_not_empty.wait_for(
+                    lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
+                    self.wait_request_timeout,
+                )
+                requests: List[Request] = []
+                for request_id in batch_ids:
+                    request = self.requests[request_id]
+                    required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
+                    current_prefill_tokens += request.prompt_tokens_ids_len
+                    required_total_blocks += required_input_blocks + reserved_output_blocks
+                    if required_total_blocks > available_blocks:
+                        break
+                    if current_prefill_tokens > max_num_batched_tokens:
+                        break
+
+                    requests.append(request.raw)
+                    start_batch_time = time.time()
+                    if len(requests) >= batch:
+                        break
+                self.ids_read_cursor += len(requests)
+                if (
+                    (current_prefill_tokens > max_num_batched_tokens)
+                    or (len(requests) >= batch)
+                    or (time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT)
+                ):
+                    break
+
+        if len(batch_ids) > 0 and len(requests) == 0:
+            scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
+
+        if len(requests) > 0:
+            scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+
+        return requests
 
 
 class DPScheduler:
