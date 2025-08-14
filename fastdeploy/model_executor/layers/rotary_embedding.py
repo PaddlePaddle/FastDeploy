@@ -457,15 +457,19 @@ class QwenVlRotaryEmbedding3D:
         
         sin_bsz = paddle.index_select(sin, index=batch_indices, axis=0)
         sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0, axis=1)[:, :, :, : section_t]
-        sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1, axis=1)[:, :, :, section_t : section_h]
-        sin_w = paddle.index_select(sin_bsz, index=tmp_pos_id_2, axis=1)[:, :, :, section_h : section_w]
+        sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1, axis=1)[
+            :, :, :, section_t : section_t + section_h]
+        sin_w = paddle.index_select(sin_bsz, index=tmp_pos_id_2, axis=1)[
+            :, :, :, section_t + section_h : section_t + section_h + section_w]
         sin_thw = paddle.concat([sin_t, sin_h, sin_w], axis=-1)
 
         cos_bsz = paddle.index_select(cos, index=batch_indices, axis=0)
         
         cos_t = paddle.index_select(cos_bsz, index=tmp_pos_id_0, axis=1)[:, :, :, : section_t]
-        cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1, axis=1)[:, :, :, section_t : section_h]
-        cos_w = paddle.index_select(cos_bsz, index=tmp_pos_id_2, axis=1)[:, :, :, section_h : section_w]
+        cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1, axis=1)[
+            :, :, :, section_t : section_t + section_h]
+        cos_w = paddle.index_select(cos_bsz, index=tmp_pos_id_2, axis=1)[
+            :, :, :, section_t + section_h : section_t + section_h + section_w]
         cos_thw = paddle.concat([cos_t, cos_h, cos_w], axis=-1)
 
         rot_emb[0] = cos_thw
