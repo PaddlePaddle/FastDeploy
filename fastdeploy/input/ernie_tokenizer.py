@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-# cipher_token=WjI1fQOvhN  # do not edit this line
-
 import os
 import re
 from shutil import copyfile
