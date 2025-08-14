@@ -15,10 +15,12 @@
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
-import os
+
+import paddle
 
 from fastdeploy.config import (
     CacheConfig,
@@ -866,10 +868,13 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
-                    self.max_num_batched_tokens = 8192
+                    if paddle.is_compiled_with_xpu():
+                        self.max_num_batched_tokens = self.max_model_len
+                    else:
+                        self.max_num_batched_tokens = 8192
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
