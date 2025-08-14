@@ -18,6 +18,9 @@ import io
 import os
 import decord
 from tempfile import NamedTemporaryFile as ntf
+from typing import Union, Optional
+import numpy as np
+import math
 
 try:
     # moviepy 1.0
@@ -99,3 +102,49 @@ def read_video_decord(video_path):
 
     video_meta = {"fps": fps, "duration": duration, "num_of_frame": vlen}
     return video_reader, video_meta
+
+
+def sample_frames(
+    video: np.ndarray,
+    frame_factor: int,
+    min_frames: int,
+    max_frames: int,
+    metadata: Optional[dict] = None,
+    fps: Optional[Union[int, float]] = None,
+    num_frames: Optional[int] = None,
+):
+    if fps is not None and num_frames is not None:
+        raise ValueError("`num_frames` and `fps` are mutually exclusive arguments, please use only one!")
+
+    if fps is None and num_frames is None:
+        return video
+
+    total_num_frames = video.shape[0]
+
+    # If num_frames is not given but fps is, calculate num_frames from fps
+    if num_frames is not None:
+        num_frames = round(num_frames / frame_factor) * frame_factor
+    elif fps is not None:
+        if metadata is None:
+            raise ValueError(
+                "Asked to sample `fps` frames per second but no video metadata was provided which is required when sampling with `fps`. "
+                "Please pass in `VideoMetadata` object or use a fixed `num_frames` per input video"
+            )
+        max_frames = math.floor(min(max_frames, total_num_frames) / frame_factor) * frame_factor
+        num_frames = total_num_frames / metadata["fps"] * fps
+        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
+        num_frames = math.floor(num_frames / frame_factor) * frame_factor
+
+    if num_frames > total_num_frames:
+        raise ValueError(
+            f"Video can't be sampled. The inferred `num_frames={num_frames}` exceeds `total_num_frames={total_num_frames}`. "
+            "Decrease `num_frames` or `fps` for sampling."
+        )
+
+    if num_frames is not None:
+        indices = np.arange(0, total_num_frames, total_num_frames / num_frames).astype("int")
+    else:
+        indices = np.arange(0, total_num_frames).astype("int")
+    video = video[indices]
+
+    return video

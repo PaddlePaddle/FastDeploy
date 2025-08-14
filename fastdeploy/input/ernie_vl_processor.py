@@ -21,6 +21,7 @@ from fastdeploy.engine.request import Request
 from fastdeploy.input.ernie_processor import ErnieProcessor
 from fastdeploy.input.mm_processor import IDS_TYPE_FLAG, DataProcessor
 from fastdeploy.utils import data_processor_logger
+from fastdeploy.engine.config import ModelConfig
 
 
 class ErnieMoEVLProcessor(ErnieProcessor):
@@ -29,27 +30,22 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def __init__(
         self,
         model_name_or_path,
+        model_conf = None,
         limit_mm_per_prompt=None,
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
     ):
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
-        tokenizer_path = model_name_or_path
-        preprocessor_path = model_name_or_path
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
 
+        model_conf = ModelConfig({"model": model_name_or_path})
+
         self.ernie_processor = DataProcessor(
-            model_path=tokenizer_path,
-            image_preprocessor_name=preprocessor_path,
+            model_path=model_name_or_path,
             **processor_kwargs,
         )
-
-        # self.ernie_processor.eval()
-        self.image_patch_id = self.ernie_processor.image_token_id
-        self.spatial_conv_size = self.ernie_processor.spatial_conv_size
-
-        self.decode_status = dict()
         self._load_tokenizer()
+        self.decode_status = dict()
 
         # Generation config
         try:
@@ -60,7 +56,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             )
             self.generation_config = None
 
-        # self.eos_token_ids = [self.tokenizer.eos_token_id]
         from paddleformers.trl.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
@@ -108,11 +103,10 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
         task = request.to_dict()
-        task["enable_thinking"] = kwargs.get("enable_thinking", True)
+        task["enable_thinking"] = kwargs.get("enable_thinking", False)
         self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
         request = self._apply_default_parameters(request)
-
         return request
 
     def _parse_processor_kwargs(self, kwargs):
@@ -127,17 +121,8 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             # 验证参数类型
             data_processor_logger.info(f"kwargs:{kwargs}")
             expected_types = {
-                "spatial_conv_size": int,
-                "temporal_conv_size": int,
-                "image_min_pixels": int,
-                "image_max_pixels": int,
-                "video_min_pixels": int,
-                "video_max_pixels": int,
-                "video_target_frames": int,
-                "video_frames_sample": str,
                 "video_max_frames": int,
                 "video_min_frames": int,
-                "video_fps": int,
             }
 
             for key, value in kwargs.items():
@@ -259,12 +244,13 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             outs["grid_thw"] = np.vstack(outs["grid_thw"])
             outs["image_type_ids"] = np.array(outs["image_type_ids"])
 
-        outs["image_patch_id"] = self.image_patch_id
+        outs["image_patch_id"] = self.ernie_processor.image_token_id
+        outs["video_patch_id"] = self.ernie_processor.video_token_id
+
         # Convert lists to arrays
         outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
         outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
         outs["position_ids"] = np.concatenate(outs["position_ids"], axis=1)
-
         return outs
 
     def process_response_dict(self, response_dict, stream, **kwargs):
@@ -284,3 +270,17 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
         else:
             return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)
+
+    def update_stop_seq(self, stop_sequences):
+        """
+        Update stop sequences from request.
+        """
+        stop_seqs = []
+        if isinstance(stop_sequences, str):
+            stop_sequences = [stop_sequences]
+        for seq in stop_sequences:
+            if seq != self.tokenizer.eos_token_id:
+                stop_seqs.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(seq)))
+        stop_seqs, stop_seqs_len = self.pad_batch_data(stop_seqs, pad_id=-1, return_seq_len=True, return_array=False)
+        data_processor_logger.debug(f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
+        return stop_seqs, stop_seqs_len

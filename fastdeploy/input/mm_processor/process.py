@@ -17,18 +17,14 @@
 
 """ process.py """
 from typing import Any, Dict, List, Union
-
 import numpy as np
-from paddleformers.transformers.image_utils import ChannelDimension
 from PIL import Image
-
+from paddleformers.transformers import AutoTokenizer
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.utils import data_processor_logger
 
-from paddleformers.transformers import AutoTokenizer
-
 from .image_processor import ImageProcessor
-from .process_video import read_video_decord
+from .process_video import read_video_decord, sample_frames
 
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
 
@@ -42,13 +38,14 @@ class DataProcessor:
     def __init__(
         self,
         model_path: str,
-        image_min_pixels: int = 3136,
-        image_max_pixels: int = 12845056,
-        video_min_pixels: int = 3136,
-        video_max_pixels: int = 12845056,
+        video_min_frames: int = 4,
+        video_max_frames: int = 768,
         tokens_per_second: int = 2,
         **kwargs,
     ) -> None:
+        self.min_frames = video_min_frames
+        self.max_frames = video_max_frames
+
         # Tokenizer and image preprocessor
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
         self.tokenizer.ignored_index = -100
@@ -57,12 +54,6 @@ class DataProcessor:
         # Convolution sizes for patch aggregation
         self.spatial_conv_size = self.image_processor.merge_size
         self.temporal_conv_size = self.image_processor.temporal_patch_size
-
-        # Pixel constraints
-        self.image_min_pixels = image_min_pixels
-        self.image_max_pixels = image_max_pixels
-        self.video_min_pixels = video_min_pixels
-        self.video_max_pixels = video_max_pixels
 
         # Special tokens and IDs
         self.image_token = "<|image_pad|>"
@@ -196,7 +187,7 @@ class DataProcessor:
                     video_bytes = image_message.get("video")
                     if video_bytes is None:
                         continue
-                    frames, meta = self._load_and_process_video(video_bytes)
+                    frames, meta = self._load_and_process_video(video_bytes, image_message)
                     # -----------
                     # mm_parser = MultiModalPartParser()
                     # fimg = mm_parser.parse_image("file:///home/liudongdong/github/FastDeploy/data/images/demo.jpeg")
@@ -221,17 +212,17 @@ class DataProcessor:
         position_ids = self._compute_1d_positions(outputs["cur_position"], len(tokens))
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
-    
-    def _compute_1d_positions(self, start_pos: int, tokens_num: int) -> np.ndarray:
-        text_array = np.arange(tokens_num).reshape(1, -1)
-        text_index = np.broadcast_to(text_array, (3, tokens_num))
+
+    def _compute_1d_positions(self, start_pos: int, num_tokens: int) -> np.ndarray:
+        text_array = np.arange(num_tokens).reshape(1, -1)
+        text_index = np.broadcast_to(text_array, (3, num_tokens))
         position = text_index + start_pos
         return position
 
     def _add_image(self, img, outputs: Dict) -> None:
         ret = self.image_processor.preprocess(images=[img.convert("RGB")])
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
-        grid_thw =  ret["grid_thw"].tolist()
+        grid_thw = ret["grid_thw"].tolist()
 
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
@@ -247,11 +238,10 @@ class DataProcessor:
         outputs["cur_position"] = position_ids.max() + 1
 
     def _add_video(self, frames, meta: Dict, outputs: Dict) -> None:
-        pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
-        ret = self.image_processor.preprocess(images=pixel_stack)
+        ret = self.image_processor.preprocess(images=frames)
 
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
-        grid_thw =  ret["grid_thw"].tolist()
+        grid_thw = ret["grid_thw"].tolist()
 
         outputs["input_ids"].extend([self.video_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
@@ -260,14 +250,14 @@ class DataProcessor:
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].extend([1] * grid_thw[0])
 
-        fps = meta["fps"] 
+        fps = meta["fps"]
         second_per_grid_t = self.temporal_conv_size / fps
         t, h, w = grid_thw
         position_ids = self._compute_3d_positions2(outputs["cur_position"], t,h,w, second_per_grid_t)
 
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
-    
+
     def _compute_3d_positions2(self, start_pos: int, t: int, h: int, w: int, second_per_grid_t:float) -> np.ndarray:
         h //= self.spatial_conv_size
         w //= self.spatial_conv_size
@@ -286,7 +276,7 @@ class DataProcessor:
         position = np.stack([t_index, h_index, w_index]) + start_pos
         return position
 
-    def _load_and_process_video(self, url: str) -> List[Image.Image]:
+    def _load_and_process_video(self, url: str, item: Dict) -> np.ndarray:
         reader, meta = read_video_decord(url)
 
         frames = []
@@ -294,6 +284,26 @@ class DataProcessor:
             frame = reader[i].asnumpy()
             image = Image.fromarray(frame, "RGB")
             frames.append(image)
+        frames = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
+
+        fps = item.get("fps", None)
+        num_frames = item.get("target_frames", None)
+        if fps is not None or num_frames is not None:
+            min_frames = item.get("min_frames", self.min_frames)
+            max_frames = item.get("max_frames", self.max_frames)
+            frames = sample_frames(video=frames,
+                                   frame_factor=self.temporal_conv_size,
+                                   min_frames=min_frames,
+                                   max_frames=max_frames,
+                                   metadata=meta,
+                                   fps=fps,
+                                   num_frames=num_frames)
+            
+            meta["num_of_frame"] = frames.shape[0]
+            if fps is not None:
+                meta["fps"] = fps 
+            else:
+                meta["fps"] = frames.shape[0] / meta["duration"]
 
         return frames, meta
 
