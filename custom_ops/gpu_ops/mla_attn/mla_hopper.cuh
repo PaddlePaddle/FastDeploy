@@ -113,6 +113,9 @@ struct Params {
   } else if (group_size == 64) {                             \
     constexpr size_t GROUP_SIZE = 64;                        \
     __VA_ARGS__                                              \
+  } else if (group_size == 128) {                            \
+    constexpr size_t GROUP_SIZE = 128;                       \
+    __VA_ARGS__                                              \
   } else {                                                   \
     PD_THROW("not support the group_size: ", group_size);    \
     return cudaErrorNotSupported;                            \

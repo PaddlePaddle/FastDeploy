@@ -49,6 +49,8 @@ def get_block_shape_and_split_kv_block(
             kv_batch_ids,
             kv_tile_ids_per_batch,
             kv_num_blocks,
+            decoder_num_blocks_x,
+            decoder_chunk_size_cpu,
             max_len_kv_cpu,
         ) = get_block_shape_and_split_kv_block_cuda(
             seq_lens_encoder,
@@ -71,6 +73,8 @@ def get_block_shape_and_split_kv_block(
             kv_batch_ids,
             kv_tile_ids_per_batch,
             kv_num_blocks,
+            decoder_num_blocks_x,
+            decoder_chunk_size_cpu,
             max_len_kv_cpu,
         )
     else:
