@@ -236,7 +236,7 @@ class Config:
             if self.cache_config.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     if paddle.is_compiled_with_xpu():
@@ -290,7 +290,7 @@ class Config:
         )
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
