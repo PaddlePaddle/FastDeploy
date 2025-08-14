@@ -124,8 +124,6 @@ class OpenAIServingCompletion:
 
                 del current_req_dict
 
-
-
             if request.stream:
                 return self.completion_stream_generator(
                     request=request,
