@@ -29,7 +29,7 @@ def top_k_top_p_sampling(
     x: paddle.Tensor,
     top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
-    top_k_list: Optional[paddle.Tensor] = None,
+    top_k_list: Optional[list] = None,
     threshold: Optional[paddle.Tensor] = None,
     topp_seed: Optional[paddle.Tensor] = None,
     seed: int = -1,
