@@ -834,6 +834,65 @@ def test_non_streaming_chat_with_bad_words(openai_client, capsys):
     assert not any(ids in response_1.choices[0].message.completion_token_ids for ids in bad_token_ids)
 
 
+def test_streaming_chat_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in streaming chat functionality with the local service
+    """
+    response_0 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        stream=True,
+        extra_body={"return_token_ids": True},
+    )
+    output_tokens_0 = []
+    output_ids_0 = []
+    is_first_chunk = True
+    for chunk in response_0:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "content")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+            output_tokens_0.append(chunk.choices[0].delta.content)
+            output_ids_0.extend(chunk.choices[0].delta.completion_token_ids)
+
+    # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
+    response_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
+        stream=True,
+    )
+    output_tokens_1 = []
+    output_ids_1 = []
+    is_first_chunk = True
+    for chunk in response_1:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "content")
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+            output_tokens_1.append(chunk.choices[0].delta.content)
+            output_ids_1.extend(chunk.choices[0].delta.completion_token_ids)
+    assert not any(ids in output_ids_1 for ids in bad_token_ids)
+
+
 def test_non_streaming_completion_with_bad_words(openai_client, capsys):
     """
     Test bad_words option in non-streaming completion functionality with the local service
@@ -884,3 +943,58 @@ def test_non_streaming_completion_with_bad_words(openai_client, capsys):
     assert hasattr(response_0.choices[0], "completion_token_ids")
     assert isinstance(response_0.choices[0].completion_token_ids, list)
     assert not any(ids in response_1.choices[0].completion_token_ids for ids in bad_token_ids)
+
+
+def test_streaming_completion_with_bad_words(openai_client, capsys):
+    """
+    Test bad_words option in streaming completion functionality with the local service
+    """
+    response_0 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        stream=True,
+        extra_body={"return_token_ids": True},
+    )
+    output_tokens_0 = []
+    output_ids_0 = []
+    is_first_chunk = True
+    for chunk in response_0:
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert hasattr(chunk, "choices")
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], "text")
+            assert hasattr(chunk.choices[0], "completion_token_ids")
+            output_tokens_0.append(chunk.choices[0].text)
+            output_ids_0.extend(chunk.choices[0].completion_token_ids)
+
+    # add bad words
+    bad_token_ids = output_ids_0[6:10]
+    bad_tokens = output_tokens_0[6:10]
+    is_first_chunk = True
+    response_1 = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        top_p=0.0,
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
+        stream=True,
+    )
+    output_tokens_1 = []
+    output_ids_1 = []
+    for chunk in response_1:
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert hasattr(chunk, "choices")
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], "text")
+            assert hasattr(chunk.choices[0], "completion_token_ids")
+            output_tokens_1.append(chunk.choices[0].text)
+            output_ids_1.extend(chunk.choices[0].completion_token_ids)
+    assert not any(ids in output_ids_1 for ids in bad_token_ids)
