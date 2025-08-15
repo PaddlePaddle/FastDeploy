@@ -257,7 +257,6 @@ class DataProcessor(BaseDataProcessor):
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
-        request["enable_thinking"] = request.get("chat_template_kwargs", {}).get("enable_thinking")
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
@@ -275,6 +274,11 @@ class DataProcessor(BaseDataProcessor):
             elif "messages" in request:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
+                chat_template_kwargs = request.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    for k, v in chat_template_kwargs.items():
+                        if k not in request:
+                            request[k] = v
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
