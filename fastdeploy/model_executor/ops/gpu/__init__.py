@@ -19,7 +19,6 @@ from fastdeploy.import_ops import import_custom_ops
 
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
-import_custom_ops(PACKAGE, "..base.fastdeploy_base_ops", globals())
 import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
 
 

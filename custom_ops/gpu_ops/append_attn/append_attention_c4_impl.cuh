@@ -48,6 +48,7 @@ __global__ void multi_query_append_attention_c4_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ mask_offset,
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -172,6 +173,7 @@ __global__ void multi_query_append_attention_c4_kernel(
   } else {
     o_base_ptr_int8 = out + o_offset;
   }
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -248,7 +250,7 @@ __global__ void multi_query_append_attention_c4_kernel(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : chunk_len) /
+              : mask_offset ? 0 : chunk_len) /
       (num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -338,7 +340,8 @@ __global__ void multi_query_append_attention_c4_kernel(
                           q_len,
                           kv_len,
                           chunk_end,
-                          s_frag);
+                          s_frag,
+                          mask_offset_this_seq);
     }
 
     update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
@@ -505,6 +508,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ mask_offset,
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -627,7 +631,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
           tid % 8 * num_elems_per_128b<T>();
     }
   }
-
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -706,7 +710,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : chunk_len) /
+              : mask_offset ? 0 : chunk_len) /
       (NUM_WARP_KV * num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -793,7 +797,8 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
                           q_len,
                           kv_len,
                           chunk_end,
-                          s_frag);
+                          s_frag,
+                          mask_offset_this_seq);
     }
 
     update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
@@ -1088,6 +1093,7 @@ void MultiQueryAppendC4Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1151,6 +1157,7 @@ void MultiQueryAppendC4Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1335,6 +1342,7 @@ void MultiQueryAppendC4Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1411,6 +1419,7 @@ void MultiQueryAppendC4Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
