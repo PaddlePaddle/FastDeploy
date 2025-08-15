@@ -1,5 +1,4 @@
 [English](README.md) | 简体中文
-[English](README.md) | 简体中文
 <p align="center">
   <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://github.com/user-attachments/assets/42b0039f-39e3-4279-afda-6d1865dfbffb" width="500"></a>
 </p>
@@ -24,7 +23,7 @@
 </p>
 
 --------------------------------------------------------------------------------
-# FastDeploy 2.0：基于飞桨的大语言模型与视觉语言模型推理部署工具包
+# FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
 
 ## 最新活动
 
@@ -56,7 +55,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [天数 CoreX](./docs/zh/get_started/installation/iluvatar_gpu.md)
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
 
-**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU、海光（Hygon）DCU 和摩尔线程（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
+**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU、海光（Hygon）DCU 和沐曦（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
 
 ## 入门指南
 
