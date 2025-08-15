@@ -23,7 +23,7 @@
 </p>
 
 --------------------------------------------------------------------------------
-# FastDeploy 2.1：基于飞桨的大语言模型与视觉语言模型推理部署工具包
+# FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
 
 ## 最新活动
 **[2025-08] 🔥 FastDeploy v2.1 全新发布:** 全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
@@ -48,14 +48,15 @@
 
 ## 安装
 
-FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU**、**天数（Iluvatar）GPU**、**燧原（Enflame）GCU** 以及其他硬件上进行推理部署。详细安装说明如下：
+FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU**、**天数（Iluvatar）GPU**、**燧原（Enflame）GCU**、**海光（Hygon）DCU** 以及其他硬件上进行推理部署。详细安装说明如下：
 
 - [英伟达 GPU](./docs/zh/get_started/installation/nvidia_gpu.md)
 - [昆仑芯 XPU](./docs/zh/get_started/installation/kunlunxin_xpu.md)
 - [天数 CoreX](./docs/zh/get_started/installation/iluvatar_gpu.md)
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
+- [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
 
-**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU、海光（Hygon）DCU 和摩尔线程（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
+**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 和 沐曦（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
 
 ## 入门指南
 

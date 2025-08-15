@@ -1,4 +1,4 @@
-site_name: 'FastDeploy 2.0: Large Language Model Deployement'
+site_name: 'FastDeploy : Large Language Model Deployement'
 repo_url: https://github.com/PaddlePaddle/FastDeploy
 repo_name: FastDeploy
 
@@ -34,14 +34,14 @@ plugins:
         - locale: en
           default: true
           name: English
-          site_name: 'FastDeploy 2.0: Large Language Model Deployement'
+          site_name: 'FastDeploy: Large Language Model Deployement'
           build: true
         - locale: zh
           name: 简体中文
           site_name: 飞桨大语言模型推理部署工具包
-          link: /zh/
+          link: /./zh/
           nav_translations:
-            FastDeploy 2.0: FastDeploy 2.0
+            FastDeploy: FastDeploy
             Quick Start: 快速入门
             Installation: 安装
             Nvidia GPU: 英伟达 GPU
@@ -58,7 +58,7 @@ plugins:
             Monitor Metrics: 监控Metrics
             Scheduler: 调度器
             Offline Inference: 离线推理
-            Optimal Deployment: 最佳实践
+            Best Practices: 最佳实践
             ERNIE-4.5-0.3B: ERNIE-4.5-0.3B
             ERNIE-4.5-21B-A3B: ERNIE-4.5-21B-A3B
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B
@@ -89,7 +89,7 @@ plugins:
             Environment Variables: 环境变量
 
 nav:
-  - 'FastDeploy 2.0': index.md
+  - 'FastDeploy': index.md
   - 'Quick Start':
       - Installation:
           - 'Nvidia GPU': get_started/installation/nvidia_gpu.md
@@ -106,7 +106,7 @@ nav:
       - 'Monitor Metrics': online_serving/metrics.md
       - 'Scheduler': online_serving/scheduler.md
   - 'Offline Inference': offline_inference.md
-  - Optimal Deployment:
+  - Best Practices:
       - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md
       - ERNIE-4.5-21B-A3B: best_practices/ERNIE-4.5-21B-A3B-Paddle.md
       - ERNIE-4.5-300B-A47B: best_practices/ERNIE-4.5-300B-A47B-Paddle.md
@@ -135,4 +135,3 @@ nav:
       - 'Log Description': usage/log.md
       - 'Code Overview': usage/code_overview.md
       - 'Environment Variables': usage/environment_variables.md
-

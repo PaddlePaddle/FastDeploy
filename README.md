@@ -23,12 +23,10 @@ English | [简体中文](README_CN.md)
 </p>
 
 --------------------------------------------------------------------------------
-# FastDeploy 2.1: Inference and Deployment Toolkit for LLMs and VLMs based on PaddlePaddle
+# FastDeploy : Inference and Deployment Toolkit for LLMs and VLMs based on PaddlePaddle
 
 ## News
 **[2025-08] 🔥 Released FastDeploy v2.1:** A brand-new KV Cache scheduling strategy has been introduced, and expanded support for PD separation and CUDA Graph across more models. Enhanced hardware support has been added for platforms like Kunlun and Hygon, along with comprehensive optimizations to improve the performance of both the service and inference engine.
-
-**[2025-07] 《FastDeploy2.0推理部署实测》专题活动已上线!** 完成文心4.5系列开源模型的推理部署等任务，即可获得骨瓷马克杯等FastDeploy2.0官方周边及丰富奖金！🎁 欢迎大家体验反馈～ 📌[报名地址](https://www.wjx.top/vm/meSsp3L.aspx#)   📌[活动详情](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
 **[2025-07] The FastDeploy 2.0 Inference Deployment Challenge is now live!** Complete the inference deployment task for the ERNIE 4.5 series open-source models to win official FastDeploy 2.0 merch and generous prizes! 🎁 You're welcome to try it out and share your feedback! 📌[Sign up here](https://www.wjx.top/vm/meSsp3L.aspx#) 📌[Event details](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
@@ -52,14 +50,15 @@ English | [简体中文](README_CN.md)
 
 ## Installation
 
-FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**, **Iluvatar GPUs**, **Enflame GCUs**, and other hardware. For detailed installation instructions:
+FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**, **Iluvatar GPUs**, **Enflame GCUs**, **Hygon DCUs** and other hardware. For detailed installation instructions:
 
 - [NVIDIA GPU](./docs/get_started/installation/nvidia_gpu.md)
 - [Kunlunxin XPU](./docs/get_started/installation/kunlunxin_xpu.md)
 - [Iluvatar GPU](./docs/get_started/installation/iluvatar_gpu.md)
 - [Enflame GCU](./docs/get_started/installation/Enflame_gcu.md)
+- [Hygon DCU](./docs/get_started/installation/hygon_dcu.md)
 
-**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU, Hygon DCU, and MetaX GPU are currently under development and testing. Stay tuned for updates!
+**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU and MetaX GPU are currently under development and testing. Stay tuned for updates!
 
 ## Get Started
 
