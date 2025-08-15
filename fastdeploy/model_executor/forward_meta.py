@@ -37,6 +37,8 @@ class ForwardMode(IntEnum):
     DECODE = auto()
     # Mixed mode
     MIXED = auto()
+    # Native mode
+    NATIVE = auto()
 
     def is_prefill(self):
         """Is Extend mode"""
@@ -49,6 +51,10 @@ class ForwardMode(IntEnum):
     def is_mixed(self):
         """Is Mixed mode"""
         return self == ForwardMode.MIXED
+
+    def is_native(self):
+        """Is Native mode"""
+        return self == ForwardMode.NATIVE
 
 
 @dataclass

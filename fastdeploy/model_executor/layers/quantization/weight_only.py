@@ -94,6 +94,16 @@ class WeightOnlyConfig(QuantConfigBase):
                 )
 
                 return DCUWeightOnlyLinearMethod(self)
+        elif current_platform.is_maca():
+            if isinstance(layer, FusedMoE):
+                from fastdeploy.model_executor.layers.backends import (
+                    MetaxTritonWeightOnlyMoEMethod,
+                )
+
+                return MetaxTritonWeightOnlyMoEMethod(self)
+            else:
+
+                return GPUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":
@@ -196,14 +206,24 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         raise NotImplementedError
 
     def apply(self, layer, x):
-        linear_out = weight_only_linear(
-            x,
-            weight=layer.weight,
-            bias=layer.bias if layer.add_bias else None,
-            weight_scale=layer.weight_scale,
-            weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
-            arch=self.quant_config.weight_only_linear_arch,
-        )
+        if current_platform.is_maca():
+            linear_out = weight_only_linear(
+                x,
+                weight=layer.weight,
+                bias=layer.bias if layer.add_bias else None,
+                weight_scale=layer.weight_scale,
+                weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
+                arch=80,
+            )
+        else:
+            linear_out = weight_only_linear(
+                x,
+                weight=layer.weight,
+                bias=layer.bias if layer.add_bias else None,
+                weight_scale=layer.weight_scale,
+                weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
+                arch=self.quant_config.weight_only_linear_arch,
+            )
         return linear_out
 
 
@@ -240,6 +260,7 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             algo=self.quant_config.algo,
             arch=self.quant_config.weight_only_linear_arch,
         )
-
+        if current_platform.is_maca():
+            quanted_weight_tensor = paddle.transpose(quanted_weight_tensor, [1, 0])
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))

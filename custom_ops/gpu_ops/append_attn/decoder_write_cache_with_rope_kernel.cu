@@ -45,7 +45,6 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
   const uint32_t elem_nums =
       use_neox_style ? bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2
                      : bsz * (num_heads + 2 * kv_num_heads) * dim_head;
-  assert(dim_head == 128 && "dim_head must be 128");
   constexpr int HEAD_DIM = 128;
 
   constexpr int PackSize = HEAD_DIM / kWarpSize;
@@ -53,7 +52,7 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
   const int blocksize = 128;
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
-  dim3 block_dim(blocksize / kWarpSize, kWarpSize, 1);
+  dim3 block_dim(kWarpSize, blocksize / kWarpSize, 1);
   append_decode_cache_T_rope_qk_norm_kernel<T, PackSize>
       <<<grid_size, block_dim, 0, stream>>>(reinterpret_cast<const T*>(qkv),
                                             key_cache,
