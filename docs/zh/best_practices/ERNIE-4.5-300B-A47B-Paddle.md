@@ -100,7 +100,6 @@ export FD_SAMPLING_CLASS=rejection
 **启用方式：** 以单机8GPU，1P1D（各4GPU）部署为例，与默认的混合式部署方式相比， 需要`--splitwise-role`指定节点的角色。并通过环境变量`FD_LOG_DIR`和`CUDA_VISIBLE_DEVICES`将两个节点的GPU 和日志隔离开
 ```
 export FD_LOG_DIR="log_prefill"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -113,7 +112,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 ```
 export FD_LOG_DIR="log_decode"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 # 注意innode-prefill-ports指定为Prefill服务的engine-worker-queue-port
 python -m fastdeploy.entrypoints.openai.api_server \

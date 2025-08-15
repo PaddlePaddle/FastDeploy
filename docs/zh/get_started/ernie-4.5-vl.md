@@ -23,6 +23,7 @@
 **注意**： 由于模型参数量为424B-A47B，在80G * 8卡的机器上，需指定```--quantization wint4```(wint8也可部署)。
 
 ```shell
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \

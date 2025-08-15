@@ -18,7 +18,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 ```
 
 ## Container Preparation
-1. Start Container
+### Start Container
 
 ```bash
 docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
@@ -27,12 +27,25 @@ docker exec -it paddle_infer bash
 
 /home/paddle contains the model files, *.whl packages, and scripts.
 
-1. Install packages
+### Install paddle
 
 ```bash
-pip3 install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-pip3 install paddle-iluvatar-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
+pip3 install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+pip3 install paddle-iluvatar-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
+```
+For latest paddle verion on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+
+### Install or build FastDeploy
+```bash
 pip3 install fastdeploy_iluvatar_gpu==2.1.0.dev0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
+```
+You can build FastDeploy from source if you need the ```latest version```.
+```bash
+git clone https://github.com/PaddlePaddle/FastDeploy
+cd FastDeploy
+pip install -r requirements_iluvatar.txt
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+bash build.sh
 ```
 
 ## Prepare the inference demo script

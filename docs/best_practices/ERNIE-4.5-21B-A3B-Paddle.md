@@ -111,7 +111,6 @@ export INFERENCE_MSG_QUEUE_ID=1315
 export FLAGS_max_partition_size=2048
 export FD_ATTENTION_BACKEND=FLASH_ATTN
 export FD_LOG_DIR="prefill_log"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 quant_type=block_wise_fp8
 export FD_USE_DEEP_GEMM=0
@@ -121,7 +120,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A
     --max-num-seqs 20 \
     --num-gpu-blocks-override 40000 \
     --quantization ${quant_type} \
-    --gpu-memory-utilization 0.9 \
+    --gpu-memory-utilization 0.9 --kv-cache-ratio 0.9 \
     --port 7012 --engine-worker-queue-port 7013 --metrics-port 7014 --tensor-parallel-size 4 \
     --cache-queue-port 7015 \
     --splitwise-role "prefill" \
@@ -132,7 +131,6 @@ export CUDA_VISIBLE_DEVICES=4,5,6,7
 export INFERENCE_MSG_QUEUE_ID=1215
 export FLAGS_max_partition_size=2048
 export FD_LOG_DIR="decode_log"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 quant_type=block_wise_fp8
 export FD_USE_DEEP_GEMM=0
@@ -141,7 +139,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A
     --max-model-len 131072 \
     --max-num-seqs 20 \
     --quantization ${quant_type} \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.85 --kv-cache-ratio 0.1 \
     --port 9012 --engine-worker-queue-port 8013 --metrics-port 8014 --tensor-parallel-size 4 \
     --cache-queue-port 8015 \
     --innode-prefill-ports 7013 \
