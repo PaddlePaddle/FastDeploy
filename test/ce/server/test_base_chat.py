@@ -3,9 +3,13 @@
 # @author DDDivano
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
+"""
+some basic check for fd web api
+"""
+
 import json
 
-from core import TEMPLATE, URL, build_request_payload, send_request
+from core import TEMPLATE, URL, build_request_payload, get_token_list, send_request
 
 
 def test_stream_response():
@@ -72,9 +76,37 @@ def test_logprobs_enabled():
 def test_stop_sequence():
     data = {
         "stream": False,
-        "stop": ["然后"],
+        "stop": ["。"],
         "messages": [
-            {"role": "user", "content": "请输出：这是第一段。然后这是第二段。"},
+            {
+                "role": "user",
+                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+            },
+        ],
+        "max_tokens": 20,
+        "top_p": 0,
+    }
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+    content = resp["choices"][0]["message"]["content"]
+    token_list = get_token_list(resp)
+    print("截断输出:", content)
+    assert "第二段" not in content
+    assert "第二段" not in token_list
+    assert "。" in token_list, "没有找到。符号"
+
+
+def test_stop_sequence1():
+    """
+    不加stop看看是否有影响
+    """
+    data = {
+        "stream": False,
+        "messages": [
+            {
+                "role": "user",
+                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+            },
         ],
         "max_tokens": 20,
         "top_p": 0,
@@ -83,7 +115,54 @@ def test_stop_sequence():
     resp = send_request(URL, payload).json()
     content = resp["choices"][0]["message"]["content"]
     print("截断输出:", content)
-    assert "第二段" not in content
+    assert "第二段" in content
+
+
+def test_stop_sequence2():
+    """
+    stop token长度测试
+    """
+    data = {
+        "stream": False,
+        "stop": ["这是第二段啦啦"],
+        "messages": [
+            {
+                "role": "user",
+                "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+            },
+        ],
+        "max_tokens": 50,
+        "top_p": 0,
+    }
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+    content = resp["choices"][0]["message"]["content"]
+    # token_list = get_token_list(resp)
+    print("截断输出:", content)
+    assert "啦啦啦" not in content
+
+
+# def test_stop_sequence3():
+#     """
+#     stop token 数量测试
+#     """
+#     data = {
+#         "stream": False,
+#         "stop": ["。", "果冻", "果", "冻", "第二", "二"],
+#         "messages": [
+#             {
+#                 "role": "user",
+#                 "content": "你要严格按照我接下来的话输出，输出冒号后面的内容，请输出：这是第一段。果冻这是第二段啦啦啦啦啦。",
+#             },
+#         ],
+#         "max_tokens": 50,
+#         "top_p": 0,
+#     }
+#     payload = build_request_payload(TEMPLATE, data)
+#     resp = send_request(URL, payload).json()
+#     content = resp["choices"][0]["message"]["content"]
+#     print("截断输出:", content)
+#     assert "啦啦啦" not in content
 
 
 def test_sampling_parameters():
@@ -121,13 +200,39 @@ def test_multi_turn_conversation():
 
 
 def test_bad_words_filtering():
-    banned_tokens = ["你", "我", "年龄"]
+    banned_tokens = ["香蕉"]
 
     data = {
         "stream": False,
         "messages": [
             {"role": "system", "content": "你是一个助手，回答简洁清楚"},
-            {"role": "user", "content": "请输出我的年龄是10岁"},
+            {"role": "user", "content": "请输出冒号后面的字: 我爱吃果冻，和苹果，香蕉，和荔枝"},
+        ],
+        "top_p": 0,
+        "max_tokens": 69,
+        "bad_words": banned_tokens,
+    }
+
+    payload = build_request_payload(TEMPLATE, data)
+    response = send_request(URL, payload).json()
+    content = response["choices"][0]["message"]["content"]
+    print("生成内容:", content)
+    token_list = get_token_list(response)
+
+    for word in banned_tokens:
+        assert word not in token_list, f"bad_word '{word}' 不应出现在生成结果中"
+
+    print("test_bad_words_filtering 正例验证通过")
+
+
+def test_bad_words_filtering1():
+    banned_tokens = ["和", "呀"]
+
+    data = {
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": "你是一个助手，回答简洁清楚"},
+            {"role": "user", "content": "请输出冒号后面的字: 我爱吃果冻，和苹果，香蕉，和荔枝"},
         ],
         "top_p": 0,
         "max_tokens": 69,
@@ -143,4 +248,26 @@ def test_bad_words_filtering():
     for word in banned_tokens:
         assert word not in content, f"bad_word '{word}' 不应出现在生成结果中"
 
-    print("test_bad_words_filtering 通过：生成结果未包含被禁词")
+    print("test_bad_words_filtering1 通过：生成结果未包含被禁词")
+
+    # 正例验证
+    word = "呀"
+    data = {
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": "你是一个助手，回答简洁清楚"},
+            {"role": "user", "content": "请输出冒号后面的字，一模一样: 我爱吃果冻，苹果，香蕉，和荔枝呀呀呀"},
+        ],
+        "top_p": 0,
+        "max_tokens": 69,
+    }
+
+    payload = build_request_payload(TEMPLATE, data)
+    response = send_request(URL, payload).json()
+
+    content = response["choices"][0]["message"]["content"]
+    print("生成内容:", content)
+    token_list = get_token_list(response)
+    assert word in token_list, f"'{word}' 应出现在生成结果中"
+
+    print("test_bad_words_filtering1 正例验证通过")

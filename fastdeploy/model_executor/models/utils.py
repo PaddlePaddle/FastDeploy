@@ -72,11 +72,19 @@ def default_weight_loader(fd_config: FDConfig) -> None:
                     loaded_weight = loaded_weight[..., shard_offset:shard_size]
                 else:
                     loaded_weight = loaded_weight[shard_offset:shard_size, ...]
-            loaded_weight = get_tensor(loaded_weight)
 
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
+            loaded_weight = get_tensor(loaded_weight)
+            # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+            if param.dtype != loaded_weight.dtype:
+                loaded_weight = loaded_weight.cast(param.dtype)
+
+            if param.shape != loaded_weight.shape:
+                try:
+                    param = param.reshape(loaded_weight.shape)
+                except ValueError as e:
+                    raise ValueError(
+                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
+                    )
 
             param.copy_(loaded_weight, False)
         except Exception:
