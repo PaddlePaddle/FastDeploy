@@ -268,7 +268,7 @@ class DataProcessor:
 
         tn = np.arange(t).reshape(-1, 1)
         tn = np.broadcast_to(tn, (t, h * w))
-        tn = tn * second_per_grid_t * self.tokens_per_second
+        tn = tn * int(second_per_grid_t) * self.tokens_per_second
         t_index = tn.flatten()
 
         hn = np.arange(h).reshape(1, -1, 1)
