@@ -56,6 +56,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
         self.tool_parsers = dict()
         self.decode_status = dict()
+        self.reasoning_end_dict = dict()
         self._load_tokenizer()
         self.eos_token_ids = [self.tokenizer.eos_token_id]
         self.eos_token_id_len = len(self.eos_token_ids)
