@@ -188,7 +188,7 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
 
         if (token_idx < qo_len) {
           const int head_idx = token_group_idx % Ktraits::GROUP_SIZE;
-          const int bid_offset = mainloop_params.max_draft_token_num * Ktraits::GROUP_SIZE;
+          const int bid_offset = mainloop_params.draft_total_token_num * Ktraits::GROUP_SIZE;
           const int write_idx = bid * bid_offset + token_idx * Ktraits::GROUP_SIZE + head_idx;
           mM(write_idx) = static_cast<DTypeMD>(attention_updater.row_max(w_i));
           mD(write_idx) = static_cast<DTypeMD>(attention_updater.row_sum(w_i));
@@ -452,7 +452,7 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
 
         if (token_idx < qo_len) {
           const int head_idx = token_group_idx % Ktraits::GROUP_SIZE;
-          const int bid_offset = mainloop_params.max_draft_token_num * Ktraits::GROUP_SIZE;
+          const int bid_offset = mainloop_params.draft_total_token_num * Ktraits::GROUP_SIZE;
           const int write_idx = bid * bid_offset + token_idx * Ktraits::GROUP_SIZE + head_idx;
           mM(write_idx) = static_cast<DTypeMD>(attention_updater.row_max(w_i));
           mD(write_idx) = static_cast<DTypeMD>(attention_updater.row_sum(w_i));

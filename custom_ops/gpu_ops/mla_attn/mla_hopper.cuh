@@ -63,8 +63,8 @@ struct Params {
     alignas(16) DTypeKV *KV; // [max_block_num, block_size, dim_head]
     alignas(16) DTypeO *O; // [token_num, head_num, dim_head]
     alignas(16) DTypeO *O_tmp; // [num_chunks, bsz, head_num, dim_head]
-    alignas(16) float *m; // [num_chunks, bsz * max_draft_token_num * head_num]
-    alignas(16) float *d; // [num_chunks, bsz * max_draft_token_num * head_num]
+    alignas(16) float *m; // [num_chunks, bsz * draft_total_token_num * head_num]
+    alignas(16) float *d; // [num_chunks, bsz * draft_total_token_num * head_num]
 
     alignas(16) IdType *block_tables;
     alignas(16) IdType *seq_lens_this_time;
@@ -95,7 +95,7 @@ struct Params {
     int qk_head_dim;
     int vo_head_dim;
     int block_size;
-    int max_draft_token_num;
+    int draft_total_token_num;
     int chunk_size;
     int chunk_num;
     int num_blocks_x_int;
@@ -368,7 +368,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
             tile_id,
             seq_len_decoder_now,
             mainloop_params.chunk_size,
-            mainloop_params.max_draft_token_num,
+            mainloop_params.draft_total_token_num,
             mainloop_params.o_stride_bsz);
       }
     } else {
@@ -430,7 +430,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           tile_id,
           seq_len_decoder_now,
           mainloop_params.chunk_size,
-          mainloop_params.max_draft_token_num,
+          mainloop_params.draft_total_token_num,
           mainloop_params.o_stride_bsz);
     }
   }
@@ -453,7 +453,7 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
   typename CollectiveMainloop::Params mainloop_params = CollectiveMainloop::to_underlying_arguments({
       make_layout(make_shape(KernelTraits::BLOCK_SHAPE_Q, params.qk_head_dim), make_stride(params.qk_head_dim, _1{})), // layout q
       make_layout(make_shape(params.block_size, params.qk_head_dim, params.max_block_num), make_stride(params.qk_head_dim, _1{}, params.block_size * params.qk_head_dim)),
-      make_layout(make_shape(params.chunk_num, params.bsz * params.max_draft_token_num * params.q_num_head), make_stride(params.bsz * params.max_draft_token_num * params.q_num_head, _1{})),
+      make_layout(make_shape(params.chunk_num, params.bsz * params.draft_total_token_num * params.q_num_head), make_stride(params.bsz * params.draft_total_token_num * params.q_num_head, _1{})),
       params.Q,
       params.KV,
       params.m,
@@ -478,7 +478,7 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.o_stride_head_num,
       params.chunk_size,
       params.chunk_num,
-      params.max_draft_token_num
+      params.draft_total_token_num
   });
   typename CollectiveEpilogue::Params epilogue_params = CollectiveEpilogue::to_underlying_arguments_ntma({
       params.O,
@@ -535,7 +535,7 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.vo_head_dim,
       params.token_num,
       params.bsz,
-      params.max_draft_token_num
+      params.draft_total_token_num
     );
   }
   return cudaSuccess;

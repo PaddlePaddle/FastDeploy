@@ -60,14 +60,21 @@ template <typename T>
 void BatchMLAWithPagedKVCacheKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& q,  // [token_num, q_head_num, head_dim]
-    const paddle::Tensor& latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
+    const paddle::Tensor&
+        latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
     const paddle::optional<paddle::Tensor>& attn_mask,
-    const paddle::optional<paddle::Tensor>& cache_k_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_k_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& shift_bias,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        shift_bias,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
@@ -79,13 +86,14 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
+    const int chunk_size,
     const int max_seq_len,
     const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
-    const int draft_token_num,
+    const int draft_total_token_num,
     const bool causal,
     cudaStream_t& stream,
     paddle::Tensor* out) {
@@ -97,32 +105,45 @@ void BatchMLAWithPagedKVCacheKernel(
   const auto q_head_num = meta_data.q_num_heads;
   const auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
   const auto max_block_num = bsz * max_block_num_per_seq;
-  const uint32_t chunk_size = get_max_partition_size(bsz);
-
+//   const uint32_t chunk_size = get_max_partition_size(bsz);
+#if CUDA_VERSION >= 12080
+  constexpr bool USE_REG_EALLOC = true;
+#else
+  constexpr bool USE_REG_EALLOC = false;
+#endif
 
   int q_head_dim = meta_data.head_dims;
   int k_head_dim = meta_data.head_dims;
   int v_head_dim = meta_data.head_dims_v;
   // int num_chunks = max_dec_len / chunk_size;
   int num_chunks = div_up(max_dec_len, chunk_size);
+  std::cout << "-----------------------------------------------------------"
+            << std::endl;
+  std::cout << "num_chunks:================================ " << num_chunks
+            << std::endl;
+  std::cout << "-----------------------------------------------------------"
+            << std::endl;
 
   auto *allocator = paddle::GetAllocator(q.place());
   phi::Allocator::AllocationPtr O_tmp, m_tmp, d_tmp;
   O_tmp = allocator->Allocate(
       phi::SizeOf(q.dtype()) *
-      static_cast<size_t>(num_chunks * bsz * draft_token_num * q_head_num * v_head_dim));
+      static_cast<size_t>(num_chunks * bsz * draft_total_token_num * q_head_num * v_head_dim));
   m_tmp = allocator->Allocate(
       sizeof(float) *
-      static_cast<size_t>(num_chunks * bsz * draft_token_num * q_head_num));
+      static_cast<size_t>(num_chunks * bsz * draft_total_token_num * q_head_num));
   d_tmp = allocator->Allocate(
       sizeof(float) *
-      static_cast<size_t>(num_chunks * bsz * draft_token_num * q_head_num));
+      static_cast<size_t>(num_chunks * bsz * draft_total_token_num * q_head_num));
 
-  Params<CUTLASS_TYPE, CUTLASS_TYPE, CUTLASS_TYPE, int> params = {};
-  params.Q = reinterpret_cast<CUTLASS_TYPE*>(const_cast<T*>(q.data<T>()));
-  params.KV = reinterpret_cast<CUTLASS_TYPE*>(const_cast<T*>(latent_cache.data<T>()));
-  params.O = reinterpret_cast<CUTLASS_TYPE*>(const_cast<T*>(out->data<T>()));
-  params.O_tmp = reinterpret_cast<CUTLASS_TYPE*>(O_tmp->ptr());
+  using ParamsType =
+      Params<cutlass::half_t, cutlass::half_t, cutlass::half_t, int>;
+  ParamsType params = {};
+  params.Q = reinterpret_cast<cutlass::half_t*>(const_cast<T*>(q.data<T>()));
+  params.KV = reinterpret_cast<cutlass::half_t*>(
+      const_cast<T*>(latent_cache.data<T>()));
+  params.O = reinterpret_cast<cutlass::half_t*>(const_cast<T*>(out->data<T>()));
+  params.O_tmp = reinterpret_cast<cutlass::half_t*>(O_tmp->ptr());
   params.m = reinterpret_cast<float*>(m_tmp->ptr());
   params.d = reinterpret_cast<float*>(d_tmp->ptr());
   params.block_tables = const_cast<int*>(block_tables.data<int>());
@@ -149,15 +170,17 @@ void BatchMLAWithPagedKVCacheKernel(
   params.qk_head_dim = q_head_dim;
   params.vo_head_dim = v_head_dim;
   params.block_size = block_size;
-  params.max_draft_token_num = draft_token_num;
+  params.draft_total_token_num = draft_total_token_num;
   params.sm_scale = softmax_scale;
   params.chunk_size = chunk_size;
   params.chunk_num = num_chunks;
 
   if (q_head_dim == 576) {
-      BatchMLAWithPagedKVCacheDispatched<576, 512, NV_TYPE>(
-          params, stream
-      );
+      BatchMLAWithPagedKVCacheDispatched<576,
+                                         512,
+                                         NV_TYPE,
+                                         ParamsType,
+                                         USE_REG_EALLOC>(params, stream);
   } else {
       PD_THROW("error!!! q_head_dim must be 576 !!!\n");
   }
@@ -166,14 +189,21 @@ void BatchMLAWithPagedKVCacheKernel(
 template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& q,  // [token_num, q_head_num, head_dim]
-    const paddle::Tensor& latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
+    const paddle::Tensor&
+        latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
     const paddle::optional<paddle::Tensor>& attn_mask,
-    const paddle::optional<paddle::Tensor>& cache_k_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_k_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& shift_bias,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        shift_bias,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
@@ -185,29 +215,36 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
+    const int chunk_size,
     const int max_seq_len,
     const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
-    const int draft_token_num,
+    const int draft_total_token_num,
     const bool causal,
     cudaStream_t& stream,
     paddle::Tensor* out);
 
-
 template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& q,  // [token_num, q_head_num, head_dim]
-    const paddle::Tensor& latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
+    const paddle::Tensor&
+        latent_cache,  // [max_block_num, q_head_num, block_size, head_dim]
     const paddle::optional<paddle::Tensor>& attn_mask,
-    const paddle::optional<paddle::Tensor>& cache_k_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_scale,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_k_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& cache_v_zp,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& shift_bias,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_scale,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_k_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        cache_v_zp,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        shift_bias,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
@@ -219,13 +256,14 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
+    const int chunk_size,
     const int max_seq_len,
     const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
-    const int draft_token_num,
+    const int draft_total_token_num,
     const bool causal,
     cudaStream_t& stream,
     paddle::Tensor* out);

@@ -194,6 +194,8 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
+            metadata.decoder_num_blocks,
+            metadata.decoder_chunk_size_cpu,
             metadata.max_len_kv,
         ) = get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
@@ -330,7 +332,7 @@ class MLAAttentionBackend(AttentionBackend):
 
         # 获取推测解码参数
         speculate_decoder = self.speculative_method is not None
-        speculate_max_tokens = self.speculate_max_draft_token_num
+        speculate_max_tokens = self.speculate_max_draft_token_num + 1
 
         # 写入缓存
         decode_mla_write_cache(
@@ -368,6 +370,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
             forward_meta.decoder_num_blocks_cpu,
+            metadata.decoder_chunk_size_cpu,
             metadata.max_enc_len_this_time,
             metadata.max_dec_len_this_time,
             metadata.max_len_kv,
@@ -489,6 +492,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.decoder_num_blocks_cpu,
+                metadata.decoder_chunk_size_cpu,
                 metadata.max_enc_len_this_time,
                 metadata.max_dec_len_this_time,
                 metadata.max_len_kv,
@@ -515,5 +519,5 @@ class MLAAttentionBackend(AttentionBackend):
                 True,  # causal
                 speculate_decoder,
             )
-
+            print("mix+++++++++++++++++fmha_out: ", fmha_out)
             return fmha_out
