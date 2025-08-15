@@ -108,11 +108,14 @@ class ErnieProcessor(BaseDataProcessor):
                 data_processor_logger.info(f"req_id:{request.request_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
                 task = request.to_dict()
-                chat_template_kwargs = request.get("chat_template_kwargs")
+                chat_template_kwargs = kwargs.get("chat_template_kwargs")
                 if chat_template_kwargs:
-                    for k, v in chat_template_kwargs.items():
-                        if k not in task:
-                            task[k] = v
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in task:
+                                task[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 request.prompt_token_ids = self.messages2ids(task)
 
         if len(request.prompt_token_ids) == 0:
@@ -146,11 +149,7 @@ class ErnieProcessor(BaseDataProcessor):
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
-        chat_template_kwargs = request.get("chat_template_kwargs")
-        if chat_template_kwargs:
-            for k, v in chat_template_kwargs.items():
-                if k not in request:
-                    request[k] = v
+
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
         if stop_sequences:
@@ -172,6 +171,14 @@ class ErnieProcessor(BaseDataProcessor):
                 req_id = request.get("request_id", None)
                 data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
+                chat_template_kwargs = request.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in request:
+                                request[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 request["prompt_token_ids"] = self.messages2ids(request)
         if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")

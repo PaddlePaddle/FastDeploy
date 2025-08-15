@@ -198,11 +198,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
-        chat_template_kwargs = request.get("chat_template_kwargs")
-        if chat_template_kwargs:
-            for k, v in chat_template_kwargs.items():
-                if k not in request:
-                    request[k] = v
 
         stop_sequences = request.get("stop", [])
         if stop_sequences:
@@ -222,6 +217,14 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
+            chat_template_kwargs = request.get("chat_template_kwargs")
+            if chat_template_kwargs:
+                if isinstance(chat_template_kwargs, dict):
+                    for k, v in chat_template_kwargs.items():
+                        if k not in request:
+                            request[k] = v
+                else:
+                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
             outputs = self.ernie_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
