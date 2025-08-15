@@ -18,7 +18,6 @@ Verified platform:
 - XPU Driver Version: 5.0.21.26
 - XPU Firmware Version: 1.48
 
-
 **Note:** Currently, only INTEL or Hygon CPU-based P800 (OAM Edition) servers have been verified. Other CPU types and P800 (PCIe Edition) servers have not been tested yet.
 
 ## 1. Set up using Docker (Recommended)
