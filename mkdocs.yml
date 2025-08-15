@@ -36,10 +36,11 @@ plugins:
           name: English
           site_name: 'FastDeploy: Large Language Model Deployement'
           build: true
+          link: /FastDeploy/
         - locale: zh
           name: 简体中文
           site_name: 飞桨大语言模型推理部署工具包
-          link: /./zh/
+          link: /FastDeploy/zh/
           nav_translations:
             FastDeploy: FastDeploy
             Quick Start: 快速入门
@@ -81,6 +82,7 @@ plugins:
             Plugins: 插件机制
             Sampling: 采样策略
             MultiNode Deployment: 多机部署
+            Graph Optimization: 图优化
             Supported Models: 支持模型列表
             Benchmark: 基准测试
             Usage: 用法
@@ -129,6 +131,7 @@ nav:
       - 'Plugins': features/plugins.md
       - 'Sampling': features/sampling.md
       - 'MultiNode Deployment': features/multi-node_deployment.md
+      - 'Graph Optimization': features/graph_optimization.md
   - 'Supported Models': supported_models.md
   - Benchmark: benchmark.md
   - Usage:
