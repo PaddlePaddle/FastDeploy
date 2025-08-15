@@ -270,7 +270,7 @@ class TokenProcessor:
                     self.resource_manager._recycle_block_tables(task)
                     if self.prefill_result_status[task_id] != "finished":
                         result.error_code = 400
-                        result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                        result.error_msg = f"{task_id} failed to {self.prefill_result_status[task_id]}"
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     del self.resource_manager.req_dict[task_id]
                     break
