@@ -26,7 +26,7 @@ English | [简体中文](README_CN.md)
 # FastDeploy 2.1: Inference and Deployment Toolkit for LLMs and VLMs based on PaddlePaddle
 
 ## News
-**[2025-08] 🔥 Released FastDeploy v2.1:** More models now support PD separation and CUDA Graph, enabling comprehensive optimization of service and inference engine performance!
+**[2025-08] 🔥 Released FastDeploy v2.1:** A brand-new KV Cache scheduling strategy has been introduced, and expanded support for PD separation and CUDA Graph across more models. Enhanced hardware support has been added for platforms like Kunlun and Hygon, along with comprehensive optimizations to improve the performance of both the service and inference engine.
 
 **[2025-07] 《FastDeploy2.0推理部署实测》专题活动已上线!** 完成文心4.5系列开源模型的推理部署等任务，即可获得骨瓷马克杯等FastDeploy2.0官方周边及丰富奖金！🎁 欢迎大家体验反馈～ 📌[报名地址](https://www.wjx.top/vm/meSsp3L.aspx#)   📌[活动详情](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
