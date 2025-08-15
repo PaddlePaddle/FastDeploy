@@ -168,7 +168,7 @@ class DataProcessor(BaseDataProcessor):
         self._init_config()
 
         self.decode_status = dict()
-        self.tool_parsers = dict()
+        self.tool_parser_dict = dict()
         self.reasoning_end_dict = dict()
         self.tokenizer = self._load_tokenizer()
         data_processor_logger.info(
@@ -433,8 +433,8 @@ class DataProcessor(BaseDataProcessor):
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
-            if req_id in self.tool_parsers:
-                del self.tool_parsers[req_id]
+            if req_id in self.tool_parser_dict:
+                del self.tool_parser_dict[req_id]
             if req_id in self.reasoning_end_dict:
                 del self.reasoning_end_dict[req_id]
         return response_dict
