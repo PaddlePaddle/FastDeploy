@@ -65,18 +65,16 @@ class ErnieVLReasoningParser(ReasoningParser):
         """
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
-            return "", ""
+            return None
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.end_token)
             reasoning_content = delta_text[:end_index]
-            content = delta_text[end_index + len(self.end_token) :]
+            content = delta_text[end_index + len(self.end_token)]
+            return DeltaMessage(reasoning_content=reasoning_content, content=content)
         elif self.think_end_token_id in previous_token_ids:
-            reasoning_content = ""
-            content = delta_text
+            return DeltaMessage(content=delta_text)
         else:
-            reasoning_content = delta_text
-            content = ""
-        return reasoning_content, content
+            return DeltaMessage(reasoning_content=delta_text)
 
     def extract_reasoning_content(
         self, model_output: str, request: ChatCompletionRequest
