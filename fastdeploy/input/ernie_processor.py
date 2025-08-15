@@ -110,12 +110,9 @@ class ErnieProcessor(BaseDataProcessor):
                 task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs")
                 if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in task:
-                                task[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    for k, v in chat_template_kwargs.items():
+                        if k not in task:
+                            task[k] = v
                 request.prompt_token_ids = self.messages2ids(task)
 
         if len(request.prompt_token_ids) == 0:
@@ -173,12 +170,9 @@ class ErnieProcessor(BaseDataProcessor):
             else:
                 chat_template_kwargs = request.get("chat_template_kwargs")
                 if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in request:
-                                request[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    for k, v in chat_template_kwargs.items():
+                        if k not in request:
+                            request[k] = v
                 request["prompt_token_ids"] = self.messages2ids(request)
         if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")

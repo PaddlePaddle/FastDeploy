@@ -222,12 +222,9 @@ class DataProcessor(BaseDataProcessor):
                 task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs")
                 if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in task:
-                                task[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    for k, v in chat_template_kwargs.items():
+                        if k not in task:
+                            task[k] = v
                 task.setdefault("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
@@ -280,12 +277,9 @@ class DataProcessor(BaseDataProcessor):
                     raise ValueError("This model does not support chat_template.")
                 chat_template_kwargs = request.get("chat_template_kwargs")
                 if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in request:
-                                request[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                    for k, v in chat_template_kwargs.items():
+                        if k not in request:
+                            request[k] = v
                 request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
