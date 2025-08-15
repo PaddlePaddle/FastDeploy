@@ -24,7 +24,6 @@ Installation process reference documentation [FastDeploy GPU Install](../get_sta
 **Example 1:** Deploying a 128K context service on 8x H800 GPUs.
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1
-
 python -m fastdeploy.entrypoints.openai.api_server \
   --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle \
   --port 8180 \
@@ -41,6 +40,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --quantization wint4 \
   --enable-mm
 ```
+
+> ⚠️ For versions 2.1 and above, the new scheduler needs to be enabled via an environment variable `ENABLE_V1_KVCACHE_SCHEDULER=1`. Otherwise, some requests may be truncated before reaching the maximum length or return empty results.
 
 An example is a set of configurations that can run stably while also delivering relatively good performance. If you have further requirements for precision or performance, please continue reading the content below.
 ### 2.2 Advanced: How to Achieve Better Performance
@@ -86,6 +87,15 @@ An example is a set of configurations that can run stably while also delivering 
   - Unless you have extremely stringent precision requirements, we strongly recommend using wint4 quantization. This will significantly reduce memory consumption and increase throughput.
   - If slightly higher precision is required, you may try wint8.
   - Only consider using bfloat16 if your application scenario demands extreme precision, as it requires significantly more GPU memory.
+
+#### 2.2.4  **Adjustable environment variables**
+> **Rejection sampling：**`FD_SAMPLING_CLASS=rejection`
+- **Description：** Rejection sampling involves generating samples from a proposal distribution that is easy to sample from, thereby avoiding explicit sorting and achieving an effect of improving sampling speed, which can enhance inference performance.
+- **Recommendation：** This is a relatively aggressive optimization strategy that affects the results, and we are still conducting comprehensive validation of its impact. If you have high performance requirements and can accept potential compromises in results, you may consider enabling this strategy.
+
+> **Attention Hyperparameter：**`FLAGS_max_partition_size=1024`
+- **Description：** The hyperparameters for the Append Attention (default) backend have been tested on commonly used datasets, and our results show that setting it to 1024 can significantly improve decoding speed, especially in long-text scenarios.
+- **Recommendation：** In the future, it will be modified to an automatic adjustment mechanism. If you have high performance requirements, you may consider enabling it.
 
 ## 3. FAQ
 **Note:** Deploying multimodal services requires adding parameters to the configuration `--enable-mm`.
