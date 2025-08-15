@@ -36,10 +36,11 @@ plugins:
           name: English
           site_name: 'FastDeploy: Large Language Model Deployement'
           build: true
+          link: /FastDeploy/
         - locale: zh
           name: 简体中文
           site_name: 飞桨大语言模型推理部署工具包
-          link: /./zh/
+          link: /FastDeploy/zh/
           nav_translations:
             FastDeploy: FastDeploy
             Quick Start: 快速入门
