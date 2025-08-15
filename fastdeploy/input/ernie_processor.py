@@ -287,6 +287,7 @@ class ErnieProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+        response_dict["outputs"]["raw_prediction"] = delta_text
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
