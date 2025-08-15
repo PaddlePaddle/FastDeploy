@@ -703,6 +703,7 @@ void AppendAttentionWithOutput(
           cache_v_zp,
           out_linear_shifts,
           out_linear_smooths,
+          mask_offset,
           kv_signal_data,
           q_norm_weight,
           k_norm_weight,
