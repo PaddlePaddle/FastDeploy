@@ -198,7 +198,11 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
-        request["enable_thinking"] = request.get("chat_template_kwargs", {}).get("enable_thinking")
+        chat_template_kwargs = request.get("chat_template_kwargs")
+        if chat_template_kwargs:
+            for k, v in chat_template_kwargs.items():
+                if k not in request:
+                    request[k] = v
 
         stop_sequences = request.get("stop", [])
         if stop_sequences:

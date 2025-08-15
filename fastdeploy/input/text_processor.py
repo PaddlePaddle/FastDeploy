@@ -207,7 +207,11 @@ class DataProcessor(BaseDataProcessor):
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
-        request.enable_thinking = kwargs.get("chat_template_kwargs", {}).get("enable_thinking")
+        chat_template_kwargs = request.get("chat_template_kwargs")
+        if chat_template_kwargs:
+            for k, v in chat_template_kwargs.items():
+                if k not in request:
+                    request[k] = v
         stop_sequences = request.get("stop", [])
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
