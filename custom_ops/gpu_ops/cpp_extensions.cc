@@ -776,6 +776,22 @@ void MergePrefillDecodeOutput(
         const int head_dim,
         const int max_token);
 
+std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
+                                               const paddle::Tensor &top_p,
+                                               const paddle::optional<paddle::Tensor> &top_k,
+                                               int64_t seed);
+
+std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor &probs,
+                                       const paddle::Tensor &top_k);
+
+std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
+                                               const paddle::Tensor &min_p);
+
+void SaveOutMmsgStatic(const paddle::Tensor& x,
+                       const paddle::Tensor& not_need_stop,
+                       int64_t rank_id,
+                       bool save_each_rank);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -1128,4 +1144,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_step_paddle",&SpeculateStepPaddle, "speculate_step_paddle function");
 
   m.def("merge_prefill_decode_output", &MergePrefillDecodeOutput, "merge_prefill_decode_output function");
+
+  m.def("rejection_top_p_sampling", &TopPSamplingReject, "rejection_top_p_sampling function");
+
+  m.def("top_k_renorm_probs", &TopKRenorm, "top_k_renorm_probs function");
+
+  m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
+
+  m.def("save_output", &SaveOutMmsgStatic, "save_output function");
 }

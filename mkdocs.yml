@@ -80,6 +80,7 @@ plugins:
             Early Stop: 早停功能
             Plugins: 插件机制
             Sampling: 采样策略
+            MultiNode Deployment: 多机部署
             Supported Models: 支持模型列表
             Benchmark: 基准测试
             Usage: 用法
@@ -127,6 +128,7 @@ nav:
       - 'Early Stop': features/early_stop.md
       - 'Plugins': features/plugins.md
       - 'Sampling': features/sampling.md
+      - 'MultiNode Deployment': features/multi-node_deployment.md
   - 'Supported Models': supported_models.md
   - Benchmark: benchmark.md
   - Usage:
