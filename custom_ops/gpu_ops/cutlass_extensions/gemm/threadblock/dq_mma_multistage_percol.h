@@ -549,8 +549,6 @@ public:
                     = lds_converter(warp_frag_B[warp_tileB_k_load_offset % 2]);
                 warp_dequantizer_.dequantize(converted_frag_B, warp_frag_scales);
 
-
-
                 using FragmentOperandB = cutlass::Array<ElementA, Operator::FragmentB::kElements>;
                 constexpr cutlass::FloatRoundStyle RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
                 constexpr int ConversionVectorWidth = TransformBAfterLDS::result_type::kElements;
@@ -558,14 +556,6 @@ public:
 
                 using Converter
                     = cutlass::NumericArrayConverter<ElementA, ElementScale, ConversionVectorWidth, RoundStyle>;
-
-                CUTLASS_TRACE_DEVICE(" IteratorA::Shape::kRow = %d, IteratorA::Shape::kColumn = %d", IteratorA::Shape::kRow, IteratorA::Shape::kColumn);
-                CUTLASS_TRACE_DEVICE(" IteratorB::Shape::kRow = %d, IteratorB::Shape::kColumn = %d", IteratorB::Shape::kRow, IteratorB::Shape::kColumn);
-
-                CUTLASS_TRACE_DEVICE(" ConversionVectorWidth = %d", ConversionVectorWidth);
-                CUTLASS_TRACE_DEVICE(" Operator::FragmentA::kElements = %d", Operator::FragmentA::kElements);
-                CUTLASS_TRACE_DEVICE(" Operator::FragmentB::kElements = %d", Operator::FragmentB::kElements);
-
 
                 FragmentOperandB converted_frag_B_operand = Converter::convert(converted_frag_B);
                 run_warp_mma(warp_mma, accum, warp_frag_A[warp_mma_k % 2], converted_frag_B_operand, accum,

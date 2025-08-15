@@ -163,18 +163,6 @@ public:
 
     using ElementSuperScale = ElementScale;
 
-    // using ElementSuperScale = typename std::conditional<
-    //     std::is_same_v<ElementA, cutlass::float_e4m3_t>,
-    //     cutlass::float_e5m2_t,
-    //     ElementA
-    // >::type;
-
-    // using ElementSuperScale = typename std::conditional<
-    //     std::is_same_v<ElementA, cutlass::float_e4m3_t>,
-    //     half_t,
-    //     ElementA
-    // >::type;
-
     using ElementLocalScale = uint4b_t;
     using ElementCodeScaleZp = float;
 
@@ -228,9 +216,6 @@ public:
     using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
         IteratorShapeB, ElementB, layout::ColumnMajor, 0, InterleavedThreadMapB,
         AccessTypeB>;
-
-    static_assert((IteratorB::Shape::kRow == 512), "aaaaaaaa");
-    static_assert((IteratorB::Shape::kColumn == 64), "aaaaaaaa");
 
 private:
     // Define iterators over tiles from extra quant params for B operand

@@ -87,8 +87,6 @@ CUTLASS_DEVICE static void run_mma(Mma mma,
       thread_idx,
       tb_offset_scale);
 
-  CUTLASS_TRACE_DEVICE("run_mma with iterator_scale");
-
   mma(gemm_k_iterations,
       accum,
       iterator_A,
@@ -112,7 +110,6 @@ CUTLASS_DEVICE static void run_mma(Mma mma,
                                    MatrixCoord scale_extent,
                                    const int thread_idx,
                                    MatrixCoord tb_offset_scale) {
-  CUTLASS_TRACE_DEVICE("run_mma without iterator_scale");
   mma(gemm_k_iterations, accum, iterator_A, iterator_B, src_accum);
 }
 

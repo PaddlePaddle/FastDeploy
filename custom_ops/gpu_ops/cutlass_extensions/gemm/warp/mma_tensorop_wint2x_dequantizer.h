@@ -361,26 +361,9 @@ public:
             unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
         }
 
-        // for (int aa = 0; aa < MmaOperator::FragmentB::kElements; aa++) {
-        //     CUTLASS_TRACE_DEVICE(" unpacked_frag_[%d] = %f", aa, static_cast<float>(unpacked_frag_[aa]));
-        // }
-
         unsigned long long unpack_b = clock64();
 
-
-        // if (warp_k_compute_offset == 0) {
-        //     // special for TileRows = 64
-        //     // local_scale_shift为0或者4
-        //     int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
-        //     CUTLASS_TRACE_DEVICE(" tb_offset_k = %d, local_scale_shift = %d\n", tb_offset_k, local_scale_shift);
-
-        //     LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>::Apply(
-        //         local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
-        // }
-
         if (warp_k_compute_offset == 0) {
-            // special for TileRows = 64
-            // local_scale_shift为0或者4
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
             CUTLASS_TRACE_DEVICE(" tb_offset_k = %d, local_scale_shift = %d\n", tb_offset_k, local_scale_shift);
 
@@ -394,11 +377,6 @@ public:
             static_cast<int>(local_scale_frag[2]), static_cast<int>(local_scale_frag[3]),
             static_cast<int>(local_scale_frag[4]), static_cast<int>(local_scale_frag[5]),
             static_cast<int>(local_scale_frag[6]), static_cast<int>(local_scale_frag[7]));
-        // CUTLASS_TRACE_DEVICE(" local_scale_frag[0:7]=[%d, %d, %d, %d, %d, %d, %d, %d]",
-        //     static_cast<int>(local_scale_frag[0]), static_cast<int>(local_scale_frag[1]),
-        //     static_cast<int>(local_scale_frag[2]), static_cast<int>(local_scale_frag[3]),
-        //     static_cast<int>(local_scale_frag[4]), static_cast<int>(local_scale_frag[5]),
-        //     static_cast<int>(local_scale_frag[6]), static_cast<int>(local_scale_frag[7]));
 
         CUTLASS_TRACE_DEVICE_TID(" super_scale_frag[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
             static_cast<float>(super_scale_frag[0]), static_cast<float>(super_scale_frag[1]),
@@ -442,11 +420,6 @@ public:
         } else {*/
         //  CUTLASS_TRACE_DEVICE(" kWarpIterationsAlongN = %d, kOutputColumns = %d", kWarpIterationsAlongN, kOutputColumns);
             
-            // if (tb_offset_k == 0 || tb_offset_k == 1) {
-            //     scale_frag_[0] = static_cast<ElementOperand>(1);
-            // } else {
-            //     scale_frag_[0] = static_cast<ElementOperand>(2);
-            // }
             CUTLASS_TRACE_DEVICE("tb_offset_k = %d, scale_frag_[0] = %f", tb_offset_k, float(scale_frag_[0]));
             CUTLASS_PRAGMA_UNROLL
             for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
@@ -471,9 +444,6 @@ public:
                 }
             }
         //}
-
-
-
 
         unsigned long long end = clock64();
         // CUTLASS_TRACE_DEVICE(" unpack_B: %llu, dequant_local_scale: %llu, unscale: %llu, dequantize: %llu",

@@ -175,18 +175,6 @@ struct DefaultMmaCore<Shape_, WarpShape_, InstructionShape_, ElementA_,
   /// Policy used to define MmaPipelined
   using MmaPolicy = MmaPolicy<MmaTensorOp, MatrixShape<0, 0>,
                                         MatrixShape<0, 0>, WarpCount::kK>;
-
-  CUTLASS_HOST_DEVICE
-  void operator()(){
-    CUTLASS_TRACE_DEVICE("\nkWarpThreadArrangementContiguousA = %d"
-                         "\nkWarpThreadArrangementStridedA = %d",
-                         "\nShape::kK = %d",
-                         "\nkWarpSize = %d",
-                         kWarpThreadArrangementContiguousA,
-                         kWarpThreadArrangementStridedA,
-                         Shape::kK,
-                         kWarpSize);
-  }
 };
 
 }  // namespace threadblock
