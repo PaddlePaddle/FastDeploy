@@ -545,7 +545,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         self.moe_quant_type = "w4afp8"
         self.pack_num = 2
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
@@ -558,9 +558,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
 
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
             layer.load_experts_weight(
-                state_dict,
-                up_gate_proj_expert_weight_key,
-                down_proj_expert_weight_key,
+                state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key, is_rearrange
             )
         )
 
@@ -573,13 +571,17 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         if isinstance(state_dict, list):
             state_dict = dict(state_dict)
 
-        logger.info(f"ep_size:{layer.ep_size}")
-
         if layer.ep_size > 1:
             for expert_idx in ep_rank_to_expert_id_list:
-                scale_tensor = get_tensor(state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)])
+                scale_tensor = get_tensor(
+                    (
+                        state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)]
+                        if up_gate_proj_expert_in_scale_key.format(expert_idx) in state_dict
+                        else up_gate_proj_expert_in_scale_key.format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
                 up_gate_proj_in_scale_all_experts.append(scale_tensor)
-            logger.info(f"up_gate_proj_in_scale_all_experts:{up_gate_proj_in_scale_all_experts}")
 
         for expert_idx in logical_expert_ids:
             up_gate_proj_weight_scale.append(
@@ -641,7 +643,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             "down_proj_in_scale": down_proj_in_scale,
         }
         for name, tensor in name_tensor_map.items():
-            getattr(layer, name).set_value(tensor)
+            create_and_set_parameter(layer, name, tensor)
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
