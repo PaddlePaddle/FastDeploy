@@ -150,7 +150,7 @@ class DPLocalScheduler(LocalScheduler):
         with self.requests_not_empty:
             while True:
                 batch_ids = self.requests_not_empty.wait_for(
-                    lambda: _batch_token,
+                    lambda: _batch_token(),
                     self.wait_request_timeout,
                 )
                 if batch_ids is not True:
@@ -175,9 +175,9 @@ class DPLocalScheduler(LocalScheduler):
                     or (time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT)
                 ):
                     break
-
-        if len(batch_ids) > 0 and len(requests) == 0:
-            scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
+        if batch_ids is not True:
+            if len(batch_ids) > 0 and len(requests) == 0:
+                scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
 
         if len(requests) > 0:
             scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
