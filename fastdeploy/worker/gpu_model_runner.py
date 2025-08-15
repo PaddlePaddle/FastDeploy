@@ -1687,13 +1687,15 @@ class GPUModelRunner(ModelRunnerBase):
                 image_features = image_features.reshape([-1, C * self.model_config.spatial_conv_size**2])
                 image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
-            image_features = self.model.resampler_model(
-                image_features,
-                image_mask,
-                token_type_ids_w_video,
-                image_type_ids,
-                grid_thw,
-            )
+            # ernie-vl have resampler_model
+            if "ernie" in self.model_config.model_type:
+                image_features = self.model.resampler_model(
+                    image_features,
+                    image_mask,
+                    token_type_ids_w_video,
+                    image_type_ids,
+                    grid_thw,
+                )
         return image_features
 
     @paddle.no_grad()
