@@ -600,7 +600,7 @@ class LLMEngine:
                         time.sleep(0.001)
 
                 except Exception as e:
-                    llm_logger.error(f"Error in main loop: {e}")
+                    llm_logger.error(f"Error in main loop: {e}, {str(traceback.format_exc())}")
                     time.sleep(0.1)
 
         threading.Thread(target=receiver_loop, daemon=True).start()
@@ -987,7 +987,7 @@ class LLMEngine:
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
-                    print(f"Error extracting file: {e}")
+                    print(f"Error extracting file: {e}, {str(traceback.format_exc())}")
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
@@ -1000,7 +1000,7 @@ class LLMEngine:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
-                print(f"Error extracting sub services: {e}")
+                print(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
         self.engine_worker_queue.cleanup()
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
@@ -1175,7 +1175,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}")
+            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request

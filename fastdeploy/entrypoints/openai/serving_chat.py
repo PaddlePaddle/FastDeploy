@@ -92,7 +92,9 @@ class OpenAIServingChat:
             if isinstance(prompt_token_ids, np.ndarray):
                 prompt_token_ids = prompt_token_ids.tolist()
         except Exception as e:
-            return ErrorResponse(code=400, message=str(e))
+            error_msg = f"request[{request_id}] send to infer error: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=400, message=error_msg)
 
         del current_req_dict
         try:
@@ -101,8 +103,13 @@ class OpenAIServingChat:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-        except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+        except Exception as e:
+            error_msg = (
+                f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
+                f"max waiting time: {self.max_waiting_time}"
+            )
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=408, message=error_msg)
 
         if request.stream:
             return self.chat_completion_stream_generator(
@@ -114,9 +121,12 @@ class OpenAIServingChat:
                     request, request_id, request.model, prompt_token_ids, text_after_process
                 )
             except Exception as e:
-                return ErrorResponse(code=400, message=str(e))
+                error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
+                api_server_logger.error(error_msg)
+                return ErrorResponse(code=400, message=error_msg)
 
     def _create_streaming_error_response(self, message: str) -> str:
+        api_server_logger.error(message)
         error_response = ErrorResponse(
             code=400,
             message=message,
@@ -334,7 +344,9 @@ class OpenAIServingChat:
                 yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
 
         except Exception as e:
-            error_data = self._create_streaming_error_response(str(e))
+            error_data = self._create_streaming_error_response(
+                f"equest[{request_id}] generate stream error: {str(e)}, {str(traceback.format_exc())}"
+            )
             yield f"data: {error_data}\n\n"
         finally:
             dealer.close()
@@ -553,6 +565,6 @@ class OpenAIServingChat:
             return LogProbs(content=[sampled_entry])
 
         except Exception as e:
-            api_server_logger.error("Error in _build_logprobs_response: %s", e)
-            api_server_logger.error(traceback.format_exc())
+            error_msg = f"Error in _build_logprobs_response: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
             return None
