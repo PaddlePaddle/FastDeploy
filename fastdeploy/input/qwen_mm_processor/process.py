@@ -15,7 +15,7 @@
 # limitations under the License.
 """
 
-""" process.py """
+
 from typing import Any, Dict, List, Union
 import numpy as np
 from PIL import Image
@@ -30,8 +30,20 @@ from .process_video import read_video_decord, sample_frames
 
 class DataProcessor:
     """
-    Processes multimodal chat messages into model-ready inputs,
-    handling text, images, and videos with 3D positional embeddings.
+    Processes multimodal inputs (text, images, videos) into model-ready formats.
+    
+    Handles:
+    - Tokenization of text with special tokens for visual content
+    - Image and video preprocessing
+    - Generation of 3D positional embeddings
+    - Conversion of chat messages to model inputs
+    
+    Attributes:
+        tokenizer: Text tokenizer instance
+        image_processor: Image/video preprocessor
+        image_token: Special token for image placeholders
+        video_token: Special token for video placeholders
+        vision_start: Token marking start of visual content
     """
 
     def __init__(
@@ -42,13 +54,23 @@ class DataProcessor:
         tokens_per_second: int = 2,
         **kwargs,
     ) -> None:
+        """
+        Initialize the data processor.
+        
+        Args:
+            model_path: Path to pretrained model
+            video_min_frames: Minimum frames to sample from videos
+            video_max_frames: Maximum frames to sample from videos  
+            tokens_per_second: Temporal resolution for positional embeddings
+            **kwargs: Additional configuration
+        """
         self.min_frames = video_min_frames
         self.max_frames = video_max_frames
 
-        # Tokenizer and image preprocessor
+        # Initialize tokenizer with left padding and fast tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
-        self.tokenizer.ignored_index = -100
-        self.image_processor = ImageProcessor.from_pretrained(model_path)
+        self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
+        self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
 
         # Convolution sizes for patch aggregation
         self.spatial_conv_size = self.image_processor.merge_size
@@ -75,8 +97,21 @@ class DataProcessor:
 
     def text2ids(self, text, images=None, videos=None):
         """
-        Convert chat text into model inputs.
-        Returns a dict with input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels.
+        Convert text with image/video placeholders into model inputs.
+        
+        Args:
+            text: Input text with <|image@placeholder|> and <|video@placeholder|> markers
+            images: List of PIL Images corresponding to image placeholders
+            videos: List of video data corresponding to video placeholders
+            
+        Returns:
+            Dict containing:
+                - input_ids: Token IDs
+                - token_type_ids: Type identifiers (text/image/video)
+                - position_ids: 3D positional embeddings
+                - images: Preprocessed visual features
+                - grid_thw: Spatial/temporal dimensions
+                - image_type_ids: Visual content type (0=image, 1=video)
         """
 
         outputs = {
@@ -92,17 +127,21 @@ class DataProcessor:
             "video_cnt": 0,
         }
 
+        # Define placeholders and their lengths
         IMAGE_PLACEHOLDER = "<|image@placeholder|>"
-        VIDEO_PLACEHOLDER = "<|video@placeholder|>"
+        VIDEO_PLACEHOLDER = "<|video@placeholder|>" 
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
-        st, image_idx, video_idx = 0, 0, 0
+        
+        # Initialize tracking variables for text parsing
+        st, image_idx, video_idx = 0, 0, 0  # Start position, image counter, video counter
         while st < len(text):
+            # Find next image or video placeholder in text
             image_pos = text.find(IMAGE_PLACEHOLDER, st)
-            image_pos = len(text) if image_pos == -1 else image_pos
+            image_pos = len(text) if image_pos == -1 else image_pos  # Set to end if not found
             video_pos = text.find(VIDEO_PLACEHOLDER, st)
-            video_pos = len(text) if video_pos == -1 else video_pos
-            ed = min(image_pos, video_pos)
+            video_pos = len(text) if video_pos == -1 else video_pos  # Set to end if not found
+            ed = min(image_pos, video_pos)  # End position is first placeholder found
 
             self._add_text(text[st:ed], outputs)
             if ed == len(text):
@@ -129,8 +168,16 @@ class DataProcessor:
         self, request: Dict[str, Any], tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
-        Convert chat messages into model inputs.
-        Returns a dict with input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels.
+        Convert chat request with multimodal messages into model inputs.
+        
+        Args:
+            request: Dictionary containing:
+                - messages: List of chat messages with text/image/video content
+                - request_id: Unique identifier for logging
+            tgts: Optional target sequences
+            
+        Returns:
+            Dict with same structure as text2ids() output
         """
 
         outputs = {
@@ -146,19 +193,22 @@ class DataProcessor:
             "video_cnt": 0,
         }
 
+        # Parse and validate chat messages
         messages = parse_chat_messages(request.get("messages"))
-        image_message_list = []
+        image_message_list = []  # Store visual content messages
+        
         for msg in messages:
             role = msg.get("role")
             assert role in self.role_prefixes, f"Unsupported role: {role}"
+            
+            # Normalize content to list format
             content_items = msg.get("content")
             if not isinstance(content_items, list):
                 content_items = [content_items]
+                
+            # Collect all visual content items
             for item in content_items:
-                if isinstance(item, dict) and item.get("type") in [
-                    "image",
-                    "video",
-                ]:
+                if isinstance(item, dict) and item.get("type") in ["image", "video"]:
                     image_message_list.append(item)
         request["messages"] = messages
 
@@ -187,16 +237,6 @@ class DataProcessor:
                     if video_bytes is None:
                         continue
                     frames, meta = self._load_and_process_video(video_bytes, image_message)
-                    # -----------
-                    # from fastdeploy.entrypoints.chat_utils import MultiModalPartParser
-                    # mock_frames = []
-                    # mm_parser = MultiModalPartParser()
-                    # fimg = mm_parser.parse_image("file:///home/liudongdong/github/llm/data/images/demo.jpeg")
-                    # for i in range(frames.shape[0]):
-                    #     mock_frames.append(fimg.copy())
-                    # mock_frames = np.stack([np.array(f.convert("RGB")) for f in mock_frames], axis=0)
-                    # meta["fps"] = 3.0
-                    # frames = mock_frames
 
                     outputs["video_cnt"] += 1
                     self._add_video(frames, meta, outputs)
@@ -207,6 +247,17 @@ class DataProcessor:
         return outputs
 
     def _add_text(self, tokens, outputs: Dict) -> None:
+        """
+        Add text tokens to model inputs dictionary.
+        
+        Args:
+            tokens: Text string or already tokenized IDs
+            outputs: Dictionary accumulating model inputs
+            
+        Note:
+            - Handles both raw text and pre-tokenized inputs
+            - Updates position IDs for 3D embeddings
+        """
         if isinstance(tokens, str):
             tokens = self.tokenizer.encode(tokens, add_special_tokens=False)["input_ids"]
 
@@ -218,12 +269,34 @@ class DataProcessor:
         outputs["cur_position"] = position_ids.max() + 1
 
     def _compute_text_positions(self, start_pos: int, num_tokens: int) -> np.ndarray:
+        """
+        Generate 3D positional embeddings for text tokens.
+        
+        Args:
+            start_pos: Starting position index
+            num_tokens: Number of tokens to generate positions for
+            
+        Returns:
+            numpy.ndarray: 3D position IDs shaped (3, num_tokens)
+        """
         text_array = np.arange(num_tokens).reshape(1, -1)
         text_index = np.broadcast_to(text_array, (3, num_tokens))
         position = text_index + start_pos
         return position
 
     def _add_image(self, img, outputs: Dict) -> None:
+        """
+        Add image data to model inputs dictionary.
+        
+        Args:
+            img: PIL Image to process
+            outputs: Dictionary accumulating model inputs
+            
+        Note:
+            - Preprocesses image and calculates spatial dimensions
+            - Adds image token IDs and type markers
+            - Generates appropriate position embeddings
+        """
         ret = self.image_processor.preprocess(images=[img.convert("RGB")])
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
@@ -242,6 +315,18 @@ class DataProcessor:
         outputs["cur_position"] = position_ids.max() + 1
 
     def _add_video(self, frames, meta: Dict, outputs: Dict) -> None:
+        """
+        Add video data to model inputs dictionary.
+        
+        Args:
+            frames: Video frames as numpy array
+            meta: Video metadata containing fps/duration
+            outputs: Dictionary accumulating model inputs
+            
+        Note:
+            - Handles temporal dimension in position embeddings
+            - Uses video-specific token IDs and type markers
+        """
         ret = self.image_processor.preprocess(images=frames)
 
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
@@ -263,6 +348,19 @@ class DataProcessor:
         outputs["cur_position"] = position_ids.max() + 1
 
     def _compute_vision_positions(self, start_pos: int, t: int, h: int, w: int, second_per_grid_t:float) -> np.ndarray:
+        """
+        Generate 3D positional embeddings for visual content.
+        
+        Args:
+            start_pos: Starting position index
+            t: Temporal dimension (frames)
+            h: Height in patches
+            w: Width in patches 
+            second_per_grid_t: Seconds per temporal grid
+            
+        Returns:
+            numpy.ndarray: 3D position IDs shaped (3, t*h*w)
+        """
         h //= self.spatial_conv_size
         w //= self.spatial_conv_size
 
@@ -281,6 +379,18 @@ class DataProcessor:
         return position
 
     def _load_and_process_video(self, url: str, item: Dict) -> np.ndarray:
+        """
+        Load and preprocess video into frames.
+        
+        Args:
+            url: Video file path or bytes
+            item: Dictionary containing processing parameters
+            
+        Returns:
+            tuple: (frames, metadata) where:
+                - frames: Processed video frames as numpy array
+                - metadata: Updated video metadata dictionary
+        """
         reader, meta = read_video_decord(url)
 
         frames = []
@@ -290,51 +400,61 @@ class DataProcessor:
             frames.append(image)
         frames = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
 
+        # Apply frame sampling if fps or target_frames specified
         fps = item.get("fps", None)
         num_frames = item.get("target_frames", None)
+        
         if fps is not None or num_frames is not None:
+            # Get frame sampling constraints
             min_frames = item.get("min_frames", self.min_frames)
             max_frames = item.get("max_frames", self.max_frames)
-            frames = sample_frames(video=frames,
-                                   frame_factor=self.temporal_conv_size,
-                                   min_frames=min_frames,
-                                   max_frames=max_frames,
-                                   metadata=meta,
-                                   fps=fps,
-                                   num_frames=num_frames)
             
+            # Sample frames according to specifications
+            frames = sample_frames(
+                video=frames,
+                frame_factor=self.temporal_conv_size,  # Ensure divisible by temporal patch size
+                min_frames=min_frames,
+                max_frames=max_frames,
+                metadata=meta,
+                fps=fps,
+                num_frames=num_frames
+            )
+            
+            # Update metadata with new frame count and fps
             meta["num_of_frame"] = frames.shape[0]
             if fps is not None:
-                meta["fps"] = fps 
+                meta["fps"] = fps  # Use specified fps
             else:
-                meta["fps"] = frames.shape[0] / meta["duration"]
+                meta["fps"] = frames.shape[0] / meta["duration"]  # Calculate fps from sampled frames
 
         return frames, meta
 
     def apply_chat_template(self, request):
         """
-        Convert multi-turn messages into ID sequences.
-
+        Apply chat template to convert messages into token sequence.
+        
         Args:
-            messages: Either a request dict containing 'messages' field,
-                                or a list of message dicts directly
-
+            request: Dictionary containing chat messages
+            
         Returns:
-            List of token IDs as strings (converted from token objects)
+            List of token IDs
+            
+        Raises:
+            ValueError: If model doesn't support chat templates
         """
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
 
-        prompt_token_str = self.tokenizer.apply_chat_template(
+        raw_prompt = self.tokenizer.apply_chat_template(
             request["messages"],
             tokenize=False,
             add_generation_prompt=request.get("add_generation_prompt", True),
         )
-        prompt_token_str = prompt_token_str.replace(self.image_token, "").replace(self.video_token, "")
+        prompt_token_str = raw_prompt.replace(self.image_token, "").replace(self.video_token, "")
 
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         data_processor_logger.info(
-            f"req_id:{request.get('request_id', ''), } tokens: {tokens}, token_ids: {token_ids}"
+            f"req_id:{request.get('request_id', ''), } prompt: {raw_prompt} tokens: {tokens}, token_ids: {token_ids}"
         )
         return token_ids
