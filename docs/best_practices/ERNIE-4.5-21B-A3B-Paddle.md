@@ -25,12 +25,12 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-21B-A3B` on the followi
 ### 2.1 Basic: Launching the Service
 Start the service by following command:
 ```bash
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-21B-A3B-Paddle \
        --tensor-parallel-size 1 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
@@ -87,8 +87,8 @@ Add the following lines to the startup parameters
 ```
 Notes:
 1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../parameters.md) for related configuration parameter descriptions
-2. When CUDAGraph is enabled, only single-card inference is supported, that is, `--tensor-parallel-size 1`
-3. When CUDAGraph is enabled, it is not supported to enable `Chunked Prefill` and `Prefix Caching` at the same time
+2. When CUDAGraph is enabled, if running with multi-GPUs TP>1, `--enable-custom-all-reduce` must be specified at the same time.
+3. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
 
 #### 2.2.6 Rejection Sampling
 **Idea:**
@@ -111,6 +111,7 @@ export INFERENCE_MSG_QUEUE_ID=1315
 export FLAGS_max_partition_size=2048
 export FD_ATTENTION_BACKEND=FLASH_ATTN
 export FD_LOG_DIR="prefill_log"
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 quant_type=block_wise_fp8
 export FD_USE_DEEP_GEMM=0
@@ -120,7 +121,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A
     --max-num-seqs 20 \
     --num-gpu-blocks-override 40000 \
     --quantization ${quant_type} \
-    --gpu-memory-utilization 0.9 --kv-cache-ratio 0.9 \
+    --gpu-memory-utilization 0.9 \
     --port 7012 --engine-worker-queue-port 7013 --metrics-port 7014 --tensor-parallel-size 4 \
     --cache-queue-port 7015 \
     --splitwise-role "prefill" \
@@ -131,6 +132,7 @@ export CUDA_VISIBLE_DEVICES=4,5,6,7
 export INFERENCE_MSG_QUEUE_ID=1215
 export FLAGS_max_partition_size=2048
 export FD_LOG_DIR="decode_log"
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 quant_type=block_wise_fp8
 export FD_USE_DEEP_GEMM=0
@@ -139,7 +141,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A
     --max-model-len 131072 \
     --max-num-seqs 20 \
     --quantization ${quant_type} \
-    --gpu-memory-utilization 0.85 --kv-cache-ratio 0.1 \
+    --gpu-memory-utilization 0.85 \
     --port 9012 --engine-worker-queue-port 8013 --metrics-port 8014 --tensor-parallel-size 4 \
     --cache-queue-port 8015 \
     --innode-prefill-ports 7013 \
