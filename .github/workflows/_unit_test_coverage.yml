@@ -205,6 +205,7 @@ jobs:
       - name: Check Unit Test Success
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
             filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
@@ -225,6 +226,7 @@ jobs:
       - name: Verify Code Coverage Threshold (80%)
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
             filename=$(basename "$diff_cov_result_json_url")

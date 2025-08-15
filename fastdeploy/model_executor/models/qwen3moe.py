@@ -317,12 +317,12 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
     ) -> list[tuple[str, str, int, str]]:
         # (param_name, weight_name, expert_id, shard_id)
         return FusedMoE.make_expert_params_mapping(
+            num_experts=self.fd_config.model_config.num_experts,
             ckpt_gate_proj_name="gate_proj",
             ckpt_down_proj_name="down_proj",
             ckpt_up_proj_name="up_proj",
             param_gate_up_proj_name="experts.up_gate_proj_",
             param_down_proj_name="experts.down_proj_",
-            num_experts=self.fd_config.model_config.num_experts,
         )
 
     @paddle.no_grad()
