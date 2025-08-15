@@ -15,12 +15,13 @@
 """
 
 import io
-import os
-import decord
-from tempfile import NamedTemporaryFile as ntf
-from typing import Union, Optional
-import numpy as np
 import math
+import os
+from tempfile import NamedTemporaryFile as ntf
+from typing import Optional, Union
+
+import decord
+import numpy as np
 
 try:
     # moviepy 1.0
@@ -29,16 +30,14 @@ except:
     # moviepy 2.0
     import moviepy as mp
 
-from fastdeploy.utils import data_processor_logger
-
 
 def is_gif(data: bytes) -> bool:
     """
     Check if given bytes data is a GIF file by examining magic number.
-    
+
     Args:
         data: Binary data to check
-        
+
     Returns:
         bool: True if data is a GIF file (GIF87a or GIF89a format)
     """
@@ -48,10 +47,10 @@ def is_gif(data: bytes) -> bool:
 class VideoReaderWrapper(decord.VideoReader):
     """
     Wrapper around decord.VideoReader to handle GIF files and fix memory leaks.
-    
+
     This wrapper converts GIF inputs to MP4 format to work around decord's limitations,
     and implements proper cleanup to prevent memory leaks (https://github.com/dmlc/decord/issues/208).
-    
+
     Attributes:
         original_file (str): Path to the original video file (for cleanup)
     """
@@ -59,7 +58,7 @@ class VideoReaderWrapper(decord.VideoReader):
     def __init__(self, video_path, *args, **kwargs):
         """
         Initialize the video reader wrapper.
-        
+
         Args:
             video_path: Can be one of:
                 - str: Path to video file
@@ -67,7 +66,7 @@ class VideoReaderWrapper(decord.VideoReader):
                 - io.BytesIO: Video data stream
             *args: Additional arguments for decord.VideoReader
             **kwargs: Additional keyword arguments for decord.VideoReader
-            
+
         Note:
             Automatically converts GIF files to MP4 format for compatibility.
         """
@@ -105,13 +104,13 @@ class VideoReaderWrapper(decord.VideoReader):
     def __getitem__(self, key):
         """
         Get video frames by index/slice and reset reader position.
-        
+
         Args:
             key: Index or slice of frames to retrieve
-            
+
         Returns:
             decord.ndarray.NDArray: Requested video frames
-            
+
         Note:
             Resets read position to start after frame retrieval
         """
@@ -122,7 +121,7 @@ class VideoReaderWrapper(decord.VideoReader):
     def __del__(self):
         """
         Clean up temporary files when object is destroyed.
-        
+
         Note:
             Removes any temporary MP4 files created from GIF conversions
         """
@@ -133,14 +132,14 @@ class VideoReaderWrapper(decord.VideoReader):
 def read_video_decord(video_path):
     """
     Read video file using decord video reader and get metadata.
-    
+
     Args:
         video_path: Can be one of:
             - str: Path to video file
             - bytes: Raw video bytes
             - io.BytesIO: Video data stream
             - VideoReaderWrapper: Existing video reader instance
-            
+
     Returns:
         tuple: (video_reader, video_meta) where:
             - video_reader: VideoReaderWrapper instance
@@ -163,9 +162,9 @@ def read_video_decord(video_path):
 
     # Package metadata
     video_meta = {
-        "fps": fps,            # Frames per second
+        "fps": fps,  # Frames per second
         "duration": duration,  # Total duration in seconds
-        "num_of_frame": vlen   # Total frame count
+        "num_of_frame": vlen,  # Total frame count
     }
     return video_reader, video_meta
 
@@ -181,7 +180,7 @@ def sample_frames(
 ):
     """
     Sample frames from video according to specified criteria.
-    
+
     Args:
         video: Input video frames as numpy array
         frame_factor: Ensure sampled frames are multiples of this factor
@@ -190,12 +189,12 @@ def sample_frames(
         metadata: Video metadata containing fps information
         fps: Target frames per second for sampling
         num_frames: Exact number of frames to sample
-        
+
     Returns:
         np.ndarray: Sampled video frames
-        
+
     Raises:
-        ValueError: If both fps and num_frames are specified, 
+        ValueError: If both fps and num_frames are specified,
                    or if required metadata is missing,
                    or if requested frames exceed available frames
     """
@@ -234,7 +233,7 @@ def sample_frames(
     else:
         # Keep all frames if no sampling requested
         indices = np.arange(0, total_num_frames).astype(np.int32)
-    
+
     # Apply frame selection
     video = video[indices]
 

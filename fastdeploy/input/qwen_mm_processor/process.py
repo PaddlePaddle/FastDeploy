@@ -15,11 +15,12 @@
 # limitations under the License.
 """
 
-
 from typing import Any, Dict, List, Union
+
 import numpy as np
-from PIL import Image
 from paddleformers.transformers import AutoTokenizer
+from PIL import Image
+
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.mm_processor import IDS_TYPE_FLAG
 from fastdeploy.utils import data_processor_logger
@@ -31,13 +32,13 @@ from .process_video import read_video_decord, sample_frames
 class DataProcessor:
     """
     Processes multimodal inputs (text, images, videos) into model-ready formats.
-    
+
     Handles:
     - Tokenization of text with special tokens for visual content
     - Image and video preprocessing
     - Generation of 3D positional embeddings
     - Conversion of chat messages to model inputs
-    
+
     Attributes:
         tokenizer: Text tokenizer instance
         image_processor: Image/video preprocessor
@@ -56,11 +57,11 @@ class DataProcessor:
     ) -> None:
         """
         Initialize the data processor.
-        
+
         Args:
             model_path: Path to pretrained model
             video_min_frames: Minimum frames to sample from videos
-            video_max_frames: Maximum frames to sample from videos  
+            video_max_frames: Maximum frames to sample from videos
             tokens_per_second: Temporal resolution for positional embeddings
             **kwargs: Additional configuration
         """
@@ -98,12 +99,12 @@ class DataProcessor:
     def text2ids(self, text, images=None, videos=None):
         """
         Convert text with image/video placeholders into model inputs.
-        
+
         Args:
             text: Input text with <|image@placeholder|> and <|video@placeholder|> markers
             images: List of PIL Images corresponding to image placeholders
             videos: List of video data corresponding to video placeholders
-            
+
         Returns:
             Dict containing:
                 - input_ids: Token IDs
@@ -129,10 +130,10 @@ class DataProcessor:
 
         # Define placeholders and their lengths
         IMAGE_PLACEHOLDER = "<|image@placeholder|>"
-        VIDEO_PLACEHOLDER = "<|video@placeholder|>" 
+        VIDEO_PLACEHOLDER = "<|video@placeholder|>"
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
-        
+
         # Initialize tracking variables for text parsing
         st, image_idx, video_idx = 0, 0, 0  # Start position, image counter, video counter
         while st < len(text):
@@ -169,13 +170,13 @@ class DataProcessor:
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat request with multimodal messages into model inputs.
-        
+
         Args:
             request: Dictionary containing:
                 - messages: List of chat messages with text/image/video content
                 - request_id: Unique identifier for logging
             tgts: Optional target sequences
-            
+
         Returns:
             Dict with same structure as text2ids() output
         """
@@ -196,16 +197,16 @@ class DataProcessor:
         # Parse and validate chat messages
         messages = parse_chat_messages(request.get("messages"))
         image_message_list = []  # Store visual content messages
-        
+
         for msg in messages:
             role = msg.get("role")
             assert role in self.role_prefixes, f"Unsupported role: {role}"
-            
+
             # Normalize content to list format
             content_items = msg.get("content")
             if not isinstance(content_items, list):
                 content_items = [content_items]
-                
+
             # Collect all visual content items
             for item in content_items:
                 if isinstance(item, dict) and item.get("type") in ["image", "video"]:
@@ -219,7 +220,7 @@ class DataProcessor:
         vision_start_index = 0
         vision_message_index = 0
         for i in range(len(prompt_token_ids)):
-            if prompt_token_ids[i] == self.vision_start_id :
+            if prompt_token_ids[i] == self.vision_start_id:
                 self._add_text(prompt_token_ids[vision_start_index : i + 1], outputs)
 
                 vision_start_index = i + 1
@@ -249,11 +250,11 @@ class DataProcessor:
     def _add_text(self, tokens, outputs: Dict) -> None:
         """
         Add text tokens to model inputs dictionary.
-        
+
         Args:
             tokens: Text string or already tokenized IDs
             outputs: Dictionary accumulating model inputs
-            
+
         Note:
             - Handles both raw text and pre-tokenized inputs
             - Updates position IDs for 3D embeddings
@@ -271,11 +272,11 @@ class DataProcessor:
     def _compute_text_positions(self, start_pos: int, num_tokens: int) -> np.ndarray:
         """
         Generate 3D positional embeddings for text tokens.
-        
+
         Args:
             start_pos: Starting position index
             num_tokens: Number of tokens to generate positions for
-            
+
         Returns:
             numpy.ndarray: 3D position IDs shaped (3, num_tokens)
         """
@@ -287,11 +288,11 @@ class DataProcessor:
     def _add_image(self, img, outputs: Dict) -> None:
         """
         Add image data to model inputs dictionary.
-        
+
         Args:
             img: PIL Image to process
             outputs: Dictionary accumulating model inputs
-            
+
         Note:
             - Preprocesses image and calculates spatial dimensions
             - Adds image token IDs and type markers
@@ -309,7 +310,7 @@ class DataProcessor:
         outputs["image_type_ids"].append(0)
 
         t, h, w = grid_thw
-        position_ids = self._compute_vision_positions(outputs["cur_position"], t,h,w, 0)
+        position_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, 0)
 
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
@@ -317,12 +318,12 @@ class DataProcessor:
     def _add_video(self, frames, meta: Dict, outputs: Dict) -> None:
         """
         Add video data to model inputs dictionary.
-        
+
         Args:
             frames: Video frames as numpy array
             meta: Video metadata containing fps/duration
             outputs: Dictionary accumulating model inputs
-            
+
         Note:
             - Handles temporal dimension in position embeddings
             - Uses video-specific token IDs and type markers
@@ -342,22 +343,24 @@ class DataProcessor:
         fps = meta["fps"]
         second_per_grid_t = self.temporal_conv_size / fps
         t, h, w = grid_thw
-        position_ids = self._compute_vision_positions(outputs["cur_position"], t,h,w, second_per_grid_t)
+        position_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, second_per_grid_t)
 
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
 
-    def _compute_vision_positions(self, start_pos: int, t: int, h: int, w: int, second_per_grid_t:float) -> np.ndarray:
+    def _compute_vision_positions(
+        self, start_pos: int, t: int, h: int, w: int, second_per_grid_t: float
+    ) -> np.ndarray:
         """
         Generate 3D positional embeddings for visual content.
-        
+
         Args:
             start_pos: Starting position index
             t: Temporal dimension (frames)
             h: Height in patches
-            w: Width in patches 
+            w: Width in patches
             second_per_grid_t: Seconds per temporal grid
-            
+
         Returns:
             numpy.ndarray: 3D position IDs shaped (3, t*h*w)
         """
@@ -381,11 +384,11 @@ class DataProcessor:
     def _load_and_process_video(self, url: str, item: Dict) -> np.ndarray:
         """
         Load and preprocess video into frames.
-        
+
         Args:
             url: Video file path or bytes
             item: Dictionary containing processing parameters
-            
+
         Returns:
             tuple: (frames, metadata) where:
                 - frames: Processed video frames as numpy array
@@ -403,12 +406,12 @@ class DataProcessor:
         # Apply frame sampling if fps or target_frames specified
         fps = item.get("fps", None)
         num_frames = item.get("target_frames", None)
-        
+
         if fps is not None or num_frames is not None:
             # Get frame sampling constraints
             min_frames = item.get("min_frames", self.min_frames)
             max_frames = item.get("max_frames", self.max_frames)
-            
+
             # Sample frames according to specifications
             frames = sample_frames(
                 video=frames,
@@ -417,9 +420,9 @@ class DataProcessor:
                 max_frames=max_frames,
                 metadata=meta,
                 fps=fps,
-                num_frames=num_frames
+                num_frames=num_frames,
             )
-            
+
             # Update metadata with new frame count and fps
             meta["num_of_frame"] = frames.shape[0]
             if fps is not None:
@@ -432,13 +435,13 @@ class DataProcessor:
     def apply_chat_template(self, request):
         """
         Apply chat template to convert messages into token sequence.
-        
+
         Args:
             request: Dictionary containing chat messages
-            
+
         Returns:
             List of token IDs
-            
+
         Raises:
             ValueError: If model doesn't support chat templates
         """

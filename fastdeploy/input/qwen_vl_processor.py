@@ -26,12 +26,12 @@ from fastdeploy.utils import data_processor_logger
 class QwenVLProcessor(ErnieProcessor):
     """
     Processor for Qwen Vision-Language models that handles multimodal inputs.
-    
+
     Inherits from ErnieProcessor and extends functionality for:
     - Image and video processing
     - Multimodal request handling
     - Generation configuration
-    
+
     Attributes:
         ernie_processor: Underlying DataProcessor instance
         tokenizer: Text tokenizer
@@ -50,7 +50,7 @@ class QwenVLProcessor(ErnieProcessor):
     ):
         """
         Initialize QwenVLProcessor.
-        
+
         Args:
             config: Model configuration
             model_name_or_path: Path to pretrained model
@@ -91,7 +91,7 @@ class QwenVLProcessor(ErnieProcessor):
     def get_pad_id(self):
         """
         Get the padding token ID.
-        
+
         Returns:
             int: Padding token ID
         """
@@ -100,7 +100,7 @@ class QwenVLProcessor(ErnieProcessor):
     def _load_tokenizer(self):
         """
         Load and initialize the tokenizer.
-        
+
         Returns:
             AutoTokenizer: Initialized tokenizer instance
         """
@@ -130,12 +130,12 @@ class QwenVLProcessor(ErnieProcessor):
     def process_request(self, request, max_model_len=None, **kwargs):
         """
         Process incoming request into model inputs.
-        
+
         Args:
             request: Input request object
             max_model_len: Maximum model context length
             **kwargs: Additional processing arguments
-            
+
         Returns:
             Request: Processed request with model inputs
         """
@@ -149,13 +149,13 @@ class QwenVLProcessor(ErnieProcessor):
     def _parse_processor_kwargs(self, kwargs):
         """
         Parse and validate multimodal processor kwargs.
-        
+
         Args:
             kwargs: Input kwargs dictionary
-            
+
         Returns:
             dict: Validated processor kwargs
-            
+
         Raises:
             ValueError: If kwargs format is invalid
         """
@@ -188,13 +188,13 @@ class QwenVLProcessor(ErnieProcessor):
     def _parse_limits(self, limits):
         """
         Parse and validate multimodal input limits.
-        
+
         Args:
             limits: Input limits dictionary
-            
+
         Returns:
             dict: Validated limits with defaults
-            
+
         Raises:
             ValueError: If limits format is invalid
         """
@@ -215,10 +215,10 @@ class QwenVLProcessor(ErnieProcessor):
     def _check_mm_limits(self, item):
         """
         Validate multimodal inputs against configured limits.
-        
+
         Args:
             item: Input request item to check
-            
+
         Raises:
             ValueError: If input exceeds configured limits
         """
@@ -246,14 +246,14 @@ class QwenVLProcessor(ErnieProcessor):
     def process_request_dict(self, request, max_model_len=None):
         """
         Process request dictionary into model inputs.
-        
+
         Args:
             request: Input request dictionary
             max_model_len: Maximum model context length
-            
+
         Returns:
             dict: Processed request with model inputs
-            
+
         Raises:
             ValueError: If request format is invalid
         """
@@ -294,8 +294,10 @@ class QwenVLProcessor(ErnieProcessor):
 
         # Handle prompt truncation if exceeds model context length
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]  # Leave space for at least 1 new token
-            
+            request["prompt_token_ids"] = request["prompt_token_ids"][
+                : max_model_len - 1
+            ]  # Leave space for at least 1 new token
+
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
@@ -306,7 +308,7 @@ class QwenVLProcessor(ErnieProcessor):
     def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
         """
         Append previously generated tokens to inputs.
-        
+
         Args:
             multimodal_inputs: Current model inputs
             generated_token_ids: Tokens to append
@@ -324,10 +326,10 @@ class QwenVLProcessor(ErnieProcessor):
     def pack_outputs(self, outs):
         """
         Convert and package model outputs into standardized format.
-        
+
         Args:
             outs: Raw model outputs
-            
+
         Returns:
             dict: Packaged outputs with proper types and shapes
         """
@@ -353,12 +355,12 @@ class QwenVLProcessor(ErnieProcessor):
     def process_response_dict(self, response_dict, stream, **kwargs):
         """
         Process model response into final output format.
-        
+
         Args:
             response_dict: Raw model response
             stream: Whether response is streaming
             **kwargs: Additional processing arguments
-            
+
         Returns:
             dict: Processed response
         """
@@ -373,10 +375,10 @@ class QwenVLProcessor(ErnieProcessor):
     def update_stop_seq(self, stop_sequences):
         """
         Update stop sequences for generation.
-        
+
         Args:
             stop_sequences: Stop sequences to process
-            
+
         Returns:
             tuple: (stop_seqs, stop_seqs_len) processed sequences
         """

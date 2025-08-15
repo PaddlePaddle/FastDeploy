@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-
 import math
 from typing import List, Optional, Union
 
@@ -35,7 +34,6 @@ from paddleformers.transformers.image_utils import (
     PILImageResampling,
     get_image_size,
     infer_channel_dimension_format,
-
     make_list_of_images,
     to_numpy_array,
     valid_images,
@@ -67,11 +65,11 @@ VideoInput = Union[
 def round_by_factor(number: int, factor: int) -> int:
     """
     Round number to nearest multiple of factor.
-    
+
     Args:
         number: Input number to round
         factor: Rounding factor
-        
+
     Returns:
         int: Rounded number
     """
@@ -81,11 +79,11 @@ def round_by_factor(number: int, factor: int) -> int:
 def ceil_by_factor(number: int, factor: int) -> int:
     """
     Round number up to nearest multiple of factor.
-    
+
     Args:
         number: Input number to round
         factor: Rounding factor
-        
+
     Returns:
         int: Rounded number
     """
@@ -95,28 +93,21 @@ def ceil_by_factor(number: int, factor: int) -> int:
 def floor_by_factor(number: int, factor: int) -> int:
     """
     Round number down to nearest multiple of factor.
-    
+
     Args:
         number: Input number to round
         factor: Rounding factor
-        
+
     Returns:
         int: Rounded number
     """
     return math.floor(number / factor) * factor
 
 
-def smart_resize(
-    height: int,
-    width: int,
-    factor: int,
-    min_pixels: int,
-    max_pixels: int,
-    max_ratio: int = 200
-):
+def smart_resize(height: int, width: int, factor: int, min_pixels: int, max_pixels: int, max_ratio: int = 200):
     """
     Smart image resizing that maintains aspect ratio and respects constraints.
-    
+
     Args:
         height: Original image height
         width: Original image width
@@ -124,10 +115,10 @@ def smart_resize(
         min_pixels: Minimum allowed pixels
         max_pixels: Maximum allowed pixels
         max_ratio: Maximum allowed aspect ratio
-        
+
     Returns:
         tuple: (new_height, new_width)
-        
+
     Raises:
         ValueError: If calculated dimensions are invalid
     """
@@ -167,10 +158,10 @@ def smart_resize(
 def is_scaled_image(image: np.ndarray) -> bool:
     """
     Check if image pixel values are already normalized to [0, 1] range.
-    
+
     Args:
         image: Input image array
-        
+
     Returns:
         bool: True if image is already scaled
     """
@@ -184,7 +175,7 @@ def is_scaled_image(image: np.ndarray) -> bool:
 class ImageProcessor(BaseImageProcessor):
     """
     Adaptive image processor for dynamic image resizing and preprocessing.
-    
+
     This processor handles image resizing, rescaling, normalization and format conversion.
     It dynamically adjusts image dimensions based on original size and specified constraints.
     """
@@ -206,10 +197,10 @@ class ImageProcessor(BaseImageProcessor):
     ) -> None:
         """
         Initialize image processor with configuration parameters.
-        
+
         Args:
             patch_size (int): Spatial patch size for vision encoder
-            merge_size (int): Merge size between vision and LLM encoders 
+            merge_size (int): Merge size between vision and LLM encoders
             temporal_patch_size (int): Temporal patch size for video processing
             min_pixels (int): Minimum allowed pixels in resized image
             max_pixels (int): Maximum allowed pixels in resized image
@@ -253,7 +244,7 @@ class ImageProcessor(BaseImageProcessor):
     ):
         """
         Internal method for image preprocessing pipeline.
-        
+
         Args:
             images: Input image or batch of images
             min_pixels: Minimum allowed pixels in output
@@ -266,7 +257,7 @@ class ImageProcessor(BaseImageProcessor):
             resample: Resampling method
             data_format: Output channel format
             input_data_format: Input channel format
-            
+
         Returns:
             tuple: (flatten_patches, grid_dimensions)
                 - flatten_patches: Flattened image patches
@@ -300,7 +291,7 @@ class ImageProcessor(BaseImageProcessor):
         for image in images:
             if height != resized_height or width != resized_width:
                 # Convert to uint8 before resizing to avoid double scaling
-                image = image.astype("uint8")  
+                image = image.astype("uint8")
                 # Convert to PIL Image and resize
                 image = Image.fromarray(image)
                 image = resize(
@@ -312,8 +303,8 @@ class ImageProcessor(BaseImageProcessor):
 
             if do_rescale and do_normalize:
                 # Adjust mean and std for combined rescale+normalize
-                image_mean = np.array(image_mean, dtype=np.float32)  * (1.0 / rescale_factor)
-                image_std = np.array(image_std, dtype=np.float32)  * (1.0 / rescale_factor)
+                image_mean = np.array(image_mean, dtype=np.float32) * (1.0 / rescale_factor)
+                image_std = np.array(image_std, dtype=np.float32) * (1.0 / rescale_factor)
                 do_rescale = False  # Skip separate rescale step
 
             if do_rescale:
@@ -334,13 +325,13 @@ class ImageProcessor(BaseImageProcessor):
 
         # Convert processed images to numpy array
         patches = np.array(processed_images)
-        
+
         # Pad temporal dimension if needed
         if patches.shape[0] % self.temporal_patch_size != 0:
             repeats = np.repeat(
-                patches[-1][np.newaxis], 
-                self.temporal_patch_size - (patches.shape[0] % self.temporal_patch_size), 
-                axis=0
+                patches[-1][np.newaxis],
+                self.temporal_patch_size - (patches.shape[0] % self.temporal_patch_size),
+                axis=0,
             )
             patches = np.concatenate([patches, repeats], axis=0)
 
@@ -399,7 +390,7 @@ class ImageProcessor(BaseImageProcessor):
     ):
         """
         Main preprocessing method for images/videos.
-        
+
         Args:
             images: Input image/video data
             min_pixels: Override for minimum pixels
@@ -413,12 +404,12 @@ class ImageProcessor(BaseImageProcessor):
             return_tensors: Desired output tensor format
             data_format: Output channel dimension format
             input_data_format: Input channel dimension format
-            
+
         Returns:
             BatchFeature: Processed features containing:
                 - pixel_values: Preprocessed pixel data
                 - grid_thw: Grid dimensions [temporal, height, width]
-                
+
         Raises:
             ValueError: For invalid image types or dimensions
         """
@@ -447,8 +438,5 @@ class ImageProcessor(BaseImageProcessor):
             data_format=data_format,
             input_data_format=input_data_format,
         )
-        data = {
-            "pixel_values": pixel_values,
-            "grid_thw": grid_thw
-        }
+        data = {"pixel_values": pixel_values, "grid_thw": grid_thw}
         return BatchFeature(data=data, tensor_type=return_tensors)
