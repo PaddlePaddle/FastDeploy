@@ -334,10 +334,12 @@ class FusedMoE(nn.Layer):
         assert up_gate_proj_expert_weight_key is not None, "up_gate_proj_expert_weight_key should not be none."
         assert down_proj_expert_weight_key is not None, "down_proj_expert_weight_key should not be none."
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = self.load_experts_weight(
-            state_dict,
-            up_gate_proj_expert_weight_key,
-            down_proj_expert_weight_key,
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            self.load_experts_weight(
+                state_dict,
+                up_gate_proj_expert_weight_key,
+                down_proj_expert_weight_key,
+            )
         )
         assert (
             len(up_gate_proj_weights) == self.num_local_experts
@@ -346,7 +348,7 @@ class FusedMoE(nn.Layer):
             len(down_proj_weights) == self.num_local_experts
         ), "down_proj_weights length should be equal to num_local_experts."
 
-        return up_gate_proj_weights, down_proj_weights
+        return up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list
 
     def extract_gate_correction_bias(self, gate_correction_bias_key, state_dict):
         """

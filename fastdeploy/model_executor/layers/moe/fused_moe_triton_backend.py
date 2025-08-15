@@ -56,7 +56,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton MoE create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
 
@@ -267,7 +267,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
     def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
         """process_prequanted_weights"""
 
-        up_gate_proj_tensor, down_proj_tensor = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_tensor, down_proj_tensor, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert up_gate_proj_tensor[0].shape == [
             layer.hidden_size,
             layer.moe_intermediate_size * 2,
@@ -534,7 +534,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         """
         Triton MoE create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 

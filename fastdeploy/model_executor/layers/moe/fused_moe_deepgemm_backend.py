@@ -37,7 +37,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         deepgemm create weight process.
         """
 
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            layer.extract_moe_ffn_weights(state_dict)
+        )
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 

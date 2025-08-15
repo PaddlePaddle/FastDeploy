@@ -36,7 +36,7 @@ class XPUMoEMethod(MoEMethodBase):
         Paddle cutlass create weight process.
         """
         # bf16
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         for weights in [up_gate_proj_weights, down_proj_weights]:
             for idx, weight in enumerate(weights):
                 weights[idx] = weight.transpose([1, 0])
@@ -130,7 +130,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         """
         Paddle cutlass create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
         assert up_gate_proj_weights[0].shape == [

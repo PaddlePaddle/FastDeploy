@@ -51,7 +51,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
         Paddle gcu create weight process.
         """
         # bf16
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
         for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
@@ -312,7 +312,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         """
         Paddle cutlass create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
         def quant_worker(p_group_idx, shared_dict, weights, moe_quant_type, group_size):
