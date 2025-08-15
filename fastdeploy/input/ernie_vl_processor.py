@@ -225,6 +225,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+            request.setdefault("enable_thinking", True)
             outputs = self.ernie_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")

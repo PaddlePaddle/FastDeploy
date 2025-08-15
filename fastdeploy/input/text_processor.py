@@ -228,6 +228,7 @@ class DataProcessor(BaseDataProcessor):
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                task.setdefault("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
@@ -285,6 +286,7 @@ class DataProcessor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
