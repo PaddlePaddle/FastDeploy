@@ -1,0 +1,441 @@
+"""
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+"""image preprocessor adaptive"""
+
+import math
+from typing import List, Optional, Union
+
+import numpy as np
+import paddle
+import PIL
+from paddleformers.transformers.feature_extraction_utils import BatchFeature
+from paddleformers.transformers.image_processing_utils import BaseImageProcessor
+from paddleformers.transformers.image_transforms import (
+    normalize,
+    rescale,
+    resize,
+    to_channel_dimension_format,
+)
+from paddleformers.transformers.image_utils import (
+    ChannelDimension,
+    ImageInput,
+    PILImageResampling,
+    get_image_size,
+    infer_channel_dimension_format,
+
+    make_list_of_images,
+    to_numpy_array,
+    valid_images,
+)
+from paddleformers.transformers.tokenizer_utils_base import TensorType
+from PIL import Image
+
+from fastdeploy.utils import data_processor_logger
+
+OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
+
+MIN_PIXELS = 4 * 28 * 28
+MAX_PIXELS = 16384 * 28 * 28
+
+
+VideoInput = Union[
+    List["PIL.Image.Image"],
+    "np.ndarray",
+    "paddle.Tensor",
+    List["np.ndarray"],
+    List["paddle.Tensor"],
+    List[List["PIL.Image.Image"]],
+    List[List["np.ndarrray"]],
+    List[List["paddle.Tensor"]],
+]
+
+
+def round_by_factor(number: int, factor: int) -> int:
+    """Returns the closest integer to 'number' that is divisible by 'factor'."""
+    return round(number / factor) * factor
+
+
+def ceil_by_factor(number: int, factor: int) -> int:
+    """Returns the smallest integer greater than or equal to 'number' that is divisible by 'factor'."""
+    return math.ceil(number / factor) * factor
+
+
+def floor_by_factor(number: int, factor: int) -> int:
+    """Returns the largest integer less than or equal to 'number' that is divisible by 'factor'."""
+    return math.floor(number / factor) * factor
+
+
+def smart_resize(
+    height: int,
+    width: int,
+    factor: int,
+    min_pixels: int,
+    max_pixels: int,
+    max_ratio: int = 200
+):
+    """
+    Rescales the image so that the following conditions are met:
+
+    1. Both dimensions (height and width) are divisible by 'factor'.
+
+    2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
+
+    3. The aspect ratio of the image is maintained as closely as possible.
+    """
+    if max(height, width) / min(height, width) > max_ratio:
+        if height > width:
+            new_width = max(factor, round_by_factor(width, factor))
+            new_height = floor_by_factor(new_width * max_ratio, factor)
+        else:
+            new_height = max(factor, round_by_factor(height, factor))
+            new_width = floor_by_factor(new_height * max_ratio, factor)
+
+        data_processor_logger.info(
+            f"absolute aspect ratio must be smaller than {max_ratio}, got {max(height, width) / min(height, width)},\
+              resize to {max(new_height, new_width) / min(new_height, new_width)}"
+        )
+
+        height = new_height
+        width = new_width
+
+    h_bar = max(factor, round_by_factor(height, factor))
+    w_bar = max(factor, round_by_factor(width, factor))
+    if h_bar * w_bar > max_pixels:
+        beta = math.sqrt((height * width) / max_pixels)
+        h_bar = floor_by_factor(height / beta, factor)
+        w_bar = floor_by_factor(width / beta, factor)
+    elif h_bar * w_bar < min_pixels:
+        beta = math.sqrt(min_pixels / (height * width))
+        h_bar = ceil_by_factor(height * beta, factor)
+        w_bar = ceil_by_factor(width * beta, factor)
+
+    if min_pixels > h_bar * w_bar or h_bar * w_bar > max_pixels:
+        raise ValueError(f"encounter invalid h_bar: {h_bar}, w_bar: {w_bar}")
+
+    return h_bar, w_bar
+
+
+def is_scaled_image(image: np.ndarray) -> bool:
+    """
+    Checks to see whether the pixel values have already been rescaled to [0, 1].
+    """
+    if image.dtype == np.uint8:
+        return False
+
+    # It's possible the image has pixel values in [0, 255] but is of floating type
+    return np.min(image) >= 0 and np.max(image) <= 1
+
+
+class ImageProcessor(BaseImageProcessor):
+    r"""
+    Constructs a adaptive image processor that dynamically resizes images based on the original images.
+
+    Args:
+        resample (`PILImageResampling`, *optional*, defaults to `Resampling.BICUBIC`):
+            Resampling filter to use when resizing the image.
+        do_rescale (`bool`, *optional*, defaults to `True`):
+            Whether to rescale the image by the specified scale `rescale_factor`.
+        rescale_factor (`int` or `float`, *optional*, defaults to `1/255`):
+            Scale factor to use if rescaling the image.
+        do_normalize (`bool`, *optional*, defaults to `True`):
+            Whether to normalize the image.
+        image_mean (`float` or `List[float]`, *optional*, defaults to `[0.48145466, 0.4578275, 0.40821073]`):
+            Mean to use if normalizing the image. This is a float or list of floats for each channel in the image.
+        image_std (`float` or `List[float]`, *optional*, defaults to `[0.26862954, 0.26130258, 0.27577711]`):
+            Standard deviation to use if normalizing the image. This is a float or list of floats for each channel
+            in the image.
+        min_pixels (`int`, *optional*, defaults to `56 * 56`):
+            The min pixels of the image to resize the image.
+        max_pixels (`int`, *optional*, defaults to `28 * 28 * 1280`):
+            The max pixels of the image to resize the image.
+        patch_size (`int`, *optional*, defaults to 14):
+            The spacial patch size of the vision encoder.
+        temporal_patch_size (`int`, *optional*, defaults to 2):
+            The temporal conv size in resampler.
+        merge_size (`int`, *optional*, defaults to 2):
+            The merge size of the vision encoder to llm encoder.
+    """
+
+    def __init__(
+        self,
+        patch_size: int = 14,
+        merge_size: int = 2,
+        temporal_patch_size: int = 2,
+        min_pixels: int = MIN_PIXELS,
+        max_pixels: int = MAX_PIXELS,
+        image_mean: Union[float, List[float]] = OPENAI_CLIP_MEAN,
+        image_std: Union[float, List[float]] = OPENAI_CLIP_STD,
+        rescale_factor: float = 1 / 255,
+        do_rescale: bool = True,
+        do_normalize: bool = True,
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
+        **kwargs,
+    ) -> None:
+        """init"""
+        super().__init__(**kwargs)
+        self.patch_size = patch_size
+        self.merge_size = merge_size
+        self.temporal_patch_size = temporal_patch_size
+
+        self.min_pixels = min_pixels
+        self.max_pixels = max_pixels
+
+        self.image_mean = image_mean
+        self.image_std = image_std
+        self.rescale_factor = rescale_factor
+        self.do_rescale = do_rescale
+        self.do_normalize = do_normalize
+
+        self.resample = resample
+
+    def _preprocess(
+        self,
+        images: Union[ImageInput, VideoInput],
+        min_pixels: int,
+        max_pixels: int,
+        image_mean: Optional[Union[float, List[float]]],
+        image_std: Optional[Union[float, List[float]]],
+        rescale_factor: float,
+        do_rescale: bool,
+        do_normalize: bool,
+        resample: PILImageResampling,
+        data_format: Optional[ChannelDimension],
+        input_data_format: Optional[Union[str, ChannelDimension]],
+    ):
+        """
+        Preprocess an image or batch of images. Copy of the `preprocess` method from `CLIPImageProcessor`.
+
+        Args:
+            images (`ImageInput`):
+                Image or batch of images to preprocess. Expects pixel values ranging from 0 to 255.
+                If pixel values range from 0 to 1, set `do_rescale=False`.
+            vision_info (`List[Dict]`, *optional*):
+                Optional list of dictionaries containing additional information about vision inputs.
+            resample (`PILImageResampling`, *optional*, defaults to `self.resample`):
+                Resampling filter to use if resizing the image. This can be one of the `PILImageResampling` enums.
+            do_rescale (`bool`, *optional*, defaults to `self.do_rescale`):
+                Whether to rescale the image.
+            rescale_factor (`float`, *optional*, defaults to `self.rescale_factor`):
+                Scale factor to use if rescaling the image.
+            do_normalize (`bool`, *optional*, defaults to `self.do_normalize`):
+                Whether to normalize the image.
+            image_mean (`float` or `List[float]`, *optional*, defaults to `self.image_mean`):
+                Mean to use if normalizing the image.
+                Can be a float or a list of floats corresponding to the number of channels in the image.
+            image_std (`float` or `List[float]`, *optional*, defaults to `self.image_std`):
+                Standard deviation to use if normalizing the image.
+                Can be a float or a list of floats corresponding to the number of channels in the image.
+            data_format (`ChannelDimension`, *optional*, defaults to `ChannelDimension.FIRST`):
+                The channel dimension format for the output image. Can be one of:
+                - `"channels_first"` or `ChannelDimension.FIRST`: image in (num_channels, height, width) format.
+                - `"channels_last"` or `ChannelDimension.LAST`: image in (height, width, num_channels) format.
+                - Unset: Use the channel dimension format of the input image.
+            input_data_format (`ChannelDimension` or `str`, *optional*):
+                The channel dimension format for the input image. Can be one of:
+                - `"channels_first"` or `ChannelDimension.FIRST`: image in (num_channels, height, width) format.
+                - `"channels_last"` or `ChannelDimension.LAST`: image in (height, width, num_channels) format.
+                - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
+                - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
+        """
+        images = make_list_of_images(images)
+
+        # All transformations expect numpy arrays.
+        images = [to_numpy_array(image) for image in images]
+
+        if is_scaled_image(images[0]) and do_rescale:
+            data_processor_logger.warning(
+                "It looks like you are trying to rescale already rescaled images. If the input"
+                " images have pixel values between 0 and 1, set `do_rescale=False` to avoid rescaling them again."
+            )
+        if input_data_format is None:
+            # We assume that all images have the same channel dimension format.
+            input_data_format = infer_channel_dimension_format(images[0])
+
+        height, width = get_image_size(images[0], channel_dim=input_data_format)
+        resized_height, resized_width = smart_resize(
+            height,
+            width,
+            factor=self.patch_size * self.merge_size,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
+        )
+
+        processed_images = []
+        for image in images:
+            if height != resized_height or width != resized_width:
+                image = image.astype("uint8")  # TODO : 需要手动加上，否则多除255 导致结果会出错
+                # 直接fromarray，不要靠paddleformers里面的
+                image = Image.fromarray(image)
+                image = resize(
+                    image,
+                    size=(resized_height, resized_width),
+                    resample=resample,
+                    data_format=input_data_format,
+                )
+
+            if do_rescale and do_normalize:
+                image_mean = np.array(image_mean, dtype=np.float32)  * (1.0 / rescale_factor)
+                image_std = np.array(image_std, dtype=np.float32)  * (1.0 / rescale_factor)
+                do_rescale = False
+
+            if do_rescale:
+                image = image.astype("float32")
+                image = rescale(image, scale=rescale_factor, data_format=input_data_format)
+
+            if do_normalize:
+                image = image.astype("float32")
+                image = normalize(
+                    image=image,
+                    mean=image_mean,
+                    std=image_std,
+                    data_format=input_data_format,
+                )
+
+            image = to_channel_dimension_format(image, data_format, input_channel_dim=input_data_format)  # [C, H, W]
+            processed_images.append(image)
+
+        patches = np.array(processed_images)
+        if patches.shape[0] % self.temporal_patch_size != 0:
+            repeats = np.repeat(
+                patches[-1][np.newaxis], self.temporal_patch_size - (patches.shape[0] % self.temporal_patch_size), axis=0
+            )
+            patches = np.concatenate([patches, repeats], axis=0)
+
+        if data_format == ChannelDimension.LAST:
+            patches = patches.transpose([0, 3, 1, 2])
+
+        grid_t, channel = patches.shape[:2]
+        grid_t = grid_t // self.temporal_patch_size
+
+        grid_h, grid_w = (
+            resized_height // self.patch_size,
+            resized_width // self.patch_size,
+        )
+        patches = patches.reshape(
+            [
+                grid_t,
+                self.temporal_patch_size,
+                channel,
+                grid_h // self.merge_size,
+                self.merge_size,
+                self.patch_size,
+                grid_w // self.merge_size,
+                self.merge_size,
+                self.patch_size,
+            ]
+        )
+        # [grid_t, temporal_patch_size, grid_h/merge_size, grid_w/merge_size, merge_size, merge_size, C, psz, psz]
+        patches = patches.transpose([0, 3, 6, 4, 7, 2, 1, 5, 8])
+
+        flatten_patches = patches.reshape(
+            [
+                grid_t * grid_h * grid_w,
+                channel * self.temporal_patch_size * self.patch_size * self.patch_size,
+            ]
+        )
+
+        return flatten_patches, np.array([grid_t, grid_h, grid_w])
+
+    def preprocess(
+        self,
+        images: Union[ImageInput, VideoInput],
+        min_pixels: Optional[int] = None,
+        max_pixels: Optional[int] = None,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        rescale_factor: Optional[float] = None,
+        do_rescale: Optional[bool] = None,
+        do_normalize: Optional[bool] = None,
+        resample: Optional[PILImageResampling] = None,
+        return_tensors: Optional[Union[str, TensorType]] = None,
+        data_format: Optional[ChannelDimension] = ChannelDimension.FIRST,
+        input_data_format: Optional[Union[str, ChannelDimension]] = ChannelDimension.LAST,
+    ):
+        """
+        Args:
+            images (`ImageInput`):
+                Image to preprocess. Expects a single or batch of images with pixel values ranging from 0 to 255. If
+                passing in images with pixel values between 0 and 1, set `do_rescale=False`.
+            videos (`VideoInput`):
+                Video to preprocess. Expects a single or batch of videos with pixel values ranging from 0 to 255. If
+                passing in videos with pixel values between 0 and 1, set `do_rescale=False`.
+            size (`Dict[str, int]`, *optional*, defaults to `self.size`):
+                Size of the image after resizing. Shortest edge of the image is resized to size["shortest_edge"], with
+                the longest edge resized to keep the input aspect ratio.
+            resample (`int`, *optional*, defaults to `self.resample`):
+                Resampling filter to use if resizing the image. This can be one of the enum `PILImageResampling`. Only
+                has an effect if `do_resize` is set to `True`.
+            do_rescale (`bool`, *optional*, defaults to `self.do_rescale`):
+                Whether to rescale the image.
+            rescale_factor (`float`, *optional*, defaults to `self.rescale_factor`):
+                Rescale factor to rescale the image by if `do_rescale` is set to `True`.
+            do_normalize (`bool`, *optional*, defaults to `self.do_normalize`):
+                Whether to normalize the image.
+            image_mean (`float` or `List[float]`, *optional*, defaults to `self.image_mean`):
+                Image mean to use for normalization. Only has an effect if `do_normalize` is set to `True`.
+            image_std (`float` or `List[float]`, *optional*, defaults to `self.image_std`):
+                Image standard deviation to use for normalization. Only has an effect if `do_normalize` is set to
+                `True`.
+            return_tensors (`str` or `TensorType`, *optional*):
+                The type of tensors to return. Can be one of:
+                - Unset: Return a list of `np.ndarray`.
+                - `TensorType.PADDLE` or `'pt'`: Return a batch of type `torch.Tensor`.
+                - `TensorType.NUMPY` or `'np'`: Return a batch of type `np.ndarray`.
+            data_format (`ChannelDimension` or `str`, *optional*, defaults to `ChannelDimension.FIRST`):
+                The channel dimension format for the output image. Can be one of:
+                - `"channels_first"` or `ChannelDimension.FIRST`: image in (num_channels, height, width) format.
+                - `"channels_last"` or `ChannelDimension.LAST`: image in (height, width, num_channels) format.
+                - Unset: Use the channel dimension format of the input image.
+            input_data_format (`ChannelDimension` or `str`, *optional*):
+                The channel dimension format for the input image. If unset, the channel dimension format is inferred
+                from the input image. Can be one of:
+                - `"channels_first"` or `ChannelDimension.FIRST`: image in (num_channels, height, width) format.
+                - `"channels_last"` or `ChannelDimension.LAST`: image in (height, width, num_channels) format.
+                - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
+
+        """
+        min_pixels = min_pixels if min_pixels is not None else self.min_pixels
+        max_pixels = max_pixels if max_pixels is not None else self.max_pixels
+        image_mean = image_mean if image_mean is not None else self.image_mean
+        image_std = image_std if image_std is not None else self.image_std
+        rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
+        do_rescale = do_rescale if do_rescale is not None else self.do_rescale
+        do_normalize = do_normalize if do_normalize is not None else self.do_normalize
+        resample = resample if resample is not None else self.resample
+
+        if images is not None and not valid_images(images):
+            raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
+
+        pixel_values, grid_thw = self._preprocess(
+            images,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
+            image_mean=image_mean,
+            image_std=image_std,
+            rescale_factor=rescale_factor,
+            do_rescale=do_rescale,
+            do_normalize=do_normalize,
+            resample=resample,
+            data_format=data_format,
+            input_data_format=input_data_format,
+        )
+        data = {
+            "pixel_values": pixel_values,
+            "grid_thw": grid_thw
+        }
+        return BatchFeature(data=data, tensor_type=return_tensors)
