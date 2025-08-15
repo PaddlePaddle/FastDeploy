@@ -8,7 +8,7 @@ BASE_URL="http://$HOST:$PORT"
 
 TOTAL_ROUNDS=100
 CHAT_REQUESTS_PER_ROUND=5
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1
 MAX_MEMORY_MB=10240  # 10GB
 
 # ====================================================
