@@ -48,14 +48,15 @@
 
 ## 安装
 
-FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU**、**天数（Iluvatar）GPU**、**燧原（Enflame）GCU** 以及其他硬件上进行推理部署。详细安装说明如下：
+FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU**、**天数（Iluvatar）GPU**、**燧原（Enflame）GCU**、**海光（Hygon）DCU** 以及其他硬件上进行推理部署。详细安装说明如下：
 
 - [英伟达 GPU](./docs/zh/get_started/installation/nvidia_gpu.md)
 - [昆仑芯 XPU](./docs/zh/get_started/installation/kunlunxin_xpu.md)
 - [天数 CoreX](./docs/zh/get_started/installation/iluvatar_gpu.md)
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
+- [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
 
-**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU、海光（Hygon）DCU 和沐曦（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
+**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 和 沐曦（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
 
 ## 入门指南
 
