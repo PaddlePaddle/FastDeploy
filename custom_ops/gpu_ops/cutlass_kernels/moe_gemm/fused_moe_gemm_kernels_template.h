@@ -839,71 +839,75 @@ void MoeGemmRunner<InType, OutType, WeightQuantTraits>::run_gemm<EpilogueTag>(
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
     size_t num_candidate_configs_size = candidate_configs.size();
-    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
-      CUTLASS_TRACE_HOST("Current tile_config value = " << static_cast<int>(candidate_configs[ii].tile_config));
 
-      try {
-        for (int i = 0; i < warm_time; i++) {
-          dispatch_to_arch<EpilogueTag>(A,
-                                        B,
-                                        weight_scales,
-                                        biases,
-                                        C,
-                                        total_rows_before_expert,
-                                        total_rows,
-                                        gemm_n,
-                                        gemm_k,
-                                        num_experts,
-                                        quant_args_B,
-                                        candidate_configs[ii],
-                                        stream);
-        }
-        cudaEvent_t start;
-        cudaEvent_t stop;
-        check_cuda_error(cudaEventCreate(&start));
-        check_cuda_error(cudaEventCreate(&stop));
-        check_cuda_error(cudaStreamSynchronize(stream));
-        check_cuda_error(cudaEventRecord(start, stream));
-        for (int i = 0; i < test_time; i++) {
-          dispatch_to_arch<EpilogueTag>(A,
-                                        B,
-                                        weight_scales,
-                                        biases,
-                                        C,
-                                        total_rows_before_expert,
-                                        total_rows,
-                                        gemm_n,
-                                        gemm_k,
-                                        num_experts,
-                                        quant_args_B,
-                                        candidate_configs[ii],
-                                        stream);
-        }
-        check_cuda_error(cudaEventRecord(stop, stream));
-        check_cuda_error(cudaEventSynchronize(stop));
-        float elapsed;
-        check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
-        check_cuda_error(cudaEventDestroy(start));
-        check_cuda_error(cudaEventDestroy(stop));
-        //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
-        if (elapsed < best_time) {
-          best_id = ii;
-          best_time = elapsed;
-          best_config = candidate_configs[ii];
-        }
-        find_one = true;
-      } catch (const std::exception& e) {
-        std::cerr << "MOE config[" << ii << "]  Caught exception: " << e.what()
-                  << std::endl;
-      }
-    }
-    if (find_one) {
-      //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
-      gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
-      chosen_config = best_config;
-    } else {
-      PADDLE_FATAL("[MoE Configure Search] find no one available config.");
-    }
+    best_config = candidate_configs[0];
+    chosen_config = best_config;
+
+    // for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
+    //   CUTLASS_TRACE_HOST("Current tile_config value = " << static_cast<int>(candidate_configs[ii].tile_config));
+
+    //   try {
+    //     for (int i = 0; i < warm_time; i++) {
+    //       dispatch_to_arch<EpilogueTag>(A,
+    //                                     B,
+    //                                     weight_scales,
+    //                                     biases,
+    //                                     C,
+    //                                     total_rows_before_expert,
+    //                                     total_rows,
+    //                                     gemm_n,
+    //                                     gemm_k,
+    //                                     num_experts,
+    //                                     quant_args_B,
+    //                                     candidate_configs[ii],
+    //                                     stream);
+    //     }
+    //     cudaEvent_t start;
+    //     cudaEvent_t stop;
+    //     check_cuda_error(cudaEventCreate(&start));
+    //     check_cuda_error(cudaEventCreate(&stop));
+    //     check_cuda_error(cudaStreamSynchronize(stream));
+    //     check_cuda_error(cudaEventRecord(start, stream));
+    //     for (int i = 0; i < test_time; i++) {
+    //       dispatch_to_arch<EpilogueTag>(A,
+    //                                     B,
+    //                                     weight_scales,
+    //                                     biases,
+    //                                     C,
+    //                                     total_rows_before_expert,
+    //                                     total_rows,
+    //                                     gemm_n,
+    //                                     gemm_k,
+    //                                     num_experts,
+    //                                     quant_args_B,
+    //                                     candidate_configs[ii],
+    //                                     stream);
+    //     }
+    //     check_cuda_error(cudaEventRecord(stop, stream));
+    //     check_cuda_error(cudaEventSynchronize(stop));
+    //     float elapsed;
+    //     check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
+    //     check_cuda_error(cudaEventDestroy(start));
+    //     check_cuda_error(cudaEventDestroy(stop));
+    //     //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
+    //     if (elapsed < best_time) {
+    //       best_id = ii;
+    //       best_time = elapsed;
+    //       best_config = candidate_configs[ii];
+    //     }
+    //     find_one = true;
+    //   } catch (const std::exception& e) {
+    //     std::cerr << "MOE config[" << ii << "]  Caught exception: " << e.what()
+    //               << std::endl;
+    //   }
+    // }
+    // if (find_one) {
+    //   //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
+    //   gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
+    //   chosen_config = best_config;
+    // } else {
+    //   PADDLE_FATAL("[MoE Configure Search] find no one available config.");
+    // }
   }
 
   dispatch_to_arch<EpilogueTag>(A,
