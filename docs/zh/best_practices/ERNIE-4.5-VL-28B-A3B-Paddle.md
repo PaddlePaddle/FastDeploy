@@ -1,14 +1,17 @@
 
-# ERNIE-4.5-VL-424B-A47B-Paddle
+# ERNIE-4.5-VL-28B-A3B-Paddle
 
 ## 一、环境准备
 ### 1.1 支持情况
 在下列硬件上部署所需要的最小卡数如下：
+
 | 设备[显存] | WINT4 | WINT8 | BFLOAT16 |
 |:----------:|:----------:|:------:| :------:|
-| H20 [144G] | 8 | 8 |  8 |
-| A100 [80G] | 8 | 8 |  - |
-| H800 [80G] | 8 | 8 |  - |
+| A30 [24G] | 2 | 2 | 4 |
+| L20 [48G] | 1 | 1 | 2 |
+| H20 [144G] | 1 | 1 |  1 |
+| A100 [80G] | 1 | 1 |  1 |
+| H800 [80G] | 1 | 1 |  1 |
 
 ### 1.2 安装fastdeploy
 
@@ -20,21 +23,41 @@
 
 ## 二、如何使用
 ### 2.1 基础：启动服务
- **示例1：** H800上8卡部署128K上下文的服务
+ **示例1：** 4090上单卡部署32K上下文的服务
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle \
+    --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8180 \
     --metrics-port 8181 \
     --engine-worker-queue-port 8182 \
-    --tensor-parallel-size 8 \
-    --max-model-len 131072 \
-    --max-num-seqs 16 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 32 \
     --limit-mm-per-prompt '{"image": 100, "video": 100}' \
     --reasoning-parser ernie-45-vl \
-    --gpu-memory-utilization 0.8 \
+    --gpu-memory-utilization 0.9 \
+    --enable-chunked-prefill \
+    --max-num-batched-tokens 384 \
+    --quantization wint4 \
+    --enable-mm
+```
+ **示例2：** H800上双卡部署128K上下文的服务
+```shell
+export ENABLE_V1_KVCACHE_SCHEDULER=1
+
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --port 8180 \
+    --metrics-port 8181 \
+    --engine-worker-queue-port 8182 \
+    --tensor-parallel-size 2 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --limit-mm-per-prompt '{"image": 100, "video": 100}' \
+    --reasoning-parser ernie-45-vl \
+    --gpu-memory-utilization 0.9 \
     --enable-chunked-prefill \
     --max-num-batched-tokens 384 \
     --quantization wint4 \
@@ -48,12 +71,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
 > **上下文长度**
 - **参数：** `--max-model-len`
 - **描述：** 控制模型可处理的最大上下文长度。
-- **推荐：** 更长的上下文会导致吞吐降低，根据实际情况设置，`ERNIE-4.5-VL-424B-A47B-Paddle` 最长支持**128k**（131072）长度的上下文。
+- **推荐：** 更长的上下文会导致吞吐降低，根据实际情况设置，`ERNIE-4.5-VL-28B-A3B-Paddle`最长支持**128k**（131072）长度的上下文。
 
+   ⚠️ 注：更长的上下文会显著增加GPU显存需求，设置更长的上下文之前确保硬件资源是满足的。
 > **最大序列数量**
 - **参数：** `--max-num-seqs`
 - **描述：** 控制服务可以处理的最大序列数量，支持1～256。
-- **推荐：** 128k场景下，80G显存的单机我们建议设置为**16**。
+- **推荐：** 如果您不知道实际应用场景中请求的平均序列数量是多少，我们建议设置为**256**。如果您的应用场景中请求的平均序列数量明显少于256，我们建议设置为一个略大于平均值的较小值，以进一步降低显存占用，优化服务性能。
 
 > **多图、多视频输入**
 - **参数**：`--limit-mm-per-prompt`
@@ -63,7 +87,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 > **初始化时可用的显存比例**
 - **参数：** `--gpu-memory-utilization`
 - **用处：** 用于控制 FastDeploy 初始化服务的可用显存，默认0.9，即预留10%的显存备用。
-- **推荐：** 128k长度的上下文时推荐使用0.8。如果服务压测时提示显存不足，可以尝试调低该值。
+- **推荐：** 推荐使用默认值0.9。如果服务压测时提示显存不足，可以尝试调低该值。
 
 #### 2.2.2 Chunked Prefill
 - **参数：** `--enable-chunked-prefill`
@@ -71,7 +95,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 - **其他相关配置**:
 
-    `--max-num-batched-tokens`：限制每个chunk的最大token数量。多模场景下每个chunk会向上取整保持图片的完整性，因此实际每次推理的总token数会大于该值。推荐设置为384。
+    `--max-num-batched-tokens`：限制每个chunk的最大token数量。多模场景下每个chunk会向上取整保持图片的完整性，因此实际每次推理的总token数会大于该值。我们推荐设置为384。
 
 #### 2.2.3  **量化精度**
 - **参数：** `--quantization`
@@ -93,7 +117,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 如果服务启动时提示显存不足，请尝试以下方法：
 1. 确保无其他进程占用显卡显存；
 2. 使用WINT4/WINT8量化，开启chunked prefill；
-3. 酌情降低上下文长度和最大序列数量。
+3. 酌情降低上下文长度和最大序列数量；
+4. 增加部署卡数，使用2卡或4卡部署，即修改参数 `--tensor-parallel-size 2` 或 `--tensor-parallel-size 4`。
 
 如果可以服务可以正常启动，运行时提示显存不足，请尝试以下方法：
-1. 酌情降低初始化时可用的显存比例，即调整参数 `--gpu-memory-utilization` 的值。
+1. 酌情降低初始化时可用的显存比例，即调整参数 `--gpu-memory-utilization` 的值；
+2. 增加部署卡数，参数修改同上。

@@ -38,7 +38,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Whether to use HuggingFace tokenizer (0 or 1)
     "FD_USE_HF_TOKENIZER":
-    lambda: os.getenv("FD_USE_HF_TOKENIZER", 0),
+    lambda: bool(int(os.getenv("FD_USE_HF_TOKENIZER", 0))),
 
     # ZMQ send high-water mark (HWM) during initialization
     "FD_ZMQ_SNDHWM":

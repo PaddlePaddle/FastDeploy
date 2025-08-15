@@ -24,6 +24,7 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
@@ -289,8 +290,9 @@ class PaddleDisWorkerProc:
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-
-                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
+                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                    ):
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
@@ -431,7 +433,19 @@ class PaddleDisWorkerProc:
 
     def load_model(self) -> None:
         """Load weights and create model"""
+
         self.worker.load_model()
+        loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
+        if self.ranks > 1:
+            paddle.distributed.barrier()
+        self.loaded_model_signal.value[0] = 1
 
 
 def parse_args():
@@ -723,7 +737,12 @@ def run_worker_proc() -> None:
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
+
+        worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
+    else:
+        worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()

@@ -56,15 +56,14 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
   LoadEmbT cos_emb_vec;
   LoadEmbT sin_emb_vec;
 
-  int64_t global_warp_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  int64_t all_warp_num = gridDim.x * blockDim.x;
+  int64_t global_warp_idx = blockDim.y * blockIdx.x + threadIdx.y;
+  int64_t all_warp_num = gridDim.x * blockDim.y;
   int64_t all_head_dim = elem_cnt / head_size;
 
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
-  // const int64_t offset = 2 * hidden_size;
   const int half_head_size = head_size / 2;
   for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_dim; gloabl_hi += all_warp_num) {
-    int64_t linear_index = gloabl_hi * head_size + threadIdx.y * VecSize;
+    int64_t linear_index = gloabl_hi * head_size + threadIdx.x * VecSize;
     const int ori_bi = linear_index / hidden_size;
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
@@ -122,13 +121,13 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
       float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
           LoadT q_norm_vec, k_norm_vec;
       if (hi < num_heads) { // q
-        Load<T, VecSize>(&q_norm_weight[threadIdx.y * VecSize], &q_norm_vec);
+        Load<T, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
         #pragma unroll
         for (int i = 0; i < VecSize; i++) {
           out_vec[i] = static_cast<T>(static_cast<float>(out_vec[i]) * row_inv_var * static_cast<float>(q_norm_vec[i]));
         }
       } else { // k
-        Load<T, VecSize>(&k_norm_weight[threadIdx.y * VecSize], &k_norm_vec);
+        Load<T, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
         for (int i = 0; i < VecSize; i++) {
           out_vec[i] = static_cast<T>(static_cast<float>(out_vec[i]) * row_inv_var * static_cast<float>(k_norm_vec[i]));
         }

@@ -14,18 +14,18 @@
 # limitations under the License.
 """
 
-from paddle.distributed import fleet
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+    CutlassMoEMethod,
+)
+from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+    BlockWiseFP8MoEMethod,
+    TensorWiseFP8MoEMethod,
+    TritonWeightOnlyMoEMethod,
+)
+
+pre_create_weights_list = (CutlassMoEMethod, TensorWiseFP8MoEMethod, BlockWiseFP8MoEMethod, TritonWeightOnlyMoEMethod)
 
 
-def get_tensor_model_parallel_world_size():
-    """Return world size for the tensor model parallel group."""
-    hcg = fleet.get_hybrid_communicate_group()
-    mp_size = hcg.get_model_parallel_world_size()
-    return mp_size
-
-
-def get_tensor_model_parallel_rank():
-    """Return my rank for the tensor model parallel group."""
-    hcg = fleet.get_hybrid_communicate_group()
-    mp_rank = hcg.get_model_parallel_rank()
-    return mp_rank
+def is_supported_moe_backend(quant_method: MoEMethodBase):
+    return isinstance(quant_method, pre_create_weights_list)
