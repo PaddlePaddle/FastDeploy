@@ -25,12 +25,12 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-0.3B` on the following 
 ### 2.1 Basic: Launching the Service
 Start the service by following command:
 ```bash
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-0.3B-Paddle \
        --tensor-parallel-size 1 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
@@ -77,8 +77,8 @@ Add the following lines to the startup parameters
 ```
 Notes:
 1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../parameters.md) for related configuration parameter descriptions
-2. When CUDAGraph is enabled, only single-card inference is supported, that is, `--tensor-parallel-size 1`
-3. When CUDAGraph is enabled, it is not supported to enable `Chunked Prefill` and `Prefix Caching` at the same time
+2. When CUDAGraph is enabled, if running with multi-GPUs TP>1, `--enable-custom-all-reduce` must be specified at the same time.
+3. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
 
 #### 2.2.6 Rejection Sampling
 **Idea:**
