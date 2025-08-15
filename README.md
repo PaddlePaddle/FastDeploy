@@ -1,4 +1,4 @@
-English | [简体中文](README_CN.md) 
+English | [简体中文](README_CN.md)
 <p align="center">
   <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://github.com/user-attachments/assets/42b0039f-39e3-4279-afda-6d1865dfbffb" width="500"></a>
 </p>
@@ -26,6 +26,7 @@ English | [简体中文](README_CN.md)
 # FastDeploy : Inference and Deployment Toolkit for LLMs and VLMs based on PaddlePaddle
 
 ## News
+**[2025-08] 🔥 Released FastDeploy v2.1:** A brand-new KV Cache scheduling strategy has been introduced, and expanded support for PD separation and CUDA Graph across more models. Enhanced hardware support has been added for platforms like Kunlun and Hygon, along with comprehensive optimizations to improve the performance of both the service and inference engine.
 
 **[2025-07] The FastDeploy 2.0 Inference Deployment Challenge is now live!** Complete the inference deployment task for the ERNIE 4.5 series open-source models to win official FastDeploy 2.0 merch and generous prizes! 🎁 You're welcome to try it out and share your feedback! 📌[Sign up here](https://www.wjx.top/vm/meSsp3L.aspx#) 📌[Event details](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
@@ -73,13 +74,13 @@ Learn how to use FastDeploy through our documentation:
 
 | Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
 |:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
-|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| WIP |128K |
-|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| WIP | 128K |
+|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| ✅ |128K |
+|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| ✅ | 128K |
 |ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
 |ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
 |ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ✅ | ✅|128K |
-|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅|128K |
-|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅| 128K |
+|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌  | ✅|128K |
+|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌ | ✅| 128K |
 
 ## Advanced Usage
 
