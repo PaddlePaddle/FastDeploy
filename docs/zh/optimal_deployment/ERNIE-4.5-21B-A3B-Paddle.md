@@ -24,12 +24,12 @@ ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小�
 ### 2.1 基础：启动服务
 通过下列命令启动服务
 ```bash
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-21B-A3B-Paddle \
        --tensor-parallel-size 1 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
 其中：
@@ -86,8 +86,8 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 ```
 注：
 1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../parameters.md) 相关配置参数说明
-2. 开启CUDAGraph时，暂时只支持单卡推理，即`--tensor-parallel-size 1`
-3. 开启CUDAGraph时，暂时不支持同时开启`Chunked Prefill`和`Prefix Caching`
+2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
+3. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
 
 #### 2.2.6 拒绝采样
 **原理：**
@@ -110,6 +110,7 @@ export INFERENCE_MSG_QUEUE_ID=1315
 export FLAGS_max_partition_size=2048
 export FD_ATTENTION_BACKEND=FLASH_ATTN
 export FD_LOG_DIR="prefill_log"
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 quant_type=block_wise_fp8
 export FD_USE_DEEP_GEMM=0
@@ -119,7 +120,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A
     --max-num-seqs 20 \
     --num-gpu-blocks-override 40000 \
     --quantization ${quant_type} \
-    --gpu-memory-utilization 0.9 --kv-cache-ratio 0.9 \
+    --gpu-memory-utilization 0.9 \
     --port 7012 --engine-worker-queue-port 7013 --metrics-port 7014 --tensor-parallel-size 4 \
     --cache-queue-port 7015 \
     --splitwise-role "prefill" \
@@ -130,6 +131,7 @@ export CUDA_VISIBLE_DEVICES=4,5,6,7
 export INFERENCE_MSG_QUEUE_ID=1215
 export FLAGS_max_partition_size=2048
 export FD_LOG_DIR="decode_log"
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 quant_type=block_wise_fp8
 export FD_USE_DEEP_GEMM=0
@@ -138,7 +140,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A
     --max-model-len 131072 \
     --max-num-seqs 20 \
     --quantization ${quant_type} \
-    --gpu-memory-utilization 0.85 --kv-cache-ratio 0.1 \
+    --gpu-memory-utilization 0.85 \
     --port 9012 --engine-worker-queue-port 8013 --metrics-port 8014 --tensor-parallel-size 4 \
     --cache-queue-port 8015 \
     --innode-prefill-ports 7013 \
