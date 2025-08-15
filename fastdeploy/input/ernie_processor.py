@@ -109,7 +109,13 @@ class ErnieProcessor(BaseDataProcessor):
                 request.prompt_token_ids = token_ids
                 data_processor_logger.info(f"req_id:{request.request_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
-                request.prompt_token_ids = self.messages2ids(request.to_dict())
+                task = request.to_dict()
+                chat_template_kwargs = request.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    for k, v in chat_template_kwargs.items():
+                        if k not in task:
+                            task[k] = v
+                request.prompt_token_ids = self.messages2ids(task)
 
         if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
