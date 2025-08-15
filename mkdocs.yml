@@ -81,6 +81,7 @@ plugins:
             Plugins: 插件机制
             Sampling: 采样策略
             MultiNode Deployment: 多机部署
+            Graph Optimization: 图优化
             Supported Models: 支持模型列表
             Benchmark: 基准测试
             Usage: 用法
@@ -129,6 +130,7 @@ nav:
       - 'Plugins': features/plugins.md
       - 'Sampling': features/sampling.md
       - 'MultiNode Deployment': features/multi-node_deployment.md
+      - 'Graph Optimization': features/graph_optimization.md
   - 'Supported Models': supported_models.md
   - Benchmark: benchmark.md
   - Usage:
