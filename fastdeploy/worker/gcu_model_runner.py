@@ -94,7 +94,7 @@ class GCUModelRunner(ModelRunnerBase):
             shape=[self.parallel_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
-        )
+        ).cpu()
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -239,7 +239,9 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
 
             self.share_inputs["temperature"][idx : idx + 1] = get_attr_from_request(request, "temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = get_attr_from_request(
@@ -361,7 +363,9 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["top_k_list"] = [0] * max_num_seqs
         self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
+        self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
         )
@@ -408,7 +412,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["need_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["need_block_len"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -539,7 +543,9 @@ class GCUModelRunner(ModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
+            top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
+            min_p_list=self.share_inputs["min_p_list"],
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
