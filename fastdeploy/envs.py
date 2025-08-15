@@ -16,7 +16,12 @@ Environment variables used by FastDeploy.
 """
 
 import os
+from datetime import datetime
 from typing import Any, Callable
+
+if os.getenv("FD_IPC_APPEND_SUFFIX") is None:
+    timestamp_ms = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    os.environ["FD_IPC_APPEND_SUFFIX"] = timestamp_ms
 
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
@@ -86,6 +91,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
     # support max connections
     "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
+    # set ipc signal append suffix (to avoid pid conflict of different containers amounted)
+    "FD_IPC_APPEND_SUFFIX": lambda: os.getenv("FD_IPC_APPEND_SUFFIX"),
 }
 
 

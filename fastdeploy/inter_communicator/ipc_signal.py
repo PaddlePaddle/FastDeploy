@@ -18,6 +18,8 @@ from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
 
+from fastdeploy import envs
+
 
 def shared_memory_exists(name: str) -> bool:
     """Check if a shared memory block with the given name exists.
@@ -76,6 +78,8 @@ class IPCSignal:
         # Set a suffix for name to avoid name conflict while there are multiple engine launched
         if suffix is not None:
             name = name + f".{suffix}"
+            if envs.FD_IPC_APPEND_SUFFIX:
+                name = name + f".{envs.FD_IPC_APPEND_SUFFIX}"
 
         if create:
             assert not shared_memory_exists(name), f"ShareMemory: {name} already exists"

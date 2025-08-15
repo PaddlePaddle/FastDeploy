@@ -1023,6 +1023,7 @@ class LLMEngine:
             "FLAGS_hardamard_use_diagonal_block_matrix": int(
                 os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
             ),
+            "FD_IPC_APPEND_SUFFIX": envs.FD_IPC_APPEND_SUFFIX,
         }
         # environment variables needed by Dy2St
         variables.update(
