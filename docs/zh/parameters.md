@@ -6,6 +6,8 @@
 |:-----------------------------------|:----------| :----- |
 | ```port```                         | `int`       | 仅服务化部署需配置，服务HTTP请求端口号，默认8000 |
 | ```metrics_port```                 | `int`       | 仅服务化部署需配置，服务监控Metrics端口号，默认8001 |
+| ```max_waiting_time```             | `int`       | 仅服务化部署需配置，服务请求建立连接最大等待时间，默认-1 表示无等待时间限制|
+| ```max_concurrency```              | `int`       | 仅服务化部署需配置，服务实际建立连接数目，默认512 |
 | ```engine_worker_queue_port```     | `int`       | FastDeploy内部引擎进程通信端口, 默认8002 |
 | ```cache_queue_port```             | `int`       | FastDeploy内部KVCache进程通信端口, 默认8003 |
 | ```max_model_len```                | `int`       | 推理默认最大支持上下文长度，默认2048 |
@@ -17,7 +19,7 @@
 | ```tokenizer```                    | `str`      | tokenizer 名或路径，默认为模型路径 |
 | ```use_warmup```                   | `int`      | 是否在启动时进行warmup，会自动生成极限长度数据进行warmup，默认自动计算KV Cache时会使用 |
 | ```limit_mm_per_prompt```          | `dict[str]` | 限制每个prompt中多模态数据的数量，如：{"image": 10, "video": 3}，默认都为1 |
-| ```enable_mm```                    | `bool`      | 是否支持多模态数据（仅针对多模模型），默认False |
+| ```enable_mm```                    | `bool`      | __[已废弃]__ 是否支持多模态数据（仅针对多模模型），默认False |
 | ```quantization```                 | `str`       | 模型量化策略，当在加载BF16 CKPT时，指定wint4或wint8时，支持无损在线4bit/8bit量化 |
 | ```gpu_memory_utilization```       | `float`     | GPU显存利用率，默认0.9 |
 | ```num_gpu_blocks_override```      | `int`       | 预分配KVCache块数，此参数可由FastDeploy自动根据显存情况计算，无需用户配置，默认为None |

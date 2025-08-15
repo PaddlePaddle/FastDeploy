@@ -39,7 +39,7 @@ Documentation for `SamplingParams`, `LLM.generate`, `LLM.chat`, and output struc
 ```python
 from fastdeploy.entrypoints.llm import LLM
 # 加载模型
-llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
 
 outputs = llm.chat(
     messages=[
@@ -127,7 +127,7 @@ for message in messages:
             })
 
 sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
-llm = LLM(model=PATH, tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+llm = LLM(model=PATH, tensor_parallel_size=1, max_model_len=32768, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
 outputs = llm.generate(prompts={
     "prompt": prompt,
     "multimodal_data": {

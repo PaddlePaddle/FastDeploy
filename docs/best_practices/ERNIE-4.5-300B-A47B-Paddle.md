@@ -2,7 +2,8 @@
 ## Environmental Preparation
 ### 1.1 Hardware requirements
 The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the following hardware for each quantization is as follows:
-|  | WINT8 | WINT4 | FP8 | WINT2 | W4A8 |
+
+| | WINT8 | WINT4 | FP8 | WINT2 | W4A8 |
 |-----|-----|-----|-----|-----|-----|
 |H800 80GB| 8 | 4 | 8 | 2 | 4 |
 |A800 80GB| 8 | 4 | / | 2 | 4 |
@@ -98,7 +99,6 @@ export FD_SAMPLING_CLASS=rejection
 **How to enable:** Take the deployment of a single machine with 8 GPUs and 1P1D (4 GPUs each) as an example. Compared with the default hybrid deployment method, `--splitwise-role` is required to specify the role of the node. And the GPUs and logs of the two nodes are isolated through the environment variables `FD_LOG_DIR` and `CUDA_VISIBLE_DEVICES`.
 ```
 export FD_LOG_DIR="log_prefill"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -111,7 +111,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 ```
 export FD_LOG_DIR="log_decode"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 # Note that innode-prefill-ports is specified as the Prefill serviceengine-worker-queue-port
 python -m fastdeploy.entrypoints.openai.api_server \
