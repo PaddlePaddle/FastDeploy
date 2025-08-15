@@ -29,7 +29,7 @@ on:
         default: ""
 
 jobs:
-  base_tests:
+  accuracy_tests:
     runs-on: [self-hosted, GPU-h20-1Cards]
     steps:
       - name: Code Prepare
