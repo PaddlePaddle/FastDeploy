@@ -203,3 +203,10 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
 
         set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
         set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+
+        if layer.moe_use_gate_correction_bias:
+            gate_correction_bias_shape = [1, layer.num_experts]
+            layer.gate_correction_bias = layer.create_parameter(
+                shape=gate_correction_bias_shape,
+                dtype="float32",
+            )
