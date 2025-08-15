@@ -8,6 +8,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 |:--------------|:----|:-----------|
 | ```port``` | `int` | Only required for service deployment, HTTP service port number, default: 8000 |
 | ```metrics_port``` | `int` | Only required for service deployment, metrics monitoring port number, default: 8001 |
+| ```max_waiting_time``` | `int` | Only required for service deployment, maximum wait time for establishing a connection upon service request. Default: -1 (indicates no wait time limit).|
+| ```max_concurrency```  | `int` | Only required for service deployment, the actual number of connections established by the service, default 512 |
 | ```engine_worker_queue_port``` | `int` | FastDeploy internal engine communication port, default: 8002 |
 | ```cache_queue_port``` | `int` | FastDeploy internal KVCache process communication port, default: 8003 |
 | ```max_model_len``` | `int` | Default maximum supported context length for inference, default: 2048 |
@@ -19,7 +21,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```tokenizer``` | `str` | Tokenizer name or path, defaults to model path |
 | ```use_warmup``` | `int` | Whether to perform warmup at startup, will automatically generate maximum length data for warmup, enabled by default when automatically calculating KV Cache |
 | ```limit_mm_per_prompt``` | `dict[str]` | Limit the amount of multimodal data per prompt, e.g.: {"image": 10, "video": 3}, default: 1 for all |
-| ```enable_mm``` | `bool` | Whether to support multimodal data (for multimodal models only), default: False |
+| ```enable_mm``` | `bool` | __[DEPRECATED]__ Whether to support multimodal data (for multimodal models only), default: False |
 | ```quantization``` | `str` | Model quantization strategy, when loading BF16 CKPT, specifying wint4 or wint8 supports lossless online 4bit/8bit quantization |
 | ```gpu_memory_utilization``` | `float` | GPU memory utilization, default: 0.9 |
 | ```num_gpu_blocks_override``` | `int` | Preallocated KVCache blocks, this parameter can be automatically calculated by FastDeploy based on memory situation, no need for user configuration, default: None |
