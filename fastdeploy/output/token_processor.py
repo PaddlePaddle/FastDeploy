@@ -315,6 +315,11 @@ class TokenProcessor:
         scores = self.output_scores[: batch * (K + 1)].numpy().reshape([batch, K + 1])[:, : (K + 1)]
         ranks = self.output_ranks[:batch].numpy()
         batch_result = list()
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
+            for request_id in need_to_be_reschedule_req_ids:
+                if self.resource_manager.requests[request_id].idx >= (batch - 1):  # No more token generated for preempted request
+                    self.resource_manager.reschedule_preempt_task(request_id)
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
                 continue
@@ -326,6 +331,9 @@ class TokenProcessor:
             if recovery_stop:
                 llm_logger.info(f"recovery stop signal found at task {task_id}")
             if not recovery_stop and token_id < 0:
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.reschedule_preempt_task(task_id)
                 continue
 
             if task.get("prefill_chunk_info", None) is not None:
@@ -383,6 +391,7 @@ class TokenProcessor:
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
+                    task.output_token_ids.append(token_id)
                     result.outputs.logprob = float(scores[i, 0])
                     # Construct top_logprobs
                     topk_token_ids = tokens[i, :].tolist()
