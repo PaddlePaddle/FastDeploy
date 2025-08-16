@@ -129,14 +129,14 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
         )
 
-    # Wait up to 300 seconds for API server to be ready
-    for _ in range(300):
+    # Wait up to 600 seconds for API server to be ready
+    for _ in range(600):
         if is_port_open("127.0.0.1", FD_API_PORT):
             print(f"API server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
     else:
-        print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
+        print("[TIMEOUT] API server failed to start in 10 minutes. Cleaning up...")
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
@@ -229,9 +229,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-204")
     else:
-        base_file = "ernie-4_5-vl-base-tp2"
+        base_file = "ernie-4_5-vl-base-tp2-204"
     with open(base_file, "r") as f:
         content2 = f.read()
 

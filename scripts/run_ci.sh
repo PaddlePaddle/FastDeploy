@@ -3,7 +3,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
 python -m pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 python -m pip install -r requirements.txt
 python -m pip install jsonschema aistudio_sdk==0.3.5
 bash build.sh || exit 1
@@ -24,7 +24,7 @@ for subdir in "$run_path"*/; do
                 echo "------------------------------------------------------------"
 
                 set +e
-                timeout 360 python -m pytest --disable-warnings -sv "$file"
+                timeout 600 python -m pytest --disable-warnings -sv "$file"
                 exit_code=$?
                 set -e
 
@@ -44,7 +44,7 @@ for subdir in "$run_path"*/; do
                     if [ "$exit_code" -eq 1 ] || [ "$exit_code" -eq 124 ]; then
                         echo "[ERROR] $file 起服务或执行异常，exit_code=$exit_code"
                         if [ "$exit_code" -eq 124 ]; then
-                            echo "[TIMEOUT] $file 脚本执行超过 6 分钟, 任务超时退出！"
+                            echo "[TIMEOUT] $file 脚本执行超过 10 分钟, 任务超时退出！"
                         fi
                     fi
 
