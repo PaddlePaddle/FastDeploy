@@ -802,14 +802,14 @@ class LLMEngine:
                     self.resource_manager._recycle_block_tables(cur_task)
                     if task.request_id in self.token_processor.tokens_counter:
                         del self.token_processor.tokens_counter[task.request_id]
-                    self.scheduler.put_results([task])
                     llm_logger.warning(
                         f"{task.request_id} prefill failed with msg:{task.error_msg}, recycle resource."
                     )
                     continue
                 self.token_processor.tokens_counter[task.request_id] = 1
                 current_tasks.append(cur_task)
-            self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
+            if current_tasks:
+                self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
 
         for task in tasks:
