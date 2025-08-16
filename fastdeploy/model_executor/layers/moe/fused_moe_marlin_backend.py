@@ -140,7 +140,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         self.added_zeros_attrs = ["zeros0", "zeros1"]
 
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
-        print(f"______marlin_____create_____{self.quant_method.algo}")
         self.default_dtype = layer._helper.get_default_dtype()
         self.weight_dtype = "int32"
 
@@ -198,7 +197,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """
         Marlin MoE load weight process.
         """
-        print("______marlin_____load_____")
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts

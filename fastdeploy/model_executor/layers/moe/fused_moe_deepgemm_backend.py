@@ -36,7 +36,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         deepgemm create weight process.
         """
-        print("create_weight_deep_geem_______")
         self.weight_dtype = paddle.float8_e4m3fn
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
@@ -100,7 +99,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         deepgemm create weight process.
         """
-        print("loadweight_deep_gemm_______")
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
