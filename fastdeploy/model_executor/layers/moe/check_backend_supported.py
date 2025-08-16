@@ -21,6 +21,9 @@ from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
 from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
     DeepGemmFusedMoeMethod,
 )
+from fastdeploy.model_executor.layers.moe.fused_moe_marlin_backend import (
+    MarlinWeightOnlyMoEMethod,
+)
 from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
     BlockWiseFP8MoEMethod,
     TensorWiseFP8MoEMethod,
@@ -33,6 +36,7 @@ pre_create_weights_list = (
     BlockWiseFP8MoEMethod,
     TritonWeightOnlyMoEMethod,
     DeepGemmFusedMoeMethod,
+    MarlinWeightOnlyMoEMethod,
 )
 
 
