@@ -23,7 +23,6 @@ from fastdeploy.distributed.communication import tensor_model_parallel_all_reduc
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
 
-from ..utils import create_and_set_parameter
 from .fused_moe_backend_base import MoEMethodBase
 
 
@@ -182,7 +181,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             "down_proj_weight_scale": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
-            create_and_set_parameter(layer, name, tensor)
+            getattr(layer, name).set_value(tensor)
 
     def apply_ep_prefill(
         self,
