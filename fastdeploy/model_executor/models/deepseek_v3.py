@@ -539,7 +539,7 @@ class DeepSeekV3Model(nn.Layer):
             prefix="deepseek_v3.embed_tokens",
         )
 
-        self.decoder_layers = nn.LayerList(
+        self.layers = nn.LayerList(
             [
                 DeepSeekV3DecoderLayer(
                     fd_config,
@@ -564,7 +564,7 @@ class DeepSeekV3Model(nn.Layer):
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.decoder_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -578,7 +578,7 @@ class DeepSeekV3Model(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.decoder_layers[i](
+            hidden_states, residual = self.layers[i](
                 forward_meta,
                 hidden_states,
                 residual,
@@ -647,23 +647,22 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         ]
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(
+            num_experts=self.fd_config.model_config.n_routed_experts,
             ckpt_gate_proj_name="gate_proj",
             ckpt_down_proj_name="down_proj",
             ckpt_up_proj_name="up_proj",
             param_gate_up_proj_name="experts.up_gate_proj_",
             param_down_proj_name="experts.down_proj_",
-            num_experts=self.fd_config.model_config.n_routed_experts,
         )
         params_dict = dict(self.named_parameters())
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
-            loaded_weight_name = loaded_weight_name.replace("layers", "decoder_layers")
 
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
-                if "mlp.experts." in loaded_weight_name and loaded_weight_name not in params_dict:
+                if "mlp.experts." in loaded_weight_name:
                     continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
 

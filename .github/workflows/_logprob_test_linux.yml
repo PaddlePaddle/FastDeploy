@@ -62,18 +62,14 @@ jobs:
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
         run: |
           runner_name="${{ runner.name }}"
-          last_char="${runner_name: -1}"
+          CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
+          DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-          if [[ "$last_char" =~ [0-7] ]]; then
-            DEVICES="$last_char"
-          else
-            DEVICES="0"
-          fi
-
-          FLASK_PORT=$((42068 + DEVICES * 100))
-          FD_API_PORT=$((42088 + DEVICES * 100))
-          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICES * 100))
-          FD_METRICS_PORT=$((42078 + DEVICES * 100))
+          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -93,9 +89,24 @@ jobs:
             exit 1
           fi
 
-          PARENT_DIR=$(dirname "$WORKSPACE")
-          unset http_proxy
-          unset https_proxy
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
+
+          echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
+
+          for port in "${PORTS[@]}"; do
+              PIDS=$(lsof -t -i :$port || true)
+              if [ -n "$PIDS" ]; then
+                  echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
+                  echo "$PIDS" | xargs -r kill -9
+                  echo "Port $port cleared" | tee -a $LOG_FILE
+              else
+                  echo "Port $port is free" | tee -a $LOG_FILE
+              fi
+          done
+
+          echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
 
           docker run --rm --ipc=host --pid=host --net=host \
           -v $(pwd):/workspace \
