@@ -180,6 +180,7 @@ def fast_weights_iterator(safe_tensor_list: list[str]):
     ):
         with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
+                print("name", name)
                 param = f.get_slice(name)
                 yield name, param
 

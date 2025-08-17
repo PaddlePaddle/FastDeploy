@@ -187,11 +187,13 @@ class Qwen2DecoderLayer(nn.Layer):
             hidden_states = self.input_layernorm(hidden_states)
         else:
             hidden_states, residual = self.input_layernorm(hidden_states, residual)
-
+        # print("hidden_states",hidden_states)
+        # print("self.self_attn",self.self_attn)
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
+        # print("经过了经过self_attn的hidden_states",hidden_states)
 
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)

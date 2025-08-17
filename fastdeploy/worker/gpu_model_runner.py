@@ -403,6 +403,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                print("input_ids", self.share_inputs["input_ids"])
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
 
                 # Use chunked prefill

@@ -606,6 +606,9 @@ def parse_args():
         default="default",
         help="The format of the model weights to load. default/new_loader.",
     )
+    parser.add_argument(
+        "--hugging_face_format", action="store_true", help="Whether to use models in Hugging Face format"
+    )
 
     args = parser.parse_args()
     return args

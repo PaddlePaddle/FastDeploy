@@ -676,6 +676,7 @@ class LoadConfig:
             - 'ipc': Real-time IPC streaming with automatic resharding
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
             - None: No dynamic loading
+        hugging_face_format: Whether to use models in Hugging Face format
     """
 
     def __init__(
@@ -683,6 +684,7 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
+        self.hugging_face_format: bool = False
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None

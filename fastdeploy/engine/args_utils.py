@@ -33,7 +33,7 @@ from fastdeploy.config import (
 from fastdeploy.engine.config import Config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
+from fastdeploy.utils import FlexibleArgumentParser
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -342,10 +342,16 @@ class EngineArgs:
     """
 
     load_choices: str = "default"
-    """The format of the model weights to load.
+    """
+    The format of the model weights to load.
         Options include:
         - "default": default loader.
-        - "new_loader": new  loader.
+        - "new_loader": default_v1.
+    """
+
+    hugging_face_format: bool = False
+    """
+    Whether to use models in Hugging Face format
     """
 
     def __post_init__(self):
@@ -431,7 +437,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--enable-mm",
-            action=DeprecatedOptionWarning,
+            action="store_true",
             default=EngineArgs.enable_mm,
             help="Flag to enable multi-modal model.",
         )
@@ -598,6 +604,12 @@ class EngineArgs:
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
                  default/new_loader.",
+        )
+        load_group.add_argument(
+            "--hugging-face-format",
+            action="store_true",
+            default=EngineArgs.hugging_face_format,
+            help="Enable when loading models in Hugging Face format",
         )
 
         # CacheConfig parameters group
@@ -959,4 +971,5 @@ class EngineArgs:
             enable_logprob=self.enable_logprob,
             early_stop_config=early_stop_cfg,
             load_choices=self.load_choices,
+            hugging_face_format=self.hugging_face_format,
         )

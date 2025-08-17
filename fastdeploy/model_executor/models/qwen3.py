@@ -103,7 +103,9 @@ class Qwen3Attention(nn.Layer):
         hidden_states: paddle.Tensor,
     ):
         """ """
+        print("hidden_states", hidden_states)
         qkv_out = self.qkv_proj(hidden_states)
+        print("qkv_out", qkv_out)
         # origin_qkv_out = qkv_out
         q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
 
@@ -203,7 +205,9 @@ class Qwen3Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
+        # print("ids_remove_padding",ids_remove_padding)
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        # print("hidden_states",hidden_states)
 
         residual = None
 
@@ -266,13 +270,18 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]
-
         params_dict = dict(self.named_parameters())
+
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
+                print("param_name", param_name)
+                print("weight_name", weight_name)
+                print("share_id", shard_id)
+                print("loaded_weight_name", loaded_weight_name)
                 if weight_name not in loaded_weight_name:
                     continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                print("替换后的model_param_name", model_param_name)
                 if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]

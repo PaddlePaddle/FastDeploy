@@ -1108,6 +1108,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_choices}"
+            # f" --hugging_face_format {self.cfg.hugging_face_format}"
         )
 
         worker_append_flag = {
@@ -1120,6 +1121,7 @@ class LLMEngine:
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
             "enable_mm": self.cfg.enable_mm,
+            "hugging_face_format": self.cfg.hugging_face_format,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

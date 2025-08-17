@@ -56,6 +56,7 @@ class Config:
         innode_prefill_ports (Optional[List[int]]): Innode prefill ports.
             Temporary configuration, will be removed in the future.
         load_choices(str):The format of the model weights to load. .Default is default
+        hugging_face_format (bool): Whether to use models in Hugging Face format
     """
 
     def __init__(
@@ -92,6 +93,7 @@ class Config:
         enable_logprob: bool = False,
         early_stop_config: Optional[Dict[str, Any]] = None,
         load_choices: str = "default",
+        hugging_face_format: bool = False,
     ):
         """
         Initialize the Config class.
@@ -123,6 +125,7 @@ class Config:
             enable_logprob(bool): Enable logprob. Default is False.
             early_stop_config (Optional[Dict[str, Any]]): Early stop configuration. Default is None.
             load_choices(str):The format of the model weights to load. .Default is default
+            hugging_face_format(bool): Whether to use models in Hugging Face format
         """
         self.model_config = model_config
         self.cache_config = cache_config
@@ -174,6 +177,7 @@ class Config:
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
         self.load_choices = load_choices
+        self.hugging_face_format = hugging_face_format
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 

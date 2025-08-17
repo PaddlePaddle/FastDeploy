@@ -412,6 +412,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         elif loaded_shard_id == "up":
             param = param[:, self.output_size // 2 :]
 
+        hugging_face_format = self.fd_config.load_config.hugging_face_format
+        if hugging_face_format:
+            loaded_weight = loaded_weight.transpose([1, 0])
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -476,6 +479,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
             output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         input_size = self.hidden_size
+        # print("output_size",output_size)
         super().__init__(
             fd_config=fd_config,
             prefix=prefix,
@@ -513,6 +517,12 @@ class QKVParallelLinear(ColumnParallelLinear):
         elif loaded_shard_id == "v":
             param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
 
+        hugging_face_format = self.fd_config.load_config.hugging_face_format
+        if hugging_face_format:
+            loaded_weight = loaded_weight.transpose([1, 0])
+
+        # print("loaded_weight",loaded_weight)
+
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -534,6 +544,9 @@ class QKVParallelLinear(ColumnParallelLinear):
             q_tensor = get_tensor(state_dict.pop(q_weight_key))
             k_tensor = get_tensor(state_dict.pop(k_weight_key))
             v_tensor = get_tensor(state_dict.pop(v_weight_key))
+            print("q_tensor", q_tensor)
+            print("k_tensor", k_tensor)
+            print("v_tensor", v_tensor)
 
             if self.kv_num_heads < self.nranks:
                 sharedkv_index = (
