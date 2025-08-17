@@ -1,6 +1,6 @@
-# FastDeploy Installation Guide
+# FastDeploy 安装
 
-FastDeploy currently supports installation on the following hardware platforms:
+FastDeploy支持如下硬件平台:
 
 - [NVIDIA GPU Installation](nvidia_gpu.md)
 - [Kunlunxin XPU Installation](kunlunxin_xpu.md)
