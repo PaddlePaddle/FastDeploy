@@ -26,7 +26,7 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineSevice
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.utils import console_logger, llm_logger, envs
+from fastdeploy.utils import console_logger, envs, llm_logger
 
 
 class ExpertService:
@@ -104,6 +104,7 @@ class ExpertService:
             self.splitwise_receive_thread.daemon = True
             self.splitwise_receive_thread.start()
         self.cfg.print()
+        local_rank = local_data_parallel_id % self.cfg.worker_num_per_node
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
@@ -116,7 +117,6 @@ class ExpertService:
                 suffix=ipc_signal_suffix,
                 create=False,
             )
-            local_rank = local_data_parallel_id % self.cfg.worker_num_per_node
             self.launched_expert_service_signal.value[local_rank] = 1
 
         console_logger.info(
