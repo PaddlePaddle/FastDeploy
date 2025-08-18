@@ -524,6 +524,7 @@ class ChatCompletionRequest(BaseModel):
 
     # doc: start-completion-extra-params
     chat_template_kwargs: Optional[dict] = None
+    chat_template: Optional[str] = None
     reasoning_max_tokens: Optional[int] = None
     structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
