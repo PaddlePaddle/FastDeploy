@@ -51,7 +51,7 @@ void moe_redundant_topk_select_kernel(const T* input,
   #define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
   case N: {                                                                    \
     topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(                   \
-        input, output, indices, source_row, num_rows, num_experts, k, stream); \
+        input, bias, output, indices, source_row, num_rows, num_experts, k, stream); \
     break;                                                                     \
   }
   int64_t tem_num_experts = num_experts;
