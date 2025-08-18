@@ -95,7 +95,7 @@ class MetaxWorker(WorkerBase):
         """
 
         # temporary fix kvcache size to test
-        fd_kvache_mem = os.getenv("FD_KVCACHE_MEM")
+        fd_kvache_mem = os.getenv("FD_METAX_KVCACHE_MEM")
         if fd_kvache_mem is not None:
             return int(float(fd_kvache_mem) * 1024**3)
         else:
