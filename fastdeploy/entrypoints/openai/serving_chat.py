@@ -443,7 +443,7 @@ class OpenAIServingChat:
         max_tokens = request.max_completion_tokens or request.max_tokens
         if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
-            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+            if output.get("tool_call"):
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
