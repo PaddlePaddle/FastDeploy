@@ -35,8 +35,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
 | ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
 | ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
-| ```use_cudagraph``` | `bool` | Whether to use cuda graph, default: False |
-｜```graph_optimization_config```    | `str`       | Parameters related to graph optimization can be configured, with default values of'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }' |
+| ```use_cudagraph```                | `bool`      | Whether to use cuda graph, default False. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. Custom all-reduce needs to be enabled at the same time in multi-card scenarios. |
+| ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
 | ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
@@ -70,86 +70,3 @@ In actual inference, it's difficult for users to know how to properly configure 
 When `enable_chunked_prefill` is enabled, the service processes long input sequences through dynamic chunking, significantly improving GPU resource utilization. In this mode, the original `max_num_batched_tokens` parameter no longer constrains the batch token count in prefill phase (limiting single prefill token count), thus introducing `max_num_partial_prefills` parameter specifically to limit concurrently processed partial batches.
 
 To optimize scheduling priority for short requests, new `max_long_partial_prefills` and `long_prefill_token_threshold` parameter combination is added. The former limits the number of long requests in single prefill batch, the latter defines the token threshold for long requests. The system will prioritize batch space for short requests, thereby reducing short request latency in mixed workload scenarios while maintaining stable throughput.
-
-## 4. GraphOptimizationBackend related configuration parameters
-Currently, only user configuration of the following parameters is supported：
-- `use_cudagraph` : bool = False
-- `graph_optimization_config` :  Dict[str, Any]
-  - `graph_opt_level`: int = 0
-  - `use_cudagraph`: bool = False
-  - `cudagraph_capture_sizes` : List[int] = None
-
-CudaGrpah can be enabled by setting `--use-cudagraph` or `--graph-optimization-config '{"use_cudagraph":true}'`. Using two different methods to set the use graph simultaneously may cause conflicts.
-
-The `graph_opt_level` parameter within `--graph-optimization-config` is used to configure the graph optimization level, with the following available options:
-- `0`: Use Dynamic compute graph, default to 0
-- `1`: Use Static compute graph, during the initialization phase, Paddle API will be used to convert the dynamic image into a static image
-- `2`: Base on Static compute graph, use the complier(CINN, Compiler Infrastructure for Neural Networks) of Paddle  to compile and optimize
-
-In general, static graphs have lower Kernel Launch overhead than dynamic graphs, and it is recommended to use static graphs.
-For adapted models, FastDeploy's CudaGraph *can support both dynamic and static graphs* simultaneously.
-
-When CudaGraph is enabled in the default configuration, a list of Batch Sizes that CudaGraph needs to capture will be automatically set based on the 'max_num_deqs' parameter. The logic for generating the list of Batch Sizes that need to be captured is as follows：
-
-1. Generate a candidate list with a range of [1,1024]  Batch Size.
-
-```
-        # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
-        candidate_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
-        # Batch Size (128, 144, ... 240, 256]
-        candidate_capture_sizes += [16 * i for i in range(9, 17)]
-        # Batch Size (256, 288, ... 992, 1024]
-        candidate_capture_sizes += [32 * i for i in range(17, 33)]
-```
-
-2. Crop the candidate list based on the user set 'max_num_deqs' to obtain a CudaGraph capture list with a range of [1,' max_num_deqs'].
-
-Users can also customize the batch size list that needs to be captured by CudaGraph through the parameter `cudagraph_capture_sizes` in`--graph-optimization-config`:
-
-```
---graph-optimization-config '{"cudagraph_capture_sizes": [1, 3, 5, 7, 9]}'
-```
-
-### CudaGraph related parameters
-
- Using CudaGraph incurs some additional memory overhead, divided into two categories in FastDeploy:
-- Additional input Buffer overhead
-- CudaGraph uses dedicated memory pool, thus holding some intermediate activation memory isolated from main framework
-
-FastDeploy initialization sequence first uses `gpu_memory_utilization` parameter to calculate available memory for `KVCache`, after initializing `KVCache` then uses remaining memory to initialize CudaGraph. Since CudaGraph is not enabled by default currently, using default startup parameters may encounter `Out of memory` errors, can try following solutions:
-- Lower `gpu_memory_utilization` value, reserve more memory for CudaGraph.
-- Lower `max_num_seqs` to decrease the maximum concurrency.
-- Customize the batch size list that CudaGraph needs to capture through `graph_optimization_config`, and reduce the number of captured graphs by using `cudagraph_capture_sizes`
-
-- Before use, must ensure loaded model is properly decorated with ```@support_graph_optimization```.
-
-  ```python
-  # 1. import decorator
-  from fastdeploy.model_executor.graph_optimization.decorator import support_graph_optimization
-  ...
-
-  # 2. add decorator
-  @support_graph_optimization
-  class Ernie4_5_Model(nn.Layer): # Note decorator is added to nn.Layer subclass
-      ...
-
-  # 3. modify parameter passing in ModelForCasualLM subclass's self.model()
-   class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
-      ...
-      def forward(
-          self,
-          ids_remove_padding: paddle.Tensor,
-          forward_meta: ForwardMeta,
-      ):
-          hidden_states = self.model(ids_remove_padding=ids_remove_padding, # specify parameter name when passing
-                                     forward_meta=forward_meta)
-          return hidden_statesfrom fastdeploy.model_executor.graph_optimization.decorator import support_graph_optimization
-  ...
-
-  @support_graph_optimization
-  class Ernie45TModel(nn.Layer): # Note decorator is added to nn.Layer subclass
-      ...
-  ```
-
-- When ```use_cudagraph``` is enabled, currently only supports single-GPU inference, i.e. ```tensor_parallel_size``` set to 1.
-- When ```use_cudagraph``` is enabled, cannot enable ```enable_prefix_caching``` or ```enable_chunked_prefill```.

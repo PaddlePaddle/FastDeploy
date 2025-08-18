@@ -100,7 +100,6 @@ export FD_SAMPLING_CLASS=rejection
 **启用方式：** 以单机8GPU，1P1D（各4GPU）部署为例，与默认的混合式部署方式相比， 需要`--splitwise-role`指定节点的角色。并通过环境变量`FD_LOG_DIR`和`CUDA_VISIBLE_DEVICES`将两个节点的GPU 和日志隔离开
 ```
 export FD_LOG_DIR="log_prefill"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -113,7 +112,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 ```
 export FD_LOG_DIR="log_decode"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 # 注意innode-prefill-ports指定为Prefill服务的engine-worker-queue-port
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -138,7 +136,7 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 --enable-custom-all-reduce
 ```
 注：
-1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../parameters.md) 相关配置参数说明
+1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
 2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
 3. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
 

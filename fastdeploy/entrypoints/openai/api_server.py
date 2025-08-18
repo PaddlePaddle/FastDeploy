@@ -51,6 +51,8 @@ from fastdeploy.metrics.metrics import (
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.plugins.model_register import load_model_register_plugins
+
+load_model_register_plugins()
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     StatefulSemaphore,
@@ -461,8 +463,6 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-
-    load_model_register_plugins()
     if load_engine() is None:
         return
 
