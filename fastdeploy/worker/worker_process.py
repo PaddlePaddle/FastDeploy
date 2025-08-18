@@ -106,25 +106,26 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
-        tokenizer = ErnieBotTokenizer.from_pretrained(
-            fd_config.model_config.model,
-            model_max_length=fd_config.parallel_config.max_model_len,
-            padding_side="right",
-            use_fast=False,
-        )
-        tokenizer.ignored_index = -100
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.unk_token
+        if "ernie" in fd_config.model_config.model_type: 
+            tokenizer = ErnieBotTokenizer.from_pretrained(
+                fd_config.model_config.model,
+                model_max_length=fd_config.parallel_config.max_model_len,
+                padding_side="right",
+                use_fast=False,
+            )
+            tokenizer.ignored_index = -100
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.unk_token
 
-        fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
-        fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        vision_config = fd_config.model_config.vision_config
-        vision_config.dtype = fd_config.model_config.dtype
-        # vision_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
-        # vision_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        fd_config.model_config.im_patch_id = tokenizer.get_vocab()["<|IMAGE_PLACEHOLDER|>"]
-        fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
-        fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
+            fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+            fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+            vision_config = fd_config.model_config.vision_config
+            vision_config.dtype = fd_config.model_config.dtype
+            # vision_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+            # vision_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+            fd_config.model_config.im_patch_id = tokenizer.get_vocab()["<|IMAGE_PLACEHOLDER|>"]
+            fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
+            fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
 
 
 class PaddleDisWorkerProc:
@@ -770,6 +771,12 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
+    
+    # import debugpy
+    # debugpy.listen(("0.0.0.0", 5678))
+    # print("🚀 Debugger is ready to attach")
+    # debugpy.wait_for_client()  # 可选：阻塞直到 VSCode 连接
+    
     from fastdeploy.plugins.model_register import load_model_register_plugins
 
     load_model_register_plugins()

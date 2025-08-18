@@ -89,7 +89,7 @@ class Qwen2_5_VLModel(nn.Layer):
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.image_token_id = fd_config.model_config.image_token_id
         self._dtype = fd_config.model_config.dtype
-        fd_config.model_config.pretrained_config.prefix_name = "qwen2"
+        fd_config.model_config.pretrained_config.prefix_name = "model"
         self.fd_config = fd_config
 
         self.embed_tokens = VocabParallelEmbedding(

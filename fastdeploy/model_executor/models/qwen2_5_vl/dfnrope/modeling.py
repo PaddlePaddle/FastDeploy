@@ -349,7 +349,7 @@ class VisionRotaryEmbedding(nn.Layer):
         self.dim = dim
         self.theta = theta
         inv_freq = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2, dtype="float32") / dim)
-        self.register_buffer("inv_freq", inv_freq, persistent=False)
+        self.register_buffer("inv_freq", inv_freq, persistable=False)
         self._seq_len_cached = 0
         self._freqs_cached = None
 
@@ -408,8 +408,8 @@ class DFNRopeVisionBlock(nn.Layer):
         super().__init__()
         
         
-        self.norm1 = nn.LayerNorm(dim, epsilon=1e-6)
-        self.norm2 = nn.LayerNorm(dim, epsilon=1e-6)
+        self.norm1 = nn.LayerNorm(dim, epsilon=1e-6, bias_attr=False)
+        self.norm2 = nn.LayerNorm(dim, epsilon=1e-6, bias_attr=False)
         # qwen 是有参数直接得到的，为 intermediate_size 参数
         # hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
@@ -464,21 +464,21 @@ class PatchMerger(nn.Layer):
         super().__init__()
         self.hidden_size = context_dim * (spatial_merge_size**2)
         self.ln_q = nn.LayerNorm(context_dim, epsilon=1e-6)
-        # self.mlp = nn.Sequential(
-        #     nn.Linear(self.hidden_size, self.hidden_size),
-        #     nn.GELU(),
-        #     nn.Linear(self.hidden_size, dim),
-        # )
-        # Sequential 和 ModuleList 的区别在于，Sequential是将多个层组合成一个层，而ModuleList是将多个层组合成一个列表。
-        self.mlp = nn.ModuleList([
-            ColumnParallelLinear(self.hidden_size,
-                                 self.hidden_size,
-                                 has_bias=True),
+        self.mlp = nn.Sequential(
+            nn.Linear(self.hidden_size, self.hidden_size),
             nn.GELU(),
-            RowParallelLinear(self.hidden_size,
-                              dim,
-                              has_bias=True),
-        ])
+            nn.Linear(self.hidden_size, dim),
+        )
+        # Sequential 和 ModuleList 的区别在于，Sequential是将多个层组合成一个层，而ModuleList是将多个层组合成一个列表。
+        # self.mlp = nn.ModuleList([
+        #     ColumnParallelLinear(self.hidden_size,
+        #                          self.hidden_size,
+        #                          has_bias=True),
+        #     nn.GELU(),
+        #     RowParallelLinear(self.hidden_size,
+        #                       dim,
+        #                       has_bias=True),
+        # ])
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         """_summary_
@@ -531,7 +531,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         self.patch_embed = PatchEmbed(
             patch_size=config.vision_config.patch_size,
             temporal_patch_size=config.vision_config.temporal_patch_size,
-            in_channels=config.vision_config.in_channels,
+            in_channels=config.vision_config.in_chans,
             hidden_size=config.vision_config.hidden_size,
         )
 

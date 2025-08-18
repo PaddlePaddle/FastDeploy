@@ -98,7 +98,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            self._init_image_preprocess()
+            if "ernie" in self.fd_config.model_config.model_type: 
+                self._init_image_preprocess()
 
             self.amp_black = [
                 "reduce_sum",
