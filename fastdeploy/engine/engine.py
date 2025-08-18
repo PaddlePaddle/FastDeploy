@@ -114,6 +114,7 @@ class LLMEngine:
         self._init_worker_signals()
 
         self.data_processor = self.input_processor.create_processor()
+        self.engine.data_processor = self.data_processor
 
         self.engine.start()
 
