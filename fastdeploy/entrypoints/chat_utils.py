@@ -191,6 +191,6 @@ def load_chat_template(
         # ensure we decode so our escape are interpreted correctly
         return load_chat_template(chat_template, is_literal=True)
 
+
 def random_tool_call_id() -> str:
     return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"
-
