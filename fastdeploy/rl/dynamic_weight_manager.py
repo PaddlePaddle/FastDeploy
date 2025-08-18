@@ -82,7 +82,7 @@ class DynamicWeightManager:
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
-            self.model_config.model,
+            self.fd_config.model_config.model,
             f"model_state.tp0{self.meta_src_id}.pdparams",
         )
 
