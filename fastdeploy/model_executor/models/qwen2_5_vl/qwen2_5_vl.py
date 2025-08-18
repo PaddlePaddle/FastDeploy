@@ -161,6 +161,18 @@ class Qwen2_5_VLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
+        # -----------------------
+        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
+        hidden_states = extract_text_token_output(
+            max_seq_len,
+            max_seq_len_index.cast("int32"),
+            image_token_num.cast("int32"),
+            forward_meta.seq_lens_this_time,
+            forward_meta.cu_seqlens_q,
+            hidden_states.cast("float32"),
+        ).cast(self._dtype)
+        # -----------------------
+        
         out = self.norm(hidden_states)
 
         return out

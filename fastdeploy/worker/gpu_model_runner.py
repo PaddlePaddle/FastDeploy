@@ -1133,7 +1133,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-                think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
+                think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
