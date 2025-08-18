@@ -118,7 +118,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
                 a_scales,
                 layer.weight_scale,
                 out_type,
-                layer.bias,
+                layer.bias if layer.add_bias and layer.with_bias else None,
             )
         else:
             raise NotImplementedError
