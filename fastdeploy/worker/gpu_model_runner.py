@@ -1662,11 +1662,13 @@ class GPUModelRunner(ModelRunnerBase):
         """extract_vision_features"""
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
-
-        images = inputs["images"].cast("float32")
-        images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
-        images = images / self.image_preprocess.image_std_tensor
-        images = images.cast("bfloat16")
+        images = inputs["images"]
+        # ernie-vl has images norm
+        if "ernie" in self.model_config.model_type:
+            images = images.cast("float32")
+            images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
+            images = images / self.image_preprocess.image_std_tensor
+            images = images.cast("bfloat16")
 
         token_type_ids = inputs["token_type_ids"]
         token_type_ids_w_video = token_type_ids
@@ -1688,7 +1690,7 @@ class GPUModelRunner(ModelRunnerBase):
                 image_features = image_features.reshape([-1, C * self.model_config.spatial_conv_size**2])
                 image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
-            # ernie-vl have resampler_model
+            # ernie-vl has resampler_model
             if "ernie" in self.model_config.model_type:
                 image_features = self.model.resampler_model(
                     image_features,
