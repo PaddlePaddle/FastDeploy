@@ -49,12 +49,13 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, pid, ips, max_waiting_time, chat_template):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
         self.max_waiting_time = max_waiting_time
         self.host_ip = get_host_ip()
+        self.chat_template = chat_template
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
                 self.master_ip = self.master_ip[0]
@@ -83,11 +84,14 @@ class OpenAIServingChat:
         else:
             request_id = f"chatcmpl-{uuid.uuid4()}"
         api_server_logger.info(f"create chat completion request: {request_id}")
-
+        text_after_process = None
         try:
             current_req_dict = request.to_dict_for_infer(request_id)
+            if "chat_template" not in current_req_dict:
+                current_req_dict["chat_template"] = self.chat_template
             current_req_dict["arrival_time"] = time.time()
             prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+            text_after_process = current_req_dict.get("text_after_process")
             if isinstance(prompt_token_ids, np.ndarray):
                 prompt_token_ids = prompt_token_ids.tolist()
         except Exception as e:
@@ -104,10 +108,14 @@ class OpenAIServingChat:
             return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
         if request.stream:
-            return self.chat_completion_stream_generator(request, request_id, request.model, prompt_token_ids)
+            return self.chat_completion_stream_generator(
+                request, request_id, request.model, prompt_token_ids, text_after_process
+            )
         else:
             try:
-                return await self.chat_completion_full_generator(request, request_id, request.model, prompt_token_ids)
+                return await self.chat_completion_full_generator(
+                    request, request_id, request.model, prompt_token_ids, text_after_process
+                )
             except Exception as e:
                 return ErrorResponse(code=400, message=str(e))
 
@@ -124,6 +132,7 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
+        text_after_process: str,
     ):
         """
         Streaming chat completion generator.
@@ -134,6 +143,7 @@ class OpenAIServingChat:
         previous_num_tokens = 0
         num_prompt_tokens = 0
         num_choices = 1
+        tool_called = False
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -216,6 +226,7 @@ class OpenAIServingChat:
                             )
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
+                                choice.delta.text_after_process = text_after_process
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
                                 object=chunk_object_type,
@@ -231,25 +242,34 @@ class OpenAIServingChat:
                                     prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
+                            api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
                         first_iteration = False
 
                     output = res["outputs"]
                     delta_text = output["text"]
                     output_top_logprobs = output["top_logprobs"]
+                    previous_num_tokens += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
-
-                    previous_num_tokens += len(output["token_ids"])
-                    delta_message = DeltaMessage(
-                        content=delta_text,
-                        reasoning_content=output.get("reasoning_content"),
-                        prompt_token_ids=None,
-                        completion_token_ids=None,
-                        tool_calls=output.get("tool_call_content", []),
-                    )
+                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
+                        tool_delta_message = output["tool_delta_message"]
+                        if tool_delta_message is None:
+                            continue
+                        delta_message = tool_delta_message
+                        delta_message.reasoning_content = output.get("reasoning_content")
+                        if delta_message.tool_calls:
+                            tool_called = True
+                    else:
+                        delta_message = DeltaMessage(
+                            content=delta_text,
+                            reasoning_content=output.get("reasoning_content"),
+                            prompt_token_ids=None,
+                            completion_token_ids=None,
+                            tool_calls=None,
+                        )
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -257,6 +277,7 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         arrival_time=arrival_time,
                     )
+
                     if res["finished"]:
                         num_choices -= 1
                         work_process_metrics.e2e_request_latency.observe(
@@ -266,10 +287,7 @@ class OpenAIServingChat:
                         max_tokens = request.max_completion_tokens or request.max_tokens
                         if has_no_token_limit or previous_num_tokens != max_tokens:
                             choice.finish_reason = "stop"
-                            if (
-                                self.engine_client.reasoning_parser == "ernie_x1"
-                                and output.get("finish_reason", "") == "tool_calls"
-                            ):
+                            if tool_called:
                                 choice.finish_reason = "tool_calls"
                         else:
                             choice.finish_reason = "length"
@@ -279,6 +297,7 @@ class OpenAIServingChat:
 
                     if request.return_token_ids:
                         choice.delta.completion_token_ids = list(output["token_ids"])
+                        choice.delta.raw_prediction = output.get("raw_prediction")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -290,6 +309,9 @@ class OpenAIServingChat:
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        # 打印尾包
+                        if res["finished"]:
+                            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 
                 if choices:
@@ -329,6 +351,7 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
+        text_after_process: str,
     ):
         """
         Full chat completion generator.
@@ -403,9 +426,11 @@ class OpenAIServingChat:
             role="assistant",
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call_content"),
+            tool_calls=output.get("tool_call"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
+            text_after_process=text_after_process if request.return_token_ids else None,
+            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:
@@ -439,13 +464,15 @@ class OpenAIServingChat:
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0)),
         )
         work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
-        return ChatCompletionResponse(
+        res = ChatCompletionResponse(
             id=request_id,
             created=created_time,
             model=model_name,
             choices=choices,
             usage=usage,
         )
+        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        return res
 
     def _create_chat_logprobs(
         self,
