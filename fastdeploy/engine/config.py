@@ -746,6 +746,7 @@ class Config:
         else:
             self.worker_num_per_node = num_ranks
 
+        self.parallel_config.local_data_parallel_id = self.node_rank * self.worker_num_per_node  
         self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
