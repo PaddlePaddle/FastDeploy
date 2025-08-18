@@ -131,6 +131,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
+        self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
@@ -162,6 +163,15 @@ class GPUModelRunner(ModelRunnerBase):
         check whether prefill stage exist
         """
         if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
+            return 1
+        else:
+            return 0
+
+    def exist_decode(self):
+        """
+        check whether decode stage exist
+        """
+        if int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0:
             return 1
         else:
             return 0
@@ -555,7 +565,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.enable_expert_parallel:
             full_length = min(full_length, 32)
 
-        input_length = int(full_length * self.cache_config.kv_cache_ratio)
+        input_length = int(full_length)
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -892,7 +902,7 @@ class GPUModelRunner(ModelRunnerBase):
             caches=self.share_inputs["caches"],
         )
 
-        # Update Batch type for cuda graph
+        # Update Batch type for cuda graph for only_decode_batch
         only_decode_batch = True
         prefill_exists = None
         # mix ep in single node
@@ -903,10 +913,32 @@ class GPUModelRunner(ModelRunnerBase):
             only_decode_batch = all(only_decode_batch_list)
             self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
 
-        self.forward_meta.step_use_cudagraph = (
+        only_decode_use_cudagraph = (
             self.use_cudagraph
             and only_decode_batch
             and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
+        )
+
+        # Update Batch type for cuda graph for only_prefill_batch
+        only_prefill_batch = True
+        decode_exists = None
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            # 收集所有 worker 的状态
+            only_prefill_batch_list = []
+            decode_exists = self.exist_decode()
+            paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
+            only_prefill_batch = all(only_prefill_batch_list)
+
+        only_prefill_use_cudagraph = (
+            self.use_cudagraph
+            and self.cudagraph_only_prefill
+            and only_prefill_batch
+            and not (decode_exists if decode_exists is not None else self.exist_decode())
+        )
+
+        # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
+        self.forward_meta.step_use_cudagraph = (
+            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
         )
 
         # Initialzie attention meta data
@@ -1221,7 +1253,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
 
-    def capture_model(self) -> None:
+    def capture_model(self, capture_prefill: bool = False) -> None:
         """
         Trigger CUDA Graph capture for all shapes in cuda graph capture list
         """
@@ -1231,14 +1263,28 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-        for batch_size in sorted(capture_sizes, reverse=True):
-            self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
-                batch_size=batch_size,
-                in_capturing=True,
-                expected_decode_len=expected_decode_len,
-            )
-            logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+        if capture_prefill:
+            for num_tokens in sorted(capture_sizes, reverse=True):
+                self._dummy_run(
+                    num_tokens=num_tokens,
+                    batch_size=1,
+                    in_capturing=True,
+                    expected_decode_len=expected_decode_len,
+                )
+                logger.info(
+                    f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
+                )
+        else:
+            for batch_size in sorted(capture_sizes, reverse=True):
+                self._dummy_run(
+                    num_tokens=self.parallel_config.max_num_batched_tokens,
+                    batch_size=batch_size,
+                    in_capturing=True,
+                    expected_decode_len=expected_decode_len,
+                )
+                logger.info(
+                    f"Warm up the model with the batch size:{batch_size}, expected_decode_len:{expected_decode_len}"
+                )
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
@@ -1316,6 +1362,9 @@ class GPUModelRunner(ModelRunnerBase):
             )
             hidden_states = model_output
         else:
+            print("传递给model的seq_lens_this_time", self.forward_meta.seq_lens_this_time)
+            print("input_ids", self.forward_meta.input_ids.shape)
+            print("self.share_inputs[ids_remove_padding].shape:", self.share_inputs["ids_remove_padding"].shape)
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,

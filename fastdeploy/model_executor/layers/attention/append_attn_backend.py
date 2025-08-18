@@ -122,6 +122,21 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
+        self.share_inputs = {}
+        self.share_inputs["encoder_batch_ids"] = paddle.full(
+            shape=[self.max_seq_len], fill_value=0, dtype="int32"
+        )  # gpu
+        self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full(
+            shape=[self.max_seq_len], fill_value=0, dtype="int32"
+        )  # gpu
+        self.share_inputs["encoder_num_blocks"] = paddle.full(shape=[1], fill_value=0, dtype="int32").cpu()  # cpu
+        self.share_inputs["kv_batch_ids"] = paddle.full(shape=[self.max_seq_len], fill_value=0, dtype="int32")  # gpu
+        self.share_inputs["kv_tile_ids_per_batch"] = paddle.full(
+            shape=[self.max_seq_len], fill_value=0, dtype="int32"
+        )  # gpu
+        self.share_inputs["kv_num_blocks"] = paddle.full(shape=[1], fill_value=0, dtype="int32").cpu()  # cpu
+        self.share_inputs["max_len_kv"] = paddle.full(shape=[1], fill_value=0, dtype="int32").cpu()  # cpu
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = AppendAttentionMetadata()
@@ -139,13 +154,20 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.attn_mask = forward_meta.attn_mask
         metadata.pre_caches_length = forward_meta.pre_caches_length
         (
-            metadata.encoder_batch_ids,
-            metadata.encoder_tile_ids_per_batch,
-            metadata.encoder_num_blocks,
-            metadata.kv_batch_ids,
-            metadata.kv_tile_ids_per_batch,
-            metadata.kv_num_blocks,
-            metadata.max_len_kv,
+            temp_encoder_batch_ids,
+            temp_encoder_tile_ids_per_batch,
+            temp_encoder_num_blocks,
+            temp_kv_batch_ids,
+            temp_kv_tile_ids_per_batch,
+            temp_kv_num_blocks,
+            temp_max_len_kv,
+            # metadata.encoder_batch_ids,
+            # metadata.encoder_tile_ids_per_batch,
+            # metadata.encoder_num_blocks,
+            # metadata.kv_batch_ids,
+            # metadata.kv_tile_ids_per_batch,
+            # metadata.kv_num_blocks,
+            # metadata.max_len_kv,
         ) = get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
@@ -160,6 +182,27 @@ class AppendAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+
+        self.share_inputs["encoder_batch_ids"].copy_(temp_encoder_batch_ids, False)
+        metadata.encoder_batch_ids = self.share_inputs["encoder_batch_ids"]
+
+        self.share_inputs["encoder_tile_ids_per_batch"].copy_(temp_encoder_tile_ids_per_batch, False)
+        metadata.encoder_tile_ids_per_batch = self.share_inputs["encoder_tile_ids_per_batch"]
+
+        self.share_inputs["encoder_num_blocks"].copy_(temp_encoder_num_blocks, False)
+        metadata.encoder_num_blocks = self.share_inputs["encoder_num_blocks"]
+
+        self.share_inputs["kv_batch_ids"].copy_(temp_kv_batch_ids, False)
+        metadata.kv_batch_ids = self.share_inputs["kv_batch_ids"]
+
+        self.share_inputs["kv_tile_ids_per_batch"].copy_(temp_kv_tile_ids_per_batch, False)
+        metadata.kv_tile_ids_per_batch = self.share_inputs["kv_tile_ids_per_batch"]
+
+        self.share_inputs["kv_num_blocks"].copy_(temp_kv_num_blocks, False)
+        metadata.kv_num_blocks = self.share_inputs["kv_num_blocks"]
+
+        self.share_inputs["max_len_kv"].copy_(temp_max_len_kv, False)
+        metadata.max_len_kv = self.share_inputs["max_len_kv"]
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers

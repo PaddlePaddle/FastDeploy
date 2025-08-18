@@ -484,6 +484,10 @@ class GraphOptimizationConfig:
         """ Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
+        self.cudagraph_only_prefill: bool = False
+        """When cudagraph_only_prefill is False, only capture decode-only.
+        When cudagraph_only_prefill is True, only capture prefill-only.
+        Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = None
@@ -496,13 +500,13 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
+    def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(
@@ -941,7 +945,11 @@ class FDConfig:
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
-        self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
+
+        if self.graph_opt_config.cudagraph_only_prefill:
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
+        else:
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.parallel_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
