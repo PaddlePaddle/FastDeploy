@@ -90,10 +90,10 @@ class RepetitionEarlyStopper(EarlyStopper):
         )
 
         B, W = self.trunc_scores.shape
-        V = probs.shape[1]
+        real_bsz, V = probs.shape
         BLOCK_W = triton.next_power_of_2(W)
 
-        grid = (B,)
+        grid = (real_bsz,)
         repetition_early_stopper_kernel[grid](
             self.trunc_scores,
             probs,

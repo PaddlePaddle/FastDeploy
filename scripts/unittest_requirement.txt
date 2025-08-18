@@ -1,0 +1,10 @@
+respx
+pytest
+pytest-asyncio
+pytest-tornasync
+pytest-trio
+pytest-twisted
+anyio
+coverage
+diff-cover
+partial_json_parser
