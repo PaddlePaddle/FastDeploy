@@ -30,7 +30,7 @@ on:
 
 jobs:
   stable_tests:
-    runs-on: [self-hosted, GPU-h20-1Cards]
+    runs-on: [self-hosted, GPU-h1z1-2Cards]
     steps:
       - name: Code Prepare
         shell: bash
