@@ -165,7 +165,7 @@ class VisionFlashAttention2(nn.Layer):
             )
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
-            self.proj = nn.Linear(dim, dim)
+            self.proj = nn.Linear(dim, dim, bias_attr=True)
 
         self.head_dim = dim // num_heads  # must added
 
@@ -297,23 +297,34 @@ class VisionMlp(nn.Layer):
         if self.tensor_parallel_degree > 1:
             # vllm 那边是 merge 的，需要 hidden_dim * 2
             # fd 这边应该不需要 *2
-            self.fc1 = ColumnParallelLinear(
+            self.gate_proj = ColumnParallelLinear(
                 dim,
                 hidden_dim,
                 mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 gather_output=False,
                 has_bias=bias,
             )
-            self.fc2 = RowParallelLinear(
+
+            self.up_proj = ColumnParallelLinear(
+                dim,
+                hidden_dim,
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
+                gather_output=False,
+                has_bias=bias,
+            )
+            
+            self.down_proj = RowParallelLinear(
                 hidden_dim,
                 dim,
                 mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 input_is_parallel=True,
                 has_bias=bias,
             )
+            
         else:
-            self.fc1 = nn.Linear(dim, hidden_dim, bias_attr=bias)
-            self.fc2 = nn.Linear(hidden_dim, dim, bias_attr=bias)
+            self.gate_proj = nn.Linear(dim, hidden_dim, bias_attr=bias)
+            self.up_proj = nn.Linear(dim, hidden_dim, bias_attr=bias)
+            self.down_proj = nn.Linear(hidden_dim, dim, bias_attr=bias)
         self.act = ACT2FN[hidden_act]
 
     def forward(self, x) -> paddle.Tensor:
@@ -325,7 +336,11 @@ class VisionMlp(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        return self.fc2(self.act(self.fc1(x)))
+        x_gate = self.gate_proj(x)
+        x_gate = self.act_fn(x_gate)
+        x_up = self.up_proj(x)
+        x_down = self.down_proj(x_gate * x_up)
+        return x_down
 
 
 # 对于seqlen的操作有些不同，其他是对齐qwen的，qwen还多了 seqlen *= 2 和 cached 的操作
@@ -463,11 +478,11 @@ class PatchMerger(nn.Layer):
         """
         super().__init__()
         self.hidden_size = context_dim * (spatial_merge_size**2)
-        self.ln_q = nn.LayerNorm(context_dim, epsilon=1e-6)
+        self.ln_q = nn.LayerNorm(context_dim, epsilon=1e-6, bias_attr=False)
         self.mlp = nn.Sequential(
-            nn.Linear(self.hidden_size, self.hidden_size),
+            nn.Linear(self.hidden_size, self.hidden_size, bias_attr=True),
             nn.GELU(),
-            nn.Linear(self.hidden_size, dim),
+            nn.Linear(self.hidden_size, dim, bias_attr=True),
         )
         # Sequential 和 ModuleList 的区别在于，Sequential是将多个层组合成一个层，而ModuleList是将多个层组合成一个列表。
         # self.mlp = nn.ModuleList([
@@ -556,7 +571,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         # ), "in DFNRope, vit's config.hidden must be equal to config.embed_dim"
         
         #qwen 对齐
-        self.merger = PatchMerger(dim=config.vision_config.out_hidden_size, context_dim=config.hidden_size)
+        self.merger = PatchMerger(dim=config.vision_config.out_hidden_size, context_dim=config.vision_config.hidden_size)
 
     @property
     def device(self) -> paddle.device:
