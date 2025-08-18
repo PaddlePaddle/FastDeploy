@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import uuid
 from copy import deepcopy
 from pathlib import Path
 from typing import List, Literal, Optional, Union
@@ -189,3 +190,7 @@ def load_chat_template(
         # If opening a file fails, set chat template to be args to
         # ensure we decode so our escape are interpreted correctly
         return load_chat_template(chat_template, is_literal=True)
+
+def random_tool_call_id() -> str:
+    return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"
+

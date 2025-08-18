@@ -504,7 +504,7 @@ class DataProcessor:
             )
             .replace("<|image@placeholder|>", "")
             .replace("<|video@placeholder|>", "")
-        )
+        request["text_after_process"] = prompt_token_template
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         data_processor_logger.info(

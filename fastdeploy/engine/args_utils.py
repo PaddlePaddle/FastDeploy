@@ -98,6 +98,14 @@ class EngineArgs:
     """
     chat template or chat template file path
     """
+    tool_call_parser: str = None
+    """
+    specifies the tool call parser  to use for extracting tool call from the model output
+    """
+    tool_parser_plugin: str = None
+    """
+    tool parser plugin used to register user defined tool parsers
+    """
     enable_mm: bool = False
     """
     Flags to enable multi-modal model
@@ -443,6 +451,17 @@ class EngineArgs:
             type=str,
             default=EngineArgs.chat_template,
             help="chat template or chat template file path",
+        model_group.add_argument(
+            "--tool-call-parser",
+            type=str,
+            default=EngineArgs.tool_call_parser,
+            help="Flag specifies the tool call parser to use for extracting" "tool call from the model output",
+        )
+        model_group.add_argument(
+            "--tool-parser-plugin",
+            type=str,
+            default=EngineArgs.tool_parser_plugin,
+            help="tool parser plugin used to register user defined tool parsers",
         )
         model_group.add_argument(
             "--speculative-config",
@@ -937,6 +956,7 @@ class EngineArgs:
             mm_processor_kwargs=self.mm_processor_kwargs,
             # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
+            tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,

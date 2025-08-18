@@ -42,6 +42,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -76,7 +77,8 @@ parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template)
-
+if args.tool_parser_plugin:
+    ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
 
 
@@ -136,6 +138,7 @@ async def lifespan(app: FastAPI):
         args.data_parallel_size,
         args.enable_logprob,
         args.workers,
+        args.tool_call_parser,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     chat_handler = OpenAIServingChat(engine_client, pid, args.ips, args.max_waiting_time, chat_template)
@@ -250,6 +253,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
     """
     Create a chat completion for the provided prompt and parameters.
     """
+    api_server_logger.info(f"Chat Received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
@@ -278,6 +282,7 @@ async def create_completion(request: CompletionRequest):
     """
     Create a completion for the provided prompt and parameters.
     """
+    api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
