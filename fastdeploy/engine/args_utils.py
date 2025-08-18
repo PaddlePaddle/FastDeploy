@@ -451,6 +451,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.chat_template,
             help="chat template or chat template file path",
+        )
         model_group.add_argument(
             "--tool-call-parser",
             type=str,
