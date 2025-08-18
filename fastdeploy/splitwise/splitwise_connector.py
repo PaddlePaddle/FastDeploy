@@ -506,6 +506,8 @@ class SplitwiseConnector:
                         draft_token_ids=task["outputs"]["draft_token_ids"],
                     ),
                     finished=True,
+                    error_code=task["error_code"],
+                    error_msg=task["error_msg"],
                 )
             )
         req_ids = [task["request_id"] for task in payload]
