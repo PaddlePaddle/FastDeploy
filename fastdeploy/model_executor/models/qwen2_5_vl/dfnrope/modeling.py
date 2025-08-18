@@ -265,11 +265,14 @@ class PatchEmbed(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        L, C = hidden_states.shape
-        hidden_states = hidden_states.view(L, -1, self.temporal_patch_size, self.patch_size,
-                   self.patch_size)
-        hidden_states = self.proj(hidden_states).view(L, self.hidden_size)
+        target_dtype = self.proj.weight.dtype
+        hidden_states = hidden_states.reshape(
+            [-1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size]
+        )
 
+        # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
+        # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.hidden_size])
+        hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.hidden_size])
         return hidden_states
 
 
@@ -337,7 +340,7 @@ class VisionMlp(nn.Layer):
             paddle.Tensor: _description_
         """
         x_gate = self.gate_proj(x)
-        x_gate = self.act_fn(x_gate)
+        x_gate = self.act(x_gate)
         x_up = self.up_proj(x)
         x_down = self.down_proj(x_gate * x_up)
         return x_down
@@ -373,10 +376,8 @@ class VisionRotaryEmbedding(nn.Layer):
             seqlen *= 2
             self._seq_len_cached = seqlen
             self.inv_freq = 1.0 / (self.theta**(paddle.arange(
-                0, self.dim, 2, dtype=paddle.float, device=self.inv_freq.device)
-                                                / self.dim))
+                0, self.dim, 2, dtype="float32") / self.dim))
             seq = paddle.arange(seqlen,
-                               device=self.inv_freq.device,
                                dtype=self.inv_freq.dtype)
             freqs = paddle.outer(seq, self.inv_freq)
             self._freqs_cached = freqs
@@ -441,23 +442,22 @@ class DFNRopeVisionBlock(nn.Layer):
             tensor_parallel_degree=tensor_parallel_degree,
         )
 
-    def forward(self, x, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
+    def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
         """_summary_
 
         Args:
-            x (_type_): _description_
+            hidden_states (_type_): _description_
             cu_seqlens (_type_): _description_
             rotary_pos_emb (_type_): _description_
 
         Returns:
             paddle.Tensor: _description_
         """
-        x_attn = self.attn(self.norm1(x),
-                           cu_seqlens=cu_seqlens,
-                           rotary_pos_emb=rotary_pos_emb)
-        x_fused_norm, residual = self.norm2(x, residual=x_attn)
-        x = residual + self.mlp(x_fused_norm)
-        return x
+        hidden_states = hidden_states + self.attn(
+            self.norm1(hidden_states), cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb
+        )
+        hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
+        return hidden_states
 
 
 # 操作和参数对齐qwen
@@ -504,15 +504,9 @@ class PatchMerger(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        x = self.ln_q(x)
-        x = x.view(-1, self.hidden_size)
-
-        mlp_fc1, mlp_act, mlp_fc2 = self.mlp
-        x_parallel, _ = mlp_fc1(x)
-        x_parallel = mlp_act(x_parallel)
-        out, _ = mlp_fc2(x_parallel)
+        x = self.mlp(self.ln_q(x).reshape([-1, self.hidden_size]))
         
-        return out
+        return x
 
 
 # qwen 有些block是windows-attention，有些是普通attention，会根据fullatt_block_indexes参数选择
@@ -585,59 +579,69 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         """
         return self.blocks[0].mlp.fc2.weight.dtype
 
-    def rotary_pos_emb_thw(self, t, h, w):
-        hpos_ids = paddle.arange(h).unsqueeze(1).expand(-1, w)
-        wpos_ids = paddle.arange(w).unsqueeze(0).expand(h, -1)
-        hpos_ids = hpos_ids.reshape(
-            h // self.spatial_merge_size,
-            self.spatial_merge_size,
-            w // self.spatial_merge_size,
-            self.spatial_merge_size,
-        ).permute(0, 2, 1, 3).flatten()
-        wpos_ids = wpos_ids.reshape(
-            h // self.spatial_merge_size,
-            self.spatial_merge_size,
-            w // self.spatial_merge_size,
-            self.spatial_merge_size,
-        ).permute(0, 2, 1, 3).flatten()
-        pos_ids = paddle.stack([hpos_ids, wpos_ids], dim=-1).repeat(t, 1)
-        max_size = max(h, w)
-        rotary_pos_emb_full = self.rotary_pos_emb(max_size)
-        rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(1)
-        rotary_pos_emb = rotary_pos_emb.reshape(
-            rotary_pos_emb.shape[0] // self.spatial_merge_unit,
-            self.spatial_merge_unit, -1)
+    def get_window_index(self, grid_thw):
+        window_index: list = []
+        cu_window_seqlens: list = [0]
+        window_index_id = 0
+        vit_merger_window_size = self.window_size // self.spatial_merge_size // self.patch_size
+        for grid_t, grid_h, grid_w in grid_thw:
+            llm_grid_h, llm_grid_w = (grid_h // self.spatial_merge_size, grid_w // self.spatial_merge_size)
+            index = paddle.arange(end=grid_t * llm_grid_h * llm_grid_w).reshape([grid_t, llm_grid_h, llm_grid_w])
+            pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size
+            pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
+            num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size
+            num_windows_w = (llm_grid_w + pad_w) // vit_merger_window_size
+            index_padded = paddle.nn.functional.pad(
+                x=index, pad=(0, pad_w, 0, pad_h), mode="constant", value=-100, pad_from_left_axis=False
+            )
+            index_padded = index_padded.reshape(
+                [grid_t, num_windows_h, vit_merger_window_size, num_windows_w, vit_merger_window_size]
+            )
+            index_padded = index_padded.transpose(perm=[0, 1, 3, 2, 4]).reshape(
+                [grid_t, num_windows_h * num_windows_w, vit_merger_window_size, vit_merger_window_size]
+            )
+            seqlens = (index_padded != -100).sum(axis=[2, 3]).reshape([-1])
+            index_padded = index_padded.reshape([-1])
+            index_new = index_padded[index_padded != -100]
+            window_index.append(index_new + window_index_id)
+            cu_seqlens_tmp = seqlens.cumsum(axis=0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+            cu_window_seqlens.extend(cu_seqlens_tmp.tolist())
+            window_index_id += (grid_t * llm_grid_h * llm_grid_w).item()
+        window_index = paddle.concat(x=window_index, axis=0)
+        return window_index, cu_window_seqlens
 
+    def rot_pos_emb(self, grid_thw):
+        pos_ids = []
+        for t, h, w in grid_thw:
+            hpos_ids = paddle.arange(h).unsqueeze(1).expand([-1, w])
+            hpos_ids = hpos_ids.reshape(
+                [
+                    h // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                    w // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                ]
+            )
+            hpos_ids = hpos_ids.transpose(perm=[0, 2, 1, 3])
+            hpos_ids = hpos_ids.flatten()
+
+            wpos_ids = paddle.arange(w).unsqueeze(0).expand([h, -1])
+            wpos_ids = wpos_ids.reshape(
+                [
+                    h // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                    w // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                ]
+            )
+            wpos_ids = wpos_ids.transpose([0, 2, 1, 3])
+            wpos_ids = wpos_ids.flatten()
+            pos_ids.append(paddle.stack(x=[hpos_ids, wpos_ids], axis=-1).tile(repeat_times=[t, 1]))
+        pos_ids = paddle.concat(x=pos_ids, axis=0)
+        max_grid_size = grid_thw[:, 1:].max()
+        rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
+        rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
-
-    def get_window_index_thw(self, grid_t, grid_h, grid_w):
-        vit_merger_window_size = (self.window_size //
-                                  self.spatial_merge_size // self.patch_size)
-
-        llm_grid_h = grid_h // self.spatial_merge_size
-        llm_grid_w = grid_w // self.spatial_merge_size
-        index = paddle.arange(grid_t * llm_grid_h * llm_grid_w).reshape(
-            grid_t, llm_grid_h, llm_grid_w)
-        pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size
-        pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
-        num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size
-        num_windows_w = (llm_grid_w + pad_w) // vit_merger_window_size
-        index_padded = F.pad(index, (0, pad_w, 0, pad_h), 'constant', -100)
-        index_padded = index_padded.reshape(grid_t, num_windows_h,
-                                            vit_merger_window_size,
-                                            num_windows_w,
-                                            vit_merger_window_size)
-        index_padded = index_padded.permute(0, 1, 3, 2, 4).reshape(
-            grid_t, num_windows_h * num_windows_w, vit_merger_window_size,
-            vit_merger_window_size)
-        seqlens = (index_padded != -100).sum([2, 3]).reshape(-1)
-        index_padded = index_padded.reshape(-1)
-        index_new = index_padded[index_padded != -100]
-        cu_seqlens_tmp = seqlens.cumsum(0) * self.spatial_merge_unit
-        cu_seqlens_tmp = cu_seqlens_tmp.to(dtype=paddle.int32)
-        cu_seqlens_tmp = paddle.unique_consecutive(cu_seqlens_tmp)
-
-        return index_new, cu_seqlens_tmp
 
     # @lru_cache(maxsize=1024)  # noqa: B019
     def get_rope_by_thw(self, t, h, w):
@@ -662,67 +666,26 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         Returns:
             paddle.Tensor: _description_
         """
-        # patchify
-        seq_len, _ = hidden_states.size()
-        rotary_pos_emb = []
-        window_index: list = []
-        cu_window_seqlens: list = [paddle.tensor([0], dtype=paddle.int32)]
-        cu_seqlens: list = []
 
         hidden_states = self.patch_embed(hidden_states)
         
-        # grid_hw_array 对应 vllm qwen_vl 里的 list 形式的 grid_thw
-        grid_hw_array = np.array(grid_thw, dtype=np.int64)
-        
-        window_index_id = 0
-        cu_window_seqlens_last = 0
-        for t, h, w in grid_hw_array:
-            t, h, w = int(t), int(h), int(w)
-            llm_h = h // self.spatial_merge_size
-            llm_w = w // self.spatial_merge_size
-
-            (
-                rotary_pos_emb_thw,
-                window_index_thw,
-                cu_seqlens_window_thw,
-                cu_seqlens_thw,
-            ) = self.get_rope_by_thw(t, h, w)
-
-            window_index.append(window_index_thw + window_index_id)
-            window_index_id += (t * llm_h * llm_w)
-
-            cu_seqlens_window_thw = (cu_seqlens_window_thw +
-                                     cu_window_seqlens_last)
-            cu_window_seqlens_last = cu_seqlens_window_thw[-1]
-            cu_window_seqlens.append(cu_seqlens_window_thw)
-
-            rotary_pos_emb.append(rotary_pos_emb_thw)
-
-            cu_seqlens.append(cu_seqlens_thw)
-
-        rotary_pos_emb = paddle.cat(rotary_pos_emb)
-        window_index = paddle.cat(window_index)
-        cu_window_seqlens = paddle.cat(cu_window_seqlens)
-        cu_window_seqlens = paddle.unique_consecutive(cu_window_seqlens)
-        cu_seqlens = paddle.cat(cu_seqlens)
-        cu_seqlens = paddle.cumsum(cu_seqlens, dim=0, dtype=paddle.int32)
-        cu_seqlens = F.pad(cu_seqlens, (1, 0), "constant", 0)
-
-        # 不知道搬运device是干什么？
-        cu_seqlens = cu_seqlens.to(device=self.device, non_blocking=True)
-        cu_window_seqlens = cu_window_seqlens.to(device=self.device,
-                                                 non_blocking=True)
-        rotary_pos_emb = rotary_pos_emb.to(device=self.device,
-                                           non_blocking=True)
-        window_index = window_index.to(device=hidden_states.device,
-                                       non_blocking=True)
-
-        hidden_states = hidden_states.reshape(
-            seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
+        rotary_pos_emb = self.rot_pos_emb(grid_thw)
+        window_index, cu_window_seqlens = self.get_window_index(grid_thw)
+        cu_window_seqlens = paddle.to_tensor(data=cu_window_seqlens, dtype="int32", place=hidden_states.place)
+        cu_window_seqlens = paddle.unique_consecutive(x=cu_window_seqlens)
+        seq_len, _ = tuple(hidden_states.shape)
+        hidden_states = hidden_states.reshape([seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1])
         hidden_states = hidden_states[window_index, :, :]
-        hidden_states = hidden_states.reshape(seq_len, -1)
-
-        hidden_states = hidden_states.unsqueeze(1)
+        hidden_states = hidden_states.reshape([seq_len, -1])
+        rotary_pos_emb = rotary_pos_emb.reshape([seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1])
+        rotary_pos_emb = rotary_pos_emb[window_index, :, :]
+        rotary_pos_emb = rotary_pos_emb.reshape([seq_len, -1])
+        
+        cu_seqlens = paddle.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
+            axis=0, dtype="int32"
+        )
+        cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
+        
 
         for layer_num, blk in enumerate(self.blocks):
             if layer_num in self.fullatt_block_indexes:
