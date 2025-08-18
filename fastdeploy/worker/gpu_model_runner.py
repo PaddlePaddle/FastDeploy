@@ -681,9 +681,11 @@ class GPUModelRunner(ModelRunnerBase):
             dtype="int64",
         )
         self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["batch_id_per_token"] = paddle.full(
+            [max_num_seqs * self.parallel_config.max_model_len, 1], 0, dtype="int32"
+        )
+        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
 
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
