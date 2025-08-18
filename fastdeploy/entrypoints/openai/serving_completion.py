@@ -467,7 +467,7 @@ class OpenAIServingCompletion:
                 if isinstance(prompt_text, list):
                     output_text = prompt_text[idx] + output["text"]
                 else:
-                    output_text = prompt_text + output["text"]
+                    output_text = str(prompt_text) + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
