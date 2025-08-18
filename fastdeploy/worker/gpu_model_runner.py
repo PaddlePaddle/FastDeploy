@@ -782,7 +782,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["image_features"] = None
             self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
+            self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=("ernie" in self.model_config.model_type), dtype="bool")
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:
@@ -1657,18 +1657,15 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return result
 
-    @paddle.no_grad()
-    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        """extract_vision_features"""
+    def extract_vision_features_ernie(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
         images = inputs["images"]
         # ernie-vl has images norm
-        if "ernie" in self.model_config.model_type:
-            images = images.cast("float32")
-            images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
-            images = images / self.image_preprocess.image_std_tensor
-            images = images.cast("bfloat16")
+        images = images.cast("float32")
+        images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
+        images = images / self.image_preprocess.image_std_tensor
+        images = images.cast("bfloat16")
 
         token_type_ids = inputs["token_type_ids"]
         token_type_ids_w_video = token_type_ids
@@ -1691,15 +1688,44 @@ class GPUModelRunner(ModelRunnerBase):
                 image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
             # ernie-vl has resampler_model
-            if "ernie" in self.model_config.model_type:
-                image_features = self.model.resampler_model(
-                    image_features,
-                    image_mask,
-                    token_type_ids_w_video,
-                    image_type_ids,
-                    grid_thw,
-                )
+            image_features = self.model.resampler_model(
+                image_features,
+                image_mask,
+                token_type_ids_w_video,
+                image_type_ids,
+                grid_thw,
+            )
         return image_features
+
+    def extract_vision_features_qwen(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        assert inputs["images"] is not None
+        grid_thw = inputs["grid_thw"]
+        images = inputs["images"]
+        with paddle.amp.auto_cast(
+            True,
+            custom_black_list=self.amp_black,
+            custom_white_list=self.amp_white,
+            level="O2",
+            dtype=self.parallel_config.dtype,
+        ):
+            image_features = self.model.visual.extract_feature(images, grid_thw)
+            if self.parallel_config.tensor_parallel_size > 1:
+                S, C = image_features.shape
+                image_features = image_features.reshape([-1, C * self.model_config.vision_config.spatial_merge_size**2])
+                image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
+                image_features = image_features.reshape([S, -1])
+
+        return image_features
+
+    @paddle.no_grad()
+    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        """extract_vision_features"""
+        if "ernie" in self.model_config.model_type:
+            return self.extract_vision_features_ernie(inputs)
+        elif "qwen" in self.model_config.model_type:
+            return self.extract_vision_features_qwen(inputs)
+        else:
+            raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 
     @paddle.no_grad()
     def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
