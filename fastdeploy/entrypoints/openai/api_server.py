@@ -166,6 +166,9 @@ async def lifespan(app: FastAPI):
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
+    global llm_engine
+    if llm_engine is not None:
+        llm_engine.engine.data_processor = engine_client.data_processor
     yield
     # close zmq
     try:

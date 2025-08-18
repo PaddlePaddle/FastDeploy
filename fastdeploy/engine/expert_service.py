@@ -26,7 +26,7 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineSevice
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.utils import console_logger, llm_logger
+from fastdeploy.utils import console_logger, llm_logger, envs
 
 
 class ExpertService:
@@ -105,18 +105,19 @@ class ExpertService:
             self.splitwise_receive_thread.start()
         self.cfg.print()
 
-        launched_expert_service_signal_data = np.zeros(
-            shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
-        )
-        self.launched_expert_service_signal = IPCSignal(
-            name="launched_expert_service_signal",
-            array=launched_expert_service_signal_data,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
-        local_rank = local_data_parallel_id % self.cfg.worker_num_per_node
-        self.launched_expert_service_signal.value[local_rank] = 1
+        if not envs.FD_ENABLE_MULTI_API_SERVER:
+            launched_expert_service_signal_data = np.zeros(
+                shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
+            )
+            self.launched_expert_service_signal = IPCSignal(
+                name="launched_expert_service_signal",
+                array=launched_expert_service_signal_data,
+                dtype=np.int32,
+                suffix=ipc_signal_suffix,
+                create=False,
+            )
+            local_rank = local_data_parallel_id % self.cfg.worker_num_per_node
+            self.launched_expert_service_signal.value[local_rank] = 1
 
         console_logger.info(
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
