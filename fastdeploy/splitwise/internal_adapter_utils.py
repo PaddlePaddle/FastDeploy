@@ -56,6 +56,7 @@ class InternalAdapter:
             "splitwise_role": self.cfg.splitwise_role,
             "block_size": int(self.cfg.cache_config.block_size),
             "block_num": int(available_block_num),
+            "max_block_num": self.cfg.cache_config.total_block_num,
             "dec_token_num": int(self.cfg.cache_config.dec_token_num),
             "available_resource": 1.0 * available_block_num / self.cfg.cache_config.total_block_num,
             "max_batch_size": int(available_batch_size),

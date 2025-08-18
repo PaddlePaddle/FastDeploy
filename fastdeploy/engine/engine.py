@@ -793,6 +793,15 @@ class LLMEngine:
                 cur_task_idx = self.resource_manager.req_dict[task.request_id]
                 del self.resource_manager.req_dict[task.request_id]
                 cur_task = self.resource_manager.tasks_list[cur_task_idx]
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    if not task.outputs.token_ids:  # first token is eos in Prefill, just recycle resource and continue
+                        self.resource_manager.stop_flags[cur_task_idx] = True
+                        self.resource_manager.tasks_list[cur_task_idx] = None
+                        self.resource_manager._recycle_block_tables(cur_task)
+                        if task.request_id in self.token_processor.tokens_counter:
+                            del self.token_processor.tokens_counter[task.request_id]
+                        llm_logger.warning(f"{task.request_id} need not decode after first token")
+                        continue
                 cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
                 if self.cfg.speculative_config.method in ["mtp"] and self.cfg.splitwise_role == "decode":
                     cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)

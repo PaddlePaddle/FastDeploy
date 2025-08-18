@@ -160,10 +160,10 @@ class DPLocalScheduler(LocalScheduler):
                             break
 
                         requests.append(request.raw)
+                        self.ids_read_cursor += 1
                         start_batch_time = time.time()
                         if len(requests) >= batch:
                             break
-                    self.ids_read_cursor += len(requests)
                 if (
                     (current_prefill_tokens > max_num_batched_tokens)
                     or (len(requests) >= batch)
@@ -226,7 +226,7 @@ class DPScheduler:
     def _put_requests_to_local(self):
         while True:
             request = self.request_queues[self.dp_rank].get()
-            self.scheduler_logger.info("Recieve request from puller")
+            self.scheduler_logger.info(f"Recieve request from puller, request_id: {request.request_id}")
             self._scheduler.put_requests([request])
 
     def _get_response_from_local(self):
