@@ -123,7 +123,7 @@ class AppendAttentionBackend(AttentionBackend):
             fd_config.parallel_config.expert_parallel_rank = 0
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
-        self.use_output = fd_config.graph_opt_config.full_cuda_graph
+        self.use_output = not fd_config.graph_opt_config.full_cuda_graph
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
