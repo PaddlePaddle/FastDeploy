@@ -508,6 +508,7 @@ def test_chat_with_thinking(openai_client, capsys):
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
     assert response.choices[0].message.reasoning_content is None
+    assert "</think>" not in response.choices[0].message.content
 
     # enable thinking, streaming
     reasoning_max_tokens = 3
