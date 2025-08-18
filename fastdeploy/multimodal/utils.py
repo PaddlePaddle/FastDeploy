@@ -19,7 +19,6 @@ import io
 import ipaddress
 import mimetypes
 import os
-import random
 import socket
 import subprocess
 import tempfile
@@ -102,6 +101,7 @@ def http_to_pil_image(url):
     pil_image = process_image_data(image_data, mime_type, url)
 
     return pil_image
+
 
 def base64_to_pil_image(base64_string):
     """base64_to_pil_image"""
