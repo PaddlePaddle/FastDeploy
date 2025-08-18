@@ -185,7 +185,7 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: int = 8002
+    engine_worker_queue_port: str = "8002"
     """
     Port for worker queue communication.
     """

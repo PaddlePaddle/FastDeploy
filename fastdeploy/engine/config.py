@@ -76,7 +76,7 @@ class Config:
         speculative_config: Optional[Dict[str, Any]] = None,
         graph_optimization_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: int = 8002,
+        engine_worker_queue_port: str = "8002",
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         # enable_mm: bool = False,
