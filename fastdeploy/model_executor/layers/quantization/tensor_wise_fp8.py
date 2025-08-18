@@ -131,7 +131,7 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
             layer.weight,
             transpose_x=False,
             transpose_y=True,
-            bias=None,
+            bias=layer.bias if layer.add_bias and layer.with_bias else None,
             scale=self.total_scale,
             output_dtype="bfloat16",
             activation_type="identity",

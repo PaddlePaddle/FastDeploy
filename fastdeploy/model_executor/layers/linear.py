@@ -63,7 +63,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
     def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
 
         linear_out = paddle.matmul(x, layer.weight)
-        if layer.with_bias:
+        if layer.with_bias and layer.add_bias:
             linear_out = paddle.add(linear_out, layer.bias)
         return linear_out
 
@@ -614,6 +614,7 @@ class QKVParallelLinear(ColumnParallelLinear):
 
         # bias
         if self.with_bias:
+            print("gaoziyuan test qkv bias")
             if self.bias_key in state_dict.keys():
                 bias_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.bias_key)))
                 self.bias.set_value(bias_tensor)
@@ -717,6 +718,8 @@ class RowParallelLinear(LinearBase):
             out = self.quant_method.apply(self, x)
         else:
             out = paddle.matmul(x, self.weight)
+            if self.with_bias and self.add_bias:
+                out = paddle.add(out, self.bias)
 
         if self.reduce_results and self.nranks > 1:
             tensor_model_parallel_all_reduce(out)

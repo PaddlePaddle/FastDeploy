@@ -133,6 +133,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             (layer.weight, layer.weight_scale),
             linear_out,
         )
-        if layer.with_bias:
+        if layer.with_bias and layer.add_bias:
             linear_out = paddle.add(linear_out, layer.bias)
         return linear_out
