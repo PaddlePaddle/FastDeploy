@@ -614,7 +614,6 @@ class QKVParallelLinear(ColumnParallelLinear):
 
         # bias
         if self.with_bias:
-            print("gaoziyuan test qkv bias")
             if self.bias_key in state_dict.keys():
                 bias_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.bias_key)))
                 self.bias.set_value(bias_tensor)
@@ -651,7 +650,7 @@ class RowParallelLinear(LinearBase):
         input_size: int = None,
         output_size: int = None,
         with_bias: bool = False,
-        add_bias: bool = False,
+        add_bias: bool = True,
         reduce_results: bool = True,
         skip_quant: bool = False,
     ):
