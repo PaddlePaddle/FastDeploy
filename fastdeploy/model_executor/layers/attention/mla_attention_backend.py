@@ -297,8 +297,8 @@ class MLAAttentionBackend(AttentionBackend):
             v,
             forward_meta.cu_seqlens_q,
             forward_meta.cu_seqlens_k,
-            max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
-            max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
+            metadata.max_enc_len_this_time,
+            metadata.max_enc_len_this_time,
             causal=self.causal,
             **self.flash_attn_kwargs,
         )[0]
@@ -445,8 +445,8 @@ class MLAAttentionBackend(AttentionBackend):
                 v,
                 forward_meta.cu_seqlens_q,
                 forward_meta.cu_seqlens_k,
-                max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
-                max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
+                metadata.max_enc_len_this_time,
+                metadata.max_enc_len_this_time,
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0]
