@@ -282,7 +282,7 @@ class Config:
             f"should be larger than or equal to max_num_seqs: {self.max_num_seqs}"
         )
         assert self.max_num_batched_tokens <= self.max_model_len * self.max_num_seqs, (
-            f"max_num_batched_tokens: {self.max_num_batched_tokens} should be larger"
+            f"max_num_batched_tokens: {self.max_num_batched_tokens} should be less"
             f"than or equal to max_num_seqs: {self.max_num_seqs} * max_model_len: {self.max_model_len}"
         )
         assert (

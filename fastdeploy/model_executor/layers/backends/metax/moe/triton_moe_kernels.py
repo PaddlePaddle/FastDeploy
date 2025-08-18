@@ -17,7 +17,6 @@
 import triton
 import triton.language as tl
 
-
 @triton.jit
 def fused_moe_kernel_paddle(
     a_ptr,
