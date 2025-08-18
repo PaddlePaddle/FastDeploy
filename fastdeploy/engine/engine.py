@@ -564,7 +564,7 @@ class LLMEngine:
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
-        self.resource_manager.reset_cache_config(self.cfg.cache_config)
+        self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
