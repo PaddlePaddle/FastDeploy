@@ -72,7 +72,8 @@ class EngineClient:
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        array_size = min(max_chips_per_node, tensor_parallel_size * data_parallel_size)
+
+        array_size = min(max_chips_per_node, tensor_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",

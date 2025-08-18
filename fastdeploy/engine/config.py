@@ -173,6 +173,7 @@ class Config:
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
+        self._str_to_list("engine_worker_queue_port", int)
         self.load_choices = load_choices
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
@@ -271,9 +272,12 @@ class Config:
         assert self.max_num_seqs <= 256, (
             "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
         )
+        llm_logger.info(
+            f"engine_worker_queue_port: {self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]}"
+        )
         assert is_port_available(
-            "0.0.0.0", self.engine_worker_queue_port
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+            "0.0.0.0", int(self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id])
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]} is already in use. {self.parallel_config.local_data_parallel_id}"
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
         assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
@@ -426,10 +430,12 @@ class Config:
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):
             val = getattr(self, attr_name)
+            if val is None:
+                return
             if type(val) is str:
                 setattr(self, attr_name, [default_type(i) for i in val.split(",")])
             else:
-                setattr(self, attr_name, val)
+                setattr(self, attr_name, [default_type(i) for i in val])
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, indent=4)

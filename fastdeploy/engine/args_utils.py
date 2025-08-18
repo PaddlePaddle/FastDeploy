@@ -200,6 +200,11 @@ class EngineArgs:
     Number of data parallelism.
     """
 
+    local_data_parallel_id: int = 0
+    """
+    Local data parallel id.
+    """
+
     enable_expert_parallel: bool = False
     """
     Enable expert parallelism.
@@ -484,7 +489,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
-            type=int,
+            type=lambda s: s.split(",") if s else None,
             default=EngineArgs.engine_worker_queue_port,
             help="port for engine worker queue",
         )
@@ -592,6 +597,13 @@ class EngineArgs:
             type=int,
             default=EngineArgs.data_parallel_size,
             help="Degree of data parallelism.",
+        )
+
+        parallel_group.add_argument(
+            "--local-data-parallel-id",
+            type=int,
+            default=EngineArgs.local_data_parallel_id,
+            help="the rank of data parallelism.",
         )
         parallel_group.add_argument(
             "--enable-expert-parallel",
