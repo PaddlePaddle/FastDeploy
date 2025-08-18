@@ -1410,7 +1410,7 @@ class GPUModelRunner(ModelRunnerBase):
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
         end_time = time.time()
-        logger.info(f"execute one step cost time: {end_time-start_time:.3f} s")
+        logger.debug(f"execute one step cost time: {end_time-start_time:.3f} s")
         return None
 
     def _add_cache(self, model_forward_batch) -> None:
