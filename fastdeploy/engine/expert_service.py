@@ -17,10 +17,15 @@
 from __future__ import annotations
 
 import os
+import signal
 import threading
 import time
+import weakref
+
+import numpy as np
 
 from fastdeploy.engine.common_engine import EngineSevice
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.utils import console_logger, llm_logger
 
 
@@ -135,6 +140,7 @@ class ExpertService:
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
+
 
 def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=None):
     """

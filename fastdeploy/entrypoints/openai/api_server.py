@@ -30,8 +30,8 @@ from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
-from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.engine.expert_service import ExpertService
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -109,6 +109,8 @@ app = FastAPI()
 
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+
 def load_data_service():
     """
     load data service

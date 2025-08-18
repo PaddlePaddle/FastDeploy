@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import re
 import signal
@@ -32,6 +33,7 @@ from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineSevice
+from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal
@@ -315,7 +317,6 @@ class LLMEngine:
             create=True,
         )
 
-
         if self.do_profile:
             if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
@@ -568,7 +569,6 @@ class LLMEngine:
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-
     def check_health(self, time_interval_threashold=30):
         """
         Check the health of the model server by checking whether all workers are alive.
@@ -624,7 +624,7 @@ class LLMEngine:
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()
-            for i in range(1, expert_service_nums):
+            for i in range(1, self.cfg.parallel_config.data_parallel_size // self.cfg.nnode):
                 while self.launched_expert_service_signal.value[i] == 0:
                     time.sleep(10)
 

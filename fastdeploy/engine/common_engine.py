@@ -74,7 +74,9 @@ class EngineSevice:
 
         self.start_worker_queue_service()
 
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[
+            self.cfg.parallel_config.local_data_parallel_id
+        ]
 
         self.split_connector = SplitwiseConnector(cfg, self.engine_worker_queue, self.resource_manager)
         self.waiting_requests = []

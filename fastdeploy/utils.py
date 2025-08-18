@@ -97,7 +97,6 @@ def configure_uvicorn_logging():
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
 
-
     uvicorn_error_logger.addHandler(console_handler)
     uvicorn_access_logger.addHandler(console_handler)
     uvicorn_error_logger.setLevel(logging.INFO)
