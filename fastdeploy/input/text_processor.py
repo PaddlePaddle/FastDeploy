@@ -251,7 +251,6 @@ class DataProcessor(BaseDataProcessor):
             str: error message
         """
         request = self._apply_default_parameters(request)
-        request["enable_thinking"] = request.get("chat_template_kwargs", {}).get("enable_thinking")
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
