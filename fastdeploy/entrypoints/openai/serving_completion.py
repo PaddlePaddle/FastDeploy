@@ -244,7 +244,6 @@ class OpenAIServingCompletion:
             self.engine_client.semaphore.release()
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
-                self.engine_client.semaphore.release()
 
     async def _echo_back_prompt(self, request, res, idx):
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
@@ -279,7 +278,6 @@ class OpenAIServingCompletion:
         try:
             await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
-            dealer.write([b"", request_id.encode("utf-8")])
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"
@@ -440,7 +438,6 @@ class OpenAIServingCompletion:
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
-            self.engine_client.semaphore.release()
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
                 self.engine_client.semaphore.release()

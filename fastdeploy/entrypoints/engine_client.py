@@ -92,7 +92,6 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
-        self.semaphore = StatefulSemaphore((envs.FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
         self.connection_manager = DealerConnectionManager(
             pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
         )
