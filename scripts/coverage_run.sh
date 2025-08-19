@@ -26,7 +26,6 @@ done
 failed_tests_file="failed_tests.log"
 > "$failed_tests_file"
 disabled_tests=(
-  layers/test_sampler.py
   layers/test_append_attention.py
   layers/test_attention.py
   operators/test_rejection_top_p_sampling.py
@@ -36,7 +35,6 @@ disabled_tests=(
   operators/test_stop_generation.py
   operators/test_air_topp_sampling.py
   operators/test_fused_moe.py
-  layers/test_repetition_early_stopper.py
   operators/test_stop_generation_multi_ends.py
   graph_optimization/test_cuda_graph.py
 )
@@ -65,11 +63,25 @@ for dir in "${dirs[@]}"; do
         echo "Skipping disabled test: $test_file"
         continue
       fi
-
-      python -m coverage run "$test_file"
+      # TODO: Add a framework to manage unit test execution time
+      timeout 600 python -m coverage run "$test_file"
       if [ $? -ne 0 ]; then
         echo "$test_file" >> "$failed_tests_file"
         fail=$((fail + 1))
+
+        PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+        echo "==== PORT CLEAN AFTER UT FAILED ===="
+
+        for port in "${PORTS[@]}"; do
+            PIDS=$(lsof -t -i :$port)
+            if [ -n "$PIDS" ]; then
+                echo "Port $port is occupied by PID(s): $PIDS"
+                echo "$PIDS" | xargs -r kill -9
+                echo "Port $port cleared"
+            else
+                echo "Port $port is free"
+            fi
+        done
       else
         success=$((success + 1))
       fi

@@ -15,6 +15,7 @@
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
@@ -92,6 +93,18 @@ class EngineArgs:
     reasoning_parser: str = None
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
+    """
+    chat_template: str = None
+    """
+    chat template or chat template file path
+    """
+    tool_call_parser: str = None
+    """
+    specifies the tool call parser  to use for extracting tool call from the model output
+    """
+    tool_parser_plugin: str = None
+    """
+    tool parser plugin used to register user defined tool parsers
     """
     enable_mm: bool = False
     """
@@ -432,6 +445,24 @@ class EngineArgs:
             default=EngineArgs.reasoning_parser,
             help="Flag specifies the reasoning parser to use for extracting "
             "reasoning content from the model output",
+        )
+        model_group.add_argument(
+            "--chat-template",
+            type=str,
+            default=EngineArgs.chat_template,
+            help="chat template or chat template file path",
+        )
+        model_group.add_argument(
+            "--tool-call-parser",
+            type=str,
+            default=EngineArgs.tool_call_parser,
+            help="Flag specifies the tool call parser to use for extracting" "tool call from the model output",
+        )
+        model_group.add_argument(
+            "--tool-parser-plugin",
+            type=str,
+            default=EngineArgs.tool_parser_plugin,
+            help="tool parser plugin used to register user defined tool parsers",
         )
         model_group.add_argument(
             "--speculative-config",
@@ -884,7 +915,10 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
@@ -923,6 +957,7 @@ class EngineArgs:
             mm_processor_kwargs=self.mm_processor_kwargs,
             # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
+            tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,

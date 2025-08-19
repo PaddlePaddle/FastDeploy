@@ -139,7 +139,7 @@ class GPUModelRunner(ModelRunnerBase):
             shape=[self.parallel_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
-        )
+        ).cpu()
 
         self.restore_chunked_prefill_request = dict()
 
@@ -273,7 +273,9 @@ class GPUModelRunner(ModelRunnerBase):
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
-                    f"Handle prefill request {request} at idx {idx} prefill_start_index {prefill_start_index} prefill_end_index {prefill_end_index} need_prefilled_token_num {len(input_ids)}"
+                    f"Handle prefill request {request} at idx {idx}, "
+                    f"{prefill_start_index=}, {prefill_end_index=}, "
+                    f"need_prefilled_token_num={len(input_ids)}"
                 )
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
@@ -316,11 +318,14 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 continue
 
-            if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
-                request.eos_token_ids.append(request.eos_token_ids[0])
+            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
+            self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
@@ -479,12 +484,13 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     return default_value
 
-            if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
-                request.eos_token_ids.append(request.eos_token_ids[0])
+            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
 
             self.share_inputs["temperature"][idx : idx + 1] = get_attr_from_request(request, "temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = get_attr_from_request(
@@ -570,7 +576,9 @@ class GPUModelRunner(ModelRunnerBase):
             idx = i
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
+            self.share_inputs["eos_token_id"][:] = np.array(
+                [2] * self.model_config.eos_tokens_lens, dtype="int64"
+            ).reshape(-1, 1)
             self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
@@ -581,7 +589,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["min_dec_len"][idx : idx + 1] = max_dec_len
             self.share_inputs["stop_flags"][idx : idx + 1] = False
             self.share_inputs["temperature"][idx : idx + 1] = 1
-
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
             self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = input_length
 
@@ -605,18 +612,20 @@ class GPUModelRunner(ModelRunnerBase):
         )
         self.share_inputs["input_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
-            self.parallel_config.pad_token_id,
+            self.model_config.pad_token_id,
             dtype="int64",
         )
         self.share_inputs["prompt_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
-            self.parallel_config.pad_token_id,
+            self.model_config.pad_token_id,
             dtype="int64",
         )
-        self.share_inputs["eos_token_id"] = paddle.full([self.parallel_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["top_k_list"] = [0] * max_num_seqs
         self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
+        self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
         )
@@ -640,7 +649,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -663,7 +674,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["need_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["need_block_len"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -674,10 +685,11 @@ class GPUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
-        self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["batch_id_per_token"] = paddle.full(
+            [max_num_seqs * self.parallel_config.max_model_len, 1], 0, dtype="int32"
+        )
+        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
 
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
@@ -795,7 +807,6 @@ class GPUModelRunner(ModelRunnerBase):
         # Remove padding
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
@@ -803,7 +814,7 @@ class GPUModelRunner(ModelRunnerBase):
             output_padding_offset,
         ) = pre_process(
             self.share_inputs["input_ids"],
-            getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
+            self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
             (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             self.share_inputs["seq_lens_encoder"],
@@ -811,7 +822,6 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -832,7 +842,9 @@ class GPUModelRunner(ModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
+            top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
+            min_p_list=self.share_inputs["min_p_list"],
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
@@ -888,7 +900,7 @@ class GPUModelRunner(ModelRunnerBase):
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            seq_lens_this_time=getattr(self.share_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
@@ -955,7 +967,6 @@ class GPUModelRunner(ModelRunnerBase):
                 cache_kvs_list.append(value_cache)
 
             self.share_inputs["caches"] = cache_kvs_list
-
         else:
             for i in range(self.model_config.num_hidden_layers):
                 cache_kvs[f"key_caches_{i}"] = paddle.full(
@@ -1061,7 +1072,7 @@ class GPUModelRunner(ModelRunnerBase):
 
                 hidden_states = rebuild_padding(
                     model_output,
-                    self.share_inputs["cum_offsets"],
+                    self.share_inputs["cu_seqlens_q"],
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["seq_lens_encoder"],
@@ -1326,7 +1337,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
             hidden_states = rebuild_padding(
                 model_output,
-                self.share_inputs["cum_offsets"],
+                self.share_inputs["cu_seqlens_q"],
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
@@ -1427,6 +1438,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 7. Updata 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             step_cuda(
                 self.share_inputs,
@@ -1589,6 +1601,10 @@ class GPUModelRunner(ModelRunnerBase):
         In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
         """
         # In init_attention_metadata, the decode buffer has already been cleared
+
+        # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
+        if self.use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
         return
 
     def _init_image_preprocess(self) -> None:

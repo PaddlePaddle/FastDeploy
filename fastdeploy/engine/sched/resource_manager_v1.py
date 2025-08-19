@@ -97,13 +97,13 @@ class ResourceManagerV1(ResourceManager):
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
-    
+
     def reschedule_preempt_task(self, request_id):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
                 self.waiting.appendleft(request)
-                self.to_be_rescheduled_request_id_set.remove(request_id) 
+                self.to_be_rescheduled_request_id_set.remove(request_id)
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         can_schedule = True
@@ -142,26 +142,31 @@ class ResourceManagerV1(ResourceManager):
 
         input_ids_lst = request.prompt_token_ids + request.output_token_ids
         input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
-        grid_thw = []
-        for one in inputs["grid_thw"]:
-            if one[0] == 1:
-                grid_thw.append(one)
-            else:
-                grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
-
+        input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
         image_patch_id = inputs["image_patch_id"]
-        grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
+
         if request.multimodal_img_boundaries is None:
+            grid_thw = []
+            for one in inputs["grid_thw"]:
+                if one[0] == 1:
+                    grid_thw.append(one)
+                else:
+                    grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
+
+            grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
             from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
             request.multimodal_img_boundaries = get_img_boundaries(
                 task_input_ids=input_ids, grid_thw=grid_thw, image_patch_id=image_patch_id
             ).numpy()
 
+            grid_thw = grid_thw.numpy().reshape([-1, 3])
+            inputs["grid_thw"] = grid_thw
+
+        grid_thw = inputs["grid_thw"]
         img_boundaries_idx = request.multimodal_img_boundaries[0]
         img_num_per_boundary = request.multimodal_img_boundaries[1]
         ori_prompt_len = img_boundaries_idx[-1].item()
-        grid_thw = grid_thw.numpy().reshape([-1, 3])
         pre_end_idx = request.num_computed_tokens
         new_end_idx = pre_end_idx + num_new_tokens
         if new_end_idx < ori_prompt_len and input_ids[new_end_idx - 1] == image_patch_id:
@@ -195,7 +200,6 @@ class ResourceManagerV1(ResourceManager):
                 )
                 request.num_image_end = img_num_per_boundary[new_boundary_idx]
 
-            request.num_image_end = img_num_per_boundary[new_boundary_idx]
             request.image_type_ids_start = np.sum(grid_thw[: request.num_image_start, 0])
             request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
             request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
@@ -422,9 +426,15 @@ class ResourceManagerV1(ResourceManager):
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
                         self._free_blocks(request)
-                    if request.request_id in self.to_be_rescheduled_request_id_set: # finished after preempted, blocks have been recycled.
-                        self.to_be_rescheduled_request_id_set.remove(request.request_id) # just remove from to_be_rescheduled_request_id_set
-                    if request in self.waiting:  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
+                    if (
+                        request.request_id in self.to_be_rescheduled_request_id_set
+                    ):  # finished after preempted, blocks have been recycled.
+                        self.to_be_rescheduled_request_id_set.remove(
+                            request.request_id
+                        )  # just remove from to_be_rescheduled_request_id_set
+                    if (
+                        request in self.waiting
+                    ):  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
                         raise RuntimeError(f"request {request.request_id} scheduled into waiting list, after finished")
 
                     self.tasks_list[request.idx] = None

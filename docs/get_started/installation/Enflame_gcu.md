@@ -53,21 +53,24 @@ After driver installation, **re-enter the Docker container**:
 docker start paddle-gcu-llm
 docker exec -it paddle-gcu-llm bash
 ```
-5. Install PaddlePaddle
+5. Install PaddlePaddle & PaddleCustomDevice<br/>
 ```bash
 # PaddlePaddle Deep Learning Framework provides fundamental computing capabilities
-python -m pip install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-```
-6. Install PaddleCustomDevice<br/>
-```bash
+python -m pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
 # PaddleCustomDevice implements custom hardware backend for PaddlePaddle, providing GCU operator implementations
-python -m pip install paddle-custom-gcu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/gcu/
+python -m pip install paddle-custom-gcu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/gcu/
 # For source compilation, refer to: https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/gcu/README_cn.md
 ```
-7. Install FastDeploy and dependencies
+For latest paddle verion on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+
+6. Install FastDeploy and dependencies
 ```bash
 python -m pip install fastdeploy -i https://www.paddlepaddle.org.cn/packages/stable/gcu/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
-# For source compilation, refer to the following steps
+```
+
+You can build FastDeploy from source if you need the ```latest version```.
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy
 python -m pip install -r requirements.txt --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
