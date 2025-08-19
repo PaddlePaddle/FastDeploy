@@ -6,6 +6,7 @@
 
 import os
 import re
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urlunparse
 
@@ -18,11 +19,13 @@ BASELINE = {
     "21B": 0.49,
     "300B": 0.96,
 }
-baseline = BASELINE.get(os.environ.get("MODEL"), None)
+baseline = BASELINE.get(os.environ.get("MODEL_SIZE"), None)
 base_url = os.environ.get("URL", None)
 atol = 0.03
 if baseline is None:
-    raise ValueError(f"Invalid MODEL value '{os.environ.get('MODEL')}', expected one of {list(BASELINE.keys())}")
+    raise ValueError(
+        f"Invalid MODEL_SIZE value '{os.environ.get('MODEL_SIZE')}', expected one of {list(BASELINE.keys())}"
+    )
 if base_url is None:
     raise ValueError(
         "Environment variable 'URL' is not set. "
@@ -120,7 +123,7 @@ def query_model(prompt):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return f"[Error] {e}"
+        return f"[Error] {e}, {str(traceback.format_exc())}"
 
 
 # ========== 评估函数 ==========

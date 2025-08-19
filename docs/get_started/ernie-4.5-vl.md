@@ -23,6 +23,7 @@ Execute the following command to start the service. For parameter configurations
 >💡 **Note**: Since the model parameter size is 424B-A47B, on an 80G * 8 GPU machine, specify ```--quantization wint4``` (wint8 is also supported).
 
 ```shell
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \

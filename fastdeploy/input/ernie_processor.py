@@ -87,6 +87,7 @@ class ErnieProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -107,7 +108,16 @@ class ErnieProcessor(BaseDataProcessor):
                 request.prompt_token_ids = token_ids
                 data_processor_logger.info(f"req_id:{request.request_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
-                request.prompt_token_ids = self.messages2ids(request.to_dict())
+                task = request.to_dict()
+                chat_template_kwargs = kwargs.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in task:
+                                task[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                request.prompt_token_ids = self.messages2ids(task)
 
         if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
@@ -162,6 +172,14 @@ class ErnieProcessor(BaseDataProcessor):
                 req_id = request.get("request_id", None)
                 data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             else:
+                chat_template_kwargs = request.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in request:
+                                request[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 request["prompt_token_ids"] = self.messages2ids(request)
         if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
@@ -287,6 +305,7 @@ class ErnieProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+        response_dict["outputs"]["raw_prediction"] = delta_text
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
@@ -341,6 +360,7 @@ class ErnieProcessor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
+            chat_template=request_or_messages.get("chat_template", None),
         )
         request_or_messages["text_after_process"] = spliced_message
         req_id = None

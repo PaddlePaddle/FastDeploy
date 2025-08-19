@@ -14,6 +14,7 @@
 
 import json
 import re
+import traceback
 import uuid
 from collections.abc import Sequence
 from typing import Union
@@ -162,10 +163,12 @@ class ErnieX1ToolParser(ToolParser):
                                 }
                             )
                     except Exception as e:
-                        data_processor_logger.debug(f"Failed to parse tool call: {str(e)}")
+                        data_processor_logger.error(
+                            f"Failed to parse tool call: {str(e)}, {str(traceback.format_exc())}"
+                        )
                         continue
                 except Exception as e:
-                    data_processor_logger.debug(f"Failed to parse tool call: {str(e)}")
+                    data_processor_logger.error(f"Failed to parse tool call: {str(e)}, {str(traceback.format_exc())}")
                     continue
 
             if not function_call_arr:
@@ -211,7 +214,9 @@ class ErnieX1ToolParser(ToolParser):
             )
 
         except Exception as e:
-            data_processor_logger.error(f"Error in extracting tool call from response: {str(e)}")
+            data_processor_logger.error(
+                f"Error in extracting tool call from response: {str(e)}, {str(traceback.format_exc())}"
+            )
             return ExtractedToolCallInformation(tools_called=False, tool_calls=None, content=model_output)
 
     def extract_tool_calls_streaming(
@@ -302,7 +307,9 @@ class ErnieX1ToolParser(ToolParser):
                                 self.streamed_args_for_tool[self.current_tool_id] = args_json
                                 return delta
                     except Exception as e:
-                        data_processor_logger.debug(f"Partial arguments parsing: {str(e)}")
+                        data_processor_logger.error(
+                            f"Partial arguments parsing: {str(e)}, {str(traceback.format_exc())}"
+                        )
 
             if "</tool_call>" in self.buffer:
                 end_pos = self.buffer.find("</tool_call>")
@@ -316,5 +323,7 @@ class ErnieX1ToolParser(ToolParser):
             return delta
 
         except Exception as e:
-            data_processor_logger.error(f"Error in streaming tool call extraction: {str(e)}")
+            data_processor_logger.error(
+                f"Error in streaming tool call extraction: {str(e)}, {str(traceback.format_exc())}"
+            )
             return None

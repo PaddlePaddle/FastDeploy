@@ -55,7 +55,6 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         openai_serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
         final_res_batch: List[RequestOutput] = [
             {
-                "prompt": "Hello, world!",
                 "outputs": {
                     "token_ids": [1, 2, 3],
                     "text": " world!",
@@ -67,7 +66,6 @@ class TestOpenAIServingCompletion(unittest.TestCase):
                 "output_token_ids": 3,
             },
             {
-                "prompt": "Hello, world!",
                 "outputs": {
                     "token_ids": [4, 5, 6],
                     "text": " world!",
@@ -81,12 +79,13 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         ]
 
         request: CompletionRequest = Mock()
+        request.prompt = "Hello, world!"
+        request.echo = True
         request_id = "test_request_id"
         created_time = 1655136000
         model_name = "test_model"
         prompt_batched_token_ids = [[1, 2, 3], [4, 5, 6]]
         completion_batched_token_ids = [[7, 8, 9], [10, 11, 12]]
-
         completion_response = openai_serving_completion.request_output_to_completion_response(
             final_res_batch=final_res_batch,
             request=request,
