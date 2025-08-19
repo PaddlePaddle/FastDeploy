@@ -465,12 +465,8 @@ class OpenAIServingCompletion:
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-<<<<<<< HEAD
 
-            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
-=======
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
->>>>>>> c95b3395 (【BugFix】completion接口echo回显支持 (#3245))
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
