@@ -183,7 +183,7 @@ jobs:
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--config\": \"21b_mtp.yaml\"}"
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"21b_mtp.yaml\"}"
           check_service 180
           python -m pytest -sv test_seed_usage.py || TEST_EXIT_CODE=1
 
