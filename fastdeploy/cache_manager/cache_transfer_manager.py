@@ -382,4 +382,5 @@ if __name__ == "__main__":
 
     args = parse_args()
     logger = get_logger("cache_transfer_manager", "cache_transfer_manager.log")
+    paddle.set_device(f"gpu:{args.device_id}")
     main()
