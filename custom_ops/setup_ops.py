@@ -495,23 +495,6 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
 
     if cc >= 90 and nvcc_version >= 12.0:
-        nvcc_compile_args += [
-            "-U__CUDA_NO_HALF_OPERATORS__",
-            "-U__CUDA_NO_HALF_CONVERSIONS__",
-            "-U__CUDA_NO_BFLOAT16_OPERATORS__",
-            "-U__CUDA_NO_BFLOAT16_CONVERSIONS__",
-            "-U__CUDA_NO_BFLOAT162_OPERATORS__",
-            "-U__CUDA_NO_BFLOAT162_CONVERSIONS__",
-            "--expt-relaxed-constexpr",
-            "--expt-extended-lambda",
-            "--use_fast_math",
-            "--ptxas-options=-v",
-            "--ptxas-options=--verbose,--register-usage-level=10,--warn-on-local-memory-usage",
-            "-lineinfo",
-            "-DCUTLASS_DEBUG_TRACE_LEVEL=0",
-            "-DNDEBUG",
-            "-lcuda"
-        ]
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]

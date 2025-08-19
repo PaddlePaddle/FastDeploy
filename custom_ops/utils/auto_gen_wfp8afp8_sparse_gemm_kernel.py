@@ -130,7 +130,8 @@ for type in dtype:
             )
 
             template_cu_file = open(
-                f"{file_dir}wfp8Afp8_sparse_gemm_M{case[0]}_N{n}_TAILN{0}_K{case[1]}_B{case[2]}_P{case[3]}_{type}.cu", "w"
+                f"{file_dir}wfp8Afp8_sparse_gemm_M{case[0]}_N{n}_TAILN{0}_K{case[1]}_B{case[2]}_P{case[3]}_{type}.cu",
+                "w",
             )
             template_cu_file.write(gemm_template_cu_head)
             template_cu_file.write(
@@ -149,7 +150,8 @@ for type in dtype:
             template_cu_file.close()
 
             template_cu_file = open(
-                f"{file_dir}wfp8Afp8_sparse_gemm_M{case[0]}_N{256}_TAILN{n-32}_K{case[1]}_B{case[2]}_P{case[3]}_{type}.cu", "w"
+                f"{file_dir}wfp8Afp8_sparse_gemm_M{case[0]}_N{256}_TAILN{n-32}_K{case[1]}_B{case[2]}_P{case[3]}_{type}.cu",
+                "w",
             )
             template_cu_file.write(gemm_template_cu_head)
             template_cu_file.write(

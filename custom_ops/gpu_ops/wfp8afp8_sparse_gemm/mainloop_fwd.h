@@ -40,7 +40,7 @@ struct CollectiveMainloopFwd {
     static constexpr int kBlockM = Ktraits::kBlockM;
     static constexpr int kBlockN = Ktraits::kBlockN;
     static constexpr int kBlockK = Ktraits::kBlockK;
-    static constexpr int NumCopyThreads = cutlass::NumThreadsPerWarpGroup;  
+    static constexpr int NumCopyThreads = cutlass::NumThreadsPerWarpGroup;
     static constexpr int kTiles = Ktraits::kTiles;
     static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma{});
     static constexpr int TokenPackSize = Ktraits::TokenPackSize;
@@ -71,8 +71,8 @@ struct CollectiveMainloopFwd {
     using TMA_A = decltype(make_tma_copy(
         GmemTiledCopy{},
         make_tensor(
-            make_gmem_ptr(static_cast<Element const*>(nullptr)), 
-            WShapeT{}, 
+            make_gmem_ptr(static_cast<Element const*>(nullptr)),
+            WShapeT{},
             WStrideT{}
         ),
         SmemLayoutA{}(_, _, _0{}),
@@ -82,8 +82,8 @@ struct CollectiveMainloopFwd {
     using TMA_B = decltype(make_tma_copy(
         GmemTiledCopy{},
         make_tensor(
-            make_gmem_ptr(static_cast<Element const*>(nullptr)), 
-            ShapeT{}, 
+            make_gmem_ptr(static_cast<Element const*>(nullptr)),
+            ShapeT{},
             StrideT{}
         ),
         take<0, 2>(SmemLayoutB{}),
@@ -93,8 +93,8 @@ struct CollectiveMainloopFwd {
     using TMA_E = decltype(make_tma_copy(
         GmemTiledCopy{},
         make_tensor(
-            make_gmem_ptr(static_cast<uint32_t const*>(nullptr)), 
-            EShapeT{}, 
+            make_gmem_ptr(static_cast<uint32_t const*>(nullptr)),
+            EShapeT{},
             EStrideT{}
         ),
         SmemLayoutE{}(_, _, _0{}),
@@ -108,7 +108,7 @@ struct CollectiveMainloopFwd {
     static constexpr uint32_t TmaTransactionBytesA = static_cast<uint32_t>(size(take<0, 2>(SmemLayoutA{})) * cutlass::sizeof_bits_v<Element> / 8);
     static constexpr uint32_t TmaTransactionBytesB = static_cast<uint32_t>(size(take<0, 2>(SmemLayoutB{})) * cutlass::sizeof_bits_v<Element> / 8);
     static constexpr uint32_t TmaTransactionBytesE = static_cast<uint32_t>(size(take<0, 2>(SmemLayoutE{})) * cutlass::sizeof_bits_v<int> / 8);
-    
+
     struct Arguments {
         Element const* ptr_A;
         WLayoutT layout_A;
@@ -126,8 +126,8 @@ struct CollectiveMainloopFwd {
         WLayoutT layout_A;
         ELayoutT layout_E;
         LayoutT layout_B;
-        TMA_A tma_load_A; 
-        TMA_E tma_load_E;           
+        TMA_A tma_load_A;
+        TMA_E tma_load_E;
         TMA_B tma_load_B;
         const int *tokens;
         const float *weight_scale;
@@ -160,7 +160,7 @@ struct CollectiveMainloopFwd {
             size<0>(ClusterShape{}));
 
         return {args.layout_A, args.layout_E, args.layout_B,
-            tma_load_A, tma_load_E, tma_load_B, 
+            tma_load_A, tma_load_E, tma_load_B,
             args.tokens, args.weight_scale, args.ptr_C};
     }
 
@@ -200,7 +200,7 @@ struct CollectiveMainloopFwd {
         uint16_t *smem_c = reinterpret_cast<uint16_t *>(shared_storage.smem_c.data());
 
         uint32_t * reg_data = reinterpret_cast<uint32_t*>(tOrO_out.data());
-        
+
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
 
         constexpr int k_copy_times = CUR_N / 16;
@@ -210,13 +210,13 @@ struct CollectiveMainloopFwd {
             uint32_t smem_ptr = cast_smem_ptr_to_uint(reinterpret_cast<uint128_t*>(smem_c + i * 16 * 128) + tidx);
             asm volatile (
                 "stmatrix.sync.aligned.x4.trans.m8n8.shared.b16 [%0], {%1, %2, %3, %4};\n"
-                :: "r"(smem_ptr), "r"(reg_data[4 * i + 0]), "r"(reg_data[4 * i + 2]), "r"(reg_data[4 * i + 1]), "r"(reg_data[4 * i + 3]));                  
+                :: "r"(smem_ptr), "r"(reg_data[4 * i + 0]), "r"(reg_data[4 * i + 2]), "r"(reg_data[4 * i + 1]), "r"(reg_data[4 * i + 3]));
         }
 
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
         const int batch_idx = TokenPackSize == 0 ? pre_fix_tokens * M : bidb * M * TokenPackSize;
         ElementOutput * store_c = mainloop_params.ptr_C + batch_idx + bidn * (M * kBlockN) + bidm * kBlockM;
-        
+
         const int reamin_tokens = tokens - bidn * kBlockN;
 
         const int col = tidx % 2;
@@ -241,14 +241,14 @@ struct CollectiveMainloopFwd {
 
     template <typename MTensor>
     CUTLASS_DEVICE auto get_local_packed_tensor(
-        const MTensor &mB, 
+        const MTensor &mB,
         const int tokens,
         const int bidn) const {
 
         auto mB_this_batch = make_tensor(
-            mB.data(), 
+            mB.data(),
             make_layout(
-                cute::make_shape(tokens, size<1>(mB)), 
+                cute::make_shape(tokens, size<1>(mB)),
                 mB.stride()
             ));
         return local_tile(mB_this_batch, select<1, 2>(TileShape_MNK{}), make_coord(bidn, _));
@@ -256,20 +256,20 @@ struct CollectiveMainloopFwd {
 
     template <typename MTensor>
     CUTLASS_DEVICE auto get_local_no_packed_tensor(
-        const MTensor &mB, 
+        const MTensor &mB,
         const int pre_fix_token,
         const int actual_token,
         const int bidn) const {
 
         auto g_offset = local_tile(
-            mB(_, _, 0), 
-            cute::make_shape(1, size<1>(mB)), 
+            mB(_, _, 0),
+            cute::make_shape(1, size<1>(mB)),
             make_coord(pre_fix_token, _0{}));
 
         auto g_tensor = make_tensor(
-            g_offset.data(), 
+            g_offset.data(),
             make_layout(
-                cute::make_shape(actual_token, size<1>(mB)), 
+                cute::make_shape(actual_token, size<1>(mB)),
                 g_offset.stride()
             ));
 
@@ -291,15 +291,15 @@ struct CollectiveMainloopFwd {
          const int bidn,
          const int bidb,
          const int tidx) {
-            
+
         Tensor sA = make_tensor(make_smem_ptr(shared_storage.smem_a.data()), SmemLayoutA{});
         Tensor sB = make_tensor(make_smem_ptr(shared_storage.smem_b.data()), SmemLayoutB{});
         Tensor sE = make_tensor(make_smem_ptr(shared_storage.smem_e.data()), SmemLayoutE{});
-    
+
         Tensor mA = mainloop_params.tma_load_A.get_tma_tensor(mainloop_params.layout_A.shape());
         Tensor mB = mainloop_params.tma_load_B.get_tma_tensor(mainloop_params.layout_B.shape());
         Tensor mE = mainloop_params.tma_load_E.get_tma_tensor(mainloop_params.layout_E.shape());
-        
+
         Tensor gA = local_tile(mA(_, _, _, bidm, bidb), select<0, 1>(Shape<Int<kBlockM / 2>, Int<kBlockK>>{}), make_coord(0,0,_));
 
         Tensor gE = local_tile(mE(_, _, _, bidm, bidb), select<0, 1>(Shape<Int<NumMmaThreads>, Int<kBlockK / 64>>{}), make_coord(0, 0));
@@ -313,7 +313,7 @@ struct CollectiveMainloopFwd {
 
         if constexpr (TokenPackSize == 0) {
             Tensor gB = get_local_no_packed_tensor(
-                mB, 
+                mB,
                 pre_fix_tokens,
                 tokens,
                 bidn);
@@ -351,9 +351,9 @@ struct CollectiveMainloopFwd {
             }
         } else {
             auto mB_this_batch = make_tensor(
-                mB(_, _, bidb).data(), 
+                mB(_, _, bidb).data(),
                 make_layout(
-                    cute::make_shape(tokens, size<1>(mB)), 
+                    cute::make_shape(tokens, size<1>(mB)),
                     mB.stride()
                 ));
             Tensor gB = local_tile(mB_this_batch, select<1, 2>(TileShape_MNK{}), make_coord(bidn, _));
@@ -396,11 +396,11 @@ struct CollectiveMainloopFwd {
     CUTLASS_DEVICE void
     mma(Params const& mainloop_params,
             MainloopPipeline pipeline,
-            PipelineState& smem_pipe_read,      
+            PipelineState& smem_pipe_read,
             SharedStorage& shared_storage,
             float *acc_s,
             const int tidx) {
-        
+
         using sMemBLayout = std::conditional_t<
             CUR_N == kBlockN,
             SmemLayoutB,
@@ -462,4 +462,3 @@ struct CollectiveMainloopFwd {
     }
 
 };
-

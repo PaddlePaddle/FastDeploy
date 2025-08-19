@@ -29,7 +29,7 @@
 template <typename Ktraits>
 void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp, 1) w8a8_sparse_gemm_kernel(
         CUTE_GRID_CONSTANT typename CollectiveMainloopFwd<Ktraits>::Params const mainloop_params) {
-    
+
     using Element = typename Ktraits::Element;
     static_assert(cutlass::sizeof_bits_v<Element> == 8);
 
@@ -62,7 +62,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
     // Obtain warp index
     int const warp_group_thread_idx = threadIdx.x % cutlass::NumThreadsPerWarpGroup;
-    
+
     PipelineParams pipeline_params;
     pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesA + CollectiveMainloop::TmaTransactionBytesE + CollectiveMainloop::TmaTransactionBytesB;
     int warp_group_idx = cutlass::canonical_warp_group_idx();
@@ -85,7 +85,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         __syncthreads();
     }
 
-    
+
     const int bidm = blockIdx.x;
     const int bidn = blockIdx.y;
     const int bidb = blockIdx.z;
@@ -94,7 +94,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
     const int pre_fix_tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb] : 0;
 
     const int tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb + 1] - pre_fix_tokens : mainloop_params.tokens[bidb];
-    
+
 
     if (bidn * kBlockN >= tokens) {
         return;
@@ -102,10 +102,10 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
     if (warp_group_idx == 0) {
         cutlass::arch::warpgroup_reg_dealloc<40>();
-        PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
+        PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>();
         collective_mainloop.load(
-                mainloop_params, 
-                pipeline, 
+                mainloop_params,
+                pipeline,
                 smem_pipe_write,
                 shared_storage,
                 pre_fix_tokens,
@@ -115,7 +115,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
                 bidb,
                 tidx);
     } else {
-        cutlass::arch::warpgroup_reg_alloc<232>(); 
+        cutlass::arch::warpgroup_reg_alloc<232>();
         PipelineState smem_pipe_read;
 
         constexpr int acc_num = sizeof(typename Ktraits::Mma::CRegisters) / sizeof(float);
@@ -130,25 +130,25 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
         const int mma_tidx = tidx - NumCopyThreads;
 
-        const float2 weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4]; 
+        const float2 weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4];
 
 
         if (TAIL_N > 0 && reamin_tokens < kBlockN) {
             collective_mainloop.mma<TAIL_N>(
                 mainloop_params,
-                pipeline, 
+                pipeline,
                 smem_pipe_read,
                 shared_storage,
                 acc_s,
-                mma_tidx); 
-            
+                mma_tidx);
+
             collective_mainloop.store<TAIL_N>(
-                mainloop_params, 
-                acc_s, 
-                shared_storage, 
+                mainloop_params,
+                acc_s,
+                shared_storage,
                 pre_fix_tokens,
                 tokens,
-                reinterpret_cast<const float*>(&weight_scale),        
+                reinterpret_cast<const float*>(&weight_scale),
                 bidm,
                 bidn,
                 bidb,
@@ -156,19 +156,19 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         } else {
             collective_mainloop.mma<kBlockN>(
                 mainloop_params,
-                pipeline, 
+                pipeline,
                 smem_pipe_read,
                 shared_storage,
                 acc_s,
-                mma_tidx); 
-            
+                mma_tidx);
+
             collective_mainloop.store<kBlockN>(
-                mainloop_params, 
-                acc_s, 
-                shared_storage, 
+                mainloop_params,
+                acc_s,
+                shared_storage,
                 pre_fix_tokens,
-                tokens, 
-                reinterpret_cast<const float*>(&weight_scale),       
+                tokens,
+                reinterpret_cast<const float*>(&weight_scale),
                 bidm,
                 bidn,
                 bidb,
@@ -227,12 +227,12 @@ auto get_gmem_e_layout(int ms, int ks, int ks_in, int Cols) {
 
 template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Batch, int kPackTokenSize>
 void run_gemm(
-        const InputType * A, 
-        const uint32_t *E, 
-        const InputType * B, 
-        OutputType * C, 
+        const InputType * A,
+        const uint32_t *E,
+        const InputType * B,
+        OutputType * C,
         const float *weight_scale,
-        const int *tokens_idx, 
+        const int *tokens_idx,
         const int max_tokens,
         cudaStream_t stream) {
 
@@ -244,7 +244,7 @@ void run_gemm(
     constexpr int kBlockK = Kernel_traits::kBlockK;
     constexpr int kBlockM = Kernel_traits::kBlockM;
 
-    static_assert(M % Kernel_traits::kBlockM == 0); 
+    static_assert(M % Kernel_traits::kBlockM == 0);
     constexpr int M_nums = M / Kernel_traits::kBlockM;
     const int N_nums = (max_tokens + Kernel_traits::kBlockN - 1) / Kernel_traits::kBlockN;
 
@@ -266,7 +266,7 @@ void run_gemm(
 
     void *kernel;
     kernel = (void *)w8a8_sparse_gemm_kernel<Kernel_traits>;
-    
+
     int smem_size = sizeof(typename Kernel_traits::SharedStorage);
 
     if (smem_size >= 48 * 1024) {
@@ -287,12 +287,12 @@ void run_gemm(
 
 template <typename InputType, typename OutputType, int M, int K, int Batch, int kPackTokenSize>
 void w8a8_sparse_gemm(
-        const InputType * A, 
-        const uint32_t * E, 
-        const InputType * B, 
-        OutputType * C, 
+        const InputType * A,
+        const uint32_t * E,
+        const InputType * B,
+        OutputType * C,
         const float *weight_scale,
-        const int *tokens_idx, 
+        const int *tokens_idx,
         const int max_tokens,
         cudaStream_t stream) {
     constexpr static int kBlockM = 128;

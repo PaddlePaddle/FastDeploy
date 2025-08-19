@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
+
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import wfp8afp8_sparse_gemm, wfp8afp8_gemm_sparse_idx_convert
+from fastdeploy.model_executor.ops.gpu import (
+    wfp8afp8_gemm_sparse_idx_convert,
+    wfp8afp8_sparse_gemm,
+)
 
-import os
-import unittest
 
 def wfp8afp8_gemm_naive(input_bf16, weight_quant, tokens, weight_scale, BATCH, N):
     weight = weight_quant.astype("bfloat16") / weight_scale
@@ -33,6 +36,7 @@ def wfp8afp8_gemm_naive(input_bf16, weight_quant, tokens, weight_scale, BATCH, N
         pre_fix_token += tokens[i]
     return out
 
+
 def peruate_scale(weight_scale, N):
     BATCH = weight_scale.shape[0]
     weight_scale = weight_scale.reshape([BATCH, N])
@@ -45,21 +49,22 @@ def peruate_scale(weight_scale, N):
                 weight_scale[b, n + j + 1] = temp[j // 2 + 8]
     return weight_scale
 
+
 def sparse(weight, sparse_idx):
-    pack_weight = np.zeros([weight.shape[0], weight.shape[1], weight.shape[2]//2], dtype=weight.dtype)
+    pack_weight = np.zeros([weight.shape[0], weight.shape[1], weight.shape[2] // 2], dtype=weight.dtype)
 
     idx_select = [
-        [0,1,2,3],
-        [0,2,1,3],
-        [0,3,1,2],
-        [1,2,0,3],
-        [1,3,0,2],
-        [2,3,0,1],
+        [0, 1, 2, 3],
+        [0, 2, 1, 3],
+        [0, 3, 1, 2],
+        [1, 2, 0, 3],
+        [1, 3, 0, 2],
+        [2, 3, 0, 1],
     ]
     for b in range(weight.shape[0]):
         for i in range(weight.shape[1]):
             for j in range(0, weight.shape[2], 4):
-                idx = sparse_idx[b, i, j //4]
+                idx = sparse_idx[b, i, j // 4]
                 idx1 = idx_select[idx][0]
                 idx2 = idx_select[idx][1]
                 idx3 = idx_select[idx][2]
@@ -76,22 +81,23 @@ def sparse(weight, sparse_idx):
 def convert(weight, sparse_idx, K):
     BATCH = weight.shape[0]
     temp = np.zeros(weight.shape, dtype=weight.dtype)
-    
+
     for i in range(0, weight.shape[1], 128):
         for j in range(0, 128):
             dst_idx = j // 2 + (j % 2) * 64
-            temp[:, j+i, :] = weight[:, i+dst_idx, :]
-    
-    temp_trans = np.zeros([BATCH, weight.shape[1]//128, K//128, 128, 64], dtype=weight.dtype)
-    temp_E = np.zeros([BATCH, weight.shape[1]//128, K//128, 128, 32], dtype=sparse_idx.dtype)
+            temp[:, j + i, :] = weight[:, i + dst_idx, :]
+
+    temp_trans = np.zeros([BATCH, weight.shape[1] // 128, K // 128, 128, 64], dtype=weight.dtype)
+    temp_E = np.zeros([BATCH, weight.shape[1] // 128, K // 128, 128, 32], dtype=sparse_idx.dtype)
 
     for b in range(BATCH):
-        for i in range(weight.shape[1]//128):
-            for j in range(K//128):
-                temp_trans[b, i, j] = temp[b, i*128:i*128+128, j*64:j*64+64]
-                temp_E[b, i, j] = sparse_idx[b, i*128:i*128+128, j*32 : j*32+32]
-    
+        for i in range(weight.shape[1] // 128):
+            for j in range(K // 128):
+                temp_trans[b, i, j] = temp[b, i * 128 : i * 128 + 128, j * 64 : j * 64 + 64]
+                temp_E[b, i, j] = sparse_idx[b, i * 128 : i * 128 + 128, j * 32 : j * 32 + 32]
+
     return temp_trans, temp_E
+
 
 class TestWFp8Afp8SparseGemm(unittest.TestCase):
     def test_wfp8afp8_sparse_gemm(self):
@@ -125,10 +131,8 @@ class TestWFp8Afp8SparseGemm(unittest.TestCase):
 
         weight_quant, pack_weight = sparse(weight_quant, sparse_idx)
 
-
         weight_quant = paddle.to_tensor(weight_quant)
         out_naive = wfp8afp8_gemm_naive(input_fp8, weight_quant, tokens, weight_scale, BATCH, N)
-
 
         pack_weight, convert_sparse_idx = convert(pack_weight, sparse_idx, K)
 
@@ -141,17 +145,19 @@ class TestWFp8Afp8SparseGemm(unittest.TestCase):
         out_pd = paddle.zeros([all_tokens, N], dtype="bfloat16")
 
         wfp8afp8_sparse_gemm(
-            input_fp8, 
-            convert_sparse_idx, 
-            pack_weight.reshape([BATCH, N, K // 2]), 
+            input_fp8,
+            convert_sparse_idx,
+            pack_weight.reshape([BATCH, N, K // 2]),
             tokens_perfix_sum if TokenPadding == 0 else tokens,
-            1 / weight_scale, 
+            1 / weight_scale,
             out_pd,
             int(TokenPadding),
             int(tokens_per_group),
-            True)
+            True,
+        )
 
         print((out_pd - out_naive).abs().max())
+
 
 if __name__ == "__main__":
     unittest.main()

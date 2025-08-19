@@ -51,7 +51,7 @@ struct PackedHalf<cutlass::bfloat16_t> {
 
 template <class PointerType>
 __device__ GmmaDescriptor make_smem_desc(
-        PointerType smem_ptr, 
+        PointerType smem_ptr,
         int layout_type,
         int leading_byte_offset = 0,
         int stride_byte_offset = 1024) {
@@ -73,7 +73,7 @@ __forceinline__ __device__ static void gemm(uint64_t const& desc_a, uint64_t con
 
 template <typename Mma, int kBlockK, int NumMmaThreads, typename T>
 __forceinline__ __device__ void gemm(
-        const T * sA, 
+        const T * sA,
         const T * sB,
         float * acc_c,
         const uint32_t *E) {

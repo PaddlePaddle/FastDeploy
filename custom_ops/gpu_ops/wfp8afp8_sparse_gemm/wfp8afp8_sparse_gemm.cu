@@ -34,7 +34,7 @@ void DisPatchWFp8AFp8Gemm(
         const int M,
         const int K,
         cudaStream_t stream) {
-    
+
     const int max_tokens_pack32 = (max_tokens + 31) / 32 * 32;
 
     int kBlockN = 256;
