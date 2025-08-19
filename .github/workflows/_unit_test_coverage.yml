@@ -159,6 +159,7 @@ jobs:
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          export COVERAGE_PROCESS_START=/workspace/FastDeploy/scripts/.coveragerc
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
