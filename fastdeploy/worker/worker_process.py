@@ -192,17 +192,13 @@ class PaddleDisWorkerProc:
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
 
-        if self.parallel_config.local_data_parallel_id == 0:
-            current_suffix = self.parallel_config.engine_pid
-        else:
-            current_suffix = self.parallel_config.engine_worker_queue_port
         # init worker_healthy_live_signal
         workers_alive = np.zeros(shape=[min(array_size, self.parallel_config.tensor_parallel_size)], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
             dtype=np.int32,
-            suffix=current_suffix,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -214,7 +210,7 @@ class PaddleDisWorkerProc:
             name="model_weights_status",
             array=workers_model_weights,
             dtype=np.int32,
-            suffix=current_suffix,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
@@ -224,7 +220,7 @@ class PaddleDisWorkerProc:
             name="exist_task_signal",
             array=workers_exist_task,
             dtype=np.int32,
-            suffix=current_suffix,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
@@ -234,7 +230,7 @@ class PaddleDisWorkerProc:
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
             dtype=np.int32,
-            suffix=current_suffix,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
@@ -244,7 +240,7 @@ class PaddleDisWorkerProc:
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
             dtype=np.int32,
-            suffix=current_suffix,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
