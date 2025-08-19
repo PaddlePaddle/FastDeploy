@@ -24,19 +24,18 @@ from fastdeploy.utils import data_processor_logger
 
 class QwenVLProcessor(TextProcessor):
     """
-    Processor for Qwen Vision-Language models that handles multimodal inputs.
+    Qwen Vision-Language processor for handling multimodal inputs.
 
-    Inherits from ErnieProcessor and extends functionality for:
+    This processor extends TextProcessor to support:
     - Image and video processing
-    - Multimodal request handling
-    - Generation configuration
+    - Multimodal feature extraction
+    - Tokenization and position encoding
+    - Request processing and model input generation
 
     Attributes:
-        processor: Underlying DataProcessor instance
-        tokenizer: Text tokenizer
-        generation_config: Model generation configuration
-        eos_token_ids: End-of-sequence token IDs
-        limit_mm_per_prompt: Limits for multimodal inputs
+        processor (DataProcessor): Underlying data processor instance
+        tokenizer: Text tokenizer instance
+        limit_mm_per_prompt (dict): Limits for multimodal inputs per prompt
     """
 
     def __init__(
@@ -49,14 +48,15 @@ class QwenVLProcessor(TextProcessor):
         tool_parser_obj=None,
     ):
         """
-        Initialize QwenVLProcessor.
+        Initialize QwenVLProcessor instance.
 
         Args:
-            config: Model configuration
-            model_name_or_path: Path to pretrained model
-            limit_mm_per_prompt: Limits for multimodal inputs per prompt
-            mm_processor_kwargs: Additional kwargs for multimodal processor
-            reasoning_parser_obj: Optional reasoning parser
+            config: Model configuration object
+            model_name_or_path (str): Pretrained model name or path
+            limit_mm_per_prompt (dict, optional): Limits for multimodal inputs
+            mm_processor_kwargs (dict, optional): Multimodal processor arguments
+            reasoning_parser_obj: Reasoning parser instance
+            tool_parser_obj: Tool parser instance
         """
         super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj)
 
@@ -73,12 +73,12 @@ class QwenVLProcessor(TextProcessor):
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """
-        Process incoming request into model inputs.
+        Process incoming request and generate model inputs.
 
         Args:
             request: Input request object
-            max_model_len: Maximum model context length
-            **kwargs: Additional processing arguments
+            max_model_len (int, optional): Maximum context length
+            **kwargs: Additional processing parameters
 
         Returns:
             Request: Processed request with model inputs
@@ -92,16 +92,16 @@ class QwenVLProcessor(TextProcessor):
 
     def _parse_processor_kwargs(self, kwargs):
         """
-        Parse and validate multimodal processor kwargs.
+        Parse and validate multimodal processor arguments.
 
         Args:
-            kwargs: Input kwargs dictionary
+            kwargs (dict): Processor configuration arguments
 
         Returns:
-            dict: Validated processor kwargs
+            dict: Validated processor arguments
 
         Raises:
-            ValueError: If kwargs format is invalid
+            ValueError: If arguments format is invalid
         """
         if not kwargs:
             return {}
@@ -134,7 +134,7 @@ class QwenVLProcessor(TextProcessor):
         Parse and validate multimodal input limits.
 
         Args:
-            limits: Input limits dictionary
+            limits (dict): Input limits configuration
 
         Returns:
             dict: Validated limits with defaults
@@ -161,7 +161,7 @@ class QwenVLProcessor(TextProcessor):
         Validate multimodal inputs against configured limits.
 
         Args:
-            item: Input request item to check
+            item: Input request item to validate
 
         Raises:
             ValueError: If input exceeds configured limits
@@ -176,9 +176,9 @@ class QwenVLProcessor(TextProcessor):
             for message in item:
                 if isinstance(message.get("content"), list):
                     for part in message["content"]:
-                        if part.get("type") == "image":
+                        if part.get("type") in ["image_url", "image"]:
                             mm_data["image"].append(part)
-                        elif part.get("type") == "video":
+                        elif part.get("type") in ["video_url", "video"]:
                             mm_data["video"].append(part)
 
         for modality, data in mm_data.items():
@@ -192,8 +192,8 @@ class QwenVLProcessor(TextProcessor):
         Process request dictionary into model inputs.
 
         Args:
-            request: Input request dictionary
-            max_model_len: Maximum model context length
+            request (dict): Input request dictionary
+            max_model_len (int, optional): Maximum context length
 
         Returns:
             dict: Processed request with model inputs
@@ -253,6 +253,13 @@ class QwenVLProcessor(TextProcessor):
         return request
 
     def append_generated_tokens(self, outputs, generated_token_ids):
+        """
+        Append generated tokens to existing outputs.
+
+        Args:
+            outputs: Current model outputs
+            generated_token_ids: Generated tokens to append
+        """
         out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
         self.processor._add_text(generated_token_ids, out)
 
@@ -263,11 +270,20 @@ class QwenVLProcessor(TextProcessor):
             [outputs["token_type_ids"], np.array(out["token_type_ids"], dtype=np.int64)], axis=0
         )
         outputs["position_ids"] = np.concatenate(
-            [outputs["position_ids"], out["position_ids"]], axis=1, dtype=np.int64
+            [outputs["position_ids"], out["position_ids"][0]], axis=1, dtype=np.int64
         )
         outputs["cur_position"] = out["cur_position"]
 
     def pack_outputs(self, outputs):
+        """
+        Prepare final output dictionary for model.
+
+        Args:
+            outputs: Intermediate processing outputs
+
+        Returns:
+            dict: Packed output dictionary with all required fields
+        """
         outputs["image_patch_id"] = self.processor.image_token_id
         outputs["video_patch_id"] = self.processor.video_token_id
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)

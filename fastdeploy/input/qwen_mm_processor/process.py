@@ -101,6 +101,21 @@ class DataProcessor:
         }
 
     def _pack_outputs(self, outputs):
+        """
+        Pack and convert all output data into numpy arrays with appropriate types.
+
+        Args:
+            outputs (dict): Dictionary containing model outputs with keys:
+                - images: List of visual features
+                - grid_thw: List of spatial dimensions
+                - image_type_ids: List of content type indicators
+                - input_ids: List of token IDs
+                - token_type_ids: List of type identifiers
+                - position_ids: List of position embeddings
+
+        Returns:
+            dict: Processed outputs with all values converted to numpy arrays
+        """
         # Process visual outputs - stack if exists or set to None if empty
         if not outputs["images"]:
             outputs["images"] = None  # No images case
@@ -188,6 +203,21 @@ class DataProcessor:
 
         return self._pack_outputs(outputs)
 
+    def _parse_chat_messages(self, request):
+        """
+        Parse chat messages from request into structured format.
+
+        Args:
+            request (dict): Input request containing chat messages
+
+        Returns:
+            list: Parsed list of message dictionaries with:
+                - role (str): Message role (user/assistant)
+                - content (str): Message text content
+                - images (list, optional): List of image data if present
+        """
+        return parse_chat_messages(request.get("messages"))
+
     def request2ids(
         self, request: Dict[str, Any], tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
@@ -218,7 +248,7 @@ class DataProcessor:
         }
 
         # Parse and validate chat messages
-        messages = parse_chat_messages(request.get("messages"))
+        messages = self._parse_chat_messages(request)
         image_message_list = []  # Store visual content messages
 
         for msg in messages:
@@ -234,11 +264,14 @@ class DataProcessor:
             for item in content_items:
                 if isinstance(item, dict) and item.get("type") in ["image", "video"]:
                     image_message_list.append(item)
+
+        raw_messages = request["messages"]
         request["messages"] = messages
 
         prompt_token_ids = self.apply_chat_template(request)
         if len(prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
+        request["messages"] = raw_messages
 
         vision_start_index = 0
         vision_message_index = 0
@@ -376,17 +409,17 @@ class DataProcessor:
         self, start_pos: int, t: int, h: int, w: int, second_per_grid_t: float
     ) -> np.ndarray:
         """
-        Generate 3D positional embeddings for visual content.
+        Generate 3D position IDs for visual inputs.
 
         Args:
-            start_pos: Starting position index
-            t: Temporal dimension (frames)
+            start_pos: Base position in sequence
+            t: Temporal patches (1 for images)
             h: Height in patches
             w: Width in patches
-            second_per_grid_t: Seconds per temporal grid
+            second_per_grid_t: Time per temporal patch
 
         Returns:
-            numpy.ndarray: 3D position IDs shaped (3, t*h*w)
+            np.ndarray: Position IDs for [t,h,w] dimensions
         """
         h //= self.spatial_conv_size
         w //= self.spatial_conv_size
@@ -478,6 +511,7 @@ class DataProcessor:
             add_generation_prompt=request.get("add_generation_prompt", True),
         )
         prompt_token_str = raw_prompt.replace(self.image_token, "").replace(self.video_token, "")
+        request["text_after_process"] = raw_prompt
 
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
