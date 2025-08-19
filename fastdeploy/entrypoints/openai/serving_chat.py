@@ -49,12 +49,13 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, pid, ips, max_waiting_time, chat_template):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
         self.max_waiting_time = max_waiting_time
         self.host_ip = get_host_ip()
+        self.chat_template = chat_template
         if self.master_ip is not None:
             if isinstance(self.master_ip, list):
                 self.master_ip = self.master_ip[0]
@@ -86,6 +87,8 @@ class OpenAIServingChat:
         text_after_process = None
         try:
             current_req_dict = request.to_dict_for_infer(request_id)
+            if "chat_template" not in current_req_dict:
+                current_req_dict["chat_template"] = self.chat_template
             current_req_dict["arrival_time"] = time.time()
             prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
             text_after_process = current_req_dict.get("text_after_process")
