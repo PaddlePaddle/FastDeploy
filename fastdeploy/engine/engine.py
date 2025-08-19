@@ -109,8 +109,7 @@ class LLMEngine:
         start_time = time.time()
 
         self.api_server_pid = api_server_pid
-        self.engine_pid = os.getpid()
-        self.ipc_signal_suffix = self.engine_pid if self.api_server_pid is None else self.api_server_pid
+        self.ipc_signal_suffix = self.cfg.engine_worker_queue_port[0]
         self._init_worker_signals()
 
         self.data_processor = self.input_processor.create_processor()
@@ -445,7 +444,7 @@ class LLMEngine:
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
             f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
             f" --pad_token_id {self.data_processor.pad_token_id}"
-            f" --engine_pid {self.engine_pid}"
+            f" --engine_pid {self.cfg.engine_worker_queue_port[0]}"
             f" --max_num_batched_tokens {self.cfg.max_num_batched_tokens}"
             f" --splitwise_role {self.cfg.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
@@ -600,20 +599,19 @@ class LLMEngine:
             self.engine.scheduler.start(role, host_ip, disaggregate)
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
-            time.sleep(1)
             if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
                 self.dp_processed = []
                 for i in range(
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
-                    time.sleep(1)
+                    time.sleep(3)
                     self.dp_processed.append(
                         multiprocessing.Process(
                             target=start_data_parallel_service,
                             args=(
                                 self.cfg,
-                                i + self.cfg.node_rank * self.cfg.worker_num_per_node,
+                                i,
                             ),
                         )
                     )

@@ -152,19 +152,7 @@ class PaddleDisWorkerProc:
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
-        # Initialize task queue
-        task_address = (
-            self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
-        )
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.task_queue = TaskQueue(
-            address=task_address,
-            is_server=False,
-            num_client=self.parallel_config.tensor_parallel_size,
-            client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.expert_parallel_rank,
-        )
 
     def init_health_status(self) -> None:
         """
@@ -439,6 +427,20 @@ class PaddleDisWorkerProc:
     def init_device(self) -> None:
         """Initialize device and Construct model runner"""
         self.worker.init_device()
+
+    def start_queue_service(self):
+        # Initialize task queue
+        task_address = (
+            self.parallel_config.pod_ip,
+            self.parallel_config.engine_worker_queue_port,
+        )
+        self.task_queue = TaskQueue(
+            address=task_address,
+            is_server=False,
+            num_client=self.parallel_config.tensor_parallel_size,
+            client_id=self.parallel_config.tensor_parallel_rank,
+            local_data_parallel_id=self.parallel_config.expert_parallel_rank,
+        )
 
     def load_model(self) -> None:
         """Load weights and create model"""
@@ -772,6 +774,8 @@ def run_worker_proc() -> None:
 
     # Initialize health status
     worker_proc.init_health_status()
+
+    worker_proc.start_queue_service()
 
     # Start event loop
     if fd_config.parallel_config.use_ep:

@@ -198,7 +198,11 @@ class EngineSevice:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
-            if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            if (
+                self.cfg.cache_config.enable_prefix_caching
+                or self.cfg.splitwise_role != "mixed"
+                and self.cfg.parallel_config.local_data_parallel_id == 0
+            ):
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
@@ -726,7 +730,9 @@ class EngineSevice:
             tensor_parallel_size=self.cfg.tensor_parallel_size,
             device_ids=device_ids,
             pod_ip=self.cfg.master_ip,
-            engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+            engine_worker_queue_port=int(
+                self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            ),
             pid_suffix=ipc_signal_suffix,
         )
 

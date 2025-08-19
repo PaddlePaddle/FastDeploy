@@ -78,7 +78,9 @@ class IPCSignal:
             name = name + f".{suffix}"
 
         if create:
-            assert not shared_memory_exists(name), f"ShareMemory: {name} already exists"
+            if shared_memory_exists(name):
+                print(f"ShareMemory: {name} already exists, delete it")
+                SharedMemory(name=name, create=False).unlink()
             self.shm = SharedMemory(create=True, size=array.nbytes, name=name)
             self.value: np.ndarray = np.ndarray(array.shape, dtype=array.dtype, buffer=self.shm.buf)
             self.value[:] = array  # Initialize with input array data

@@ -62,6 +62,7 @@ class ExpertService:
                 )
             else:
                 self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
+        self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 
         self.engine = EngineSevice(self.cfg)
         if self.cfg.scheduler_config.name == "splitwise":
@@ -83,7 +84,7 @@ class ExpertService:
             self.api_server_pid = ipc_signal_suffix
             self.engine.start_zmq_service(ipc_signal_suffix)
         else:
-            ipc_signal_suffix = os.getpid()
+            ipc_signal_suffix = self.cfg.engine_worker_queue_port[0]
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
         if self.cfg.splitwise_role != "mixed":
