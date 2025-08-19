@@ -161,12 +161,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.model_handler = model_handler
     chat_handler = OpenAIServingChat(
-        engine_client,
-        app.state.model_handler,
-        pid,
-        args.ips,
-        args.max_waiting_time,
-        chat_template
+        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,
