@@ -492,8 +492,10 @@ class LLMEngine:
             for x in (
                 request.guided_json,
                 request.guided_regex,
+                request.guided_choice,
                 request.structural_tag,
                 request.guided_grammar,
+                request.guided_json_object,
             )
         )
 
