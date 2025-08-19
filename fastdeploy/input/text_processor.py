@@ -50,6 +50,23 @@ class BaseDataProcessor(ABC):
             )
         )
 
+    def get_enable_thinking(self, enable_thinking=None):
+        """
+        get enable_thinking param
+        1. if enable_thinking is None:
+            1.1 if reasoning_parser is not None, set enable_thinking to True.
+            1.2 if reasoning_parser is None, set enable_thinking to False.
+        2. if reasoning_parser is None but enable_thinking is True, set enable_thinking to False and print warning.
+        """
+        if enable_thinking is None:
+            enable_thinking = False if self.reasoning_parser is None else True
+        if enable_thinking and self.reasoning_parser is None:
+            enable_thinking = False
+            data_processor_logger.warning(
+                "enable_thinking is True, but reasoning_parser is None. " "enable_thinking will be set to False."
+            )
+        return enable_thinking
+
     def _apply_default_parameters(self, request):
         """
         Apply default value for parameters in request
@@ -239,15 +256,6 @@ class DataProcessor(BaseDataProcessor):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 task = request.to_dict()
-                chat_template_kwargs = kwargs.get("chat_template_kwargs")
-                if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in task:
-                                task[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                task.setdefault("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
@@ -313,15 +321,6 @@ class DataProcessor(BaseDataProcessor):
             elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
-                chat_template_kwargs = request.get("chat_template_kwargs")
-                if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in request:
-                                request[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")

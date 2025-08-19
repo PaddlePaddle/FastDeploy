@@ -660,6 +660,13 @@ class ChatCompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.chat_template_kwargs is not None:
+            assert isinstance(
+                self.chat_template_kwargs, dict
+            ), f"chat_template_kwargs must be a dict, but get {type(self.chat_template_kwargs)}"
+            for key, value in self.chat_template_kwargs.items():
+                req_dict[key] = value
+
         return req_dict
 
     @model_validator(mode="before")
