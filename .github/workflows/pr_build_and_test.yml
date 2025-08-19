@@ -84,7 +84,7 @@ jobs:
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
-  accuracy_test:
+  stable_test:
     name: Run Stable Tests
     needs: [clone,build]
     uses: ./.github/workflows/_stable_test.yml
