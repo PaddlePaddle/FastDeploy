@@ -258,7 +258,6 @@ class LLMEngine:
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")
 
-
     def _worker_processes_ready(self):
         """
         judge if all worker processes are ready
