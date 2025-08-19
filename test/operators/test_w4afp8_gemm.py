@@ -101,3 +101,5 @@ else:
 
 gap = (out_cuda - out_naive).abs()
 assert float(gap.mean()) < 0.07
+
+print(gap)
