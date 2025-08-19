@@ -907,7 +907,7 @@ void MultiQueryAppendC8Attention(
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
-    const int num_blocks_x_cpu,
+    const paddle::Tensor &num_blocks_x,
     const int max_seq_len,
     const int max_dec_len,
     const float quant_max_bound,
@@ -927,6 +927,7 @@ void MultiQueryAppendC8Attention(
   auto token_num = meta_data.token_nums;
   auto bsz = meta_data.batch_size;
   auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
+  const int num_blocks_x_cpu = num_blocks_x.data<int>()[0];
 
   constexpr uint32_t num_warps = 4;
   constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
@@ -1513,7 +1514,7 @@ void CascadeAppendAttentionC8Kernel(
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
-    const int num_blocks,
+    const paddle::Tensor& num_blocks,
     const int block_shape_q,
     const int max_seq_len,
     const int max_dec_len,

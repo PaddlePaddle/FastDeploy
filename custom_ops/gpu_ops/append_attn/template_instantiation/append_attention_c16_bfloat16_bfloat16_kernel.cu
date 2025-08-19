@@ -42,7 +42,7 @@ template void CascadeAppendAttentionC16Kernel<paddle::bfloat16, paddle::bfloat16
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
-    const int num_blocks,
+    const paddle::Tensor& num_blocks,
     const int block_shape_q,
     const int max_seq_len,
     const int max_dec_len,

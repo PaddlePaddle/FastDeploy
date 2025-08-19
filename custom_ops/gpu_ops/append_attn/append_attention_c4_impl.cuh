@@ -970,7 +970,7 @@ void MultiQueryAppendC4Attention(
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
-    const int num_blocks_x_cpu,
+    const paddle::Tensor &num_blocks_x,
     const int max_seq_len,
     const int max_dec_len,
     const float quant_max_bound,
@@ -1000,6 +1000,7 @@ void MultiQueryAppendC4Attention(
   auto *allocator = paddle::GetAllocator(qkv.place());
 
   const float scale = 1.f / sqrt(HEAD_DIM);
+  const int num_blocks_x_cpu = num_blocks_x.data<int>()[0];
 
   if constexpr (NUM_WARP_Q == 4) {
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16;
@@ -1541,7 +1542,7 @@ void CascadeAppendAttentionC4Kernel(
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
-    const int num_blocks,
+    const paddle::Tensor& num_blocks,
     const int block_shape_q,
     const int max_seq_len,
     const int max_dec_len,

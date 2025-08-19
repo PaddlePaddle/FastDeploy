@@ -418,6 +418,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const float quant_min_bound,
     const float in_scale,
     const uint32_t chunk_size,
+    const int *__restrict__ num_blocks_x,
+    const uint32_t kv_num_heads,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
                                     // num_heads, head_dim]
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
@@ -427,330 +429,333 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   static_assert(NUM_WARP_Q == 1, "NUM_WARP_Q must be 1");
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
-  const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
-  const uint32_t kv_num_heads = gridDim.z;
-  const uint32_t q_num_heads = kv_num_heads * GROUP_SIZE;
-  const uint32_t q_head_idx = kv_head_idx * GROUP_SIZE;
-  const uint32_t tid = threadIdx.x, wid = threadIdx.y;
-  const uint32_t num_chunks = gridDim.y;
-  const uint32_t chunk_idx = blockIdx.y;
-
-  const uint32_t batch_id = batch_ids[btid];
-  const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
-  const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
+  const uint32_t num_chunks = div_up(max_seq_len, chunk_size);
+  const uint32_t num_blocks_total_q = static_cast<uint32_t>(num_blocks_x[0]);
+  const uint32_t total_num_blocks = num_blocks_total_q * num_chunks * kv_num_heads;
+  for(uint32_t bid = blockIdx.x; bid < total_num_blocks; bid += gridDim.x){
+    const uint32_t btid = bid % num_blocks_total_q;
+    const uint32_t chunk_idx = bid / num_blocks_total_q % num_chunks;
+    const uint32_t kv_head_idx = bid / (num_blocks_total_q * num_chunks);
+    const uint32_t q_num_heads = kv_num_heads * GROUP_SIZE;
+    const uint32_t q_head_idx = kv_head_idx * GROUP_SIZE;
+    const uint32_t tid = threadIdx.x, wid = threadIdx.y;
+    const uint32_t batch_id = batch_ids[btid];
+    const uint32_t tile_id = tile_ids_per_batch[btid];
+    const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
 
-  const uint32_t q_len = seq_lens[batch_id];
-  if (q_len <= 0) {
-    return;
-  }
-  const uint32_t q_end =
-      min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
-  uint32_t kv_len = seq_lens_kv[batch_id];
-  if (ENABLE_PREFILL) {
-    kv_len += q_len;
-    if (kv_len <= 0) {
-      return;
+    const uint32_t q_len = seq_lens[batch_id];
+    if (q_len <= 0) {
+      continue;
     }
-  } else {
-    if (kv_len <= 0) {
-      return;
-    }
-    kv_len += q_len;
-  }
-  const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
-  if (chunk_idx >= num_chunks_this_seq) {
-    return;
-  }
-
-  const uint32_t chunk_start = partition_kv ? chunk_idx * chunk_size : 0;
-  const uint32_t chunk_end =
-      partition_kv ? min(kv_len, chunk_start + chunk_size) : kv_len;
-  const uint32_t chunk_len = chunk_end - chunk_start;
-
-  extern __shared__ uint8_t smem[];
-  float s_frag[num_frags_x][num_frags_z][8];
-  float o_frag[num_frags_x][num_frags_y][8];
-  float m_frag[num_frags_x][2];
-  float d_frag[num_frags_x][2];
-  init_states<T, num_frags_x, num_frags_y>(o_frag, m_frag, d_frag);
-
-  const uint32_t q_n_stride = q_num_heads * HEAD_DIM;
-  const uint32_t q_ori_n_stride = (q_num_heads + kv_num_heads * 2) * HEAD_DIM;
-  const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
-  const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
-  const uint32_t kv_b_stride = HEAD_DIM;
-  const uint32_t q_start_seq_id = cu_seqlens_q[batch_id];
-  const uint32_t q_base_seq_id_this_block = tile_id * num_frags_x * 16;
-  const uint32_t q_offset = q_start_seq_id * q_ori_n_stride +
-                            q_head_idx * HEAD_DIM +
-                            tid % 8 * num_elems_per_128b<T>();
-  const uint32_t o_offset = q_start_seq_id * q_n_stride +
-                            q_head_idx * HEAD_DIM +
-                            tid % 8 * num_elems_per_128b<T>();
-  T *q_base_ptr = q + q_offset;
-  T *o_base_ptr_T = nullptr;
-  OutT *o_base_ptr_int8 = nullptr;
-  if (num_chunks_this_seq <= 1) {
-    o_base_ptr_int8 = out + o_offset;
-  } else {
+    const uint32_t q_end =
+        min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
+    uint32_t kv_len = seq_lens_kv[batch_id];
     if (ENABLE_PREFILL) {
-      o_base_ptr_T = tmp_workspace + batch_id * num_chunks * q_n_stride +
-                     chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-                     tid % 8 * num_elems_per_128b<T>();
+      kv_len += q_len;
+      if (kv_len <= 0) {
+        continue;
+      }
     } else {
-      o_base_ptr_T =
-          tmp_workspace +
-          batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
-          chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-          tid % 8 * num_elems_per_128b<T>();
+      if (kv_len <= 0) {
+        continue;
+      }
+      kv_len += q_len;
     }
-  }
-  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
-  smem_t qo_smem(smem);
+    const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
+    if (chunk_idx >= num_chunks_this_seq) {
+      return;
+    }
 
-  uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
-      tid % 16, tid / 16);  // 16 * 16
-  load_q_global_smem_multi_warps<GROUP_SIZE,
-                                 num_frags_x,
-                                 num_frags_y,
-                                 HEAD_DIM,
-                                 T>(q_base_ptr,
-                                    &qo_smem,
-                                    q_base_seq_id_this_block,
-                                    q_end,
-                                    q_ori_n_stride,
-                                    HEAD_DIM);
-  commit_group();
-  wait_group<0>();
-  __syncthreads();
+    const uint32_t chunk_start = partition_kv ? chunk_idx * chunk_size : 0;
+    const uint32_t chunk_end =
+        partition_kv ? min(kv_len, chunk_start + chunk_size) : kv_len;
+    const uint32_t chunk_len = chunk_end - chunk_start;
 
-  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
-      &qo_smem, scale);
+    extern __shared__ uint8_t smem[];
+    float s_frag[num_frags_x][num_frags_z][8];
+    float o_frag[num_frags_x][num_frags_y][8];
+    float m_frag[num_frags_x][2];
+    float d_frag[num_frags_x][2];
+    init_states<T, num_frags_x, num_frags_y>(o_frag, m_frag, d_frag);
 
-  smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
-      v_smem(smem + (num_frags_x + NUM_WARP_KV * num_frags_z) * 16 * HEAD_DIM *
-                        sizeof(T));
+    const uint32_t q_n_stride = q_num_heads * HEAD_DIM;
+    const uint32_t q_ori_n_stride = (q_num_heads + kv_num_heads * 2) * HEAD_DIM;
+    const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
+    const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
+    const uint32_t kv_b_stride = HEAD_DIM;
+    const uint32_t q_start_seq_id = cu_seqlens_q[batch_id];
+    const uint32_t q_base_seq_id_this_block = tile_id * num_frags_x * 16;
+    const uint32_t q_offset = q_start_seq_id * q_ori_n_stride +
+                              q_head_idx * HEAD_DIM +
+                              tid % 8 * num_elems_per_128b<T>();
+    const uint32_t o_offset = q_start_seq_id * q_n_stride +
+                              q_head_idx * HEAD_DIM +
+                              tid % 8 * num_elems_per_128b<T>();
+    T *q_base_ptr = q + q_offset;
+    T *o_base_ptr_T = nullptr;
+    OutT *o_base_ptr_int8 = nullptr;
+    if (num_chunks_this_seq <= 1) {
+      o_base_ptr_int8 = out + o_offset;
+    } else {
+      if (ENABLE_PREFILL) {
+        o_base_ptr_T = tmp_workspace + batch_id * num_chunks * q_n_stride +
+                      chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+                      tid % 8 * num_elems_per_128b<T>();
+      } else {
+        o_base_ptr_T =
+            tmp_workspace +
+            batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
+            chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+            tid % 8 * num_elems_per_128b<T>();
+      }
+    }
+    const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
+    smem_t qo_smem(smem);
 
-  const uint32_t num_iterations = div_up(
-      CAUSAL
-          ? (min(chunk_len,
-                 sub_if_greater_or_zero(
-                     kv_len - q_len +
-                         div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
-                     chunk_start)))
-          : chunk_len,
-      NUM_WARP_KV * num_frags_z * 16);
-  const uint32_t mask_check_iteration =
-      (CAUSAL ? (min(chunk_len,
-                     sub_if_greater_or_zero(
-                         kv_len - q_len +
-                             tile_id * num_rows_per_block / GROUP_SIZE,
-                         chunk_start)))
-              : mask_offset ? 0 : chunk_len) /
-      (NUM_WARP_KV * num_frags_z * 16);
-
-  uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
-      wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
-
-  uint32_t v_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
-      wid * num_frags_z * 16 + tid % 16, tid / 16);
-  uint32_t kv_smem_offset_w = smem_t::get_permuted_offset<num_vecs_per_head>(
-      wid * 4 + tid / 8, tid % 8);
-
-  uint32_t kv_idx_base = chunk_start;
-  int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
-  const uint32_t const_offset = kv_head_idx * kv_h_stride +
-                                (wid * 4 + tid / 8) * kv_b_stride +
-                                tid % 8 * num_elems_per_128b<T>();
-  T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-  T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
-
-  produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(k_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
-  commit_group();
-
-  produce_kv_blockwise<SharedMemFillMode::kFillZero,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(v_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_v_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
-  commit_group();
-
-#pragma unroll 1
-  for (uint32_t iter = 0; iter < num_iterations; ++iter) {
-    wait_group<1>();
+    uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
+        tid % 16, tid / 16);  // 16 * 16
+    load_q_global_smem_multi_warps<GROUP_SIZE,
+                                  num_frags_x,
+                                  num_frags_y,
+                                  HEAD_DIM,
+                                  T>(q_base_ptr,
+                                      &qo_smem,
+                                      q_base_seq_id_this_block,
+                                      q_end,
+                                      q_ori_n_stride,
+                                      HEAD_DIM);
+    commit_group();
+    wait_group<0>();
     __syncthreads();
 
-    // s = qk
-    compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
-        &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
-    // mask according to kv_idx and q_idx
-    if (iter >= mask_check_iteration) {
-      mask_s<T,
-             partition_kv,
-             CAUSAL,
-             GROUP_SIZE,
-             NUM_WARPS,
-             num_frags_x,
-             num_frags_y,
-             num_frags_z>(q_base_seq_id_this_block,
-                          kv_idx_base + wid * num_frags_z * 16,
-                          q_len,
-                          kv_len,
-                          chunk_end,
-                          s_frag,
-                          mask_offset_this_seq);
-    }
+    q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
+        &qo_smem, scale);
 
-    // update m,d
-    update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
-        s_frag, o_frag, m_frag, d_frag);
-    __syncthreads();
+    smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
+        v_smem(smem + (num_frags_x + NUM_WARP_KV * num_frags_z) * 16 * HEAD_DIM *
+                          sizeof(T));
 
-    kv_idx_base += NUM_WARP_KV * num_frags_z * 16;
-    block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
-    if (block_id < 0) {
-      block_id = 0;
-    }
-    cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
+    const uint32_t num_iterations = div_up(
+        CAUSAL
+            ? (min(chunk_len,
+                  sub_if_greater_or_zero(
+                      kv_len - q_len +
+                          div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
+                      chunk_start)))
+            : chunk_len,
+        NUM_WARP_KV * num_frags_z * 16);
+    const uint32_t mask_check_iteration =
+        (CAUSAL ? (min(chunk_len,
+                      sub_if_greater_or_zero(
+                          kv_len - q_len +
+                              tile_id * num_rows_per_block / GROUP_SIZE,
+                          chunk_start)))
+                : mask_offset ? 0 : chunk_len) /
+        (NUM_WARP_KV * num_frags_z * 16);
+
+    uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
+        wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
+
+    uint32_t v_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
+        wid * num_frags_z * 16 + tid % 16, tid / 16);
+    uint32_t kv_smem_offset_w = smem_t::get_permuted_offset<num_vecs_per_head>(
+        wid * 4 + tid / 8, tid % 8);
+
+    uint32_t kv_idx_base = chunk_start;
+    int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
+    const uint32_t const_offset = kv_head_idx * kv_h_stride +
+                                  (wid * 4 + tid / 8) * kv_b_stride +
+                                  tid % 8 * num_elems_per_128b<T>();
+    T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
+    T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+
     produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(k_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
+                        NUM_WARPS,
+                        BLOCK_SIZE,
+                        num_frags_y,
+                        num_frags_z,
+                        NUM_WARP_Q>(k_smem,
+                                    &kv_smem_offset_w,
+                                    &cache_k_now,
+                                    kv_head_idx,
+                                    kv_n_stride,
+                                    kv_h_stride,
+                                    kv_b_stride,
+                                    kv_idx_base,
+                                    chunk_end);
     commit_group();
-    wait_group<1>();
-    __syncthreads();
 
-    // compute sfm*v
-    compute_sfm_v<num_frags_x, num_frags_y, num_frags_z, T>(
-        &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
-    __syncthreads();
-
-    cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kFillZero,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(v_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_v_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
+                        NUM_WARPS,
+                        BLOCK_SIZE,
+                        num_frags_y,
+                        num_frags_z,
+                        NUM_WARP_Q>(v_smem,
+                                    &kv_smem_offset_w,
+                                    &cache_v_now,
+                                    kv_head_idx,
+                                    kv_n_stride,
+                                    kv_h_stride,
+                                    kv_b_stride,
+                                    kv_idx_base,
+                                    chunk_end);
     commit_group();
-  }
-  wait_group<0>();
-  __syncthreads();
 
-  merge_block_res_v2<num_frags_x, num_frags_y, T>(
-      o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
+  #pragma unroll 1
+    for (uint32_t iter = 0; iter < num_iterations; ++iter) {
+      wait_group<1>();
+      __syncthreads();
 
-  if (num_chunks_this_seq <= 1) {
-    normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
-  }
+      // s = qk
+      compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
+          &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
+      // mask according to kv_idx and q_idx
+      if (iter >= mask_check_iteration) {
+        mask_s<T,
+              partition_kv,
+              CAUSAL,
+              GROUP_SIZE,
+              NUM_WARPS,
+              num_frags_x,
+              num_frags_y,
+              num_frags_z>(q_base_seq_id_this_block,
+                            kv_idx_base + wid * num_frags_z * 16,
+                            q_len,
+                            kv_len,
+                            chunk_end,
+                            s_frag,
+                            mask_offset_this_seq);
+      }
 
-  // write o
-  // [num_frags_x, 16, num_frags_y, 16]
-  if (num_chunks_this_seq <= 1) {
-    write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
-                                                    num_frags_x,
-                                                    num_frags_y,
-                                                    false>(
-        o_frag,
-        &qo_smem,
-        o_base_ptr_int8,
-        shift_bias,
-        smooth_weight,
-        q_base_seq_id_this_block,
-        q_head_idx,
-        quant_max_bound,
-        quant_min_bound,
-        in_scale,
-        q_len,
-        q_n_stride,
-        HEAD_DIM);
-  } else {
-    write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
-                                                    num_frags_x,
-                                                    num_frags_y,
-                                                    partition_kv>(
-        o_frag,
-        &qo_smem,
-        o_base_ptr_T,
-        shift_bias,
-        smooth_weight,
-        q_base_seq_id_this_block,
-        q_head_idx,
-        quant_max_bound,
-        quant_min_bound,
-        in_scale,
-        q_len,
-        q_n_stride * num_chunks,
-        HEAD_DIM);
-  }
+      // update m,d
+      update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
+          s_frag, o_frag, m_frag, d_frag);
+      __syncthreads();
 
-  if (num_chunks_this_seq > 1) {
-    if (wid == 0) {
-#pragma unroll
-      for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
-#pragma unroll
-        for (uint32_t j = 0; j < 2; ++j) {
-          const uint32_t qo_idx_now =
-              q_base_seq_id_this_block + tid / 4 + j * 8 + fx * 16;
-          const uint32_t qo_head_idx = q_head_idx + qo_idx_now % GROUP_SIZE;
-          const uint32_t qo_idx = q_start_seq_id + qo_idx_now / GROUP_SIZE;
+      kv_idx_base += NUM_WARP_KV * num_frags_z * 16;
+      block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
+      if (block_id < 0) {
+        block_id = 0;
+      }
+      cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
+      produce_kv_blockwise<SharedMemFillMode::kNoFill,
+                          NUM_WARPS,
+                          BLOCK_SIZE,
+                          num_frags_y,
+                          num_frags_z,
+                          NUM_WARP_Q>(k_smem,
+                                      &kv_smem_offset_w,
+                                      &cache_k_now,
+                                      kv_head_idx,
+                                      kv_n_stride,
+                                      kv_h_stride,
+                                      kv_b_stride,
+                                      kv_idx_base,
+                                      chunk_end);
+      commit_group();
+      wait_group<1>();
+      __syncthreads();
 
-          if (qo_idx - q_start_seq_id < q_len) {
-            uint32_t offset;
-            if (ENABLE_PREFILL) {
-              offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
-                       qo_head_idx;
-            } else {
-              offset = ((batch_id * speculate_max_draft_token_num +
-                         qo_idx_now / GROUP_SIZE) *
-                            num_chunks +
-                        chunk_idx) *
-                           q_num_heads +
-                       qo_head_idx;
+      // compute sfm*v
+      compute_sfm_v<num_frags_x, num_frags_y, num_frags_z, T>(
+          &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
+      __syncthreads();
+
+      cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+      produce_kv_blockwise<SharedMemFillMode::kFillZero,
+                          NUM_WARPS,
+                          BLOCK_SIZE,
+                          num_frags_y,
+                          num_frags_z,
+                          NUM_WARP_Q>(v_smem,
+                                      &kv_smem_offset_w,
+                                      &cache_v_now,
+                                      kv_head_idx,
+                                      kv_n_stride,
+                                      kv_h_stride,
+                                      kv_b_stride,
+                                      kv_idx_base,
+                                      chunk_end);
+      commit_group();
+    }
+    wait_group<0>();
+    __syncthreads();
+
+    merge_block_res_v2<num_frags_x, num_frags_y, T>(
+        o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
+
+    if (num_chunks_this_seq <= 1) {
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    }
+
+    // write o
+    // [num_frags_x, 16, num_frags_y, 16]
+    if (num_chunks_this_seq <= 1) {
+      write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
+                                                      num_frags_x,
+                                                      num_frags_y,
+                                                      false>(
+          o_frag,
+          &qo_smem,
+          o_base_ptr_int8,
+          shift_bias,
+          smooth_weight,
+          q_base_seq_id_this_block,
+          q_head_idx,
+          quant_max_bound,
+          quant_min_bound,
+          in_scale,
+          q_len,
+          q_n_stride,
+          HEAD_DIM);
+    } else {
+      write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
+                                                      num_frags_x,
+                                                      num_frags_y,
+                                                      partition_kv>(
+          o_frag,
+          &qo_smem,
+          o_base_ptr_T,
+          shift_bias,
+          smooth_weight,
+          q_base_seq_id_this_block,
+          q_head_idx,
+          quant_max_bound,
+          quant_min_bound,
+          in_scale,
+          q_len,
+          q_n_stride * num_chunks,
+          HEAD_DIM);
+    }
+
+    if (num_chunks_this_seq > 1) {
+      if (wid == 0) {
+  #pragma unroll
+        for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+  #pragma unroll
+          for (uint32_t j = 0; j < 2; ++j) {
+            const uint32_t qo_idx_now =
+                q_base_seq_id_this_block + tid / 4 + j * 8 + fx * 16;
+            const uint32_t qo_head_idx = q_head_idx + qo_idx_now % GROUP_SIZE;
+            const uint32_t qo_idx = q_start_seq_id + qo_idx_now / GROUP_SIZE;
+
+            if (qo_idx - q_start_seq_id < q_len) {
+              uint32_t offset;
+              if (ENABLE_PREFILL) {
+                offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
+                        qo_head_idx;
+              } else {
+                offset = ((batch_id * speculate_max_draft_token_num +
+                          qo_idx_now / GROUP_SIZE) *
+                              num_chunks +
+                          chunk_idx) *
+                            q_num_heads +
+                        qo_head_idx;
+              }
+              tmp_m[offset] = m_frag[fx][j];
+              tmp_d[offset] = d_frag[fx][j];
             }
-            tmp_m[offset] = m_frag[fx][j];
-            tmp_d[offset] = d_frag[fx][j];
           }
         }
       }
@@ -783,7 +788,7 @@ void MultiQueryAppendAttention(
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
-    const int num_blocks_x_cpu,
+    const paddle::Tensor &num_blocks_x,
     const int max_seq_len,
     const int max_dec_len,
     const float quant_max_bound,
@@ -847,6 +852,7 @@ void MultiQueryAppendAttention(
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
     const int num_chunks = div_up(max_dec_len, chunk_size);
+    const int num_blocks_x_cpu = num_blocks_x.data<int>()[0];
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
     if (num_chunks <= 1) {
@@ -1070,205 +1076,154 @@ void MultiQueryAppendAttention(
     }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
-    dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
+    // dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
+    dim3 grids(sm_count);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 0) {
-      auto nosplit_kv_kernel =
-          multi_query_append_attention_warp1_4_kernel<NV_TYPE,
-                                                      false,
-                                                      GROUP_SIZE,
-                                                      CAUSAL,
-                                                      num_warps,
-                                                      NUM_WARP_Q,
-                                                      NUM_WARP_KV,
-                                                      HEAD_DIM,
-                                                      BLOCK_SIZE,
-                                                      num_frags_x,
-                                                      num_frags_z,
-                                                      num_frags_y,
-                                                      OUT_NV_TYPE,
-                                                      ENABLE_PREFILL>;
-      if (smem_size >= 48 * 1024) {
-        cudaFuncSetAttribute(nosplit_kv_kernel,
-                             cudaFuncAttributeMaxDynamicSharedMemorySize,
-                             smem_size);
-      }
-
-      nosplit_kv_kernel<<<grids, blocks, smem_size, stream>>>(
-          reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
-          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
-          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
-          shift_bias ? reinterpret_cast<NV_TYPE *>(
-                           const_cast<T *>(shift_bias.get().data<T>()))
-                     : nullptr,
-          smooth_weight ? reinterpret_cast<NV_TYPE *>(
-                              const_cast<T *>(smooth_weight.get().data<T>()))
-                        : nullptr,
-          seq_lens_q.data<int>(),
-          seq_lens_kv.data<int>(),
-          batch_ids.data<int>(),
-          tile_ids_per_batch.data<int>(),
-          cu_seqlens_q.data<int>(),
-          block_table.data<int>(),
-          meta_data.mask_offset,
-          max_seq_len,
-          max_dec_len,
-          max_block_num_per_seq,
-          scale,
-          quant_max_bound,
-          quant_min_bound,
-          in_scale,
-          chunk_size,
-          nullptr,
-          nullptr,
-          nullptr,
-          reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+    phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
+    if (is_decoder) {
+      tmp_workspace = allocator->Allocate(
+          phi::SizeOf(qkv.dtype()) *
+          static_cast<size_t>(bsz * num_chunks * num_heads * HEAD_DIM));
+      tmp_m = allocator->Allocate(
+          phi::SizeOf(paddle::DataType::FLOAT32) *
+          static_cast<size_t>(bsz * num_chunks * num_heads));
+      tmp_d = allocator->Allocate(
+          phi::SizeOf(paddle::DataType::FLOAT32) *
+          static_cast<size_t>(bsz * num_chunks * num_heads));
     } else {
-      phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
-      if (is_decoder) {
-        tmp_workspace = allocator->Allocate(
-            phi::SizeOf(qkv.dtype()) *
-            static_cast<size_t>(bsz * num_chunks * num_heads * HEAD_DIM));
+      if (ENABLE_PREFILL) {
+        tmp_workspace =
+            allocator->Allocate(phi::SizeOf(qkv.dtype()) *
+                                static_cast<size_t>(token_num * num_chunks *
+                                                    num_heads * HEAD_DIM));
         tmp_m = allocator->Allocate(
             phi::SizeOf(paddle::DataType::FLOAT32) *
-            static_cast<size_t>(bsz * num_chunks * num_heads));
+            static_cast<size_t>(token_num * num_chunks * num_heads));
         tmp_d = allocator->Allocate(
             phi::SizeOf(paddle::DataType::FLOAT32) *
-            static_cast<size_t>(bsz * num_chunks * num_heads));
+            static_cast<size_t>(token_num * num_chunks * num_heads));
       } else {
-        if (ENABLE_PREFILL) {
-          tmp_workspace =
-              allocator->Allocate(phi::SizeOf(qkv.dtype()) *
-                                  static_cast<size_t>(token_num * num_chunks *
-                                                      num_heads * HEAD_DIM));
-          tmp_m = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(token_num * num_chunks * num_heads));
-          tmp_d = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(token_num * num_chunks * num_heads));
-        } else {
-          tmp_workspace = allocator->Allocate(
-              phi::SizeOf(qkv.dtype()) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads * HEAD_DIM));
-          tmp_m = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads));
-          tmp_d = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads));
-        }
+        tmp_workspace = allocator->Allocate(
+            phi::SizeOf(qkv.dtype()) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads * HEAD_DIM));
+        tmp_m = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads));
+        tmp_d = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads));
       }
-      split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
-          reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
-          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
-          reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
-          shift_bias ? reinterpret_cast<NV_TYPE *>(
-                            const_cast<T *>(shift_bias.get().data<T>()))
+    }
+    split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+        reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
+        reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
+        reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
+        shift_bias ? reinterpret_cast<NV_TYPE *>(
+                          const_cast<T *>(shift_bias.get().data<T>()))
+                    : nullptr,
+        smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                            const_cast<T *>(smooth_weight.get().data<T>()))
                       : nullptr,
-          smooth_weight ? reinterpret_cast<NV_TYPE *>(
-                              const_cast<T *>(smooth_weight.get().data<T>()))
-                        : nullptr,
-          seq_lens_q.data<int>(),
-          seq_lens_kv.data<int>(),
-          batch_ids.data<int>(),
-          tile_ids_per_batch.data<int>(),
-          cu_seqlens_q.data<int>(),
-          block_table.data<int>(),
-          meta_data.mask_offset,
-          max_seq_len,
-          max_dec_len,
-          max_block_num_per_seq,
-          scale,
-          quant_max_bound,
-          quant_min_bound,
-          in_scale,
-          chunk_size,
-          reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-          static_cast<float *>(tmp_m->ptr()),
-          static_cast<float *>(tmp_d->ptr()),
-          reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+        seq_lens_q.data<int>(),
+        seq_lens_kv.data<int>(),
+        batch_ids.data<int>(),
+        tile_ids_per_batch.data<int>(),
+        cu_seqlens_q.data<int>(),
+        block_table.data<int>(),
+        meta_data.mask_offset,
+        max_seq_len,
+        max_dec_len,
+        max_block_num_per_seq,
+        scale,
+        quant_max_bound,
+        quant_min_bound,
+        in_scale,
+        chunk_size,
+        num_blocks_x.data<int>(),
+        kv_num_heads,
+        reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+        static_cast<float *>(tmp_m->ptr()),
+        static_cast<float *>(tmp_d->ptr()),
+        reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+        speculate_max_draft_token_num);
 
-      // merge
-      constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
-      if (is_decoder) {
-        constexpr int blockx = HEAD_DIM / vec_size;
-        constexpr int blocky = (128 + blockx - 1) / blockx;
-        dim3 grids_merge(bsz, num_heads);
-        dim3 blocks_merge(blockx, blocky);
-        merge_multi_chunks_decoder_kernel<NV_TYPE,
-                                          vec_size,
-                                          blocky,
-                                          HEAD_DIM,
-                                          OUT_NV_TYPE,
-                                          ENABLE_PREFILL>
-            <<<grids_merge, blocks_merge, 0, stream>>>(
-                reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-                static_cast<float *>(tmp_m->ptr()),
-                static_cast<float *>(tmp_d->ptr()),
-                seq_lens_q.data<int>(),
-                seq_lens_kv.data<int>(),
-                seq_lens_encoder.data<int>(),
-                cu_seqlens_q.data<int>(),
-                shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                  const_cast<T *>(shift_bias.get().data<T>()))
+    // merge
+    constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
+    if (is_decoder) {
+      constexpr int blockx = HEAD_DIM / vec_size;
+      constexpr int blocky = (128 + blockx - 1) / blockx;
+      dim3 grids_merge(bsz, num_heads);
+      dim3 blocks_merge(blockx, blocky);
+      merge_multi_chunks_decoder_kernel<NV_TYPE,
+                                        vec_size,
+                                        blocky,
+                                        HEAD_DIM,
+                                        OUT_NV_TYPE,
+                                        ENABLE_PREFILL>
+          <<<grids_merge, blocks_merge, 0, stream>>>(
+              reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+              static_cast<float *>(tmp_m->ptr()),
+              static_cast<float *>(tmp_d->ptr()),
+              seq_lens_q.data<int>(),
+              seq_lens_kv.data<int>(),
+              seq_lens_encoder.data<int>(),
+              cu_seqlens_q.data<int>(),
+              shift_bias ? reinterpret_cast<NV_TYPE *>(
+                                const_cast<T *>(shift_bias.get().data<T>()))
+                          : nullptr,
+              smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
+                                  smooth_weight.get().data<T>()))
                             : nullptr,
-                smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
-                                    smooth_weight.get().data<T>()))
-                              : nullptr,
-                reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-                quant_max_bound,
-                quant_min_bound,
-                in_scale,
-                max_seq_len,
-                num_chunks,
-                num_heads,
-                chunk_size,
-                HEAD_DIM);
-      } else {
-        constexpr int blockx = HEAD_DIM / vec_size;
-        constexpr int blocky = (128 + blockx - 1) / blockx;
-        dim3 grids_merge(min(sm_count * 4, token_num),
-                          num_heads);
-        dim3 blocks_merge(blockx, blocky);
-        merge_multi_chunks_v2_kernel<NV_TYPE,
-                                      vec_size,
-                                      blocky,
-                                      HEAD_DIM,
-                                      OUT_NV_TYPE,
-                                      ENABLE_PREFILL>
-            <<<grids_merge, blocks_merge, 0, stream>>>(
-                reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-                static_cast<float *>(tmp_m->ptr()),
-                static_cast<float *>(tmp_d->ptr()),
-                seq_lens_q.data<int>(),
-                seq_lens_kv.data<int>(),
-                seq_lens_encoder.data<int>(),
-                batch_id_per_token.data<int>(),
-                cu_seqlens_q.data<int>(),
-                shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                  const_cast<T *>(shift_bias.get().data<T>()))
+              reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+              quant_max_bound,
+              quant_min_bound,
+              in_scale,
+              max_seq_len,
+              num_chunks,
+              num_heads,
+              chunk_size,
+              HEAD_DIM);
+    } else {
+      constexpr int blockx = HEAD_DIM / vec_size;
+      constexpr int blocky = (128 + blockx - 1) / blockx;
+      dim3 grids_merge(min(sm_count * 4, token_num),
+                        num_heads);
+      dim3 blocks_merge(blockx, blocky);
+      merge_multi_chunks_v2_kernel<NV_TYPE,
+                                    vec_size,
+                                    blocky,
+                                    HEAD_DIM,
+                                    OUT_NV_TYPE,
+                                    ENABLE_PREFILL>
+          <<<grids_merge, blocks_merge, 0, stream>>>(
+              reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+              static_cast<float *>(tmp_m->ptr()),
+              static_cast<float *>(tmp_d->ptr()),
+              seq_lens_q.data<int>(),
+              seq_lens_kv.data<int>(),
+              seq_lens_encoder.data<int>(),
+              batch_id_per_token.data<int>(),
+              cu_seqlens_q.data<int>(),
+              shift_bias ? reinterpret_cast<NV_TYPE *>(
+                                const_cast<T *>(shift_bias.get().data<T>()))
+                          : nullptr,
+              smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
+                                  smooth_weight.get().data<T>()))
                             : nullptr,
-                smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
-                                    smooth_weight.get().data<T>()))
-                              : nullptr,
-                reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-                quant_max_bound,
-                quant_min_bound,
-                in_scale,
-                max_seq_len,
-                num_chunks,
-                num_heads,
-                chunk_size,
-                HEAD_DIM,
-                token_num,
-                speculate_max_draft_token_num);
-      }
+              reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+              quant_max_bound,
+              quant_min_bound,
+              in_scale,
+              max_seq_len,
+              num_chunks,
+              num_heads,
+              chunk_size,
+              HEAD_DIM,
+              token_num,
+              speculate_max_draft_token_num);
     }
   }
 }
@@ -1302,7 +1257,7 @@ void CascadeAppendAttentionC16Kernel(
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
-    const int num_blocks,
+    const paddle::Tensor& num_blocks,
     const int block_shape_q,
     const int max_seq_len,
     const int max_dec_len,
