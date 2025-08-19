@@ -78,46 +78,46 @@ class OpenAIServingChat:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
-
-        if request.user is not None:
-            request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
-        else:
-            request_id = f"chatcmpl-{uuid.uuid4()}"
-        api_server_logger.info(f"create chat completion request: {request_id}")
-        text_after_process = None
         try:
-            current_req_dict = request.to_dict_for_infer(request_id)
-            if "chat_template" not in current_req_dict:
-                current_req_dict["chat_template"] = self.chat_template
-            current_req_dict["arrival_time"] = time.time()
-            prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
-            text_after_process = current_req_dict.get("text_after_process")
-            if isinstance(prompt_token_ids, np.ndarray):
-                prompt_token_ids = prompt_token_ids.tolist()
-        except Exception as e:
-            return ErrorResponse(code=400, message=str(e))
-
-        del current_req_dict
-        try:
-            api_server_logger.debug(f"{self.engine_client.semaphore.status()}")
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-        except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+            api_server_logger.info(f"current {self.engine_client.semaphore.status()}")
 
-        if request.stream:
-            return self.chat_completion_stream_generator(
-                request, request_id, request.model, prompt_token_ids, text_after_process
-            )
-        else:
+            if request.user is not None:
+                request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
+            else:
+                request_id = f"chatcmpl-{uuid.uuid4()}"
+            api_server_logger.info(f"create chat completion request: {request_id}")
+            text_after_process = None
             try:
-                return await self.chat_completion_full_generator(
-                    request, request_id, request.model, prompt_token_ids, text_after_process
-                )
+                current_req_dict = request.to_dict_for_infer(request_id)
+                if "chat_template" not in current_req_dict:
+                    current_req_dict["chat_template"] = self.chat_template
+                current_req_dict["arrival_time"] = time.time()
+                prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                text_after_process = current_req_dict.get("text_after_process")
+                if isinstance(prompt_token_ids, np.ndarray):
+                    prompt_token_ids = prompt_token_ids.tolist()
             except Exception as e:
                 return ErrorResponse(code=400, message=str(e))
+
+            del current_req_dict
+
+            if request.stream:
+                return self.chat_completion_stream_generator(
+                    request, request_id, request.model, prompt_token_ids, text_after_process
+                )
+            else:
+                try:
+                    return await self.chat_completion_full_generator(
+                        request, request_id, request.model, prompt_token_ids, text_after_process
+                    )
+                except Exception as e:
+                    return ErrorResponse(code=400, message=str(e))
+        except Exception:
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
     def _create_streaming_error_response(self, message: str) -> str:
         error_response = ErrorResponse(
@@ -254,6 +254,7 @@ class OpenAIServingChat:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
+
                     if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
                         tool_delta_message = output["tool_delta_message"]
                         if tool_delta_message is None:
@@ -277,7 +278,6 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         arrival_time=arrival_time,
                     )
-
                     if res["finished"]:
                         num_choices -= 1
                         work_process_metrics.e2e_request_latency.observe(
@@ -309,7 +309,6 @@ class OpenAIServingChat:
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        # 打印尾包
                         if res["finished"]:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
@@ -417,8 +416,9 @@ class OpenAIServingChat:
                 if task_is_finished:
                     break
         finally:
-            self.engine_client.semaphore.release()
             dealer.close()
+            self.engine_client.semaphore.release()
+            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
 
         choices = []
         output = final_res["outputs"]
