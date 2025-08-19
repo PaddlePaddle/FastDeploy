@@ -423,7 +423,7 @@ class GCUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
-        self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -522,7 +522,6 @@ class GCUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -742,7 +741,7 @@ class GCUModelRunner(ModelRunnerBase):
 
             hidden_states = rebuild_padding(
                 model_output,
-                self.share_inputs["cum_offsets"],
+                self.share_inputs["cu_seqlens_q"],
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
@@ -967,7 +966,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         hidden_states = rebuild_padding(
             model_output,
-            self.share_inputs["cum_offsets"],
+            self.share_inputs["cu_seqlens_q"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs["seq_lens_decoder"],
             self.share_inputs["seq_lens_encoder"],
