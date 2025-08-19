@@ -789,10 +789,10 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
 
       using ElementSuperScale = typename Mma::QuantParamsAccessor::ElementSuperScale;
 
-      // static_assert(platform::is_same<ElementSuperScale, cutlass::half_t>::value,
-      //     "ElementSuperScale must be half_t");
+      static_assert(platform::is_same<ElementSuperScale, cutlass::bfloat16_t>::value,
+          "ElementSuperScale must be bfloat16_t");
 
-      // TODO, 多了一个reinterpret_cast
+      // TODO（"baoqiwen"）, reinterpret_cast
       ElementScale* weight_scale_ptr = params.weight_scales + problem_idx * gemm_n;
       typename Mma::QuantParamsAccessor::IteratorSuperScale iterator_super_scale(
           Mma::QuantParamsAccessor::LayoutSuperScale(gemm_n),
@@ -800,7 +800,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
           {1, gemm_n},
           thread_idx,
           tb_offset_scale);
-
+          
       int local_scale_pointer_offset = ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
       int64_t offset_in_bytes = problem_idx * gemm_k * gemm_n / 128;
       uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + offset_in_bytes);

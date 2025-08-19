@@ -501,6 +501,33 @@ void dispatch_gemm_config(const InType* A,
         occupancy);                                             \
     break;
 
+#define dispatch_gemm_config_with_k_macro(AA, BB, CC, DD, EE, FF, GG)  \
+  case CutlassTileConfig::                                             \
+      CtaShape##AA##x##BB##x##CC##_WarpShape##DD##x##EE##x##FF:        \
+    dispatch_gemm_config<InType,                                       \
+                         OutType,                                      \
+                         WeightQuantTraits,                            \
+                         arch,                                         \
+                         EpilogueTag,                                  \
+                         cutlass::gemm::GemmShape<AA, BB, GG>,         \
+                         cutlass::gemm::GemmShape<DD, EE, GG>>(        \
+        A,                                                             \
+        B,                                                             \
+        weight_scales,                                                 \
+        biases,                                                        \
+        C,                                                             \
+        total_rows_before_expert,                                      \
+        total_rows,                                                    \
+        gemm_n,                                                        \
+        gemm_k,                                                        \
+        num_experts,                                                   \
+        quant_args_B,                                                  \
+        gemm_config,                                                   \
+        multi_processor_count,                                         \
+        stream,                                                        \
+        occupancy);                                                    \
+    break;
+
 // This overload will handle tensorop gemms. It is disabled via SFINAE for fp32.
 // This overload is only enabled when T == WeightType.
 template <typename InType,
@@ -574,11 +601,12 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
                                   int multi_processor_count,
                                   cudaStream_t stream,
                                   int* occupancy = nullptr) {
+  constexpr int tile_shape_k = 128 * 8 / cutlass::sizeof_bits<InType>::value;
   if constexpr (std::is_same<arch, cutlass::arch::Sm70>::value) {
     if constexpr (WeightQuantTraits::kQuantMethod != cutlass::WintQuantMethod::kWeightOnlyInt2) {
       switch (gemm_config.tile_config) {
-        dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-        dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+        dispatch_gemm_config_with_k_macro(32, 128, 64, 32, 32, 64, tile_shape_k);
+        dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 64, 64, tile_shape_k);
         case CutlassTileConfig::Undefined:
           throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
           break;
@@ -598,31 +626,26 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
               "[dispatch_moe_gemm_to_cutlass] weight_only_int2 does not support sm70.");
     }
   } else {
-    constexpr int tile_shape_k = 128 * 8 / cutlass::sizeof_bits<InType>::value;
-    CUTLASS_TRACE_HOST("tile_shape_k = " << tile_shape_k);
+    // CUTLASS_TRACE_HOST("tile_shape_k = " << tile_shape_k);
     CUTLASS_TRACE_HOST("Current tile_config value = " << static_cast<int>(gemm_config.tile_config));
 
             
     switch (gemm_config.tile_config) {
       // dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
-      dispatch_gemm_config_macro(16, 256, 128, 16, 64, 128);
+      // dispatch_gemm_config_macro(16, 256, 128, 16, 64, 128);
+      // dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
 
-      // if (tile_shape_k == 64) {
-      //       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-      // } else if (tile_shape_k == 128){
-      //       dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
-      // }
-      // dispatch_gemm_config_macro(16, 128, tile_shape_k, 16, 32, tile_shape_k);
-      // dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
-      // dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
-      // dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-      // dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
-      // dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
-      // dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
-      // dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
-      // dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
-      // dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
-      // dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_with_k_macro(16, 128, 64, 16, 32, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(16, 256, 64, 16, 64, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(64, 64, 64, 32, 32, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(32, 128, 64, 32, 32, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(128, 64, 64, 64, 32, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 64, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(128, 128, 64, 64, 64, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(128, 128, 64, 128, 32, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(128, 256, 64, 64, 64, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 32, 64, tile_shape_k);
+      // dispatch_gemm_config_with_k_macro(256, 128, 64, 64, 64, 64, tile_shape_k);
       case CutlassTileConfig::Undefined:
         throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
         break;
@@ -637,46 +660,6 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
             "mixed type tensorop GEMM.");
         break;
     }
-
-    // if (tile_shape_k == 64) {
-    // switch (gemm_config.tile_config) {
-    //   // dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
-    //   dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-
-    //   case CutlassTileConfig::Undefined:
-    //     throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
-    //     break;
-    //   case CutlassTileConfig::ChooseWithHeuristic:
-    //     throw std::runtime_error(
-    //         "[dispatch_moe_gemm_to_cutlass] gemm config should have "
-    //         "already been set by heuristic.");
-    //     break;
-    //   default:
-    //     throw std::runtime_error(
-    //         "[dispatch_moe_gemm_to_cutlass] Config is invalid for "
-    //         "mixed type tensorop GEMM.");
-    //     break;
-    // }    
-    // } else if (tile_shape_k == 128) {
-    //     switch (gemm_config.tile_config) {
-    //   dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
-
-    //   case CutlassTileConfig::Undefined:
-    //     throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
-    //     break;
-    //   case CutlassTileConfig::ChooseWithHeuristic:
-    //     throw std::runtime_error(
-    //         "[dispatch_moe_gemm_to_cutlass] gemm config should have "
-    //         "already been set by heuristic.");
-    //     break;
-    //   default:
-    //     throw std::runtime_error(
-    //         "[dispatch_moe_gemm_to_cutlass] Config is invalid for "
-    //         "mixed type tensorop GEMM.");
-    //     break;
-    // }
-    // }
-
   }
 }
 

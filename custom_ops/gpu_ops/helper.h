@@ -42,6 +42,7 @@ namespace cub = hipcub;
 #endif
 #include <fstream>
 #include <iostream>
+#include <cutlass/numeric_types.h>
 
 #include "env.h"
 #include "paddle/extension.h"

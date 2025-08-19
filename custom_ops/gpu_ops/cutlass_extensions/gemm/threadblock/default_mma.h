@@ -469,7 +469,7 @@ struct DefaultMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignm
     layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, 2, Operator>
 {
 private:
-    using Mma = DefaultWint2xMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, half_t,
+    using Mma = DefaultWint2xMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, bfloat16_t,
         ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
         WarpShape, InstructionShape, 2, Operator>;
 
@@ -517,7 +517,7 @@ struct DefaultMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignm
     false, SharedMemoryClear>
 {
 private:
-    using Mma = DefaultWint2xMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, half_t,
+    using Mma = DefaultWint2xMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, bfloat16_t,
         ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
         WarpShape, InstructionShape, kStages, Operator, SharedMemoryClear>;
 
