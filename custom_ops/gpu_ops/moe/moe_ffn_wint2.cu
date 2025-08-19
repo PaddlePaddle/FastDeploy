@@ -65,24 +65,68 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         down_proj_quant_args.code_zp_ptr = const_cast<float*>(down_proj_code_zp->data<float>());
     }
 
-    auto moe_gemm_runner = MoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
-    auto stream = permute_input.stream();
+    if constexpr (std::is_same<InNvType, OutNvType>::value) {
 
-    moe_gemm_runner.moe_gemm_bias_act(
-        reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
-        reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
-        reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
-        reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
-        reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
-        const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-        total_rows_in_ll_else_minus1,
-        actual_total_rows,
-        inter_size,
-        hidden_size,
-        num_experts,
-        up_gate_proj_quant_args,
-        "none",
-        stream);
+        auto moe_gemm_runner = MoeGemmRunner<InNvType, WeightOnlyTraits>();
+        auto stream = permute_input.stream();
+
+        moe_gemm_runner.moe_gemm_bias_act(
+            reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
+            reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
+            reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
+            reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
+            reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            total_rows_in_ll_else_minus1,
+            actual_total_rows,
+            inter_size,
+            hidden_size,
+            num_experts,
+            up_gate_proj_quant_args,
+            "none",
+            stream);
+
+    } else {
+
+        auto moe_gemm_runner = MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
+        auto stream = permute_input.stream();
+
+        moe_gemm_runner.moe_gemm_bias_act(
+            reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
+            reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
+            reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
+            reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
+            reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            total_rows_in_ll_else_minus1,
+            actual_total_rows,
+            inter_size,
+            hidden_size,
+            num_experts,
+            up_gate_proj_quant_args,
+            "none",
+            stream);
+
+    }
+
+    // auto moe_gemm_runner = MoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
+    // auto stream = permute_input.stream();
+
+    // moe_gemm_runner.moe_gemm_bias_act(
+    //     reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
+    //     reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
+    //     reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
+    //     reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
+    //     reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+    //     const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+    //     total_rows_in_ll_else_minus1,
+    //     actual_total_rows,
+    //     inter_size,
+    //     hidden_size,
+    //     num_experts,
+    //     up_gate_proj_quant_args,
+    //     "none",
+    //     stream);
 
 //     moe_gemm_runner.moe_gemm_bias_act(
 //         reinterpret_cast<const NvType*>(permute_input.data<DataT>()),
@@ -416,18 +460,18 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
 PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
 // PD_BUILD_OP(moe_expert_ffn_wint2)
   .Inputs({"permute_input",
-             "tokens_expert_prefix_sum",
-             "up_gate_proj_weight",
-             "down_proj_weight",
-             paddle::Optional("up_gate_proj_bias"),
-             paddle::Optional("up_gate_proj_scale"),
-             paddle::Optional("down_proj_scale"),
-             paddle::Optional("up_gate_proj_local_scale"),
-             paddle::Optional("up_gate_proj_code_scale"),
-             paddle::Optional("up_gate_proj_code_zp"),
-             paddle::Optional("down_proj_local_scale"),
-             paddle::Optional("down_proj_code_scale"),
-             paddle::Optional("down_proj_code_zp")})
+           "tokens_expert_prefix_sum",
+           "up_gate_proj_weight",
+           "down_proj_weight",
+           paddle::Optional("up_gate_proj_bias"),
+           paddle::Optional("up_gate_proj_scale"),
+           paddle::Optional("down_proj_scale"),
+           paddle::Optional("up_gate_proj_local_scale"),
+           paddle::Optional("up_gate_proj_code_scale"),
+           paddle::Optional("up_gate_proj_code_zp"),
+           paddle::Optional("down_proj_local_scale"),
+           paddle::Optional("down_proj_code_scale"),
+           paddle::Optional("down_proj_code_zp")})
     .Outputs({"output_tensor"})
     .Attrs({"used_in_ep_low_latency:bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFNWint2))

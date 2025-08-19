@@ -15,14 +15,14 @@
  */
 
 #pragma once
-#include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels.h"
-#include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels_template.h"
+#include "cutlass_kernels/moe_gemm/fused_moe_gemm_mixed_io_kernels.h"
+#include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels_mixed_io_template.h"
 #include "helper.h"
 
 namespace phi {
 
 #ifdef PADDLE_CUDA_BF16
-template class MoeGemmRunner<
+template class MixedMoeGemmRunner<
     cutlass::float_e4m3_t,
     __nv_bfloat16,
     cutlass::WintQuantTraits<cutlass::float_e4m3_t, cutlass::WintQuantMethod::kWeightOnlyInt2>>;

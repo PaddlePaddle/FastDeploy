@@ -784,13 +784,13 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
       cutlass::MatrixCoord tb_offset_local_scale{0, threadblock_offset.n() * 2};
 
-    // static_assert(platform::is_same<ElementScale, cutlass::float_e4m3_t>::value,
-    //     "ElementScale must be float_e4m3_t");
+      // static_assert(platform::is_same<ElementScale, cutlass::float_e4m3_t>::value,
+      //     "ElementScale must be float_e4m3_t");
 
       using ElementSuperScale = typename Mma::QuantParamsAccessor::ElementSuperScale;
 
-      static_assert(platform::is_same<ElementSuperScale, cutlass::bfloat16_t>::value,
-          "ElementSuperScale must be bfloat16_t");
+      // static_assert(platform::is_same<ElementSuperScale, cutlass::bfloat16_t>::value,
+      //     "ElementSuperScale must be bfloat16_t");
 
       // TODO（"baoqiwen"）, reinterpret_cast
       ElementScale* weight_scale_ptr = params.weight_scales + problem_idx * gemm_n;
