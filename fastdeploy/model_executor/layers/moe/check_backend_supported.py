@@ -29,6 +29,9 @@ from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
     TensorWiseFP8MoEMethod,
     TritonWeightOnlyMoEMethod,
 )
+from fastdeploy.model_executor.layers.moe.fused_moe_wint2_backend import (
+    CutlassWint2FusedMoeMethod,
+)
 
 pre_create_weights_list = (
     CutlassMoEMethod,
@@ -37,6 +40,7 @@ pre_create_weights_list = (
     TritonWeightOnlyMoEMethod,
     DeepGemmFusedMoeMethod,
     MarlinWeightOnlyMoEMethod,
+    CutlassWint2FusedMoeMethod,
 )
 
 
