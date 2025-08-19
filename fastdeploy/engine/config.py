@@ -172,6 +172,7 @@ class Config:
         self.early_stop_config = early_stop_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
+        self.engine_worker_queue_port = engine_worker_queue_port
         self._str_to_list("innode_prefill_ports", int)
         if isinstance(engine_worker_queue_port, int):
             self.engine_worker_queue_port = str(engine_worker_queue_port)
