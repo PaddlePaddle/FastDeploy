@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.platforms import current_platform
 
 try:
     from fastdeploy.model_executor.ops.gpu import get_cur_cu_seq_len_k, moba_attention
@@ -76,8 +75,6 @@ class MobaAttentionBackend(AttentionBackend):
         """
         MobaAttentionBackend __init__
         """
-        if not current_platform.is_cuda():
-            raise NotImplementedError()
         super().__init__()
         self.attention_metadata: MobaAttentionMetadata = None
         self.block_size = fd_config.parallel_config.block_size
@@ -121,9 +118,8 @@ class MobaAttentionBackend(AttentionBackend):
         )
         metadata.max_enc_len_this_time = forward_meta.seq_lens_encoder.max().cpu()
         metadata.max_dec_len_this_time = forward_meta.seq_lens_decoder.max().cpu()
-        batch_size = forward_meta.seq_lens_encoder.shape[0]
-        q_token_num = int(forward_meta.cu_seqlens_q[batch_size])
-        k_token_num = int(metadata.cu_seqlens_k[batch_size])
+        q_token_num = int(forward_meta.cu_seqlens_q[-1])
+        k_token_num = int(metadata.cu_seqlens_k[-1])
         metadata.q_input = paddle.zeros(
             [q_token_num + self.attn_block_m, self.num_heads * self.head_dim], dtype=metadata._dtype
         )

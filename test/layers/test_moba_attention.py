@@ -21,13 +21,36 @@ except:
     get_cur_cu_seq_len_k = None
 import os
 
+from fastdeploy.model_executor.layers.attention.moba_attention_backend import (
+    MobaAttentionBackend,
+)
+
+
+class ModelConfig:
+    def __init__(self):
+        self.num_hidden_layers = 12
+        self.head_dim = 128
+
+
+class ParallelConfig:
+    def __init__(self):
+        self.block_size = 128
+        self.max_model_len = 128 * 1024
+        self.max_num_seqs = 1
+
+
+class ForwardMode:
+    def __init__(self):
+        pass
+
+
+class FDConfig:
+    def __init__(self):
+        self.parallel_config = ParallelConfig()
+        self.model_config = ModelConfig()
+
 
 def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
-
-    if moba_attention is None:
-        return
-    if get_cur_cu_seq_len_k is None:
-        return
     max_seq_len = int(128 * 1024)
     moba_encoder_top_k_left = int(10)
     moba_encoder_top_k_right = int(15)
@@ -35,7 +58,6 @@ def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
     moba_decoder_top_k_left = int(10)
     moba_decoder_top_k_right = int(10)
     moba_use_decoder_seq_limit = int(10 * 128)
-
     os.environ["FD_ATTENTION_BACKEND"] = "MOBA_ATTN"
     os.environ["FD_MOBA_MLP_WEIGHT_PATH"] = "None"
     os.environ["FD_MOBA_ENCODER_TOP_K_LEFT"] = str(moba_encoder_top_k_left)
@@ -66,6 +88,20 @@ def test_moba_attention(seq_len, num_heads, num_kv_heads, head_dim):
     rotary_embs = paddle.ones([seq_len, head_dim], dtype="float32")
 
     cache_k_block_means = paddle.zeros([(seq_len + 63) // 64, num_kv_heads, 64, head_dim], dtype="bfloat16")
+
+    fd_config = FDConfig()
+    forward_meta = ForwardMode()
+    forward_meta.seq_lens_encoder = seq_lens_encoder
+    forward_meta.seq_lens_decoder = seq_lens_decoder
+    forward_meta.seq_lens_this_time = seq_lens_encoder
+    forward_meta.cu_seqlens_q = cu_seqlens_q
+    moba_attention_backend = MobaAttentionBackend(fd_config, 8, 1, 128)
+    moba_attention_backend.init_attention_metadata(forward_meta)
+    moba_attention_backend.get_kv_cache_shape(100)
+    if moba_attention is None:
+        return
+    if get_cur_cu_seq_len_k is None:
+        return
 
     cu_seq_q_pack, cu_seqlens_k, q_pack_tokens = get_cur_cu_seq_len_k(
         seq_lens_encoder,
