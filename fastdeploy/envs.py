@@ -93,6 +93,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
     # set ipc signal append suffix (to avoid pid conflict of different containers amounted)
     "FD_IPC_APPEND_SUFFIX": lambda: os.getenv("FD_IPC_APPEND_SUFFIX"),
+    "FD_ENABLE_IPC_AUTO_CLEAN": lambda: os.getenv("FD_ENABLE_IPC_AUTO_CLEAN", "1"),
 }
 
 

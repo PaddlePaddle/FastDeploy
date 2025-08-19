@@ -874,6 +874,7 @@ class LLMEngine:
             dtype=np.int32,
             suffix=self.ipc_signal_suffix,
             create=True,
+            expected_consumers=self.cfg.parallel_config.data_parallel_size,
         )
 
         # exist_task_signal: Used by each worker process to detect whether there is a new task to be processed
@@ -884,6 +885,7 @@ class LLMEngine:
             dtype=np.int32,
             suffix=self.ipc_signal_suffix,
             create=True,
+            expected_consumers=self.cfg.parallel_config.data_parallel_size,
         )
 
         # exist_swapped_task_signal: Used by the engine to detect whether there is a swapped task in the worker
@@ -894,6 +896,7 @@ class LLMEngine:
             dtype=np.int32,
             suffix=self.ipc_signal_suffix,
             create=True,
+            expected_consumers=self.cfg.parallel_config.data_parallel_size,
         )
 
         # exist_prefill_task_signal: Used by each worker process to detect whether to prefill
@@ -904,6 +907,7 @@ class LLMEngine:
             dtype=np.int32,
             suffix=self.ipc_signal_suffix,
             create=True,
+            expected_consumers=1,
         )
 
         # launched_cache_manager_signal: Used to detect whether the engine has started cache_manager
@@ -915,6 +919,7 @@ class LLMEngine:
                 dtype=np.int32,
                 suffix=self.ipc_signal_suffix,
                 create=True,
+                expected_consumers=1,
             )
 
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
@@ -938,6 +943,7 @@ class LLMEngine:
             dtype=np.int32,
             suffix=self.ipc_signal_suffix,
             create=True,
+            expected_consumers=1,
         )
 
         # worker_live_signal: Used by the engine to detect whether each worker process is alive and record the time of each step
@@ -961,6 +967,7 @@ class LLMEngine:
                 dtype=np.int32,
                 suffix=self.ipc_signal_suffix,
                 create=True,
+                expected_consumers=self.cfg.parallel_config.data_parallel_size,
             )
 
         model_weights_status = np.zeros([1], dtype=np.int32)
@@ -1024,6 +1031,7 @@ class LLMEngine:
                 os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
             ),
             "FD_IPC_APPEND_SUFFIX": envs.FD_IPC_APPEND_SUFFIX,
+            "FD_ENABLE_IPC_AUTO_CLEAN": envs.FD_ENABLE_IPC_AUTO_CLEAN,
         }
         # environment variables needed by Dy2St
         variables.update(
