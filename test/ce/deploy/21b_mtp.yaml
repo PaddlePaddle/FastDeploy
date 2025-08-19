@@ -5,4 +5,4 @@ quantization: wint4
 speculative_config:
   method: mtp
   num_speculative_tokens: 1
-  model: /ModelData/ernie-4_5-21b-a3b-bf16-paddle/mtp/
+  model: /MODELDATA/ernie-4_5-21b-a3b-bf16-paddle/mtp/
