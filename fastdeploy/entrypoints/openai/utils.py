@@ -37,6 +37,7 @@ class DealerConnectionManager:
         self.connection_load = []
         self.connection_heap = []
         self.request_map = {}  # request_id -> response_queue
+        self.request_num = {}  # request_id -> num_choices
         self.lock = asyncio.Lock()
         self.connection_tasks = []
         self.running = False
@@ -77,11 +78,15 @@ class DealerConnectionManager:
                 raw_data = await dealer.read()
                 response = msgpack.unpackb(raw_data[-1])
                 request_id = response[-1]["request_id"]
+                if "cmpl" in request_id:
+                    request_id = request_id.rsplit("-", 1)[0]
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)
                         if response[-1]["finished"]:
-                            self._update_load(conn_index, -1)
+                            self.request_num[request_id] -= 1
+                            if self.request_num[request_id] == 0:
+                                self._update_load(conn_index, -1)
             except Exception as e:
                 api_server_logger.error(f"Listener error: {str(e)}")
                 break
@@ -109,13 +114,14 @@ class DealerConnectionManager:
 
         return self.connections[conn_index]
 
-    async def get_connection(self, request_id):
+    async def get_connection(self, request_id, num_choices=1):
         """get a connection for the request"""
 
         response_queue = asyncio.Queue()
 
         async with self.lock:
             self.request_map[request_id] = response_queue
+            self.request_num[request_id] = num_choices
             dealer = self._get_least_loaded_connection()
             if not dealer:
                 raise RuntimeError("No available connections")
@@ -129,6 +135,7 @@ class DealerConnectionManager:
         async with self.lock:
             if request_id in self.request_map:
                 del self.request_map[request_id]
+                del self.request_num[request_id]
 
     async def close(self):
         """
