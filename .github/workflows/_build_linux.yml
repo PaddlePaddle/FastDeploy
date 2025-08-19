@@ -22,9 +22,19 @@ on:
         description: "Enable nightly build mode (e.g. add date suffix to version)"
         required: false
         type: string
-        default: "ON"
+        default: "OFF"
       FD_VERSION:
         description: "FastDeploy Package Version"
+        required: false
+        type: string
+        default: ""
+      PADDLEVERSION:
+        description: "Paddle Version Build Use"
+        required: false
+        type: string
+        default: ""
+      PADDLE_WHL_URL:
+        description: "Paddle Wheel Package URL"
         required: false
         type: string
         default: ""
@@ -85,6 +95,10 @@ jobs:
           compile_arch: ${{ inputs.COMPILE_ARCH }}
           fd_version: ${{ inputs.FD_VERSION }}
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          BRANCH_REF: ${{ github.ref_name }}
+          PADDLEVERSION: ${{ inputs.PADDLEVERSION }}
+          PADDLE_WHL_URL: ${{ inputs.PADDLE_WHL_URL }}
+          WITH_NIGHTLY_BUILD: ${{ inputs.WITH_NIGHTLY_BUILD }}
         run: |
             set -x
             runner_name="${{ runner.name }}"
@@ -109,6 +123,9 @@ jobs:
             -e "COMPILE_ARCH=${compile_arch}" \
             -e "FD_VERSION=${fd_version}" \
             -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+            -e "PADDLEVERSION=${PADDLEVERSION}" \
+            -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
+            -e "BRANCH_REF=${BRANCH_REF}" \
             --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
             if [[ -n "${FD_VERSION}" ]]; then
               export FASTDEPLOY_VERSION=${FD_VERSION}
@@ -124,7 +141,15 @@ jobs:
               echo "Date Only: $DATE_ONLY"
               export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
             fi
-            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            # 针对不同分支和tag使用不同的PaddlePaddle安装包
+            if [[ "${PADDLE_WHL_URL}" != "" ]];then
+              python -m pip install ${PADDLE_WHL_URL}
+            elif [[ "${PADDLEVERSION}" != "" ]];then
+              python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+            else
+              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+            fi
+
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
             python -m pip install --upgrade pip

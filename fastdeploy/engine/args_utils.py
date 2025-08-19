@@ -94,6 +94,10 @@ class EngineArgs:
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
     """
+    chat_template: str = None
+    """
+    chat template or chat template file path
+    """
     tool_call_parser: str = None
     """
     specifies the tool call parser  to use for extracting tool call from the model output
@@ -441,6 +445,12 @@ class EngineArgs:
             default=EngineArgs.reasoning_parser,
             help="Flag specifies the reasoning parser to use for extracting "
             "reasoning content from the model output",
+        )
+        model_group.add_argument(
+            "--chat-template",
+            type=str,
+            default=EngineArgs.chat_template,
+            help="chat template or chat template file path",
         )
         model_group.add_argument(
             "--tool-call-parser",
