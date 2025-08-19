@@ -170,7 +170,69 @@ def test_consistency():
         actual = triggered_step_triton[i]
         assert expected == actual, f"Sample {i} triggered at different steps: {expected} vs {actual}"
 
-    print("Triton vs Normal: All tokens, states, and trigger timings match.")
+    print("[consistency]Triton vs Normal: All tokens, states, and trigger timings match.")
+
+
+def test_consistency_with_real_batch_size():
+    batch_size = 20
+    real_batch_size = 15
+    vocab_size = 103424
+    window_size = 3000
+    threshold = 0.9
+    eos_token_id = vocab_size
+    max_steps = 10
+
+    fixed_token_id = np.random.randint(0, vocab_size)
+    early_stop_batch_id = np.random.randint(0, real_batch_size)
+
+    trigger_step_flags = [[i, np.random.randint(0, max_steps + 1)] for i in range(batch_size)]
+    trigger_step_flags = dict(trigger_step_flags)
+    cfg = EarlyStopConfig({"enable_early_stop": True, "window_size": window_size, "threshold": threshold})
+    stopper_normal = RepetitionEarlyStopper()
+    stopper_normal.initialize(batch_size, cfg)
+    stopper_triton = RepetitionEarlyStopper()
+    stopper_triton.initialize(batch_size, cfg)
+
+    next_tokens_normal = paddle.randint(0, vocab_size, shape=[real_batch_size, 1], dtype="int64")
+    next_tokens_triton = next_tokens_normal.clone()
+
+    next_tokens_normal[early_stop_batch_id, 0] = fixed_token_id
+    next_tokens_triton[early_stop_batch_id, 0] = fixed_token_id
+
+    stop_flags_normal = paddle.zeros_like(next_tokens_normal)
+    stop_flags_triton = stop_flags_normal.clone()
+
+    triggered_step_normal = [None] * batch_size
+    triggered_step_triton = [None] * batch_size
+
+    for step in range(max_steps):
+
+        flags = [trigger_step_flags[i] for i in range(real_batch_size)]
+        probs_np = simulate_step_probs(real_batch_size, early_stop_batch_id, fixed_token_id, vocab_size, step, flags)
+        probs = paddle.to_tensor(probs_np)
+
+        stopper_normal.process_normal(probs, next_tokens_normal, stop_flags_normal)
+        stopper_triton.process_triton(probs, next_tokens_triton, stop_flags_triton)
+
+        assert np.allclose(stop_flags_normal.numpy(), stop_flags_triton.numpy()), f"stop flags mismatch at step {step}"
+
+        trunc_scores_diff = paddle.abs(stopper_normal.trunc_scores - stopper_triton.trunc_scores)
+        assert paddle.all(trunc_scores_diff < 1e-5), f"trunc_scores mismatch at step {step}"
+
+        out_normal = stop_flags_normal.numpy()
+        out_triton = stop_flags_triton.numpy()
+        for i in range(real_batch_size):
+            if out_normal[i, 0] == eos_token_id and triggered_step_normal[i] is None:
+                triggered_step_normal[i] = step
+            if out_triton[i, 0] == eos_token_id and triggered_step_triton[i] is None:
+                triggered_step_triton[i] = step
+
+    for i in range(batch_size):
+        expected = triggered_step_normal[i]
+        actual = triggered_step_triton[i]
+        assert expected == actual, f"Sample {i} triggered at different steps: {expected} vs {actual}"
+
+    print("[consistency_with_real_batch_size]Triton vs Normal: All tokens, states, and trigger timings match.")
 
 
 def test_performance():
@@ -232,4 +294,5 @@ def test_performance():
 if __name__ == "__main__":
     test_repetition_early_stopper()
     test_consistency()
+    test_consistency_with_real_batch_size()
     test_performance()

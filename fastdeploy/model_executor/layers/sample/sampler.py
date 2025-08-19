@@ -177,6 +177,7 @@ class Sampler(nn.Layer):
             or current_platform.is_iluvatar()
             or current_platform.is_gcu()
             or current_platform.is_dcu()
+            or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
         else:
@@ -280,10 +281,13 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        probs = min_p_sampling(probs, sampling_metadata.min_p)
-
+        probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
         _, next_tokens = top_k_top_p_sampling(
-            probs, sampling_metadata.top_p, sampling_metadata.top_k, seed=sampling_metadata.seed[0, 0]
+            probs,
+            sampling_metadata.top_p,
+            sampling_metadata.top_k,
+            sampling_metadata.top_k_list,
+            seed=sampling_metadata.seed[0, 0],
         )
 
         logprobs_tensors = (
@@ -453,5 +457,7 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
+        )
         return next_tokens

@@ -106,6 +106,7 @@ class LLMEngine:
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
             cfg.enable_mm,
+            cfg.tool_parser,
         )
 
         self.start_queue_service()
@@ -464,10 +465,7 @@ class LLMEngine:
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
-        enable_thinking = None
-        if kwargs is not None:
-            enable_thinking = kwargs.get("enable_thinking", None)
-        request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
+        request = self.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -736,10 +734,6 @@ class LLMEngine:
         """
         Insert tasks to engine.
         """
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
-            if task.sampling_params.bad_words is not None:
-                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -765,6 +759,11 @@ class LLMEngine:
                 current_tasks.append(cur_task)
             self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
+
+        for task in tasks:
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+            if task.sampling_params.bad_words is not None:
+                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 
