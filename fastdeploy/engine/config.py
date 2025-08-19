@@ -173,6 +173,8 @@ class Config:
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
+        if isinstance(engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(engine_worker_queue_port)
         self._str_to_list("engine_worker_queue_port", int)
         self.load_choices = load_choices
 
@@ -207,7 +209,6 @@ class Config:
         else:
             self.worker_num_per_node = num_ranks
 
-        self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
@@ -272,9 +273,9 @@ class Config:
         assert self.max_num_seqs <= 256, (
             "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
         )
-        llm_logger.info(
-            f"engine_worker_queue_port: {self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]}"
-        )
+        # llm_logger.info(
+        #     f"engine_worker_queue_port: {self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]}"
+        # )
         assert is_port_available(
             "0.0.0.0", int(self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id])
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]} is already in use. {self.parallel_config.local_data_parallel_id}"
