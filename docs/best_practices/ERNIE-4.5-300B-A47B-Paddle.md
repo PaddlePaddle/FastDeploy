@@ -99,7 +99,6 @@ export FD_SAMPLING_CLASS=rejection
 **How to enable:** Take the deployment of a single machine with 8 GPUs and 1P1D (4 GPUs each) as an example. Compared with the default hybrid deployment method, `--splitwise-role` is required to specify the role of the node. And the GPUs and logs of the two nodes are isolated through the environment variables `FD_LOG_DIR` and `CUDA_VISIBLE_DEVICES`.
 ```
 export FD_LOG_DIR="log_prefill"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -112,7 +111,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 ```
 export FD_LOG_DIR="log_decode"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 # Note that innode-prefill-ports is specified as the Prefill serviceengine-worker-queue-port
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -137,7 +135,7 @@ Add the following lines to the startup parameters
 --enable-custom-all-reduce
 ```
 Notes:
-1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../parameters.md) for related configuration parameter descriptions
+1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 2. When CUDAGraph is enabled, if running with multi-GPUs TP>1, `--enable-custom-all-reduce` must be specified at the same time.
 3. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
 

@@ -141,7 +141,7 @@ def rejection_top_p_sampling(
                 top_k_renorm_probs,
             )
 
-        if not any(x > 0 for x in top_k_list):
+        if top_k_list and not any(x > 0 for x in top_k_list):
             ids = rejection_top_p_sampling(
                 x,
                 top_p,
@@ -177,7 +177,7 @@ def min_p_sampling(
     """
     min_p_sampling
     """
-    if not any(x > 0 for x in min_p_arr_cpu):
+    if min_p_arr_cpu and not any(x > 0 for x in min_p_arr_cpu):
         return probs
     else:
         if current_platform.is_cuda():

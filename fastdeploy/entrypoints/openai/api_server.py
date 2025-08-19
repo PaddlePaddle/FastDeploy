@@ -30,6 +30,7 @@ from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -52,6 +53,8 @@ from fastdeploy.metrics.metrics import (
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.plugins.model_register import load_model_register_plugins
+
+load_model_register_plugins()
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     StatefulSemaphore,
@@ -77,6 +80,7 @@ parser.add_argument("--max-concurrency", default=512, type=int, help="max concur
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
+chat_template = load_chat_template(args.chat_template)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
@@ -162,6 +166,7 @@ async def lifespan(app: FastAPI):
         pid,
         args.ips,
         args.max_waiting_time,
+        chat_template
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,
@@ -506,8 +511,6 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-
-    load_model_register_plugins()
     if load_engine() is None:
         return
 
