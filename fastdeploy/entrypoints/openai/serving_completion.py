@@ -105,6 +105,19 @@ class OpenAIServingCompletion:
         prompt_batched_token_ids = []
         text_after_process_list = []
         try:
+            if self.max_waiting_time < 0:
+                await self.engine_client.semaphore.acquire()
+            else:
+                await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+        except Exception as e:
+            error_msg = (
+                f"OpenAIServingCompletion waiting error: {e}, {str(traceback.format_exc())}, "
+                f"max waiting time: {self.max_waiting_time}"
+            )
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=408, message=error_msg)
+
+        try:
             for idx, prompt in enumerate(request_prompts):
                 request_id_idx = f"{request_id}-{idx}"
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
@@ -121,19 +134,6 @@ class OpenAIServingCompletion:
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
-
-            try:
-                if self.max_waiting_time < 0:
-                    await self.engine_client.semaphore.acquire()
-                else:
-                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            except Exception as e:
-                error_msg = (
-                    f"OpenAIServingCompletion waiting error: {e}, {str(traceback.format_exc())}, "
-                    f"max waiting time: {self.max_waiting_time}"
-                )
-                api_server_logger.error(error_msg)
-                return ErrorResponse(code=408, message=error_msg)
 
             if request.stream:
                 return self.completion_stream_generator(
