@@ -19,10 +19,7 @@ import time
 import uuid
 from typing import List, Optional
 
-import aiozmq
-import msgpack
 import numpy as np
-from aiozmq import zmq
 
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
@@ -51,6 +48,12 @@ class OpenAIServingCompletion:
                 self.master_ip = self.master_ip[0]
             else:
                 self.master_ip = self.master_ip.split(",")[0]
+
+    async def _ensure_connection_manager(self):
+        """ensure connection manager initialized"""
+        if not self.engine_client.connection_initialized:
+            await self.engine_client.connection_manager.initialize()
+            self.engine_client.connection_initialized = True
 
     def _check_master(self):
         if self.master_ip is None:
@@ -169,7 +172,8 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine.connection_manager.get_connection(request_id)
 
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
@@ -182,7 +186,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -194,7 +198,7 @@ class OpenAIServingCompletion:
                             current_waiting_time = 0
                     await asyncio.sleep(0.1)
                     continue
-                response = msgpack.unpackb(raw_data[-1])
+
                 for data in response:
                     rid = int(data["request_id"].split("-")[-1])
                     if data.get("error_code", 200) != 200:
@@ -239,7 +243,8 @@ class OpenAIServingCompletion:
         finally:
             self.engine_client.semaphore.release()
             if dealer is not None:
-                dealer.close()
+                await self.engine_client.connection_manager.cleanup_request(request_id)
+                self.engine_client.semaphore.release()
 
     async def _echo_back_prompt(self, request, res, idx):
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
@@ -272,7 +277,9 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
+            dealer.write([b"", request_id.encode("utf-8")])
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"
@@ -296,7 +303,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -309,7 +316,6 @@ class OpenAIServingCompletion:
                     await asyncio.sleep(0.1)
                     continue
 
-                response = msgpack.unpackb(raw_data[-1])
                 for res in response:
                     idx = int(res["request_id"].split("-")[-1])
                     if res.get("error_code", 200) != 200:
@@ -436,7 +442,8 @@ class OpenAIServingCompletion:
             del request
             self.engine_client.semaphore.release()
             if dealer is not None:
-                dealer.close()
+                await self.engine_client.connection_manager.cleanup_request(request_id)
+                self.engine_client.semaphore.release()
             yield "data: [DONE]\n\n"
 
     def request_output_to_completion_response(

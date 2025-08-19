@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import time
 import uuid
 
@@ -21,6 +22,7 @@ import numpy as np
 
 from fastdeploy import envs
 from fastdeploy.engine.config import ModelConfig
+from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
@@ -90,6 +92,11 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
+        self.semaphore = StatefulSemaphore((envs.FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
+        self.connection_manager = DealerConnectionManager(
+            pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
+        )
+        self.connection_initialized = False
 
     def create_zmq_client(self, model, mode):
         """
