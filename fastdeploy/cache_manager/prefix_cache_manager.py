@@ -20,6 +20,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -64,7 +65,10 @@ class PrefixCacheManager:
         self.speculative_config = config.speculative_config
         self.local_data_parallel_id = local_data_parallel_id
 
-        self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.num_gpu_blocks = self.cache_config.total_block_num
+        else:
+            self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
@@ -466,7 +470,7 @@ class PrefixCacheManager:
                 self.leaf_req_map[leaf_node].add(req_id)
                 self.cache_info[req_id] = (leaf_node, input_ids)
         except Exception as e:
-            logger.error(f"update_cache_blocks, error: {type(e)} {e}")
+            logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
             raise e
 
     def request_match_blocks(self, task, block_size, *args):
@@ -552,7 +556,7 @@ class PrefixCacheManager:
                 )
                 return common_block_ids, matched_token_num, hit_info
             except Exception as e:
-                logger.error(f"request_block_ids: error: {type(e)} {e}")
+                logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
@@ -657,7 +661,7 @@ class PrefixCacheManager:
                 )
                 return common_block_ids, unique_block_ids, hit_info
             except Exception as e:
-                logger.error(f"request_block_ids: error: {type(e)} {e}")
+                logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
 
     def release_block_ids_async(self, task):
@@ -706,7 +710,7 @@ class PrefixCacheManager:
                 )
                 return
             except Exception as e:
-                logger.error(f"release_block_ids: error: {type(e)} {e}")
+                logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):
@@ -896,7 +900,7 @@ class PrefixCacheManager:
                 else:
                     self.gpu_free_task_future = None
             except Exception as e:
-                logger.error(f"free_block_ids_async: error: {type(e)} {e}")
+                logger.error(f"free_block_ids_async: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
 
     def free_cpu_block_ids(self, need_block_num):
@@ -1215,5 +1219,5 @@ class PrefixCacheManager:
                     + f"task_cpu_block_id {task_cpu_block_id} event_type {event_type} done"
                 )
             except Exception as e:
-                logger.warning(f"recv_data_transfer_result: error: {e}")
+                logger.warning(f"recv_data_transfer_result: error: {e}, {str(traceback.format_exc())}")
                 raise e

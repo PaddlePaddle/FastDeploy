@@ -81,7 +81,8 @@ class VocabParallelEmbedding(nn.Layer):
                         initializer=nn.initializer.Normal(mean=0.0, std=self.initializer_range),
                     ),
                 )
-                set_weight_attrs(self.embeddings.weight, {"output_dim": False})
+                if self.world_size > 1:
+                    set_weight_attrs(self.embeddings.weight, {"output_dim": False})
             else:
                 # column cut embedding
                 self.embeddings = nn.Embedding(
@@ -91,7 +92,8 @@ class VocabParallelEmbedding(nn.Layer):
 
                 self.embeddings.weight.is_distributed = True
                 self.embeddings.weight.split_axis = 1
-                set_weight_attrs(self.embeddings.weight, {"output_dim": True})
+                if self.world_size > 1:
+                    set_weight_attrs(self.embeddings.weight, {"output_dim": True})
 
         self.prefix = prefix
         self.dropout = nn.Dropout(self.hidden_dropout_prob)
