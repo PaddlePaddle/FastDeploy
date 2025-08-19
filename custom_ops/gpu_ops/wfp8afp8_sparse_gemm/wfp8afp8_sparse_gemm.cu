@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,20 +93,7 @@ void WFp8AFp8Gemm(
             input.stream()
         );
     } else {
-        // DisPatchWFp8AFp8Gemm(
-        //     reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
-        //     reinterpret_cast<const uint32_t*>(sparse_idx.data<int32_t>()),
-        //     reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<phi::dtype::float8_e4m3fn>()),
-        //     tokens.data<int>(),
-        //     weight_scale.data<float>(),
-        //     reinterpret_cast<cutlass::half_t*>(const_cast<phi::dtype::float16*>(out.data<phi::dtype::float16>())),
-        //     token_padding_size,
-        //     max_tokens,
-        //     batch_size,
-        //     M,
-        //     K,
-        //     input.stream()
-        // );
+        PD_THROW("Only supported dtype in ['BFLOAT16'].");
     }
 }
 
