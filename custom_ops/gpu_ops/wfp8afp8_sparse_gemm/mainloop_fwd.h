@@ -208,9 +208,11 @@ struct CollectiveMainloopFwd {
         #pragma unroll
         for (int i = 0; i < k_copy_times; i++) {
             uint32_t smem_ptr = cast_smem_ptr_to_uint(reinterpret_cast<uint128_t*>(smem_c + i * 16 * 128) + tidx);
+            #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
             asm volatile (
                 "stmatrix.sync.aligned.x4.trans.m8n8.shared.b16 [%0], {%1, %2, %3, %4};\n"
                 :: "r"(smem_ptr), "r"(reg_data[4 * i + 0]), "r"(reg_data[4 * i + 2]), "r"(reg_data[4 * i + 1]), "r"(reg_data[4 * i + 3]));
+            #endif
         }
 
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
