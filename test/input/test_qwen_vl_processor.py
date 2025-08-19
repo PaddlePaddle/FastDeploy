@@ -76,7 +76,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        model_name_or_path = "./data/models/paddle/Qwen2.5-VL-3B-Instruct"
+        model_name_or_path = "/workspace/Fastdeploy/test/ModelData/Qwen2.5-VL-7B-Instruct"
         self.processor = QwenVLProcessor(
             config=config,
             model_name_or_path=model_name_or_path,
