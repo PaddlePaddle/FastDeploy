@@ -70,7 +70,7 @@ class Request:
         guided_grammar: Optional[Any] = None,
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
-        enable_thinking: Optional[bool] = None,
+        enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
         chat_template: Optional[str] = None,
     ) -> None:
@@ -153,7 +153,7 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", None),
+            enable_thinking=d.get("enable_thinking", True),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
         )

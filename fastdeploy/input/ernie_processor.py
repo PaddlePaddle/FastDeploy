@@ -257,6 +257,7 @@ class ErnieProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
+        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -266,7 +267,6 @@ class ErnieProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
             if self.reasoning_parser and (
                 enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
             ):
@@ -296,6 +296,7 @@ class ErnieProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
+        enable_thinking = kwargs.get("enable_thinking")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -304,9 +305,7 @@ class ErnieProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-
         response_dict["outputs"]["raw_prediction"] = delta_text
-        enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):

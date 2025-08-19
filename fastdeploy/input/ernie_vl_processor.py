@@ -105,9 +105,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
-
-        enable_thinking = self.get_enable_thinking(request.get("enable_thinking", None))
-        set_value(request, "enable_thinking", enable_thinking)
         return request
 
     def process_request(self, request, max_model_len=None, **kwargs):
@@ -198,6 +195,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
     def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
+
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -292,7 +290,9 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = self.get_enable_thinking(kwargs.pop("enable_thinking", None))
+        enable_thinking = kwargs.pop("enable_thinking", True)
+        if enable_thinking is None:
+            enable_thinking = True
         if stream:
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
         else:
