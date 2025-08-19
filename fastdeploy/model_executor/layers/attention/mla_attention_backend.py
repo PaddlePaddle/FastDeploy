@@ -195,6 +195,8 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
+            metadata.decoder_num_blocks,
+            metadata.decoder_chunk_size_cpu,
             metadata.max_len_kv,
         ) = get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
@@ -210,6 +212,12 @@ class MLAAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+        print("metadata.kv_batch_ids",metadata.kv_batch_ids)
+        print("metadata.kv_tile_ids_per_batch",metadata.kv_tile_ids_per_batch)
+        print("metadata.kv_num_blocks",metadata.kv_num_blocks)
+        print("metadata.decoder_num_blocks",metadata.decoder_num_blocks)
+        print("metadata.decoder_chunk_size_cpu",metadata.decoder_chunk_size_cpu)
+        print("metadata.max_len_kv",metadata.max_len_kv)
 
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
@@ -369,6 +377,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
             forward_meta.decoder_num_blocks_cpu,
+            metadata.decoder_chunk_size_cpu,
             metadata.max_enc_len_this_time,
             metadata.max_dec_len_this_time,
             metadata.max_len_kv,
@@ -450,6 +459,11 @@ class MLAAttentionBackend(AttentionBackend):
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0]
+            print("mix_FA3+++++++++++++++++++fmha_out",fmha_out)
+            print("nan || -inf FA3 :",paddle.isfinite(fmha_out).all())
+            is_finite = paddle.isfinite(fmha_out).all().item()
+            is_normal = (paddle.abs(fmha_out) < 1e6).all().item()
+            print("nan/inf/大异常值:", is_finite and is_normal)
 
             return fmha_out
 
@@ -488,8 +502,9 @@ class MLAAttentionBackend(AttentionBackend):
                 metadata.kv_num_blocks,
                 forward_meta.decoder_batch_ids,
                 forward_meta.decoder_tile_ids_per_batch,
+                metadata.decoder_num_blocks,
                 forward_meta.decoder_num_blocks_cpu,
-                forward_meta.decoder_num_blocks_cpu,
+                metadata.decoder_chunk_size_cpu,
                 metadata.max_enc_len_this_time,
                 metadata.max_dec_len_this_time,
                 metadata.max_len_kv,
@@ -516,5 +531,11 @@ class MLAAttentionBackend(AttentionBackend):
                 True,  # causal
                 speculate_decoder,
             )
+            print("nan || -inf MLA :",paddle.isfinite(fmha_out).all())
+            is_finite = paddle.isfinite(fmha_out).all().item()
+            is_normal = (paddle.abs(fmha_out) < 1e6).all().item()
+            print("nan/inf/大异常值:", is_finite and is_normal)
+            print("mix_MLA=====================fmha_out",fmha_out)
+            
 
             return fmha_out

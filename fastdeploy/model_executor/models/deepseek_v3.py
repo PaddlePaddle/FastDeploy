@@ -401,6 +401,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 fmha_out = fmha_out + fmha_out_decode
 
         output = self.o_proj(fmha_out)
+        print("out__attn______________",output)
         return output
 
     def load_state_dict(self, state_dict):
