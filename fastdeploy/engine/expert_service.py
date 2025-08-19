@@ -156,4 +156,4 @@ def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=N
             time.sleep(1000)
 
     except Exception as e:
-        llm_logger.exception(f"Expert service failed to start: {e}")
+        llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")

@@ -341,7 +341,9 @@ class LLMEngine:
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
-                    print(f"Error extracting file: {e}")
+                    console_logger.error(
+                        f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                    )
         self.worker_ready_signal.clear()
 
         if hasattr(self, "get_profile_block_num_signal"):
@@ -350,7 +352,7 @@ class LLMEngine:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
-                print(f"Error extracting sub services: {e}")
+                console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
@@ -525,7 +527,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}")
+            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request

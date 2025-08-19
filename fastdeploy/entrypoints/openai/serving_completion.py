@@ -16,6 +16,7 @@
 
 import asyncio
 import time
+import traceback
 import uuid
 from typing import List, Optional
 
@@ -92,7 +93,9 @@ class OpenAIServingCompletion:
             else:
                 raise ValueError("Prompt must be a string, a list of strings or a list of integers.")
         except Exception as e:
-            return ErrorResponse(message=str(e), code=400)
+            error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(message=error_msg, code=400)
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
@@ -106,8 +109,13 @@ class OpenAIServingCompletion:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-        except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+        except Exception as e:
+            error_msg = (
+                f"OpenAIServingCompletion waiting error: {e}, {str(traceback.format_exc())}, "
+                f"max waiting time: {self.max_waiting_time}"
+            )
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=408, message=error_msg)
 
         try:
             for idx, prompt in enumerate(request_prompts):
@@ -121,6 +129,8 @@ class OpenAIServingCompletion:
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                 except Exception as e:
+                    error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
+                    api_server_logger.error(error_msg)
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
@@ -147,10 +157,16 @@ class OpenAIServingCompletion:
                         text_after_process_list=text_after_process_list,
                     )
                 except Exception as e:
-                    return ErrorResponse(code=400, message=str(e))
+                    error_msg = (
+                        f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
+                    )
+                    api_server_logger.error(error_msg)
+                    return ErrorResponse(code=400, message=error_msg)
 
         except Exception as e:
-            return ErrorResponse(message=str(e), code=400)
+            error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(message=error_msg, code=400)
 
     async def completion_full_generator(
         self,
@@ -431,6 +447,7 @@ class OpenAIServingCompletion:
                     choices = []
 
         except Exception as e:
+            api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
@@ -614,5 +631,5 @@ class OpenAIServingCompletion:
             )
 
         except Exception as e:
-            api_server_logger.error("Error in _build_logprobs_response: %s", e)
+            api_server_logger.error(f"Error in _build_logprobs_response: {str(e)}, {str(traceback.format_exc())}")
             return None
