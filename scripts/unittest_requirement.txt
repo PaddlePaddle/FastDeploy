@@ -7,3 +7,4 @@ pytest-twisted
 anyio
 coverage
 diff-cover
+partial_json_parser
