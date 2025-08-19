@@ -15,15 +15,14 @@
 """
 
 import numpy as np
-from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.ernie_processor import ErnieProcessor
-from fastdeploy.input.qwen_mm_processor import IDS_TYPE_FLAG, DataProcessor
+from fastdeploy.input.qwen_mm_processor import DataProcessor
+from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
 
-class QwenVLProcessor(ErnieProcessor):
+class QwenVLProcessor(TextProcessor):
     """
     Processor for Qwen Vision-Language models that handles multimodal inputs.
 
@@ -33,7 +32,7 @@ class QwenVLProcessor(ErnieProcessor):
     - Generation configuration
 
     Attributes:
-        ernie_processor: Underlying DataProcessor instance
+        processor: Underlying DataProcessor instance
         tokenizer: Text tokenizer
         generation_config: Model generation configuration
         eos_token_ids: End-of-sequence token IDs
@@ -47,6 +46,7 @@ class QwenVLProcessor(ErnieProcessor):
         limit_mm_per_prompt=None,
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
+        tool_parser_obj=None,
     ):
         """
         Initialize QwenVLProcessor.
@@ -58,74 +58,18 @@ class QwenVLProcessor(ErnieProcessor):
             mm_processor_kwargs: Additional kwargs for multimodal processor
             reasoning_parser_obj: Optional reasoning parser
         """
+        super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj)
+
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
-
-        self.ernie_processor = DataProcessor(
+        self.processor = DataProcessor(
             model_path=model_name_or_path,
             tokens_per_second=config.vision_config.tokens_per_second,
+            tokenizer=self.tokenizer,
             **processor_kwargs,
         )
-        self._load_tokenizer()
-        self.decode_status = dict()
 
-        # Load generation config if available
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(model_name_or_path)
-        except Exception as e:
-            data_processor_logger.warning(
-                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
-            )
-            self.generation_config = None  # Fallback to None if config not found
-
-        from paddleformers.trl.llm_utils import get_eos_token_id
-
-        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
-        self.reasoning_parser = None
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
-
-    def get_pad_id(self):
-        """
-        Get the padding token ID.
-
-        Returns:
-            int: Padding token ID
-        """
-        return self.tokenizer.pad_token_id
-
-    def _load_tokenizer(self):
-        """
-        Load and initialize the tokenizer.
-
-        Returns:
-            AutoTokenizer: Initialized tokenizer instance
-        """
-        self.tokenizer = self.ernie_processor.tokenizer
-
-    def _apply_default_parameters(self, request):
-        """
-        Apply default value for parameters in request
-        """
-
-        def set_value(req, key, value):
-            value = getattr(self.generation_config, key, value)
-            if isinstance(req, dict):
-                if key not in req:
-                    req[key] = value
-            else:
-                if req.get(key) is None:
-                    req.set(key, value)
-
-        set_value(request, "top_p", 0.7)
-        set_value(request, "temperature", 1.0)
-        set_value(request, "repetition_penalty", 1.0)
-        set_value(request, "frequency_penalty", 0.0)
-        set_value(request, "presence_penalty", 0.0)
-        return request
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """
@@ -275,11 +219,13 @@ class QwenVLProcessor(ErnieProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.ernie_processor.text2ids(request["prompt"], images, videos)
+            outputs = self.processor.text2ids(request["prompt"], images, videos)
+
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
-            outputs = self.ernie_processor.request2ids(request)
+            outputs = self.processor.request2ids(request)
+
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
@@ -288,6 +234,7 @@ class QwenVLProcessor(ErnieProcessor):
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
+
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
@@ -305,89 +252,23 @@ class QwenVLProcessor(ErnieProcessor):
 
         return request
 
-    def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
-        """
-        Append previously generated tokens to inputs.
+    def append_generated_tokens(self, outputs, generated_token_ids):
+        out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
+        self.processor._add_text(generated_token_ids, out)
 
-        Args:
-            multimodal_inputs: Current model inputs
-            generated_token_ids: Tokens to append
-        """
+        outputs["input_ids"] = np.concatenate(
+            [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
+        )
+        outputs["token_type_ids"] = np.concatenate(
+            [outputs["token_type_ids"], np.array(out["token_type_ids"], dtype=np.int64)], axis=0
+        )
+        outputs["position_ids"] = np.concatenate(
+            [outputs["position_ids"], out["position_ids"]], axis=1, dtype=np.int64
+        )
+        outputs["cur_position"] = out["cur_position"]
 
-        num_tokens = len(generated_token_ids)
-        multimodal_inputs["input_ids"].extend(generated_token_ids)
-        multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
-
-        start = multimodal_inputs["cur_position"]
-        for i in range(num_tokens):
-            multimodal_inputs["position_ids"].append([start + i] * 3)
-        multimodal_inputs["cur_position"] += num_tokens
-
-    def pack_outputs(self, outs):
-        """
-        Convert and package model outputs into standardized format.
-
-        Args:
-            outs: Raw model outputs
-
-        Returns:
-            dict: Packaged outputs with proper types and shapes
-        """
-        # Process visual outputs - stack if exists or set to None if empty
-        if not outs["images"]:
-            outs["images"] = None  # No images case
-            outs["grid_thw"] = None  # No spatial dimensions
-            outs["image_type_ids"] = None  # No type IDs
-        else:
-            outs["images"] = np.vstack(outs["images"])  # Stack image features vertically
-            outs["grid_thw"] = np.vstack(outs["grid_thw"])  # Stack spatial dimensions
-            outs["image_type_ids"] = np.array(outs["image_type_ids"])  # Convert to numpy array
-
-        outs["image_patch_id"] = self.ernie_processor.image_token_id
-        outs["video_patch_id"] = self.ernie_processor.video_token_id
-
-        # Convert all outputs to numpy arrays with appropriate types
-        outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)  # Token IDs as int64
-        outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
-        outs["position_ids"] = np.concatenate(outs["position_ids"], axis=1, dtype=np.int64)  # Concatenate position IDs
-        return outs
-
-    def process_response_dict(self, response_dict, stream, **kwargs):
-        """
-        Process model response into final output format.
-
-        Args:
-            response_dict: Raw model response
-            stream: Whether response is streaming
-            **kwargs: Additional processing arguments
-
-        Returns:
-            dict: Processed response
-        """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
-        if stream:
-            return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
-        else:
-            return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)
-
-    def update_stop_seq(self, stop_sequences):
-        """
-        Update stop sequences for generation.
-
-        Args:
-            stop_sequences: Stop sequences to process
-
-        Returns:
-            tuple: (stop_seqs, stop_seqs_len) processed sequences
-        """
-        stop_seqs = []
-        if isinstance(stop_sequences, str):
-            stop_sequences = [stop_sequences]
-        for seq in stop_sequences:
-            if seq != self.tokenizer.eos_token_id:
-                stop_seqs.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(seq)))
-        stop_seqs, stop_seqs_len = self.pad_batch_data(stop_seqs, pad_id=-1, return_seq_len=True, return_array=False)
-        data_processor_logger.debug(f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
-        return stop_seqs, stop_seqs_len
+    def pack_outputs(self, outputs):
+        outputs["image_patch_id"] = self.processor.image_token_id
+        outputs["video_patch_id"] = self.processor.video_token_id
+        outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
+        return outputs

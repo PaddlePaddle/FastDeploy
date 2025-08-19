@@ -53,6 +53,7 @@ class DataProcessor:
         video_min_frames: int = 4,
         video_max_frames: int = 768,
         tokens_per_second: int = 2,
+        tokenizer=None,
         **kwargs,
     ) -> None:
         """
@@ -69,8 +70,11 @@ class DataProcessor:
         self.max_frames = video_max_frames
 
         # Initialize tokenizer with left padding and fast tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
-        self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
+        if tokenizer is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
+            self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
+        else:
+            self.tokenizer = tokenizer
         self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
 
         # Convolution sizes for patch aggregation
@@ -95,6 +99,25 @@ class DataProcessor:
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
         }
+
+    def _pack_outputs(self, outputs):
+        # Process visual outputs - stack if exists or set to None if empty
+        if not outputs["images"]:
+            outputs["images"] = None  # No images case
+            outputs["grid_thw"] = None  # No spatial dimensions
+            outputs["image_type_ids"] = None  # No type IDs
+        else:
+            outputs["images"] = np.vstack(outputs["images"])  # Stack image features vertically
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])  # Stack spatial dimensions
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])  # Convert to numpy array
+
+        # Convert all outputs to numpy arrays with appropriate types
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)  # Token IDs as int64
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
+        outputs["position_ids"] = np.concatenate(
+            outputs["position_ids"], axis=1, dtype=np.int64
+        )  # Concatenate position IDs
+        return outputs
 
     def text2ids(self, text, images=None, videos=None):
         """
@@ -163,7 +186,7 @@ class DataProcessor:
                 video_idx += 1
                 st = ed + VIDEO_PLACEHOLDER_LEN
 
-        return outputs
+        return self._pack_outputs(outputs)
 
     def request2ids(
         self, request: Dict[str, Any], tgts: List[str] = None
@@ -245,7 +268,7 @@ class DataProcessor:
                 vision_message_index += 1
 
         self._add_text(prompt_token_ids[vision_start_index:], outputs)
-        return outputs
+        return self._pack_outputs(outputs)
 
     def _add_text(self, tokens, outputs: Dict) -> None:
         """
@@ -262,10 +285,11 @@ class DataProcessor:
         if isinstance(tokens, str):
             tokens = self.tokenizer.encode(tokens, add_special_tokens=False)["input_ids"]
 
+        num_tokens = len(tokens)
         outputs["input_ids"].extend(tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * len(tokens))
+        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
 
-        position_ids = self._compute_text_positions(outputs["cur_position"], len(tokens))
+        position_ids = self._compute_text_positions(outputs["cur_position"], num_tokens)
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
 
