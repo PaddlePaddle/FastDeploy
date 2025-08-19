@@ -245,7 +245,7 @@ class ParallelConfig:
         # block size
         self.block_size: int = 64
         # Engine worker queue port
-        self.engine_worker_queue_port: int = 9923
+        self.engine_worker_queue_port: str = "9923"
         # Max model len
         self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
