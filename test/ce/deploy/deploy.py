@@ -185,7 +185,7 @@ def stop_server(signum=None, frame=None):
                 os.kill(int(pid), signal.SIGKILL)
                 print(f"Killed process on port {port}, pid={pid}")
         except Exception as e:
-            print(f"Failed to killed process on port: {e}, {str(traceback.format_exc())}")
+            print(f"Failed to kill process on port: {e}, {str(traceback.format_exc())}")
     # 若log目录存在，则重命名为log_timestamp
     if os.path.isdir("./log"):
         os.rename("./log", "./log_{}".format(time.strftime("%Y%m%d%H%M%S")))

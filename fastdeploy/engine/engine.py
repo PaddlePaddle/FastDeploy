@@ -984,7 +984,9 @@ class LLMEngine:
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
-                    print(f"Error extracting file: {e}, {str(traceback.format_exc())}")
+                    error_msg = f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                    print(error_msg)
+                    llm_logger.error(error_msg)
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
@@ -997,7 +999,9 @@ class LLMEngine:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
-                print(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
+                error_msg = f"Error extracting sub services: {e}, {str(traceback.format_exc())}"
+                print(error_msg)
+                llm_logger.error(error_msg)
 
         self.engine_worker_queue.cleanup()
         if hasattr(self, "zmq_server") and self.zmq_server is not None:

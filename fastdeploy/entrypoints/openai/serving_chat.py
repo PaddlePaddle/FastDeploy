@@ -348,7 +348,7 @@ class OpenAIServingChat:
 
         except Exception as e:
             error_data = self._create_streaming_error_response(
-                f"equest[{request_id}] generate stream error: {str(e)}, {str(traceback.format_exc())}"
+                f"request[{request_id}] generate stream error: {str(e)}, {str(traceback.format_exc())}"
             )
             yield f"data: {error_data}\n\n"
         finally:
