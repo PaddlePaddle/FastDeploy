@@ -102,6 +102,14 @@ class OpenAIServingCompletion:
         prompt_batched_token_ids = []
         text_after_process_list = []
         try:
+            if self.max_waiting_time < 0:
+                await self.engine_client.semaphore.acquire()
+            else:
+                await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+        except Exception:
+            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+
+        try:
             for idx, prompt in enumerate(request_prompts):
                 request_id_idx = f"{request_id}-{idx}"
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
@@ -116,14 +124,6 @@ class OpenAIServingCompletion:
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
-
-            try:
-                if self.max_waiting_time < 0:
-                    await self.engine_client.semaphore.acquire()
-                else:
-                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            except Exception:
-                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -241,6 +241,14 @@ class OpenAIServingCompletion:
             if dealer is not None:
                 dealer.close()
 
+    async def _echo_back_prompt(self, request, res, idx):
+        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
+            if isinstance(request.prompt, list):
+                prompt_text = request.prompt[idx]
+            else:
+                prompt_text = request.prompt
+            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
             if tool_called or output.get("tool_call"):
@@ -338,6 +346,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -463,7 +472,7 @@ class OpenAIServingCompletion:
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            prompt_text = final_res["prompt"]
+            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
@@ -481,16 +490,14 @@ class OpenAIServingCompletion:
 
             if request.echo:
                 assert prompt_text is not None
-                if request.max_tokens == 0:
-                    token_ids = prompt_token_ids
-                    output_text = prompt_text
+                token_ids = [*prompt_token_ids, *output["token_ids"]]
+                if isinstance(prompt_text, list):
+                    output_text = prompt_text[idx] + output["text"]
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
-                    output_text = prompt_text + output["text"]
+                    output_text = str(prompt_text) + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
             choice_data = CompletionResponseChoice(
