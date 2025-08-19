@@ -31,6 +31,7 @@ on:
 jobs:
   accuracy_tests:
     runs-on: [self-hosted, GPU-h20-1Cards]
+    timeout-minutes: 60
     steps:
       - name: Code Prepare
         shell: bash

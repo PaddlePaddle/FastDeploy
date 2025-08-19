@@ -31,6 +31,7 @@ on:
 jobs:
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
+    timeout-minutes: 60
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}

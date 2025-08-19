@@ -31,6 +31,7 @@ on:
 jobs:
   stable_tests:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
+    timeout-minutes: 60
     steps:
       - name: Code Prepare
         shell: bash
@@ -62,7 +63,7 @@ jobs:
             git config --global user.email "fastdeploy_ci@example.com"
             git log -n 3 --oneline
 
-      - name: Run FastDeploy Base Tests
+      - name: Run FastDeploy Stable Tests
         shell: bash
         env:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
