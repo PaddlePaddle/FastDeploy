@@ -162,19 +162,53 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether prefill stage exist
         """
-        if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
-            return 1
-        else:
-            return 0
+        return int(paddle.max(self.share_inputs["seq_lens_encoder"])) > 0
 
     def exist_decode(self):
         """
         check whether decode stage exist
         """
-        if int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0:
-            return 1
-        else:
-            return 0
+        return int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0
+
+    def only_prefill(self):
+        """
+        check whether prefill only
+        """
+        only_prefill_batch = True
+        decode_exists = None
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            # 收集所有 worker 的状态
+            only_prefill_batch_list = []
+            decode_exists = self.exist_decode()
+            paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
+            only_prefill_batch = all(only_prefill_batch_list)
+
+        only_prefill_batch = only_prefill_batch and not (
+            decode_exists if decode_exists is not None else self.exist_decode()
+        )
+
+        return only_prefill_batch
+
+    def only_decode(self):
+        """
+        check whether decode only
+        """
+        # Update Batch type for cuda graph for only_decode_batch
+        only_decode_batch = True
+        prefill_exists = None
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+
+        only_decode_batch = only_decode_batch and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
+
+        return only_decode_batch
 
     def _init_speculative_proposer(self):
         """
@@ -561,7 +595,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        full_length = min(
+        input_length = min(
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
@@ -569,9 +603,8 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
         if self.fd_config.parallel_config.enable_expert_parallel:
-            full_length = min(full_length, 32)
+            input_length = min(input_length, 32)
 
-        input_length = int(full_length)
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -700,6 +733,13 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = None
         self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.share_inputs["max_len_tensor_cpu"] = None  # CPU
+        self.share_inputs["encoder_batch_ids"] = None
+        self.share_inputs["encoder_tile_ids_per_batch"] = None
+        self.share_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
+        self.share_inputs["kv_batch_ids"] = None
+        self.share_inputs["kv_tile_ids_per_batch"] = None
+        self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
+        self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -910,41 +950,20 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
             caches=self.share_inputs["caches"],
+            encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
+            encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
+            encoder_num_blocks_x_cpu=self.share_inputs["encoder_num_blocks_x_cpu"],
+            kv_batch_ids=self.share_inputs["kv_batch_ids"],
+            kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
+            kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
         )
 
         # Update Batch type for cuda graph for only_decode_batch
-        only_decode_batch = True
-        prefill_exists = None
-        # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            only_decode_batch_list = []
-            prefill_exists = self.exist_prefill()
-            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
-            only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
-
-        only_decode_use_cudagraph = (
-            self.use_cudagraph
-            and only_decode_batch
-            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
-        )
+        only_decode_use_cudagraph = self.use_cudagraph and self.only_decode()
 
         # Update Batch type for cuda graph for only_prefill_batch
-        only_prefill_batch = True
-        decode_exists = None
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            # 收集所有 worker 的状态
-            only_prefill_batch_list = []
-            decode_exists = self.exist_decode()
-            paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
-            only_prefill_batch = all(only_prefill_batch_list)
-
-        only_prefill_use_cudagraph = (
-            self.use_cudagraph
-            and self.cudagraph_only_prefill
-            and only_prefill_batch
-            and not (decode_exists if decode_exists is not None else self.exist_decode())
-        )
+        only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
 
         # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
         self.forward_meta.step_use_cudagraph = (
@@ -1027,13 +1046,30 @@ class GPUModelRunner(ModelRunnerBase):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
+        group_size = np.ceil(num_heads / self.model_config.kv_num_heads)
+
         decode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
-            (decoder_step_token_num * np.ceil(num_heads / self.model_config.kv_num_heads)) / decoder_block_shape_q
+            (decoder_step_token_num * group_size) / decoder_block_shape_q
+        )
+        encode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+            (self.model_config.max_model_len * group_size) / encoder_block_shape_q
+        )
+        kv_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+            self.model_config.max_model_len / self.fd_config.cache_config.block_size
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
         self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+
+        self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["encoder_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+
+        self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+        self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -1262,7 +1298,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
 
-    def capture_model(self, capture_prefill: bool = False) -> None:
+    def capture_model(self, prefill_only: bool = False) -> None:
         """
         Trigger CUDA Graph capture for all shapes in cuda graph capture list
         """
@@ -1272,7 +1308,8 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-        if capture_prefill:
+
+        if prefill_only:
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
                     num_tokens=num_tokens,
@@ -1292,7 +1329,7 @@ class GPUModelRunner(ModelRunnerBase):
                     expected_decode_len=expected_decode_len,
                 )
                 logger.info(
-                    f"Warm up the model with the batch size:{batch_size}, expected_decode_len:{expected_decode_len}"
+                    f"Warm up the model with the num_tokens:{batch_size}, expected_decode_len:{expected_decode_len}"
                 )
 
         time_after_capture = time.perf_counter()
@@ -1371,9 +1408,6 @@ class GPUModelRunner(ModelRunnerBase):
             )
             hidden_states = model_output
         else:
-            print("传递给model的seq_lens_this_time", self.forward_meta.seq_lens_this_time)
-            print("input_ids", self.forward_meta.input_ids.shape)
-            print("self.share_inputs[ids_remove_padding].shape:", self.share_inputs["ids_remove_padding"].shape)
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,

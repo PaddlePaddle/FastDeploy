@@ -88,6 +88,14 @@ class ForwardMeta:
     # Recorded multiple lengths related to prefill or decode
     max_len_tensor_cpu: Optional[paddle.Tensor] = None
 
+    encoder_batch_ids: Optional[paddle.Tensor] = None
+    encoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    encoder_num_blocks_x_cpu: Optional[paddle.Tensor] = None
+    kv_batch_ids: Optional[paddle.Tensor] = None
+    kv_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
+    max_len_kv_cpu: Optional[paddle.Tensor] = None
+
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None
     # Sequence length of Encoder for ever batch

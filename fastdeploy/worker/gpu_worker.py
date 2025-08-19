@@ -210,7 +210,7 @@ class GpuWorker(WorkerBase):
         if self.model_runner.graph_opt_level >= 1:
             self.model_runner.sot_warmup()
         # Triger cuda grpah capture
-        self.model_runner.capture_model(capture_prefill=self.fd_config.graph_opt_config.cudagraph_only_prefill)
+        self.model_runner.capture_model(prefill_only=self.fd_config.graph_opt_config.cudagraph_only_prefill)
 
     def check_health(self) -> bool:
         """ """
