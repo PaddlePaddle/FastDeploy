@@ -293,10 +293,11 @@ class Config:
         )
 
         if not self.cache_config.enable_chunked_prefill:
-            assert self.max_num_batched_tokens >= self.max_model_len, (
-                f"max_num_batched_tokens: {self.max_num_batched_tokens} "
-                f"should be larger than or equal to max_model_len: {self.max_model_len}"
-            )
+            if not int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")):
+                assert self.max_num_batched_tokens >= self.max_model_len, (
+                    f"max_num_batched_tokens: {self.max_num_batched_tokens} "
+                    f"should be larger than or equal to max_model_len: {self.max_model_len}"
+                )
         else:
             assert self.max_num_batched_tokens >= self.cache_config.block_size, (
                 f"max_num_batched_tokens: {self.max_num_batched_tokens} "
