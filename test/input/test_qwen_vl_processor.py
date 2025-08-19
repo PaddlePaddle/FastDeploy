@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -10,11 +26,28 @@ from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
 
 
 def mock_pil_image(height, width):
+    """Generate mock random RGB image
+
+    Args:
+        height: Image height in pixels
+        width: Image width in pixels
+
+    Returns:
+        PIL.Image object with random RGB data
+    """
     rgb_image = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
     return Image.fromarray(rgb_image)
 
 
 def mock_parse_chat_messages():
+    """Generate mock chat messages with image, video and text content
+
+    Returns:
+        List of chat message dictionaries containing:
+        - Mock image data (480x640 pixels)
+        - Mock video data (dummy bytes)
+        - Sample text prompt
+    """
     messages = [
         {
             "role": "user",
@@ -37,6 +70,17 @@ def mock_parse_chat_messages():
 
 
 def mock_video_frames(num_frames, height, width):
+    """Generate mock video frames with random pixel data
+
+    Args:
+        num_frames: Number of frames to generate
+        height: Frame height in pixels
+        width: Frame width in pixels
+
+    Returns:
+        Numpy array of shape (num_frames, height, width, 3)
+        containing random RGB frames
+    """
     frames = []
     for i in range(num_frames):
         frame = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
@@ -45,6 +89,16 @@ def mock_video_frames(num_frames, height, width):
 
 
 def mock_load_and_process_video():
+    """Mock video loading and processing
+
+    Returns:
+        Tuple containing:
+        - frames: 3 mock video frames (480x640 resolution)
+        - meta: Dictionary with mock video metadata:
+            * fps: 1
+            * duration: 3 seconds
+            * num_of_frame: 3
+    """
     frames = mock_video_frames(num_frames=3, height=480, width=640)
     meta = {
         "fps": 1,
@@ -55,8 +109,14 @@ def mock_load_and_process_video():
 
 
 class TestQwenVLProcessor(unittest.TestCase):
+    """Unit tests for Qwen Vision-Language Processor functionality"""
 
     def setUp(self):
+        """Initialize test case with:
+        - Mock configuration
+        - Patched message parsing and video processing methods
+        - QwenVLProcessor instance with test parameters
+        """
         config = MagicMock()
         config.vision_config.tokens_per_second = 2
 
@@ -76,7 +136,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        model_name_or_path = "/workspace/Fastdeploy/test/ModelData/Qwen2.5-VL-7B-Instruct"
+        model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
         self.processor = QwenVLProcessor(
             config=config,
             model_name_or_path=model_name_or_path,
@@ -87,10 +147,19 @@ class TestQwenVLProcessor(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        """Clean up test case by stopping all mock patches"""
         self.patcher_parse_chat_messages.stop()
         self.patcher_load_and_process_video.stop()
 
     def test_process_request(self):
+        """Test processing of Request object with multimodal input
+
+        Validates:
+        1. Token ID lengths match position_ids and token_type_ids shapes
+        2. Image processing produces expected output dimensions
+        3. Video processing produces expected output dimensions
+        4. Correct counts for images (1) and videos (1)
+        """
         prompt = {
             "request_id": "123",
             "messages": [
@@ -121,6 +190,14 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
     def test_process_request_dict(self):
+        """Test processing of dictionary-format request with multimodal input
+
+        Validates:
+        1. Token ID lengths match position_ids and token_type_ids shapes
+        2. Image processing produces expected output dimensions
+        3. Video processing produces expected output dimensions
+        4. Correct counts for images (1) and videos (1)
+        """
         num_generated_token_ids = 10
         request = {
             "metadata": {
