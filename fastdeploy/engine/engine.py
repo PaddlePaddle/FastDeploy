@@ -605,7 +605,6 @@ class LLMEngine:
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
-                    time.sleep(3)
                     self.dp_processed.append(
                         multiprocessing.Process(
                             target=start_data_parallel_service,
@@ -620,9 +619,9 @@ class LLMEngine:
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()
-            for i in range(1, self.cfg.parallel_config.data_parallel_size // self.cfg.nnode):
-                while self.launched_expert_service_signal.value[i] == 0:
-                    time.sleep(10)
+                    while self.launched_expert_service_signal.value[i] == 0:
+                        time.sleep(1)
+
 
     def check_worker_initialize_status(self):
         """
