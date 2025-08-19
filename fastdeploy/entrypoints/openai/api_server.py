@@ -156,6 +156,7 @@ async def lifespan(app: FastAPI):
         await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
+
         multiprocess.mark_process_dead(os.getpid())
         api_server_logger.info(f"Closing metrics client pid: {pid}")
     except Exception as e:
