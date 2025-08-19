@@ -6,6 +6,7 @@
 
 import os
 import re
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urlunparse
 
@@ -122,7 +123,7 @@ def query_model(prompt):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return f"[Error] {e}"
+        return f"[Error] {e}, {str(traceback.format_exc())}"
 
 
 # ========== 评估函数 ==========

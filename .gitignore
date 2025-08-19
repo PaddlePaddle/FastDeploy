@@ -170,3 +170,6 @@ third_party
 
 custom_ops/gpu_ops/w4afp8_gemm/w4afp8_gemm_*.cu
 custom_ops/gpu_ops/w4afp8_gemm/w4afp8_gemm_template.h
+
+custom_ops/gpu_ops/wfp8afp8_sparse_gemm/wfp8Afp8_sparse_gemm_*.cu
+custom_ops/gpu_ops/wfp8afp8_sparse_gemm/wfp8Afp8_sparse_gemm_template.h

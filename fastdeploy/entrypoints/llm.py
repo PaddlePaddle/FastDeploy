@@ -256,7 +256,7 @@ class LLM:
         self,
         prompts,
         sampling_params,
-        chat_template_kwargs: Optional[dict[str, Any]] = None,
+        **kwargs,
     ):
         """
             添加一个请求到 LLM Engine，并返回该请求的 ID。
@@ -297,10 +297,7 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
-            enable_thinking = None
-            if chat_template_kwargs is not None:
-                enable_thinking = chat_template_kwargs.get("enable_thinking", None)
-            self.llm_engine.add_requests(tasks, current_sampling_params, enable_thinking=enable_thinking)
+            self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 
     def _decode_token(self, token_id: int) -> str:
@@ -349,7 +346,7 @@ class LLM:
             return result
 
         except Exception as e:
-            llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}")
+            llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}, {str(traceback.format_exc())}")
 
     def _run_engine(self, req_ids: list[str], use_tqdm: bool, topk_logprobs: Optional[int] = None):
         """

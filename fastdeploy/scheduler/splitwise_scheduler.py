@@ -20,6 +20,7 @@ import math
 import random
 import threading
 import time
+import traceback
 from collections import deque
 from typing import List
 
@@ -379,7 +380,7 @@ class ResultReader:
                 if total == 0:
                     time.sleep(0.01)
             except Exception as e:
-                logger.error(f"ResultsReader{self.idx} sync results error: {e!s}")
+                logger.error(f"ResultsReader{self.idx} sync results error: {e!s}, {str(traceback.format_exc())}")
 
     def sync_results(self, keys):
         """
@@ -402,7 +403,7 @@ class ResultReader:
                     result = RequestOutput.from_dict(data)
                     self.data.appendleft(result)
                 except Exception as e:
-                    logger.error(f"Parse Result Error:{e}, {result}")
+                    logger.error(f"Parse Result Error:{e}, {str(traceback.format_exc())}, {result}")
         return total
 
 
@@ -498,7 +499,7 @@ class APIScheduler:
             except IndexError:
                 continue
             except Exception as e:
-                logger.error(f"APIScheduler Schedule req error: {e!s}")
+                logger.error(f"APIScheduler Schedule req error: {e!s}, {str(traceback.format_exc())}")
 
     def schedule(self, req, pnodes, dnodes, mnodes, group=""):
         """
@@ -573,8 +574,8 @@ class APIScheduler:
                     # logger.info(f"clear expired nodes: {nodeid}")
                     self.client.hdel(self.cluster_key, nodeid)
                 time.sleep(self.clear_expired_nodes_period)
-            except Exception:
-                logger.error("APIScheduler clear expired nodes error: {str(e)}")
+            except Exception as e:
+                logger.error(f"APIScheduler clear expired nodes error: {str(e)}, {str(traceback.format_exc())}")
 
     def select_pd(self, req, nodes, role):
         """
@@ -664,7 +665,7 @@ class ResultWriter:
                     # e = time.time()
                     # logger.info(f"Lpush {self.idx}: {key} used {e-s} {len(items)} items")
             except Exception as e:
-                logger.error(f"ResultWriter write error: {e!s}")
+                logger.error(f"ResultWriter write error: {e!s}, {str(traceback.format_exc())}")
 
 
 class InferScheduler:
@@ -723,7 +724,7 @@ class InferScheduler:
                 self.client.hset(self.cluster_key, self.nodeid, info)
                 time.sleep(self.sync_period / 1000.0)
             except Exception as e:
-                logger.error(f"InferScheduler routine report error: {e!s}")
+                logger.error(f"InferScheduler routine report error: {e!s}, {str(traceback.format_exc())}")
 
     def loop_expire_reqs(self):
         """
@@ -733,8 +734,8 @@ class InferScheduler:
             try:
                 self.node.expire_reqs(self.release_load_expire_period)
                 time.sleep(60)
-            except Exception:
-                logger.error("InferScheduler expire reqs error: {e}")
+            except Exception as e:
+                logger.error(f"InferScheduler expire reqs error: {e}, {str(traceback.format_exc())}")
 
     def loop_get_reqs(self):
         """
@@ -772,7 +773,7 @@ class InferScheduler:
                     else:
                         self.node.add_req(req.request_id, 1)
             except Exception as e:
-                logger.error(f"InferScheduler loop get reqs error: {e!s}")
+                logger.error(f"InferScheduler loop get reqs error: {e!s}, {str(traceback.format_exc())}")
 
     def get_requests(
         self,
@@ -807,7 +808,8 @@ class InferScheduler:
                     return reqs
                 # logger.info(f"Get Requests from Scheduler: {req.request_id}")
                 reqs.append(req)
-            except Exception:
+            except Exception as e:
+                logger.error(f"InferScheduler get requests error: {e}, {str(traceback.format_exc())}")
                 return reqs
         return reqs
 
