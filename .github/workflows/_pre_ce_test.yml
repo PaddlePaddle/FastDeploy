@@ -27,10 +27,6 @@ on:
         type: string
         default: ""
 
-concurrency:
-  group: ${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   run_ce_cases:
     runs-on: [self-hosted, PRE_CE_RUN_2Card]

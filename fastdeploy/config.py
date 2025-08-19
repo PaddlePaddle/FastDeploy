@@ -487,7 +487,7 @@ class GraphOptimizationConfig:
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = None
-        self.batch_size_to_captured_size: dict[int, int] = None
+        self.real_shape_to_captured_size: dict[int, int] = None
         # CINN Config ...
         if args is not None:
             for key, value in args.items():
@@ -516,26 +516,26 @@ class GraphOptimizationConfig:
         self.cudagraph_capture_sizes.sort(reverse=True)
         self.max_capture_size = self.cudagraph_capture_sizes[0] if self.cudagraph_capture_sizes else 0
 
-        # Pre-compute the mapping from batch size to padded graph size
-        self.batch_size_to_captured_size = {}
+        # Pre-compute the mapping from shape to padded graph size
+        self.real_shape_to_captured_size = {}
         for end, start in zip(self.cudagraph_capture_sizes, self.cudagraph_capture_sizes[1:] + [0]):
             for bs in range(start, end):
                 if bs == start:
-                    self.batch_size_to_captured_size[bs] = start
+                    self.real_shape_to_captured_size[bs] = start
                 else:
-                    self.batch_size_to_captured_size[bs] = end
-        self.batch_size_to_captured_size[self.max_capture_size] = self.max_capture_size
+                    self.real_shape_to_captured_size[bs] = end
+        self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
     def _set_cudagraph_sizes(self, max_num_seqs: int = 0):
         """
-        Calculate a series of candidate capture batch sizes,
+        Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
+        # Shape [1, 2, 4, 8, 16, ... 120, 128]
         draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
-        # Batch Size [128, 144, ... 240, 256]
+        # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
-        # Batch Size [256, 288, ... 992, 1024]
+        # Shape [256, 288, ... 992, 1024]
         draft_capture_sizes += [32 * i for i in range(17, 33)]
 
         draft_capture_sizes.append(max_num_seqs)
