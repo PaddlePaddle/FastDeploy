@@ -192,13 +192,17 @@ class PaddleDisWorkerProc:
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
 
+        if self.parallel_config.local_data_parallel_id == 0:
+            current_suffix = self.parallel_config.engine_pid
+        else:
+            current_suffix = self.parallel_config.engine_worker_queue_port
         # init worker_healthy_live_signal
         workers_alive = np.zeros(shape=[min(array_size, self.parallel_config.tensor_parallel_size)], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=current_suffix,
             create=False,
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -210,7 +214,7 @@ class PaddleDisWorkerProc:
             name="model_weights_status",
             array=workers_model_weights,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=current_suffix,
             create=False,
         )
 
@@ -220,7 +224,7 @@ class PaddleDisWorkerProc:
             name="exist_task_signal",
             array=workers_exist_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=current_suffix,
             create=False,
         )
 
@@ -230,7 +234,7 @@ class PaddleDisWorkerProc:
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=current_suffix,
             create=False,
         )
 
@@ -240,7 +244,7 @@ class PaddleDisWorkerProc:
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=current_suffix,
             create=False,
         )
 
@@ -643,12 +647,14 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
         num_experts_per_rank = num_experts // args.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
     parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
-        parallel_config.expert_parallel_rank
+        parallel_config.local_data_parallel_id
     ]
 
     load_config = LoadConfig(vars(args))
