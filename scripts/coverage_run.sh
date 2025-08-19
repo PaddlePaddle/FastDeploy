@@ -26,7 +26,6 @@ done
 failed_tests_file="failed_tests.log"
 > "$failed_tests_file"
 disabled_tests=(
-  layers/test_sampler.py
   layers/test_append_attention.py
   layers/test_attention.py
   operators/test_rejection_top_p_sampling.py
@@ -36,7 +35,6 @@ disabled_tests=(
   operators/test_stop_generation.py
   operators/test_air_topp_sampling.py
   operators/test_fused_moe.py
-  layers/test_repetition_early_stopper.py
   operators/test_stop_generation_multi_ends.py
   graph_optimization/test_cuda_graph.py
 )
