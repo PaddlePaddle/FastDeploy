@@ -247,8 +247,8 @@ class LLMEngine:
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        if self.guided_decoding_checker is not None:
-            request, err_msg = self.guided_decoding_checker.schema_format(request)
+        if self.engine.guided_decoding_checker is not None:
+            request, err_msg = self.engine.guided_decoding_checker.schema_format(request)
             if err_msg is not None:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
