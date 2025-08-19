@@ -240,7 +240,15 @@ class OpenAIServingCompletion:
                 dealer.close()
                 self.engine_client.semaphore.release()
 
-    def calc_finish_reason(self, max_tokens, token_num, output):
+    async def _echo_back_prompt(self, request, res, idx):
+        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
+            if isinstance(request.prompt, list):
+                prompt_text = request.prompt[idx]
+            else:
+                prompt_text = request.prompt
+            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+
+    def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
             if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
                 return "tool_calls"
@@ -336,6 +344,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -430,7 +439,7 @@ class OpenAIServingCompletion:
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            prompt_text = final_res["prompt"]
+            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
@@ -448,17 +457,20 @@ class OpenAIServingCompletion:
 
             if request.echo:
                 assert prompt_text is not None
-                if request.max_tokens == 0:
-                    token_ids = prompt_token_ids
-                    output_text = prompt_text
+                token_ids = [*prompt_token_ids, *output["token_ids"]]
+                if isinstance(prompt_text, list):
+                    output_text = prompt_text[idx] + output["text"]
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
-                    output_text = prompt_text + output["text"]
+                    output_text = str(prompt_text) + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
+<<<<<<< HEAD
 
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
+=======
+            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
+>>>>>>> c95b3395 (【BugFix】completion接口echo回显支持 (#3245))
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
