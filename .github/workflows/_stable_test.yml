@@ -147,7 +147,7 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           TEST_EXIT_CODE=0
-          pushd test/ce/stable_cases
+          pushd tests/ce/stable_cases
           bash launch_model.sh /MODELDATA
           bash run.sh || TEST_EXIT_CODE=1
           popd
