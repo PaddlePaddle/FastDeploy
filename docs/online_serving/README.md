@@ -161,6 +161,9 @@ The following extra parameters are supported:
 chat_template_kwargs: Optional[dict] = None
 # Additional parameters passed to the chat template, used for customizing dialogue formats (default None).
 
+chat_template: Optional[str] = None
+# Custom chat template will override the model's default chat template (default None).
+
 reasoning_max_tokens: Optional[int] = None
 # Maximum number of tokens to generate during reasoning (e.g., CoT, chain of thought) (default None means using global max_tokens).
 

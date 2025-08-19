@@ -87,6 +87,7 @@ class ErnieProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -287,6 +288,7 @@ class ErnieProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+        response_dict["outputs"]["raw_prediction"] = delta_text
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
@@ -341,6 +343,7 @@ class ErnieProcessor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
+            chat_template=request_or_messages.get("chat_template", None),
         )
         request_or_messages["text_after_process"] = spliced_message
         req_id = None

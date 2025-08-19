@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -784,43 +785,54 @@ def test_non_streaming_chat_with_bad_words(openai_client, capsys):
     """
     Test bad_words option in non-streaming chat functionality with the local service
     """
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
+    else:
+        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
     response_0 = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
+        max_tokens=20,
         stream=False,
+        extra_body={"return_token_ids": True},
     )
-    output_0 = []
+
     assert hasattr(response_0, "choices")
     assert len(response_0.choices) > 0
     assert hasattr(response_0.choices[0], "message")
-    assert hasattr(response_0.choices[0].message, "content")
+    assert hasattr(response_0.choices[0].message, "completion_token_ids")
+    assert isinstance(response_0.choices[0].message.completion_token_ids, list)
 
-    text_split = response_0.choices[0].message.content.split(" ")
-    for text in text_split:
-        output_0.append(text)
+    from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+
+    tokenizer = ErnieBotTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    output_tokens_0 = []
+    output_ids_0 = []
+    for ids in response_0.choices[0].message.completion_token_ids:
+        output_tokens_0.append(tokenizer.decode(ids))
+        output_ids_0.append(ids)
 
     # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
     response_1 = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
-        extra_body={"bad_words": output_0[-5:]},
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
         stream=False,
     )
-    output_1 = []
     assert hasattr(response_1, "choices")
     assert len(response_1.choices) > 0
     assert hasattr(response_1.choices[0], "message")
-    assert hasattr(response_1.choices[0].message, "content")
-    text_split = response_1.choices[0].message.content.split(" ")
-    for text in text_split:
-        output_1.append(text)
-    assert output_0 not in output_1
+    assert hasattr(response_1.choices[0].message, "completion_token_ids")
+    assert isinstance(response_1.choices[0].message.completion_token_ids, list)
+    assert not any(ids in response_1.choices[0].message.completion_token_ids for ids in bad_token_ids)
 
 
 def test_streaming_chat_with_bad_words(openai_client, capsys):
@@ -832,75 +844,106 @@ def test_streaming_chat_with_bad_words(openai_client, capsys):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
+        max_tokens=20,
         stream=True,
+        extra_body={"return_token_ids": True},
     )
-    output_0 = []
+    output_tokens_0 = []
+    output_ids_0 = []
+    is_first_chunk = True
     for chunk in response_0:
         assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "delta")
         assert hasattr(chunk.choices[0].delta, "content")
-        output_0.append(chunk.choices[0].delta.content)
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+            output_tokens_0.append(chunk.choices[0].delta.content)
+            output_ids_0.extend(chunk.choices[0].delta.completion_token_ids)
 
     # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
     response_1 = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
-        extra_body={"bad_words": output_0[-5:]},
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
         stream=True,
     )
-    output_1 = []
+    output_tokens_1 = []
+    output_ids_1 = []
+    is_first_chunk = True
     for chunk in response_1:
         assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "delta")
         assert hasattr(chunk.choices[0].delta, "content")
-        output_1.append(chunk.choices[0].delta.content)
-    assert output_0 not in output_1
+        assert hasattr(chunk.choices[0].delta, "completion_token_ids")
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
+            output_tokens_1.append(chunk.choices[0].delta.content)
+            output_ids_1.extend(chunk.choices[0].delta.completion_token_ids)
+    assert not any(ids in output_ids_1 for ids in bad_token_ids)
 
 
 def test_non_streaming_completion_with_bad_words(openai_client, capsys):
     """
     Test bad_words option in non-streaming completion functionality with the local service
     """
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
+    else:
+        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+
     response_0 = openai_client.completions.create(
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
+        max_tokens=20,
         stream=False,
+        extra_body={"return_token_ids": True},
     )
-    output_0 = []
     assert hasattr(response_0, "choices")
     assert len(response_0.choices) > 0
-    assert hasattr(response_0.choices[0], "text")
-    text_split = response_0.choices[0].text.split(" ")
-    for text in text_split:
-        output_0.append(text)
+    assert hasattr(response_0.choices[0], "completion_token_ids")
+    assert isinstance(response_0.choices[0].completion_token_ids, list)
+
+    from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+
+    tokenizer = ErnieBotTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    output_tokens_0 = []
+    output_ids_0 = []
+    for ids in response_0.choices[0].completion_token_ids:
+        output_tokens_0.append(tokenizer.decode(ids))
+        output_ids_0.append(ids)
 
     # add bad words
+    bad_tokens = output_tokens_0[6:10]
+    bad_token_ids = output_ids_0[6:10]
     response_1 = openai_client.completions.create(
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
-        extra_body={"bad_words": output_0[-5:]},
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
         stream=False,
     )
-    output_1 = []
     assert hasattr(response_1, "choices")
     assert len(response_1.choices) > 0
-    assert hasattr(response_1.choices[0], "text")
-    text_split = response_1.choices[0].text.split(" ")
-    for text in text_split:
-        output_1.append(text)
-    assert output_0 not in output_1
+    assert hasattr(response_0.choices[0], "completion_token_ids")
+    assert isinstance(response_0.choices[0].completion_token_ids, list)
+    assert not any(ids in response_1.choices[0].completion_token_ids for ids in bad_token_ids)
 
 
 def test_streaming_completion_with_bad_words(openai_client, capsys):
@@ -912,30 +955,86 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         prompt="Hello, how are you?",
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
+        max_tokens=20,
         stream=True,
+        extra_body={"return_token_ids": True},
     )
-    output_0 = []
+    output_tokens_0 = []
+    output_ids_0 = []
+    is_first_chunk = True
     for chunk in response_0:
-        assert hasattr(chunk, "choices")
-        assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], "text")
-        output_0.append(chunk.choices[0].text)
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert hasattr(chunk, "choices")
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], "text")
+            assert hasattr(chunk.choices[0], "completion_token_ids")
+            output_tokens_0.append(chunk.choices[0].text)
+            output_ids_0.extend(chunk.choices[0].completion_token_ids)
 
     # add bad words
+    bad_token_ids = output_ids_0[6:10]
+    bad_tokens = output_tokens_0[6:10]
     response_1 = openai_client.completions.create(
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
         top_p=0.0,
-        max_tokens=10,
-        extra_body={"bad_words": output_0[-5:]},
+        max_tokens=20,
+        extra_body={"bad_words": bad_tokens, "return_token_ids": True},
         stream=True,
     )
-    output_1 = []
+    output_tokens_1 = []
+    output_ids_1 = []
+    is_first_chunk = True
     for chunk in response_1:
-        assert hasattr(chunk, "choices")
-        assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], "text")
-        output_1.append(chunk.choices[0].text)
-    assert output_0 not in output_1
+        if is_first_chunk:
+            is_first_chunk = False
+        else:
+            assert hasattr(chunk, "choices")
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], "text")
+            assert hasattr(chunk.choices[0], "completion_token_ids")
+            output_tokens_1.append(chunk.choices[0].text)
+            output_ids_1.extend(chunk.choices[0].completion_token_ids)
+    assert not any(ids in output_ids_1 for ids in bad_token_ids)
+
+
+def test_profile_reset_block_num():
+    """测试profile reset_block_num功能，与baseline diff不能超过5%"""
+    log_file = "./log/config.log"
+    baseline = 31446
+
+    if not os.path.exists(log_file):
+        pytest.fail(f"Log file not found: {log_file}")
+
+    with open(log_file, "r") as f:
+        log_lines = f.readlines()
+
+    target_line = None
+    for line in log_lines:
+        if "Reset block num" in line:
+            target_line = line.strip()
+            break
+
+    if target_line is None:
+        pytest.fail("日志中没有Reset block num信息")
+
+    match = re.search(r"total_block_num:(\d+)", target_line)
+    if not match:
+        pytest.fail(f"Failed to extract total_block_num from line: {target_line}")
+
+    try:
+        actual_value = int(match.group(1))
+    except ValueError:
+        pytest.fail(f"Invalid number format: {match.group(1)}")
+
+    lower_bound = baseline * (1 - 0.05)
+    upper_bound = baseline * (1 + 0.05)
+    print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
+
+    assert lower_bound <= actual_value <= upper_bound, (
+        f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
+        f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
+    )

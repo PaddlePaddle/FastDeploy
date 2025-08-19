@@ -204,6 +204,7 @@ class DataProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -486,6 +487,7 @@ class DataProcessor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
             return_tensors="pd",
+            chat_template=request.get("chat_template", None),
         )
         request["text_after_process"] = spliced_message
         req_id = None

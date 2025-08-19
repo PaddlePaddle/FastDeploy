@@ -109,6 +109,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
+        request.chat_template = kwargs.get("chat_template")
         task = request.to_dict()
         task["enable_thinking"] = kwargs.get("enable_thinking", True)
         self.process_request_dict(task, max_model_len)

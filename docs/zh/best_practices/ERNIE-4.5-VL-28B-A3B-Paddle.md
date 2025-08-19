@@ -9,9 +9,9 @@
 |:----------:|:----------:|:------:| :------:|
 | A30 [24G] | 2 | 2 | 4 |
 | L20 [48G] | 1 | 1 | 2 |
-| H20 [144G] | 1 | 1 |  1 |
-| A100 [80G] | 1 | 1 |  1 |
-| H800 [80G] | 1 | 1 |  1 |
+| H20 [144G] | 1 | 1 | 1 |
+| A100 [80G] | 1 | 1 | 1 |
+| H800 [80G] | 1 | 1 | 1 |
 
 ### 1.2 安装fastdeploy
 
@@ -26,7 +26,6 @@
  **示例1：** 4090上单卡部署32K上下文的服务
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1
-
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8180 \
@@ -46,7 +45,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
  **示例2：** H800上双卡部署128K上下文的服务
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1
-
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8180 \
@@ -63,6 +61,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --quantization wint4 \
     --enable-mm
 ```
+> ⚠️ 2.1及以上版本需要通过环境变量开启新调度器 `ENABLE_V1_KVCACHE_SCHEDULER=1`，否则可能会有部分请求最大长度前截断或返空。
+
 示例是可以稳定运行的一组配置，同时也能得到比较好的性能。
 如果对精度、性能有进一步的要求，请继续阅读下面的内容。
 ### 2.2 进阶：如何获取更优性能
@@ -109,6 +109,15 @@ python -m fastdeploy.entrypoints.openai.api_server \
   - 除非您有极其严格的精度要求，否则我们建议使用WINT4量化。这将显著降低内存占用并提升吞吐量。
   - 若需要稍高的精度，可尝试WINT8。
   - 仅当您的应用场景对精度有极致要求时候才尝试使用BFLOAT16，因为它需要更多显存。
+
+#### 2.2.4  **可调整的环境变量**
+> **拒绝采样：**`FD_SAMPLING_CLASS=rejection`
+- **描述**：拒绝采样即从一个易于采样的提议分布（proposal distribution）中生成样本，避免显式排序从而达到提升采样速度的效果，可以提升推理性能。
+- **推荐**：这是一种影响效果的较为激进的优化策略，我们还在全面验证影响。如果对性能有较高要求，也可以接受对效果的影响时可以尝试开启。
+
+> **Attention超参：**`FLAGS_max_partition_size=1024`
+- **描述**：Append Attntion(默认)后端的超参，我们在常用数据集上的测试结果表明，设置为1024后可以大幅提升解码速度，尤其是长文场景。
+- **推荐**：未来会修改为自动调整的机制。如果对性能有较高要求可以尝试开启。
 
 ## 三、常见问题FAQ
 **注意：** 使用多模服务部署需要在配置中添加参数 `--enable-mm`。
