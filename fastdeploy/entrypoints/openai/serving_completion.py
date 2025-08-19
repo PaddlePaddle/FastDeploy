@@ -240,7 +240,7 @@ class OpenAIServingCompletion:
                 dealer.close()
                 self.engine_client.semaphore.release()
 
-    def _echo_back_prompt(self, request, res, idx):
+    async def _echo_back_prompt(self, request, res, idx):
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
             if isinstance(request.prompt, list):
                 prompt_text = request.prompt[idx]
@@ -346,7 +346,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
-                    self._echo_back_prompt(request, res, idx)
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -478,7 +478,6 @@ class OpenAIServingCompletion:
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
             choice_data = CompletionResponseChoice(
