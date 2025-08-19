@@ -208,7 +208,6 @@ class DataProcessor(BaseDataProcessor):
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
-
         stop_sequences = request.get("stop", [])
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
@@ -222,7 +221,15 @@ class DataProcessor(BaseDataProcessor):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 task = request.to_dict()
-                task["enable_thinking"] = kwargs.get("enable_thinking", True)
+                chat_template_kwargs = kwargs.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in task:
+                                task[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                task.setdefault("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
@@ -272,6 +279,15 @@ class DataProcessor(BaseDataProcessor):
             elif "messages" in request:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
+                chat_template_kwargs = request.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in request:
+                                request[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")

@@ -57,6 +57,7 @@ def _create_default_sampling_metadata(
         bad_words_token_ids=paddle.full(shape=[batch_size], fill_value=-1, dtype="int64"),
         eos_token_ids=paddle.full(shape=[batch_size], fill_value=-2, dtype="int64"),
         min_p=paddle.randn([batch_size]),
+        seed=paddle.to_tensor([[2025]]),
     )
     return fake_sampling_metadata
 

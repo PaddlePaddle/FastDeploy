@@ -197,10 +197,7 @@ class LLMEngine:
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
-        enable_thinking = None
-        if kwargs is not None:
-            enable_thinking = kwargs.get("enable_thinking", None)
-        request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
+        request = self.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -260,6 +257,7 @@ class LLMEngine:
         self.engine.scheduler.put_requests([request])
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")
+
 
     def _worker_processes_ready(self):
         """
