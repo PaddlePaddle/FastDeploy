@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal, Optional, Union
 
+import paddle.distributed as dist
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
 import fastdeploy
@@ -276,7 +277,10 @@ class ParallelConfig:
                 setattr(self, key, value)
 
         # currently, the expert parallel size is equal data parallel size
-        self.expert_parallel_size = self.data_parallel_size
+        if self.enable_expert_parallel:
+            self.expert_parallel_size = self.data_parallel_size * self.tensor_parallel_size
+        else:
+            self.expert_parallel_size = 1
         self.use_ep = self.expert_parallel_size > 1
         if self.splitwise_role == "mixed":
             self.moe_phase = MoEPhase(phase="prefill")
@@ -296,6 +300,22 @@ class ParallelConfig:
             self.pd_disaggregation_mode = "per_query"
         else:
             self.pd_disaggregation_mode = "None"
+
+    def set_tp_group(self):
+        # different tp group id
+        # prevent different tp_groups using the same group_id
+        dist.collective._set_custom_gid(self.data_parallel_rank + 100)
+        self.tp_group = dist.new_group(
+            range(
+                self.data_parallel_rank * self.tensor_parallel_size,
+                (self.data_parallel_rank + 1) * self.tensor_parallel_size,
+            )
+        )
+        # same ep group id
+        dist.collective._set_custom_gid(self.data_parallel_size + 100)
+        logger.info(
+            f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
+        )
 
     def print(self):
         """

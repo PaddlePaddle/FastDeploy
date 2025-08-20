@@ -192,12 +192,7 @@ class Config:
         if self.enable_mm:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
-        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
-            self.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
-        ), "TP and EP cannot be enabled at the same time"
-
-        num_ranks = self.tensor_parallel_size * self.parallel_config.expert_parallel_size
+        num_ranks = self.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if num_ranks > self.max_chips_per_node:
             self.worker_num_per_node = self.max_chips_per_node

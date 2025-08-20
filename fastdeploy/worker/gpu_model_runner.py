@@ -1123,7 +1123,7 @@ class GPUModelRunner(ModelRunnerBase):
                 is_block_step=self.share_inputs["is_block_step"],
                 full_hidden_states=model_output,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(
@@ -1391,7 +1391,7 @@ class GPUModelRunner(ModelRunnerBase):
             is_block_step=self.share_inputs["is_block_step"],
             full_hidden_states=model_output,
             msg_queue_id=self.parallel_config.msg_queue_id,
-            mp_rank=self.local_rank,
+            mp_rank=self.parallel_config.tensor_parallel_rank,
             use_ep=self.parallel_config.use_ep,
             draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             actual_draft_token_num=(

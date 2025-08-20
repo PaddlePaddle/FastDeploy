@@ -37,6 +37,7 @@ class ModelRunnerBase(ABC):
         Initialize FDConfig
         """
         self.fd_config = fd_config
+        self.fd_config.parallel_config.set_tp_group()
         self.model_config = fd_config.model_config
         self.load_config = fd_config.load_config
         self.device_config = fd_config.device_config

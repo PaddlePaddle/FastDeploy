@@ -309,7 +309,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         )
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            tensor_model_parallel_all_reduce(fused_moe_out, self.tp_group)
 
         return fused_moe_out
 
