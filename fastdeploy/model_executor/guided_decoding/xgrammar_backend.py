@@ -16,6 +16,7 @@
 
 import json
 import re
+import traceback
 from typing import Any, List, Optional
 
 import paddle
@@ -261,7 +262,7 @@ class XGrammarBackend(BackendBase):
         try:
             compiled_grammar = self.grammar_compiler.compile_json_schema(schemata, any_whitespace=self.any_whitespace)
         except Exception as e:
-            llm_logger.error(f"Failed to compile json schema: {e}")
+            llm_logger.error(f"Failed to compile json schema: {e}, {str(traceback.format_exc())}")
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
@@ -279,7 +280,7 @@ class XGrammarBackend(BackendBase):
         try:
             compiled_grammar = self.grammar_compiler.compile_regex(schemata)
         except Exception as e:
-            llm_logger.error(f"Failed to compile regex schema: {e}")
+            llm_logger.error(f"Failed to compile regex schema: {e}, {str(traceback.format_exc())}")
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
@@ -297,7 +298,7 @@ class XGrammarBackend(BackendBase):
         try:
             compiled_grammar = self.grammar_compiler.compile_grammar(schemata)
         except Exception as e:
-            llm_logger.error(f"Failed to compile ebnf schema: {e}")
+            llm_logger.error(f"Failed to compile ebnf schema: {e}, {str(traceback.format_exc())}")
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
@@ -324,7 +325,7 @@ class XGrammarBackend(BackendBase):
 
             compiled_grammar = self.grammar_compiler.compile_structural_tag(tags, structural_tag["triggers"])
         except Exception as e:
-            llm_logger.error(f"Failed to compile structural tags schema: {e}")
+            llm_logger.error(f"Failed to compile structural tags schema: {e}, {str(traceback.format_exc())}")
             return None
         return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
