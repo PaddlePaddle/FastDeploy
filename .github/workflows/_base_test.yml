@@ -162,7 +162,6 @@ jobs:
             local resp
 
             resp=$(curl -s -X POST "$url")
-            echo "$resp"
 
             if echo "$resp" | grep -q "服务启动超时"; then
               exit 8
