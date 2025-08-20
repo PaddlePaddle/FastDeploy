@@ -53,7 +53,7 @@ jobs:
             branch=$(echo "$pair" | cut -d',' -f1)
             compile_task_list=$(echo "$pair" | cut -d',' -f2)
 
-            if [[ "$branch" == "$current_branch" ]]; then
+            if [[ "$branch" == "$GITHUB_REF_NAME" ]]; then
 
               # 判断里面是否包含 sm8090 或 sm8689
               if [[ "$compile_task_list" == *"sm8090"* ]]; then
