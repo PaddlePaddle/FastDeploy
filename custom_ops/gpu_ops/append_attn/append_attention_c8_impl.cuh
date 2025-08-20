@@ -48,6 +48,7 @@ __global__ void multi_query_append_attention_c8_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ mask_offset,
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -179,6 +180,7 @@ __global__ void multi_query_append_attention_c8_kernel(
   } else {
     o_base_ptr_int8 = out + o_offset;
   }
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -216,7 +218,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : chunk_len) /
+              : mask_offset ? 0 : chunk_len) /
       (num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -305,7 +307,8 @@ __global__ void multi_query_append_attention_c8_kernel(
                           q_len,
                           kv_len,
                           chunk_end,
-                          s_frag);
+                          s_frag,
+                          mask_offset_this_seq);
     }
 
     // update m,d
@@ -474,6 +477,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ mask_offset,
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -601,7 +605,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           tid % 8 * num_elems_per_128b<T>();
     }
   }
-
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -642,7 +646,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : chunk_len) /
+              : mask_offset ? 0 : chunk_len) /
       (NUM_WARP_KV * num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -733,7 +737,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                           q_len,
                           kv_len,
                           chunk_end,
-                          s_frag);
+                          s_frag,
+                          mask_offset_this_seq);
     }
 
     // update m,d
@@ -1054,6 +1059,7 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1111,6 +1117,7 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1254,10 +1261,10 @@ void MultiQueryAppendC8Attention(
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
 
-    const int num_chunks = div_up(max_dec_len, chunk_size);
+    const int num_chunks = div_up(max_seq_len, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1) {
+    if (num_chunks <= 0) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
                                                          uint8_t,
@@ -1318,6 +1325,7 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1377,8 +1385,8 @@ void MultiQueryAppendC8Attention(
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k_scale.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v_scale.data<T>())),
           shift_bias ? reinterpret_cast<NV_TYPE *>(
-                           const_cast<T *>(shift_bias.get().data<T>()))
-                     : nullptr,
+                            const_cast<T *>(shift_bias.get().data<T>()))
+                      : nullptr,
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
@@ -1388,6 +1396,7 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1418,8 +1427,8 @@ void MultiQueryAppendC8Attention(
                 seq_lens_encoder.data<int>(),
                 cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
+                                  const_cast<T *>(shift_bias.get().data<T>()))
+                            : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
@@ -1436,14 +1445,14 @@ void MultiQueryAppendC8Attention(
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
         dim3 grids_merge(min(sm_count * 4, token_num),
-                         num_heads);
+                          num_heads);
         dim3 blocks_merge(blockx, blocky);
         merge_multi_chunks_v2_kernel<NV_TYPE,
-                                     vec_size,
-                                     blocky,
-                                     HEAD_DIM,
-                                     OUT_NV_TYPE,
-                                     ENABLE_PREFILL>
+                                      vec_size,
+                                      blocky,
+                                      HEAD_DIM,
+                                      OUT_NV_TYPE,
+                                      ENABLE_PREFILL>
             <<<grids_merge, blocks_merge, 0, stream>>>(
                 reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
                 static_cast<float *>(tmp_m->ptr()),
@@ -1454,8 +1463,8 @@ void MultiQueryAppendC8Attention(
                 batch_id_per_token.data<int>(),
                 cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
+                                  const_cast<T *>(shift_bias.get().data<T>()))
+                            : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,

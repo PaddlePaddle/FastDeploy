@@ -27,7 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
@@ -68,13 +68,18 @@ class GpuWorker(WorkerBase):
 
             gc.collect()
             paddle.device.cuda.empty_cache()
-            if self.parallel_config.enable_custom_all_reduce:
+            if (
+                self.parallel_config.enable_custom_all_reduce
+                and self.parallel_config.tensor_parallel_size > 1
+                and paddle.is_compiled_with_cuda()
+            ):
                 from fastdeploy.distributed.communication import use_custom_allreduce
 
                 use_custom_allreduce()
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
+        set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
         self.model_runner: ModelRunnerBase = ModelRunner(
             fd_config=self.fd_config,
@@ -129,6 +134,7 @@ class GpuWorker(WorkerBase):
 
         # 2. Profile run
         self.model_runner.profile_run()
+        set_random_seed(self.fd_config.model_config.seed)
 
         # 3. Statistical memory information
         paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(local_rank)
@@ -181,20 +187,21 @@ class GpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        num_running_request: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch)
+        output = self.model_runner.execute_model(model_forward_batch, num_running_request)
         return output
 
-    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
         else:
-            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """

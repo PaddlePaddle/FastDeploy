@@ -52,21 +52,24 @@ bash TopsRider_i3x_*_deb_amd64.run --driver --no-auto-load -y
 docker start paddle-gcu-llm
 docker exec -it paddle-gcu-llm bash
 ```
-5. 安装 PaddlePaddle<br/>
+5. 安装 PaddlePaddle & PaddleCustomDevice<br/>
 ```bash
 # PaddlePaddle『飞桨』深度学习框架，提供运算基础能力
-python -m pip install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-```
-6. 安装 PaddleCustomDevice<br/>
-```bash
+python -m pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
 # PaddleCustomDevice是PaddlePaddle『飞桨』深度学习框架的自定义硬件接入实现，提供GCU的算子实现
-python -m pip install paddle-custom-gcu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/gcu/
+python -m pip install paddle-custom-gcu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/gcu/
 # 如想源码编译安装，请参考https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/gcu/README_cn.md
 ```
-7. 安装 FastDeploy <br/>
+获取Paddle的最新安装版本： [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+
+6. 安装 FastDeploy <br/>
 ```bash
 python -m pip install fastdeploy -i https://www.paddlepaddle.org.cn/packages/stable/gcu/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
-# 如想源码编译安装，请参考如下步骤
+```
+
+可以按如下步骤编译FastDeploy，得到```最新版本```.
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy
 python -m pip install -r requirements.txt --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels

@@ -63,11 +63,17 @@ class W4AFP8LinearMethod(QuantMethodBase):
         super().__init__()
         self.quant_config = quant_config
 
-    def create_weights(self, layer):
+    def create_weights(self, layer, **extra_weight_attrs):
         layer.weight_shape.reverse()
         layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-        pass
+
+        layer.weight = layer.create_parameter(
+            shape=layer.weight_shape,
+            dtype=layer.weight_dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
 
     def process_loaded_weights(self, layer, weights) -> None:
         (

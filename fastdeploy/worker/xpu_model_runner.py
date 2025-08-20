@@ -361,7 +361,7 @@ class XPUModelRunner(ModelRunnerBase):
             shape=[self.parallel_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
-        )
+        ).cpu()
 
         # Initialize attention Backend
         # Note(gonshaotian): Currently, all attention layers share one attention backend instance.
@@ -373,7 +373,7 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
-    def insert_tasks_v1(self, req_dicts: List[Request]):
+    def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
         """
@@ -403,7 +403,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                self.seq_lens_this_time_buffer[idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
@@ -425,17 +425,20 @@ class XPUModelRunner(ModelRunnerBase):
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 0
+                self.seq_lens_this_time_buffer[idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 continue
 
-            if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
-                request.eos_token_ids.append(request.eos_token_ids[0])
+            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
+            self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
@@ -462,8 +465,9 @@ class XPUModelRunner(ModelRunnerBase):
                 )
         if has_prefill_task:
             self.share_inputs["not_need_stop"][0] = True
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
-    def process_prefill_inputs(self, req_dicts: List[Request]):
+    def process_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """Process inputs for prefill tasks and update share_inputs buffer"""
         req_len = len(req_dicts)
         for i in range(req_len):
@@ -471,18 +475,19 @@ class XPUModelRunner(ModelRunnerBase):
             idx = request.idx
             length = request.prompt_token_ids_len
             self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-            if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
-                request.eos_token_ids.append(request.eos_token_ids[0])
+            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["pre_ids"][idx : idx + 1] = -1
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
             self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
-            self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -526,6 +531,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
         self.share_inputs["not_need_stop"][0] = True
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -541,13 +547,15 @@ class XPUModelRunner(ModelRunnerBase):
         )
         self.share_inputs["input_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
-            self.parallel_config.pad_token_id,
+            self.model_config.pad_token_id,
             dtype="int64",
         )
-        self.share_inputs["eos_token_id"] = paddle.full([self.parallel_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["top_k_list"] = [0] * max_num_seqs
         self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
+        self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
         )
@@ -571,7 +579,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -674,7 +682,10 @@ class XPUModelRunner(ModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
+            top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
+            min_p_list=self.share_inputs["min_p_list"],
+            seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
@@ -812,8 +823,10 @@ class XPUModelRunner(ModelRunnerBase):
         for i in range(batch_size):
             idx = i
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.share_inputs["eos_token_id"][:] = np.array(
+                [2] * self.model_config.eos_tokens_lens, dtype="int64"
+            ).reshape(-1, 1)
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -829,6 +842,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _dummy_run(
         self,
@@ -853,6 +867,7 @@ class XPUModelRunner(ModelRunnerBase):
         self,
         model_forward_batch: Optional[List[Request]] = None,
         is_dummy_run: bool = False,
+        num_running_requests: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -860,6 +875,7 @@ class XPUModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
+            num_running_requests: batch_size
             intermediate_tensors:
         """
         # 1. Prepare inputs of model and decoder.
@@ -920,6 +936,10 @@ class XPUModelRunner(ModelRunnerBase):
             self.cache_config.block_size,
             self.cache_config.enc_dec_block_num,
         )
+        if num_running_requests is not None:
+            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
+                self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+            )
 
         return None
 
