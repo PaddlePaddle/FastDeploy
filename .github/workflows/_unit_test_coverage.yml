@@ -31,6 +31,7 @@ on:
 jobs:
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
+    timeout-minutes: 60
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
@@ -150,12 +151,12 @@ jobs:
           python -m pip install coverage
           python -m pip install diff-cover
           python -m pip install ${fd_wheel_url}
-          if [ -d "test/plugins" ]; then
-              cd test/plugins
+          if [ -d "tests/plugins" ]; then
+              cd tests/plugins
               python setup.py install
               cd ../..
           else
-              echo "Warning: test/plugins directory not found, skipping setup.py install"
+              echo "Warning: tests/plugins directory not found, skipping setup.py install"
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
@@ -204,7 +205,7 @@ jobs:
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
           fi
-          unittest_result="test/failed_tests.log"
+          unittest_result="tests/failed_tests.log"
           if [ -s ${unittest_result} ];then
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
             target_path_stripped="${target_path#paddle-github-action/}"

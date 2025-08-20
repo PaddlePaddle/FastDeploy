@@ -12,24 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
+from setuptools import setup
 
-from fastdeploy.plugins import load_model_runner_plugins
-
-
-class TestModelRunnerRegistryPlugins(unittest.TestCase):
-    def test_model_runner_callable(self):
-        runner_class = load_model_runner_plugins()
-        device_id = 1
-
-        # create runner
-        runner = runner_class(device_id)
-
-        # test func
-        res = runner.get_rank()
-
-        self.assertEqual(res, device_id)
-
-
-if __name__ == "__main__":
-    unittest.main()
+setup(
+    name="fastdeploy-plugins",
+    version="0.1",
+    packages=["fd_add_dummy_model", "fd_add_dummy_model_runner"],
+    entry_points={
+        "fastdeploy.model_register_plugins": [
+            "fd_add_dummy_model = fd_add_dummy_model:register",
+        ],
+    },
+)

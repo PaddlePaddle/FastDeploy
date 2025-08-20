@@ -325,7 +325,6 @@ class ErnieProcessor(BaseDataProcessor):
             response_dict["outputs"]["reasoning_delta_message"] = reasoning_delta_message
             if self.reasoning_parser.is_reasoning_end(previous_token_ids + token_ids):
                 self.reasoning_end_dict[req_id] = True
-        response_dict["outputs"]["text"] = delta_text
         if self.tool_parser_obj and req_id in self.reasoning_end_dict:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -340,6 +339,7 @@ class ErnieProcessor(BaseDataProcessor):
                 response_dict,
             )
             response_dict["outputs"]["tool_delta_message"] = tool_call
+        response_dict["outputs"]["text"] = delta_text
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
