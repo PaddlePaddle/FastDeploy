@@ -173,7 +173,7 @@ class OpenAIServingCompletion:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
             await self._ensure_connection_manager()
-            dealer, response_queue = await self.engine.connection_manager.get_connection(request_id, num_choices)
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id, num_choices)
 
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
