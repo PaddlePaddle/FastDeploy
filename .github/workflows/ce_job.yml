@@ -1,4 +1,4 @@
-name: Daily and Manual Job
+name: CE Compile Job
 
 on:
   workflow_dispatch:
@@ -164,12 +164,12 @@ jobs:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "86,89"
-      WITH_NIGHTLY_BUILD: ${{ needs.build_version.outputs.WITH_NIGHTLY_BUILD }}
-      FD_VERSION: ${{ needs.build_version.outputs.FD_VERSION }}
+      WITH_NIGHTLY_BUILD: OFF
+      FD_VERSION: 0.0.0
 
   ce_upload_sm8090:
     environment: CodeSync
-    name: PADDLE_PYPI_UPLOAD
+    name: CE_UPLOAD
     needs: build_sm8090
     runs-on: ubuntu-latest
     env:
@@ -207,8 +207,8 @@ jobs:
 
   ce_upload_sm8689:
     environment: CodeSync
-    name: PADDLE_PYPI_UPLOAD
-    needs: build_sm8090
+    name: CE_UPLOAD
+    needs: build_sm8689
     runs-on: ubuntu-latest
     env:
       AK: ${{ secrets.BOS_AK }}
