@@ -272,14 +272,13 @@ class OpenAIServingChat:
                         completion_token_ids=None,
                         tool_calls=None,
                     )
-                    if not res["finished"]:
-                        if "delta_message" in output:
-                            delta_message_output = output["delta_message"]
-                            if delta_message_output is None:
-                                continue
-                            delta_message.content = delta_message_output.content
-                            delta_message.reasoning_content = delta_message_output.reasoning_content
-                            delta_message.tool_calls = delta_message_output.tool_calls
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
+                            continue
+                        delta_message.content = delta_message_output.content
+                        delta_message.reasoning_content = delta_message_output.reasoning_content
+                        delta_message.tool_calls = delta_message_output.tool_calls
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
