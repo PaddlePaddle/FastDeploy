@@ -50,7 +50,6 @@ class DefaultModelLoaderV1(BaseModelLoader):
     def load_weights(self, model, fd_config: FDConfig) -> None:
         _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
         weights_iterator = fast_weights_iterator(safetensor_files)
-        print("weights_iterator", weights_iterator)
         model.load_weights(weights_iterator)
         self.clean_memory_fragments()
 

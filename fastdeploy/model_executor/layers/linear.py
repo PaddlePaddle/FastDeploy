@@ -393,6 +393,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        output_dim = getattr(param, "output_dim", None)
+
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk.
             if self.nranks != 1:
@@ -498,7 +500,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
             output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         input_size = self.hidden_size
-        # print("output_size",output_size)
         super().__init__(
             fd_config=fd_config,
             prefix=prefix,
@@ -556,16 +557,13 @@ class QKVParallelLinear(ColumnParallelLinear):
             elif loaded_shard_id == "v":
                 param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
 
-        hugging_face_format = self.fd_config.load_config.hugging_face_format
-        if hugging_face_format:
-            loaded_weight = loaded_weight.transpose([1, 0])
-
-        # print("loaded_weight",loaded_weight)
-
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        param.copy_(loaded_weight, False)
+            hugging_face_format = self.fd_config.load_config.hugging_face_format
+            if hugging_face_format:
+                loaded_weight = loaded_weight.transpose([1, 0])
+            assert param.shape == loaded_weight.shape, (
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+            param.copy_(loaded_weight, False)
 
     def load_weight(self, state_dict: dict):
         """
@@ -583,9 +581,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             q_tensor = get_tensor(state_dict.pop(q_weight_key))
             k_tensor = get_tensor(state_dict.pop(k_weight_key))
             v_tensor = get_tensor(state_dict.pop(v_weight_key))
-            print("q_tensor", q_tensor)
-            print("k_tensor", k_tensor)
-            print("v_tensor", v_tensor)
 
             if self.kv_num_heads < self.nranks:
                 sharedkv_index = (
@@ -724,6 +719,42 @@ class RowParallelLinear(LinearBase):
                     )
 
         self.reduce_results = reduce_results
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        try:
+            output_dim = getattr(param, "output_dim", None)
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1 if output_dim else 0
+                size = loaded_weight.get_shape()[dim]
+                block_size = size // self.fd_config.parallel_config.tensor_parallel_size
+                shard_offset = self.fd_config.parallel_config.tensor_parallel_rank * block_size
+                shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+                if output_dim:
+                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
+                else:
+                    loaded_weight = loaded_weight[shard_offset:shard_size, ...]
+
+            loaded_weight = get_tensor(loaded_weight)
+
+            # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+            if param.dtype != loaded_weight.dtype:
+                loaded_weight = loaded_weight.cast(param.dtype)
+
+            hugging_face_format = self.fd_config.load_config.hugging_face_format
+            if hugging_face_format:
+                loaded_weight = loaded_weight.transpose([1, 0])
+            if param.shape != loaded_weight.shape:
+                try:
+                    param = param.reshape(loaded_weight.shape)
+                except ValueError as e:
+                    raise ValueError(
+                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
+                    )
+
+            param.copy_(loaded_weight, False)
+        except Exception:
+            raise
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         if self.fd_config.quant_config:
