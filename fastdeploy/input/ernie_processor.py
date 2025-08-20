@@ -195,6 +195,8 @@ class ErnieProcessor(BaseDataProcessor):
             request["temperature"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+        if self.reasoning_parser and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser":
+            request["enable_thinking"] = True
         data_processor_logger.info(f"Processed request {request}")
 
         return request
