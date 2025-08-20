@@ -1,5 +1,5 @@
-name: Base Test
-description: "Run Base Tests"
+name: Stable Test
+description: "Run Stable Tests"
 
 on:
   workflow_call:
@@ -29,8 +29,8 @@ on:
         default: ""
 
 jobs:
-  base_tests:
-    runs-on: [self-hosted, GPU-h20-1Cards]
+  stable_tests:
+    runs-on: [self-hosted, GPU-h1z1-2Cards]
     timeout-minutes: 60
     steps:
       - name: Code Prepare
@@ -63,7 +63,7 @@ jobs:
             git config --global user.email "fastdeploy_ci@example.com"
             git log -n 3 --oneline
 
-      - name: Run FastDeploy Base Tests
+      - name: Run FastDeploy Stable Tests
         shell: bash
         env:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
@@ -80,12 +80,16 @@ jobs:
           FD_API_PORT=$((42088 + DEVICE_PORT * 100))
           FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
           FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((42038 + DEVICE_PORT * 100))
+          FD_INFERENCE_MSG_QUEUE_ID=$(( 42048 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
           echo "FD_API_PORT=${FD_API_PORT}"
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "FD_INFERENCE_MSG_QUEUE_ID=${INFERENCE_MSG_QUEUE_ID}"
+          echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -126,6 +130,8 @@ jobs:
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
+          -e "FD_INFERENCE_MSG_QUEUE_ID=${FD_INFERENCE_MSG_QUEUE_ID}" \
+          -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
           -v "${MODEL_CACHE_DIR}:/MODELDATA" \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
@@ -139,35 +145,12 @@ jobs:
           python -m pip install ${fastdeploy_wheel_url}
           python -m pip install pytest
 
-          wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
-          chmod +x ./llm-deploy-linux-amd64
-          ./llm-deploy-linux-amd64 -python python3.10 \
-          -model_name ERNIE-4.5-0.3B-Paddle \
-          -model_path /MODELDATA \
-          --skip install
-
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          pushd tests/ce/deploy
-          python3.10 deploy.py > dd.log 2>&1 &
-          sleep 3
-          curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
-            -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
-
-          curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
-          popd
-
-          pushd tests/ce/server
-          export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
-          export TEMPLATE=TOKEN_LOGPROB
           TEST_EXIT_CODE=0
-          python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py test_evil_cases.py || TEST_EXIT_CODE=1
-          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
-            -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
-          curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
-          python -m pytest -sv test_repetition_early_stop.py || TEST_EXIT_CODE=1
+          pushd tests/ce/stable_cases
+          bash launch_model.sh /MODELDATA
+          bash run.sh || TEST_EXIT_CODE=1
           popd
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
           '
