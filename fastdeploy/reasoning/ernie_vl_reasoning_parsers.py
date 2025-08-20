@@ -96,7 +96,6 @@ class ErnieVLReasoningParser(ReasoningParser):
         # Check if the model output contains the </think> tokens.
         if self.think_end_token not in model_output:
             return "", model_output
-        # Extract reasoning content from the model output.
         reasoning_content, _, content = model_output.partition(self.think_end_token)
 
         final_content = content or ""
