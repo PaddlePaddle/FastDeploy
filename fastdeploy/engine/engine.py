@@ -943,7 +943,7 @@ class LLMEngine:
             dtype=np.int32,
             suffix=self.ipc_signal_suffix,
             create=True,
-            expected_consumers=1,
+            expected_consumers=self.cfg.parallel_config.data_parallel_size,
         )
 
         # worker_live_signal: Used by the engine to detect whether each worker process is alive and record the time of each step

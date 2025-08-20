@@ -25,6 +25,7 @@ import msgpack
 import numpy as np
 from aiozmq import zmq
 
+import fastdeploy.envs as envs
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -161,7 +162,9 @@ class OpenAIServingChat:
             model=model_name,
         )
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            dealer = await aiozmq.create_zmq_stream(
+                zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.{envs.FD_IPC_APPEND_SUFFIX}.ipc"
+            )
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
@@ -342,7 +345,9 @@ class OpenAIServingChat:
         include_stop_str_in_output = request.include_stop_str_in_output
 
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            dealer = await aiozmq.create_zmq_stream(
+                zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.{envs.FD_IPC_APPEND_SUFFIX}.ipc"
+            )
             dealer.write([b"", request_id.encode("utf-8")])
             final_res = None
             previous_num_tokens = 0

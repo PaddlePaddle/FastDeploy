@@ -24,6 +24,7 @@ import msgpack
 import numpy as np
 from aiozmq import zmq
 
+import fastdeploy.envs as envs
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
@@ -164,7 +165,9 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            dealer = await aiozmq.create_zmq_stream(
+                zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.{envs.FD_IPC_APPEND_SUFFIX}.ipc"
+            )
 
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
@@ -256,7 +259,9 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            dealer = await aiozmq.create_zmq_stream(
+                zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.{envs.FD_IPC_APPEND_SUFFIX}.ipc"
+            )
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"

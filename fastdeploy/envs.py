@@ -16,12 +16,11 @@ Environment variables used by FastDeploy.
 """
 
 import os
-from datetime import datetime
+import uuid
 from typing import Any, Callable
 
 if os.getenv("FD_IPC_APPEND_SUFFIX") is None:
-    timestamp_ms = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    os.environ["FD_IPC_APPEND_SUFFIX"] = timestamp_ms
+    os.environ["FD_IPC_APPEND_SUFFIX"] = str(uuid.uuid4())
 
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
