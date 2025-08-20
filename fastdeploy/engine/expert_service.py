@@ -328,6 +328,8 @@ class ExpertService:
         if not isinstance(tasks, list):
             tasks = [tasks]
 
+        req_ids = [t.request_id for t in tasks]
+
         for task in tasks:
             if self.cfg.splitwise_role != "mixed":
                 status, msg = self.split_connector.check_decode_allocated(task)
@@ -347,6 +349,8 @@ class ExpertService:
                     continue
             task.schedule_start_time = time.time()
 
+        if len(tasks) == 0:
+            return False
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(
@@ -354,8 +358,6 @@ class ExpertService:
             )
             self.llm_logger.error("The exceeded part will be ignored!")
             tasks = tasks[:available_batch]
-
-        req_ids = [t.request_id for t in tasks]
 
         tasks = self.resource_manager.allocate_resources_for_new_tasks(tasks)
 
