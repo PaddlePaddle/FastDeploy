@@ -20,6 +20,7 @@ from typing import List
 import numpy as np
 import paddle
 
+from fastdeploy import envs
 from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -151,8 +152,12 @@ class MTPProposer(Proposer):
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
+                key_cache_name = (
+                    f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}.{envs.FD_IPC_APPEND_SUFFIX}"
+                )
+                val_cache_name = (
+                    f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}.{envs.FD_IPC_APPEND_SUFFIX}"
+                )
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)

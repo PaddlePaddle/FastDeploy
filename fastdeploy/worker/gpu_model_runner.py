@@ -942,8 +942,10 @@ class GPUModelRunner(ModelRunnerBase):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}.{envs.FD_IPC_APPEND_SUFFIX}"
+                val_cache_name = (
+                    f"value_caches_{i}_rank{local_rank}.device{self.device_id}.{envs.FD_IPC_APPEND_SUFFIX}"
+                )
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
