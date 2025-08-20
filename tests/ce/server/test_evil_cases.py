@@ -130,15 +130,14 @@ def test_multilingual_input():
         "messages": [
             {
                 "role": "user",
-                "content": "这是一个包含多种语言的输入：Hello, 世界！Bonjour, le monde! Hola, el mundo! こんにちは、世界！"
+                "content": "这是一个包含多种语言的输入：Hello, 世界！Bonjour, le monde! Hola, el mundo! こんにちは、世界！",
             }
         ],
         "stream": False,
-
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    
+
     # 验证响应是否包含有效的回复
     assert "choices" in resp, "未收到有效的回复"
     assert len(resp["choices"]) > 0, "回复为空"
@@ -150,18 +149,9 @@ def test_multilingual_input():
     print("多语言混合输入测试通过！")
 
 
-
 def test_too_long_input():
     """测试超长输入是否被正确处理"""
-    data = {
-        "messages": [
-            {
-                "role": "user",
-                "content": "a，" * 200000  # 超过最大输入长度
-            }
-        ],
-        "stream": False
-    }
+    data = {"messages": [{"role": "user", "content": "a，" * 200000}], "stream": False}  # 超过最大输入长度
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert resp["detail"].get("object") == "error", "超长输入未被识别为错误"
@@ -170,15 +160,7 @@ def test_too_long_input():
 
 def test_empty_input():
     """测试空输入是否被正确处理"""
-    data = {
-        "messages": [
-            {
-                "role": "user",
-                "content": ""  # 空输入
-            }
-        ],
-        "stream": False
-    }
+    data = {"messages": [{"role": "user", "content": ""}], "stream": False}  # 空输入
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert "error" not in resp.get("object"), "空输入被识别为错误"
@@ -191,7 +173,7 @@ def test_prompt_only_spaces():
         "messages": [
             {
                 "role": "user",
-                "content":  "    ",  # 纯空格
+                "content": "    ",  # 纯空格
             }
         ],
         "stream": False,
@@ -202,19 +184,11 @@ def test_prompt_only_spaces():
     assert resp.get("object") == "chat.completion", "应返回 chat.completion 对象"
     response_content = resp["choices"][0]["message"]["content"]
     assert len(response_content) > 0, "messages content为空，未正常生成回复"
-    
+
 
 def test_illegal_characters():
     """测试非法字符输入是否被正确处理"""
-    data = {
-        "messages": [
-            {
-                "role": "user",
-                "content": "非洲的首都是？：\x00\x01\x02"  # 非法字符
-            }
-        ],
-        "stream": False
-    }
+    data = {"messages": [{"role": "user", "content": "非洲的首都是？：\x00\x01\x02"}], "stream": False}  # 非法字符
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert len(resp["choices"][0]["message"]["content"]) > 0, "非法字符输入影响模型回复"
@@ -224,10 +198,7 @@ def test_sql_injection():
     """测试 SQL 注入攻击是否被正确处理"""
     data = {
         "messages": [
-            {
-                "role": "user",
-                "content": "SELECT * FROM users WHERE username = 'admin' OR '1'='1';"  # SQL 注入攻击
-            }
+            {"role": "user", "content": "SELECT * FROM users WHERE username = 'admin' OR '1'='1';"}  # SQL 注入攻击
         ],
         "stream": False,
         "max_tokens": 50,
@@ -243,12 +214,7 @@ def test_sql_injection():
 def test_xss_attack():
     """测试 XSS 攻击是否被正确处理"""
     data = {
-        "messages": [
-            {
-                "role": "user",
-                "content": "<script>alert('XSS');</script>"  # XSS 攻击
-            }
-        ],
+        "messages": [{"role": "user", "content": "<script>alert('XSS');</script>"}],  # XSS 攻击
         "stream": False,
         "max_tokens": 50,
     }
@@ -264,14 +230,9 @@ def test_stop_empty_string():
     """测试 stop 参数为空字符串时的行为"""
     data = {
         "stream": False,
-        "messages": [
-            {
-                "role": "user",
-                "content": "非洲的首都是？"
-            }
-        ],
+        "messages": [{"role": "user", "content": "非洲的首都是？"}],
         "max_tokens": 10,
-        "stop": ""  # 空字符串
+        "stop": "",  # 空字符串
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -283,14 +244,9 @@ def test_stop_multiple_strings():
     """测试 stop 参数为多个字符串时的行为"""
     data = {
         "stream": False,
-        "messages": [
-            {
-                "role": "user",
-                "content": "非洲的首都是？"
-            }
-        ],
+        "messages": [{"role": "user", "content": "非洲的首都是？"}],
         "max_tokens": 50,
-        "stop": ["。", "！", "？"]  # 多个停止条件
+        "stop": ["。", "！", "？"],  # 多个停止条件
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -303,14 +259,9 @@ def test_stop_with_special_characters():
     """测试 stop 参数为包含特殊字符的字符串时的行为"""
     data = {
         "stream": False,
-        "messages": [
-            {
-                "role": "user",
-                "content": "非洲的首都是？"
-            }
-        ],
+        "messages": [{"role": "user", "content": "非洲的首都是？"}],
         "max_tokens": 50,
-        "stop": "!@#$%^&*()"  # 包含特殊字符
+        "stop": "!@#$%^&*()",  # 包含特殊字符
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -323,14 +274,9 @@ def test_stop_with_newlines():
     """测试 stop 参数为包含换行符的字符串时的行为"""
     data = {
         "stream": False,
-        "messages": [
-            {
-                "role": "user",
-                "content": "非洲的首都是？"
-            }
-        ],
+        "messages": [{"role": "user", "content": "非洲的首都是？"}],
         "max_tokens": 50,
-        "stop": "\n\n"  # 包含换行符
+        "stop": "\n\n",  # 包含换行符
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -345,12 +291,12 @@ def test_model_empty():
         "messages": [
             {
                 "role": "user",
-                "content":  "非洲的首都是？",  
+                "content": "非洲的首都是？",
             }
         ],
         "stream": False,
         "max_tokens": 10,
-        "model": ""  # 空模型
+        "model": "",  # 空模型
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -365,12 +311,12 @@ def test_model_invalid():
         "messages": [
             {
                 "role": "user",
-                "content":  "非洲的首都是？",  
+                "content": "非洲的首都是？",
             }
         ],
         "stream": False,
         "max_tokens": 10,
-        "model": "non-existent-model"  # 不存在的模型
+        "model": "non-existent-model",  # 不存在的模型
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
@@ -385,18 +331,20 @@ def test_model_with_special_characters():
         "messages": [
             {
                 "role": "user",
-                "content":  "非洲的首都是？",
+                "content": "非洲的首都是？",
             }
         ],
         "stream": False,
         "max_tokens": 10,
-        "model": "!@#"  # 包含特殊字符
+        "model": "!@#",  # 包含特殊字符
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert resp.get("object") == "chat.completion", "不存在的 model 应触发校验异常"
     assert "!@#" in resp.get("model"), "未返回预期的 model 信息"
-    assert len(resp.get("choices")[0].get("message").get("content")) > 0, "模型名为model 参数为非法格式，未正常生成回复"
+    assert (
+        len(resp.get("choices")[0].get("message").get("content")) > 0
+    ), "模型名为model 参数为非法格式，未正常生成回复"
 
 
 def test_max_tokens_negative():
@@ -405,7 +353,7 @@ def test_max_tokens_negative():
         "messages": [
             {
                 "role": "user",
-                "content":  "非洲的首都是？",  
+                "content": "非洲的首都是？",
             }
         ],
         "stream": False,
@@ -414,7 +362,7 @@ def test_max_tokens_negative():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert resp.get("detail").get("object") == "error", "max_tokens < 0 未触发校验异常"
-    assert 'max_tokens can be defined [1,' in resp.get("detail").get("message"), "未返回预期的 max_tokens 错误信息"
+    assert "max_tokens can be defined [1," in resp.get("detail").get("message"), "未返回预期的 max_tokens 错误信息"
 
 
 def test_max_tokens_min():
@@ -423,7 +371,7 @@ def test_max_tokens_min():
         "messages": [
             {
                 "role": "user",
-                "content":  "非洲的首都是？",  
+                "content": "非洲的首都是？",
             }
         ],
         "stream": False,
@@ -431,8 +379,10 @@ def test_max_tokens_min():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get('detail').get("object") == "error", "max_tokens未0时API未拦截住"
-    assert "reasoning_max_tokens must be between max_tokens and 1" in resp.get('detail').get("message", ""), "未返回预期的 max_tokens 达到异常值0 的 错误信息"
+    assert resp.get("detail").get("object") == "error", "max_tokens未0时API未拦截住"
+    assert "reasoning_max_tokens must be between max_tokens and 1" in resp.get("detail").get(
+        "message", ""
+    ), "未返回预期的 max_tokens 达到异常值0 的 错误信息"
 
 
 def test_max_tokens_non_integer():
@@ -441,7 +391,7 @@ def test_max_tokens_non_integer():
         "messages": [
             {
                 "role": "user",
-                "content":  "非洲的首都是？",
+                "content": "非洲的首都是？",
             }
         ],
         "stream": False,
@@ -449,5 +399,6 @@ def test_max_tokens_non_integer():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get('detail')[0].get("msg") == "Input should be a valid integer, got a number with a fractional part", "未返回预期的 max_tokens 为非整数的错误信息"
-
+    assert (
+        resp.get("detail")[0].get("msg") == "Input should be a valid integer, got a number with a fractional part"
+    ), "未返回预期的 max_tokens 为非整数的错误信息"
