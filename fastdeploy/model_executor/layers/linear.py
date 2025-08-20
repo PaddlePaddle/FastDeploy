@@ -393,7 +393,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        output_dim = getattr(param, "output_dim", None)
 
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk.

@@ -33,7 +33,7 @@ from fastdeploy.config import (
 from fastdeploy.engine.config import Config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import FlexibleArgumentParser
+from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -441,7 +441,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--enable-mm",
-            action="store_true",
+            action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
             help="Flag to enable multi-modal model.",
         )
