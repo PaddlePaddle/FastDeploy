@@ -61,10 +61,14 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         """fn"""
         try:
             output_dim = getattr(param, "output_dim", None)
+            print("output_dim", output_dim)
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1 if output_dim else 0
-                size = loaded_weight.get_shape()[dim]
+                if isinstance(loaded_weight, paddle.Tensor):
+                    size = loaded_weight.shape[dim]
+                else:
+                    size = loaded_weight.get_shape()[dim]
                 block_size = size // fd_config.parallel_config.tensor_parallel_size
                 shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
                 shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size

@@ -173,7 +173,7 @@ def safetensors_weights_iterator(safe_tensor_list: list[str]):
 
 def fast_weights_iterator(safe_tensor_list: list[str]):
     """
-    paddleformers' iterator for safetensors using get_tensor utility
+    paddleformers' iterator for safetensors
     """
     for st_file in tqdm(
         safe_tensor_list,
