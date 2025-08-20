@@ -160,6 +160,9 @@ repetition_penalty: Optional[float] = None
 chat_template_kwargs: Optional[dict] = None
 # 传递给聊天模板（chat template）的额外参数，用于自定义对话格式（默认 None）。
 
+chat_template: Optional[str] = None
+# 自定义聊天模板，会覆盖模型默认的聊天模板，（默认 None）。
+
 reasoning_max_tokens: Optional[int] = None
 # 推理（如 CoT, 思维链）过程中生成的最大 token 数（默认 None 表示使用全局 max_tokens）。
 

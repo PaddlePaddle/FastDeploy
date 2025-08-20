@@ -1,5 +1,5 @@
 # 如何在天数机器上运行 ERNIE-4.5-300B-A47B-BF16 & ERNIE-4.5-21B-A3B
-当前版本软件只是作为天数芯片 + Fastdeploy 推理大模型的一个演示 demo，跑最新ERNIE4.5模型可能存在问题，后续进行修复和性能优化，给客户提供一个更稳定的版本。
+该软件的当前版本仅作为Iluvatar CoreX与大型模型的Fastdeploy推理框架相结合的演示。在GSM8K数据集上运行最新的ERNIE4.5 300B模型大约需要6.3小时。
 
 ## 准备机器
 首先您需要准备以下配置的机器
@@ -18,7 +18,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 ```
 
 ## 准备容器
-1. 启动容器
+### 启动容器
 
 ```bash
 docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
@@ -27,12 +27,25 @@ docker exec -it paddle_infer bash
 
 /home/paddle 为模型文件、whl包、脚本所在目录
 
-1. 安装whl包
+### 安装paddle
 
 ```bash
-pip3 install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-pip3 install paddle-iluvatar-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
-pip3 install fastdeploy_iluvatar_gpu -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
+pip3 install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+pip3 install paddle-iluvatar-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
+```
+获取Paddle的最新安装版本： [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+
+### 安装fastdeploy
+```bash
+pip3 install fastdeploy_iluvatar_gpu==2.1.0.dev0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
+```
+可以按如下步骤编译FastDeploy，，得到```最新版本```.
+```bash
+git clone https://github.com/PaddlePaddle/FastDeploy
+cd FastDeploy
+pip install -r requirements_iluvatar.txt
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+bash build.sh
 ```
 
 ## 准备推理demo脚本
