@@ -78,6 +78,7 @@ def build_command(config):
     # 添加配置参数
     for key, value in config.items():
         if "--enable" in key:
+            value = eval(value)
             if value:
                 cmd.append(key)
         else:
