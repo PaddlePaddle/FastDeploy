@@ -32,7 +32,7 @@ class TestErnieProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         # 模拟工具解析器
         self.mock_tool_parser = MagicMock()
-        self.mock_tool_parser.extract_tool_calls_streaming.return_value = "tool_call"
+        self.mock_tool_parser.extract_tool_calls_streaming.return_value = None
         self.mock_tool_parser_obj = MagicMock()
         self.mock_tool_parser_obj.return_value = self.mock_tool_parser
         self.processor.tool_parser_obj = self.mock_tool_parser_obj
