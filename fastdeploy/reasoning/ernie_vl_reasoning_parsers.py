@@ -46,6 +46,9 @@ class ErnieVLReasoningParser(ReasoningParser):
         if self.think_end_token_id is None:
             raise RuntimeError("Ernie VL reasoning parser could not locate think end " "tokens in the tokenizer!")
 
+    def is_reasoning_end(self, input_ids: list[int]) -> bool:
+        return self.tool_call_start_token_id in input_ids
+
     def extract_reasoning_content_streaming(
         self,
         previous_text: str,

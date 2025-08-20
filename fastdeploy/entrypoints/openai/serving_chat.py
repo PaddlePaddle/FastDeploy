@@ -254,19 +254,31 @@ class OpenAIServingChat:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
+
+                    delta_message = DeltaMessage(
+                        content=delta_text,
+                        reasoning_content=None,
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        tool_calls=None,
+                    )
                     if not res["finished"]:
                         if "reasoning_delta_message" in output:
-                            delta_message = output["reasoning_delta_message"]
+                            reasoning_delta_message = output["reasoning_delta_message"]
+                            if reasoning_delta_message is not None:
+                                delta_message.content = reasoning_delta_message.content
+                                delta_message.reasoning_content = reasoning_delta_message.reasoning_content
+                            else:
+                                continue
                         elif "tool_delta_message" in output:
-                            delta_message = output["tool_delta_message"]
-                            if delta_message is not None and delta_message.tool_calls:
-                                tool_called = True
-                        else:
-                            delta_message = DeltaMessage(content=delta_text)
-                    else:
-                        delta_message = DeltaMessage(content=delta_text)
-                    if delta_message is None:
-                        continue
+                            tool_delta_message = output["tool_delta_message"]
+                            if tool_delta_message is not None:
+                                if tool_delta_message.tool_calls:
+                                    delta_message.tool_calls = tool_delta_message.tool_calls
+                                    tool_called = True
+                                delta_message.content = tool_delta_message.content
+                            else:
+                                continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,

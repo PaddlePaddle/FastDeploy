@@ -280,7 +280,7 @@ class OpenAIServingCompletion:
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
             first_iteration = [True] * num_choices
-            tool_called = False
+            tool_called = [False] * num_choices
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -379,7 +379,7 @@ class OpenAIServingCompletion:
                                     "tool_calls": tool_delta_message.tool_calls,
                                 }
                                 if tool_delta_message.tool_calls:
-                                    tool_called = True
+                                    tool_called[idx] = True
                         else:
                             delta_message_kwargs = {
                                 **base_kwargs,
@@ -400,7 +400,7 @@ class OpenAIServingCompletion:
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output, tool_called
+                            request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
