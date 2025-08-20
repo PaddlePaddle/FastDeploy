@@ -343,7 +343,7 @@ class LLMEngine:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
-        current_id = -1
+        current_id = 0
         while self.running:
             try:
                 if self.resource_manager.available_batch() == 0:
@@ -378,12 +378,15 @@ class LLMEngine:
                     time.sleep(0.001)
                     continue
 
-                current_id = (current_id + 1) % 100003
                 if self.cfg.splitwise_role != "mixed":
                     llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
-                self.insert_tasks(tasks, current_id)
+                insert_successful = self.insert_tasks(tasks, current_id)
+                if insert_successful:
+                    current_id = (current_id + 1) % 100003
+                else:
+                    continue
 
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
@@ -824,8 +827,9 @@ class LLMEngine:
                 self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
 
-        req_ids = [t.request_id for t in tasks]
-
+        if not isinstance(tasks, list):
+            tasks = [tasks]
+        need_delete_tasks = []
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
             if self.cfg.splitwise_role != "mixed":
@@ -842,18 +846,20 @@ class LLMEngine:
                             )
                         ]
                     )
-                    tasks.remove(task)
+                    need_delete_tasks.append(task)
                     continue
             if task.sampling_params.bad_words is not None:
                 task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 
-        if not isinstance(tasks, list):
-            tasks = [tasks]
+        for tmp_task in need_delete_tasks:
+            tasks.remove(tmp_task)
 
         for item in tasks:
             item.schedule_start_time = time.time()
+
+        req_ids = [t.request_id for t in tasks]
 
         if len(tasks) == 0:
             return False
