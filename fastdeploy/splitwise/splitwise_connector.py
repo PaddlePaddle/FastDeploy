@@ -16,6 +16,7 @@
 
 import json
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
 
@@ -97,7 +98,7 @@ class SplitwiseConnector:
                 time.sleep(0.001)
 
             except Exception as e:
-                logger.error(f"Receiver error: {e}")
+                logger.error(f"Receiver error: {e}, {str(traceback.format_exc())}")
                 time.sleep(1)
 
     def _get_push_socket(self, addr):
@@ -152,7 +153,7 @@ class SplitwiseConnector:
             except zmq.Again:
                 logger.warning(f"Send queue full for {addr}")
             except Exception as e:
-                logger.error(f"Send to {addr} failed: {e}")
+                logger.error(f"Send to {addr} failed: {e}, {str(traceback.format_exc())}")
                 self._close_connection(addr)
 
         except Exception as e:
@@ -433,7 +434,7 @@ class SplitwiseConnector:
                 self.engine_worker_queue.put_cache_info(payload)
 
         except Exception as e:
-            logger.error(f"Message processing failed: {e}")
+            logger.error(f"Message processing failed: {e}, {str(traceback.format_exc())}")
 
     def _handle_prefill(self, tasks):
         """

@@ -465,10 +465,7 @@ class LLMEngine:
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
-        enable_thinking = None
-        if kwargs is not None:
-            enable_thinking = kwargs.get("enable_thinking", None)
-        request = self.data_processor.process_request(request, self.cfg.max_model_len, enable_thinking=enable_thinking)
+        request = self.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -600,7 +597,7 @@ class LLMEngine:
                         time.sleep(0.001)
 
                 except Exception as e:
-                    llm_logger.error(f"Error in main loop: {e}")
+                    llm_logger.error(f"Error in main loop: {e}, {str(traceback.format_exc())}")
                     time.sleep(0.1)
 
         threading.Thread(target=receiver_loop, daemon=True).start()
@@ -737,10 +734,6 @@ class LLMEngine:
         """
         Insert tasks to engine.
         """
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
-            if task.sampling_params.bad_words is not None:
-                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -766,6 +759,11 @@ class LLMEngine:
                 current_tasks.append(cur_task)
             self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
+
+        for task in tasks:
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+            if task.sampling_params.bad_words is not None:
+                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 
@@ -987,7 +985,9 @@ class LLMEngine:
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
                 except Exception as e:
-                    print(f"Error extracting file: {e}")
+                    console_logger.error(
+                        f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                    )
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
@@ -1000,7 +1000,7 @@ class LLMEngine:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
             except Exception as e:
-                print(f"Error extracting sub services: {e}")
+                console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
         self.engine_worker_queue.cleanup()
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
@@ -1174,7 +1174,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}")
+            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request

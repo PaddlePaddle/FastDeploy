@@ -269,7 +269,7 @@ class ExpertService:
                         time.sleep(0.001)
                         continue
                 except Exception as e:
-                    llm_logger.error(f"get decode tasks error: {e}")
+                    llm_logger.error(f"get decode tasks error: {e}, {str(traceback.format_exc())}")
 
         threading.Thread(target=receiver_loop, daemon=True).start()
 
@@ -378,4 +378,4 @@ def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix):
         expert_service.start(ipc_signal_suffix, local_data_parallel_id)
         expert_service.split_connector.start_receiver()
     except Exception as e:
-        llm_logger.exception(f"Expert service failed to start: {e}")
+        llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")

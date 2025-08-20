@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import paddle
 
 from fastdeploy.utils import console_logger as logger
@@ -40,7 +42,8 @@ class GCUPlatform(Platform):
             logger.warning(
                 "You are using GCUPlatform, but there is no GCU "
                 "detected on your machine. Maybe GCU devices is not set properly."
-                f"\n Original Error is {e}"
+                f"\n Original Error is {e}, "
+                f"{str(traceback.format_exc())}"
             )
             return False
 

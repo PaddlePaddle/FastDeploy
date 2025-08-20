@@ -494,10 +494,12 @@ class DataProcessor:
         """
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
+
         prompt_token_template = self.tokenizer.apply_chat_template(
             request,
             tokenize=False,
             add_generation_prompt=request.get("add_generation_prompt", True),
+            chat_template=request.get("chat_template", None),
         )
         prompt_token_str = prompt_token_template.replace("<|image@placeholder|>", "").replace(
             "<|video@placeholder|>", ""

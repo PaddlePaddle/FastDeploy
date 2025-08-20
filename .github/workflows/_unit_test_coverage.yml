@@ -31,6 +31,7 @@ on:
 jobs:
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
+    timeout-minutes: 60
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
@@ -73,8 +74,13 @@ jobs:
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
-          set -x
+          if [[ "$IS_PR" == "true" ]]; then
+            echo "Running on PR"
+          else
+            echo "Not a PR"
+          fi
           runner_name="${{ runner.name }}"
           CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
@@ -133,26 +139,29 @@ jobs:
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
+          -e "IS_PR=${IS_PR}" \
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install coverage
           python -m pip install diff-cover
+          python -m pip install jsonschema aistudio_sdk==0.3.5
           python -m pip install ${fd_wheel_url}
-          if [ -d "test/plugins" ]; then
-              cd test/plugins
+          if [ -d "tests/plugins" ]; then
+              cd tests/plugins
               python setup.py install
               cd ../..
           else
-              echo "Warning: test/plugins directory not found, skipping setup.py install"
+              echo "Warning: tests/plugins directory not found, skipping setup.py install"
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          export COVERAGE_PROCESS_START=/workspace/FastDeploy/scripts/.coveragerc
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
@@ -160,9 +169,13 @@ jobs:
           coverage combine coveragedata/
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
-          diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+          if [[ "$IS_PR" == "true" ]]; then
+            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+          else
+            echo "Not a PR, skipping diff-cover"
+          fi
           echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
-          python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
           '
           if [ -f FastDeploy/exit_code.env ]; then
             cat FastDeploy/exit_code.env >> $GITHUB_ENV
@@ -194,7 +207,7 @@ jobs:
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
           fi
-          unittest_result="test/failed_tests.log"
+          unittest_result="tests/failed_tests.log"
           if [ -s ${unittest_result} ];then
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
             target_path_stripped="${target_path#paddle-github-action/}"
@@ -205,6 +218,7 @@ jobs:
       - name: Check Unit Test Success
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
             filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
@@ -223,8 +237,10 @@ jobs:
           echo "All tests passed"
 
       - name: Verify Code Coverage Threshold (80%)
+        if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
             filename=$(basename "$diff_cov_result_json_url")

@@ -1,6 +1,7 @@
 [run]
 source = fastdeploy
 parallel = True
+concurrency = multiprocessing
 
 [paths]
 source =
