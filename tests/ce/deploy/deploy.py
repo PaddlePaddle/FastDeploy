@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
 
 import requests
 import yaml
@@ -176,7 +177,7 @@ def stop_server(signum=None, frame=None):
         # 终止进程组（包括所有子进程）
         os.killpg(os.getpgid(pid_port["PID"]), signal.SIGTERM)
     except Exception as e:
-        print(f"Failed to stop server: {e}")
+        print(f"Failed to stop server: {e}, {str(traceback.format_exc())}")
 
     for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]:
         try:
@@ -185,7 +186,7 @@ def stop_server(signum=None, frame=None):
                 os.kill(int(pid), signal.SIGKILL)
                 print(f"Killed process on port {port}, pid={pid}")
         except Exception as e:
-            print(f"Failed to killed process on port: {e}")
+            print(f"Failed to kill process on port: {e}, {str(traceback.format_exc())}")
     # 若log目录存在，则重命名为log_timestamp
     if os.path.isdir("./log"):
         os.rename("./log", "./log_{}".format(time.strftime("%Y%m%d%H%M%S")))
@@ -232,8 +233,10 @@ def start_service():
         # 构建命令
         cmd = build_command(final_config)
     except Exception as e:
+        error_msg = f"Failed to start service: {e}, {str(traceback.format_exc())}"
+        print(error_msg)
         return Response(
-            json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
+            json.dumps({"status": "error", "message": error_msg}, ensure_ascii=False),
             status=500,
             content_type="application/json",
         )
@@ -267,8 +270,10 @@ def start_service():
 
         return Response(json.dumps(json_data, ensure_ascii=False), status=200, content_type="application/json")
     except Exception as e:
+        error_msg = f"Failed to start service: {e}, {str(traceback.format_exc())}"
+        print(error_msg)
         return Response(
-            json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
+            json.dumps({"status": "error", "message": error_msg}, ensure_ascii=False),
             status=500,
             content_type="application/json",
         )
@@ -298,8 +303,10 @@ def switch_service():
         # 构建命令
         cmd = build_command(final_config)
     except Exception as e:
+        error_msg = f"Failed to switch service: {e}, {str(traceback.format_exc())}"
+        print(error_msg)
         return Response(
-            json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
+            json.dumps({"status": "error", "message": error_msg}, ensure_ascii=False),
             status=500,
             content_type="application/json",
         )
@@ -333,8 +340,10 @@ def switch_service():
 
         return Response(json.dumps(json_data, ensure_ascii=False), status=200, content_type="application/json")
     except Exception as e:
+        error_msg = f"Failed to switch service: {e}, {str(traceback.format_exc())}"
+        print(error_msg)
         return Response(
-            json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False),
+            json.dumps({"status": "error", "message": error_msg}, ensure_ascii=False),
             status=500,
             content_type="application/json",
         )
@@ -409,8 +418,10 @@ def get_config():
         )
 
     except Exception as e:
+        error_msg = f"{e}, {str(traceback.format_exc())}"
+        print(error_msg)
         return Response(
-            json.dumps({"message": "api_server.log解析失败，请检查log", "error": str(e)}, ensure_ascii=False),
+            json.dumps({"message": "api_server.log解析失败，请检查log", "error": error_msg}, ensure_ascii=False),
             status=500,
             content_type="application/json",
         )
@@ -450,7 +461,7 @@ def wait_for_infer():
                         with open(path, "r", encoding="utf-8", errors="ignore") as f:
                             return "".join(f.readlines()[-lines:])
                     except Exception as e:
-                        return f"[无法读取 {path}]: {e}\n"
+                        return f"[无法读取 {path}]: {e}, {str(traceback.format_exc())}\n"
 
                 result = f"服务启动超时，耗时：[{timeout}s]\n\n"
                 result += "==== server.log tail 50 ====\n"

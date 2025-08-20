@@ -17,6 +17,7 @@
 import os
 import threading
 import time
+import traceback
 
 import msgpack
 import zmq
@@ -143,7 +144,7 @@ class ZmqClient:
             llm_logger.error(f"[{req_id}] zmq error: {e}")
             self.req_dict[req_id] = -1
         except Exception as e:
-            llm_logger.error(f"Send result to zmq client failed: {e}")
+            llm_logger.error(f"Send result to zmq client failed: {e}, {str(traceback.format_exc())}")
 
         if data[-1].finished:
             with self.mutex:
@@ -163,7 +164,7 @@ class ZmqClient:
             return None, None
         except Exception as e:
             self.close()
-            llm_logger.warning(f"{e}")
+            llm_logger.warning(f"{e}, {str(traceback.format_exc())}")
             return str(e), None
 
     def receive_pyobj_once(self, block=False):
@@ -179,7 +180,7 @@ class ZmqClient:
             return None, None
         except Exception as e:
             self.close()
-            llm_logger.warning(f"{e}")
+            llm_logger.warning(f"{e}, {str(traceback.format_exc())}")
             return str(e), None
 
     def _clear_ipc(self, name):
@@ -214,7 +215,7 @@ class ZmqClient:
             self._clear_ipc(self.file_name)
             self._clear_ipc(self.router_path)
         except Exception as e:
-            llm_logger.warning(f"Failed to close ZMQ connection - {e}")
+            llm_logger.warning(f"Failed to close ZMQ connection - {e}, {str(traceback.format_exc())}")
             return
 
     def __exit__(self, exc_type, exc_val, exc_tb):

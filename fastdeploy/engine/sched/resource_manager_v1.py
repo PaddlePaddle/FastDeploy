@@ -16,6 +16,7 @@
 
 import threading
 import time
+import traceback
 from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -389,7 +390,7 @@ class ResourceManagerV1(ResourceManager):
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
-            llm_logger.error(f"prefix match blocks error: {e}, waiting reschedule...")
+            llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
     def add_request(self, request: Request) -> None:
@@ -441,4 +442,4 @@ class ResourceManagerV1(ResourceManager):
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
         except Exception as e:
-            llm_logger.error(e)
+            llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
