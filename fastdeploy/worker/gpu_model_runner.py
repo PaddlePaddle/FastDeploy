@@ -960,7 +960,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Update Batch type for cuda graph for only_decode_batch
-        only_decode_use_cudagraph = self.use_cudagraph and self.only_decode()
+        only_decode_use_cudagraph = self.only_decode() and self.use_cudagraph
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()

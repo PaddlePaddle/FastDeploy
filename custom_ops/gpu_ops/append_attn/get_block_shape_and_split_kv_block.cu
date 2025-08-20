@@ -231,12 +231,13 @@ void GetBlockShapeAndSplitKVBlock(
   int max_just_dec_len_without_system = max_len_cpu_ptr[7];
 
 
-  PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(max_len_kv_cpu.data<int>(), 0, sizeof(int32_t), stream));
+  // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(max_len_kv_cpu.data<int>(), 0, sizeof(int32_t), stream));
   auto max_len_kv =
       GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_decoder.place());
   get_max_len_kv_ernel<128><<<1, 128, 0, stream>>>(
       max_len_kv.data<int>(), seq_lens_this_time.data<int>(),
       seq_lens_decoder.data<int>(), bsz);
+
 
   max_len_kv_cpu = max_len_kv.copy_to(paddle::CPUPlace(), false);
 
@@ -245,7 +246,7 @@ void GetBlockShapeAndSplitKVBlock(
     const uint32_t kv_batch_shape = bsz * max_tile_size_per_bs_kv;
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_batch_ids.data<int>(), 0, kv_batch_shape * sizeof(int32_t), stream));
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_tile_ids_per_batch.data<int>(), 0, kv_batch_shape * sizeof(int32_t), stream));
-    PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
+    // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
     auto kv_num_blocks_x =
         GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
 
@@ -262,7 +263,7 @@ void GetBlockShapeAndSplitKVBlock(
     const uint32_t encoder_batch_shape = bsz * encoder_max_tile_size_per_bs_q;
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_batch_ids.data<int>(), 0, encoder_batch_shape * sizeof(int32_t), stream));
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_tile_ids_per_batch.data<int>(), 0, encoder_batch_shape * sizeof(int32_t), stream));
-    PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
+    // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
     auto encoder_num_blocks_x =
         GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
     split_q_block<<<1, 32, 0, stream>>>(seq_lens_encoder.data<int>(), nullptr,
