@@ -370,45 +370,25 @@ class OpenAIServingCompletion:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
                     output_tokens[idx] += 1
-                    base_kwargs = {
-                        "index": idx,
-                        "completion_token_ids": output.get("token_ids") if request.return_token_ids else None,
-                        "arrival_time": arrival_time,
-                        "logprobs": logprobs_res,
-                    }
-                    delta_message_kwargs = None
+                    delta_message = CompletionResponseStreamChoice(
+                        index=idx,
+                        text=output["text"],
+                        prompt_token_ids=None,
+                        completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
+                        tool_calls=None,
+                        raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                        reasoning_content=None,
+                        arrival_time=arrival_time,
+                        logprobs=logprobs_res,
+                    )
                     if not res["finished"]:
-                        if "reasoning_delta_message" in output:
-                            reasoning_delta_message = output["reasoning_delta_message"]
-                            if reasoning_delta_message is not None:
-                                delta_message_kwargs = {
-                                    **base_kwargs,
-                                    "text": reasoning_delta_message.content or "",
-                                    "reasoning_content": reasoning_delta_message.reasoning_content,
-                                }
-                        elif "tool_delta_message" in output:
-                            tool_delta_message = output["tool_delta_message"]
-                            if tool_delta_message is not None:
-                                delta_message_kwargs = {
-                                    **base_kwargs,
-                                    "text": tool_delta_message.content or "",
-                                    "tool_calls": tool_delta_message.tool_calls,
-                                }
-                                if tool_delta_message.tool_calls:
-                                    tool_called[idx] = True
-                        else:
-                            delta_message_kwargs = {
-                                **base_kwargs,
-                                "text": output["text"],
-                            }
-                    else:
-                        delta_message_kwargs = {
-                            **base_kwargs,
-                            "text": output["text"],
-                        }
-                    if delta_message_kwargs is None:
-                        continue
-                    delta_message = CompletionResponseStreamChoice(**delta_message_kwargs)
+                        if "delta_message" in output:
+                            delta_message_output = output["delta_message"]
+                            if delta_message_output is None:
+                                continue
+                            delta_message.content = delta_message_output.content
+                            delta_message.reasoning_content = delta_message_output.reasoning_content
+                            delta_message.tool_calls = delta_message_output.tool_calls
 
                     choices.append(delta_message)
                     output_tokens[idx] += 1
