@@ -46,7 +46,7 @@ done <<< "$gpu_info"
 export CUDA_VISIBLE_DEVICES=${min_gpu}
 
 # 使用 find 命令查找 test 目录下的 .py 文件
-test_files=$(find test -type f -name "test*.py")
+test_files=$(find tests -type f -name "test*.py")
 
 # 遍历每个找到的测试文件
 for test_file in $test_files; do
