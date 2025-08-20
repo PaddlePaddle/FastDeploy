@@ -571,50 +571,7 @@ class Ernie4_5_Model(nn.Layer):
 
                 attention_input[i][1] = e2a_x
                 combine_events[i].appendleft(event)
-
-            # compute_atten(3,0)
-            # dispatch_send(0)
-
-            # compute_atten(3,1)
-            # zkk_barrier()
-            # dispatch_wait(0)
-            # dispatch_send(1)
-            # combine_receive(0)
-            # compute_atten(3,2)
-            # zkk_barrier()
-            # dispatch_wait(1)
-            # dispatch_send(2)
-
-            # for layer_id in range(4, self.num_layers):
-            #     for j in range(split_num):
-            #         # 当前batch接受同步一下，接受来自 layer_id-1 层 MoE 的输入！
-            #         zkk_barrier()
-            #         combine_wait(j)
-            #         # 下一个batch准备接受layer_id-1层的数据！
-            #         combine_receive( (j+1) % split_num )
-            #         # 当前batch计算attention！
-            #         compute_atten(layer_id, j)
-            #         # 上一个batch send同步！
-            #         zkk_barrier()
-            #         dispatch_wait((j+split_num-1) % split_num)
-            #         # 当前batch发送数据给MoE！
-            #         dispatch_send(j)
             
-            # zkk_barrier()
-            # # 处理一下尾巴！
-            # combine_wait(0)
-            # combine_receive(1)
-            # zkk_barrier()
-            # dispatch_wait(2)
-
-            # zkk_barrier()
-            # combine_wait(1)
-            # combine_receive(2)
-            
-            # zkk_barrier()
-            # combine_wait(2)
-
-
             for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
                     zkk_barrier()
@@ -628,6 +585,7 @@ class Ernie4_5_Model(nn.Layer):
                     zkk_barrier()
                     combine_wait(j)
                     zkk_barrier()
+        
         else:
             # 搞一个大槽子放东西！
             moe_input = [None] * split_num
@@ -690,47 +648,6 @@ class Ernie4_5_Model(nn.Layer):
                 )
                 send_hooks[i].appendleft(e2a_isend_hook)
                 combine_events[i].appendleft(event)
-            
-            # dispatch_receive(0)
-            # zkk_barrier()
-            # dispatch_wait(0)
-            # dispatch_receive(1)
-
-            # for layer_id in range(3, self.num_layers):
-            #     for j in range(split_num):
-            #         # 当前batch计算moe！
-            #         compute_moe(layer_id, j)
-
-            #         # 下一个batch准备接受layer_id层的attention 输出！
-            #         if layer_id == self.num_layers - 1 and j == 2:
-            #             # 此时我没有下一个batch，所以skip！
-            #             pass
-            #         else:
-            #             zkk_barrier()
-            #             dispatch_wait((j+1) % split_num)
-
-            #         # 下下个batch发起接受layer_id层的attention 输出！
-            #         if layer_id == self.num_layers - 1 and j >= 1:
-            #             # 此时我没有下下一个batch，所以skip！
-            #             pass
-            #         else:
-            #             dispatch_receive((j+2) % split_num)
-
-            #         # 上一个batch的combine同步
-            #         if layer_id == 3 and j == 0:
-            #             # 此时我没有上一个batch，所以skip！
-            #             pass
-            #         else:
-            #             zkk_barrier()
-            #             combine_wait((j+split_num-1) % split_num)
-
-
-            #         # 当前batch发送数据发给attention！
-            #         combine_send(j)
-            
-            # # 处理一下尾巴！
-            # zkk_barrier()
-            # combine_wait(2)
         
             for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
@@ -747,8 +664,8 @@ class Ernie4_5_Model(nn.Layer):
                     zkk_barrier()
 
 
-        paddle.device.synchronize()
         paddle.distributed.barrier()
+
         if IsH20:
             hidden_states = paddle.concat([attention_input[j][1] for j in range(split_num)], axis=0)
             residuals = paddle.concat([attention_input[j][2]  for j in range(split_num)], axis=0)
