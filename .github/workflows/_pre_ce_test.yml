@@ -30,6 +30,7 @@ on:
 jobs:
   run_ce_cases:
     runs-on: [self-hosted, PRE_CE_RUN_2Card]
+    timeout-minutes: 60
     steps:
       - name: Print current runner name
         run: |

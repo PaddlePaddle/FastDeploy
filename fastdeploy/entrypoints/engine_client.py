@@ -15,6 +15,7 @@
 """
 
 import time
+import traceback
 import uuid
 
 import numpy as np
@@ -141,7 +142,7 @@ class EngineClient:
             work_process_metrics.prompt_tokens_total.inc(input_ids_len)
             work_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
-            api_server_logger.error(e)
+            api_server_logger.error(f"add_requests error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         if input_ids_len + min_tokens >= self.max_model_len:
@@ -194,7 +195,7 @@ class EngineClient:
             else:
                 self.zmq_client.send_pyobj(task)
         except Exception as e:
-            api_server_logger.error(e)
+            api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
     def vaild_parameters(self, data):
