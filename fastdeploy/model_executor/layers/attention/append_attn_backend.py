@@ -115,21 +115,6 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
-        self.share_inputs = {}
-        self.share_inputs["encoder_batch_ids"] = paddle.full(
-            shape=[self.max_seq_len], fill_value=0, dtype="int32"
-        )  # gpu
-        self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full(
-            shape=[self.max_seq_len], fill_value=0, dtype="int32"
-        )  # gpu
-        self.share_inputs["encoder_num_blocks"] = paddle.full(shape=[1], fill_value=0, dtype="int32").cpu()  # cpu
-        self.share_inputs["kv_batch_ids"] = paddle.full(shape=[self.max_seq_len], fill_value=0, dtype="int32")  # gpu
-        self.share_inputs["kv_tile_ids_per_batch"] = paddle.full(
-            shape=[self.max_seq_len], fill_value=0, dtype="int32"
-        )  # gpu
-        self.share_inputs["kv_num_blocks"] = paddle.full(shape=[1], fill_value=0, dtype="int32").cpu()  # cpu
-        self.share_inputs["max_len_kv"] = paddle.full(shape=[1], fill_value=0, dtype="int32").cpu()  # cpu
-
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = AppendAttentionMetadata()
