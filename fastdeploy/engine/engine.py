@@ -202,6 +202,10 @@ class LLMEngine:
             else:
                 self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
                 self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
+            self.recv_result_handle_thread = threading.Thread(
+                target=self.send_response_server.recv_result_handle, daemon=True
+            )
+            self.recv_result_handle_thread.start()
             time.sleep(3)
 
         self.cfg.init_cache_info()
