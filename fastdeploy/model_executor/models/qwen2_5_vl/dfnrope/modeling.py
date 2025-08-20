@@ -27,7 +27,6 @@ from paddle.distributed.fleet.meta_parallel import (
     ColumnParallelLinear,
     RowParallelLinear,
 )
-from paddle.distributed.fleet.utils import recompute
 from paddle.nn.functional.flash_attention import (
     flash_attn_unpadded as flash_attn_varlen_func,
 )
@@ -172,7 +171,6 @@ class Qwen2_5_VLVisionAttention(nn.Layer):
         attn_output = self.proj(attn_output)
         return attn_output
 
-# Todo : attention本质一样，细节还需要再对齐
 class VisionFlashAttention2(nn.Layer):
     """_summary_
 
@@ -244,7 +242,7 @@ class VisionFlashAttention2(nn.Layer):
 
         max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
-        softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
+        softmax_scale = self.head_dim**-0.5
 
         attn_output = (
             flash_attn_varlen_func(  # flash_attn_unpadded
@@ -255,7 +253,7 @@ class VisionFlashAttention2(nn.Layer):
                 cu_seqlens,
                 max_seqlen,
                 max_seqlen,
-                scale=softmax_scale,  # TODO: 需要手动加上
+                scale=softmax_scale,
             )[0]
             .squeeze(0)
             .reshape([seq_length, -1])
@@ -266,8 +264,6 @@ class VisionFlashAttention2(nn.Layer):
         return attn_output
 
 
-# conv3D 在 nn.layer.conv 里
-# 操作和参数对齐qwen
 class PatchEmbed(nn.Layer):
     """_summary_
 
@@ -310,14 +306,9 @@ class PatchEmbed(nn.Layer):
         )
 
         # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
-        # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.hidden_size])
         hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.hidden_size])
         return hidden_states
 
-
-# 需要设置bias参数
-# 已加上 bias 参数
-# 操作和参数对齐qwen
 class VisionMlp(nn.Layer):
     """_summary_
 
@@ -386,7 +377,6 @@ class VisionMlp(nn.Layer):
 
 
 # 对于seqlen的操作有些不同，其他是对齐qwen的，qwen还多了 seqlen *= 2 和 cached 的操作
-# 完全照搬过来了
 # 操作和参数对齐qwen
 class VisionRotaryEmbedding(nn.Layer):
     """_summary_
@@ -430,9 +420,6 @@ class VisionRotaryEmbedding(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        # seq = paddle.arange(seqlen).cast(self.inv_freq.dtype)
-        # freqs = paddle.outer(x=seq, y=self.inv_freq)
-        # return freqs
         self.update_freqs_cache(seqlen)
         return self._freqs_cached[:seqlen]
 
@@ -560,16 +547,6 @@ class PatchMerger(nn.Layer):
             nn.GELU(),
             nn.Linear(self.hidden_size, dim, bias_attr=True),
         )
-        # Sequential 和 ModuleList 的区别在于，Sequential是将多个层组合成一个层，而ModuleList是将多个层组合成一个列表。
-        # self.mlp = nn.ModuleList([
-        #     ColumnParallelLinear(self.hidden_size,
-        #                          self.hidden_size,
-        #                          has_bias=True),
-        #     nn.GELU(),
-        #     RowParallelLinear(self.hidden_size,
-        #                       dim,
-        #                       has_bias=True),
-        # ])
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         """_summary_
@@ -586,9 +563,6 @@ class PatchMerger(nn.Layer):
 
 
 # qwen 有些block是windows-attention，有些是普通attention，会根据fullatt_block_indexes参数选择
-# cu_window_seqlens的计算非常复杂，这应该是和ernie_vl最不同的地方
-# 已加上 windows-attention
-# 操作和参数对齐qwen
 class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
     """_summary_
 
@@ -636,10 +610,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             ]
         )
 
-        # assert (
-        #     config.vision_config.hidden_size == config.vision_config.embed_dim
-        # ), "in DFNRope, vit's config.hidden must be equal to config.embed_dim"
-        
         #qwen 对齐
         self.merger = PatchMerger(dim=config.vision_config.out_hidden_size, context_dim=config.vision_config.hidden_size)
 

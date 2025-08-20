@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import partial
 from typing import Dict, Optional, Union
 
@@ -35,42 +34,19 @@ from fastdeploy.model_executor.graph_optimization.decorator import (
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
-from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.models.qwen2 import (
-    Qwen2Attention,
-    Qwen2MLP,
-    Qwen2DecoderLayer,
-    Qwen2Model
-)
+from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
-        extract_text_token_output,
-        text_image_gather_scatter,
-        text_image_index_out,
+        extract_text_token_output
     )
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-
-''' 没必要再创建qwen2_5_VL*类了，直接用qwen2model即可 '''
-# class Qwen2_5_VLMLP(Qwen2MLP):
-#     pass
-
-# class Qwen2_5_VLAttention(Qwen2Attention):
-#     pass
-
-# class Qwen2_5_VLDecoderLayer(Qwen2DecoderLayer):
-#     pass
-
-# @support_graph_optimization
-# class Qwen2_5_VLModel(Qwen2Model):
-#     pass
-
 
 @support_graph_optimization
 class Qwen2_5_VLModel(nn.Layer):
@@ -143,7 +119,7 @@ class Qwen2_5_VLModel(nn.Layer):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         # -----------------------
-        # 将 image_embeds 替换 input_embeds 里的 image占位符
+        # 将 image_embeds 替换 input_embeds 里的 image video 占位符
         image_mask = ids_remove_padding == self.image_token_id
         image_token_num = image_mask.sum()
         
@@ -151,7 +127,7 @@ class Qwen2_5_VLModel(nn.Layer):
         video_token_num = video_mask.sum()
         
         # 由于框架只有 image_features，所以目前不支持图片和视频混合
-        # TODO 后续考虑支持传入 video_features
+        # TODO(wangyafeng) 后续考虑支持传入 video_features
         if image_token_num > 0:
             hidden_states[image_mask] = image_features.cast(self._dtype)
         if video_token_num > 0:
@@ -203,8 +179,6 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         # -----------  resampler_model ------------   qwen2_5_VL 没有这部分操作
         # self.resampler_model = self._init_resampler_model_model(fd_config.model_config)
         # -----------  language model -------------
-        # 在 vllm 里也是直接用的 qwen2_model
-        # 未知：需要保证 FD 的 qwen2 和 vllm 的 qwen2 完全对齐
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
@@ -243,10 +217,6 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         self.visual.load_state_dict(state_dict)
-        # self.resampler_model.load_state_dict(state_dict)
-        # if self.tie_word_embeddings:
-        #     self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
-        # else:
         self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
@@ -309,7 +279,6 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
     from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
     from fastdeploy.model_executor.models.utils import WeightMeta
 
-    # 这一部分不知道是在干什么？？？？？？？？？？？-----------------------------------------------
     weight_infos = [
         WeightMeta(
             f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
