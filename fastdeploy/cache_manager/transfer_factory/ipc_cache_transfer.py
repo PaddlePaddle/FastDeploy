@@ -16,7 +16,6 @@
 
 import paddle
 
-from fastdeploy import envs
 from fastdeploy.model_executor.ops.gpu import (
     get_data_ptr_ipc,
     ipc_sent_key_value_cache_by_remote_ptr,
@@ -47,12 +46,8 @@ class IPCConnector:
         tmp = paddle.ones([1, 1])
         logger.info(f"init ipc rank{self.rank_id} with remote {self.remote_gpu_id} {self.local_gpu_id}")
         for layer_id in range(layer_num):
-            key_unique_name = (
-                f"key_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}.{envs.FD_IPC_APPEND_SUFFIX}"
-            )
-            value_unique_name = (
-                f"value_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}.{envs.FD_IPC_APPEND_SUFFIX}"
-            )
+            key_unique_name = f"key_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+            value_unique_name = f"value_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
             self.remote_key_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_unique_name))
             self.remote_value_tensor_ptr_list.append(get_data_ptr_ipc(tmp, value_unique_name))
         self.write_stream = paddle.device.Stream(f"gpu:{self.local_gpu_id}")

@@ -23,7 +23,6 @@ import time
 import numpy as np
 import paddle
 
-from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal
@@ -167,11 +166,11 @@ class CacheTransferManager:
 
             set_data_ipc(
                 self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
-                f"key_caches_{i}_rank{rank}.device{device}.{envs.FD_IPC_APPEND_SUFFIX}",
+                f"key_caches_{i}_rank{rank}.device{device}",
             )
             set_data_ipc(
                 self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
-                f"value_caches_{i}_rank{rank}.device{device}.{envs.FD_IPC_APPEND_SUFFIX}",
+                f"value_caches_{i}_rank{rank}.device{device}",
             )
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
