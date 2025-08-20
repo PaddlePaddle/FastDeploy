@@ -96,7 +96,6 @@ class TokenProcessor:
             dtype=np.float32,
             suffix=os.getpid(),
             create=True,
-            expected_consumers=0,
         )
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.prefill_result_status = dict()

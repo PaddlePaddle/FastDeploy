@@ -161,7 +161,6 @@ class PrefixCacheManager:
             dtype=np.int32,
             suffix=pid_suffix,
             create=True,
-            expected_consumers=1,
         )
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
