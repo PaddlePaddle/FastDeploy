@@ -15,7 +15,8 @@ class TestErnieProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
         self.processor.decode_status = {}
-        self.processor.tool_parsers = {}
+        self.processor.reasoning_end_dict = {}
+        self.processor.tool_parser_dict = {}
 
         # 模拟 ids2tokens 方法
         def mock_ids2tokens(token_ids, task_id):

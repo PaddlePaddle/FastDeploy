@@ -265,22 +265,30 @@ class OpenAIServingChat:
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
 
-                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
-                        tool_delta_message = output["tool_delta_message"]
-                        if tool_delta_message is None:
-                            continue
-                        delta_message = tool_delta_message
-                        delta_message.reasoning_content = output.get("reasoning_content")
-                        if delta_message.tool_calls:
-                            tool_called = True
-                    else:
-                        delta_message = DeltaMessage(
-                            content=delta_text,
-                            reasoning_content=output.get("reasoning_content"),
-                            prompt_token_ids=None,
-                            completion_token_ids=None,
-                            tool_calls=None,
-                        )
+                    delta_message = DeltaMessage(
+                        content=delta_text,
+                        reasoning_content=None,
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        tool_calls=None,
+                    )
+                    if not res["finished"]:
+                        if "reasoning_delta_message" in output:
+                            reasoning_delta_message = output["reasoning_delta_message"]
+                            if reasoning_delta_message is not None:
+                                delta_message.content = reasoning_delta_message.content
+                                delta_message.reasoning_content = reasoning_delta_message.reasoning_content
+                            else:
+                                continue
+                        elif "tool_delta_message" in output:
+                            tool_delta_message = output["tool_delta_message"]
+                            if tool_delta_message is not None:
+                                if tool_delta_message.tool_calls:
+                                    delta_message.tool_calls = tool_delta_message.tool_calls
+                                    tool_called = True
+                                delta_message.content = tool_delta_message.content
+                            else:
+                                continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -458,7 +466,7 @@ class OpenAIServingChat:
         max_tokens = request.max_completion_tokens or request.max_tokens
         if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
-            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+            if output.get("tool_call"):
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"

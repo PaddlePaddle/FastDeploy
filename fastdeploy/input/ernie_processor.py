@@ -58,7 +58,8 @@ class ErnieProcessor(BaseDataProcessor):
             self.generation_config = None
 
         self.decode_status = dict()
-        self.tool_parsers = dict()
+        self.tool_parser_dict = dict()
+        self.reasoning_end_dict = dict()
         self.thinking_parser_dict = dict()
         self._load_tokenizer()
         data_processor_logger.info(
@@ -306,10 +307,12 @@ class ErnieProcessor(BaseDataProcessor):
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["raw_prediction"] = delta_text
-        if self.reasoning_parser and (
-            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+        if (
+            self.reasoning_parser
+            and req_id not in self.reasoning_end_dict
+            and (enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser")
         ):
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
+            reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
                 delta_text,
@@ -317,14 +320,13 @@ class ErnieProcessor(BaseDataProcessor):
                 previous_token_ids + token_ids,
                 token_ids,
             )
-            response_dict["outputs"]["text"] = text
-            response_dict["outputs"]["reasoning_content"] = reasoning_content
-        else:
-            response_dict["outputs"]["text"] = delta_text
-        if self.tool_parser_obj:
-            if req_id not in self.tool_parsers:
-                self.tool_parsers[req_id] = self.tool_parser_obj(self.tokenizer)
-            tool_parser = self.tool_parsers[req_id]
+            response_dict["outputs"]["reasoning_delta_message"] = reasoning_delta_message
+            if self.reasoning_parser.is_reasoning_end(previous_token_ids + token_ids):
+                self.reasoning_end_dict[req_id] = True
+        if self.tool_parser_obj and req_id in self.reasoning_end_dict:
+            if req_id not in self.tool_parser_dict:
+                self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
+            tool_parser = self.tool_parser_dict[req_id]
             tool_call = tool_parser.extract_tool_calls_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -335,11 +337,14 @@ class ErnieProcessor(BaseDataProcessor):
                 response_dict,
             )
             response_dict["outputs"]["tool_delta_message"] = tool_call
+        response_dict["outputs"]["text"] = delta_text
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
-            if req_id in self.tool_parsers:
-                del self.tool_parsers[req_id]
+            if req_id in self.tool_parser_dict:
+                del self.tool_parser_dict[req_id]
+            if req_id in self.reasoning_end_dict:
+                del self.reasoning_end_dict[req_id]
         return response_dict
 
     def messages2ids(self, request_or_messages):
