@@ -131,7 +131,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.patcher_load_and_process_video.start()
 
         mm_processor_kwargs = {
-            "video_max_frames": 20,
+            "video_max_frames": 10,
             "video_min_frames": 1,
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
