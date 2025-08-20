@@ -442,6 +442,21 @@ class CustomAllreduce {
   }
 
   /**
+   * Paddle GPU Tensor.stream() is cudaStreamCaptureStatusActive.
+   */
+  bool is_tensor_stream_capturing(paddle::Tensor& input)
+  {
+    auto stream = input.stream();
+    cudaStreamCaptureStatus status;
+    CUDACHECK(cudaStreamIsCapturing(stream, &status));
+    if (status == cudaStreamCaptureStatusActive) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /**
    * Performs allreduce, assuming input has already been registered.
    *
    * Block and grid default configs are results after careful grid search. Using

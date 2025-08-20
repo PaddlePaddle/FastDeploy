@@ -163,3 +163,8 @@ fptr_t open_mem_handle(paddle::Tensor& mem_handle) {
 void free_shared_buffer(fptr_t buffer) {
   CUDACHECK(cudaFree(reinterpret_cast<void*>(buffer)));
 }
+
+bool is_tensor_stream_capturing(paddle::Tensor& input, fptr_t _fa) {
+  auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
+  return fa->is_tensor_stream_capturing(input);
+}

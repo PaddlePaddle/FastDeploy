@@ -28,6 +28,7 @@ from fastdeploy.model_executor.ops.gpu import (
     dispose,
     get_graph_buffer_ipc_meta,
     init_custom_all_reduce,
+    is_tensor_stream_capturing,
     meta_size,
     register_buffer,
     register_graph_buffers,
@@ -163,6 +164,15 @@ class CustomAllreduce:
             all_reduce(self._ptr, inp, out, self.buffer_ptrs[self.rank], self.max_size)
         return out
 
+    def iscapturing(
+        self,
+        input: paddle.Tensor,
+    ):
+        """
+        get tensor stream is in capturing
+        """
+        return is_tensor_stream_capturing(self._ptr, input)
+
     def start_capture(self):
         """
         set CUDA graph flag: True.
@@ -207,11 +217,8 @@ class CustomAllreduce:
     def custom_all_reduce(self, input: paddle.Tensor) -> Optional[paddle.Tensor]:
         """The main allreduce API that provides support for cuda graph."""
         if self.capturing:
-            lib = cuda_wrapper.CudaRTLibrary()
-            stream = paddle.device.current_stream()
-            stream_capturing = lib.cudaStreamIsCapturing(stream)
-            if stream_capturing.value == 1:
-                # 1 is cudaStreamCaptureStatusActive: The stream is capturing.
+            if self.iscapturing(input):
+                # The input stream is capturing.
                 return self.all_reduce(input, input, registered=True)
             else:
                 # If warm up, mimic the allocation pattern since custom
