@@ -71,7 +71,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               dim_head,
               block_size,
               elem_nums,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_T_neox_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
@@ -91,7 +92,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                                 dim_head,
                                                 block_size,
                                                 elem_nums,
-                                                kv_num_heads);
+                                                kv_num_heads,
+                                                rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -198,7 +200,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_neox_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -221,7 +224,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -248,7 +252,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_rope_kernel<T, 4, 0, 128, is_scale_channel_wise, IsFP8>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -271,7 +276,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   }
 }
