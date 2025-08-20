@@ -88,6 +88,7 @@ class Qwen2_5_VLModel(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.image_token_id = fd_config.model_config.image_token_id
+        self.video_token_id = fd_config.model_config.video_token_id
         self._dtype = fd_config.model_config.dtype
         fd_config.model_config.pretrained_config.prefix_name = "model"
         self.fd_config = fd_config
@@ -145,10 +146,17 @@ class Qwen2_5_VLModel(nn.Layer):
         # 将 image_embeds 替换 input_embeds 里的 image占位符
         image_mask = ids_remove_padding == self.image_token_id
         image_token_num = image_mask.sum()
-
+        
+        video_mask = ids_remove_padding == self.video_token_id
+        video_token_num = video_mask.sum()
+        
+        # 由于框架只有 image_features，所以目前不支持图片和视频混合
+        # TODO 后续考虑支持传入 video_features
         if image_token_num > 0:
             hidden_states[image_mask] = image_features.cast(self._dtype)
-
+        if video_token_num > 0:
+            hidden_states[video_mask] = image_features.cast(self._dtype)
+        
         # -----------------------
 
         residual = None

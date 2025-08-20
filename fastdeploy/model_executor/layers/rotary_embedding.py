@@ -474,8 +474,10 @@ class QwenVlRotaryEmbedding3D:
 
         rot_emb[0] = cos_thw
         rot_emb[1] = sin_thw
-
-        return rot_emb
+        
+        # neox style need
+        rot_emb_neox = paddle.concat([rot_emb, rot_emb], axis=-1)
+        return rot_emb_neox
 
 
 def get_rope_3d(
