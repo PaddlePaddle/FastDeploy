@@ -205,6 +205,20 @@ class MTPProposer(Proposer):
         ).pin_memory()
         self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(self.main_model_inputs["max_len_tensor_cpu"]).cpu()
 
+        self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.main_model_inputs["encoder_batch_ids"])
+        self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
+            self.main_model_inputs["encoder_tile_ids_per_batch"]
+        )
+        self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
+            self.main_model_inputs["encoder_num_blocks_x_cpu"]
+        ).cpu()
+        self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.main_model_inputs["kv_batch_ids"])
+        self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(self.main_model_inputs["kv_tile_ids_per_batch"])
+        self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
+            self.main_model_inputs["kv_num_blocks_x_cpu"]
+        ).cpu()
+        self.model_inputs["max_len_kv_cpu"] = paddle.zeros_like(self.main_model_inputs["max_len_kv_cpu"]).cpu()
+
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
