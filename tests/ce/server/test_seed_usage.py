@@ -65,9 +65,13 @@ def test_chat_usage_stream():
 
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert data["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert data["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
 
 
 def test_chat_usage_non_stream():
@@ -92,9 +96,13 @@ def test_chat_usage_non_stream():
 
     usage = response["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert data["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert data["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
 
 
 def test_non_chat_usage_stream():
@@ -117,9 +125,13 @@ def test_non_chat_usage_stream():
 
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert data["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert data["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
 
 
 def test_non_chat_usage_non_stream():
@@ -142,9 +154,13 @@ def test_non_chat_usage_non_stream():
 
     usage = response["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert data["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert data["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
 
 
 if __name__ == "__main__":
