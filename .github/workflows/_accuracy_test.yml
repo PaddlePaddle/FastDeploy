@@ -31,6 +31,7 @@ on:
 jobs:
   accuracy_tests:
     runs-on: [self-hosted, GPU-h20-1Cards]
+    timeout-minutes: 60
     steps:
       - name: Code Prepare
         shell: bash
@@ -147,7 +148,7 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          pushd test/ce/deploy
+          pushd tests/ce/deploy
           python3.10 deploy.py > dd.log 2>&1 &
           sleep 3
           curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
@@ -157,7 +158,7 @@ jobs:
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
           popd
 
-          pushd test/ce/accuracy_cases
+          pushd tests/ce/accuracy_cases
           export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
           export TEMPLATE=TOKEN_LOGPROB
           export MODEL_SIZE=0.3B
