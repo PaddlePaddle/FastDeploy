@@ -386,7 +386,7 @@ class OpenAIServingCompletion:
                             delta_message_output = output["delta_message"]
                             if delta_message_output is None:
                                 continue
-                            delta_message.content = delta_message_output.content
+                            delta_message.text = delta_message_output.content
                             delta_message.reasoning_content = delta_message_output.reasoning_content
                             delta_message.tool_calls = delta_message_output.tool_calls
 
