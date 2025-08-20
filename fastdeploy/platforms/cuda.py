@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import paddle
 
 from fastdeploy.utils import console_logger as logger
@@ -40,7 +42,8 @@ class CUDAPlatform(Platform):
             logger.warning(
                 "You are using GPU version PaddlePaddle, but there is no GPU "
                 "detected on your machine. Maybe CUDA devices is not set properly."
-                f"\n Original Error is {e}"
+                f"\n Original Error is {e}, "
+                f"{str(traceback.format_exc())}"
             )
             return False
 

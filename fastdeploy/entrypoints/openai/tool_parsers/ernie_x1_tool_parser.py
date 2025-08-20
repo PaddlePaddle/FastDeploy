@@ -272,7 +272,6 @@ class ErnieX1ToolParser(ToolParser):
                                 )
                             ]
                         )
-                        print("delta name:", delta)
                         # 删除已处理的name部分
                         self.buffer = self.buffer[name_match.end() :]
                         self.current_tool_name_sent = True
@@ -282,11 +281,9 @@ class ErnieX1ToolParser(ToolParser):
                 args_match = re.search(r'"arguments"\s*:\s*(\{.*)', self.buffer)
                 if args_match:
                     args_content = args_match.group(1)
-                    print("args_content:", args_content)
                     try:
                         # 检查是否到达arguments结尾(括号完全匹配)
                         if "}}" in args_content:
-                            print("delta_text (partial):", delta_text)
                             # 逐个字符检查括号匹配状态
                             matched_pos = -1
                             for i, ch in enumerate(delta_text):
@@ -302,7 +299,6 @@ class ErnieX1ToolParser(ToolParser):
                             if matched_pos >= 0:
                                 # 找到匹配点，清理buffer并返回
                                 truncate_text = delta_text[: matched_pos + 1]
-                                print("truncate_text:", truncate_text)
                                 delta = DeltaMessage(
                                     tool_calls=[
                                         DeltaToolCall(
@@ -314,7 +310,6 @@ class ErnieX1ToolParser(ToolParser):
                                     ]
                                 )
                                 self.buffer = self.buffer[args_match.end() :]
-                                print(delta)
                                 return delta
                             else:
                                 # 没有完全匹配，继续累积
@@ -333,10 +328,6 @@ class ErnieX1ToolParser(ToolParser):
                                         function=DeltaFunctionCall(arguments=delta_text).model_dump(exclude_none=True),
                                     )
                                 ]
-                            )
-                            print("delta argument (partial):", delta)
-                            print(
-                                f"Current bracket counts - left: {self.bracket_counts['total_l']}, right: {self.bracket_counts['total_r']}"
                             )
                             return delta
                     except Exception as e:
