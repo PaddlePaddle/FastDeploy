@@ -64,7 +64,7 @@ for dir in "${dirs[@]}"; do
         continue
       fi
       # TODO: Add a framework to manage unit test execution time
-      timeout 600 python -m coverage run "$test_file"
+      timeout 600 python -m coverage run -m pytest "$test_file"
       if [ $? -ne 0 ]; then
         echo "$test_file" >> "$failed_tests_file"
         fail=$((fail + 1))
