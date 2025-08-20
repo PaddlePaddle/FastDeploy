@@ -496,19 +496,23 @@ class Ernie4_5_Model(nn.Layer):
         send_hooks = [None] * split_num
         recv_hooks = [None] * split_num
 
+        dispatch_events = [None] * split_num
+        combine_events = [None] * split_num
 
         from collections import deque
         for j in range(split_num):
             send_hooks[j] = deque()
             recv_hooks[j] = deque()
             handles[j] = deque()
+            dispatch_events[j] = deque()
+            combine_events[j] = deque()
 
         self.barrier_id = -1
         def zkk_barrier():
             self.barrier_id += 1
             # paddle.device.synchronize()
             # paddle.distributed.barrier()
-            # print("到达", self.barrier_id)
+            #print("到达", self.barrier_id)
             #paddle.device.synchronize()
 
         # 先只搞第三层！
@@ -516,11 +520,20 @@ class Ernie4_5_Model(nn.Layer):
 
             def dispatch_wait(j):
                 #print(f"dispatch_wait({j})")
+                a = dispatch_events[j].pop()
+                a.current_stream_wait()
                 tmp = send_hooks[j].pop()()
+                tmp.current_stream_wait()
+                
 
             def combine_wait(j):
                 #print(f"combine_wait({j})")
+                a = combine_events[j].pop()
+                a.current_stream_wait()
+                
                 tmp = recv_hooks[j].pop()()
+                tmp.current_stream_wait()
+                
 
 
             def compute_atten(layer_id, i):
@@ -542,6 +555,7 @@ class Ernie4_5_Model(nn.Layer):
                 )
                 handles[i].appendleft(handle)
                 send_hooks[i].appendleft(a2e_isend_hook)
+                dispatch_events[i].appendleft(event)
 
             def combine_receive(i):
                 #print(f"combine_receive({i})")
@@ -556,48 +570,64 @@ class Ernie4_5_Model(nn.Layer):
                 recv_hooks[i].appendleft(e2a_irecv_hook)
 
                 attention_input[i][1] = e2a_x
+                combine_events[i].appendleft(event)
 
-            compute_atten(3,0)
-            dispatch_send(0)
+            # compute_atten(3,0)
+            # dispatch_send(0)
 
-            compute_atten(3,1)
-            zkk_barrier()
-            dispatch_wait(0)
-            dispatch_send(1)
-            combine_receive(0)
-            compute_atten(3,2)
-            zkk_barrier()
-            dispatch_wait(1)
-            dispatch_send(2)
+            # compute_atten(3,1)
+            # zkk_barrier()
+            # dispatch_wait(0)
+            # dispatch_send(1)
+            # combine_receive(0)
+            # compute_atten(3,2)
+            # zkk_barrier()
+            # dispatch_wait(1)
+            # dispatch_send(2)
 
-            for layer_id in range(4, self.num_layers):
+            # for layer_id in range(4, self.num_layers):
+            #     for j in range(split_num):
+            #         # 当前batch接受同步一下，接受来自 layer_id-1 层 MoE 的输入！
+            #         zkk_barrier()
+            #         combine_wait(j)
+            #         # 下一个batch准备接受layer_id-1层的数据！
+            #         combine_receive( (j+1) % split_num )
+            #         # 当前batch计算attention！
+            #         compute_atten(layer_id, j)
+            #         # 上一个batch send同步！
+            #         zkk_barrier()
+            #         dispatch_wait((j+split_num-1) % split_num)
+            #         # 当前batch发送数据给MoE！
+            #         dispatch_send(j)
+            
+            # zkk_barrier()
+            # # 处理一下尾巴！
+            # combine_wait(0)
+            # combine_receive(1)
+            # zkk_barrier()
+            # dispatch_wait(2)
+
+            # zkk_barrier()
+            # combine_wait(1)
+            # combine_receive(2)
+            
+            # zkk_barrier()
+            # combine_wait(2)
+
+
+            for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
-                    # 当前batch接受同步一下，接受来自 layer_id-1 层 MoE 的输入！
+                    zkk_barrier()
+                    compute_atten(layer_id, j)
+                    zkk_barrier()
+                    dispatch_send(j)
+                    zkk_barrier()
+                    dispatch_wait(j)
+                    zkk_barrier()
+                    combine_receive(j)
                     zkk_barrier()
                     combine_wait(j)
-                    # 下一个batch准备接受layer_id-1层的数据！
-                    combine_receive( (j+1) % split_num )
-                    # 当前batch计算attention！
-                    compute_atten(layer_id, j)
-                    # 上一个batch send同步！
                     zkk_barrier()
-                    dispatch_wait((j+split_num-1) % split_num)
-                    # 当前batch发送数据给MoE！
-                    dispatch_send(j)
-            
-            zkk_barrier()
-            # 处理一下尾巴！
-            combine_wait(0)
-            combine_receive(1)
-            zkk_barrier()
-            dispatch_wait(2)
-
-            zkk_barrier()
-            combine_wait(1)
-            combine_receive(2)
-            
-            zkk_barrier()
-            combine_wait(2)
         else:
             # 搞一个大槽子放东西！
             moe_input = [None] * split_num
@@ -607,11 +637,20 @@ class Ernie4_5_Model(nn.Layer):
 
             def dispatch_wait(j):
                 #print(f"dispatch_wait({j})")
-                recv_hooks[j].pop()()
+                a = dispatch_events[j].pop()
+                a.current_stream_wait()
+                tmp = recv_hooks[j].pop()()
+                tmp.current_stream_wait()
+                
 
             def combine_wait(j):
                 #print(f"combine_wait({j})")
-                send_hooks[j].pop()()
+                a = combine_events[j].pop()
+                a.current_stream_wait()
+                
+                tmp = send_hooks[j].pop()()
+                tmp.current_stream_wait()
+                
 
             def dispatch_receive(i):
                 #print(f"dispatch_receive({i})")
@@ -631,7 +670,7 @@ class Ernie4_5_Model(nn.Layer):
                 )
                 handles[i].appendleft(handle)
                 recv_hooks[i].appendleft(a2e_irecv_hook)
-
+                dispatch_events[i].appendleft(event)
                 moe_input[i][0] = packed_recv_x
                 moe_input[i][1] = packed_recv_count
 
@@ -650,53 +689,69 @@ class Ernie4_5_Model(nn.Layer):
                     out=None,
                 )
                 send_hooks[i].appendleft(e2a_isend_hook)
+                combine_events[i].appendleft(event)
             
-            dispatch_receive(0)
-            zkk_barrier()
-            dispatch_wait(0)
-            dispatch_receive(1)
+            # dispatch_receive(0)
+            # zkk_barrier()
+            # dispatch_wait(0)
+            # dispatch_receive(1)
 
+            # for layer_id in range(3, self.num_layers):
+            #     for j in range(split_num):
+            #         # 当前batch计算moe！
+            #         compute_moe(layer_id, j)
+
+            #         # 下一个batch准备接受layer_id层的attention 输出！
+            #         if layer_id == self.num_layers - 1 and j == 2:
+            #             # 此时我没有下一个batch，所以skip！
+            #             pass
+            #         else:
+            #             zkk_barrier()
+            #             dispatch_wait((j+1) % split_num)
+
+            #         # 下下个batch发起接受layer_id层的attention 输出！
+            #         if layer_id == self.num_layers - 1 and j >= 1:
+            #             # 此时我没有下下一个batch，所以skip！
+            #             pass
+            #         else:
+            #             dispatch_receive((j+2) % split_num)
+
+            #         # 上一个batch的combine同步
+            #         if layer_id == 3 and j == 0:
+            #             # 此时我没有上一个batch，所以skip！
+            #             pass
+            #         else:
+            #             zkk_barrier()
+            #             combine_wait((j+split_num-1) % split_num)
+
+
+            #         # 当前batch发送数据发给attention！
+            #         combine_send(j)
+            
+            # # 处理一下尾巴！
+            # zkk_barrier()
+            # combine_wait(2)
+        
             for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
-                    # 当前batch计算moe！
+                    zkk_barrier()
+                    dispatch_receive(j)
+                    zkk_barrier()
+                    dispatch_wait(j)
+                    zkk_barrier()
                     compute_moe(layer_id, j)
-
-                    # 下一个batch准备接受layer_id层的attention 输出！
-                    if layer_id == self.num_layers - 1 and j == 2:
-                        # 此时我没有下一个batch，所以skip！
-                        pass
-                    else:
-                        zkk_barrier()
-                        dispatch_wait((j+1) % split_num)
-
-                    # 下下个batch发起接受layer_id层的attention 输出！
-                    if layer_id == self.num_layers - 1 and j >= 1:
-                        # 此时我没有下下一个batch，所以skip！
-                        pass
-                    else:
-                        dispatch_receive((j+2) % split_num)
-
-                    # 上一个batch的combine同步
-                    if layer_id == 3 and j == 0:
-                        # 此时我没有上一个batch，所以skip！
-                        pass
-                    else:
-                        zkk_barrier()
-                        combine_wait((j+split_num-1) % split_num)
-
-
-                    # 当前batch发送数据发给attention！
+                    zkk_barrier()
                     combine_send(j)
-            
-            # 处理一下尾巴！
-            zkk_barrier()
-            combine_wait(2)
-        
+                    zkk_barrier()
+                    combine_wait(j)
+                    zkk_barrier()
+
+
         paddle.device.synchronize()
         paddle.distributed.barrier()
         if IsH20:
-            hidden_states = paddle.concat([attention_input[0][1], attention_input[1][1], attention_input[2][1]], axis=0)
-            residuals = paddle.concat([attention_input[0][2], attention_input[1][2], attention_input[2][2]], axis=0)
+            hidden_states = paddle.concat([attention_input[j][1] for j in range(split_num)], axis=0)
+            residuals = paddle.concat([attention_input[j][2]  for j in range(split_num)], axis=0)
             hidden_states = hidden_states + residuals
             out = self.norm(hidden_states)
             return out
