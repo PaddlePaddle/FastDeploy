@@ -27,6 +27,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import check_unified_ckpt, get_logger
 
 logger = get_logger("config", "config.log")
@@ -124,6 +125,8 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.pad_token_id: int = -1
+        self.eos_tokens_lens: int = 2
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -257,10 +260,6 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
-        #
-        self.pad_token_id: int = -1
-        #
-        self.eos_tokens_lens: int = 2
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role
@@ -488,7 +487,7 @@ class GraphOptimizationConfig:
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = None
-        self.batch_size_to_captured_size: dict[int, int] = None
+        self.real_shape_to_captured_size: dict[int, int] = None
         # CINN Config ...
         if args is not None:
             for key, value in args.items():
@@ -517,26 +516,26 @@ class GraphOptimizationConfig:
         self.cudagraph_capture_sizes.sort(reverse=True)
         self.max_capture_size = self.cudagraph_capture_sizes[0] if self.cudagraph_capture_sizes else 0
 
-        # Pre-compute the mapping from batch size to padded graph size
-        self.batch_size_to_captured_size = {}
+        # Pre-compute the mapping from shape to padded graph size
+        self.real_shape_to_captured_size = {}
         for end, start in zip(self.cudagraph_capture_sizes, self.cudagraph_capture_sizes[1:] + [0]):
             for bs in range(start, end):
                 if bs == start:
-                    self.batch_size_to_captured_size[bs] = start
+                    self.real_shape_to_captured_size[bs] = start
                 else:
-                    self.batch_size_to_captured_size[bs] = end
-        self.batch_size_to_captured_size[self.max_capture_size] = self.max_capture_size
+                    self.real_shape_to_captured_size[bs] = end
+        self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
     def _set_cudagraph_sizes(self, max_num_seqs: int = 0):
         """
-        Calculate a series of candidate capture batch sizes,
+        Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
+        # Shape [1, 2, 4, 8, 16, ... 120, 128]
         draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
-        # Batch Size [128, 144, ... 240, 256]
+        # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
-        # Batch Size [256, 288, ... 992, 1024]
+        # Shape [256, 288, ... 992, 1024]
         draft_capture_sizes += [32 * i for i in range(17, 33)]
 
         draft_capture_sizes.append(max_num_seqs)
@@ -732,8 +731,11 @@ class CacheConfig:
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
         self.num_gpu_blocks_override = None
-        self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 2
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.kv_cache_ratio = 1.0
+        else:
+            self.kv_cache_ratio = 0.75
+        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
         self.prealloc_dec_block_slot_num_threshold = 5
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -817,7 +819,10 @@ class CacheConfig:
         self.dec_token_num = self.enc_dec_block_num * self.block_size
         if self.num_gpu_blocks_override is not None:
             self.total_block_num = self.num_gpu_blocks_override
-            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.prefill_kvcache_block_num = self.total_block_num
+            else:
+                self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -830,7 +835,10 @@ class CacheConfig:
         reset gpu block number
         """
         self.total_block_num = num_gpu_blocks
-        self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.prefill_kvcache_block_num = self.total_block_num
+        else:
+            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         logger.info(
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"

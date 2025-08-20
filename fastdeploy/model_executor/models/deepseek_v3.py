@@ -316,30 +316,23 @@ class DeepseekV3MLAAttention(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        layernorm_out = hidden_states
-        fmha_out = paddle.zeros(
-            shape=[
-                layernorm_out.shape[0],
-                self.num_attention_heads_tp * self.v_head_dim,
-            ],
-            dtype=layernorm_out.dtype,
-        )
+
+        # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
+        fmha_out = None
+        query = self.q_a_proj(hidden_states)
+        query = self.q_a_layernorm(query)
+        query = self.q_b_proj(query)
+        query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+        query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+
+        compressed_kv = self.kv_a_proj_with_mqa(hidden_states)
+        compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
+        key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+        compressed_kv = self.kv_a_layernorm(compressed_kv)
+
+        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
-            query = self.q_a_proj(layernorm_out)
-            query = self.q_a_layernorm(query)
-            query = self.q_b_proj(query)
-
-            query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
-
-            compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
-            compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
-            key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-            compressed_kv = self.kv_a_layernorm(compressed_kv)
-
-            query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
-
             key_value = self.kv_b_proj(compressed_kv)
             key_value = key_value.reshape(
                 [
@@ -371,23 +364,9 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
-            fmha_out = fmha_out + fmha_out_prefill
+            fmha_out = fmha_out_prefill
+
         if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
-            query = self.q_a_proj(layernorm_out)
-            query = self.q_a_layernorm(query)
-            ln_out_or_q_c = query
-
-            compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
-            compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
-            key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-            compressed_kv = self.kv_a_layernorm(compressed_kv)
-
-            query = self.q_b_proj(ln_out_or_q_c)
-            query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-
-            query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
-            query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
-
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -416,7 +395,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .transpose([1, 0, 2])
                 .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
-            fmha_out = fmha_out + fmha_out_decode
+            if fmha_out is None:
+                fmha_out = fmha_out_decode
+            else:
+                fmha_out = fmha_out + fmha_out_decode
 
         output = self.o_proj(fmha_out)
         return output
@@ -539,7 +521,7 @@ class DeepSeekV3Model(nn.Layer):
             prefix="deepseek_v3.embed_tokens",
         )
 
-        self.decoder_layers = nn.LayerList(
+        self.layers = nn.LayerList(
             [
                 DeepSeekV3DecoderLayer(
                     fd_config,
@@ -564,7 +546,7 @@ class DeepSeekV3Model(nn.Layer):
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.decoder_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -578,7 +560,7 @@ class DeepSeekV3Model(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.decoder_layers[i](
+            hidden_states, residual = self.layers[i](
                 forward_meta,
                 hidden_states,
                 residual,
@@ -627,6 +609,78 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         self.lm_head.load_state_dict(state_dict)
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+        from fastdeploy.model_executor.models.utils import default_weight_loader
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+            ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
+        ]
+        # (param_name, weight_name, expert_id, shard_id)
+        expert_params_mapping = FusedMoE.make_expert_params_mapping(
+            num_experts=self.fd_config.model_config.n_routed_experts,
+            ckpt_gate_proj_name="gate_proj",
+            ckpt_down_proj_name="down_proj",
+            ckpt_up_proj_name="up_proj",
+            param_gate_up_proj_name="experts.up_gate_proj_",
+            param_down_proj_name="experts.down_proj_",
+        )
+        params_dict = dict(self.named_parameters())
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
+
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                if "mlp.experts." in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+
+                if model_param_name not in params_dict:
+                    continue
+
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                for mapping in expert_params_mapping:
+                    param_name, weight_name, expert_id, shard_id = mapping
+                    if weight_name not in loaded_weight_name:
+                        continue
+                    model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                    if model_param_name not in params_dict:
+                        continue
+                    param = params_dict[model_param_name]
+                    weight_loader = param.weight_loader
+                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    break
+                else:
+                    if loaded_weight_name not in params_dict:
+                        continue
+                    param = params_dict[loaded_weight_name]
+                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                    weight_loader(param, loaded_weight)
+                    if "kv_b_proj.weight" in loaded_weight_name:
+                        # handle kv_b_proj_bmm
+                        model_param_name = loaded_weight_name.replace(
+                            "kv_b_proj.weight", "kv_b_proj_bmm.k_b_proj_weight"
+                        )
+                        param = params_dict[model_param_name]
+                        weight_loader = getattr(param, "weight_loader", None)
+                        weight_loader(param, loaded_weight, shard_id)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """

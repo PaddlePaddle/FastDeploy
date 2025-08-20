@@ -20,6 +20,11 @@ import paddle
 from paddle.incubate.nn.functional import swiglu
 from paddle.nn.quant import weight_only_linear
 
+try:
+    from fastdeploy.model_executor.ops.iluvatar import w8a16_group_gemm
+except ImportError:
+    w8a16_group_gemm = None
+
 
 def group_gemm(
     input: paddle.Tensor,
@@ -67,11 +72,7 @@ def group_gemm(
         scale_i = scale[i]
         # avoid d2d?
         output[expert_start:expert_end] = weight_only_linear(
-            input_i,
-            weight_i,
-            weight_scale=scale_i,
-            weight_dtype="int8",
-            group_size=-1,
+            input_i, weight_i, weight_scale=scale_i, weight_dtype="int8", group_size=-1
         )
 
 
@@ -96,24 +97,9 @@ def iluvatar_moe_expert_ffn(
     assert quant_method in ("weight_only_int8")
     assert not used_in_ep_low_latency
     tokens_expert_prefix_sum_cpu = tokens_expert_prefix_sum.to("cpu")
-    up_gate_proj_output = paddle.empty(
-        [permute_input.shape[0], up_gate_proj_weight.shape[1]],
-        dtype=permute_input.dtype,
+    ffn1_output = w8a16_group_gemm(
+        permute_input, up_gate_proj_weight, up_gate_proj_scale, tokens_expert_prefix_sum_cpu, -1
     )
-    group_gemm(
-        permute_input,
-        tokens_expert_prefix_sum_cpu,
-        up_gate_proj_weight,
-        up_gate_proj_scale,
-        up_gate_proj_output,
-    )
-    act_out = swiglu(up_gate_proj_output)
-    output = paddle.empty([act_out.shape[0], down_proj_weight.shape[1]], dtype=act_out.dtype)
-    group_gemm(
-        act_out,
-        tokens_expert_prefix_sum_cpu,
-        down_proj_weight,
-        down_proj_scale,
-        output,
-    )
+    act_out = swiglu(ffn1_output)
+    output = w8a16_group_gemm(act_out, down_proj_weight, down_proj_scale, tokens_expert_prefix_sum_cpu, -1)
     return output

@@ -15,6 +15,7 @@
 """
 
 import argparse
+import asyncio
 import codecs
 import importlib
 import logging
@@ -22,6 +23,7 @@ import os
 import random
 import re
 import socket
+import sys
 import tarfile
 import time
 from datetime import datetime
@@ -38,6 +40,7 @@ from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
+from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
 
@@ -189,38 +192,38 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
             os.remove(str(self.base_log_path.with_name(file_name)))
 
 
-def get_logger(name, file_name, without_formater=False, print_to_console=False):
-    """
-    get logger
-    """
-    log_dir = envs.FD_LOG_DIR
-    if not os.path.exists(log_dir):
-        os.mkdir(log_dir)
-    is_debug = int(envs.FD_DEBUG)
-    logger = logging.getLogger(name)
-    if is_debug:
-        logger.setLevel(level=logging.DEBUG)
-    else:
-        logger.setLevel(level=logging.INFO)
+# def get_logger(name, file_name, without_formater=False, print_to_console=False):
+#     """
+#     get logger
+#     """
+#     log_dir = envs.FD_LOG_DIR
+#     if not os.path.exists(log_dir):
+#         os.mkdir(log_dir)
+#     is_debug = int(envs.FD_DEBUG)
+#     logger = logging.getLogger(name)
+#     if is_debug:
+#         logger.setLevel(level=logging.DEBUG)
+#     else:
+#         logger.setLevel(level=logging.INFO)
 
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
+#     for handler in logger.handlers[:]:
+#         logger.removeHandler(handler)
 
-    LOG_FILE = f"{log_dir}/{file_name}"
-    backup_count = int(envs.FD_LOG_BACKUP_COUNT)
-    handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
-    formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
+#     LOG_FILE = f"{log_dir}/{file_name}"
+#     backup_count = int(envs.FD_LOG_BACKUP_COUNT)
+#     handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
+#     formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
 
-    console_handler = logging.StreamHandler()
-    if not without_formater:
-        handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    if print_to_console:
-        logger.addHandler(console_handler)
-    handler.propagate = False
-    console_handler.propagate = False
-    return logger
+#     console_handler = logging.StreamHandler()
+#     if not without_formater:
+#         handler.setFormatter(formatter)
+#         console_handler.setFormatter(formatter)
+#     logger.addHandler(handler)
+#     if print_to_console:
+#         logger.addHandler(console_handler)
+#     handler.propagate = False
+#     console_handler.propagate = False
+#     return logger
 
 
 def str_to_datetime(date_string):
@@ -302,6 +305,16 @@ def set_random_seed(seed: int) -> None:
         random.seed(seed)
         np.random.seed(seed)
         paddle.seed(seed)
+
+
+def get_limited_max_value(max_value):
+    def validator(value):
+        value = float(value)
+        if value > max_value:
+            raise argparse.ArgumentTypeError(f"The value cannot exceed {max_value}")
+        return value
+
+    return validator
 
 
 def download_model(url, output_dir, temp_tar):
@@ -619,6 +632,22 @@ def is_list_of(
     assert_never(check)
 
 
+def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
+    """
+    Import a Python file according to its file path.
+    """
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None:
+        raise ModuleNotFoundError(f"No module named '{module_name}'")
+
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
@@ -651,6 +680,67 @@ def deprecated_kwargs_warning(**kwargs):
     for arg in DEPRECATED_ARGS:
         if arg in kwargs:
             console_logger.warning(f"Deprecated argument is detected: {arg}, which may be removed later")
+
+
+class StatefulSemaphore:
+    __slots__ = ("_semaphore", "_max_value", "_acquired_count", "_last_reset")
+
+    """
+    StatefulSemaphore is a class that wraps an asyncio.Semaphore and provides additional stateful information.
+    """
+
+    def __init__(self, value: int):
+        """
+        StatefulSemaphore constructor
+        """
+        if value < 0:
+            raise ValueError("Value must be non-negative.")
+        self._semaphore = asyncio.Semaphore(value)
+        self._max_value = value
+        self._acquired_count = 0
+        self._last_reset = time.monotonic()
+
+    async def acquire(self):
+        await self._semaphore.acquire()
+        self._acquired_count += 1
+
+    def release(self):
+        self._semaphore.release()
+
+        self._acquired_count = max(0, self._acquired_count - 1)
+
+    def locked(self) -> bool:
+        return self._semaphore.locked()
+
+    @property
+    def available(self) -> int:
+        return self._max_value - self._acquired_count
+
+    @property
+    def acquired(self) -> int:
+        return self._acquired_count
+
+    @property
+    def max_value(self) -> int:
+        return self._max_value
+
+    @property
+    def uptime(self) -> float:
+        return time.monotonic() - self._last_reset
+
+    def status(self) -> dict:
+        return {
+            "available": self.available,
+            "acquired": self.acquired,
+            "max_value": self.max_value,
+            "uptime": round(self.uptime, 2),
+        }
+
+
+# 日志使用全局访问点（兼容原有使用方式）
+def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
+    """全局函数包装器，保持向后兼容"""
+    return FastDeployLogger().get_logger(name, file_name, without_formater, print_to_console)
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
