@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from .process import DataProcessor, IDS_TYPE_FLAG
+from .process import IDS_TYPE_FLAG, DataProcessor
 
 __all__ = [
     "DataProcessor",

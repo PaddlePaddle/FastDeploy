@@ -15,16 +15,28 @@
 """
 
 import numpy as np
-from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.ernie_processor import ErnieProcessor
-from fastdeploy.input.qwen_mm_processor import IDS_TYPE_FLAG, DataProcessor
+from fastdeploy.input.qwen_mm_processor import DataProcessor
+from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
 
-class QwenVLProcessor(ErnieProcessor):
-    """The processor class for ERNIE MoE VL models."""
+class QwenVLProcessor(TextProcessor):
+    """
+    Qwen Vision-Language processor for handling multimodal inputs.
+
+    This processor extends TextProcessor to support:
+    - Image and video processing
+    - Multimodal feature extraction
+    - Tokenization and position encoding
+    - Request processing and model input generation
+
+    Attributes:
+        processor (DataProcessor): Underlying data processor instance
+        tokenizer: Text tokenizer instance
+        limit_mm_per_prompt (dict): Limits for multimodal inputs per prompt
+    """
 
     def __init__(
         self,
@@ -33,73 +45,44 @@ class QwenVLProcessor(ErnieProcessor):
         limit_mm_per_prompt=None,
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
+        tool_parser_obj=None,
     ):
+        """
+        Initialize QwenVLProcessor instance.
+
+        Args:
+            config: Model configuration object
+            model_name_or_path (str): Pretrained model name or path
+            limit_mm_per_prompt (dict, optional): Limits for multimodal inputs
+            mm_processor_kwargs (dict, optional): Multimodal processor arguments
+            reasoning_parser_obj: Reasoning parser instance
+            tool_parser_obj: Tool parser instance
+        """
+        super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj)
+
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
-
-        self.ernie_processor = DataProcessor(
+        self.processor = DataProcessor(
             model_path=model_name_or_path,
             tokens_per_second=config.vision_config.tokens_per_second,
+            tokenizer=self.tokenizer,
             **processor_kwargs,
         )
-        self._load_tokenizer()
-        self.decode_status = dict()
 
-        # Generation config
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(model_name_or_path)
-        except Exception as e:
-            data_processor_logger.warning(
-                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
-            )
-            self.generation_config = None
-
-        from paddleformers.trl.llm_utils import get_eos_token_id
-
-        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
-        self.reasoning_parser = None
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
-
-    def get_pad_id(self):
-        """get pad id"""
-        return self.tokenizer.pad_token_id
-
-    def _load_tokenizer(self):
-        """
-        load tokenizer
-
-        Returns:
-            tokenizer (AutoTokenizer)
-        """
-        self.tokenizer = self.ernie_processor.tokenizer
-
-    def _apply_default_parameters(self, request):
-        """
-        Apply default value for parameters in request
-        """
-
-        def set_value(req, key, value):
-            value = getattr(self.generation_config, key, value)
-            if isinstance(req, dict):
-                if key not in req:
-                    req[key] = value
-            else:
-                if req.get(key) is None:
-                    req.set(key, value)
-
-        set_value(request, "top_p", 0.7)
-        set_value(request, "temperature", 1.0)
-        set_value(request, "repetition_penalty", 1.0)
-        set_value(request, "frequency_penalty", 0.0)
-        set_value(request, "presence_penalty", 0.0)
-        return request
 
     def process_request(self, request, max_model_len=None, **kwargs):
-        """process the input data"""
+        """
+        Process incoming request and generate model inputs.
+
+        Args:
+            request: Input request object
+            max_model_len (int, optional): Maximum context length
+            **kwargs: Additional processing parameters
+
+        Returns:
+            Request: Processed request with model inputs
+        """
         task = request.to_dict()
         task["enable_thinking"] = kwargs.get("enable_thinking", False)
         self.process_request_dict(task, max_model_len)
@@ -108,7 +91,18 @@ class QwenVLProcessor(ErnieProcessor):
         return request
 
     def _parse_processor_kwargs(self, kwargs):
-        """解析多模态处理器参数配置"""
+        """
+        Parse and validate multimodal processor arguments.
+
+        Args:
+            kwargs (dict): Processor configuration arguments
+
+        Returns:
+            dict: Validated processor arguments
+
+        Raises:
+            ValueError: If arguments format is invalid
+        """
         if not kwargs:
             return {}
 
@@ -116,11 +110,11 @@ class QwenVLProcessor(ErnieProcessor):
             if not isinstance(kwargs, dict):
                 raise ValueError("mm-processor-kwargs must be a dictionary")
 
-            # 验证参数类型
-            data_processor_logger.info(f"kwargs:{kwargs}")
+            # Validate kwargs types against expected schema
+            data_processor_logger.info(f"Processing kwargs: {kwargs}")
             expected_types = {
-                "video_max_frames": int,
-                "video_min_frames": int,
+                "video_max_frames": int,  # Maximum video frames parameter
+                "video_min_frames": int,  # Minimum video frames parameter
             }
 
             for key, value in kwargs.items():
@@ -136,7 +130,18 @@ class QwenVLProcessor(ErnieProcessor):
             return {}
 
     def _parse_limits(self, limits):
-        """解析多模态限制配置"""
+        """
+        Parse and validate multimodal input limits.
+
+        Args:
+            limits (dict): Input limits configuration
+
+        Returns:
+            dict: Validated limits with defaults
+
+        Raises:
+            ValueError: If limits format is invalid
+        """
         DEFAULT_LIMITS = {"image": 1, "video": 1, "audio": 1}
 
         if not limits:
@@ -152,6 +157,15 @@ class QwenVLProcessor(ErnieProcessor):
             return DEFAULT_LIMITS
 
     def _check_mm_limits(self, item):
+        """
+        Validate multimodal inputs against configured limits.
+
+        Args:
+            item: Input request item to validate
+
+        Raises:
+            ValueError: If input exceeds configured limits
+        """
         if isinstance(item, dict):
             # 请求包含prompt和multi_modal_data
             mm_data = item
@@ -162,9 +176,9 @@ class QwenVLProcessor(ErnieProcessor):
             for message in item:
                 if isinstance(message.get("content"), list):
                     for part in message["content"]:
-                        if part.get("type") == "image":
+                        if part.get("type") in ["image_url", "image"]:
                             mm_data["image"].append(part)
-                        elif part.get("type") == "video":
+                        elif part.get("type") in ["video_url", "video"]:
                             mm_data["video"].append(part)
 
         for modality, data in mm_data.items():
@@ -174,7 +188,19 @@ class QwenVLProcessor(ErnieProcessor):
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
     def process_request_dict(self, request, max_model_len=None):
-        """process the input data"""
+        """
+        Process request dictionary into model inputs.
+
+        Args:
+            request (dict): Input request dictionary
+            max_model_len (int, optional): Maximum context length
+
+        Returns:
+            dict: Processed request with model inputs
+
+        Raises:
+            ValueError: If request format is invalid
+        """
 
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
@@ -193,92 +219,71 @@ class QwenVLProcessor(ErnieProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.ernie_processor.text2ids(request["prompt"], images, videos)
+            outputs = self.processor.text2ids(request["prompt"], images, videos)
+
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
-            outputs = self.ernie_processor.request2ids(request)
+            outputs = self.processor.request2ids(request)
+
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
         metadata = request.get("metadata")
-        # 如果metadata包含之前输出的token，将这些token添加到input_ids末尾
+        # Handle continuation of previous generation by appending existing tokens
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
+
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
-        # 截断超过长度限制的prompt
+        # Handle prompt truncation if exceeds model context length
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
-        data_processor_logger.info(f"Processed request {request}")
+            request["prompt_token_ids"] = request["prompt_token_ids"][
+                : max_model_len - 1
+            ]  # Leave space for at least 1 new token
 
+        # Set default max_tokens if not specified
+        if request.get("max_tokens") is None:
+            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
+        data_processor_logger.info(f"Processed request {request}")
         return request
 
-    def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
-        "append already generated tokens"
-
-        num_tokens = len(generated_token_ids)
-        multimodal_inputs["input_ids"].extend(generated_token_ids)
-        multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
-
-        start = multimodal_inputs["cur_position"]
-        for i in range(num_tokens):
-            multimodal_inputs["position_ids"].append([start + i] * 3)
-        multimodal_inputs["cur_position"] += num_tokens
-
-    def pack_outputs(self, outs):
-        # Stack or nullify image-related fields
-        if not outs["images"]:
-            outs["images"] = None
-            outs["grid_thw"] = None
-            outs["image_type_ids"] = None
-        else:
-            outs["images"] = np.vstack(outs["images"])
-            outs["grid_thw"] = np.vstack(outs["grid_thw"])
-            outs["image_type_ids"] = np.array(outs["image_type_ids"])
-
-        outs["image_patch_id"] = self.ernie_processor.image_token_id
-        outs["video_patch_id"] = self.ernie_processor.video_token_id
-
-        # Convert lists to arrays
-        outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
-        outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
-        outs["position_ids"] = np.concatenate(outs["position_ids"], axis=1)
-        return outs
-
-    def process_response_dict(self, response_dict, stream, **kwargs):
+    def append_generated_tokens(self, outputs, generated_token_ids):
         """
-        Preprocess the response
+        Append generated tokens to existing outputs.
 
         Args:
-            response_dict (Dict): response for engine, contain ids fields
+            outputs: Current model outputs
+            generated_token_ids: Generated tokens to append
+        """
+        out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
+        self.processor._add_text(generated_token_ids, out)
+
+        outputs["input_ids"] = np.concatenate(
+            [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
+        )
+        outputs["token_type_ids"] = np.concatenate(
+            [outputs["token_type_ids"], np.array(out["token_type_ids"], dtype=np.int64)], axis=0
+        )
+        outputs["position_ids"] = np.concatenate(
+            [outputs["position_ids"], out["position_ids"][0]], axis=1, dtype=np.int64
+        )
+        outputs["cur_position"] = out["cur_position"]
+
+    def pack_outputs(self, outputs):
+        """
+        Prepare final output dictionary for model.
+
+        Args:
+            outputs: Intermediate processing outputs
 
         Returns:
-            Dict: response contain text fields
+            dict: Packed output dictionary with all required fields
         """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
-        if stream:
-            return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
-        else:
-            return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)
-
-    def update_stop_seq(self, stop_sequences):
-        """
-        Update stop sequences from request.
-        """
-        stop_seqs = []
-        if isinstance(stop_sequences, str):
-            stop_sequences = [stop_sequences]
-        for seq in stop_sequences:
-            if seq != self.tokenizer.eos_token_id:
-                stop_seqs.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(seq)))
-        stop_seqs, stop_seqs_len = self.pad_batch_data(stop_seqs, pad_id=-1, return_seq_len=True, return_array=False)
-        data_processor_logger.debug(f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
-        return stop_seqs, stop_seqs_len
+        outputs["image_patch_id"] = self.processor.image_token_id
+        outputs["video_patch_id"] = self.processor.video_token_id
+        outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
+        return outputs
