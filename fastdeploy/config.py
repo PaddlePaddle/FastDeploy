@@ -540,7 +540,7 @@ class GraphOptimizationConfig:
         # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Shape [256, 288, ... 992, 1024]
-        draft_capture_sizes += [32 * i for i in range(17, 33)]
+        draft_capture_sizes += [32 * i for i in range(9, 33)]
 
         draft_capture_sizes.append(max_num_seqs)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)

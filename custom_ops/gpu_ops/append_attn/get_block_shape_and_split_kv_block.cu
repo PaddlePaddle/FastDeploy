@@ -198,14 +198,14 @@ void GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
-    paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    paddle::Tensor &max_len_tensor_cpu,         // Inplace, CPU
     paddle::Tensor &encoder_batch_ids,          // Inplace
     paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
-    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, CPU
     paddle::Tensor &kv_batch_ids,               // Inplace
     paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
-    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
-    paddle::Tensor &max_len_kv_cpu,             // Inplace, Pinned Memory
+    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, CPU
+    paddle::Tensor &max_len_kv_cpu,             // Inplace, CPU
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -231,7 +231,7 @@ void GetBlockShapeAndSplitKVBlock(
   int max_just_dec_len_without_system = max_len_cpu_ptr[7];
 
 
-  // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(max_len_kv_cpu.data<int>(), 0, sizeof(int32_t), stream));
+
   auto max_len_kv =
       GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_decoder.place());
   get_max_len_kv_ernel<128><<<1, 128, 0, stream>>>(
@@ -239,14 +239,13 @@ void GetBlockShapeAndSplitKVBlock(
       seq_lens_decoder.data<int>(), bsz);
 
 
-  max_len_kv_cpu = max_len_kv.copy_to(paddle::CPUPlace(), false);
+  max_len_kv_cpu.copy_(max_len_kv, max_len_kv_cpu.place(), false);
 
   if (max_enc_len_this_time > 0) {
     const uint32_t max_tile_size_per_bs_kv = div_up(max_enc_dec_len_this_time, block_size);
     const uint32_t kv_batch_shape = bsz * max_tile_size_per_bs_kv;
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_batch_ids.data<int>(), 0, kv_batch_shape * sizeof(int32_t), stream));
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_tile_ids_per_batch.data<int>(), 0, kv_batch_shape * sizeof(int32_t), stream));
-    // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(kv_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
     auto kv_num_blocks_x =
         GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
 
@@ -257,13 +256,12 @@ void GetBlockShapeAndSplitKVBlock(
         kv_tile_ids_per_batch.data<int>(), kv_num_blocks_x.data<int>(), bsz,
         block_size, block_size);
 
-    kv_num_blocks_x_cpu = kv_num_blocks_x.copy_to(paddle::CPUPlace(), false);
+    kv_num_blocks_x_cpu.copy_(kv_num_blocks_x, kv_num_blocks_x_cpu.place(), false);
     // Clear buffer
     const uint32_t encoder_max_tile_size_per_bs_q = div_up((max_enc_dec_len_this_time * group_size), encoder_block_shape_q);
     const uint32_t encoder_batch_shape = bsz * encoder_max_tile_size_per_bs_q;
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_batch_ids.data<int>(), 0, encoder_batch_shape * sizeof(int32_t), stream));
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_tile_ids_per_batch.data<int>(), 0, encoder_batch_shape * sizeof(int32_t), stream));
-    // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(encoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
     auto encoder_num_blocks_x =
         GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
     split_q_block<<<1, 32, 0, stream>>>(seq_lens_encoder.data<int>(), nullptr,
@@ -271,8 +269,7 @@ void GetBlockShapeAndSplitKVBlock(
                                         encoder_tile_ids_per_batch.data<int>(),
                                         encoder_num_blocks_x.data<int>(), bsz,
                                         encoder_block_shape_q, group_size);
-    encoder_num_blocks_x_cpu =
-        encoder_num_blocks_x.copy_to(paddle::CPUPlace(), false);
+    encoder_num_blocks_x_cpu.copy_(encoder_num_blocks_x, encoder_num_blocks_x_cpu.place(), false);
   }
 
   if (max_just_dec_len_this_time > 0) {
