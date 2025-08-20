@@ -252,6 +252,11 @@ class CacheMessager:
             self.last_step_idx = -1
             self.last_layer_idx = -1  # int32
 
+            engine_recycled_step_idx = False
+            server_recycled_step_idx = False
+            max_step_idx = 100003
+            max_relative_diff_step = 5
+
             while True:
 
                 cache_info = self.engine_worker_queue.get_cache_info()
@@ -271,7 +276,6 @@ class CacheMessager:
                                 current_info["status"] = "init"
                                 logger.info(f"start cache_infos: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
-                            self.last_step_idx = min(self.last_step_idx, current_info["current_id"])
                         else:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
@@ -287,7 +291,24 @@ class CacheMessager:
                 if not self.cache_info:
                     time.sleep(0.001)
                     continue
+                if self.last_step_idx > prefilled_step_idx:
+                    engine_recycled_step_idx = True
+
                 logger.debug(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
+                if engine_recycled_step_idx:
+                    exist_unrecycled_step_idx = False
+                    for req_id, item in list(self.cache_info.items()):
+                        if item["current_id"] < max_relative_diff_step:
+                            server_recycled_step_idx = True
+                        if item["current_id"] > max_step_idx - max_relative_diff_step:
+                            exist_unrecycled_step_idx = True
+                    if (
+                        exist_unrecycled_step_idx is False and server_recycled_step_idx is True
+                    ):  # server tasks all jump to next cycle
+                        # reset status
+                        engine_recycled_step_idx = False
+                        server_recycled_step_idx = False
+
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
                         continue
@@ -296,8 +317,12 @@ class CacheMessager:
                     if item["status"] == "error":
                         del self.cache_info[req_id]
                         continue
-                    if item["current_id"] > prefilled_step_idx:
-                        continue
+                    if engine_recycled_step_idx:
+                        if item["current_id"] > prefilled_step_idx + max_step_idx:
+                            continue
+                    else:
+                        if item["current_id"] > prefilled_step_idx:
+                            continue
                     current_transfer_protocol = item["transfer_protocol"]
                     if item["transfer_protocol"] == "rdma":
                         target_ip = item["ip"]
@@ -318,7 +343,15 @@ class CacheMessager:
                     if item["current_id"] < prefilled_step_idx:
                         current_layer_idx = self.num_hidden_layers
                     else:
-                        current_layer_idx = prefilled_layer_idx + 1
+                        if (
+                            item["current_id"] > prefilled_step_idx
+                            and item["current_id"] > max_step_idx - max_relative_diff_step
+                        ):
+                            current_layer_idx = self.num_hidden_layers
+                        elif item["current_id"] > prefilled_step_idx:
+                            continue
+                        if item["current_id"] == prefilled_step_idx:
+                            current_layer_idx = prefilled_layer_idx + 1
 
                     for layer_idx in range(item["layer_idx"], current_layer_idx):
                         tic = time.time()
@@ -362,8 +395,8 @@ class CacheMessager:
                             logger.info(f"put write cache {item['request_id']}")
                         del self.cache_info[req_id]
 
-                    self.last_step_idx = prefilled_step_idx
-                    self.last_layer_idx = prefilled_layer_idx
+                self.last_step_idx = prefilled_step_idx
+                self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:
             logger.info(f"prefill layerwise send cache thread has exception: {e}")
