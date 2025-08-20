@@ -92,7 +92,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "start_layer_index": 0,
     "moe_num_shared_experts": 0,
     "moe_layer_start_index": 0,
-    "num_max_dispatch_tokens_per_rank": 256,
+    "num_max_dispatch_tokens_per_rank": 128,
     "moe_use_aux_free": False,
     "vocab_size": -1,
     "hidden_dropout_prob": 0.0,
@@ -143,6 +143,8 @@ class ModelConfig:
         for key, value in PRETRAINED_INIT_CONFIGURATION.items():
             if not hasattr(self, key):
                 setattr(self, key, value)
+        print("gaoziyuan test")
+        print(PRETRAINED_INIT_CONFIGURATION)
 
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads

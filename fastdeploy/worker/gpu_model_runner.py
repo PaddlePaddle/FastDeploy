@@ -1301,6 +1301,19 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
+        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
+                        > 1).sum() > 0)
+        
+        is_decode_batch_list = []
+        import paddle.distributed as dist
+        if dist.is_initialized():
+            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
+        else:
+            is_decode_batch_list = [is_decode_batch]  # signal gpu
+        is_decode_batch = all(is_decode_batch_list)
+        
+        self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
@@ -1325,6 +1338,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
             hidden_states = model_output
         else:
+            self.forward_meta.is_decode_batch = is_decode_batch
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,

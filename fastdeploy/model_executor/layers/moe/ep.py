@@ -104,13 +104,18 @@ class DeepEPEngine:
 
         # In mixed EP mode on a single node, we dynamically switch between
         # high throughput and low latency modes.
+        print("gaoziyuan test deep ep!")
+        print("self.num_experts", self.num_experts)
+        print("self.ep_size", self.ep_size)
+        print("self.num_local_experts", self.num_local_experts)
+
         if splitwise_role == "mixed":
             self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 int(2e9),
-                int(5e9),
+                int(6e9),
                 low_latency_mode=True,
-                num_qps_per_rank=24,
+                num_qps_per_rank=6,
             )
         # In disaggregated mode on mutiple nodes, we either use
         # high throughput mode or low latency mode.
@@ -387,18 +392,15 @@ class EPPrefillRunner(EPRunner):
         *args,
         **kwargs,
     ):
-        (
-            num_tokens_per_rank,
-            _,
-            num_tokens_per_expert,
-            is_token_in_rank,
-            _,
-        ) = self.ep_engine.deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
+        (num_tokens_per_rank, num_tokens_per_rdma_rank , num_tokens_per_expert, is_token_in_rank,
+         _) = self.ep_engine.deepep_engine.get_dispatch_layout(
+             topk_idx, self.num_experts)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
             "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
             "num_tokens_per_rank": num_tokens_per_rank,
+            "num_tokens_per_rdma_rank": num_tokens_per_rdma_rank,
             "is_token_in_rank": is_token_in_rank,
             "num_tokens_per_expert": num_tokens_per_expert,
             "config": self.ep_engine.ep_config,

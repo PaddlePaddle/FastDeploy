@@ -242,11 +242,13 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.engine_pid,
             create=False,
         )
+        logger.info("gaoziyuan test init_health_status")
 
     def event_loop_ep(self) -> None:
         """
         Tmp loop function for ep utill DP is supported
         """
+        logger.info("satart gaoziayun event_loop_ep")
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
@@ -430,6 +432,8 @@ class PaddleDisWorkerProc:
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 
+        logger.info(f"gaoziyuan initialize_cache done done !!!!!!!")
+
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
 
@@ -452,6 +456,7 @@ class PaddleDisWorkerProc:
         if self.ranks > 1:
             paddle.distributed.barrier()
         self.loaded_model_signal.value[0] = 1
+        logger.info("gaoziayun test worker process load done")
 
 
 def parse_args():
@@ -712,6 +717,16 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     model_config.enable_mm = args.enable_mm
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+
+    # Set MoE phase based on splitwise role
+    if parallel_config.splitwise_role == "mixed":
+        parallel_config.moe_phase.phase = "prefill"
+    elif parallel_config.splitwise_role == "prefill":
+        parallel_config.moe_phase = "prefill"
+    elif parallel_config.splitwise_role == "decode":
+        parallel_config.moe_phase = "decode"
+    elif parallel_config.splitwise_role is not None:
+        raise NotImplementedError
 
     fd_config = FDConfig(
         model_config=model_config,
