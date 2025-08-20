@@ -9,14 +9,10 @@ Checking for /v1/completions parameters
 
 import json
 
-from core import (
-    TEMPLATE,
-    URL,
-    build_request_payload,
-    send_request,
-)
+from core import TEMPLATE, URL, build_request_payload, send_request
 
 URL = URL.replace("/v1/chat/completions", "/v1/completions")
+
 
 def test_completion_total_tokens():
     data = {
@@ -24,7 +20,7 @@ def test_completion_total_tokens():
         "stream": True,
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
     }
-    
+
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload, stream=True)
     last_data = None
@@ -33,10 +29,9 @@ def test_completion_total_tokens():
             break
         if line.strip() == "" or not line.startswith("data: "):
             continue
-        line = line[len("data: "):]
+        line = line[len("data: ") :]
         last_data = json.loads(line)
     usage = last_data["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert "total_tokens" in usage, "total_tokens 不存在"
-    assert usage["total_tokens"]== total_tokens, "total_tokens计数不正确"
-    
+    assert usage["total_tokens"] == total_tokens, "total_tokens计数不正确"
