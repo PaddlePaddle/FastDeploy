@@ -280,72 +280,38 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
     from fastdeploy.model_executor.models.utils import WeightMeta
 
     weight_infos = [
-        WeightMeta(
-            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
-            True,
-            tsm.GQA,
-        ),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.q_proj.weight",True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.q_proj.bias",True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.k_proj.weight",True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.k_proj.bias",True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.v_proj.weight",True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.v_proj.bias",True),
         WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.mlp.gate_proj.weight", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.mlp.up_proj.weight", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.mlp.down_proj.weight", False),
         WeightMeta(".embed_tokens.weight", False),
         WeightMeta("lm_head.weight", True),
     ]
 
     weight_vison = [
-        # resampler_model
-        WeightMeta("ernie.resampler_model.spatial_linear.0.weight", False),
-        WeightMeta("resampler_model.spatial_linear.0.weight", False),
         # vision
         WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.proj.weight",
+            f"visual.blocks.{{{layerid.LAYER_ID}}}.attn.proj.weight",
             False,
         ),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc2.weight", False),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.weight", True),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.bias", True),
+        WeightMeta(f"visual.blocks.{{{layerid.LAYER_ID}}}.mlp.up_proj.weight", True),
+        WeightMeta(f"visual.blocks.{{{layerid.LAYER_ID}}}.mlp.up_proj.bias", True),
+        WeightMeta(f"visual.blocks.{{{layerid.LAYER_ID}}}.mlp.gate_proj.weight", True),
+        WeightMeta(f"visual.blocks.{{{layerid.LAYER_ID}}}.mlp.gate_proj.bias", True),
+        WeightMeta(f"visual.blocks.{{{layerid.LAYER_ID}}}.mlp.down_proj.weight", False),
         WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.weight",
+            f"visual.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.weight",
             True,
             tsm.GQA,
         ),
         WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.bias",
+            f"visual.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.bias",
             True,
             tsm.GQA,
         ),
@@ -356,7 +322,7 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
+        logger.info("qwen2_5_vl inference model _get_tensor_parallel_mappings")
         from fastdeploy.model_executor.models.tp_utils import (
             build_expanded_keys,
             has_prefix,
@@ -371,6 +337,7 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
             num_key_value_heads=config.num_key_value_heads,
             head_dim=config.head_dim,
         )
+
         vision_fn = split_or_merge_func_v1(
             is_split=is_split,
             tensor_parallel_degree=config.tensor_parallel_degree,
@@ -379,11 +346,9 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
             num_key_value_heads=config.vision_config.get("num_heads"),
             head_dim=config.vision_config.get("hidden_size") // config.vision_config.get("num_heads"),
         )
-
+        
         def get_tensor_parallel_split_mappings(
             num_layers: int,
-            moe_num_experts: list[int],
-            moe_layer_start_index: int,
             prefix_name: str,
         ):
             base_actions = {}
@@ -404,9 +369,6 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
             final_actions = build_expanded_keys(
                 base_actions,
                 num_layers,
-                (moe_layer_start_index if moe_layer_start_index > 0 else num_layers),
-                text_num_experts=moe_num_experts[0],
-                img_num_experts=moe_num_experts[1],
             )
             return final_actions
 
@@ -425,16 +387,8 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
             )
             return final_actions
 
-        moe_layer_start_index = -1
-        if isinstance(config.moe_layer_start_index, list):
-            moe_layer_start_index = min(config.moe_layer_start_index)
-        elif isinstance(config.moe_layer_start_index, int):
-            moe_layer_start_index = config.moe_layer_start_index
-
         mappings = get_tensor_parallel_split_mappings(
             config.num_hidden_layers,
-            config.moe_num_experts,
-            moe_layer_start_index,
             config.prefix_name,
         )
         vision_mappings = get_vison_parallel_split_mappings(config.vision_config.get("depth"))

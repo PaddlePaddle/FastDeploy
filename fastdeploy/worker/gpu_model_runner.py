@@ -1714,11 +1714,6 @@ class GPUModelRunner(ModelRunnerBase):
             dtype=self.parallel_config.dtype,
         ):
             image_features = self.model.visual.extract_feature(images, grid_thw)
-            if self.parallel_config.tensor_parallel_size > 1:
-                S, C = image_features.shape
-                image_features = image_features.reshape([-1, C * self.model_config.vision_config.spatial_merge_size**2])
-                image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
-                image_features = image_features.reshape([S, -1])
 
         return image_features
 

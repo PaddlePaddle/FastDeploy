@@ -513,12 +513,12 @@ class DFNRopeVisionBlock(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        hidden_states_norm1 = self.norm1(hidden_states)
-        hidden_states_old = hidden_states
-        hidden_states = self.attn(
-            hidden_states_norm1, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb
+        
+        hidden_states = hidden_states + self.attn(
+            self.norm1(hidden_states),
+            cu_seqlens=cu_seqlens,
+            rotary_pos_emb=rotary_pos_emb,
         )
-        hidden_states = hidden_states + hidden_states_old
         hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
         return hidden_states
 
@@ -802,12 +802,14 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         def get_tensor_parallel_split_mappings(depth):
             final_actions = {}
             base_actions = {
-                "vision_model.blocks.0.attn.proj.weight": partial(fn, is_column=False),
-                "vision_model.blocks.0.fc1.weight": partial(fn, is_column=True),
-                "vision_model.blocks.0.fc1.bias": partial(fn, is_column=True),
-                "vision_model.blocks.0.fc2.weight": partial(fn, is_column=False),
-                "vision_model.blocks.0.qkv.weight": split_qkv_weight,
-                "vision_model.blocks.0.qkv.bias": split_qkv_bias,
+                "visual.blocks.0.attn.proj.weight": partial(fn, is_column=False),
+                "visual.blocks.0.mlp.gate_proj.weight": partial(fn, is_column=True),
+                "visual.blocks.0.mlp.gate_proj.bias": partial(fn, is_column=True),
+                "visual.blocks.0.mlp.up_proj.weight": partial(fn, is_column=True),
+                "visual.blocks.0.mlp.up_proj.bias": partial(fn, is_column=True),
+                "visual.blocks.0.mlp.down_proj.weight": partial(fn, is_column=False),
+                "visual.blocks.0.qkv.weight": split_qkv_weight,
+                "visual.blocks.0.qkv.bias": split_qkv_bias,
             }
 
             for key, action in base_actions.items():
