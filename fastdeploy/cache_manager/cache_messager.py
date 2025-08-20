@@ -252,10 +252,8 @@ class CacheMessager:
             self.last_step_idx = -1
             self.last_layer_idx = -1  # int32
 
-            engine_recycled_step_idx = False
-            server_recycled_step_idx = False
             max_step_idx = 100003
-            max_relative_diff_step = 5
+            engine_recycled_count = 0
 
             while True:
 
@@ -292,22 +290,16 @@ class CacheMessager:
                     time.sleep(0.001)
                     continue
                 if self.last_step_idx > prefilled_step_idx:
-                    engine_recycled_step_idx = True
+                    engine_recycled_count += 1
+                self.last_step_idx = prefilled_step_idx  # only copy value read from shm memory
+                prefilled_step_idx = (
+                    prefilled_step_idx + max_step_idx * engine_recycled_count
+                )  # remap prefilled_step_idx for comparison
 
-                logger.debug(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
-                if engine_recycled_step_idx:
-                    exist_unrecycled_step_idx = False
-                    for req_id, item in list(self.cache_info.items()):
-                        if item["current_id"] < max_relative_diff_step:
-                            server_recycled_step_idx = True
-                        if item["current_id"] > max_step_idx - max_relative_diff_step:
-                            exist_unrecycled_step_idx = True
-                    if (
-                        exist_unrecycled_step_idx is False and server_recycled_step_idx is True
-                    ):  # server tasks all jump to next cycle
-                        # reset status
-                        engine_recycled_step_idx = False
-                        server_recycled_step_idx = False
+                logger.debug(
+                    f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx in shm: {self.last_step_idx},"
+                    f"prefilled_step_idx: {prefilled_step_idx} engine_recycled_count {engine_recycled_count}"
+                )
 
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
@@ -317,12 +309,8 @@ class CacheMessager:
                     if item["status"] == "error":
                         del self.cache_info[req_id]
                         continue
-                    if engine_recycled_step_idx:
-                        if item["current_id"] > prefilled_step_idx + max_step_idx:
-                            continue
-                    else:
-                        if item["current_id"] > prefilled_step_idx:
-                            continue
+                    if item["current_id"] > prefilled_step_idx:
+                        continue
                     current_transfer_protocol = item["transfer_protocol"]
                     if item["transfer_protocol"] == "rdma":
                         target_ip = item["ip"]
@@ -343,13 +331,6 @@ class CacheMessager:
                     if item["current_id"] < prefilled_step_idx:
                         current_layer_idx = self.num_hidden_layers
                     else:
-                        if (
-                            item["current_id"] > prefilled_step_idx
-                            and item["current_id"] > max_step_idx - max_relative_diff_step
-                        ):
-                            current_layer_idx = self.num_hidden_layers
-                        elif item["current_id"] > prefilled_step_idx:
-                            continue
                         if item["current_id"] == prefilled_step_idx:
                             current_layer_idx = prefilled_layer_idx + 1
 
@@ -394,8 +375,6 @@ class CacheMessager:
                             self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
                             logger.info(f"put write cache {item['request_id']}")
                         del self.cache_info[req_id]
-
-                self.last_step_idx = prefilled_step_idx
                 self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:

@@ -388,7 +388,7 @@ class LLMEngine:
 
                 insert_successful = self.insert_tasks(tasks, current_id)
                 if insert_successful:
-                    current_id = (current_id + 1) % 100003
+                    current_id = current_id + 1
                 else:
                     continue
 
