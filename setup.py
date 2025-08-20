@@ -151,13 +151,15 @@ def load_requirements():
         requirements_file_name = "requirements_iluvatar.txt"
     elif paddle.is_compiled_with_rocm():
         requirements_file_name = "requirements_dcu.txt"
+    elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
+        requirements_file_name = "requirements_metaxgpu.txt"
     requirements_path = os.path.join(os.path.dirname(__file__), requirements_file_name)
     with open(requirements_path, "r") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 
 def get_device_type():
-    """Get the device type (rocm/gpu/xpu/npu/cpu) that paddle is compiled with."""
+    """Get the device type (rocm/gpu/xpu/npu/cpu/metax-gpu) that paddle is compiled with."""
     if paddle.is_compiled_with_rocm():
         return "rocm"
     elif paddle.is_compiled_with_cuda():
@@ -170,6 +172,8 @@ def get_device_type():
         return "iluvatar-gpu"
     elif paddle.is_compiled_with_custom_device("gcu"):
         return "gcu"
+    elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
+        return "metax-gpu"
     else:
         return "cpu"
 

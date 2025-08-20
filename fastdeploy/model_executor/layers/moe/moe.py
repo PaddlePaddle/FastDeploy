@@ -16,13 +16,20 @@
 
 from typing import Optional
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
+
+# TODO(lulinjun): remove this import after supporting all backends
+is_supported_moe_backend = None
+if current_platform.is_cuda():
+    from .check_backend_supported import is_supported_moe_backend
 
 
 def get_moe_method():
@@ -43,6 +50,12 @@ def get_moe_method():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
         return GCUFusedMoeMethod(None)
+    elif current_platform.is_maca():
+        from fastdeploy.model_executor.layers.backends import (
+            MetaxTritonWeightOnlyMoEMethod,
+        )
+
+        return MetaxTritonWeightOnlyMoEMethod(None)
     raise NotImplementedError
 
 
@@ -98,12 +111,17 @@ class FusedMoE(nn.Layer):
         self.weight_key_map = weight_key_map
 
         self.use_method = envs.FD_MOE_BACKEND.lower()
-        self.gate_correction_bias = None
         self.moe_tag = moe_tag
         if self.ep_size > 1:
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
 
         self.expert_id_offset = expert_id_offset
+
+        self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
+        if self.gate_correction_bias_key is not None:
+            self.moe_use_gate_correction_bias = True
+        else:
+            self.moe_use_gate_correction_bias = False
 
         # used for deepseek_v3
         self.topk_method = topk_method
@@ -121,10 +139,7 @@ class FusedMoE(nn.Layer):
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
-            # w_fp16 a_fp16
             self.quant_method = get_moe_method()
-            self.quant_method.create_weights(self, weight_loader=self.weight_loader)
-
         self.redundant_table_manger = None
         if self.ep_size > 1:
             if fd_config.model_config.enable_redundant_experts is True:
@@ -139,6 +154,20 @@ class FusedMoE(nn.Layer):
         if fd_config.load_config.dynamic_load_weight:
             # It's for RL to build model
             self.init_moe_weights()
+        else:
+            self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
+            if self.gate_correction_bias_key is not None:
+                self.gate_correction_bias = self.create_parameter(shape=[1, self.num_experts], dtype="float32")
+            if moe_quant_config:
+                if (
+                    moe_quant_config
+                    and is_supported_moe_backend is not None
+                    and is_supported_moe_backend(self.quant_method)
+                ):
+                    self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+            else:
+                # w_fp16 a_fp16
+                self.quant_method.create_weights(self, weight_loader=self.weight_loader)
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
@@ -152,20 +181,33 @@ class FusedMoE(nn.Layer):
 
         if shard_id is None:
             # 1.gate up fused in disk
-            return
-        # 2.gate up splited in disk
-        assert shard_id in ["gate", "down", "up"]
-        expert_param = param[expert_id]
-        if current_platform.is_cuda():
-            SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
+            if self.tp_size > 1:
+                shard_offsets = [
+                    # (shard_id, shard_offset, shard_size)
+                    ("gate", 0, self.moe_intermediate_size * self.tp_size),
+                    ("up", self.moe_intermediate_size * self.tp_size, self.moe_intermediate_size * self.tp_size),
+                ]
+                for shard_id, shard_offset, shard_size in shard_offsets:
+                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
+                    self.weight_loader(param, loaded_weight_shard, expert_id, shard_id)
+            else:
+                expert_param = param[expert_id]
+                loaded_weight = get_tensor(loaded_weight)
+                expert_param.copy_(loaded_weight, False)
         else:
-            SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
-        self._load_expert_weight(
-            expert_param=expert_param,
-            shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
-            loaded_weight=loaded_weight,
-            shard_id=shard_id,
-        )
+            # 2.gate up splited in disk
+            assert shard_id in ["gate", "down", "up"]
+            if current_platform.is_cuda():
+                SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
+            else:
+                SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
+            self._load_expert_weight(
+                param=param,
+                expert_id=expert_id,
+                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+                loaded_weight=loaded_weight,
+                shard_id=shard_id,
+            )
 
     def _load_gate_up_weight(self, expert_param, shard_dim, loaded_weight, shard_id):
         tensor_size = expert_param.shape[shard_dim] // 2
@@ -175,7 +217,10 @@ class FusedMoE(nn.Layer):
             expert_param = expert_param[..., tensor_size:] if shard_dim else expert_param[tensor_size:, ...]
 
         if self.tp_size > 1:
-            size = loaded_weight.get_shape()[-1]
+            if isinstance(loaded_weight, np.ndarray):
+                size = loaded_weight.shape[-1]
+            else:
+                size = loaded_weight.get_shape()[-1]
             block_size = size // self.tp_size
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
@@ -192,7 +237,10 @@ class FusedMoE(nn.Layer):
 
     def _load_down_weight(self, expert_param, shard_dim, loaded_weight, shard_id):
         if self.tp_size > 1:
-            size = loaded_weight.get_shape()[shard_dim]
+            if isinstance(loaded_weight, np.ndarray):
+                size = loaded_weight.shape[shard_dim]
+            else:
+                size = loaded_weight.get_shape()[shard_dim]
             block_size = size // self.tp_size
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
@@ -208,11 +256,13 @@ class FusedMoE(nn.Layer):
 
     def _load_expert_weight(
         self,
-        expert_param,
+        param,
+        expert_id,
         shard_dim,
         loaded_weight,
         shard_id,
     ):
+        expert_param = param[expert_id]
         if shard_id == "down":
             self._load_down_weight(expert_param, shard_dim, loaded_weight, shard_id)
         elif shard_id in ["gate", "up"]:
@@ -221,29 +271,32 @@ class FusedMoE(nn.Layer):
     @classmethod
     def make_expert_params_mapping(
         cls,
-        ckpt_gate_proj_name: str,
-        ckpt_down_proj_name: str,
-        ckpt_up_proj_name: str,
-        param_gate_up_proj_name: str,
-        param_down_proj_name: str,
         num_experts: int,
-        ckpt_expert_key_name: str = "experts",
+        ckpt_gate_proj_name: Optional[str] = None,
+        ckpt_up_proj_name: Optional[str] = None,
+        ckpt_down_proj_name: Optional[str] = None,
         ckpt_gate_up_proj_name: Optional[str] = None,
+        param_gate_up_proj_name: Optional[str] = None,
+        param_down_proj_name: Optional[str] = None,
+        ckpt_expert_key_name: str = "experts",
     ) -> list[tuple[str, str, int, str]]:
-        param_name_maping = [
-            ("gate", ckpt_gate_proj_name),
-            ("down", ckpt_down_proj_name),
-            ("up", ckpt_up_proj_name),
-        ]
+        param_name_maping = []
+
         if ckpt_gate_up_proj_name:
             param_name_maping.append((None, ckpt_gate_up_proj_name))
+        if ckpt_gate_proj_name:
+            param_name_maping.append(("gate", ckpt_gate_proj_name))
+        if ckpt_down_proj_name:
+            param_name_maping.append(("down", ckpt_down_proj_name))
+        if ckpt_up_proj_name:
+            param_name_maping.append(("up", ckpt_up_proj_name))
 
         return [
             # (param_name, weight_name, expert_id, shard_id)
             (
                 (
                     param_gate_up_proj_name
-                    if weight_name in [ckpt_gate_proj_name, ckpt_up_proj_name]
+                    if weight_name in [ckpt_gate_proj_name, ckpt_up_proj_name, ckpt_gate_up_proj_name]
                     else param_down_proj_name
                 ),
                 f"{ckpt_expert_key_name}.{expert_id}.{weight_name}.",
@@ -268,7 +321,7 @@ class FusedMoE(nn.Layer):
                 dtype="float32",
             )
         up_gate_proj_output_dim = self.moe_intermediate_size * 2
-        if self.moe_quant_type in ["fp8", "wint8"]:
+        if self.moe_quant_type in ["block_wise_fp8", "wint8"]:
             up_gate_proj_weight_shape = [
                 self.num_local_experts,
                 up_gate_proj_output_dim,
@@ -292,9 +345,10 @@ class FusedMoE(nn.Layer):
             ]
 
         # Create parameters
-        if self.moe_quant_type == "fp8":
+        if self.moe_quant_type == "block_wise_fp8":
             # (TODO:gaoziyuan)
-            pass
+            self.weight_dtype = "float8_e4m3fn"
+            self.init_block_wise_fp8_scale()
         elif self.moe_quant_type == "wint8":
             self.weight_dtype = "int8"
             self.init_weight_only_scale()
@@ -323,6 +377,21 @@ class FusedMoE(nn.Layer):
         self.down_proj_weight_scale = self.create_parameter(
             shape=[self.num_local_experts, self.hidden_size],
             dtype=self._dtype,
+        )
+
+    def init_block_wise_fp8_scale(self):
+        """
+        Initialize the weight scale.
+        """
+        self.up_gate_proj_weight_scale = self.create_parameter(
+            shape=[self.num_local_experts, self.moe_intermediate_size * 2 // 128, self.hidden_size // 128],
+            dtype="float32",
+            is_bias=False,
+        )
+        self.down_proj_weight_scale = self.create_parameter(
+            shape=[self.num_local_experts, self.hidden_size // 128, self.moe_intermediate_size // 128],
+            dtype="float32",
+            is_bias=False,
         )
 
     def load_experts_weight(
@@ -466,32 +535,38 @@ class FusedMoE(nn.Layer):
         load_state_dict function.
         """
         if not is_rearrange:
-            self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
-            if self.gate_correction_bias_key is not None and self.gate_correction_bias_key in state_dict:
-                self.moe_use_gate_correction_bias = True
-            else:
-                self.moe_use_gate_correction_bias = False
             if self.moe_use_gate_correction_bias:
                 gate_correction_bias_tensor = self.extract_gate_correction_bias(
                     self.gate_correction_bias_key, state_dict
                 )
-                self.gate_correction_bias = self.create_parameter(
-                    shape=gate_correction_bias_tensor.shape,
-                    dtype="float32",
-                )
+                if self.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                    gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(self.gate_correction_bias.shape)
                 self.gate_correction_bias.set_value(gate_correction_bias_tensor)
-
-        if self.fd_config.model_config.is_quantized:
-            if getattr(self.fd_config.quant_config, "is_permuted", True):
-                self.quant_method.process_prequanted_weights(self, state_dict)
             else:
-                self.quant_method.create_weights(self, state_dict)
+                self.gate_correction_bias = None
         else:
-            if self.moe_quant_config:
-                self.quant_method.create_weights(self, state_dict)
+            self.gate_correction_bias = None
+
+        if is_supported_moe_backend is not None and is_supported_moe_backend(self.quant_method):
+            if self.fd_config.model_config.is_quantized:
+                if getattr(self.fd_config.quant_config, "is_permuted", True):
+                    self.quant_method.process_prequanted_weights(self, state_dict)
+                else:
+                    self.quant_method.process_loaded_weights(self, state_dict)
             else:
-                # w_fp16 a_fp16
                 self.quant_method.process_loaded_weights(self, state_dict)
+        else:
+            if self.fd_config.model_config.is_quantized:
+                if getattr(self.fd_config.quant_config, "is_permuted", True):
+                    self.quant_method.process_prequanted_weights(self, state_dict)
+                else:
+                    self.quant_method.create_weights(self, state_dict)
+            else:
+                if self.moe_quant_config:
+                    self.quant_method.create_weights(self, state_dict)
+                else:
+                    # w_fp16 a_fp16
+                    self.quant_method.process_loaded_weights(self, state_dict)
 
     def forward(self, x: paddle.Tensor, gate: nn.Layer):
         """

@@ -24,6 +24,7 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
@@ -74,6 +75,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.gcu_worker import GcuWorker
 
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_maca():
+        from fastdeploy.worker.metax_worker import MetaxWorker
+
+        return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -245,6 +250,7 @@ class PaddleDisWorkerProc:
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
+            num_running_requests = 0
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
 
@@ -271,6 +277,7 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
+        num_running_requests = 0
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -289,8 +296,9 @@ class PaddleDisWorkerProc:
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-
-                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
+                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                    ):
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
@@ -431,7 +439,19 @@ class PaddleDisWorkerProc:
 
     def load_model(self) -> None:
         """Load weights and create model"""
+
         self.worker.load_model()
+        loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
+        if self.ranks > 1:
+            paddle.distributed.barrier()
+        self.loaded_model_signal.value[0] = 1
 
 
 def parse_args():
@@ -723,7 +743,12 @@ def run_worker_proc() -> None:
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
+
+        worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
+    else:
+        worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()

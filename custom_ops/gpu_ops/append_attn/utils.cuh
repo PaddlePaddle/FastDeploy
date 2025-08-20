@@ -27,6 +27,7 @@ struct AppendAttnMetaData {
   int head_dims;
   int head_dims_v;
   int max_blocks_per_seq;
+  const int *mask_offset = nullptr;
 };
 
 __forceinline__ __host__ __device__ int div_up(int a, int b) {
@@ -430,6 +431,9 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
   } else if (group_size == 12) {                             \
     constexpr size_t GROUP_SIZE = 12;                        \
     __VA_ARGS__                                              \
+  } else if (group_size == 14) {                             \
+    constexpr size_t GROUP_SIZE = 14;                        \
+    __VA_ARGS__                                              \
   } else if (group_size == 16) {                             \
     constexpr size_t GROUP_SIZE = 16;                        \
     __VA_ARGS__                                              \
@@ -473,6 +477,9 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
 #define DISPATCH_CAUSAL(causal, CAUSAL, ...) \
   if (causal) {                              \
     constexpr bool CAUSAL = true;            \
+    __VA_ARGS__                              \
+  } else {                                   \
+    constexpr bool CAUSAL = false;           \
     __VA_ARGS__                              \
   }
 
