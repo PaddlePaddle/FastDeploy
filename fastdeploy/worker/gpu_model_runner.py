@@ -207,13 +207,10 @@ class GPUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        enable_thinking = request.get("enable_thinking", True)
-        enable_thinking = enable_thinking if enable_thinking is not None else True
-
         return (
             self.guided_backend.get_logits_processor(
                 schemata_key=schemata_key,
-                enable_thinking=enable_thinking,
+                enable_thinking=request.get("enable_thinking", True),
             ),
             schemata_key,
         )
@@ -272,7 +269,6 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids = None
 
                     enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
@@ -496,7 +492,6 @@ class GPUModelRunner(ModelRunnerBase):
 
                 if self.enable_mm:
                     enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)

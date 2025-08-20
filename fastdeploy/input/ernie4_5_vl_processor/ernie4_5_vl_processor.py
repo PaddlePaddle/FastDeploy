@@ -109,6 +109,12 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
+
+        enable_thinking = self.get_enable_thinking(enable_thinking=request.get("enable_thinking", None))
+        if isinstance(request, dict):
+            request["enable_thinking"] = enable_thinking
+        else:
+            request.set("enable_thinking", enable_thinking)
         return request
 
     def process_request(self, request, max_model_len=None, **kwargs):
@@ -299,9 +305,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
+        enable_thinking = self.get_enable_thinking(enable_thinking=kwargs.pop("enable_thinking", None))
         if stream:
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
         else:

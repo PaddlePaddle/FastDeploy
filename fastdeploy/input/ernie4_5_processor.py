@@ -287,7 +287,6 @@ class Ernie4_5Processor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -297,9 +296,8 @@ class Ernie4_5Processor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            if self.reasoning_parser and (
-                enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
-            ):
+            enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
+            if self.reasoning_parser and enable_thinking:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -326,7 +324,6 @@ class Ernie4_5Processor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -336,9 +333,8 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["raw_prediction"] = delta_text
-        if self.reasoning_parser and (
-            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
-        ):
+        enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
+        if self.reasoning_parser and enable_thinking:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,

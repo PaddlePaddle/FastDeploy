@@ -70,7 +70,7 @@ class Request:
         guided_grammar: Optional[Any] = None,
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
-        enable_thinking: Optional[bool] = True,
+        enable_thinking: Optional[bool] = None,
         trace_carrier: dict = dict(),
         chat_template: Optional[str] = None,
         image_start: int = 0,
@@ -99,7 +99,6 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
-        self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
         # speculative method in disaggregate-mode
@@ -118,10 +117,12 @@ class Request:
         self.multimodal_data = multimodal_data
         self.multimodal_img_boundaries = None
 
+        # Chat-template related
         self.enable_thinking = enable_thinking
-        self.trace_carrier = trace_carrier
-
         self.chat_template = chat_template
+        self.disable_chat_template = disable_chat_template
+
+        self.trace_carrier = trace_carrier
 
         # token num
         self.block_tables = []
@@ -171,7 +172,7 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", True),
+            enable_thinking=d.get("enable_thinking", None),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
             num_computed_tokens=d.get("num_computed_tokens", 0),

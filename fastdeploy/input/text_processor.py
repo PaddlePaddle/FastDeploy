@@ -57,13 +57,25 @@ class BaseDataProcessor(ABC):
             1.1 if reasoning_parser is not None, set enable_thinking to True.
             1.2 if reasoning_parser is None, set enable_thinking to False.
         2. if reasoning_parser is None but enable_thinking is True, set enable_thinking to False and print warning.
+        3. if reasoning_parser is ErnieX1ReasoningParser and enable_thinking is False, set enable_thinking to True and print warning.
         """
         if enable_thinking is None:
             enable_thinking = False if self.reasoning_parser is None else True
         if enable_thinking and self.reasoning_parser is None:
             enable_thinking = False
             data_processor_logger.warning(
-                "enable_thinking is True, but reasoning_parser is None. " "enable_thinking will be set to False."
+                "enable_thinking is True, but reasoning_parser is None. enable_thinking will be set to False."
+            )
+
+        if (
+            enable_thinking is False
+            and self.reasoning_parser is not None
+            and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+        ):
+            enable_thinking = True
+            data_processor_logger.warning(
+                "enable_thinking is False, but reasoning_parser is ErnieX1ReasoningParser. "
+                "enable_thinking will be set to True.",
             )
         return enable_thinking
 
@@ -86,6 +98,12 @@ class BaseDataProcessor(ABC):
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
+
+        enable_thinking = self.get_enable_thinking(enable_thinking=request.get("enable_thinking", None))
+        if isinstance(request, dict):
+            request["enable_thinking"] = enable_thinking
+        else:
+            request.set("enable_thinking", enable_thinking)
         return request
 
     @abstractmethod
@@ -390,7 +408,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -401,6 +418,7 @@ class DataProcessor(BaseDataProcessor):
         if is_end:
             full_text = previous_texts + delta_text
             response_dict["outputs"]["raw_prediction"] = full_text
+            enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
@@ -427,7 +445,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -437,9 +454,8 @@ class DataProcessor(BaseDataProcessor):
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["raw_prediction"] = delta_text
-        if self.reasoning_parser and (
-            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
-        ):
+        enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
+        if enable_thinking and self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -482,9 +498,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
+        enable_thinking = self.get_enable_thinking(kwargs.pop("enable_thinking", None))
         stream = kwargs.get("stream", True)
         if stream:
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
