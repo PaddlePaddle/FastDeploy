@@ -59,7 +59,6 @@ class ErnieProcessor(BaseDataProcessor):
 
         self.decode_status = dict()
         self.tool_parser_dict = dict()
-        self.reasoning_end_dict = dict()
         self.thinking_parser_dict = dict()
         self._load_tokenizer()
         data_processor_logger.info(
@@ -342,8 +341,6 @@ class ErnieProcessor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
-            if req_id in self.reasoning_end_dict:
-                del self.reasoning_end_dict[req_id]
         return response_dict
 
     def messages2ids(self, request_or_messages):

@@ -176,7 +176,6 @@ class DataProcessor(BaseDataProcessor):
 
         self.decode_status = dict()
         self.tool_parser_dict = dict()
-        self.reasoning_end_dict = dict()
         self.tokenizer = self._load_tokenizer()
         data_processor_logger.info(
             f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
@@ -432,8 +431,6 @@ class DataProcessor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
-            if req_id in self.reasoning_end_dict:
-                del self.reasoning_end_dict[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):

@@ -52,7 +52,6 @@ class ErnieMoEVLProcessor(ErnieProcessor):
 
         self.tool_parser_dict = dict()
         self.decode_status = dict()
-        self.reasoning_end_dict = dict()
         self._load_tokenizer()
 
         # Generation config
