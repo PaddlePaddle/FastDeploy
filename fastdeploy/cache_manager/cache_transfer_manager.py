@@ -18,6 +18,7 @@ import argparse
 import concurrent.futures
 import json
 import queue
+import threading
 import time
 import traceback
 
@@ -217,9 +218,19 @@ class CacheTransferManager:
                 rank=self.rank,
                 nranks=args.mp_num,
                 num_layers=args.num_layers + self.num_extra_layers,
+                block_size=args.block_size,
                 gpu_id=self.device,
                 rdma_port=args.rdma_port,
             )
+
+            if args.splitwise_role == "prefill":
+                self.send_signal_thread = threading.Thread(target=self.cache_messager.consume_signals, daemon=True)
+                self.send_signal_thread.start()
+            self.layerwise_send_cache_thread = threading.Thread(
+                target=self.cache_messager.prefill_layerwise_send_cache_thread, daemon=True
+            )
+            self.layerwise_send_cache_thread.start()
+
             logger.info("successfully create cache messager")
         logger.info(f"done init CacheMessager gmem alloc : {paddle.device.cuda.memory_allocated()}")
 

@@ -373,12 +373,11 @@ class SplitwiseConnector:
 
             else:
                 addr = "prefill"
-                if current_id == -1:
-                    current_id = tasks[i].disaggregate_info["cache_info"]["ipc"]["current_id"]
                 cache_info = {
                     "request_id": tasks[i].request_id,
                     "src_block_ids": tasks[i].block_tables,
-                    "current_id": current_id,
+                    "current_id": tasks[i].idx,
+                    "total_tokens": tasks[i].prompt_token_ids_len + tasks[i].get("seq_lens_decoder", 0),
                 }
                 if addr not in temp_cache_info:
                     temp_cache_info[addr] = []

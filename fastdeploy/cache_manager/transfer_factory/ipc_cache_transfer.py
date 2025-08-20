@@ -45,6 +45,7 @@ class IPCConnector:
         self.local_gpu_id = int(local_gpu_id_)
         tmp = paddle.ones([1, 1])
         logger.info(f"init ipc rank{self.rank_id} with remote {self.remote_gpu_id} {self.local_gpu_id}")
+        paddle.set_device(f"gpu:{self.local_gpu_id}")
         for layer_id in range(layer_num):
             key_unique_name = f"key_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
             value_unique_name = f"value_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"

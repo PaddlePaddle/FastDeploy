@@ -360,10 +360,6 @@ class GPUModelRunner(ModelRunnerBase):
         TODO(gongshaotian): Refactor this func
         """
 
-        # NOTE(luotingdan): Set environment variable of prefill node
-        if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
-            os.environ["PREFILL_NODE_ONE_STEP_STOP"] = "1"
-
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]

@@ -145,8 +145,8 @@ class LLMEngine:
         else:
             self.do_profile = 0
 
-        self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
-        for idx in range(1, self.cfg.max_num_partial_prefills + 1):
+        self.partial_chunked_tokens = [0] * (self.cfg.max_prefill_batch + 1)
+        for idx in range(1, self.cfg.max_prefill_batch + 1):
             self.partial_chunked_tokens[idx] = (
                 (self.cfg.max_num_batched_tokens // idx)
                 // self.cfg.cache_config.block_size
@@ -654,6 +654,7 @@ class LLMEngine:
 
         for idx in range(len(requests)):
             requests[idx].set("prefill_chunk_info", requests_chunk[idx])
+            requests[idx].min_tokens = len(requests_chunk[idx]) + 1
 
     def update_mm_requests_chunk_size(self, requests):
         """
@@ -804,13 +805,15 @@ class LLMEngine:
         self.split_connector.send_cache_infos(tasks, current_id)
         if not is_decode:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
+
+            if not self.cfg.enable_mm:
+                self.update_requests_chunk_size(tasks)
+            else:
+                self.update_mm_requests_chunk_size(tasks)
             for task in tasks:
                 task.inference_start_time = time.time()
-            if not is_prefill:
-                if not self.cfg.enable_mm:
-                    self.update_requests_chunk_size(tasks)
-                else:
-                    self.update_mm_requests_chunk_size(tasks)
+                if is_prefill:
+                    task.max_tokens = task.min_tokens
             self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
             if is_prefill and self.cfg.scheduler_config.name != "splitwise":
                 self.engine_worker_queue.available_prefill_instances.put(1)
@@ -1044,7 +1047,7 @@ class LLMEngine:
         )
 
         if self.cfg.splitwise_role != "mixed":
-            variables["FLAGS_use_pd_disaggregation"] = 1
+            variables["FLAGS_use_pd_disaggregation_per_chunk"] = 1
             # TODO dynamic load environment variable
             if self.cfg.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1

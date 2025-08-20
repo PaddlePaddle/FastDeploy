@@ -23,7 +23,8 @@ import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
-from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.inter_communicator import EngineWorkerQueue
+from fastdeploy.model_executor.ops.gpu import get_output_kv_signal
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -46,6 +47,7 @@ class CacheMessager:
         nranks,
         num_layers,
         gpu_id=0,
+        block_size=64,
         rdma_port=None,
     ):
         """
@@ -82,6 +84,7 @@ class CacheMessager:
             client_id=self.rank,
             local_data_parallel_id=local_data_parallel_id,
         )
+        self.block_size = block_size
         transfer_protocol = transfer_protocol.split(",")
 
         logger.info(f"splitwise role: {splitwise_role}, {transfer_protocol}" f"rank: {rank}")
@@ -143,105 +146,78 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
-        self.dp_rank_id = self.rank + local_data_parallel_id * self.nranks
-
-        layerwise_send_cache_thread = threading.Thread(target=self._prefill_layerwise_send_cache_thread)
-        layerwise_send_cache_thread.daemon = True
-        layerwise_send_cache_thread.start()
+        self.rank_id = self.rank + local_data_parallel_id * self.nranks
+        self.cache_tasks_list = []  # 支持每个元素是一个列表
+        self.engine_cache_task_thread_lock = threading.Lock()
+        self.engine_cache_tasks = [dict() for _ in range(512)]
 
         logger.info(f"cache messager init finished, use {transfer_protocol}")
 
-    def _prefill_layerwise_send_cache_thread(self):
+    def prefill_layerwise_send_cache_thread(self):
         """
         layerwise_send_cache_thread:
         send cache to other instance
         """
-        try:
-            prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
-            prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
+        while True:
             try:
-                step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
-                    array=prefilled_step_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=True,
-                )
-                layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
-                    array=prefilled_layer_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=True,
-                )
-            except:
-                step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
-                    array=prefilled_step_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=False,
-                )
-                layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
-                    array=prefilled_layer_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=False,
-                )
-
-            step_shm_value.value[0] = -1
-            layer_shm_value.value[0] = -1
-
-            self.last_step_idx = -1
-            self.last_layer_idx = -1  # int32
-
-            while True:
-
                 cache_info = self.engine_worker_queue.get_cache_info()
-
                 if cache_info:
-                    logger.debug(f"cache info {cache_info}")
                     for info in cache_info:
                         if info["request_id"] in self.cache_info:
                             self.cache_info[info["request_id"]].update(info)
                             current_info = self.cache_info[info["request_id"]]
                             if "dest_block_ids" in current_info and "src_block_ids" in current_info:
+                                decode_cached_block = len(current_info["src_block_ids"]) - len(
+                                    current_info["dest_block_ids"]
+                                )
                                 current_src_blocks = current_info["src_block_ids"][
                                     -len(current_info["dest_block_ids"]) :
                                 ]
+                                current_info["send_finished_tokens"] = decode_cached_block * self.block_size
+                                current_info["current_tokens"] = current_info["send_finished_tokens"]
                                 current_info["src_block_ids"] = current_src_blocks
-                                current_info["current_layer_ids"] = 0
+                                current_info["current_layer_ids"] = -1
+                                current_info["current_block_num"] = 0
                                 current_info["status"] = "init"
-                                logger.info(f"start cache_infos: {current_info}")
-                            self.cache_info[info["request_id"]] = current_info
-                            self.last_step_idx = min(self.last_step_idx, current_info["current_id"])
+                                logger.info(f"current info: {current_info}")
+                                self.cache_info[info["request_id"]] = current_info
                         else:
                             self.cache_info[info["request_id"]] = info
-                prefilled_layer_idx = layer_shm_value.value[0]
-                prefilled_step_idx = step_shm_value.value[0]
-                if prefilled_layer_idx == self.num_layers - 1:
-                    time.sleep(0.001)
-                    prefilled_layer_idx = layer_shm_value.value[0]
-                    prefilled_step_idx = step_shm_value.value[0]
-
-                if prefilled_step_idx == -1:
-                    time.sleep(0.001)
-                    continue
                 if not self.cache_info:
-                    time.sleep(0.001)
+                    time.sleep(0.005)
                     continue
-                logger.debug(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
+
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
                         continue
-                    if "layer_idx" not in item:
-                        item["layer_idx"] = 0
-                    if item["status"] == "error":
-                        del self.cache_info[req_id]
+                    if "prefilled_token_num" not in self.engine_cache_tasks[item["current_id"]]:
                         continue
-                    if item["current_id"] > prefilled_step_idx:
+                    if (
+                        self.engine_cache_tasks[item["current_id"]]["prefilled_token_num"]
+                        <= item["send_finished_tokens"]
+                    ):
+                        time.sleep(0.005)
                         continue
+                    if (
+                        self.engine_cache_tasks[item["current_id"]]["prefilled_token_num"] == item["current_tokens"]
+                        and self.engine_cache_tasks[item["current_id"]]["prefilled_layer_idx"]
+                        == item["current_layer_ids"]
+                    ):
+                        continue
+
+                    prefill_layer = self.engine_cache_tasks[item["current_id"]]["prefilled_layer_idx"]
+                    prefill_tokens = self.engine_cache_tasks[item["current_id"]]["prefilled_token_num"]
+                    if prefill_tokens > item["current_tokens"] and item["current_block_num"] != 0:
+                        prefill_tokens = item["current_tokens"]
+                        prefill_layer = self.num_layers - 1
+                        current_block_num = item["current_block_num"]
+                    else:
+                        current_block_num = (prefill_tokens - item["send_finished_tokens"]) // self.block_size
+                        if prefill_tokens == item["total_tokens"]:
+                            current_block_num = len(item["src_block_ids"])
+
+                        item["current_block_num"] = current_block_num
+
                     current_transfer_protocol = item["transfer_protocol"]
                     if item["transfer_protocol"] == "rdma":
                         target_ip = item["ip"]
@@ -257,14 +233,20 @@ class CacheMessager:
                     elif item["transfer_protocol"] == "ipc":
                         target_ip = "0.0.0.0"
                         target_id = int(item["device_ids"][self.rank])
-                    src_block_ids = paddle.to_tensor(item["src_block_ids"], dtype="int32", place="cpu")
-                    dest_block_ids = paddle.to_tensor(item["dest_block_ids"], dtype="int32", place="cpu")
-                    if item["current_id"] < prefilled_step_idx:
-                        current_layer_idx = self.num_layers
-                    else:
-                        current_layer_idx = prefilled_layer_idx + 1
 
-                    for layer_idx in range(item["layer_idx"], current_layer_idx):
+                    src_block_ids = item["src_block_ids"][:current_block_num]
+                    dest_block_ids = item["dest_block_ids"][:current_block_num]
+                    src_block_ids = paddle.to_tensor(src_block_ids, dtype="int32", place="cpu")
+                    dest_block_ids = paddle.to_tensor(dest_block_ids, dtype="int32", place="cpu")
+                    logger.debug(
+                        f"src_block_ids: {src_block_ids.shape}, dest_block_ids: {dest_block_ids.shape}"
+                        f"req_id: {item['request_id']}, current_tokens: {item['current_tokens']}, prefill tokens {prefill_tokens}"
+                        f"send_finished_tokens: {item['send_finished_tokens']}, "
+                        f"current_layer_ids: {item['current_layer_ids']}, "
+                        f"prefilled_layer_idx: {prefill_layer}"
+                    )
+
+                    for layer_idx in range(item["current_layer_ids"] + 1, prefill_layer + 1):
                         tic = time.time()
                         return_code = self.messager[current_transfer_protocol].write_cache(
                             target_ip,
@@ -282,8 +264,10 @@ class CacheMessager:
                                 f"write cache failed, layer_idx: {layer_idx}, "
                                 f"req_id: {item['request_id']}, dest_ip: {target_ip}"
                             )
-                            break
+                            self.engine_cache_tasks[item["current_id"]] = dict()
+                            del self.cache_info[req_id]
 
+                            break
                         tok = time.time()
                         cost_time = tok - tic
                         block_num = len(src_block_ids)
@@ -295,19 +279,53 @@ class CacheMessager:
                             f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
                             f"avg_time per block(ms): {round(avg_time_per_block, 5)}"
                         )
-                    item["layer_idx"] = current_layer_idx
-                    if item["layer_idx"] == self.num_layers:
+                        item["current_layer_ids"] = layer_idx
+                    item["current_tokens"] = prefill_tokens
+                    if item["current_layer_ids"] == self.num_layers - 1:
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(target_id)
-                        logger.info(f"finish write cache {item['request_id']}")
-                        self.engine_worker_queue.finish_request_barrier.wait()
-                        if self.rank == 0:
-                            self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
-                            logger.info(f"put write cache {item['request_id']}")
-                        del self.cache_info[req_id]
+                        if prefill_tokens == item["total_tokens"]:
+                            logger.info(f"finish write cache {item['request_id']}")
+                            self.engine_worker_queue.finish_request_barrier.wait()
+                            if self.rank == 0:
+                                self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
+                                logger.info(f"put write cache {item['request_id']}")
+                            self.engine_cache_tasks[item["current_id"]] = dict()
+                            del self.cache_info[req_id]
 
-                    self.last_step_idx = prefilled_step_idx
-                    self.last_layer_idx = prefilled_layer_idx
+                        else:
+                            item["current_layer_ids"] = -1
+                        item["src_block_ids"] = item["src_block_ids"][current_block_num:]
+                        item["dest_block_ids"] = item["dest_block_ids"][current_block_num:]
+                        item["send_finished_tokens"] = prefill_tokens
+                        item["current_block_num"] = 0
 
-        except Exception as e:
-            logger.error(f"prefill layerwise send cache thread has exception: {e}, {str(traceback.format_exc())}")
+            except Exception as e:
+                logger.error(f"prefill layerwise send cache thread has exception: {e} {traceback.format_exc()!s}")
+                time.sleep(0.01)
+
+    def consume_signals(self):
+        paddle.device.set_device("cpu")
+        kv_signal_data = paddle.full(shape=[512 * 3 + 2], fill_value=-1, dtype="int32")
+        while True:
+            try:
+                get_output_kv_signal(kv_signal_data, self.rank_id, 0)  # wait_flag
+                if not self.cache_info:
+                    time.sleep(0.01)
+                    continue
+                tasks_count = kv_signal_data[0]
+                if tasks_count == -1:
+                    time.sleep(0.001)
+                    continue
+                layer_id = kv_signal_data[1].numpy().tolist()
+                if layer_id == self.num_layers - 1:
+                    logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id}")
+
+                for bi in range(tasks_count):
+                    engine_idx = kv_signal_data[3 * bi + 2].numpy().tolist()
+                    chuck_token_offset = kv_signal_data[3 * bi + 3].numpy().tolist()
+                    current_seq_len = kv_signal_data[3 * bi + 4].numpy().tolist()
+                    self.engine_cache_tasks[engine_idx]["prefilled_layer_idx"] = layer_id
+                    self.engine_cache_tasks[engine_idx]["prefilled_token_num"] = chuck_token_offset + current_seq_len
+            except Exception as e:
+                logger.error(f"Consume signals get exception: {e}")
