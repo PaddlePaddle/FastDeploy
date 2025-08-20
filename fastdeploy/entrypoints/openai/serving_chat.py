@@ -267,7 +267,7 @@ class OpenAIServingChat:
 
                     delta_message = DeltaMessage(
                         content=delta_text,
-                        reasoning_content=None,
+                        reasoning_content="",
                         prompt_token_ids=None,
                         completion_token_ids=None,
                         tool_calls=None,
