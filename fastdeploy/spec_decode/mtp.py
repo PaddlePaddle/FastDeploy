@@ -291,10 +291,6 @@ class MTPProposer(Proposer):
         self.model_inputs["batch_id_per_token"] = paddle.clone(self.main_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(self.main_model_inputs["cu_seqlens_q"])
         self.model_inputs["cu_seqlens_k"] = paddle.clone(self.main_model_inputs["cu_seqlens_k"])
-        self.model_inputs["decoder_batch_ids"] = paddle.clone(self.main_model_inputs["decoder_batch_ids"])
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
-            self.main_model_inputs["decoder_tile_ids_per_batch"]
-        )
 
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
         self.model_inputs["rope_emb"] = get_rope(
@@ -328,6 +324,13 @@ class MTPProposer(Proposer):
         self.model_inputs["decoder_tile_ids_per_batch"] = None
         self.model_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.model_inputs["max_len_tensor_cpu"] = None  # CPU
+        self.model_inputs["encoder_batch_ids"] = None
+        self.model_inputs["encoder_tile_ids_per_batch"] = None
+        self.model_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
+        self.model_inputs["kv_batch_ids"] = None
+        self.model_inputs["kv_tile_ids_per_batch"] = None
+        self.model_inputs["kv_num_blocks_x_cpu"] = None  # CPU
+        self.model_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Input tokens
         self.model_inputs["draft_tokens"] = paddle.full(
@@ -454,6 +457,13 @@ class MTPProposer(Proposer):
             cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
             block_tables=self.model_inputs["block_tables"],
             caches=self.model_inputs["caches"],
+            encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+            encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+            encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+            kv_batch_ids=self.model_inputs["kv_batch_ids"],
+            kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+            kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+            max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
         )
 
         # Initialzie attention meta data
