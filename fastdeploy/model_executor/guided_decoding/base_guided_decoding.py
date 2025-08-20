@@ -15,6 +15,7 @@
 """
 
 import os
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from fastdeploy.config import ErnieArchitectures, FDConfig
@@ -300,7 +301,7 @@ class BackendBase:
 
             return tokenizer
         except Exception as e:
-            raise Exception(f"Fail to initialize hf tokenizer: {e}")
+            raise Exception(f"Fail to initialize hf tokenizer: {e}, {str(traceback.format_exc())}")
 
     def add_cache(self, schemata_key: tuple[str, str], processor: LogitsProcessorBase) -> None:
         """

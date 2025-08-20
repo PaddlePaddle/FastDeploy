@@ -15,6 +15,7 @@
 """
 
 import json
+import traceback
 
 import uvicorn
 from fastapi import FastAPI
@@ -114,7 +115,7 @@ def launch_api_server(args) -> None:
             log_level="info",
         )  # set log level to error to avoid log
     except Exception as e:
-        api_server_logger.error(f"launch sync http server error, {e}")
+        api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
 
 def main():

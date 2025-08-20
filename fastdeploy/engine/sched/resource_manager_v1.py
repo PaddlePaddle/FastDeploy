@@ -16,6 +16,7 @@
 
 import threading
 import time
+import traceback
 from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -142,26 +143,31 @@ class ResourceManagerV1(ResourceManager):
 
         input_ids_lst = request.prompt_token_ids + request.output_token_ids
         input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
-        grid_thw = []
-        for one in inputs["grid_thw"]:
-            if one[0] == 1:
-                grid_thw.append(one)
-            else:
-                grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
-
+        input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
         image_patch_id = inputs["image_patch_id"]
-        grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
+
         if request.multimodal_img_boundaries is None:
+            grid_thw = []
+            for one in inputs["grid_thw"]:
+                if one[0] == 1:
+                    grid_thw.append(one)
+                else:
+                    grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
+
+            grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
             from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
             request.multimodal_img_boundaries = get_img_boundaries(
                 task_input_ids=input_ids, grid_thw=grid_thw, image_patch_id=image_patch_id
             ).numpy()
 
+            grid_thw = grid_thw.numpy().reshape([-1, 3])
+            inputs["grid_thw"] = grid_thw
+
+        grid_thw = inputs["grid_thw"]
         img_boundaries_idx = request.multimodal_img_boundaries[0]
         img_num_per_boundary = request.multimodal_img_boundaries[1]
         ori_prompt_len = img_boundaries_idx[-1].item()
-        grid_thw = grid_thw.numpy().reshape([-1, 3])
         pre_end_idx = request.num_computed_tokens
         new_end_idx = pre_end_idx + num_new_tokens
         if new_end_idx < ori_prompt_len and input_ids[new_end_idx - 1] == image_patch_id:
@@ -384,7 +390,7 @@ class ResourceManagerV1(ResourceManager):
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
-            llm_logger.error(f"prefix match blocks error: {e}, waiting reschedule...")
+            llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
     def add_request(self, request: Request) -> None:
@@ -436,4 +442,4 @@ class ResourceManagerV1(ResourceManager):
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
         except Exception as e:
-            llm_logger.error(e)
+            llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")

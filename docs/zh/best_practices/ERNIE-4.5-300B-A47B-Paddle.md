@@ -22,12 +22,12 @@ ERNIE-4.5-300B-A47B各量化精度，在下列硬件上部署所需要的最小�
 ### 2.1 基础：启动服务
 通过下列命令启动服务
 ```bash
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --tensor-parallel-size 8 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
 其中：
@@ -124,6 +124,21 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --innode-prefill-ports 8182 \
        --splitwise-role "decode"
 ```
+
+#### 2.2.8 CUDAGraph
+**原理：**
+CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操作序列捕获（capture）为图结构（graph），实现 GPU 任务的高效执行和优化。CUDAGraph 的核心思想是将一系列 GPU 计算和内存操作封装为一个可重复执行的图，从而减少 CPU-GPU 通信开销、降低内核启动延迟，并提升整体计算性能。
+
+**启用方式：**
+在启动命令中增加
+```
+--use-cudagraph
+--enable-custom-all-reduce
+```
+注：
+1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
+2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
+3. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
 
 ## 三、常见问题FAQ
 如果您在使用过程中遇到问题，可以在[FAQ](./FAQ.md)中查阅。
