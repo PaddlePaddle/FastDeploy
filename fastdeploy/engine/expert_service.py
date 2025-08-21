@@ -172,7 +172,7 @@ class ExpertService:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
-        current_id = -1
+        current_id = 0
         while True:
             try:
                 if self.resource_manager.available_batch() == 0:
@@ -205,9 +205,11 @@ class ExpertService:
                     self.llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
-                current_id = (current_id + 1) % 100003
-
-                self.insert_tasks(tasks, current_id)
+                insert_successful = self.insert_tasks(tasks, current_id)
+                if insert_successful:
+                    current_id = current_id + 1
+                else:
+                    continue
 
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
@@ -328,6 +330,7 @@ class ExpertService:
         if not isinstance(tasks, list):
             tasks = [tasks]
 
+        need_delete_tasks = []
         for task in tasks:
             if self.cfg.splitwise_role != "mixed":
                 status, msg = self.split_connector.check_decode_allocated(task)
@@ -343,10 +346,19 @@ class ExpertService:
                             )
                         ]
                     )
-                    tasks.remove(task)
+                    need_delete_tasks.append(task)
                     continue
-            task.schedule_start_time = time.time()
 
+        for tmp_task in need_delete_tasks:
+            tasks.remove(tmp_task)
+
+        for item in tasks:
+            item.schedule_start_time = time.time()
+
+        req_ids = [t.request_id for t in tasks]
+
+        if len(tasks) == 0:
+            return False
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(
@@ -354,8 +366,6 @@ class ExpertService:
             )
             self.llm_logger.error("The exceeded part will be ignored!")
             tasks = tasks[:available_batch]
-
-        req_ids = [t.request_id for t in tasks]
 
         tasks = self.resource_manager.allocate_resources_for_new_tasks(tasks)
 

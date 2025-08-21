@@ -190,6 +190,7 @@ class LLMEngine:
         self._init_worker_signals()
 
         self.data_processor = self.input_processor.create_processor()
+        self.response_lock = threading.Lock()  # prevent to call send_multipart in zmq concurrently
 
         if api_server_pid is not None:
             if envs.FD_ENABLE_INTERNAL_ADAPTER:
@@ -201,6 +202,10 @@ class LLMEngine:
             else:
                 self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
                 self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
+            self.recv_result_handle_thread = threading.Thread(
+                target=self.send_response_server.recv_result_handle, daemon=True
+            )
+            self.recv_result_handle_thread.start()
             time.sleep(3)
 
         self.cfg.init_cache_info()
@@ -323,8 +328,9 @@ class LLMEngine:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
-                for request_id, contents in results.items():
-                    self.send_response_server.send_response(request_id, contents)
+                with self.response_lock:
+                    for request_id, contents in results.items():
+                        self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
@@ -341,7 +347,7 @@ class LLMEngine:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
-        current_id = -1
+        current_id = 0
         while self.running:
             try:
                 if self.resource_manager.available_batch() == 0:
@@ -376,12 +382,15 @@ class LLMEngine:
                     time.sleep(0.001)
                     continue
 
-                current_id = (current_id + 1) % 100003
                 if self.cfg.splitwise_role != "mixed":
                     llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
-                self.insert_tasks(tasks, current_id)
+                insert_successful = self.insert_tasks(tasks, current_id)
+                if insert_successful:
+                    current_id = current_id + 1
+                else:
+                    continue
 
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
@@ -495,7 +504,7 @@ class LLMEngine:
                     if failed is None:
                         main_process_metrics.num_requests_waiting.inc(1)
                         continue
-
+                    llm_logger.error(f"request {request_id} insert to scheduler failed: {failed}")
                     error_result = RequestOutput(
                         request_id=request_id,
                         finished=True,
@@ -504,7 +513,8 @@ class LLMEngine:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.send_response_server.send_response(request_id, error_result)
+                    with self.response_lock:
+                        self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
@@ -821,6 +831,9 @@ class LLMEngine:
                 self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
 
+        if not isinstance(tasks, list):
+            tasks = [tasks]
+        need_delete_tasks = []
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
             if self.cfg.splitwise_role != "mixed":
@@ -837,26 +850,28 @@ class LLMEngine:
                             )
                         ]
                     )
-                    tasks.remove(task)
+                    need_delete_tasks.append(task)
                     continue
             if task.sampling_params.bad_words is not None:
                 task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 
-        if not isinstance(tasks, list):
-            tasks = [tasks]
+        for tmp_task in need_delete_tasks:
+            tasks.remove(tmp_task)
 
         for item in tasks:
             item.schedule_start_time = time.time()
 
+        req_ids = [t.request_id for t in tasks]
+
+        if len(tasks) == 0:
+            return False
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
             llm_logger.error("The exceeded part will be ignored!")
             tasks = tasks[:available_batch]
-
-        req_ids = [t.request_id for t in tasks]
 
         tasks = self.resource_manager.allocate_resources_for_new_tasks(tasks)
 
