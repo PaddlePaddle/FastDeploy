@@ -136,7 +136,8 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
+        # model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
+        model_name_or_path = "./data/models/paddle/Qwen2.5-VL-3B-Instruct"
         self.processor = QwenVLProcessor(
             config=config,
             model_name_or_path=model_name_or_path,
@@ -161,7 +162,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         4. Correct counts for images (1) and videos (1)
         """
         prompt = {
-            "request_id": "123",
+            "request_id": "12345",
             "messages": [
                 {
                     "role": "user",
@@ -200,11 +201,11 @@ class TestQwenVLProcessor(unittest.TestCase):
         """
         num_generated_token_ids = 10
         request = {
+            "request_id": "12345",
             "metadata": {
                 "generated_token_ids": [1] * num_generated_token_ids,
             },
             "stop": ["stop", "eof"],
-            "request_id": "123",
             "messages": [
                 {
                     "role": "user",
@@ -230,6 +231,39 @@ class TestQwenVLProcessor(unittest.TestCase):
         )
         self.assertEqual(result["multimodal_inputs"]["pic_cnt"], 1)
         self.assertEqual(result["multimodal_inputs"]["video_cnt"], 1)
+
+    def test_prompt(self):
+        """Test processing of prompt with image and video placeholders
+
+        Validates:
+        1. Token ID lengths match position_ids and token_type_ids shapes
+        2. Image processing produces expected output dimensions
+        3. Video processing produces expected output dimensions
+        4. Correct counts for images (1) and videos (1)
+        """
+        prompt = {
+            "request_id": "12345",
+            "prompt": "<|image@placeholder|><|video@placeholder|>Describe image and video.",
+            "multimodal_data": {
+                "image": [mock_pil_image(10, 2100)],
+                "video": [b"123"],
+            },
+        }
+
+        request = Request.from_dict(prompt)
+        result = self.processor.process_request(request, 1024 * 100)
+
+        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
+        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
+        self.assertEqual(
+            result.multimodal_inputs["images"].shape[0],
+            sum(map(lambda x: x.prod(), result.multimodal_inputs["grid_thw"])),
+        )
+        self.assertEqual(
+            result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
+        )
+        self.assertEqual(result.multimodal_inputs["pic_cnt"], 1)
+        self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
 
 if __name__ == "__main__":

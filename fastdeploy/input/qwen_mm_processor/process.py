@@ -15,7 +15,7 @@
 # limitations under the License.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 from paddleformers.transformers import AutoTokenizer
@@ -187,17 +187,19 @@ class DataProcessor:
                 break
 
             if ed == image_pos:
+                outputs["pic_cnt"] += 1
                 self._add_image(images[image_idx], outputs)
                 image_idx += 1
                 st = ed + IMAGE_PLACEHOLDER_LEN
             else:
                 item = videos[video_idx]
                 if isinstance(item, dict):
-                    frames = self._load_and_process_video(item["video"], item)
+                    frames, meta = self._load_and_process_video(item["video"], item)
                 else:
-                    frames = self._load_and_process_video(item, {})
+                    frames, meta = self._load_and_process_video(item, {})
 
-                self._add_video(frames, outputs)
+                outputs["video_cnt"] += 1
+                self._add_video(frames, meta, outputs)
                 video_idx += 1
                 st = ed + VIDEO_PLACEHOLDER_LEN
 
@@ -315,8 +317,12 @@ class DataProcessor:
             - Handles both raw text and pre-tokenized inputs
             - Updates position IDs for 3D embeddings
         """
+        if not tokens:
+            return None
+
         if isinstance(tokens, str):
-            tokens = self.tokenizer.encode(tokens, add_special_tokens=False)["input_ids"]
+            tokens_str = self.tokenizer.tokenize(tokens)
+            tokens = self.tokenizer.convert_tokens_to_ids(tokens_str)
 
         num_tokens = len(tokens)
         outputs["input_ids"].extend(tokens)
@@ -438,7 +444,7 @@ class DataProcessor:
         position = np.stack([t_index, h_index, w_index]) + start_pos
         return position
 
-    def _load_and_process_video(self, url: str, item: Dict) -> np.ndarray:
+    def _load_and_process_video(self, url: str, item: Dict) -> Tuple[np.ndarray, Dict]:
         """
         Load and preprocess video into frames.
 
