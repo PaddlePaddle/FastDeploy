@@ -1068,9 +1068,14 @@ class LLMEngine:
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == 1 else "-u"
-        pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
+        if envs.FD_WITH_COVERAGE == "ON":
+            coverage_args = "-m coverage run --branch -p"
+        else:
+            coverage_args = ""
+        pd_cmd = (
+            f"{command_prefix} {sys.executable} {uncache_worker_stdout} {coverage_args} -m paddle.distributed.launch"
+        )
         pd_cmd = pd_cmd + f" --log_dir {log_dir}"
-
         worker_path = "../worker/worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
 

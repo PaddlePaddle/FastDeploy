@@ -165,11 +165,15 @@ class PrefixCacheManager:
         )
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
+        if envs.FD_WITH_COVERAGE == "ON":
+            coverage_args = "-m coverage run --branch -p"
+        else:
+            coverage_args = ""
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
-                + f" {sys.executable} {py_path}"
+                + f" {sys.executable} {coverage_args} {py_path}"
                 + f" --device_id {int(device_ids[i])}"
                 + f" --rank {i}"
                 + f" --splitwise_role {self.splitwise_role}"
