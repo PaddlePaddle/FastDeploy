@@ -11,7 +11,7 @@ MAX_MODEL_LEN = 2048
 
 
 async def _async_serving_models_init() -> OpenAIServingModels:
-    """异步初始化 OpenAIServingModels 实例"""
+    """Asynchronously initialize an OpenAIServingModels instance."""
     return OpenAIServingModels(
         model_paths=MODEL_PATHS,
         max_model_len=MAX_MODEL_LEN,
