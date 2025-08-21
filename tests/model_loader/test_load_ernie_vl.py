@@ -113,8 +113,6 @@ def setup_and_run_server():
         "--enable-chunked-prefill",
         "--kv-cache-ratio",
         "0.71",
-        "--quantization",
-        "wint4",
         "--reasoning-parser",
         "ernie-45-vl",
         "--load_choices",
