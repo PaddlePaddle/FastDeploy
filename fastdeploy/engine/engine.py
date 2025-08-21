@@ -126,7 +126,6 @@ class LLMEngine:
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
             self.cfg.engine_worker_queue_port + self.cfg.worker_num_per_node * self.cfg.node_rank
         )
-        
         self.split_connector = SplitwiseConnector(cfg, self.scheduler, self.engine_worker_queue, self.resource_manager)
 
         self.token_processor = TokenProcessor(
@@ -135,7 +134,6 @@ class LLMEngine:
             engine_worker_queue=self.engine_worker_queue,
             split_connector=self.split_connector,
         )
-        
         self.token_processor.set_resource_manager(self.resource_manager)
 
         self.is_started = False
