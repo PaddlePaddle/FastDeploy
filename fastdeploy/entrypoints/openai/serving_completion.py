@@ -401,7 +401,6 @@ class OpenAIServingCompletion:
                         )
 
                     choices.append(delta_message)
-                    output_tokens[idx] += 1
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
