@@ -195,13 +195,15 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
+            metadata.decoder_num_blocks,
+            metadata.decoder_chunk_size_cpu,
             metadata.max_len_kv,
         ) = get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            forward_meta.decoder_batch_ids,
-            forward_meta.decoder_tile_ids_per_batch,
+            forward_meta.decoder_batch_ids,  # decoder_batch_ids_per_ctax
+            forward_meta.decoder_tile_ids_per_batch,  # decoder_chunk_ids_per_ctax_each_batch
             forward_meta.decoder_num_blocks_cpu,
             forward_meta.max_len_tensor_cpu,
             self.encoder_block_shape_q,
@@ -369,6 +371,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
             forward_meta.decoder_num_blocks_cpu,
+            metadata.decoder_chunk_size_cpu,
             metadata.max_enc_len_this_time,
             metadata.max_dec_len_this_time,
             metadata.max_len_kv,
@@ -490,6 +493,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.decoder_num_blocks_cpu,
+                metadata.decoder_chunk_size_cpu,
                 metadata.max_enc_len_this_time,
                 metadata.max_dec_len_this_time,
                 metadata.max_len_kv,
