@@ -76,7 +76,8 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
-
+from fastdeploy.inter_communicator import ZmqClient
+import zmq
 
 class GPUModelRunner(ModelRunnerBase):
     def __init__(
@@ -161,6 +162,10 @@ class GPUModelRunner(ModelRunnerBase):
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+
+        self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+        self.zmq_client.connect()
+        self.zmq_client.socket.SNDTIMEO = 3000
 
     def exist_prefill(self):
         """
@@ -682,6 +687,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full([1], False, dtype="bool").cpu()
@@ -1203,6 +1209,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             post_process(
+                self,
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
@@ -1497,6 +1504,7 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             skip_save_output = False
         post_process(
+            self,
             sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,

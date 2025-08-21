@@ -77,6 +77,8 @@ else:
     )
 
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
+from fastdeploy.output.stream_transfer_data import *
+from fastdeploy import envs
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -157,6 +159,7 @@ def pre_process(
 
 
 def post_process_normal(
+    cls,
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
@@ -289,12 +292,31 @@ def post_process_normal(
     #    In the future, we will abandon this approach.
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
-            save_output(
-                sampler_output.sampled_token_ids,
-                model_output.not_need_stop,
-                model_output.mp_rank,
-                save_each_rank,  # save_each_rank
-            )
+            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                # TODO(Wanglongzhi2001): adapt more type of message.
+                stream_transfer_data = StreamTransferData(
+                    decoder_state=DecoderState.TEXT,
+                    data=TextData(
+                        tokens=sampler_output.sampled_token_ids.numpy(),
+                        not_need_stop=model_output.not_need_stop.numpy().item(),
+                        batch=sampler_output.sampled_token_ids.shape[0],
+                        speculaive_decoding=False
+                    )
+                )
+                
+                if not (not save_each_rank and model_output.mp_rank > 0):
+                    try:
+                        cls.zmq_client.send_pyobj(stream_transfer_data)
+                    except Exception as e:
+                        print(f"Send message error: {e}")
+                        time.sleep(1)
+            else:
+                save_output(
+                    sampler_output.sampled_token_ids,
+                    model_output.not_need_stop,
+                    model_output.mp_rank,
+                    save_each_rank,
+                )
         else:
             save_output_topk(
                 sampler_output.sampled_token_ids,
@@ -348,6 +370,7 @@ def post_process_specualate(model_output, save_each_rank: bool = False, skip_sav
 
 
 def post_process(
+    cls,
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
@@ -360,7 +383,7 @@ def post_process(
     if speculative_decoding:
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
-        post_process_normal(sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output)
+        post_process_normal(cls, sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output)
 
 
 def step_cuda(
