@@ -237,6 +237,7 @@ class OpenAIServingChat:
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
                                 choice.delta.text_after_process = text_after_process
+                                choice.delta.prompt_tokens = text_after_process
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
                                 object=chunk_object_type,
@@ -308,6 +309,7 @@ class OpenAIServingChat:
                     if request.return_token_ids:
                         choice.delta.completion_token_ids = list(output["token_ids"])
                         choice.delta.raw_prediction = output.get("raw_prediction")
+                        choice.delta.completion_tokens = output.get("raw_prediction")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -442,7 +444,9 @@ class OpenAIServingChat:
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             text_after_process=text_after_process if request.return_token_ids else None,
+            prompt_tokens=text_after_process if request.return_token_ids else None,
             raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:
