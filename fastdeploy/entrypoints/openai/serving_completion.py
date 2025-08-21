@@ -38,8 +38,9 @@ from fastdeploy.worker.output import LogprobsLists
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
         self.engine_client = engine_client
+        self.models = models
         self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
@@ -71,6 +72,12 @@ class OpenAIServingCompletion:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+        if self.models:
+            is_supported, request.model = self.models.is_supported_model(request.model)
+            if not is_supported:
+                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                api_server_logger.error(err_msg)
+                return ErrorResponse(message=err_msg, code=400)
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
@@ -305,7 +312,7 @@ class OpenAIServingCompletion:
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
             first_iteration = [True] * num_choices
-            tool_called = False
+            tool_called = [False] * num_choices
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -379,41 +386,31 @@ class OpenAIServingCompletion:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
                     output_tokens[idx] += 1
-                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
-                        tool_delta_message = output["tool_delta_message"]
-                        if tool_delta_message is None:
+                    delta_message = CompletionResponseStreamChoice(
+                        index=idx,
+                        text=output["text"],
+                        prompt_token_ids=None,
+                        completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
+                        tool_calls=None,
+                        raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                        completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        reasoning_content="",
+                        arrival_time=arrival_time,
+                        logprobs=logprobs_res,
+                    )
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
                             continue
-                        delta_message = CompletionResponseStreamChoice(
-                            index=idx,
-                            text=output["text"],
-                            completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                            tool_calls=tool_delta_message.tool_calls,
-                            reasoning_content=output.get("reasoning_content"),
-                            arrival_time=arrival_time,
-                            logprobs=logprobs_res,
-                        )
-                        if tool_delta_message.tool_calls:
-                            tool_called = True
-                    else:
-                        delta_message = CompletionResponseStreamChoice(
-                            index=idx,
-                            text=output["text"],
-                            prompt_token_ids=None,
-                            completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                            tool_calls=None,
-                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                            reasoning_content=output.get("reasoning_content"),
-                            arrival_time=arrival_time,
-                            logprobs=logprobs_res,
-                        )
+                        delta_message.text = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        delta_message.tool_calls = delta_message_output.tool_calls
 
                     choices.append(delta_message)
-                    output_tokens[idx] += 1
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output, tool_called
+                            request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
