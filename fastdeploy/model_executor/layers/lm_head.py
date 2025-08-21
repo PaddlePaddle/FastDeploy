@@ -61,6 +61,7 @@ class ParallelLMHead(nn.Layer):
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.column_cut = True
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.fd_config = fd_config
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -92,6 +93,7 @@ class ParallelLMHead(nn.Layer):
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_weight_attrs(self.linear.weight, {"weight_loader": self.weight_loader})
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": True})
             else:
@@ -104,8 +106,48 @@ class ParallelLMHead(nn.Layer):
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_weight_attrs(self.linear.weight, {"weight_loader": self.weight_loader})
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": False})
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        try:
+            output_dim = getattr(param, "output_dim", None)
+            hugging_face_format = self.fd_config.load_config.hugging_face_format
+            if hugging_face_format:
+                loaded_weight = loaded_weight.transpose([1, 0])
+            # Tensor parallelism splits the weight along the output_dim
+            if output_dim is not None:
+                dim = -1 if output_dim else 0
+                if isinstance(loaded_weight, paddle.Tensor):
+                    size = loaded_weight.shape[dim]
+                else:
+                    size = loaded_weight.get_shape()[dim]
+                block_size = size // self.fd_config.parallel_config.tensor_parallel_size
+                shard_offset = self.fd_config.parallel_config.tensor_parallel_rank * block_size
+                shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+                if output_dim:
+                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
+                else:
+                    loaded_weight = loaded_weight[shard_offset:shard_size, ...]
+
+            loaded_weight = get_tensor(loaded_weight)
+
+            # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+            if param.dtype != loaded_weight.dtype:
+                loaded_weight = loaded_weight.cast(param.dtype)
+
+            if param.shape != loaded_weight.shape:
+                try:
+                    param = param.reshape(loaded_weight.shape)
+                except ValueError as e:
+                    raise ValueError(
+                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
+                    )
+
+            param.copy_(loaded_weight, False)
+        except Exception:
+            raise
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """

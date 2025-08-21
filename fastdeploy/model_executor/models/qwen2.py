@@ -217,7 +217,11 @@ class Qwen2Model(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        fd_config.model_config.pretrained_config.prefix_name = "qwen2"
+        hugging_face_format = fd_config.load_config.hugging_face_format
+        if hugging_face_format:
+            fd_config.model_config.pretrained_config.prefix_name = "model"
+        else:
+            fd_config.model_config.pretrained_config.prefix_name = "qwen2"
 
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
@@ -265,7 +269,6 @@ class Qwen2Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
-
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
@@ -274,7 +277,6 @@ class Qwen2Model(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         hidden_states = hidden_states + residual
-
         out = self.norm(hidden_states)
 
         return out
@@ -308,6 +310,51 @@ class Qwen2ForCausalLM(ModelForCasualLM):
     def name(self):
         """ """
         return "Qwen2ForCausalLM"
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.models.utils import default_weight_loader
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+
+        params_dict = dict(self.named_parameters())
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            hugging_face_format = self.fd_config.load_config.hugging_face_format
+            # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
+            if hugging_face_format:
+                loaded_weight_name = loaded_weight_name.replace("model", "qwen2")
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                if loaded_weight_name not in params_dict:
+                    continue
+                param = params_dict[loaded_weight_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

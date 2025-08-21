@@ -61,7 +61,6 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         """fn"""
         try:
             output_dim = getattr(param, "output_dim", None)
-            print("output_dim", output_dim)
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1 if output_dim else 0
@@ -78,6 +77,7 @@ def default_weight_loader(fd_config: FDConfig) -> None:
                     loaded_weight = loaded_weight[shard_offset:shard_size, ...]
 
             loaded_weight = get_tensor(loaded_weight)
+
             # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
             if param.dtype != loaded_weight.dtype:
                 loaded_weight = loaded_weight.cast(param.dtype)
