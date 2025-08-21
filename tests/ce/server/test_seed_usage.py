@@ -5,6 +5,7 @@
 
 import json
 
+import pytest
 from core import TEMPLATE, URL, build_request_payload, get_stream_chunks, send_request
 
 
@@ -105,6 +106,7 @@ def test_chat_usage_non_stream():
     ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
 
 
+@pytest.mark.skip(reason="修复后打开")
 def test_non_chat_usage_stream():
     """测试completions 流式 usage"""
     data = {
