@@ -2,7 +2,7 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
-run_path="$DIR/../test/"
+run_path="$DIR/../tests/"
 cd ${run_path}
 ls
 

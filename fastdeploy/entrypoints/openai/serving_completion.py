@@ -16,13 +16,11 @@
 
 import asyncio
 import time
+import traceback
 import uuid
 from typing import List, Optional
 
-import aiozmq
-import msgpack
 import numpy as np
-from aiozmq import zmq
 
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
@@ -51,6 +49,12 @@ class OpenAIServingCompletion:
                 self.master_ip = self.master_ip[0]
             else:
                 self.master_ip = self.master_ip.split(",")[0]
+
+    async def _ensure_connection_manager(self):
+        """ensure connection manager initialized"""
+        if not self.engine_client.connection_initialized:
+            await self.engine_client.connection_manager.initialize()
+            self.engine_client.connection_initialized = True
 
     def _check_master(self):
         if self.master_ip is None:
@@ -92,7 +96,9 @@ class OpenAIServingCompletion:
             else:
                 raise ValueError("Prompt must be a string, a list of strings or a list of integers.")
         except Exception as e:
-            return ErrorResponse(message=str(e), code=400)
+            error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(message=error_msg, code=400)
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
@@ -106,8 +112,13 @@ class OpenAIServingCompletion:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-        except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+        except Exception as e:
+            error_msg = (
+                f"OpenAIServingCompletion waiting error: {e}, {str(traceback.format_exc())}, "
+                f"max waiting time: {self.max_waiting_time}"
+            )
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=408, message=error_msg)
 
         try:
             for idx, prompt in enumerate(request_prompts):
@@ -121,6 +132,8 @@ class OpenAIServingCompletion:
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                 except Exception as e:
+                    error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
+                    api_server_logger.error(error_msg)
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
@@ -147,10 +160,16 @@ class OpenAIServingCompletion:
                         text_after_process_list=text_after_process_list,
                     )
                 except Exception as e:
-                    return ErrorResponse(code=400, message=str(e))
+                    error_msg = (
+                        f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
+                    )
+                    api_server_logger.error(error_msg)
+                    return ErrorResponse(code=400, message=error_msg)
 
         except Exception as e:
-            return ErrorResponse(message=str(e), code=400)
+            error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(message=error_msg, code=400)
 
     async def completion_full_generator(
         self,
@@ -169,7 +188,10 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
 
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
@@ -182,7 +204,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -194,7 +216,7 @@ class OpenAIServingCompletion:
                             current_waiting_time = 0
                     await asyncio.sleep(0.1)
                     continue
-                response = msgpack.unpackb(raw_data[-1])
+
                 for data in response:
                     rid = int(data["request_id"].split("-")[-1])
                     if data.get("error_code", 200) != 200:
@@ -239,7 +261,7 @@ class OpenAIServingCompletion:
         finally:
             self.engine_client.semaphore.release()
             if dealer is not None:
-                dealer.close()
+                await self.engine_client.connection_manager.cleanup_request(request_id)
 
     async def _echo_back_prompt(self, request, res, idx):
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
@@ -272,7 +294,10 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"
@@ -296,7 +321,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -309,7 +334,6 @@ class OpenAIServingCompletion:
                     await asyncio.sleep(0.1)
                     continue
 
-                response = msgpack.unpackb(raw_data[-1])
                 for res in response:
                     idx = int(res["request_id"].split("-")[-1])
                     if res.get("error_code", 200) != 200:
@@ -327,6 +351,7 @@ class OpenAIServingCompletion:
                                         text="",
                                         prompt_token_ids=list(prompt_batched_token_ids[idx]),
                                         text_after_process=text_after_process_list[idx],
+                                        prompt_tokens=text_after_process_list[idx],
                                         completion_token_ids=None,
                                     )
                                 ],
@@ -377,6 +402,7 @@ class OpenAIServingCompletion:
                             completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                             tool_calls=None,
                             raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
                             reasoning_content=output.get("reasoning_content"),
                             arrival_time=arrival_time,
                             logprobs=logprobs_res,
@@ -431,12 +457,13 @@ class OpenAIServingCompletion:
                     choices = []
 
         except Exception as e:
+            api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
-            self.engine_client.semaphore.release()
             if dealer is not None:
-                dealer.close()
+                await self.engine_client.connection_manager.cleanup_request(request_id)
+                self.engine_client.semaphore.release()
             yield "data: [DONE]\n\n"
 
     def request_output_to_completion_response(
@@ -494,7 +521,9 @@ class OpenAIServingCompletion:
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
                 raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
                 text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
+                prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
@@ -614,5 +643,5 @@ class OpenAIServingCompletion:
             )
 
         except Exception as e:
-            api_server_logger.error("Error in _build_logprobs_response: %s", e)
+            api_server_logger.error(f"Error in _build_logprobs_response: {str(e)}, {str(traceback.format_exc())}")
             return None

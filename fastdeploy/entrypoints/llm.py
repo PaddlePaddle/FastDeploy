@@ -346,7 +346,7 @@ class LLM:
             return result
 
         except Exception as e:
-            llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}")
+            llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}, {str(traceback.format_exc())}")
 
     def _run_engine(self, req_ids: list[str], use_tqdm: bool, topk_logprobs: Optional[int] = None):
         """

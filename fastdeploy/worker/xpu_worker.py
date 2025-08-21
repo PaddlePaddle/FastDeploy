@@ -151,10 +151,9 @@ class XpuWorker(WorkerBase):
         num_running_requests: Optional[int] = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        if is_dummy_run:
-            output = self.model_runner.execute_model(model_forward_batch)
-        else:
-            output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
+
+        output = self.model_runner.execute_model(model_forward_batch)
+
         return output
 
     def exist_prefill(self):
@@ -163,15 +162,15 @@ class XpuWorker(WorkerBase):
         """
         return self.model_runner.exist_prefill()
 
-    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int = -1) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
         else:
-            self.model_runner.process_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
 
     def check_health(self) -> bool:
         """ """

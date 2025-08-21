@@ -55,6 +55,7 @@ on:
 jobs:
   fd-build:
     runs-on: [self-hosted, GPU-Build]
+    timeout-minutes: 240
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
     steps:
@@ -147,7 +148,7 @@ jobs:
             elif [[ "${PADDLEVERSION}" != "" ]];then
               python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
             else
-              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+              python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
             fi
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
