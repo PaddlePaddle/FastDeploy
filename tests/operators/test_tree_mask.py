@@ -189,6 +189,7 @@ def test_append_c16_attention(q_len, kv_len, prefill=False, attn_mask=None):
     decoder_tile_ids_per_batch = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
     decoder_num_blocks = paddle.full([1], 0, dtype="int32").pin_memory()
     max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
+    paddle.device.synchronize()
     (
         encoder_batch_ids,
         encoder_tile_ids_per_batch,
@@ -246,6 +247,7 @@ def test_append_c16_attention(q_len, kv_len, prefill=False, attn_mask=None):
             cache_v_out_scale,
             None,  # cache_k_zp
             None,  # cache_v_zp
+            None,
             None,
             None,
             None,
@@ -321,7 +323,7 @@ def test_tree_mask(num_q_head, num_kv_head, head_dim):
     # N+1   [0,   -inf,   0,      -inf,   -inf]
     # N+2   [0,   0,      -inf,   0,      -inf]
     # N+2   [0,   -inf,   0,      -inf,   0]
-    prefill_len = 2048
+    prefill_len = 8192
     dec_len_q = 5
     total_len = prefill_len + dec_len_q
     mask = paddle.tril(paddle.ones((bsz, dec_len_q, total_len), dtype="float32"), diagonal=prefill_len)
