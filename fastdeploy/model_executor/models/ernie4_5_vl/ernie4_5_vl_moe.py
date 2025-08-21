@@ -72,7 +72,14 @@ class VLMoEMeta:
     text_index: paddle.Tensor
     image_index: paddle.Tensor
     token_type_ids: paddle.Tensor
-
+    def __str__(self):
+        return (f"VLMoEMeta(\n"
+                f"  image_input: {self.image_input}, pointer: {self.image_input.data_ptr()}\n"
+                f"  text_input: {self.text_input}, pointer: {self.text_input.data_ptr()}\n"
+                f"  text_index: {self.text_index}, pointer: {self.text_index.data_ptr()}\n"
+                f"  image_index: {self.image_index}, pointer: {self.image_index.data_ptr()}\n"
+                f"  token_type_ids: {self.token_type_ids}, pointer: {self.token_type_ids.data_ptr()}\n\n"
+                f")")
 
 class Ernie4_5_VLMoeBlock(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str, moe_tag: str, expert_id_offset: int) -> None:
@@ -381,6 +388,11 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             "dtype": "int32",
             "value": 0,
         },
+        "token_type_ids":{
+            "shape": ["parallel_config.max_model_len"],
+            "dtype": "int32",
+            "value": -1,
+        },
     }
 )
 @support_graph_optimization
@@ -457,17 +469,20 @@ class Ernie4_5_VLModel(nn.Layer):
         image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
+        # TODO maybe we can unify following code with one kernel
+        self._mm_buffers["text_input"].fill_(0)
+        self._mm_buffers["image_input"].fill_(0)
+        self._mm_buffers["text_index"].fill_(0)
+        self._mm_buffers["image_index"].fill_(0)
+        self._mm_buffers["token_type_ids"].fill_(-1) # -1 for cuda graph padding value
+
         text_input = self._mm_buffers["text_input"][:text_token_num]
         image_input = self._mm_buffers["image_input"][:image_token_num]
         text_index = self._mm_buffers["text_index"][:token_num]
         image_index = self._mm_buffers["image_index"][:token_num]
-
-        text_input.fill_(1.0)
-        if image_token_num > 0:
-            image_input.fill_(1.0)
-
-        text_index.zero_()
-        image_index.zero_()
+        
+        self._mm_buffers["token_type_ids"].copy_(token_type_ids, False)
+        
         text_image_index_out(token_type_ids, text_index, image_index)
 
         vl_moe_meta = VLMoEMeta(
@@ -475,7 +490,7 @@ class Ernie4_5_VLModel(nn.Layer):
             image_input=image_input,
             text_index=text_index,
             image_index=image_index,
-            token_type_ids=None,
+            token_type_ids=self._mm_buffers["token_type_ids"][:token_num],
         )
 
         return vl_moe_meta
@@ -493,9 +508,7 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = input_embeddings
 
         image_mask = ids_remove_padding == self.im_patch_id
-        token_type_ids = image_mask.cast("int32")
         image_token_num = image_mask.sum()
-        vl_moe_meta.token_type_ids = token_type_ids
         residual = None
 
         for i in range(self.num_layers):
@@ -629,8 +642,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
-        if image_features is not None and len(image_features) != 0:
-            input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
+        image_mask = ids_remove_padding == self.ernie.im_patch_id
+        if image_mask.sum() > 0:
+            input_embeddings[image_mask] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
     def init_mm_data(

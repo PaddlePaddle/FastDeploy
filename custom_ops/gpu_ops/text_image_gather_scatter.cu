@@ -83,9 +83,13 @@ __global__ void text_image_scatter_kernel(
           int64_t text_load_offset = text_index[token_idx] * hidden_size + hidden_offset;
           Store<T,VecSize>(text_images_vec, text_gather_ptr + text_load_offset);
 
-        } else {
+        } else if(token_type_ids_num == 1){
           int64_t image_load_offset = image_index[token_idx] * hidden_size + hidden_offset;
           Store<T,VecSize>(text_images_vec, image_gather_ptr + image_load_offset);
+          
+        } else {
+          // for cuda graph padding value
+          continue;
         }
     }
 }
@@ -120,9 +124,18 @@ __global__ void text_image_gather_kernel(
           int64_t text_load_offset = text_index[token_idx] * hidden_size + hidden_offset;
           Load<T,VecSize>(text_gather_ptr + text_load_offset, &text_imgaes_vec);
 
-        } else {
+        } else if (token_type_ids_num == 1){
           int64_t image_load_offset = image_index[token_idx] * hidden_size + hidden_offset;
           Load<T,VecSize>(image_gather_ptr + image_load_offset, &text_imgaes_vec);
+        } else {
+          // for cuda graph padding value
+          #pragma unroll
+          for (int vi = 0; vi < VecSize; ++vi) {
+            output_ptr_vec[vi] = static_cast<T>(0);
+          }
+          int64_t input_load_offset = token_idx * hidden_size + hidden_offset;
+          Store<T, VecSize>(output_ptr_vec, output_ptr + input_load_offset);
+          continue;
         }
 
         #pragma unroll

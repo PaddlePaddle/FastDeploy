@@ -31,9 +31,12 @@ __global__ void text_image_index_out_kernel(
         if (token_type_ids[i] == 0) {
             text_index[i] = text_count;
             text_count += 1;
-        } else {
+        } else if (token_type_ids[i] == 1) {
             image_index[i] = images_count;
             images_count += 1;
+        } else {
+            // for cuda graph padding value
+            continue;
         }
     }
 }

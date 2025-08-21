@@ -1061,20 +1061,19 @@ class GPUModelRunner(ModelRunnerBase):
                 input_embeddings = self.model.get_input_embeddings(
                     self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"]
                 )
-                actual_token_num = input_embeddings.shape[0]
-                self.share_inputs["input_embeds"][:actual_token_num] = input_embeddings.clone().detach()
+                self.share_inputs["input_embeds"].copy_(input_embeddings, False)
                 del input_embeddings
-                input_embeddings = self.share_inputs["input_embeds"][:actual_token_num]
+                input_embeddings = self.share_inputs["input_embeds"]
 
                 mm_args = self.model.init_mm_data(
                     input_embeddings,
                     self.share_inputs["ids_remove_padding"],
                 )
                 model_output = self.model(
-                    input_embeddings,
-                    self.share_inputs["ids_remove_padding"],
-                    self.forward_meta,
-                    mm_args,
+                    input_embeddings=input_embeddings,
+                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    forward_meta=self.forward_meta,
+                    mm_args=mm_args,
                 )
                 hidden_states = model_output
             else:
@@ -1341,20 +1340,18 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],
             )
-            actual_token_num = input_embeddings.shape[0]
-            self.share_inputs["input_embeds"][:actual_token_num] = input_embeddings.clone().detach()
+            self.share_inputs["input_embeds"].copy_(input_embeddings, False)
             del input_embeddings
-            input_embeddings = self.share_inputs["input_embeds"][:actual_token_num]
-
+            input_embeddings = self.share_inputs["input_embeds"]
             mm_args = self.model.init_mm_data(
                 input_embeddings,
                 self.share_inputs["ids_remove_padding"],
             )
             model_output = self.model(
-                input_embeddings,
-                self.share_inputs["ids_remove_padding"],
-                self.forward_meta,
-                mm_args,
+                input_embeddings=input_embeddings,
+                ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                forward_meta=self.forward_meta,
+                mm_args=mm_args,
             )
             hidden_states = model_output
         else:
@@ -1631,6 +1628,8 @@ class GPUModelRunner(ModelRunnerBase):
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.use_cudagraph:
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+        if self.enable_mm:
+            self.share_inputs["input_embeds"].fill_(0)
         return
 
     def _init_image_preprocess(self) -> None:
