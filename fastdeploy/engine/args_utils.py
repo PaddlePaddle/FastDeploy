@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
     ModelConfig,
@@ -30,10 +31,13 @@ from fastdeploy.config import (
     SpeculativeConfig,
     TaskOption,
 )
-from fastdeploy.engine.config import Config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
+from fastdeploy.utils import (
+    DeprecatedOptionWarning,
+    FlexibleArgumentParser,
+    is_port_available,
+)
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -912,7 +916,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> Config:
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -947,8 +951,11 @@ class EngineArgs:
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
-        return Config(
-            model_name_or_path=self.model,
+        assert is_port_available(
+            "0.0.0.0", self.engine_worker_queue_port
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+
+        return FDConfig(
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
@@ -956,7 +963,6 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            tensor_parallel_size=self.tensor_parallel_size,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
@@ -965,7 +971,6 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
@@ -973,10 +978,8 @@ class EngineArgs:
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
-            graph_optimization_config=graph_opt_cfg,
+            graph_opt_config=graph_opt_cfg,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_logprob=self.enable_logprob,
             early_stop_config=early_stop_cfg,
-            load_choices=self.load_choices,
         )

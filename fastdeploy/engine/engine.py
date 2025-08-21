@@ -105,7 +105,7 @@ class LLMEngine:
             cfg.reasoning_parser,
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
-            cfg.enable_mm,
+            cfg.model_config.enable_mm,
             cfg.tool_parser,
         )
 
@@ -113,7 +113,7 @@ class LLMEngine:
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
-                cfg.max_num_seqs, cfg, cfg.tensor_parallel_size, cfg.splitwise_role
+                cfg.max_num_seqs, cfg, cfg.parallel_config.tensor_parallel_size, cfg.splitwise_role
             )
             if cfg.splitwise_role != "mixed":
                 raise NotImplementedError(
@@ -121,7 +121,7 @@ class LLMEngine:
                 )
         else:
             self.resource_manager = ResourceManager(
-                cfg.max_num_seqs, cfg, cfg.tensor_parallel_size, cfg.splitwise_role
+                cfg.max_num_seqs, cfg, cfg.parallel_config.tensor_parallel_size, cfg.splitwise_role
             )
 
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.cfg.engine_worker_queue_port)
@@ -191,7 +191,7 @@ class LLMEngine:
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
-                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
                 device_ids=device_ids,
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
@@ -387,7 +387,7 @@ class LLMEngine:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     err, data = self.zmq_server.receive_json_once(block)
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
@@ -807,7 +807,7 @@ class LLMEngine:
             for task in tasks:
                 task.inference_start_time = time.time()
             if not is_prefill:
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -1049,7 +1049,7 @@ class LLMEngine:
             if self.cfg.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.enable_mm:
+        if self.cfg.model_config.enable_mm:
             variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
@@ -1084,9 +1084,9 @@ class LLMEngine:
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
-            f" --model {self.cfg.model_name_or_path!s}"
+            f" --model {self.cfg.model_config.model!s}"
             f" --device_ids {self.cfg.device_ids}"
-            f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
+            f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {self.cfg.engine_worker_queue_port!s}"
             f" --pod_ip {self.cfg.master_ip}"
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
@@ -1103,11 +1103,11 @@ class LLMEngine:
             f" --quantization {self.cfg.model_config.quantization}"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
-            f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
+            f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
-            f" --load_choices {self.cfg.load_choices}"
+            f" --load_choices {self.cfg.load_config.load_choices}"
         )
 
         worker_append_flag = {
@@ -1118,8 +1118,7 @@ class LLMEngine:
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
-            "enable_logprob": self.cfg.enable_logprob,
-            "enable_mm": self.cfg.enable_mm,
+            "enable_logprob": self.cfg.model_config.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
@@ -1216,7 +1215,7 @@ class LLMEngine:
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
-                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
                 device_ids=device_ids,
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
@@ -1370,7 +1369,7 @@ class LLMEngine:
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
                 is_server=True,
-                num_client=self.cfg.tensor_parallel_size,
+                num_client=self.cfg.parallel_config.tensor_parallel_size,
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
@@ -1382,7 +1381,7 @@ class LLMEngine:
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
-                    num_client=self.cfg.tensor_parallel_size,
+                    num_client=self.cfg.parallel_config.tensor_parallel_size,
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
@@ -1390,7 +1389,7 @@ class LLMEngine:
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
-            num_client=self.cfg.tensor_parallel_size,
+            num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             local_data_parallel_id=min(

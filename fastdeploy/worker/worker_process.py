@@ -587,7 +587,6 @@ def parse_args():
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
     )
-    parser.add_argument("--enable_mm", action="store_true", help="Whether to enable vl model")
     parser.add_argument(
         "--enable_logprob",
         action="store_true",
@@ -708,8 +707,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     else:
         logger.info("No quantization config found and use original weight and act dtype.")
 
-    # Set VL tag
-    model_config.enable_mm = args.enable_mm
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
