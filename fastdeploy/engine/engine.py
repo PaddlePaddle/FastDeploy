@@ -514,7 +514,7 @@ class LLMEngine:
                     # Since the request is not in scheduler
                     # Send result by zmq directly
                     with self.response_lock:
-                        self.send_response_server.send_response(request_id, error_result)
+                        self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
