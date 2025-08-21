@@ -50,6 +50,10 @@ class EngineArgs:
     """
     The name or path of the model to be used.
     """
+    served_model_name: Optional[str] = None
+    """
+    The name of the model being served.
+    """
     revision: Optional[str] = "master"
     """
     The revision for downloading models.
@@ -378,6 +382,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.model,
             help="Model name or path to be used.",
+        )
+        model_group.add_argument(
+            "--served-model-name",
+            type=nullable_str,
+            default=EngineArgs.served_model_name,
+            help="Served model name",
         )
         model_group.add_argument(
             "--revision",

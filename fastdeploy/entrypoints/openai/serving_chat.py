@@ -46,8 +46,9 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips, max_waiting_time, chat_template):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
         self.engine_client = engine_client
+        self.models = models
         self.pid = pid
         self.master_ip = ips
         self.max_waiting_time = max_waiting_time
@@ -81,6 +82,14 @@ class OpenAIServingChat:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+
+        if self.models:
+            is_supported, request.model = self.models.is_supported_model(request.model)
+            if not is_supported:
+                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                api_server_logger.error(err_msg)
+                return ErrorResponse(message=err_msg, code=400)
+
         try:
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
