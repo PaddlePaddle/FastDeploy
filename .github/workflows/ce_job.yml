@@ -1,0 +1,244 @@
+name: CE Compile Job
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+      - 'release/*'
+permissions: read-all
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  ce_job_pre_check:
+    runs-on: ubuntu-latest
+    env:
+      COMPILE_BRANCH: ${{ vars.COMPILE_BRANCH }}
+      CE_COMPILE_SELECTION: ${{ vars.CE_COMPILE_SELECTION }}
+      COMPILE_USE_PADDLE_WHL_URL_MAPPINGS: ${{ vars.COMPILE_USE_PADDLE_WHL_URL_MAPPINGS }}
+    outputs:
+      branch_match: ${{ steps.set_output.outputs.branch_match }}
+      compile_use_paddle_whl_url: ${{ steps.set_output.outputs.compile_use_paddle_whl_url }}
+      sm8689_match: ${{ steps.set_output.outputs.sm8689_match }}
+      sm8090_match: ${{ steps.set_output.outputs.sm8090_match }}
+
+    steps:
+      - name: Set Version
+        id: set_output
+        env:
+          COMPILE_BRANCH: ${{ env.COMPILE_BRANCH }}
+          CE_COMPILE_SELECTION: ${{ env.CE_COMPILE_SELECTION }}
+          COMPILE_USE_PADDLE_WHL_URL_MAPPINGS: ${{ env.COMPILE_USE_PADDLE_WHL_URL_MAPPINGS }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          # 选择要触发编译任务的分支 done
+          # 选择指定分支要编译的任务 8090或者8689
+          # 指定分支编译要使用的Paddle的安装包,默认使用nightly最新的
+
+          IFS=',' read -ra BRANCHES <<< "$COMPILE_BRANCH"
+          MATCH=false
+          for b in "${BRANCHES[@]}"; do
+            if [[ "$b" == "${GITHUB_REF_NAME}" ]]; then
+              MATCH=true
+              break
+            fi
+          done
+          echo "branch_match=$MATCH" >> $GITHUB_OUTPUT
+
+          # 通过变量CE_COMPILE_SELECTION中的映射关系,决定分支是编译sm8090还是sm8689
+          for pair in $(echo "$CE_COMPILE_SELECTION" | tr ';' ' '); do
+            branch=$(echo "$pair" | cut -d',' -f1)
+            compile_task_list=$(echo "$pair" | cut -d',' -f2)
+
+            if [[ "$branch" == "$GITHUB_REF_NAME" ]]; then
+
+              # 判断里面是否包含 sm8090 或 sm8689
+              if [[ "$compile_task_list" == *"sm8090"* ]]; then
+                echo "sm8090_match=true" >> $GITHUB_OUTPUT
+              fi
+              if [[ "$compile_task_list" == *"sm8689"* ]]; then
+                echo "sm8689_match=true" >> $GITHUB_OUTPUT
+              fi
+              break
+            fi
+          done
+
+          # 通过变量COMPILE_USE_PADDLE_WHL_URL_MAPPINGS中的映射关系,决定是否是安装指定版本的Paddle还是直接安装URL
+          for pair in $(echo $COMPILE_USE_PADDLE_WHL_URL_MAPPINGS | tr ';' ' '); do
+            branch=$(echo "$pair" | cut -d',' -f1)
+            paddle_whl_url=$(echo "$pair" | cut -d',' -f2)
+            if [[ "$branch" == "${{ github.ref_name }}" ]]; then
+              FOUND_PADDLE_URL="$paddle_whl_url"
+              echo "compile_use_paddle_whl_url=${FOUND_PADDLE_URL}" >> $GITHUB_OUTPUT
+              break
+            fi
+          done
+
+  print_ce_job_pre_check_outputs:
+    runs-on: ubuntu-latest
+    needs: ce_job_pre_check
+    steps:
+      - name: Print outputs as JSON
+        run: |
+          echo '${{ toJSON(needs.ce_job_pre_check.outputs) }}'
+
+
+  clone:
+    environment: CodeSync
+    name: FD-Clone-Linux
+    runs-on: ubuntu-latest
+    needs: ce_job_pre_check
+    if: ${{ needs.ce_job_pre_check.outputs.branch_match == 'true' }}
+    outputs:
+      repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
+    steps:
+      - name: Clone FastDeploy
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request'
+                && github.event.pull_request.base.ref
+                || github.ref_name }}
+          submodules: 'recursive'
+          fetch-depth: 1000
+
+      - name: Python Setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Code Info Show and Upload
+        id: set_output
+        env:
+          AK: ${{ secrets.BOS_AK }}
+          SK: ${{ secrets.BOS_SK }}
+        run: |
+          git config --unset http.https://github.com/.extraheader
+          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader'"
+          git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+          echo "Current HEAD Log:"
+          git log --oneline -n 5
+          ls
+          cd ..
+          tar -zcf FastDeploy.tar.gz FastDeploy
+          commit_id=${{ github.sha }}
+          branch_name=${{ github.ref_name }}
+          target_path=paddle-qa/BRANCH/FastDeploy/${branch_name}/${commit_id}
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} FastDeploy.tar.gz ${target_path}
+          target_path_stripped="${target_path#paddle-qa/}"
+          REPO_ARCHIVE_URL=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/FastDeploy.tar.gz
+          echo "repo_archive_url=${REPO_ARCHIVE_URL}" >> $GITHUB_OUTPUT
+
+  resultshow:
+    name: Show Code Archive Output
+    needs: clone
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print wheel path
+        run: |
+          echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"
+
+  build_sm8090:
+    name: BUILD_SM8090
+    needs: [clone, ce_job_pre_check]
+    if: ${{ needs.ce_job_pre_check.outputs.sm8090_match == 'true' }}
+    uses: ./.github/workflows/_build_linux.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "80,90"
+      WITH_NIGHTLY_BUILD: OFF
+      FD_VERSION: 0.0.0
+
+  build_sm8689:
+    name: BUILD_SM8689
+    needs: [clone, ce_job_pre_check]
+    if: ${{ needs.ce_job_pre_check.outputs.sm8689_match == 'true' }}
+    uses: ./.github/workflows/_build_linux.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "86,89"
+      WITH_NIGHTLY_BUILD: OFF
+      FD_VERSION: 0.0.0
+
+  ce_upload_sm8090:
+    environment: CodeSync
+    name: CE_UPLOAD
+    needs: build_sm8090
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ secrets.BOS_AK }}
+      SK: ${{ secrets.BOS_SK }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      COMPILE_ARCH: "80,90"
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Wheel Info Show and Upload
+        if: github.ref_name == 'develop' || github.ref_type == 'tag'
+        run: |
+          echo "The wheel is located at: ${{ needs.build_sm8090.outputs.wheel_path }}"
+          wget -q --no-check-certificate ${{ needs.build_sm8090.outputs.wheel_path }}
+          filename=$(basename ${{ needs.build_sm8090.outputs.wheel_path }})
+
+          commit_id=${{ github.sha }}
+          branch_name=${{ github.ref_name }}
+          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
+
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} ${filename} ${target_path}
+          target_path_stripped="${target_path#paddle-qa/}"
+          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+
+          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/latest
+          python ${push_file} ${filename} ${target_path_latest}
+          target_path_stripped_latest="${target_path_latest#paddle-qa/}"
+          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+
+  ce_upload_sm8689:
+    environment: CodeSync
+    name: CE_UPLOAD
+    needs: build_sm8689
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ secrets.BOS_AK }}
+      SK: ${{ secrets.BOS_SK }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      COMPILE_ARCH: "86,89"
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Wheel Info Show and Upload
+        if: github.ref_name == 'develop' || github.ref_type == 'tag'
+        run: |
+          echo "The wheel is located at: ${{ needs.build_sm8090.outputs.wheel_path }}"
+          wget -q --no-check-certificate ${{ needs.build_sm8090.outputs.wheel_path }}
+          filename=$(basename ${{ needs.build_sm8090.outputs.wheel_path }})
+
+          commit_id=${{ github.sha }}
+          branch_name=${{ github.ref_name }}
+          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
+
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} ${filename} ${target_path}
+          target_path_stripped="${target_path#paddle-qa/}"
+          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+
+          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/latest
+          python ${push_file} ${filename} ${target_path_latest}
+          target_path_stripped_latest="${target_path_latest#paddle-qa/}"
+          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
