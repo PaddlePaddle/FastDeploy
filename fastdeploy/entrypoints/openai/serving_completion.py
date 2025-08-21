@@ -377,6 +377,7 @@ class OpenAIServingCompletion:
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=None,
                         raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                        completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
                         reasoning_content=None,
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
