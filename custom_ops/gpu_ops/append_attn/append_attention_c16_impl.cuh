@@ -249,7 +249,7 @@ __global__ void multi_query_append_attention_kernel(
              num_frags_y,
              num_frags_z>(nullptr,
                           q_base_seq_id_this_block,
-                          kv_idx_base + wid * num_frags_z * 16,
+                          kv_idx_base,
                           q_len,
                           kv_len,
                           chunk_end,
