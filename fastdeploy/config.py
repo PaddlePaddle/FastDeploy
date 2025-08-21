@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
@@ -989,8 +988,7 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-        if test_mode:
-            return
+
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
@@ -1038,20 +1036,12 @@ class FDConfig:
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
 
-        assert self.splitwise_role in ["mixed", "prefill", "decode"]
-        import fastdeploy.model_executor.models  # noqa: F401
-
         # TODO
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if self.model_config.enable_mm:
+        if self.model_config is not None and self.model_config.enable_mm:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
-
-        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
-            self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
-        ), "TP and EP cannot be enabled at the same time"
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.expert_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
@@ -1070,6 +1060,8 @@ class FDConfig:
 
         self.read_from_config()
         self.postprocess()
+        if test_mode:
+            return
         self.check()
         self.print()
 
@@ -1145,6 +1137,11 @@ class FDConfig:
             f"max_long_partial_prefills: {self.max_long_partial_prefills} should "
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
+        assert self.splitwise_role in ["mixed", "prefill", "decode"]
+        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
+        assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
+            self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
+        ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
             if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
@@ -1195,12 +1192,9 @@ class FDConfig:
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 
-    def print(self, file=None):
+    def print(self):
         """
         print all config
-
-        Args:
-            file (str): the path of file to save config
         """
         logger.info("=================== Configuration Information ===============")
         for k, v in self.__dict__.items():
@@ -1219,13 +1213,6 @@ class FDConfig:
             else:
                 logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
-        if file is not None:
-            f = open(file, "a")
-            now_time = datetime.now()
-            f.write(f"{now_time} configuration information as below,\n")
-            for k, v in self.__dict__.items():
-                f.write("{:<20}:{:<6}{}\n".format(k, "", v))
-            f.close()
 
     def init_cache_info(self):
         """
