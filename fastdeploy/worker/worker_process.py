@@ -718,16 +718,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    # Set MoE phase based on splitwise role
-    if parallel_config.splitwise_role == "mixed":
-        parallel_config.moe_phase.phase = "prefill"
-    elif parallel_config.splitwise_role == "prefill":
-        parallel_config.moe_phase = "prefill"
-    elif parallel_config.splitwise_role == "decode":
-        parallel_config.moe_phase = "decode"
-    elif parallel_config.splitwise_role is not None:
-        raise NotImplementedError
-
     fd_config = FDConfig(
         model_config=model_config,
         parallel_config=parallel_config,

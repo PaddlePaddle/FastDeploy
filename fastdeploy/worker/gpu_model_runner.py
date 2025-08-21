@@ -310,6 +310,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 continue
+            logger.info(f"request : {request.eos_token_ids}")
+            logger.info(f"model config : {self.model_config.eos_tokens_lens}")
+
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
@@ -478,6 +481,9 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     return default_value
 
+            logger.info(f"request : {request.eos_token_ids}")
+            logger.info(f"model config : {self.model_config.eos_tokens_lens}")
+            
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
@@ -1301,19 +1307,6 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                        > 1).sum() > 0)
-        
-        is_decode_batch_list = []
-        import paddle.distributed as dist
-        if dist.is_initialized():
-            paddle.distributed.all_gather_object(is_decode_batch_list, is_decode_batch)
-        else:
-            is_decode_batch_list = [is_decode_batch]  # signal gpu
-        is_decode_batch = all(is_decode_batch_list)
-        
-        self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
-
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
@@ -1338,7 +1331,6 @@ class GPUModelRunner(ModelRunnerBase):
             )
             hidden_states = model_output
         else:
-            self.forward_meta.is_decode_batch = is_decode_batch
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
@@ -1371,6 +1363,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
+            print("gaoziyuna test !!!!", sampler_output)
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
 
