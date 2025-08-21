@@ -1,5 +1,5 @@
 import asyncio
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import httpx
 from pydantic import BaseModel, HttpUrl
@@ -25,6 +25,11 @@ class VideoEncodeRequest(BaseEncodeRequest):
     frames: int
 
 
+class ImageDecodeRequest(BaseModel):
+    req_id: str
+    data: list[Any]
+
+
 class AsyncTokenizerClient:
     def __init__(
         self,
@@ -46,10 +51,13 @@ class AsyncTokenizerClient:
         self.max_wait = max_wait
 
     async def encode_image(self, request: ImageEncodeRequest):
-        return await self._async_request("image", request.__dict__)
+        return await self._async_encode_request("image", request.__dict__)
 
     async def encode_video(self, request: VideoEncodeRequest):
-        return await self._async_request("video", request.__dict__)
+        return await self._async_encode_request("video", request.__dict__)
+
+    async def decode_image(self, request: ImageEncodeRequest):
+        return await self._async_decode_request("image", request.__dict__)
 
     async def log_request(self, request):
         data_processor_logger.debug(f">>> Request: {request.method} {request.url}")
@@ -61,7 +69,7 @@ class AsyncTokenizerClient:
         data_processor_logger.debug(f"<<< Response status: {response.status_code}")
         data_processor_logger.debug(f"<<< Headers: {response.headers}")
 
-    async def _async_request(self, type: str, request: dict):
+    async def _async_encode_request(self, type: str, request: dict):
         if not self.base_url:
             raise ValueError("Missing base_url")
 
@@ -117,6 +125,27 @@ class AsyncTokenizerClient:
 
                 await asyncio.sleep(self.poll_interval)
 
+    async def _async_decode_request(self, type: str, request: dict):
+        if not self.base_url:
+            raise ValueError("Missing base_url")
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout, event_hooks={"request": [self.log_request], "response": [self.log_response]}
+        ) as client:
+            try:
+                url = None
+                if type == "image":
+                    url = f"{self.base_url}/image/decode"
+                else:
+                    raise ValueError("Invalid type")
+                resp = await client.post(url, json=request)
+                resp.raise_for_status()
+                if resp.json().get("code") != 0:
+                    raise RuntimeError(f"Tokenize task creation failed, {resp.json().get('message')}")
+                return resp.json().get("result")
+            except httpx.RequestError as e:
+                raise RuntimeError(f"Failed to decode: {e}") from e
+
 
 async def main():
     """
@@ -127,15 +156,15 @@ async def main():
     client = AsyncTokenizerClient(base_url=base_url)
 
     # # 测试图片编码请求
-    image_request = ImageEncodeRequest(
+    image_encode_request = ImageEncodeRequest(
         version="v1", req_id="req_image_001", is_gen=False, resolution=512, image_url="http://example.com/image.jpg"
     )
 
-    image_result = await client.encode_image(image_request)
-    print("Image encode result:", image_result)
+    image_encode_ret = await client.encode_image(image_encode_request)
+    print(f"Image encode result:{image_encode_ret}")
 
     # 测试视频编码请求
-    video_req = VideoEncodeRequest(
+    video_encode_req = VideoEncodeRequest(
         version="v1",
         req_id="req_video_001",
         video_url="http://example.com/video.mp4",
@@ -145,8 +174,23 @@ async def main():
         end_ts=5,
         frames=1,
     )
-    video_ret = await client.encode_video(video_req)
-    print(f"Video Encode Result:{video_ret}")
+    video_encode_result = await client.encode_video(video_encode_req)
+    print(f"Video Encode Result:{video_encode_result}")
+    # 测试图片解码请求
+    with open("./image_decode_demo.json", "r", encoding="utf-8") as file:
+        import json
+        import time
+
+        start_time = time.time()
+        start_process_time = time.process_time()  # 记录开始时间
+        json_data = json.load(file)
+        image_decoding_request = ImageDecodeRequest(req_id="req_image_001", data=json_data.get("data"))
+        # import pdb; pdb.set_trace()
+        image_decode_result = await client.decode_image(image_decoding_request)
+        print(f"Image decode result:{image_decode_result}")
+        elapsed_time = time.time() - start_time
+        elapsed_process_time = time.process_time() - start_process_time
+        print(f"decode elapsed_time: {elapsed_time:.6f}s, elapsed_process_time: {elapsed_process_time:.6f}s")
 
 
 if __name__ == "__main__":
