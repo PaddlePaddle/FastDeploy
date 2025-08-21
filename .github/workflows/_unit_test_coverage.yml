@@ -144,6 +144,7 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
+          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple

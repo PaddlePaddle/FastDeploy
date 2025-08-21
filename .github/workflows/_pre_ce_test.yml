@@ -129,6 +129,7 @@ jobs:
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
+          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install ${fd_wheel_url}
           bash scripts/run_pre_ce.sh
