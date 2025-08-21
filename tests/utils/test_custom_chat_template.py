@@ -170,6 +170,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         ernie_processor.process_request_dict = mock_process_request
         ernie_processor.messages2ids = mock_messages2ids
         ernie_processor.eos_token_ids = [1]
+        ernie_processor.reasoning_parser = MagicMock()
         result = ernie_processor.process_request(mock_request, chat_template="hello")
         self.assertEqual("hello", result.chat_template)
 

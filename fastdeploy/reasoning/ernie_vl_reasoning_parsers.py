@@ -46,6 +46,9 @@ class ErnieVLReasoningParser(ReasoningParser):
         if self.think_end_token_id is None:
             raise RuntimeError("Ernie VL reasoning parser could not locate think end " "tokens in the tokenizer!")
 
+    def is_reasoning_end(self, input_ids: list[int]) -> bool:
+        return self.think_end_token_id in input_ids
+
     def extract_reasoning_content_streaming(
         self,
         previous_text: str,
@@ -65,18 +68,16 @@ class ErnieVLReasoningParser(ReasoningParser):
         """
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
-            return "", ""
+            return None
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.end_token)
             reasoning_content = delta_text[:end_index]
             content = delta_text[end_index + len(self.end_token) :]
+            return DeltaMessage(reasoning_content=reasoning_content, content=content)
         elif self.think_end_token_id in previous_token_ids:
-            reasoning_content = ""
-            content = delta_text
+            return DeltaMessage(content=delta_text)
         else:
-            reasoning_content = delta_text
-            content = ""
-        return reasoning_content, content
+            return DeltaMessage(reasoning_content=delta_text)
 
     def extract_reasoning_content(
         self, model_output: str, request: ChatCompletionRequest
@@ -95,7 +96,6 @@ class ErnieVLReasoningParser(ReasoningParser):
         # Check if the model output contains the </think> tokens.
         if self.think_end_token not in model_output:
             return "", model_output
-        # Extract reasoning content from the model output.
         reasoning_content, _, content = model_output.partition(self.think_end_token)
 
         final_content = content or ""

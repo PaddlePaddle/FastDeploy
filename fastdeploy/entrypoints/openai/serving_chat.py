@@ -279,22 +279,20 @@ class OpenAIServingChat:
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
 
-                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
-                        tool_delta_message = output["tool_delta_message"]
-                        if tool_delta_message is None:
+                    delta_message = DeltaMessage(
+                        content=delta_text,
+                        reasoning_content="",
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        tool_calls=None,
+                    )
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
                             continue
-                        delta_message = tool_delta_message
-                        delta_message.reasoning_content = output.get("reasoning_content")
-                        if delta_message.tool_calls:
-                            tool_called = True
-                    else:
-                        delta_message = DeltaMessage(
-                            content=delta_text,
-                            reasoning_content=output.get("reasoning_content"),
-                            prompt_token_ids=None,
-                            completion_token_ids=None,
-                            tool_calls=None,
-                        )
+                        delta_message.content = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        delta_message.tool_calls = delta_message_output.tool_calls
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -475,7 +473,7 @@ class OpenAIServingChat:
         max_tokens = request.max_completion_tokens or request.max_tokens
         if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
-            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+            if output.get("tool_call"):
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
