@@ -17,6 +17,7 @@
 """
 maca platform file
 """
+import traceback
 
 import paddle
 from paddleformers.utils.log import logger
@@ -43,7 +44,8 @@ class MACAPlatform(Platform):
             logger.warning(
                 "You are using GPU version PaddlePaddle, but there is no GPU "
                 "detected on your machine. Maybe CUDA devices is not set properly."
-                f"\n Original Error is {e}"
+                f"\n Original Error is {e}, "
+                f"{str(traceback.format_exc())}"
             )
             return False
 

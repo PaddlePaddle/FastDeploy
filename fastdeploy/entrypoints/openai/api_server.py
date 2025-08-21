@@ -18,6 +18,7 @@ import asyncio
 import os
 import threading
 import time
+import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from multiprocessing import current_process
@@ -159,7 +160,7 @@ async def lifespan(app: FastAPI):
         multiprocess.mark_process_dead(os.getpid())
         api_server_logger.info(f"Closing metrics client pid: {pid}")
     except Exception as e:
-        api_server_logger.warning(e)
+        api_server_logger.warning(f"exit error: {e}, {str(traceback.format_exc())}")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -355,7 +356,7 @@ def launch_api_server() -> None:
             log_level="info",
         )  # set log level to error to avoid log
     except Exception as e:
-        api_server_logger.error(f"launch sync http server error, {e}")
+        api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
 
 metrics_app = FastAPI()
