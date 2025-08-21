@@ -955,7 +955,9 @@ __global__ void append_decode_cache_int8_rope_kernel(
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
       uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+
 #pragma unroll
       for (int i = 0; i < HalfVecSize; i++) {
         // dequant + add_bias + rope
