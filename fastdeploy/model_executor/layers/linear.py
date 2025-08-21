@@ -423,7 +423,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1
-                if isinstance(loaded_weight, np.ndarray) or isinstance(loaded_weight, paddle.Tensor):
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
@@ -541,7 +541,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1
-                if isinstance(loaded_weight, np.ndarray) or isinstance(loaded_weight, paddle.Tensor):
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
@@ -597,7 +597,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1
-                if isinstance(loaded_weight, np.ndarray) or isinstance(loaded_weight, paddle.Tensor):
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
