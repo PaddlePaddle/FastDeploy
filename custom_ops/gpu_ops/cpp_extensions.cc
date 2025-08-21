@@ -530,7 +530,7 @@ paddle::Tensor FusedHadamardQuantFp8Func(
 int64_t init_custom_all_reduce(const std::vector<int64_t>& fake_ipc_ptrs,
                       paddle::Tensor& rank_data, int64_t rank, bool full_nvlink);
 
-void all_reduce(int64_t _fa, paddle::Tensor& inp, paddle::Tensor& out,
+void all_reduce(paddle::Tensor& inp, paddle::Tensor& out, int64_t _fa,
                 int64_t reg_buffer, int64_t reg_buffer_sz_bytes);
 
 void dispose(int64_t _fa);
