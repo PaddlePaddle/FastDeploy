@@ -83,7 +83,7 @@ class OpenAIServingModels:
         """
         if not self._check_master():
             err_msg = (
-                f"Only master node can accept models request, please send request to master node: {self.pod_ips[0]}"
+                f"Only master node can accept models request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
