@@ -706,10 +706,25 @@ def test_streaming_completion_with_prompt_token_ids(openai_client, capsys):
             assert chunk.usage.prompt_tokens == 9
 
 
-def test_non_streaming_chat_completion_disable_chat_template(openai_client, capsys):
+def test_non_streaming_chat_with_disable_chat_template(openai_client, capsys):
     """
     Test disable_chat_template option in chat functionality with the local service.
     """
+    enabled_response = openai_client.chat.completions.create(
+        model="default",
+        messages=[],
+        max_tokens=10,
+        temperature=0.0,
+        top_p=0,
+        extra_body={
+            "disable_chat_template": True,
+            "prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        },
+        stream=False,
+    )
+    assert hasattr(enabled_response, "choices")
+    assert len(enabled_response.choices) > 0
+
     enabled_response = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
@@ -939,3 +954,10 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
         assert hasattr(chunk.choices[0], "text")
         output_1.append(chunk.choices[0].text)
     assert output_0 not in output_1
+
+
+def test_chat_with_empty_message_list(api_url, headers):
+    for is_stream in [True, False]:
+        payload = {"messages": [], "stream": is_stream}
+        response = requests.post(api_url, headers=headers, json=payload)
+        assert response.status_code == 400
