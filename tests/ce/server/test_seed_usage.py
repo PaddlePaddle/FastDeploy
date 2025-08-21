@@ -5,6 +5,7 @@
 
 import json
 
+import pytest
 from core import TEMPLATE, URL, build_request_payload, get_stream_chunks, send_request
 
 
@@ -44,7 +45,7 @@ def test_seed_stream():
         assert l1 == l2, f"top_p=0, 固定seed, logprobs[{idx}]不一致"
 
 
-def test_usage_stream():
+def test_chat_usage_stream():
     """测试payload max_tokens参数"""
     data = {
         "messages": [
@@ -65,9 +66,103 @@ def test_usage_stream():
 
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert data["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert data["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
+
+
+def test_chat_usage_non_stream():
+    """测试非流式 usage"""
+    data = {
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "牛顿的三大运动定律是什么？"},
+        ],
+        "max_tokens": 50,
+        "stream": False,
+        "metadata": {"min_tokens": 10},
+    }
+
+    payload = build_request_payload(TEMPLATE, data)
+
+    response = send_request(url=URL, payload=payload).json()
+    # print(response)
+    # chunks = get_stream_chunks(response)
+    # for idx, chunk in enumerate(chunks):
+    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
+
+    usage = response["usage"]
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
+
+
+@pytest.mark.skip(reason="修复后打开")
+def test_non_chat_usage_stream():
+    """测试completions 流式 usage"""
+    data = {
+        "prompt": "牛顿的三大运动定律是什么？",
+        "max_tokens": 50,
+        "stream": True,
+        "stream_options": {"include_usage": True, "continuous_usage_stats": True},
+        "metadata": {"min_tokens": 10},
+    }
+    completion_url = URL.replace("chat/completions", "completions")
+
+    payload = build_request_payload(TEMPLATE, data)
+
+    response = send_request(url=completion_url, payload=payload, stream=True)
+    chunks = get_stream_chunks(response)
+    # for idx, chunk in enumerate(chunks):
+    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
+
+    usage = chunks[-1]["usage"]
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
+
+
+def test_non_chat_usage_non_stream():
+    """测试completions 非流式 usage"""
+    data = {
+        "prompt": "牛顿的三大运动定律是什么？",
+        "max_tokens": 50,
+        "stream": False,
+        "metadata": {"min_tokens": 10},
+    }
+    completion_url = URL.replace("chat/completions", "completions")
+
+    payload = build_request_payload(TEMPLATE, data)
+
+    response = send_request(url=completion_url, payload=payload).json()
+    # print(response)
+    # chunks = get_stream_chunks(response)
+    # for idx, chunk in enumerate(chunks):
+    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
+
+    usage = response["usage"]
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert data["max_tokens"] >= usage["completion_tokens"], f"completion_tokens大于max_tokens, usage: {usage}"
+    assert (
+        data["metadata"]["min_tokens"] <= usage["completion_tokens"]
+    ), f"completion_tokens小于min_tokens, usage: {usage}"
+    assert (
+        usage["total_tokens"] == total_tokens
+    ), f"total_tokens不等于prompt_tokens + completion_tokens, usage: {usage}"
 
 
 if __name__ == "__main__":
