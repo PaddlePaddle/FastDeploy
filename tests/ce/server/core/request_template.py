@@ -18,8 +18,18 @@ TOKEN_LOGPROB = {
     "max_tokens": 10000,
 }
 
+TOKEN_NORMAL = {
+    "model": "default",
+    "temperature": 0,
+    "top_p": 0,
+    "seed": 33,
+    "stream": True,
+    "max_tokens": 10000,
+}
+
 
 TEMPLATES = {
     "TOKEN_LOGPROB": TOKEN_LOGPROB,
+    "TOKEN_NORMAL": TOKEN_NORMAL,
     # "ANOTHER_TEMPLATE": ANOTHER_TEMPLATE
 }
