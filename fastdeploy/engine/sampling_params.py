@@ -99,7 +99,7 @@ class SamplingParams:
     min_tokens: int = 1
     logprobs: Optional[int] = None
     bad_words: Optional[List[str]] = None
-    _bad_words_token_ids: Optional[List[int]] = None
+    bad_words_token_ids: Optional[List[int]] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -131,6 +131,7 @@ class SamplingParams:
         min_tokens=1,
         logprobs=None,
         bad_words=None,
+        bad_words_token_ids=None,
     ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
@@ -151,6 +152,7 @@ class SamplingParams:
             min_tokens=min_tokens,
             logprobs=logprobs,
             bad_words=bad_words,
+            bad_words_token_ids=bad_words_token_ids,
         )
 
     def __post_init__(self):
@@ -207,7 +209,7 @@ class SamplingParams:
         """Support bad words"""
         if self.bad_words is None:
             return
-        self._bad_words_token_ids = []
+        self.bad_words_token_ids = []
         for bad_word in self.bad_words:
             # To prohibit words both at the beginning
             # and in the middle of text
@@ -236,12 +238,8 @@ class SamplingParams:
                         )
                     continue
 
-                if prompt_token_ids not in self._bad_words_token_ids:
-                    self._bad_words_token_ids.extend(prompt_token_ids)
-
-    @property
-    def bad_words_token_ids(self) -> Optional[List[list[int]]]:
-        return self._bad_words_token_ids
+                if prompt_token_ids not in self.bad_words_token_ids:
+                    self.bad_words_token_ids.extend(prompt_token_ids)
 
 
 @dataclass

@@ -391,6 +391,7 @@ class CompletionRequest(BaseModel):
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    bad_words_token_ids: Optional[List[int]] = None
     # doc: end-completion-sampling-params
 
     # doc: start-completion-extra-params
@@ -526,6 +527,7 @@ class ChatCompletionRequest(BaseModel):
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    bad_words_token_ids: Optional[List[int]] = None
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     # doc: end-chat-completion-sampling-params
