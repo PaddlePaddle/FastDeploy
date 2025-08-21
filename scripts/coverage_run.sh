@@ -1,6 +1,7 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 run_path="$DIR/../tests/"
+export PYTEST_INI="$DIR/../pytest.ini"
 
 cd "$run_path" || exit 1
 
@@ -22,7 +23,7 @@ special_tests=(
 for test_file in "${special_tests[@]}"; do
     if [ -f "$test_file" ]; then
         echo "Running special test: $test_file"
-        python -m coverage run --parallel-mode "$test_file"
+        python -m coverage run "$test_file"
         status=$?
         if [ "$status" -ne 0 ]; then
             echo "$test_file" >> "$failed_tests_file"
@@ -35,8 +36,7 @@ done
 # 运行所有测试（pytest.ini 会自动忽略不需要的）
 # --maxfail=0 表示不提前停止
 # --junitxml 可以生成 XML 报告，便于后续统计
-pytest --maxfail=0 --disable-warnings -q --junitxml=report.xml
-
+python -m coverage run -m pytest -c $PYTEST_INI --maxfail=0 --disable-warnings -q --junitxml=report.xml
 status=$?
 
 # 提取失败的 case 列表（可选）
