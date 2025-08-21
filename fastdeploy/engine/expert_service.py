@@ -143,7 +143,7 @@ class ExpertService:
         self.token_processor.run()
 
         self.cfg.init_cache_info()
-        if cfg.scheduler_config.name == "splitwise":
+        if self.cfg.scheduler_config.name == "splitwise":
             role = self.cfg.splitwise_role
             host_ip = self.cfg.host_ip
             disaggregate = self.cfg.disaggregate_info
