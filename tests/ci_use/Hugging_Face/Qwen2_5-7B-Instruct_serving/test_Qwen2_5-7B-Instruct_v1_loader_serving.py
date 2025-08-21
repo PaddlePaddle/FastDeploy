@@ -109,7 +109,7 @@ def setup_and_run_server():
         "128",
         "--load_choices",
         "default_v1",
-        "--hugging-face-format",
+        "--hugging_face_format",
     ]
 
     # Start subprocess in new process group

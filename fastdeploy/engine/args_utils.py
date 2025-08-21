@@ -616,7 +616,7 @@ class EngineArgs:
                  default/new_loader.",
         )
         load_group.add_argument(
-            "--hugging-face-format",
+            "--hugging_face_format",
             action="store_true",
             default=EngineArgs.hugging_face_format,
             help="Enable when loading models in Hugging Face format",
