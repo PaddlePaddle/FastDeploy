@@ -17,7 +17,7 @@ pwd
 
 git config --global --add safe.directory /workspace1/FastDeploy
 
-python -m pip install --force-reinstall --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+python -m pip install paddlepaddle-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 python -m pip install --upgrade --force-reinstall -r requirements/unittest/requirements.txt
 bash tools/build_wheel.sh
 
