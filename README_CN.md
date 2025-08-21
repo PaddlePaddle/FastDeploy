@@ -1,5 +1,4 @@
 [English](README.md) | 简体中文
-[English](README.md) | 简体中文
 <p align="center">
   <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://github.com/user-attachments/assets/42b0039f-39e3-4279-afda-6d1865dfbffb" width="500"></a>
 </p>
@@ -24,9 +23,10 @@
 </p>
 
 --------------------------------------------------------------------------------
-# FastDeploy 2.0：基于飞桨的大语言模型与视觉语言模型推理部署工具包
+# FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
 
 ## 最新活动
+**[2025-08] 🔥 FastDeploy v2.1 全新发布:** 全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
 
 **[2025-07] 《FastDeploy2.0推理部署实测》专题活动已上线!** 完成文心4.5系列开源模型的推理部署等任务，即可获得骨瓷马克杯等FastDeploy2.0官方周边及丰富奖金！🎁 欢迎大家体验反馈～ 📌[报名地址](https://www.wjx.top/vm/meSsp3L.aspx#)   📌[活动详情](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
@@ -41,7 +41,6 @@
 - ⏩ **高级加速技术**：推测解码、多令牌预测（MTP）及分块预填充
 - 🖥️ **多硬件支持**：NVIDIA GPU、昆仑芯XPU、海光DCU、昇腾NPU、天数智芯GPU、燧原GCU、沐曦GPU等
 
-
 ## 要求
 
 - 操作系统: Linux
@@ -49,14 +48,15 @@
 
 ## 安装
 
-FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU**、**天数（Iluvatar）GPU**、**燧原（Enflame）GCU** 以及其他硬件上进行推理部署。详细安装说明如下：
+FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU**、**天数（Iluvatar）GPU**、**燧原（Enflame）GCU**、**海光（Hygon）DCU** 以及其他硬件上进行推理部署。详细安装说明如下：
 
 - [英伟达 GPU](./docs/zh/get_started/installation/nvidia_gpu.md)
 - [昆仑芯 XPU](./docs/zh/get_started/installation/kunlunxin_xpu.md)
 - [天数 CoreX](./docs/zh/get_started/installation/iluvatar_gpu.md)
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
+- [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
 
-**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU、海光（Hygon）DCU 和摩尔线程（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
+**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 和 沐曦（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
 
 ## 入门指南
 
@@ -73,13 +73,13 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 
 | Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
 |:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
-|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| WIP |128K |
-|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| WIP | 128K |
+|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| ✅ |128K |
+|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| ✅ | 128K |
 |ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
 |ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
 |ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ✅ | ✅|128K |
-|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅|128K |
-|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅| 128K |
+|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌  | ✅|128K |
+|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌ | ✅| 128K |
 
 ## 进阶用法
 

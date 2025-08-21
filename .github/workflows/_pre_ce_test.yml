@@ -27,13 +27,10 @@ on:
         type: string
         default: ""
 
-concurrency:
-  group: ${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   run_ce_cases:
     runs-on: [self-hosted, PRE_CE_RUN_2Card]
+    timeout-minutes: 60
     steps:
       - name: Print current runner name
         run: |
@@ -132,7 +129,7 @@ jobs:
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install ${fd_wheel_url}
           bash scripts/run_pre_ce.sh
           '

@@ -162,25 +162,25 @@ def pre_compile_from_config(config_file: str, num_threads: int, expert_parallel:
 
 
 def main(args):
-    pre_compile_from_config(args.config_file, args.num_threads, args.expert_parallel)
+    pre_compile_from_config(args.config_file, args.num_threads, args.expert_parallel_size)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config_file",
+        "--config-file",
         type=str,
         default="./deep_gemm_pre_compile_config.jsonl",
     )
     parser.add_argument(
-        "--expert_parallel",
+        "--expert-parallel-size",
         "--ep",
         type=int,
         default=8,
     )
     parser.add_argument(
-        "--num_threads",
+        "--num-threads",
         type=int,
         default=16,
     )
