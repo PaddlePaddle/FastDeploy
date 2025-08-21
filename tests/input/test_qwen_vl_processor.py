@@ -21,12 +21,12 @@ import numpy as np
 from PIL import Image
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qwen_mm_processor import DataProcessor
 from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
 
 
 def mock_pil_image(height, width):
-    """Generate mock random RGB image
+    """
+    Generate mock random RGB image
 
     Args:
         height: Image height in pixels
@@ -39,80 +39,50 @@ def mock_pil_image(height, width):
     return Image.fromarray(rgb_image)
 
 
-def mock_parse_chat_messages():
-    """Generate mock chat messages with image, video and text content
-
-    Returns:
-        List of chat message dictionaries containing:
-        - Mock image data (480x640 pixels)
-        - Mock video data (dummy bytes)
-        - Sample text prompt
+def mock_read_frames(height: int, width: int, nums_frame: int, fps: int):
     """
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "image_url": {},
-                    "image": mock_pil_image(480, 640),
-                },
-                {
-                    "type": "video",
-                    "video_url": {},
-                    "video": b"123",
-                },
-                {"type": "text", "text": "Describe image and video."},
-            ],
-        }
-    ]
-    return messages
+    Generate mock video frames with metadata for testing purposes
 
-
-def mock_video_frames(num_frames, height, width):
-    """Generate mock video frames with random pixel data
+    Creates synthetic video data by generating random RGB frames and constructing
+    corresponding metadata to simulate real video processing.
 
     Args:
-        num_frames: Number of frames to generate
-        height: Frame height in pixels
-        width: Frame width in pixels
+        height (int): Height of video frames in pixels
+        width (int): Width of video frames in pixels
+        nums_frame (int): Number of frames to generate
+        fps (int): Frames per second for the mock video
 
     Returns:
-        Numpy array of shape (num_frames, height, width, 3)
-        containing random RGB frames
+        tuple: A tuple containing:
+            frames (numpy.ndarray): Array of shape (nums_frame, height, width, 3)
+                containing randomly generated RGB frames
+            meta (dict): Dictionary with video metadata:
+                - fps (int): Frames per second (same as input)
+                - duration (float): Calculated duration in seconds (nums_frame/fps)
+                - num_of_frame (int): Number of frames (same as nums_frame input)
     """
     frames = []
-    for i in range(num_frames):
+    for _ in range(nums_frame):
         frame = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
         frames.append(frame)
-    return np.stack(frames, axis=0)
+    frames = np.stack(frames, axis=0)
 
-
-def mock_load_and_process_video():
-    """Mock video loading and processing
-
-    Returns:
-        Tuple containing:
-        - frames: 3 mock video frames (480x640 resolution)
-        - meta: Dictionary with mock video metadata:
-            * fps: 1
-            * duration: 3 seconds
-            * num_of_frame: 3
-    """
-    frames = mock_video_frames(num_frames=3, height=480, width=640)
     meta = {
-        "fps": 1,
-        "duration": 3,
-        "num_of_frame": 3,
+        "fps": fps,
+        "duration": nums_frame / fps,
+        "num_of_frame": nums_frame,
     }
     return frames, meta
 
 
 class TestQwenVLProcessor(unittest.TestCase):
-    """Unit tests for Qwen Vision-Language Processor functionality"""
+    """
+    Unit tests for Qwen Vision-Language Processor functionality
+    """
 
     def setUp(self):
-        """Initialize test case with:
+        """
+        Initialize test case with:
         - Mock configuration
         - Patched message parsing and video processing methods
         - QwenVLProcessor instance with test parameters
@@ -120,15 +90,20 @@ class TestQwenVLProcessor(unittest.TestCase):
         config = MagicMock()
         config.vision_config.tokens_per_second = 2
 
-        self.patcher_parse_chat_messages = patch.object(
-            DataProcessor, "_parse_chat_messages", return_value=mock_parse_chat_messages()
+        self.patcher_parse_image = patch(
+            "fastdeploy.entrypoints.chat_utils.MultiModalPartParser.parse_image", return_value=mock_pil_image(480, 640)
         )
-        self.patcher_parse_chat_messages.start()
+        self.patcher_parse_image.start()
 
-        self.patcher_load_and_process_video = patch.object(
-            DataProcessor, "_load_and_process_video", return_value=mock_load_and_process_video()
+        self.patcher_parse_video = patch(
+            "fastdeploy.entrypoints.chat_utils.MultiModalPartParser.parse_video", return_value=b"123"
         )
-        self.patcher_load_and_process_video.start()
+        self.patcher_parse_video.start()
+
+        self.patcher_read_frames = patch(
+            "fastdeploy.input.qwen_mm_processor.process.read_frames", return_value=mock_read_frames(480, 640, 5, 2)
+        )
+        self.patcher_read_frames.start()
 
         mm_processor_kwargs = {
             "video_max_frames": 10,
@@ -136,8 +111,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        # model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
-        model_name_or_path = "./data/models/paddle/Qwen2.5-VL-3B-Instruct"
+        model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
         self.processor = QwenVLProcessor(
             config=config,
             model_name_or_path=model_name_or_path,
@@ -149,11 +123,13 @@ class TestQwenVLProcessor(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Clean up test case by stopping all mock patches"""
-        self.patcher_parse_chat_messages.stop()
-        self.patcher_load_and_process_video.stop()
+        self.patcher_read_frames.stop()
+        self.patcher_parse_image.stop()
+        self.patcher_parse_video.stop()
 
     def test_process_request(self):
-        """Test processing of Request object with multimodal input
+        """
+        Test processing of Request object with multimodal input
 
         Validates:
         1. Token ID lengths match position_ids and token_type_ids shapes
@@ -191,7 +167,8 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
     def test_process_request_dict(self):
-        """Test processing of dictionary-format request with multimodal input
+        """
+        Test processing of dictionary-format request with multimodal input
 
         Validates:
         1. Token ID lengths match position_ids and token_type_ids shapes
@@ -233,7 +210,8 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(result["multimodal_inputs"]["video_cnt"], 1)
 
     def test_prompt(self):
-        """Test processing of prompt with image and video placeholders
+        """
+        Test processing of prompt with image and video placeholders
 
         Validates:
         1. Token ID lengths match position_ids and token_type_ids shapes
@@ -246,7 +224,7 @@ class TestQwenVLProcessor(unittest.TestCase):
             "prompt": "<|image@placeholder|><|video@placeholder|>Describe image and video.",
             "multimodal_data": {
                 "image": [mock_pil_image(10, 2100)],
-                "video": [b"123"],
+                "video": [{"video": b"123", "fps": 5}],
             },
         }
 

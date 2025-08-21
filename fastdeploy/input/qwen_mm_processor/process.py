@@ -19,14 +19,13 @@ from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 from paddleformers.transformers import AutoTokenizer
-from PIL import Image
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.mm_processor import IDS_TYPE_FLAG
 from fastdeploy.utils import data_processor_logger
 
 from .image_processor import ImageProcessor
-from .process_video import read_video_decord, sample_frames
+from .process_video import read_frames, sample_frames
 
 
 class DataProcessor:
@@ -205,21 +204,6 @@ class DataProcessor:
 
         return self._pack_outputs(outputs)
 
-    def _parse_chat_messages(self, request):
-        """
-        Parse chat messages from request into structured format.
-
-        Args:
-            request (dict): Input request containing chat messages
-
-        Returns:
-            list: Parsed list of message dictionaries with:
-                - role (str): Message role (user/assistant)
-                - content (str): Message text content
-                - images (list, optional): List of image data if present
-        """
-        return parse_chat_messages(request.get("messages"))
-
     def request2ids(
         self, request: Dict[str, Any], tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
@@ -250,7 +234,7 @@ class DataProcessor:
         }
 
         # Parse and validate chat messages
-        messages = self._parse_chat_messages(request)
+        messages = parse_chat_messages(request.get("messages"))
         image_message_list = []  # Store visual content messages
 
         for msg in messages:
@@ -457,14 +441,7 @@ class DataProcessor:
                 - frames: Processed video frames as numpy array
                 - metadata: Updated video metadata dictionary
         """
-        reader, meta = read_video_decord(url)
-
-        frames = []
-        for i in range(meta["num_of_frame"]):
-            frame = reader[i].asnumpy()
-            image = Image.fromarray(frame, "RGB")
-            frames.append(image)
-        frames = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
+        frames, meta = read_frames(url)
 
         # Apply frame sampling if fps or target_frames specified
         fps = item.get("fps", None)
@@ -490,6 +467,7 @@ class DataProcessor:
             meta["num_of_frame"] = frames.shape[0]
             if fps is not None:
                 meta["fps"] = fps  # Use specified fps
+                meta["duration"] = frames.shape[0] / fps
             else:
                 meta["fps"] = frames.shape[0] / meta["duration"]  # Calculate fps from sampled frames
 
