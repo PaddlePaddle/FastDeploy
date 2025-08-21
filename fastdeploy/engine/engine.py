@@ -439,6 +439,8 @@ class LLMEngine:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
+                main_process_metrics.num_requests_waiting.dec(len(tasks))
+                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
@@ -476,6 +478,7 @@ class LLMEngine:
                     request = Request.from_dict(data)
                     start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
 
+                    main_process_metrics.requests_number.inc()
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None

@@ -154,6 +154,22 @@ class MetricsManager:
     spec_decode_num_emitted_tokens_total: "Counter"
     spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
+    # for YIYAN Adapter
+    prefix_cache_token_num: "Gauge"
+    prefix_gpu_cache_token_num: "Gauge"
+    prefix_cpu_cache_token_num: "Gauge"
+    prefix_ssd_cache_token_num: "Gauge"
+    batch_size: "Gauge"
+    max_batch_size: "Gauge"
+    available_gpu_block_num: "Gauge"
+    free_gpu_block_num: "Gauge"
+    max_gpu_block_num: "Gauge"
+    available_gpu_resource: "Gauge"
+    requests_number: "Counter"
+    send_cache_failed_num: "Counter"
+    first_token_latency: "Gauge"
+    infer_latency: "Gauge"
+
     # 定义所有指标配置
     METRICS = {
         "num_requests_running": {
@@ -256,6 +272,91 @@ class MetricsManager:
             "type": Counter,
             "name": "fastdeploy:request_success_total",
             "description": "Total number of successfully processed requests",
+            "kwargs": {},
+        },
+        # for YIYAN Adapter
+        "prefix_cache_token_num": {
+            "type": Counter,
+            "name": "fastdeploy:prefix_cache_token_num",
+            "description": "Total number of cached tokens",
+            "kwargs": {},
+        },
+        "prefix_gpu_cache_token_num": {
+            "type": Counter,
+            "name": "fastdeploy:prefix_gpu_cache_token_num",
+            "description": "Total number of cached tokens on GPU",
+            "kwargs": {},
+        },
+        "prefix_cpu_cache_token_num": {
+            "type": Counter,
+            "name": "fastdeploy:prefix_cpu_cache_token_num",
+            "description": "Total number of cached tokens on CPU",
+            "kwargs": {},
+        },
+        "prefix_ssd_cache_token_num": {
+            "type": Counter,
+            "name": "fastdeploy:prefix_ssd_cache_token_num",
+            "description": "Total number of cached tokens on SSD",
+            "kwargs": {},
+        },
+        "batch_size": {
+            "type": Gauge,
+            "name": "fastdeploy:batch_size",
+            "description": "Real batch size during inference",
+            "kwargs": {},
+        },
+        "max_batch_size": {
+            "type": Gauge,
+            "name": "fastdeploy:max_batch_size",
+            "description": "Maximum batch size determined when service started",
+            "kwargs": {},
+        },
+        "available_gpu_block_num": {
+            "type": Gauge,
+            "name": "fastdeploy:available_gpu_block_num",
+            "description": "Number of available gpu blocks in cache, including prefix caching blocks that are not officially released",
+            "kwargs": {},
+        },
+        "free_gpu_block_num": {
+            "type": Gauge,
+            "name": "fastdeploy:free_gpu_block_num",
+            "description": "Number of free blocks in cache",
+            "kwargs": {},
+        },
+        "max_gpu_block_num": {
+            "type": Gauge,
+            "name": "fastdeploy:max_gpu_block_num",
+            "description": "Number of total blocks determined when service started",
+            "kwargs": {},
+        },
+        "available_gpu_resource": {
+            "type": Gauge,
+            "name": "fastdeploy:available_gpu_resource",
+            "description": "Available blocks percentage, i.e. available_gpu_block_num / max_gpu_block_num",
+            "kwargs": {},
+        },
+        "requests_number": {
+            "type": Counter,
+            "name": "fastdeploy:requests_number",
+            "description": "Total number of requests received",
+            "kwargs": {},
+        },
+        "send_cache_failed_num": {
+            "type": Counter,
+            "name": "fastdeploy:send_cache_failed_num",
+            "description": "Total number of failures of sending cache",
+            "kwargs": {},
+        },
+        "first_token_latency": {
+            "type": Gauge,
+            "name": "fastdeploy:first_token_latency",
+            "description": "Latest time to first token in seconds",
+            "kwargs": {},
+        },
+        "infer_latency": {
+            "type": Gauge,
+            "name": "fastdeploy:infer_latency",
+            "description": "Latest time to generate one token in seconds",
             "kwargs": {},
         },
     }
