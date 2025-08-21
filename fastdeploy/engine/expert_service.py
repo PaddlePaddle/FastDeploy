@@ -59,7 +59,7 @@ class ExpertService:
         self.cfg.disaggregate_info = None
 
         self.scheduler = cfg.scheduler_config.scheduler()
-        if cfg.scheduler_config.name != "splitwise":
+        if cfg.scheduler_config.name == "splitwise":
             self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
@@ -142,7 +142,7 @@ class ExpertService:
 
         self.token_processor.run()
         self.cfg.init_cache_info()
-        if self.cfg.scheduler_config.name != "splitwise":
+        if self.cfg.scheduler_config.name == "splitwise":
             role = self.cfg.splitwise_role
             host_ip = self.cfg.host_ip
             disaggregate = self.cfg.disaggregate_info
