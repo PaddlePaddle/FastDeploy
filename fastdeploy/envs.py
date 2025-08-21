@@ -87,7 +87,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # support max connections
     "FD_SUPPORT_MAX_CONNECTIONS": lambda: int(os.getenv("FD_SUPPORT_MAX_CONNECTIONS", "1024")),
     # Whether to calculate coverage rate.
-    "FD_WITH_COVERAGE": lambda: os.getenv("FD_WITH_COVERAGE", "ON"),
+    "FD_WITH_COVERAGE": lambda: os.getenv("FD_WITH_COVERAGE", "OFF"),
 }
 
 
