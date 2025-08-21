@@ -154,6 +154,7 @@ async def lifespan(app: FastAPI):
     yield
     # close zmq
     try:
+        await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
 
