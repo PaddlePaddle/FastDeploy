@@ -23,7 +23,7 @@ class TestOpenAIServingModels(unittest.TestCase):
     """测试 OpenAIServingModels 的 unittest 版本"""
 
     def test_serving_model_name(self):
-        """测试模型名称获取"""
+        """Test model name retrieval"""
         # 通过 asyncio.run() 执行异步初始化
         serving_models = asyncio.run(_async_serving_models_init())
         self.assertEqual(serving_models.model_name(), MODEL_NAME)
