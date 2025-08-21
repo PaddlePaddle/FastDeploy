@@ -625,6 +625,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                           q_len,
                           kv_len,
                           chunk_end,
+                          attn_mask_len,
                           s_frag,
                           mask_offset_this_seq);
     }
