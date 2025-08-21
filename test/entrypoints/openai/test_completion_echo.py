@@ -7,17 +7,7 @@ from fastdeploy.entrypoints.openai.serving_completion import (
 )
 
 
-class YourClass:
-    async def _1(self, a, b, c):
-        if b["outputs"].get("send_idx", -1) == 0 and a.echo:
-            if isinstance(a.prompt, list):
-                text = a.prompt[c]
-            else:
-                text = a.prompt
-            b["outputs"]["text"] = text + (b["outputs"]["text"] or "")
-
-
-class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
+class TestCompletionEcho(unittest.TestCase):
     def setUp(self):
         self.mock_engine = MagicMock()
         self.completion_handler = None
@@ -52,7 +42,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.choices[0].text, "test prompt generated text")
 
-    async def test_echo_back_prompt_and_streaming(self):
+    def test_echo_back_prompt_and_streaming(self):
         """测试_echo_back_prompt方法和流式响应的prompt拼接逻辑"""
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
@@ -67,7 +57,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
             mock_echo.side_effect = mock_echo_side_effect
 
-            await self.completion_handler._echo_back_prompt(request, mock_response, 0)
+            self.completion_handler._echo_back_prompt(request, mock_response, 0)
 
             mock_echo.assert_called_once_with(request, mock_response, 0)
 
@@ -107,7 +97,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[0].text, "prompt1 response1")
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
-    async def test_multi_prompt_streaming(self):
+    def test_multi_prompt_streaming(self):
         self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
 
         request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, stream=True, echo=True)
@@ -124,8 +114,8 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
             mock_echo.side_effect = mock_echo_side_effect
 
-            await self.completion_handler._echo_back_prompt(request, mock_responses[0], 0)
-            await self.completion_handler._echo_back_prompt(request, mock_responses[1], 1)
+            self.completion_handler._echo_back_prompt(request, mock_responses[0], 0)
+            self.completion_handler._echo_back_prompt(request, mock_responses[1], 1)
 
             self.assertEqual(mock_echo.call_count, 2)
             mock_echo.assert_any_call(request, mock_responses[0], 0)
@@ -135,41 +125,41 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(mock_responses[1]["outputs"]["text"], "prompt2 response2")
             self.assertEqual(request.prompt, ["prompt1", "prompt2"])
 
-    async def test_echo_back_prompt_and_streaming1(self):
+    def test_echo_back_prompt_and_streaming1(self):
         request = CompletionRequest(echo=True, prompt=["Hello", "World"])
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
+        instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "Hello!")
 
-    async def test_1_prompt_is_string_and_send_idx_is_0(self):
+    def test_1_prompt_is_string_and_send_idx_is_0(self):
         request = CompletionRequest(echo=True, prompt="Hello")
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
+        instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "Hello!")
 
-    async def test_1_send_idx_is_not_0(self):
+    def test_1_send_idx_is_not_0(self):
         request = CompletionRequest(echo=True, prompt="Hello")
         res = {"outputs": {"send_idx": 1, "text": "!"}}
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
+        instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "!")
 
-    async def test_1_echo_is_false(self):
+    def test_1_echo_is_false(self):
         """测试echo为False时，_echo_back_prompt不拼接prompt"""
         request = CompletionRequest(echo=False, prompt="Hello")
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
+        instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "!")
 
 
