@@ -150,6 +150,7 @@ jobs:
 
           python -m pip install coverage
           python -m pip install diff-cover
+          python -m pip install jsonschema aistudio_sdk==0.3.5
           python -m pip install ${fd_wheel_url}
           if [ -d "tests/plugins" ]; then
               cd tests/plugins
@@ -160,6 +161,7 @@ jobs:
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          export COVERAGE_PROCESS_START=/workspace/FastDeploy/scripts/.coveragerc
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt

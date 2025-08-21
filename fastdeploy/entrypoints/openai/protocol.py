@@ -139,6 +139,8 @@ class ChatMessage(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     text_after_process: Optional[str] = None
     raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -198,6 +200,8 @@ class DeltaMessage(BaseModel):
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     text_after_process: Optional[str] = None
     raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
 
 
 class ChatCompletionResponseStreamChoice(BaseModel):
@@ -236,6 +240,8 @@ class CompletionResponseChoice(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     text_after_process: Optional[str] = None
     raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
@@ -280,6 +286,8 @@ class CompletionResponseStreamChoice(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     text_after_process: Optional[str] = None
     raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
