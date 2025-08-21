@@ -927,7 +927,7 @@ __device__ __forceinline__ void mask_s(const uint32_t qo_idx_base,
                                   8 * (reg_id / 4) + reg_id % 2;
           bool out_of_boundary;
           if (mask_offset) {
-            out_of_boundary = q_idx < qo_len ? (kv_idx > mask_offset[q_idx]) : true;
+            out_of_boundary = q_idx < qo_len ? (kv_idx >= mask_offset[q_idx * 2 + 1] || kv_idx < mask_offset[q_idx * 2]) : true;
           } else {
             out_of_boundary =
                 (causal
