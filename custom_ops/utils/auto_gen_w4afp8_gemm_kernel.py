@@ -83,7 +83,7 @@ void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
 }}
 """
 
-gemm_case = [[128, 128, 1, 0]]
+gemm_case = [[256, 256, 1, 0]]
 
 dtype = ["BF16"]
 

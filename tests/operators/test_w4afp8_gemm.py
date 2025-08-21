@@ -45,8 +45,8 @@ def peruate_scale(weight_scale):
 
 paddle.seed(0)
 tokens_per_group = 256
-N = 128
-K = 128
+N = 256
+K = 256
 BATCH = 1
 TokenPadding = 0
 
