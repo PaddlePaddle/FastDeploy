@@ -343,6 +343,7 @@ class OpenAIServingCompletion:
                                         text="",
                                         prompt_token_ids=list(prompt_batched_token_ids[idx]),
                                         text_after_process=text_after_process_list[idx],
+                                        prompt_tokens=text_after_process_list[idx],
                                         completion_token_ids=None,
                                     )
                                 ],
@@ -378,7 +379,7 @@ class OpenAIServingCompletion:
                         tool_calls=None,
                         raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
                         completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                        reasoning_content=None,
+                        reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
                     )
@@ -386,8 +387,8 @@ class OpenAIServingCompletion:
                         delta_message_output = output["delta_message"]
                         if delta_message_output is None:
                             continue
-                        delta_message.text = delta_message_output.content
-                        delta_message.reasoning_content = delta_message_output.reasoning_content
+                        delta_message.text = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
                         delta_message.tool_calls = delta_message_output.tool_calls
 
                     choices.append(delta_message)
@@ -503,7 +504,9 @@ class OpenAIServingCompletion:
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
                 raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
                 text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
+                prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
