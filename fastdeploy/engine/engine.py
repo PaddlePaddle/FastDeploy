@@ -135,6 +135,7 @@ class LLMEngine:
             engine_worker_queue=self.engine_worker_queue,
             split_connector=self.split_connector,
         )
+        
         self.token_processor.set_resource_manager(self.resource_manager)
 
         self.is_started = False
