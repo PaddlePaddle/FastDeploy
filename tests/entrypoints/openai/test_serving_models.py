@@ -29,7 +29,7 @@ class TestOpenAIServingModels(unittest.TestCase):
         self.assertEqual(serving_models.model_name(), MODEL_NAME)
 
     def test_list_models(self):
-        """测试模型列表功能"""
+        """Test the model listing functionality"""
         serving_models = asyncio.run(_async_serving_models_init())
 
         # 通过 asyncio.run() 执行异步方法
