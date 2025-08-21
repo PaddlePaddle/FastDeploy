@@ -20,7 +20,7 @@ async def _async_serving_models_init() -> OpenAIServingModels:
 
 
 class TestOpenAIServingModels(unittest.TestCase):
-    """测试 OpenAIServingModels 的 unittest 版本"""
+    """Unit test for OpenAIServingModels"""
 
     def test_serving_model_name(self):
         """Test model name retrieval"""
