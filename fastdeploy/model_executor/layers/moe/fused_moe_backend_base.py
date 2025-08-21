@@ -210,3 +210,5 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
                 shape=gate_correction_bias_shape,
                 dtype="float32",
             )
+        else:
+            layer.gate_correction_bias = None
