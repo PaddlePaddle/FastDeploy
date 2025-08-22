@@ -59,7 +59,7 @@ class ExpertService:
         self.cfg.disaggregate_info = None
 
         self.scheduler = cfg.scheduler_config.scheduler()
-        if cfg.splitwise_role != "mixed":
+        if cfg.scheduler_config.name == "splitwise":
             self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
@@ -143,11 +143,11 @@ class ExpertService:
         self.token_processor.run()
 
         self.cfg.init_cache_info()
-
-        role = self.cfg.splitwise_role
-        host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
-        self.scheduler.start(role, host_ip, disaggregate)
+        if self.cfg.scheduler_config.name == "splitwise":
+            role = self.cfg.splitwise_role
+            host_ip = self.cfg.host_ip
+            disaggregate = self.cfg.disaggregate_info
+            self.scheduler.start(role, host_ip, disaggregate)
         self.cfg.print()
 
         launched_expert_service_signal_data = np.zeros(
@@ -378,6 +378,10 @@ def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix):
     expert_service = ExpertService(cfg, local_data_parallel_id)
     try:
         expert_service.start(ipc_signal_suffix, local_data_parallel_id)
-        expert_service.split_connector.start_receiver()
+        if cfg.splitwise_role != "mixed":
+            expert_service.split_connector.start_receiver()
+        else:
+            while True:
+                time.sleep(100)
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}")

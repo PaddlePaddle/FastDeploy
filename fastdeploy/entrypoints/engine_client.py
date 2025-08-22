@@ -45,6 +45,7 @@ class EngineClient:
         data_parallel_size=1,
         enable_logprob=False,
         workers=1,
+        tool_parser=None,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -52,6 +53,7 @@ class EngineClient:
             limit_mm_per_prompt,
             mm_processor_kwargs,
             enable_mm,
+            tool_parser,
         )
         self.enable_logprob = enable_logprob
         self.enable_mm = enable_mm
@@ -119,8 +121,6 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
