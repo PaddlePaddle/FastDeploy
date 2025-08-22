@@ -24,7 +24,7 @@ import random
 import re
 import struct
 from functools import partial
-from typing import Any, NamedTuple, Optional, Union
+from typing import NamedTuple, Optional
 
 import numpy as np
 import paddle
@@ -40,71 +40,8 @@ from paddleformers.utils.env import (
 from paddleformers.utils.log import logger
 from tqdm import tqdm
 
-from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.utils import get_tensor
-
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
-
-
-def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
-    if param_attr_map is None:
-        return
-    for key, value in param_attr_map.items():
-        setattr(param, key, value)
-
-
-def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
-    if hasattr(weight_or_paramter, "get_shape"):
-        shape = weight_or_paramter.get_shape()
-    else:
-        shape = weight_or_paramter.shape
-    if len(shape) == 1:
-        weight_or_paramter = weight_or_paramter[start:end]
-    elif output_dim:
-        weight_or_paramter = weight_or_paramter[..., start:end]
-    else:
-        weight_or_paramter = weight_or_paramter[start:end, ...]
-    return weight_or_paramter
-
-
-def default_weight_loader(fd_config: FDConfig) -> None:
-    """Default weight loader"""
-
-    def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
-        """fn"""
-        try:
-            output_dim = getattr(param, "output_dim", None)
-            # Tensor parallelism splits the weight along the output_dim
-            if output_dim is not None:
-                dim = -1 if output_dim else 0
-                size = loaded_weight.get_shape()[dim]
-                block_size = size // fd_config.parallel_config.tensor_parallel_size
-                shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
-                shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
-                if output_dim:
-                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
-                else:
-                    loaded_weight = loaded_weight[shard_offset:shard_size, ...]
-
-            loaded_weight = get_tensor(loaded_weight)
-            # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
-            if param.dtype != loaded_weight.dtype:
-                loaded_weight = loaded_weight.cast(param.dtype)
-
-            if param.shape != loaded_weight.shape:
-                try:
-                    param = param.reshape(loaded_weight.shape)
-                except ValueError as e:
-                    raise ValueError(
-                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
-                    )
-
-            param.copy_(loaded_weight, False)
-        except Exception:
-            raise
-
-    return fn
 
 
 class LayerIdPlaceholder(str, enum.Enum):
