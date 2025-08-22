@@ -61,6 +61,9 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         """fn"""
         try:
             output_dim = getattr(param, "output_dim", None)
+            hugging_face_format = getattr(param, "hugging_face_format", None)
+            if hugging_face_format:
+                loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
                 dim = -1 if output_dim else 0

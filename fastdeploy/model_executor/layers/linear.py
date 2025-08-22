@@ -49,7 +49,10 @@ class UnquantizedLinearMethod(QuantMethodBase):
         )
         set_weight_attrs(
             layer.weight,
-            {"weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config))},
+            {
+                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "hugging_face_format": extra_weight_attrs.get("hugging_face_format", None),  # 添加这行
+            },
         )
         if hasattr(layer, "nranks") and layer.nranks > 1:
             set_weight_attrs(layer.weight, {"output_dim": extra_weight_attrs.get("output_dim")})
@@ -337,7 +340,9 @@ class ColumnParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            hugging_face_format=self.fd_config.load_config.hugging_face_format,
         )
+
         if self.nranks > 0:
             _set_var_distributed(self.weight, split_axis=1)
             if self.with_bias:
@@ -398,6 +403,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        hugging_face_format = getattr(param, "hugging_face_format", None)
+        if hugging_face_format:
+            loaded_weight = loaded_weight.transpose([1, 0])
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk.
             if self.nranks != 1:
@@ -415,9 +423,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         else:
             # 1.fused gate_up in disk
             # 2.split gate up
-            hugging_face_format = self.fd_config.load_config.hugging_face_format
-            if hugging_face_format:
-                loaded_weight = loaded_weight.transpose([1, 0])
             assert loaded_shard_id in ["gate", "up"]
             output_dim = getattr(param, "output_dim", None)
             # Tensor parallelism splits the weight along the output_dim
@@ -533,7 +538,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         else:
             # 1.fused qkv in disk
             # 2.split q k v
-            hugging_face_format = self.fd_config.load_config.hugging_face_format
+            hugging_face_format = getattr(param, "hugging_face_format", None)
             if hugging_face_format:
                 loaded_weight = loaded_weight.transpose([1, 0])
             assert loaded_shard_id in ["q", "k", "v"]
@@ -573,7 +578,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
             if self.nranks != 1:
-                hugging_face_format = self.fd_config.load_config.hugging_face_format
+                hugging_face_format = getattr(param, "hugging_face_format", None)
                 if hugging_face_format:
                     loaded_weight = loaded_weight.transpose([1, 0])
                 shard_offsets = [
@@ -763,6 +768,7 @@ class RowParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            hugging_face_format=self.fd_config.load_config.hugging_face_format,
         )
         if self.nranks > 0:
             _set_var_distributed(self.weight, split_axis=0)
@@ -778,45 +784,6 @@ class RowParallelLinear(LinearBase):
                     )
 
         self.reduce_results = reduce_results
-
-    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        try:
-            output_dim = getattr(param, "output_dim", None)
-            hugging_face_format = self.fd_config.load_config.hugging_face_format
-            if hugging_face_format:
-                loaded_weight = loaded_weight.transpose([1, 0])
-            # Tensor parallelism splits the weight along the output_dim
-            if output_dim is not None:
-                dim = -1 if output_dim else 0
-                if isinstance(loaded_weight, paddle.Tensor):
-                    size = loaded_weight.shape[dim]
-                else:
-                    size = loaded_weight.get_shape()[dim]
-                block_size = size // self.fd_config.parallel_config.tensor_parallel_size
-                shard_offset = self.fd_config.parallel_config.tensor_parallel_rank * block_size
-                shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
-                if output_dim:
-                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
-                else:
-                    loaded_weight = loaded_weight[shard_offset:shard_size, ...]
-
-            loaded_weight = get_tensor(loaded_weight)
-
-            # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
-            if param.dtype != loaded_weight.dtype:
-                loaded_weight = loaded_weight.cast(param.dtype)
-
-            if param.shape != loaded_weight.shape:
-                try:
-                    param = param.reshape(loaded_weight.shape)
-                except ValueError as e:
-                    raise ValueError(
-                        f" Attempted to load weight ({loaded_weight.shape}) into parameter ({param.shape}). {e}"
-                    )
-
-            param.copy_(loaded_weight, False)
-        except Exception:
-            raise
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         if self.fd_config.quant_config:

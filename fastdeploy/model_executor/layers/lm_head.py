@@ -22,7 +22,10 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.models.utils import set_weight_attrs
+from fastdeploy.model_executor.models.utils import (
+    default_weight_loader,
+    set_weight_attrs,
+)
 
 from .utils import get_tensor
 
@@ -93,7 +96,14 @@ class ParallelLMHead(nn.Layer):
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
-                set_weight_attrs(self.linear.weight, {"weight_loader": self.weight_loader})
+                set_weight_attrs(
+                    self.linear.weight,
+                    {
+                        "weight_loader": default_weight_loader(self.fd_config),
+                        "hugging_face_format": self.fd_config.load_config.hugging_face_format,  # 添加这行
+                    },
+                )
+
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": True})
             else:
@@ -106,7 +116,13 @@ class ParallelLMHead(nn.Layer):
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
-                set_weight_attrs(self.linear.weight, {"weight_loader": self.weight_loader})
+                set_weight_attrs(
+                    self.linear.weight,
+                    {
+                        "weight_loader": default_weight_loader(self.fd_config),
+                        "hugging_face_format": self.fd_config.load_config.hugging_face_format,  # 添加这行
+                    },
+                )
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": False})
 
