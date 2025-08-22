@@ -101,6 +101,16 @@ def default_weight_loader(fd_config: FDConfig) -> None:
 
 
 def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
+    """
+    Slices a weight or parameter tensor for distributed computing, such as tensor parallelism.
+
+    Args:
+        weight_or_parameter (Tensor or ndarray): The weight or parameter tensor to slice, either a PaddlePaddle Tensor.
+        output_dim (bool): Determines the slicing dimension. If True, slices along columns; if False, slices along rows.
+        start (int): The starting index of the slice (inclusive).
+        end (int): The ending index of the slice (exclusive).
+        step (int, optional): The step size for slicing. Defaults to 1.
+    """
     if hasattr(weight_or_paramter, "get_shape"):
         shape = weight_or_paramter.get_shape()
     else:
