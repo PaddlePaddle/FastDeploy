@@ -77,7 +77,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python test/ci_use/XPU_45T/run_45T.py
+python tests/ci_use/XPU_45T/run_45T.py
 exit_code=$?
 echo exit_code is ${exit_code}
 
@@ -143,7 +143,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python test/ci_use/XPU_45T/run_45T.py
+python tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
