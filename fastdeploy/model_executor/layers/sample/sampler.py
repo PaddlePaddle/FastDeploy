@@ -49,7 +49,7 @@ def top_p_normalize_probs_paddle(
     probs_sum = paddle.cumsum(probs_sort, axis=-1)
     probs_sort = paddle.where((probs_sum - probs_sort) > top_ps, paddle.zeros_like(probs_sort), probs_sort)
     probs_sort.divide_(probs_sort.sum(axis=-1, keepdim=True))
-    return paddle.put_along_axis(paddle.zeros_like(probs_sort), probs_idx, probs_sort, -1)
+    return paddle.zeros_like(probs_sort).put_along_axis_(indices=probs_idx, values=probs_sort, axis=-1)
 
 
 class SamplerProcessor:
@@ -231,26 +231,33 @@ class Sampler(nn.Layer):
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         share_inputs = sampling_metadata.share_inputs
         if temp_scaled_logprobs is not None:
-            temp_scaled_logprobs = temp_scaled_logprobs[:real_bsz]
+            real_bsz_temp_scaled = temp_scaled_logprobs[:real_bsz]
             temperature = sampling_metadata.temperature[:real_bsz]
-            temp_temperature = paddle.where(temp_scaled_logprobs, temperature, paddle.ones_like(temperature))
+            temp_temperature = paddle.where(real_bsz_temp_scaled, temperature, paddle.ones_like(temperature))
             last_logits = last_logits / temp_temperature
+
+        last_logprobs = F.log_softmax(last_logits, axis=-1)
+        top_p_logprob = None
+        top_p_req_mask = None
+
         if top_p_normalized_logprobs is not None and share_inputs is not None:
             seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])
             seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])
             seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])
             seq_lens_time_sum = seq_lens_this_time + seq_lens_encoder + seq_lens_decoder
-            no_stop_seqs_mask = seq_lens_time_sum[:real_bsz] > 0
-            real_req_top_p_normalized_logprobs = paddle.logical_and(
-                top_p_normalized_logprobs[:real_bsz], no_stop_seqs_mask
-            )
-            real_req_top_p = sampling_metadata.top_p[:real_bsz] * no_stop_seqs_mask.cast(sampling_metadata.top_p.dtype)
-            if real_req_top_p_normalized_logprobs.any():
-                if (real_req_top_p != 1.0).any():
-                    probs = F.softmax(last_logits, axis=-1)
-                    probs = top_p_normalize_probs_paddle(probs, real_req_top_p)
-                    return paddle.log(probs)
-        return F.log_softmax(last_logits, axis=-1)
+            real_req_mask = seq_lens_time_sum[:real_bsz] > 0
+            top_p_req_mask = paddle.logical_and(top_p_normalized_logprobs[:real_bsz], real_req_mask)
+            real_req_top_p = sampling_metadata.top_p[:real_bsz]
+            # Normalize logprobs if top_p normalization is enabled
+            # NOTE: only normalize logprobs when top_p is set and not equal to 1.0
+            top_p_req_mask = paddle.logical_and(top_p_req_mask, real_req_top_p != 1.0)
+            if top_p_req_mask.any():
+                probs = F.softmax(last_logits, axis=-1)
+                probs = top_p_normalize_probs_paddle(probs, real_req_top_p)
+                top_p_logprob = paddle.log(probs)
+        if top_p_logprob is not None:
+            last_logprobs = paddle.where(top_p_req_mask, top_p_logprob, last_logprobs)
+        return last_logprobs
 
     def gather_logprobs(
         self,
