@@ -26,6 +26,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethod
 from fastdeploy.model_executor.models.utils import (
     default_weight_loader,
     set_weight_attrs,
+    slice_fn,
 )
 from fastdeploy.platforms import current_platform
 
@@ -158,6 +159,11 @@ class LinearBase(nn.Layer):
                 shape=[self.output_size],
                 dtype=self._dtype,
                 is_bias=True,
+            )
+            setattr(
+                self.bias,
+                "weight_loader",
+                self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config),
             )
 
         # smooth quant
@@ -503,8 +509,10 @@ class QKVParallelLinear(ColumnParallelLinear):
             with_bias=with_bias,
             add_bias=add_bias,
         )
+        setattr(self.weight, "output_dim", True)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        output_dim = getattr(param, "output_dim", None)
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
             if self.nranks != 1:
@@ -515,7 +523,9 @@ class QKVParallelLinear(ColumnParallelLinear):
                     ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.head_dim),
                 ]
                 for shard_id, shard_offset, shard_size in shard_offsets:
-                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
+                    loaded_weight_shard = loaded_weight_shard = slice_fn(
+                        loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
+                    )
                     self.weight_loader(param, loaded_weight_shard, shard_id)
             else:
                 loaded_weight = get_tensor(loaded_weight)
@@ -525,10 +535,9 @@ class QKVParallelLinear(ColumnParallelLinear):
             # 1.fused qkv in disk
             # 2.split q k v
             assert loaded_shard_id in ["q", "k", "v"]
-            output_dim = getattr(param, "output_dim", None)
             # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
-                dim = -1
+                dim = -1 if output_dim else 0
                 if isinstance(loaded_weight, np.ndarray):
                     size = loaded_weight.shape[dim]
                 else:
@@ -541,17 +550,16 @@ class QKVParallelLinear(ColumnParallelLinear):
             loaded_weight = get_tensor(loaded_weight)
 
             if loaded_shard_id == "q":
-                param = param[:, : self.num_heads_per_rank * self.head_dim]
+                param_shard_offset = 0
+                param_shard_size = self.num_heads_per_rank * self.head_dim
             elif loaded_shard_id == "k":
-                param = param[
-                    :,
-                    self.num_heads_per_rank
-                    * self.head_dim : (self.num_heads_per_rank + self.kv_num_heads_per_rank)
-                    * self.head_dim,
-                ]
-            elif loaded_shard_id == "v":
-                param = param[:, (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim :]
-
+                param_shard_offset = self.num_heads_per_rank * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.head_dim
+            else:
+                # loaded_shard_id == "v"
+                param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.head_dim
+            param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
             assert param.shape == loaded_weight.shape, (
                 f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
             )

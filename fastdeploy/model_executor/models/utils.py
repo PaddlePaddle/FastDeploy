@@ -54,6 +54,20 @@ def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
         setattr(param, key, value)
 
 
+def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
+    if hasattr(weight_or_paramter, "get_shape"):
+        shape = weight_or_paramter.get_shape()
+    else:
+        shape = weight_or_paramter.shape
+    if len(shape) == 1:
+        weight_or_paramter = weight_or_paramter[start:end]
+    elif output_dim:
+        weight_or_paramter = weight_or_paramter[..., start:end]
+    else:
+        weight_or_paramter = weight_or_paramter[start:end, ...]
+    return weight_or_paramter
+
+
 def default_weight_loader(fd_config: FDConfig) -> None:
     """Default weight loader"""
 
