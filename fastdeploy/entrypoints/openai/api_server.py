@@ -296,7 +296,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
-                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
+                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.http_status_code)
             elif isinstance(generator, ChatCompletionResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
@@ -325,7 +325,7 @@ async def create_completion(request: CompletionRequest):
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=generator.http_status_code)
             elif isinstance(generator, CompletionResponse):
                 connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump())

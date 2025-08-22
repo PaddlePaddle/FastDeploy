@@ -36,12 +36,10 @@ class ErrorResponse(BaseModel):
     message: str
     type: Optional[str] = None
     param: Optional[str] = None
+    code: Optional[str] = None  # OpenAI error code (string like "context_length_exceeded")
     
-    # OpenAI-style error code (string)
-    error_code: Optional[str] = Field(default=None, alias="code")
-    
-    # Keep old code field for backward compatibility (HTTP status code as integer)
-    code: int = 400
+    # HTTP status code for FastAPI response (backward compatibility)
+    http_status_code: int = 400
 
 
 # OpenAI Error Types

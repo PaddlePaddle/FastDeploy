@@ -91,8 +91,8 @@ class OpenAIServingModels:
             return ErrorResponse(
                 message=err_msg,
                 type=ErrorType.SERVER_ERROR,
-                error_code=ErrorCode.SERVER_ERROR,
-                code=503
+                code=ErrorCode.SERVER_ERROR,
+                http_status_code=503
             )
         model_infos = [
             ModelInfo(

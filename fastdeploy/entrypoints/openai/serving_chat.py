@@ -86,8 +86,8 @@ class OpenAIServingChat:
             return ErrorResponse(
                 message=err_msg,
                 type=ErrorType.SERVER_ERROR,
-                error_code=ErrorCode.SERVER_ERROR,
-                code=503
+                code=ErrorCode.SERVER_ERROR,
+                http_status_code=503
             )
 
         if self.models:
@@ -98,9 +98,9 @@ class OpenAIServingChat:
                 return ErrorResponse(
                     message=err_msg,
                     type=ErrorType.NOT_FOUND_ERROR,
-                    error_code=ErrorCode.MODEL_NOT_FOUND,
+                    code=ErrorCode.MODEL_NOT_FOUND,
                     param="model",
-                    code=404
+                    http_status_code=404
                 )
 
         try:
@@ -134,8 +134,8 @@ class OpenAIServingChat:
                     return ErrorResponse(
                         message=error_msg,
                         type=ErrorType.INVALID_REQUEST_ERROR,
-                        error_code=ErrorCode.CONTEXT_LENGTH_EXCEEDED,
-                        code=400
+                        code=ErrorCode.CONTEXT_LENGTH_EXCEEDED,
+                        http_status_code=400
                     )
                 else:
                     error_msg = f"Invalid request: {error_str}"
@@ -143,8 +143,8 @@ class OpenAIServingChat:
                     return ErrorResponse(
                         message=error_msg,
                         type=ErrorType.INVALID_REQUEST_ERROR,
-                        error_code=ErrorCode.INVALID_PARAMETER,
-                        code=400
+                        code=ErrorCode.INVALID_PARAMETER,
+                        http_status_code=400
                     )
 
             del current_req_dict
@@ -164,8 +164,8 @@ class OpenAIServingChat:
                     return ErrorResponse(
                         message=error_msg,
                         type=ErrorType.SERVER_ERROR,
-                        error_code=ErrorCode.SERVER_ERROR,
-                        code=500
+                        code=ErrorCode.SERVER_ERROR,
+                        http_status_code=500
                     )
         except Exception as e:
             # This is likely a timeout error during semaphore acquisition
@@ -176,8 +176,8 @@ class OpenAIServingChat:
                 return ErrorResponse(
                     message=error_msg,
                     type=ErrorType.SERVER_ERROR,
-                    error_code=ErrorCode.TIMEOUT,
-                    code=408
+                    code=ErrorCode.TIMEOUT,
+                    http_status_code=408
                 )
             else:
                 error_msg = "The server had an error while processing your request. Please try again."
@@ -185,8 +185,8 @@ class OpenAIServingChat:
                 return ErrorResponse(
                     message=error_msg,
                     type=ErrorType.SERVER_ERROR,
-                    error_code=ErrorCode.SERVER_ERROR,
-                    code=500
+                    code=ErrorCode.SERVER_ERROR,
+                    http_status_code=500
                 )
 
     def _create_streaming_error_response(self, message: str) -> str:
@@ -194,8 +194,8 @@ class OpenAIServingChat:
         error_response = ErrorResponse(
             message="The server had an error while processing your request. Please try again.",
             type=ErrorType.SERVER_ERROR,
-            error_code=ErrorCode.SERVER_ERROR,
-            code=500
+            code=ErrorCode.SERVER_ERROR,
+            http_status_code=500
         )
         return error_response.model_dump_json()
 

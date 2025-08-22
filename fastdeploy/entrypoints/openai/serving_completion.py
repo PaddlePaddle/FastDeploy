@@ -76,8 +76,8 @@ class OpenAIServingCompletion:
             return ErrorResponse(
                 message=err_msg,
                 type=ErrorType.SERVER_ERROR,
-                error_code=ErrorCode.SERVER_ERROR,
-                code=503
+                code=ErrorCode.SERVER_ERROR,
+                http_status_code=503
             )
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
@@ -87,9 +87,9 @@ class OpenAIServingCompletion:
                 return ErrorResponse(
                     message=err_msg,
                     type=ErrorType.NOT_FOUND_ERROR,
-                    error_code=ErrorCode.MODEL_NOT_FOUND,
+                    code=ErrorCode.MODEL_NOT_FOUND,
                     param="model",
-                    code=404
+                    http_status_code=404
                 )
         created_time = int(time.time())
         if request.user is not None:
@@ -123,9 +123,9 @@ class OpenAIServingCompletion:
                 return ErrorResponse(
                     message=error_msg,
                     type=ErrorType.INVALID_REQUEST_ERROR,
-                    error_code=ErrorCode.INVALID_PARAMETER,
+                    code=ErrorCode.INVALID_PARAMETER,
                     param="prompt",
-                    code=400
+                    http_status_code=400
                 )
             else:
                 error_msg = f"Invalid request: {error_str}"
@@ -133,8 +133,8 @@ class OpenAIServingCompletion:
                 return ErrorResponse(
                     message=error_msg,
                     type=ErrorType.INVALID_REQUEST_ERROR,
-                    error_code=ErrorCode.INVALID_PARAMETER,
-                    code=400
+                    code=ErrorCode.INVALID_PARAMETER,
+                    http_status_code=400
                 )
 
         if request_prompt_ids is not None:
@@ -157,8 +157,8 @@ class OpenAIServingCompletion:
                 return ErrorResponse(
                     message=error_msg,
                     type=ErrorType.SERVER_ERROR,
-                    error_code=ErrorCode.TIMEOUT,
-                    code=408
+                    code=ErrorCode.TIMEOUT,
+                    http_status_code=408
                 )
             else:
                 error_msg = "The server had an error while processing your request. Please try again."
@@ -166,8 +166,8 @@ class OpenAIServingCompletion:
                 return ErrorResponse(
                     message=error_msg,
                     type=ErrorType.SERVER_ERROR,
-                    error_code=ErrorCode.SERVER_ERROR,
-                    code=500
+                    code=ErrorCode.SERVER_ERROR,
+                    http_status_code=500
                 )
 
         try:
@@ -190,8 +190,8 @@ class OpenAIServingCompletion:
                         return ErrorResponse(
                             message=error_msg,
                             type=ErrorType.INVALID_REQUEST_ERROR,
-                            error_code=ErrorCode.CONTEXT_LENGTH_EXCEEDED,
-                            code=400
+                            code=ErrorCode.CONTEXT_LENGTH_EXCEEDED,
+                            http_status_code=400
                         )
                     else:
                         error_msg = f"Invalid request: {error_str}"
@@ -199,8 +199,8 @@ class OpenAIServingCompletion:
                         return ErrorResponse(
                             message=error_msg,
                             type=ErrorType.INVALID_REQUEST_ERROR,
-                            error_code=ErrorCode.INVALID_PARAMETER,
-                            code=400
+                            code=ErrorCode.INVALID_PARAMETER,
+                            http_status_code=400
                         )
 
                 del current_req_dict
@@ -232,8 +232,8 @@ class OpenAIServingCompletion:
                     return ErrorResponse(
                         message=error_msg,
                         type=ErrorType.SERVER_ERROR,
-                        error_code=ErrorCode.SERVER_ERROR,
-                        code=500
+                        code=ErrorCode.SERVER_ERROR,
+                        http_status_code=500
                     )
 
         except Exception as e:
@@ -242,8 +242,8 @@ class OpenAIServingCompletion:
             return ErrorResponse(
                 message=error_msg,
                 type=ErrorType.SERVER_ERROR,
-                error_code=ErrorCode.SERVER_ERROR,
-                code=500
+                code=ErrorCode.SERVER_ERROR,
+                http_status_code=500
             )
 
     async def completion_full_generator(
@@ -526,8 +526,8 @@ class OpenAIServingCompletion:
             error_response = ErrorResponse(
                 message="The server had an error while processing your request. Please try again.",
                 type=ErrorType.SERVER_ERROR,
-                error_code=ErrorCode.SERVER_ERROR,
-                code=500
+                code=ErrorCode.SERVER_ERROR,
+                http_status_code=500
             )
             yield f"data: {error_response.model_dump_json(exclude_unset=True)}\n\n"
         finally:
