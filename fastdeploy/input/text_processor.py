@@ -263,11 +263,30 @@ class DataProcessor(BaseDataProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        # processing stop_sequences
+        # processing stop_sequences and stop_token_ids
         stop_sequences = request.get("stop", [])
+        user_stop_token_ids = request.get("stop_token_ids", [])
+        
+        # Convert string stop sequences to token ids
+        all_stop_token_ids = []
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
+            all_stop_token_ids.extend(stop_seqs)
+        
+        # Add user-provided stop_token_ids
+        if user_stop_token_ids:
+            # Convert single token ids to list format for consistency
+            for token_id in user_stop_token_ids:
+                if isinstance(token_id, int):
+                    all_stop_token_ids.append([token_id])
+                elif isinstance(token_id, list):
+                    all_stop_token_ids.append(token_id)
+        
+        # Set the final combined stop_token_ids
+        if all_stop_token_ids:
+            # Pad the combined sequences for consistent format
+            padded_stop_seqs, stop_seqs_len = self.pad_batch_data(all_stop_token_ids, pad_id=-1, return_seq_len=True, return_array=False)
+            request["stop_token_ids"] = padded_stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
 
         data_processor_logger.info(f"Processing request {request}")
