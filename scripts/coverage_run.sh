@@ -1,8 +1,7 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 run_path="$DIR/../tests/"
-export PYTEST_INI="$DIR/../pytest.ini"
-
+export PYTEST_INI="$DIR/../tests/pytest.ini"
 cd "$run_path" || exit 1
 
 failed_tests_file="failed_tests.log"
