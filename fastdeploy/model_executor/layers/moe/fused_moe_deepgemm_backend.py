@@ -22,6 +22,7 @@ import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
+from fastdeploy.utils import ceil_div
 
 from .fused_moe_backend_base import MoEMethodBase
 
@@ -73,8 +74,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer.create_parameter(
                 shape=[
                     layer.num_local_experts,
-                    layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
-                    layer.hidden_size // self.quant_config.weight_block_size[1],
+                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
                 ],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(0),
@@ -86,8 +87,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer.create_parameter(
                 shape=[
                     layer.num_local_experts,
-                    layer.hidden_size // self.quant_config.weight_block_size[0],
-                    layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
                 ],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(0),

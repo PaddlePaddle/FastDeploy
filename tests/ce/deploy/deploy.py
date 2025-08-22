@@ -79,6 +79,7 @@ def build_command(config):
     # 添加配置参数
     for key, value in config.items():
         if "--enable" in key:
+            value = bool(value if isinstance(value, bool) else eval(value))
             if value:
                 cmd.append(key)
         else:
@@ -189,6 +190,8 @@ def stop_server(signum=None, frame=None):
     # 若log目录存在，则重命名为log_timestamp
     if os.path.isdir("./log"):
         os.rename("./log", "./log_{}".format(time.strftime("%Y%m%d%H%M%S")))
+    if os.path.exists("gemm_profiles.json"):
+        os.remove("gemm_profiles.json")
 
     if signum:
         sys.exit(0)
