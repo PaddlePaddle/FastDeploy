@@ -1292,7 +1292,7 @@ class LLMEngine:
                     )
                 )
                 llm_logger.info(
-                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                    f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                     + f" data parallel id {i}"
                 )
                 self.dp_processed[-1].start()
