@@ -76,9 +76,12 @@ else:
         update_inputs_v1,
     )
 
+from fastdeploy.output.stream_transfer_data import (
+    DecoderState,
+    StreamTransferData,
+    TextData,
+)
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
-from fastdeploy.output.stream_transfer_data import *
-from fastdeploy import envs
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -300,16 +303,15 @@ def post_process_normal(
                         tokens=sampler_output.sampled_token_ids.numpy(),
                         not_need_stop=model_output.not_need_stop.numpy().item(),
                         batch=sampler_output.sampled_token_ids.shape[0],
-                        speculaive_decoding=False
-                    )
+                        speculaive_decoding=False,
+                    ),
                 )
-                
+
                 if not (not save_each_rank and model_output.mp_rank > 0):
                     try:
                         cls.zmq_client.send_pyobj(stream_transfer_data)
                     except Exception as e:
                         print(f"Send message error: {e}")
-                        time.sleep(1)
             else:
                 save_output(
                     sampler_output.sampled_token_ids,
@@ -383,7 +385,9 @@ def post_process(
     if speculative_decoding:
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
-        post_process_normal(cls, sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output)
+        post_process_normal(
+            cls, sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output
+        )
 
 
 def step_cuda(

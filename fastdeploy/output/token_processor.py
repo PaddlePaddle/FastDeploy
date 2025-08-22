@@ -22,19 +22,19 @@ import traceback
 import weakref
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from fastdeploy.inter_communicator import ZmqClient
+
 import numpy as np
-import zmq
 import paddle
+import zmq
+
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
-from fastdeploy.output.stream_transfer_data import *
-from fastdeploy import envs
 
 RECOVERY_STOP_SIGNAL = -3
 MAX_BSZ = 512
@@ -181,10 +181,16 @@ class TokenProcessor:
                                 if receive_data is not None:
                                     # TODO(Wanglongzhi2001): adapt more type of message.
                                     if receive_data.decoder_state == DecoderState.TEXT:
-                                        self.output_tokens[0, 0] = paddle.to_tensor(receive_data.data.not_need_stop, dtype="int64")
-                                        self.output_tokens[1, 0] = paddle.to_tensor(receive_data.data.batch, dtype="int64")
-                                        self.output_tokens[2:, 0] = paddle.to_tensor(receive_data.data.tokens, dtype="int64")
-                                    
+                                        self.output_tokens[0, 0] = paddle.to_tensor(
+                                            receive_data.data.not_need_stop, dtype="int64"
+                                        )
+                                        self.output_tokens[1, 0] = paddle.to_tensor(
+                                            receive_data.data.batch, dtype="int64"
+                                        )
+                                        self.output_tokens[2:, 0] = paddle.to_tensor(
+                                            receive_data.data.tokens, dtype="int64"
+                                        )
+
                             except Exception as e:
                                 print(f"Recieve message error: {e}")
                                 continue
@@ -202,7 +208,28 @@ class TokenProcessor:
                                 is_blocking,
                             )
                         else:
-                            get_output(self.output_tokens, rank_id, is_blocking)
+                            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                                try:
+                                    receive_data = self.zmq_server.recv_pyobj()
+                                    assert isinstance(receive_data, StreamTransferData)
+                                    if receive_data is not None:
+                                        # TODO(Wanglongzhi2001): adapt more type of message.
+                                        if receive_data.decoder_state == DecoderState.TEXT:
+                                            self.output_tokens[0, 0] = paddle.to_tensor(
+                                                receive_data.data.not_need_stop, dtype="int64"
+                                            )
+                                            self.output_tokens[1, 0] = paddle.to_tensor(
+                                                receive_data.data.batch, dtype="int64"
+                                            )
+                                            self.output_tokens[2:, 0] = paddle.to_tensor(
+                                                receive_data.data.tokens, dtype="int64"
+                                            )
+
+                                except Exception as e:
+                                    print(f"Recieve message error: {e}")
+                                    continue
+                            else:
+                                get_output(self.output_tokens, rank_id, is_blocking)
 
                     if self.output_tokens[0, 0] == -2:
                         continue
