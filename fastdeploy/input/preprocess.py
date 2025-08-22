@@ -16,7 +16,8 @@
 
 from typing import Any, Dict, Optional
 
-from fastdeploy.config import ErnieArchitectures, ModelConfig
+from fastdeploy.config import ErnieArchitectures
+from fastdeploy.engine.config import ModelConfig
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.reasoning import ReasoningParserManager
 

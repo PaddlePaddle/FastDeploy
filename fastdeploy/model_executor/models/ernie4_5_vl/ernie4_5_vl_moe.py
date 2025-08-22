@@ -44,6 +44,7 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MLP,
 )
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -504,6 +505,7 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@MultimodalRegistry.register_model()
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
