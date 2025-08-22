@@ -140,7 +140,7 @@ class Config:
             self.master_ip = "0.0.0.0"
         elif isinstance(self.ips, str):
             self.ips = self.ips.split(",")
-    
+
         self.host_ip = get_host_ip()
 
         if self.ips is None:
@@ -231,7 +231,6 @@ class Config:
 
         self.local_device_ids = self.device_ids.split(",")[: self.tensor_parallel_size]
 
-
         if self.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
             self.master_ip = self.host_ip
@@ -271,9 +270,6 @@ class Config:
         assert self.max_num_seqs <= 256, (
             "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
         )
-        # llm_logger.info(
-        #     f"engine_worker_queue_port: {self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]}"
-        # )
         assert is_port_available(
             "0.0.0.0", int(self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id])
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]} is already in use. {self.parallel_config.local_data_parallel_id}"

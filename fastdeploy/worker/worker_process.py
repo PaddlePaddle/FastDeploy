@@ -237,11 +237,8 @@ class PaddleDisWorkerProc:
         """
         Tmp loop function for ep utill DP is supported
         """
-        logger.info(f"satart gaoziayun event_loop_ep {self.parallel_config.tensor_parallel_size}")
         num_running_requests = 0
-        
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        logger.info(f"gaoziyuan test {local_rank}")
         while True:
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
@@ -253,8 +250,7 @@ class PaddleDisWorkerProc:
                 for req_dict, bsz in tasks:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
-                
-                
+
                 req_ids = [req.request_id for req in req_dicts]
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
@@ -428,8 +424,6 @@ class PaddleDisWorkerProc:
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 
-        logger.info(f"gaoziyuan initialize_cache done done !!!!!!!")
-
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
 
@@ -468,7 +462,6 @@ class PaddleDisWorkerProc:
         if self.ranks > 1:
             paddle.distributed.barrier()
         self.loaded_model_signal.value[0] = 1
-        logger.info("gaoziayun test worker process load done")
 
 
 def parse_args():

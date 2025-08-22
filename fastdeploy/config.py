@@ -143,8 +143,6 @@ class ModelConfig:
         for key, value in PRETRAINED_INIT_CONFIGURATION.items():
             if not hasattr(self, key):
                 setattr(self, key, value)
-        print("gaoziyuan test")
-        print(PRETRAINED_INIT_CONFIGURATION)
 
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
