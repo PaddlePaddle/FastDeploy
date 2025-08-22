@@ -52,22 +52,16 @@ class OpenAIServingChat:
     def __init__(self, engine_client, pid, ips, max_waiting_time, chat_template):
         self.engine_client = engine_client
         self.pid = pid
-        self.master_ip = ips
         self.max_waiting_time = max_waiting_time
-        self.host_ip = get_host_ip()
         self.chat_template = chat_template
-        if self.master_ip is not None:
-            if isinstance(self.master_ip, list):
-                self.master_ip = self.master_ip[0]
+        if ips is not None:
+            if isinstance(ips, list):
+                self.master_ip = ips[0]
             else:
-                self.master_ip = self.master_ip.split(",")[0]
+                self.master_ip = ips.split(",")[0]
 
     def _check_master(self):
-        if self.master_ip is None:
-            return True
-        if self.host_ip == self.master_ip:
-            return True
-        return False
+        return self.engine_client.is_master
 
     async def create_chat_completion(self, request: ChatCompletionRequest):
         """
@@ -75,7 +69,7 @@ class OpenAIServingChat:
         """
 
         if not self._check_master():
-            err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
+            err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
         try:

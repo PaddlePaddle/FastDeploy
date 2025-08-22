@@ -247,7 +247,7 @@ class ParallelConfig:
         # block size
         self.block_size: int = 64
         # Engine worker queue port
-        self.engine_worker_queue_port: int = 9923
+        self.engine_worker_queue_port: str = "9923"
         # Max model len
         self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
@@ -276,7 +276,12 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-
+        if isinstance(self.engine_worker_queue_port, str):
+            logger.info(f"engine_worker_queue_port type is str: {self.engine_worker_queue_port}")
+            self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
+            logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
+        elif isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = [self.engine_worker_queue_port]
         # currently, the expert parallel size is equal data parallel size
         self.expert_parallel_size = self.data_parallel_size
         self.use_ep = self.expert_parallel_size > 1

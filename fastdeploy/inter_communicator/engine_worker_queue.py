@@ -241,6 +241,7 @@ class EngineWorkerQueue:
         Args:
             tasks: Tasks to be added to the queue
         """
+        llm_logger.info(f"gaoziyuan test {self.tasks}")
         self.lock.acquire()
         while sum(self.client_read_flag) < self.num_client:
             self.lock.release()
@@ -250,7 +251,9 @@ class EngineWorkerQueue:
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
         self.tasks.append(tasks)
+        llm_logger.info(f"gaoziyuan test {self.tasks}")
         self.lock.release()
+        llm_logger.info(f"gaoziyuan test {self.tasks}")
 
     def get_tasks(self) -> Tuple[List[Any], bool]:
         """
@@ -259,6 +262,7 @@ class EngineWorkerQueue:
         Returns:
             tuple: (list of tasks, bool indicating if all clients have read)
         """
+        llm_logger.info(f"get gaoziyuan test {self.tasks}")
         tasks: List[Any] = list()
         self.lock.acquire()
         tasks.extend(self.tasks)
@@ -267,6 +271,7 @@ class EngineWorkerQueue:
         if all_client_read:
             self.tasks[:] = list()
         self.lock.release()
+        llm_logger.info(f"get gaoziyuan test {tasks}")
         return tasks, all_client_read
 
     def num_tasks(self) -> int:
@@ -307,6 +312,7 @@ class EngineWorkerQueue:
         self.cache_infos.extend(cache_info)
         llm_logger.debug(f"cache_infos: {self.cache_infos}  local_data_parallel_id:{self.local_data_parallel_id}")
         self.lock_info.release()
+        llm_logger.info(f"get gaoziyuan test {self.tasks}")
 
     def get_cache_info(self) -> List[Any]:
         """

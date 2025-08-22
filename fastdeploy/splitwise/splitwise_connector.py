@@ -35,18 +35,16 @@ class SplitwiseConnector:
     SplitwiseConnector class for managing and scheduling Splitwise tasks.
     """
 
-    def __init__(self, cfg, scheduler, worker_queue, resource_manager):
+    def __init__(self, cfg, worker_queue, resource_manager):
         """
         Initialize the SplitwiseConnector instance.
 
         Parameters:
         cfg (dict): Configuration information.
-        scheduler (object): Scheduler object.
         worker_queue (object): Worker queue object.
         resource_manager (object): Resource manager object.
         """
         self.cfg = cfg
-        self.scheduler = scheduler
         self.engine_worker_queue = worker_queue
         self.resource_manager = resource_manager
         self.connect_innode_instances = {}
@@ -85,18 +83,20 @@ class SplitwiseConnector:
         """
         while True:
             try:
-                socks = dict(self.poller.poll(100))
-                if not socks:
-                    continue
+                if hasattr(self, "poller"):
+                    socks = dict(self.poller.poll(100))
+                    if not socks:
+                        continue
+                    else:
+                        logger.debug(f"receive {socks}")
+
+                    frames = self.router_socket.recv_multipart()
+                    logger.debug(f"frames: {frames}")
+                    message = frames[-1]
+                    self.io_executor.submit(self._process_message, message)
+                    time.sleep(0.001)
                 else:
-                    logger.debug(f"receive {socks}")
-
-                frames = self.router_socket.recv_multipart()
-                logger.debug(f"frames: {frames}")
-                message = frames[-1]
-                self.io_executor.submit(self._process_message, message)
-                time.sleep(0.001)
-
+                    time.sleep(5)
             except Exception as e:
                 logger.error(f"Receiver error: {e}, {str(traceback.format_exc())}")
                 time.sleep(1)
@@ -183,7 +183,7 @@ class SplitwiseConnector:
 
     def dispatch_innode_splitwise_tasks(self, tasks, current_id):
         """
-        Dispatch splitwise tasks to the scheduler.
+        Dispatch splitwise tasks .
 
         Parameters:
         tasks (list): List of tasks.

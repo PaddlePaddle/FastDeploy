@@ -76,7 +76,7 @@ class Config:
         speculative_config: Optional[Dict[str, Any]] = None,
         graph_optimization_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: int = 8002,
+        engine_worker_queue_port: str = "8002",
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         # enable_mm: bool = False,
@@ -138,11 +138,10 @@ class Config:
 
         if self.ips is None:
             self.master_ip = "0.0.0.0"
-        elif isinstance(self.ips, list):
-            self.master_ip = self.ips[0]
-        else:
+        elif isinstance(self.ips, str):
             self.ips = self.ips.split(",")
-            self.master_ip = self.ips[0]
+    
+        self.host_ip = get_host_ip()
 
         if self.ips is None:
             self.nnode = 1
@@ -151,7 +150,7 @@ class Config:
             self.nnode = len(self.ips)
 
             for idx, ip in enumerate(self.ips):
-                if ip == self.master_ip:
+                if ip == self.host_ip:
                     self.node_rank = idx
 
         self.max_model_len = max_model_len
@@ -172,7 +171,11 @@ class Config:
         self.early_stop_config = early_stop_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
+        self.engine_worker_queue_port = engine_worker_queue_port
         self._str_to_list("innode_prefill_ports", int)
+        if isinstance(engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(engine_worker_queue_port)
+        self._str_to_list("engine_worker_queue_port", str)
         self.load_choices = load_choices
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
@@ -206,7 +209,6 @@ class Config:
         else:
             self.worker_num_per_node = num_ranks
 
-        self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
@@ -229,15 +231,13 @@ class Config:
 
         self.local_device_ids = self.device_ids.split(",")[: self.tensor_parallel_size]
 
-        self.host_ip = get_host_ip()
-
-        if self.ips is None or self.host_ip == self.master_ip:
-            self.is_master = True
-        else:
-            self.is_master = False
 
         if self.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
+            self.master_ip = self.host_ip
+        else:
+            self.is_master = False
+            self.master_ip = self.ips[0]
 
         import paddle
 
@@ -271,9 +271,12 @@ class Config:
         assert self.max_num_seqs <= 256, (
             "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
         )
+        # llm_logger.info(
+        #     f"engine_worker_queue_port: {self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]}"
+        # )
         assert is_port_available(
-            "0.0.0.0", self.engine_worker_queue_port
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+            "0.0.0.0", int(self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id])
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]} is already in use. {self.parallel_config.local_data_parallel_id}"
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
         assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
@@ -426,10 +429,12 @@ class Config:
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):
             val = getattr(self, attr_name)
+            if val is None:
+                return
             if type(val) is str:
                 setattr(self, attr_name, [default_type(i) for i in val.split(",")])
             else:
-                setattr(self, attr_name, val)
+                setattr(self, attr_name, [default_type(i) for i in val])
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, indent=4)

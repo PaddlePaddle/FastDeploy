@@ -86,6 +86,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
     # support max connections
     "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
+    # enable multi api server
+    "FD_ENABLE_MULTI_API_SERVER": lambda: bool(int(os.getenv("FD_ENABLE_MULTI_API_SERVER", "0"))),
 }
 
 
