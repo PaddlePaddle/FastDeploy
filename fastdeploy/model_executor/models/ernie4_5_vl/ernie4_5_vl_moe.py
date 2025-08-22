@@ -72,14 +72,19 @@ class VLMoEMeta:
     text_index: paddle.Tensor
     image_index: paddle.Tensor
     token_type_ids: paddle.Tensor
+    image_token_num: paddle.Tensor
+
     def __str__(self):
-        return (f"VLMoEMeta(\n"
-                f"  image_input: {self.image_input}, pointer: {self.image_input.data_ptr()}\n"
-                f"  text_input: {self.text_input}, pointer: {self.text_input.data_ptr()}\n"
-                f"  text_index: {self.text_index}, pointer: {self.text_index.data_ptr()}\n"
-                f"  image_index: {self.image_index}, pointer: {self.image_index.data_ptr()}\n"
-                f"  token_type_ids: {self.token_type_ids}, pointer: {self.token_type_ids.data_ptr()}\n\n"
-                f")")
+        return (
+            f"VLMoEMeta(\n"
+            f"  image_input: {self.image_input}, pointer: {self.image_input.data_ptr()}\n"
+            f"  text_input: {self.text_input}, pointer: {self.text_input.data_ptr()}\n"
+            f"  text_index: {self.text_index}, pointer: {self.text_index.data_ptr()}\n"
+            f"  image_index: {self.image_index}, pointer: {self.image_index.data_ptr()}\n"
+            f"  token_type_ids: {self.token_type_ids}, pointer: {self.token_type_ids.data_ptr()}\n\n"
+            f")"
+        )
+
 
 class Ernie4_5_VLMoeBlock(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str, moe_tag: str, expert_id_offset: int) -> None:
@@ -388,10 +393,15 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             "dtype": "int32",
             "value": 0,
         },
-        "token_type_ids":{
+        "token_type_ids": {
             "shape": ["parallel_config.max_model_len"],
             "dtype": "int32",
             "value": -1,
+        },
+        "image_token_num": {
+            "shape": [1],
+            "dtype": "int64",
+            "value": 0,
         },
     }
 )
@@ -455,48 +465,32 @@ class Ernie4_5_VLModel(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
-    def prepare_vl_moe_meta(
+    def _prepare_vl_moe_meta(
         self,
-        input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
     ) -> VLMoEMeta:
-        hidden_states = input_embeddings
 
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
-
-        token_num = hidden_states.shape[0]
+        token_num = ids_remove_padding.shape[0]
         image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
-        # TODO maybe we can unify following code with one kernel
-        self._mm_buffers["text_input"].fill_(0)
-        self._mm_buffers["image_input"].fill_(0)
-        self._mm_buffers["text_index"].fill_(0)
-        self._mm_buffers["image_index"].fill_(0)
-        self._mm_buffers["token_type_ids"].fill_(-1) # -1 for cuda graph padding value
-
-        text_input = self._mm_buffers["text_input"][:text_token_num]
-        image_input = self._mm_buffers["image_input"][:image_token_num]
-        text_index = self._mm_buffers["text_index"][:token_num]
-        image_index = self._mm_buffers["image_index"][:token_num]
-        
+        self._mm_buffers["token_type_ids"].fill_(-1)
         self._mm_buffers["token_type_ids"].copy_(token_type_ids, False)
-        
-        text_image_index_out(token_type_ids, text_index, image_index)
+        self._mm_buffers["image_token_num"].copy_(image_token_num, False)
 
-        vl_moe_meta = VLMoEMeta(
-            text_input=text_input,
-            image_input=image_input,
-            text_index=text_index,
-            image_index=image_index,
+        return VLMoEMeta(
+            text_input=self._mm_buffers["text_input"][:text_token_num],
+            image_input=self._mm_buffers["image_input"][:image_token_num],
+            text_index=self._mm_buffers["text_index"][:token_num],
+            image_index=self._mm_buffers["image_index"][:token_num],
             token_type_ids=self._mm_buffers["token_type_ids"][:token_num],
+            image_token_num=self._mm_buffers["image_token_num"],
         )
 
-        return vl_moe_meta
-
     def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding)
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
     def forward(
         self,
@@ -505,10 +499,9 @@ class Ernie4_5_VLModel(nn.Layer):
         forward_meta: ForwardMeta,
         vl_moe_meta: VLMoEMeta,
     ):
-        hidden_states = input_embeddings
+        text_image_index_out(vl_moe_meta.token_type_ids, vl_moe_meta.text_index, vl_moe_meta.image_index)
 
-        image_mask = ids_remove_padding == self.im_patch_id
-        image_token_num = image_mask.sum()
+        hidden_states = input_embeddings
         residual = None
 
         for i in range(self.num_layers):
@@ -525,7 +518,7 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
-            image_token_num.cast("int32"),
+            vl_moe_meta.image_token_num.cast("int32"),
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
             hidden_states.cast("float32"),
@@ -652,8 +645,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
     ):
-        vl_moe_meta = self.ernie.prepare_vl_moe_meta(
-            input_embeddings=input_embeddings, ids_remove_padding=ids_remove_padding
+        vl_moe_meta = self.ernie._prepare_vl_moe_meta(
+            ids_remove_padding=ids_remove_padding
         )
         return {"vl_moe_meta": vl_moe_meta}
 

@@ -109,7 +109,7 @@ def mm_buffer(buffer_meta):
             if not hasattr(self, "_mm_buffers"):
                 self._mm_buffers = {}
                 for name, meta in buffer_meta.items():
-                    shape = list(_resolve_path(fd_config, s) for s in meta["shape"])
+                    shape = [_resolve_path(fd_config, s) if isinstance(s, str) else s for s in meta["shape"]]
                     dtype = meta["dtype"]
                     if "." in meta["dtype"]:
                         dtype = _resolve_path(fd_config, meta["dtype"])
