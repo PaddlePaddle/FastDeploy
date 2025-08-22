@@ -24,7 +24,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
     def test_single_prompt_non_streaming(self):
         """测试单prompt非流式响应"""
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        self.completion_handler = OpenAIServingCompletion(
+            self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
+        )
 
         request = CompletionRequest(prompt="test prompt", max_tokens=10, echo=True, logprobs=1)
 
@@ -54,7 +56,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
     async def test_echo_back_prompt_and_streaming(self):
         """测试_echo_back_prompt方法和流式响应的prompt拼接逻辑"""
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        self.completion_handler = OpenAIServingCompletion(
+            self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
+        )
 
         request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True, echo=True)
 
@@ -76,7 +80,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
     def test_multi_prompt_non_streaming(self):
         """测试多prompt非流式响应"""
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        self.completion_handler = OpenAIServingCompletion(
+            self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
+        )
 
         request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, echo=True)
 
@@ -108,7 +114,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
     async def test_multi_prompt_streaming(self):
-        self.completion_handler = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        self.completion_handler = OpenAIServingCompletion(
+            self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
+        )
 
         request = CompletionRequest(prompt=["prompt1", "prompt2"], max_tokens=10, stream=True, echo=True)
 
@@ -140,7 +148,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
-        instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
         await instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "Hello!")
 
@@ -149,7 +157,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
-        instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
         await instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "Hello!")
 
@@ -158,7 +166,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         res = {"outputs": {"send_idx": 1, "text": "!"}}
         idx = 0
 
-        instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
         await instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "!")
 
@@ -168,7 +176,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
-        instance = OpenAIServingCompletion(self.mock_engine, pid=123, ips=None, max_waiting_time=30)
+        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
         await instance._echo_back_prompt(request, res, idx)
         self.assertEqual(res["outputs"]["text"], "!")
 

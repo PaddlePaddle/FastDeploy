@@ -320,7 +320,7 @@ class SplitwiseConnector:
         """
         self.connect_innode_instances[port] = EngineWorkerQueue(
             address=("0.0.0.0", int(port)),
-            num_client=self.cfg.tensor_parallel_size,
+            num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
         )
 
