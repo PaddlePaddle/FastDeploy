@@ -59,8 +59,8 @@ class ExpertService:
         self.cfg.disaggregate_info = None
 
         self.scheduler = cfg.scheduler_config.scheduler()
-
-        self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
+        if cfg.splitwise_role != "mixed":
+            self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 
@@ -127,7 +127,7 @@ class ExpertService:
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.tensor_parallel_size,
                 device_ids=self.cfg.local_device_ids,
-                pod_ip=self.cfg.pod_ips[0],
+                pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}",
             )

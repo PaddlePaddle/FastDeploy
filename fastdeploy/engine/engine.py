@@ -1290,9 +1290,9 @@ class LLMEngine:
                     + f" data parallel id {i}"
                 )
                 self.dp_processed[-1].start()
-                for i in range(1, expert_service_nums):
-                    while self.launched_expert_service_signal.value[i] == 0:
-                        time.sleep(10)
+            for i in range(1, expert_service_nums):
+                while self.launched_expert_service_signal.value[i] == 0:
+                    time.sleep(1)
 
     def check_worker_initialize_status(self):
         """
