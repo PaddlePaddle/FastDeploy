@@ -139,6 +139,7 @@ class ForwardMeta:
                     "shape": obj.shape,
                     "dtype": str(obj.dtype),
                     "place": str(obj.place),
+                    # "content": obj if obj.numel()<10 else "Too big to show"
                 }
                 return tensor_info
             elif isinstance(obj, (list, tuple)):

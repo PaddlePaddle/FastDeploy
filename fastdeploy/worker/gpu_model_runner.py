@@ -591,12 +591,14 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
-    def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
+    def _dummy_prefill_inputs(
+        self, num_tokens: int, batch_size: int, expected_decode_len: int, prefill_only: bool = False
+    ):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
         input_length = min(
-            num_tokens // batch_size,
+            num_tokens // (1 if prefill_only else batch_size),
             self.parallel_config.max_model_len - max_dec_len,
         )
 
@@ -609,8 +611,19 @@ class GPUModelRunner(ModelRunnerBase):
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
+        input_length_list = [input_length] * batch_size
+        if prefill_only:
+            if num_tokens < batch_size:
+                input_length_list = [1] * num_tokens
+                batch_size = num_tokens
+                # input_length_list.extend([0]*(batch_size-num_tokens))
+            else:
+                input_length_list = [1] * (batch_size - 1)
+                input_length_list.append(num_tokens - batch_size + 1)
+        print()
         for i in range(batch_size):
             idx = i
+            input_length = input_length_list[i]
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array(
@@ -1090,6 +1103,7 @@ class GPUModelRunner(ModelRunnerBase):
         batch_size: paddle.Tensor,
         expected_decode_len: int = 1,
         in_capturing: bool = False,
+        prefill_only: bool = False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -1102,12 +1116,14 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens=num_tokens,
             batch_size=batch_size,
             expected_decode_len=expected_decode_len,
+            prefill_only=prefill_only,
         )
         if self.speculative_method in ["mtp"]:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
+                prefill_only=prefill_only,
             )
         while True:
 
@@ -1313,9 +1329,10 @@ class GPUModelRunner(ModelRunnerBase):
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
                     num_tokens=num_tokens,
-                    batch_size=1,
+                    batch_size=self.parallel_config.max_num_seqs,
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
+                    prefill_only=True,
                 )
                 logger.info(
                     f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
