@@ -239,7 +239,6 @@ class ZmqTcpServer(ZmqServerBase):
         self.running = True
         self.context = zmq.Context()
         self._create_socket()
-        self.mutex = threading.Lock()
         self.response_token_lock = threading.Lock()
 
     def _create_socket(self):
