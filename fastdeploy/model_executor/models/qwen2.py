@@ -218,7 +218,6 @@ class Qwen2Model(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         hugging_face_format = fd_config.model_config.model_format == "hugging_face"
-        print("hugging_face_fotmat", hugging_face_format)
         if hugging_face_format:
             fd_config.model_config.pretrained_config.prefix_name = "model"
         else:

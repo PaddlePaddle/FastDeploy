@@ -214,14 +214,12 @@ class ModelConfig:
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
             self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
-            print("self.model_config", self.model_config)
             if "torch_dtype" in self.model_config:
                 self.model_format = "hugging_face"
                 logger.info("The model format is Hugging Face")
             else:
                 self.model_format = "paddle"
                 logger.info("The model format is Paddle")
-        print("self.model_config.model_format", self.model_format)
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
