@@ -57,7 +57,7 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
-        self.use_logprobs = self.cfg.enable_logprob
+        self.use_logprobs = self.cfg.model_config.enable_logprob
 
         if self.speculative_decoding:
             self.output_tokens = paddle.full(

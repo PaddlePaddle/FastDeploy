@@ -89,7 +89,7 @@ class LLMEngine:
             cfg.reasoning_parser,
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
-            cfg.enable_mm,
+            cfg.model_config.enable_mm,
             cfg.tool_parser,
         )
         self.engine = EngineSevice(cfg)
@@ -401,7 +401,7 @@ class LLMEngine:
             if self.cfg.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.enable_mm:
+        if self.cfg.model_config.enable_mm:
             variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
@@ -437,9 +437,9 @@ class LLMEngine:
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
-            f" --model {self.cfg.model_name_or_path!s}"
+            f" --model {self.cfg.model_config.model!s}"
             f" --device_ids {self.cfg.device_ids}"
-            f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
+            f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {ports}"
             f" --pod_ip {self.cfg.master_ip}"
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
@@ -456,11 +456,11 @@ class LLMEngine:
             f" --quantization {self.cfg.model_config.quantization}"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
-            f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
+            f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
-            f" --load_choices {self.cfg.load_choices}"
+            f" --load_choices {self.cfg.load_config.load_choices}"
         )
 
         worker_append_flag = {
@@ -471,8 +471,7 @@ class LLMEngine:
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
-            "enable_logprob": self.cfg.enable_logprob,
-            "enable_mm": self.cfg.enable_mm,
+            "enable_logprob": self.cfg.model_config.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
