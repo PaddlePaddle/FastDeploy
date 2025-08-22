@@ -57,10 +57,10 @@ def load_chat_template(chat_template, is_literal=False):
 class MockMediaIO:
     def load_bytes(self, data):
         return f"media_from_bytes({len(data)})"
-    
+
     def load_base64(self, media_type, data):
         return f"media_from_base64({media_type}, {data})"
-    
+
     def load_file(self, path):
         return f"media_from_file({path})"
 
@@ -145,14 +145,14 @@ class TestChatUtils(unittest.TestCase):
     def test_random_tool_call_id(self):
         """Test random tool call ID generation"""
         tool_id = random_tool_call_id()
-        
+
         # Should start with expected prefix
         self.assertTrue(tool_id.startswith("chatcmpl-tool-"))
-        
+
         # Should contain a UUID hex string
         uuid_part = tool_id.replace("chatcmpl-tool-", "")
         self.assertEqual(len(uuid_part), 32)  # UUID hex is 32 chars
-        
+
         # Should be different each time
         tool_id2 = random_tool_call_id()
         self.assertNotEqual(tool_id, tool_id2)
@@ -172,11 +172,11 @@ class TestChatUtils(unittest.TestCase):
     def test_load_chat_template_from_file(self):
         """Test loading chat template from file"""
         template_content = "Hello {{name}}, how are you?"
-        
+
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
             f.write(template_content)
             temp_path = f.name
-        
+
         try:
             result = load_chat_template(temp_path)
             self.assertEqual(result, template_content)
@@ -188,7 +188,7 @@ class TestChatUtils(unittest.TestCase):
         # Test with path-like string that looks like a file path
         with self.assertRaises(ValueError) as cm:
             load_chat_template("/non/existent/path.txt")
-        
+
         self.assertIn("looks like a file path", str(cm.exception))
 
     def test_load_chat_template_fallback_to_literal(self):
@@ -208,21 +208,21 @@ class TestChatUtils(unittest.TestCase):
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there!"}
         ]
-        
+
         result = parse_chat_messages(messages)
-        
+
         expected = [
             {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
             {"role": "assistant", "content": [{"type": "text", "text": "Hi there!"}]}
         ]
-        
+
         self.assertEqual(result, expected)
 
     def test_parse_chat_messages_none_content(self):
         """Test parsing chat messages with None content"""
         messages = [{"role": "user", "content": None}]
         result = parse_chat_messages(messages)
-        
+
         expected = [{"role": "user", "content": []}]
         self.assertEqual(result, expected)
 
@@ -230,7 +230,7 @@ class TestChatUtils(unittest.TestCase):
         """Test parsing text content part"""
         parser = MultiModalPartParser()
         part = {"type": "text", "text": "Hello world"}
-        
+
         result = parse_content_part(parser, part)
         self.assertEqual(result, part)
 
@@ -241,9 +241,9 @@ class TestChatUtils(unittest.TestCase):
             "type": "image_url",
             "image_url": {"url": "http://example.com/image.jpg"}
         }
-        
+
         result = parse_content_part(parser, part)
-        
+
         expected = {
             "type": "image",
             "image_url": {},
@@ -258,9 +258,9 @@ class TestChatUtils(unittest.TestCase):
             "type": "video_url",
             "video_url": {"url": "http://example.com/video.mp4"}
         }
-        
+
         result = parse_content_part(parser, part)
-        
+
         expected = {
             "type": "video",
             "video_url": {},
@@ -272,10 +272,10 @@ class TestChatUtils(unittest.TestCase):
         """Test parsing unknown content part type"""
         parser = MultiModalPartParser()
         part = {"type": "unknown", "data": "test"}
-        
+
         with self.assertRaises(ValueError) as cm:
             parse_content_part(parser, part)
-        
+
         self.assertIn("Unknown content part type: unknown", str(cm.exception))
 
     def test_multimodal_part_parser_data_url(self):

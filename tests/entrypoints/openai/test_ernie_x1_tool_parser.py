@@ -60,7 +60,7 @@ class ErnieX1ToolParser:
         self.bracket_counts = {"total_l": 0, "total_r": 0}
         self.tool_call_start_token = "<tool_call>"
         self.tool_call_end_token = "</tool_call>"
-        
+
         # Mock vocab access
         self.vocab = getattr(tokenizer, 'vocab', {}) or tokenizer.get_vocab()
         self.tool_call_start_token_id = self.vocab.get(self.tool_call_start_token, 1000)
@@ -70,7 +70,7 @@ class ErnieX1ToolParser:
         """Extract tool calls from complete model response"""
         try:
             tool_calls = []
-            
+
             # Check for invalid <response> tags before tool calls
             if re.search(r"<response>[\s\S]*?</response>\s*(?=<tool_call>)", model_output):
                 return ExtractedToolCallInformation(tools_called=False, content=model_output)
@@ -129,7 +129,9 @@ class ErnieX1ToolParser:
                     type="function",
                     function=FunctionCall(
                         name=func_call["name"],
-                        arguments=json.dumps(func_call["arguments"]) if isinstance(func_call["arguments"], dict) else str(func_call["arguments"])
+                        arguments=json.dumps(func_call["arguments"])
+                        if isinstance(func_call["arguments"], dict)
+                        else str(func_call["arguments"])
                     )
                 ))
 
@@ -142,7 +144,7 @@ class ErnieX1ToolParser:
         except Exception as e:
             return ExtractedToolCallInformation(tools_called=False, content=model_output)
 
-    def extract_tool_calls_streaming(self, previous_text, current_text, delta_text, 
+    def extract_tool_calls_streaming(self, previous_text, current_text, delta_text,
                                    previous_token_ids, current_token_ids, delta_token_ids, request):
         """Extract tool calls for streaming response (simplified)"""
         # Simplified streaming implementation
@@ -185,9 +187,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
         """Test extracting tool calls when none present"""
         model_output = "This is a regular response without tool calls."
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertFalse(result.tools_called)
         self.assertEqual(len(result.tool_calls), 0)
         self.assertEqual(result.content, model_output)
@@ -198,9 +200,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
 {"name": "get_weather", "arguments": {"location": "Beijing"}}
 </tool_call>'''
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertTrue(result.tools_called)
         self.assertEqual(len(result.tool_calls), 1)
         self.assertEqual(result.tool_calls[0].function.name, "get_weather")
@@ -215,9 +217,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
 {"name": "get_time", "arguments": {"timezone": "UTC"}}
 </tool_call>'''
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertTrue(result.tools_called)
         self.assertEqual(len(result.tool_calls), 2)
         self.assertEqual(result.tool_calls[0].function.name, "get_weather")
@@ -228,9 +230,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
         model_output = '''<tool_call>
 {"name": "get_weather", "arguments": {"location": "Beijing"'''
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         # Should handle incomplete JSON gracefully
         self.assertIsInstance(result, ExtractedToolCallInformation)
 
@@ -240,9 +242,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
 "name": "get_weather", "arguments": {"location": "Beijing"}
 </tool_call>'''
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         # Should try to fix JSON by adding braces
         self.assertIsInstance(result, ExtractedToolCallInformation)
 
@@ -255,9 +257,9 @@ This should not be here before tool calls
 {"name": "get_weather", "arguments": {"location": "Beijing"}}
 </tool_call>'''
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         # Should reject due to invalid format
         self.assertFalse(result.tools_called)
 
@@ -266,9 +268,9 @@ This should not be here before tool calls
         model_output = '''<tool_call>
 </tool_call>'''
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertFalse(result.tools_called)
         self.assertEqual(len(result.tool_calls), 0)
 
@@ -278,11 +280,11 @@ This should not be here before tool calls
         current_text = "Let me check the weather"
         delta_text = "Let me check the weather"
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls_streaming(
             previous_text, current_text, delta_text, [], [], [], request
         )
-        
+
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.role, "assistant")
         self.assertEqual(result.content, delta_text)
@@ -291,11 +293,11 @@ This should not be here before tool calls
         """Test streaming with tool call start token"""
         delta_text = "<tool_call>"
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls_streaming(
             "", "", delta_text, [], [], [], request
         )
-        
+
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.role, "assistant")
         self.assertEqual(result.content, "")  # Should suppress token
@@ -304,11 +306,11 @@ This should not be here before tool calls
         """Test streaming with tool call end token"""
         delta_text = "</tool_call>"
         request = MagicMock()
-        
+
         result = self.parser.extract_tool_calls_streaming(
             "", "", delta_text, [], [], [], request
         )
-        
+
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.role, "assistant")
         self.assertEqual(result.content, "")  # Should suppress token

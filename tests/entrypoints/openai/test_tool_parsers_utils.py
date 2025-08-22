@@ -25,7 +25,7 @@ except ImportError:
     # Create mock objects if not available
     class Allow:
         ALL = "ALL"
-    
+
     partial_json_parser = MagicMock()
 
 # Copy the utility functions directly for testing to avoid import issues
@@ -105,19 +105,19 @@ class TestToolParsersUtils(unittest.TestCase):
         # Basic test
         result = find_common_prefix('{"fruit": "ap"}', '{"fruit": "apple"}')
         self.assertEqual(result, '{"fruit": "ap')
-        
+
         # No common prefix
         result = find_common_prefix('hello', 'world')
         self.assertEqual(result, '')
-        
+
         # Identical strings
         result = find_common_prefix('test', 'test')
         self.assertEqual(result, 'test')
-        
+
         # Empty strings
         result = find_common_prefix('', '')
         self.assertEqual(result, '')
-        
+
         # One empty string
         result = find_common_prefix('test', '')
         self.assertEqual(result, '')
@@ -127,19 +127,19 @@ class TestToolParsersUtils(unittest.TestCase):
         # Basic test with non-alphanumeric suffix
         result = find_common_suffix('{"fruit": "ap"}', '{"fruit": "apple"}')
         self.assertEqual(result, '"}')
-        
+
         # No common suffix
         result = find_common_suffix('hello', 'world')
         self.assertEqual(result, '')
-        
+
         # Identical strings
         result = find_common_suffix('test{}', 'test{}')
         self.assertEqual(result, '{}')
-        
+
         # Empty strings
         result = find_common_suffix('', '')
         self.assertEqual(result, '')
-        
+
         # Suffix with alphanumeric character (should stop)
         result = find_common_suffix('test123}', 'best123}')
         self.assertEqual(result, '}')
@@ -149,15 +149,15 @@ class TestToolParsersUtils(unittest.TestCase):
         # Basic test
         result = extract_intermediate_diff('{"fruit": "apple"}', '{"fruit": "ap"}')
         self.assertEqual(result, 'ple')
-        
+
         # No difference
         result = extract_intermediate_diff('test', 'test')
         self.assertEqual(result, '')
-        
+
         # Complete replacement (common prefix and suffix removed)
         result = extract_intermediate_diff('{"new": "value"}', '{"old": "data"}')
         self.assertEqual(result, 'new": "value')  # Fixed: prefix {"" and suffix "}" removed
-        
+
         # Adding characters at the end
         result = extract_intermediate_diff('hello world!', 'hello')
         self.assertEqual(result, ' world!')
@@ -167,20 +167,20 @@ class TestToolParsersUtils(unittest.TestCase):
         # Basic test
         result = find_all_indices('hello world hello', 'hello')
         self.assertEqual(result, [0, 12])
-        
+
         # No matches
         result = find_all_indices('hello world', 'xyz')
         self.assertEqual(result, [])
-        
+
         # Overlapping matches
         result = find_all_indices('aaa', 'aa')
         self.assertEqual(result, [0, 1])
-        
+
         # Empty substring (should find nothing)
         result = find_all_indices('hello', '')
         # find returns every position for empty string, but we expect specific behavior
         self.assertIsInstance(result, list)
-        
+
         # Empty string
         result = find_all_indices('', 'test')
         self.assertEqual(result, [])
@@ -191,7 +191,7 @@ class TestToolParsersUtils(unittest.TestCase):
         result, length = partial_json_loads('{"key": "value"}', Allow.ALL)
         self.assertEqual(result, {"key": "value"})
         self.assertEqual(length, 16)
-        
+
         # Valid partial JSON that partial_json_parser can handle
         try:
             result, length = partial_json_loads('{"key": "val', Allow.ALL)
@@ -200,7 +200,7 @@ class TestToolParsersUtils(unittest.TestCase):
         except JSONDecodeError:
             # This is acceptable for partial JSON
             pass
-        
+
         # Valid JSON with extra data (should use raw_decode)
         try:
             result, length = partial_json_loads('{"key": "value"} extra', Allow.ALL)
@@ -219,7 +219,7 @@ class TestToolParsersUtils(unittest.TestCase):
         self.assertTrue(is_complete_json('true'))
         self.assertTrue(is_complete_json('123'))
         self.assertTrue(is_complete_json('"string"'))
-        
+
         # Invalid JSON
         self.assertFalse(is_complete_json('{"key": "value"'))
         self.assertFalse(is_complete_json('{"key":}'))
@@ -231,27 +231,27 @@ class TestToolParsersUtils(unittest.TestCase):
         # Basic test
         result = consume_space(0, '   hello')
         self.assertEqual(result, 3)
-        
+
         # No spaces
         result = consume_space(0, 'hello')
         self.assertEqual(result, 0)
-        
+
         # All spaces
         result = consume_space(0, '     ')
         self.assertEqual(result, 5)
-        
+
         # Starting from middle
         result = consume_space(2, 'he   llo')
         self.assertEqual(result, 5)
-        
+
         # At end of string
         result = consume_space(5, 'hello')
         self.assertEqual(result, 5)
-        
+
         # Beyond end of string
         result = consume_space(10, 'hello')
         self.assertEqual(result, 10)
-        
+
         # Mixed whitespace (\t\n\r + space = 5 total characters)
         result = consume_space(0, ' \t\n\r hello')
         self.assertEqual(result, 5)

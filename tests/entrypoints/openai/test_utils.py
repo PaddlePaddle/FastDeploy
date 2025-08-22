@@ -47,7 +47,7 @@ class DealerConnectionManager:
             dealer = MagicMock()
             dealer.read = AsyncMock()
             dealer.close = MagicMock()
-            
+
             async with self.lock:
                 self.connections.append(dealer)
                 self.connection_load.append(0)
@@ -139,7 +139,7 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
     def test_init(self):
         """Test DealerConnectionManager initialization"""
         manager = DealerConnectionManager(pid=123, max_connections=5)
-        
+
         self.assertEqual(manager.pid, 123)
         self.assertEqual(manager.max_connections, 10)  # Should be at least 10
         self.assertEqual(manager.connections, [])
@@ -153,27 +153,27 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
         """Test minimum connections constraint"""
         manager = DealerConnectionManager(pid=123, max_connections=5)
         self.assertEqual(manager.max_connections, 10)  # Should be at least 10
-        
+
         manager = DealerConnectionManager(pid=123, max_connections=15)
         self.assertEqual(manager.max_connections, 15)  # Should keep 15
 
     async def test_initialize(self):
         """Test connection initialization"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         with patch.object(manager, '_add_connection', new_callable=AsyncMock) as mock_add:
             mock_add.return_value = True
             await manager.initialize()
-            
+
             self.assertTrue(manager.running)
             self.assertEqual(mock_add.call_count, 10)
 
     async def test_add_connection_success(self):
         """Test successful connection addition"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         result = await manager._add_connection(0)
-        
+
         self.assertTrue(result)
         self.assertEqual(len(manager.connections), 1)
         self.assertEqual(len(manager.connection_load), 1)
@@ -186,9 +186,9 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
         manager = DealerConnectionManager(pid=123, max_connections=10)
         manager.connection_load = [0, 1, 2]
         manager.connection_heap = [(0, 0), (1, 1), (2, 2)]
-        
+
         manager._update_load(0, 2)
-        
+
         self.assertEqual(manager.connection_load[0], 2)
         # Heap should be reordered
         self.assertIn((1, 1), manager.connection_heap)
@@ -196,17 +196,17 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
     def test_get_least_loaded_connection_empty(self):
         """Test getting connection when none available"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         result = manager._get_least_loaded_connection()
         self.assertIsNone(result)
 
     async def test_get_least_loaded_connection(self):
         """Test getting least loaded connection"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         # Add a connection first
         await manager._add_connection(0)
-        
+
         result = manager._get_least_loaded_connection()
         self.assertIsNotNone(result)
         self.assertEqual(manager.connection_load[0], 1)  # Load should be incremented
@@ -215,9 +215,9 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
         """Test getting connection for request"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
         await manager._add_connection(0)
-        
+
         dealer, queue = await manager.get_connection("test-request", num_choices=2)
-        
+
         self.assertIsNotNone(dealer)
         self.assertIsInstance(queue, asyncio.Queue)
         self.assertIn("test-request", manager.request_map)
@@ -226,10 +226,10 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
     async def test_get_connection_no_available(self):
         """Test getting connection when none available"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         with self.assertRaises(RuntimeError) as cm:
             await manager.get_connection("test-request")
-        
+
         self.assertIn("No available connections", str(cm.exception))
 
     async def test_cleanup_request(self):
@@ -237,29 +237,29 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
         manager = DealerConnectionManager(pid=123, max_connections=10)
         manager.request_map["test-request"] = asyncio.Queue()
         manager.request_num["test-request"] = 1
-        
+
         await manager.cleanup_request("test-request")
-        
+
         self.assertNotIn("test-request", manager.request_map)
         self.assertNotIn("test-request", manager.request_num)
 
     async def test_cleanup_request_nonexistent(self):
         """Test cleanup of non-existent request"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         # Should not raise an error
         await manager.cleanup_request("nonexistent")
 
     async def test_close(self):
         """Test closing manager"""
         manager = DealerConnectionManager(pid=123, max_connections=10)
-        
+
         # Add some connections and tasks
         await manager._add_connection(0)
         manager.request_map["test"] = asyncio.Queue()
-        
+
         await manager.close()
-        
+
         self.assertFalse(manager.running)
         self.assertEqual(len(manager.connections), 0)
         self.assertEqual(len(manager.connection_load), 0)
@@ -270,20 +270,20 @@ class TestDealerConnectionManager(unittest.IsolatedAsyncioTestCase):
         manager = DealerConnectionManager(pid=123, max_connections=10)
         mock_dealer = MagicMock()
         mock_dealer.read = AsyncMock()
-        
+
         # Set up to stop after one iteration
         manager.running = True
-        
+
         # Mock the read to return once then stop
         async def mock_read_side_effect():
             manager.running = False  # Stop after first read
             return [b'mock_data']
-        
+
         mock_dealer.read.side_effect = mock_read_side_effect
-        
+
         # This should not raise an exception
         await manager._listen_connection(mock_dealer, 0)
-        
+
         mock_dealer.read.assert_called()
 
 
