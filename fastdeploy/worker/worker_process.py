@@ -516,7 +516,7 @@ def parse_args():
         help="enable prefix cache",
     )
     parser.add_argument(
-        "--enable_custom_all_reduce",
+        "--disable_custom_all_reduce",
         action="store_true",
         help="enable custom all-reduce",
     )
