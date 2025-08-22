@@ -71,6 +71,7 @@ class ZmqClient:
         self.router.setsockopt(zmq.ROUTER_MANDATORY, 1)
         self.router.setsockopt(zmq.SNDTIMEO, -1)
         self.router.bind(f"ipc://{self.router_path}")
+        llm_logger.info(f"router path: {self.router_path}")
 
     def send_json(self, data):
         """
@@ -113,10 +114,12 @@ class ZmqClient:
         """
         if self.router is None:
             raise RuntimeError("Router socket not created. Call create_router() first.")
+        llm_logger.info(f"send_multipart start, req_id: {req_id} data_len: {len(data)}")
 
         while self.running:
             with self.mutex:
                 if req_id not in self.req_dict:
+                    llm_logger.info(f"send_multipart start, req_id: {req_id} data_len: {len(data)}")
                     try:
                         client, _, request_id = self.router.recv_multipart(flags=zmq.NOBLOCK)
                         req_id_str = request_id.decode("utf-8")
@@ -126,7 +129,7 @@ class ZmqClient:
                         continue
                 else:
                     break
-
+        llm_logger.info(f"send_multipart start, req_id: {req_id} data_len: {len(data)}")
         if self.req_dict[req_id] == -1:
             if data[-1].finished:
                 with self.mutex:
@@ -134,10 +137,12 @@ class ZmqClient:
             return
         try:
             start_send = time.time()
+            llm_logger.info(f"send_multipart start, req_id: {req_id} data_len: {len(data)}")
             if self.aggregate_send:
                 result = self.pack_aggregated_data(data)
             else:
                 result = msgpack.packb([response.to_dict() for response in data])
+            llm_logger.info(f"send_multipart start, req_id: {req_id} data_len: {len(data)}")
             self.router.send_multipart([self.req_dict[req_id], b"", result])
             llm_logger.debug(f"send_multipart result: {req_id} len {len(data)} elapse: {time.time()-start_send}")
         except zmq.ZMQError as e:

@@ -67,7 +67,7 @@ class EngineSevice:
             self.resource_manager = ResourceManagerV1(
                 cfg.max_num_seqs,
                 cfg,
-                cfg.tensor_parallel_size,
+                cfg.parallel_config.tensor_parallel_size,
                 cfg.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
@@ -79,7 +79,7 @@ class EngineSevice:
             self.resource_manager = ResourceManager(
                 cfg.max_num_seqs,
                 cfg,
-                cfg.tensor_parallel_size,
+                cfg.parallel_config.tensor_parallel_size,
                 cfg.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
@@ -162,7 +162,7 @@ class EngineSevice:
 
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
-            shape=[min(self.cfg.worker_num_per_node, self.cfg.tensor_parallel_size)], dtype=np.int32
+            shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
         )
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
@@ -194,7 +194,7 @@ class EngineSevice:
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
                 is_server=True,
-                num_client=self.cfg.tensor_parallel_size,
+                num_client=self.cfg.parallel_config.tensor_parallel_size,
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
@@ -210,7 +210,7 @@ class EngineSevice:
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
-                    num_client=self.cfg.tensor_parallel_size,
+                    num_client=self.cfg.parallel_config.tensor_parallel_size,
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
@@ -218,7 +218,7 @@ class EngineSevice:
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
-            num_client=self.cfg.tensor_parallel_size,
+            num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             # local_data_parallel_id=min(
@@ -303,7 +303,7 @@ class EngineSevice:
             for task in tasks:
                 task.inference_start_time = time.time()
             if not is_prefill:
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -580,7 +580,7 @@ class EngineSevice:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     err, data = self.zmq_server.receive_json_once(block)
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
@@ -651,6 +651,7 @@ class EngineSevice:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
+                    llm_logger.info(f"Send results: {request_id} {contents}")
                     self.zmq_server.send_multipart(request_id, contents)
 
             except Exception as e:
@@ -728,7 +729,7 @@ class EngineSevice:
     def start_cache_service(self, device_ids, ipc_signal_suffix):
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
-            tensor_parallel_size=self.cfg.tensor_parallel_size,
+            tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
             device_ids=device_ids,
             pod_ip=self.cfg.master_ip,
             engine_worker_queue_port=int(

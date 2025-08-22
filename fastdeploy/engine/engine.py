@@ -117,8 +117,8 @@ class LLMEngine:
         self.engine.data_processor = self.data_processor
 
         self.engine.start()
-
         if api_server_pid is not None:
+            llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
             self.engine.start_zmq_service(api_server_pid)
 
         if self.do_profile == 0 and (

@@ -963,9 +963,16 @@ class EngineArgs:
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
+
+
         assert is_port_available(
-            "0.0.0.0", self.engine_worker_queue_port
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+        ), f"The parameter `engine_worker_queue_port`:{port} is already in use."
+
 
         return FDConfig(
             model_config=model_cfg,

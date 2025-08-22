@@ -31,7 +31,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
+from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger, is_port_available
 
 logger = get_logger("config", "config.log")
 
@@ -1057,7 +1057,10 @@ class FDConfig:
         if num_ranks > self.max_chips_per_node:
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
-            assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
+            logger.warning(f"nnode: {nnode}, but got {self.nnode} current ips {self.ips}")
+            self.nnode = nnode
+
+            # assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
         else:
             self.worker_num_per_node = num_ranks
 
@@ -1083,7 +1086,7 @@ class FDConfig:
 
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
-        if self.tensor_parallel_size <= self.worker_num_per_node:
+        if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
             self.master_ip = self.host_ip
         else:
@@ -1120,10 +1123,6 @@ class FDConfig:
         assert self.max_num_seqs <= 256, (
             "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
         )
-        assert is_port_available(
-            "0.0.0.0", int(self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id])
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id]} is already in use. {self.parallel_config.local_data_parallel_id}"
-
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
         assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"

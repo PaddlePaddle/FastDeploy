@@ -45,6 +45,7 @@ class EngineClient:
         max_model_len,
         tensor_parallel_size,
         pid,
+        port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
         # enable_mm=False,
@@ -87,7 +88,7 @@ class EngineClient:
             name="worker_healthy_live_signal",
             array=self.worker_healthy_live_recorded_time_array,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
@@ -96,7 +97,7 @@ class EngineClient:
             name="model_weights_status",
             array=model_weights_status,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         self.connection_manager = DealerConnectionManager(

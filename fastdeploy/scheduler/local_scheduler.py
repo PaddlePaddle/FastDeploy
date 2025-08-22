@@ -305,6 +305,8 @@ class LocalScheduler:
                     continue
                 self.responses[response.request_id].append(response)
             self.responses_not_empty.notify_all()
+            scheduler_logger.info(f"Scheduler has received some finished responses: {self.responses}")
+
 
     def get_results(self) -> Dict[str, List[RequestOutput]]:
         """
@@ -349,4 +351,5 @@ class LocalScheduler:
                 if finished:
                     self._recycle(request_id)
                     scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                scheduler_logger.info(f"responses: {responses} {results}")
             return results

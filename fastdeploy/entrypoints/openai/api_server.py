@@ -156,19 +156,20 @@ async def lifespan(app: FastAPI):
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
     engine_client = EngineClient(
-        args.model,
-        args.tokenizer,
-        args.max_model_len,
-        args.tensor_parallel_size,
-        int(args.engine_worker_queue_port[args.local_data_parallel_id]),
-        args.limit_mm_per_prompt,
-        args.mm_processor_kwargs,
+        model_name_or_path=args.model,
+        tokenizer=args.tokenizer,
+        max_model_len=args.max_model_len,
+        tensor_parallel_size=args.tensor_parallel_size,
+        pid=pid,
+        port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
+        limit_mm_per_prompt=args.limit_mm_per_prompt,
+        mm_processor_kwargs=args.mm_processor_kwargs,
         # args.enable_mm,
-        args.reasoning_parser,
-        args.data_parallel_size,
-        args.enable_logprob,
-        args.workers,
-        args.tool_call_parser,
+        reasoning_parser=args.reasoning_parser,
+        data_parallel_size=args.data_parallel_size,
+        enable_logprob=args.enable_logprob,
+        workers=args.workers,
+        tool_parser=args.tool_call_parser,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(

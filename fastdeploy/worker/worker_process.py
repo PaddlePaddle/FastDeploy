@@ -737,6 +737,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        engine_worker_queue_port=args.engine_worker_queue_port,
     )
     update_fd_config_for_mm(fd_config)
 
