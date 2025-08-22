@@ -36,6 +36,8 @@ def get_block_shape_and_split_kv_block(
     decoder_block_shape_q: int,
     group_size: int,
     block_size: int,
+    kv_num_heads: int,
+    decoder_chunk_size: int,
     decoder_step_token_num: int,
 ):
     """
@@ -62,6 +64,8 @@ def get_block_shape_and_split_kv_block(
             decoder_block_shape_q,
             group_size,
             block_size,
+            kv_num_heads,
+            decoder_chunk_size,
             decoder_step_token_num,
         )
         return (

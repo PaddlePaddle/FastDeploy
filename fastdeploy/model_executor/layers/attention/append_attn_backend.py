@@ -159,6 +159,8 @@ class AppendAttentionBackend(AttentionBackend):
             self.decoder_block_shape_q,
             self.group_size,
             self.block_size,
+            self.kv_num_heads,
+            metadata.max_partition_size,
             self.speculate_max_draft_token_num + 1,
         )
 

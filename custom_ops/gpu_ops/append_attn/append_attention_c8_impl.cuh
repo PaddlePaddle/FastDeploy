@@ -1166,7 +1166,7 @@ void MultiQueryAppendC8Attention(
                 max_seq_len,
                 num_chunks,
                 num_heads,
-                chunk_size,
+                num_blocks_x.data<int>()[0],
                 HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
@@ -1440,7 +1440,7 @@ void MultiQueryAppendC8Attention(
                 max_seq_len,
                 num_chunks,
                 num_heads,
-                chunk_size,
+                num_blocks_x.data<int>()[0],
                 HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;

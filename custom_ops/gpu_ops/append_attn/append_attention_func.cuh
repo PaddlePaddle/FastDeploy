@@ -2109,10 +2109,10 @@ template <typename T,
           typename OutT = T,
           bool ENABLE_PREFILL = true>
 __global__ void merge_multi_chunks_decoder_kernel(
-    const T *__restrict__ multi_out,    // [token_num, num_chunks, num_heads,
+    const T *__restrict__ multi_out,    // [token_num, max_num_chunks, num_heads,
                                         // head_dim]
-    const float *__restrict__ multi_m,  // [token_num, num_chunks, num_heads]
-    const float *__restrict__ multi_d,  // [token_num, num_chunks, num_heads]
+    const float *__restrict__ multi_m,  // [token_num, max_num_chunks, num_heads]
+    const float *__restrict__ multi_d,  // [token_num, max_num_chunks, num_heads]
     const int *__restrict__ seq_lens_q,
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ seq_lens_encoder,
@@ -2124,9 +2124,9 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const float quant_min_bound,
     const float in_scale,
     const int max_seq_len,
-    const int num_chunks,
+    const int max_num_chunks,
     const int num_heads,
-    const int chunk_size,
+    const int *__restrict__ num_blocks_q_and_chunk_config, // [3]
     const int head_dim) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int bid = blockIdx.x, hid = blockIdx.y;
@@ -2134,6 +2134,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
   __shared__ float md_smem[bdy * 2];
   const int start_token_idx = cu_seqlens_q[bid];
   const int seq_len_q = seq_lens_q[bid];
+  const int chunk_size = num_blocks_q_and_chunk_config[1];
   if (seq_len_q == 0) return;
   int seq_len_kv = seq_lens_kv[bid];
 
@@ -2176,13 +2177,13 @@ __global__ void merge_multi_chunks_decoder_kernel(
   }
 #pragma unroll 2
   for (int i = ty; i < num_chunks_this_seq; i += bdy) {
-    uint32_t offset = (bid * num_chunks + i) * num_heads + hid;
+    uint32_t offset = (bid * max_num_chunks + i) * num_heads + hid;
     float m_prev = m;
     float d_prev = d;
     const float m_now = multi_m[offset];
     const float d_now = multi_d[offset];
     m = max(m_prev, m_now);
-    offset = (bid * num_chunks * num_heads + i * num_heads + hid) * head_dim +
+    offset = (bid * max_num_chunks * num_heads + i * num_heads + hid) * head_dim +
              vid * vec_size;
     Load<T, vec_size>(&multi_out[offset], &load_vec);
     const float scale1 = __expf(m_prev - m), scale2 = __expf(m_now - m);
