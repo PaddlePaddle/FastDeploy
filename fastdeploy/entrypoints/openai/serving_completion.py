@@ -119,11 +119,10 @@ class OpenAIServingCompletion:
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
+                    del current_req_dict
             except Exception as e:
                 self.engine_client.semaphore.release()
                 return ErrorResponse(message=str(e), code=400)
-
-            del current_req_dict
 
             if request.stream:
                 return self.completion_stream_generator(
