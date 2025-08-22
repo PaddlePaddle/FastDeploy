@@ -21,7 +21,7 @@ import numpy as np
 
 from fastdeploy import envs
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqClient
+from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
@@ -85,7 +85,7 @@ class EngineClient:
         """
         Create a ZMQ client.
         """
-        self.zmq_client = ZmqClient(model, mode)
+        self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
     def format_and_add_data(self, prompts: dict):
