@@ -1,20 +1,17 @@
-# ERNIE-4.5-21B-A3B
+# ERNIE-4.5-Turbo-X1
 ## 一、环境准备
 ### 1.1 支持情况
-ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小卡数如下：
+ERNIE-4.5-Turbo-X1各量化精度，在下列硬件上部署所需要的最小卡数如下：
 
-|  | WINT8 | WINT4 | FP8 |
-|-----|-----|-----|-----|
-|H800 80GB| 1 | 1 | 1 |
-|A800 80GB| 1 | 1 | / |
-|H20 96GB| 1 | 1 | 1 |
-|L20 48GB| 1 | 1 | 1 |
-|A30 40GB| 2 | 1 | / |
-|A10 24GB| 2 | 1 | / |
+|  | WINT8 | WINT4 | FP8  | W4A8 |
+|-----|-----|-----|-----|-----|
+|H800 80GB| 8 | 4 | 8 | 4 |
+|A800 80GB| 8 | 4 | / | 4 |
 
 **注：**
-1. 在启动命令后指定`--tensor-parallel-size 2` 即可修改部署卡数
-2. 表格中未列出的硬件，可根据显存大小进行预估是否可以部署
+1. 在启动命令后指定`--tensor-parallel-size 4`即可修改部署卡数
+2. 由于仅提供4卡量化scale，W4A8模型需部署在4卡
+3. 表格中未列出的硬件，可根据显存大小进行预估是否可以部署
 
 ### 1.2 安装fastdeploy
 - 安装，请参考[Fastdeploy Installation](../get_started/installation/README.md)完成安装。
@@ -27,10 +24,10 @@ ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小�
 ```bash
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-21B-A3B-Paddle \
-       --tensor-parallel-size 1 \
+       --model baidu/ERNIE-4.5-Turbo-X1-Paddle \
+       --tensor-parallel-size 8 \
        --quantization wint4 \
-       --max-model-len 32768 \
+       --max-model-len 65536 \
        --max-num-seqs 128
 ```
 其中：
@@ -41,9 +38,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 ### 2.2 进阶：如何获取更优性能
 #### 2.2.1 评估应用场景，正确设置参数
-结合应用场景，评估平均输入长度、平均输出长度、最大上下文长度。例如，平均输入长度为1000，输出长度为30000，那么建议设置为 32768
-- 根据最大上下文长度，设置`max-model-len`
+结合应用场景，评估平均输入长度、平均输出长度、最大上下文长度
+- 根据最大上下文长度，设置`max-model-len`。例如，平均输入长度为2000，输出长度为50000，那么建议设置为 65536
 - **启用服务管理全局 Block**
+
 ```
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 ```
@@ -80,18 +78,15 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 1. MTP当前暂不支持与Prefix Caching 、Chunked Prefill 、CUDAGraph同时使用。
 2. MTP当前暂不支持服务管理全局 Block， 即`export ENABLE_V1_KVCACHE_SCHEDULER=1`
 
-#### 2.2.5 CUDAGraph
+#### 2.2.5 W4A8C8量化
 **原理：**
-CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操作序列捕获（capture）为图结构（graph），实现 GPU 任务的高效执行和优化。CUDAGraph 的核心思想是将一系列 GPU 计算和内存操作封装为一个可重复执行的图，从而减少 CPU-GPU 通信开销、降低内核启动延迟，并提升整体计算性能。
+量化可以实现模型的压缩，减少显存占用并加快推理计算速度。对模型MOE部分权重使用per-channel对称4比特量化，激活使用静态per-tensor对称8比特量化，KVCache使用静态per-channel对称8比特量化。以实现更优的推理效果。
 
 **启用方式：**
-在启动命令中增加
+需要在启动命令中指定对应的模型名称，`baidu/ERNIE-4.5-Turbo-X1-W4A8C8-TP4-Paddle`
 ```
---use-cudagraph
+--model baidu/ERNIE-4.5-Turbo-X1-W4A8C8-TP4-Paddle
 ```
-注：
-1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../parameters.md) 相关配置参数说明
-2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
 
 #### 2.2.6 拒绝采样
 **原理：**
@@ -108,46 +103,45 @@ export FD_SAMPLING_CLASS=rejection
 
 **启用方式：** 以单机8GPU，1P1D（各4GPU）部署为例，与默认的混合式部署方式相比， 需要`--splitwise-role`指定节点的角色。并通过环境变量`FD_LOG_DIR`和`CUDA_VISIBLE_DEVICES`将两个节点的GPU 和日志隔离开
 ```
-# prefill
+export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-export INFERENCE_MSG_QUEUE_ID=1315
-export FLAGS_max_partition_size=2048
-export FD_ATTENTION_BACKEND=FLASH_ATTN
-export FD_LOG_DIR="prefill_log"
-
-quant_type=block_wise_fp8
-export FD_USE_DEEP_GEMM=0
-
-python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
-    --max-model-len 131072 \
-    --max-num-seqs 20 \
-    --num-gpu-blocks-override 40000 \
-    --quantization ${quant_type} \
-    --gpu-memory-utilization 0.9 --kv-cache-ratio 0.9 \
-    --port 7012 --engine-worker-queue-port 7013 --metrics-port 7014 --tensor-parallel-size 4 \
-    --cache-queue-port 7015 \
-    --splitwise-role "prefill" \
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-Turbo-X1-Paddle \
+       --port 8180 --metrics-port 8181 \
+       --engine-worker-queue-port 8182 \
+       --cache-queue-port 8183 \
+       --tensor-parallel-size 4 \
+       --quantization wint4 \
+       --splitwise-role "prefill"
 ```
 ```
-# decode
+export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
-export INFERENCE_MSG_QUEUE_ID=1215
-export FLAGS_max_partition_size=2048
-export FD_LOG_DIR="decode_log"
-
-quant_type=block_wise_fp8
-export FD_USE_DEEP_GEMM=0
-
-python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
-    --max-model-len 131072 \
-    --max-num-seqs 20 \
-    --quantization ${quant_type} \
-    --gpu-memory-utilization 0.85 --kv-cache-ratio 0.1 \
-    --port 9012 --engine-worker-queue-port 8013 --metrics-port 8014 --tensor-parallel-size 4 \
-    --cache-queue-port 8015 \
-    --innode-prefill-ports 7013 \
-    --splitwise-role "decode"
+# 注意innode-prefill-ports指定为Prefill服务的engine-worker-queue-port
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-Turbo-X1-Paddle\
+       --port 8184 --metrics-port 8185 \
+       --engine-worker-queue-port 8186 \
+       --cache-queue-port 8187 \
+       --tensor-parallel-size 4 \
+       --quantization wint4 \
+       --innode-prefill-ports 8182 \
+       --splitwise-role "decode"
 ```
+
+#### 2.2.8 CUDAGraph
+**原理：**
+CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操作序列捕获（capture）为图结构（graph），实现 GPU 任务的高效执行和优化。CUDAGraph 的核心思想是将一系列 GPU 计算和内存操作封装为一个可重复执行的图，从而减少 CPU-GPU 通信开销、降低内核启动延迟，并提升整体计算性能。
+
+**启用方式：**
+在启动命令中增加
+```
+--use-cudagraph
+--enable-custom-all-reduce
+```
+注：
+1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../parameters.md) 相关配置参数说明
+2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
 
 ## 三、常见问题FAQ
 如果您在使用过程中遇到问题，可以在[FAQ](./FAQ.md)中查阅。

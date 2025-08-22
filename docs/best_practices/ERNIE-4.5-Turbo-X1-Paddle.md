@@ -1,12 +1,12 @@
-# ERNIE-4.5-300B-A47B
+# ERNIE-4.5-Turbo-X1
 ## Environmental Preparation
 ### 1.1 Hardware requirements
-The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the following hardware for each quantization is as follows:
+The minimum number of GPUs required to deploy `ERNIE-4.5-Turbo-X1` on the following hardware for each quantization is as follows:
 
-| | WINT8 | WINT4 | FP8 | WINT2 | W4A8 |
-|-----|-----|-----|-----|-----|-----|
-|H800 80GB| 8 | 4 | 8 | 2 | 4 |
-|A800 80GB| 8 | 4 | / | 2 | 4 |
+| | WINT8 | WINT4 | FP8 | W4A8 |
+|-----|-----|-----|-----|-----|
+|H800 80GB| 8 | 4 | 8 | 4 |
+|A800 80GB| 8 | 4 | / | 4 |
 
 **Tips:**
 1. To modify the number of deployment GPUs, specify `--tensor-parallel-size 4` in starting command.
@@ -24,10 +24,10 @@ Start the service by following command:
 ```bash
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+       --model baidu/ERNIE-4.5-Turbo-X1-Paddle \
        --tensor-parallel-size 8 \
        --quantization wint4 \
-       --max-model-len 32768 \
+       --max-model-len 65536 \
        --max-num-seqs 128
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
@@ -38,7 +38,7 @@ For more parameter meanings and default settings, see [FastDeploy Parameter Docu
 ### 2.2 Advanced: How to get better performance
 #### 2.2.1 Correctly set parameters that match the application scenario
 Evaluate average input length, average output length, and maximum context length
-- Set max-model-len according to the maximum context length. For example, if the average input length is 1000 and the output length is 30000, then it is recommended to set it to 32768
+- Set max-model-len according to the maximum context length. For example, if the average input length is 2000 and the output length is 50000, then it is recommended to set it to 65536
 - **Enable the service management global block**
 
 ```
@@ -81,9 +81,9 @@ Notes:
 Quantization can achieve model compression, reduce GPU memory usage and speed up inference. To achieve better inference results, per-channel symmetric 4-bit quantization is used for MoE weights. static per-tensor symmetric 8-bit quantization is used for activation. And static per-channel symmetric 8-bit quantization is used for KVCache.
 
 **How to enable:**
-Just specify the corresponding model name in the startup command, `baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle`
+Just specify the corresponding model name in the startup command, `baidu/ERNIE-4.5-Turbo-X1-W4A8C8-TP4-Paddle`
 ```
---model baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle
+--model baidu/ERNIE-4.5-Turbo-X1-W4A8C8-TP4-Paddle
 ```
 
 #### 2.2.6 Rejection Sampling
@@ -104,7 +104,7 @@ export FD_SAMPLING_CLASS=rejection
 export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+       --model baidu/ERNIE-4.5-Turbo-X1-Paddle \
        --port 8180 --metrics-port 8181 \
        --engine-worker-queue-port 8182 \
        --cache-queue-port 8183 \
@@ -117,7 +117,7 @@ export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 # Note that innode-prefill-ports is specified as the Prefill serviceengine-worker-queue-port
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-Paddle\
+       --model baidu/ERNIE-4.5-Turbo-X1-Paddle\
        --port 8184 --metrics-port 8185 \
        --engine-worker-queue-port 8186 \
        --cache-queue-port 8187 \

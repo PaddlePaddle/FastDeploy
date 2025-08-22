@@ -52,7 +52,7 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 **Idea:** The core idea of Prefix Caching is to avoid repeated calculations by caching the intermediate calculation results of the input sequence (KV Cache), thereby speeding up the response speed of multiple requests with the same prefix. For details, refer to [prefix-cache](../features/prefix_caching.md)
 
 **How to enable:**
-Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine.
+Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine. The recommended value is `(total machine memory - model size) * 20%`. If the service fails to start because other programs are occupying memory, try reducing the `--swap-space` value.
 ```
 --enable-prefix-caching
 --swap-space 50
@@ -75,6 +75,9 @@ Add the following lines to the startup parameters
 ```
 --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
 ```
+Notes:
+1. MTP currently does not support simultaneous use with Prefix Caching, Chunked Prefill, and CUDAGraph.
+2. MTP currently does not support service management global blocks, i.e. `export ENABLE_V1_KVCACHE_SCHEDULER=1`
 
 #### 2.2.5 CUDAGraph
 **Idea:**
@@ -88,7 +91,6 @@ Add the following lines to the startup parameters
 Notes:
 1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../parameters.md) for related configuration parameter descriptions
 2. When CUDAGraph is enabled, if running with multi-GPUs TP>1, `--enable-custom-all-reduce` must be specified at the same time.
-3. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
 
 #### 2.2.6 Rejection Sampling
 **Idea:**
