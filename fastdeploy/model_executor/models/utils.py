@@ -106,7 +106,7 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
 
     Args:
         weight_or_parameter (Tensor or ndarray): The weight or parameter tensor to slice, either a PaddlePaddle Tensor.
-        output_dim (bool): Determines the slicing dimension. If True, slices along columns; if False, slices along rows.
+        output_dim (bool): Determines the slicing dimension. If True, it indicates that the weight matrix is partitioned along the column dimension; if False, it indicates that the weight matrix is partitioned along the row dimension.
         start (int): The starting index of the slice (inclusive).
         end (int): The ending index of the slice (exclusive).
         step (int, optional): The step size for slicing. Defaults to 1.
