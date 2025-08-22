@@ -19,6 +19,9 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
+from fastdeploy.model_executor.layers.utils import set_weight_attrs
+from fastdeploy.platforms import current_platform
+
 from ..quantization.quant_base import QuantMethodBase
 
 
@@ -51,6 +54,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.hidden_size,
                     layer.num_experts,
                     layer.fd_config.parallel_config.splitwise_role,
+                    layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                     layer.ep_size,
                     layer.ep_rank,
                     layer.fd_config.model_config.redundant_experts_num,
@@ -74,6 +78,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.hidden_size,
                         layer.num_experts,
                         layer.fd_config.parallel_config.splitwise_role,
+                        layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                         layer.ep_size,
                         layer.ep_rank,
                         layer.fd_config.model_config.redundant_experts_num,
@@ -123,7 +128,7 @@ class MoEMethodBase(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -135,7 +140,7 @@ class MoEMethodBase(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -147,7 +152,7 @@ class MoEMethodBase(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -158,15 +163,50 @@ class MoEMethodBase(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
             if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                return self.apply_ep_prefill(layer, x, gate_out)
+                self.ep_prefill_runner.clean_low_latency_buffer()
+                return self.apply_ep_prefill(layer, x, gate)
             else:
-                return self.apply_ep_decode(layer, x, gate_out)
+                self.ep_decoder_runner.clean_low_latency_buffer()
+                return self.apply_ep_decode(layer, x, gate)
         else:
-            return self.apply_tp(layer, x, gate_out)
+            return self.apply_tp(layer, x, gate)
+
+
+class UnquantizedFusedMoEMethod(MoEMethodBase):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+
+        if current_platform.is_cuda():
+            self.up_gate_proj_weight_shape = [layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2]
+            self.down_proj_weight_shape = [layer.num_experts, layer.moe_intermediate_size, layer.hidden_size]
+        else:
+            self.up_gate_proj_weight_shape = [layer.num_experts, layer.moe_intermediate_size * 2, layer.hidden_size]
+            self.down_proj_weight_shape = [layer.num_experts, layer.hidden_size, layer.moe_intermediate_size]
+
+        layer.up_gate_proj_weight = layer.create_parameter(
+            shape=self.up_gate_proj_weight_shape,
+            dtype=layer.weight_dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        layer.down_proj_weight = layer.create_parameter(
+            shape=self.down_proj_weight_shape,
+            dtype=layer.weight_dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+
+        if layer.moe_use_gate_correction_bias:
+            gate_correction_bias_shape = [1, layer.num_experts]
+            layer.gate_correction_bias = layer.create_parameter(
+                shape=gate_correction_bias_shape,
+                dtype="float32",
+            )

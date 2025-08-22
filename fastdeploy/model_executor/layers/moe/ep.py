@@ -31,6 +31,35 @@ import fastdeploy
 from fastdeploy.config import MoEPhase
 from fastdeploy.utils import singleton
 
+try:
+    from fastdeploy.model_executor.ops.gpu import noaux_tc
+except:
+    logger.warning("import noaux_tc Failed!")
+
+
+def get_moe_scores(
+    gating_output: paddle.Tensor,
+    n_group,
+    topk_group,
+    top_k,
+    routed_scaling_factor,
+    e_score_correction_bias,
+) -> paddle.Tensor:
+    """
+    compute moe scores using e_score_correction_bias.
+    """
+    scores = paddle.nn.functional.sigmoid(gating_output)
+    scores_with_bias = scores + e_score_correction_bias
+    scores, topk_values, topk_idx = noaux_tc(
+        scores,
+        scores_with_bias,
+        n_group,
+        topk_group,
+        top_k,
+        routed_scaling_factor,
+    )
+    return scores, topk_values, topk_idx
+
 
 @singleton
 class DeepEPEngine:
@@ -68,8 +97,7 @@ class DeepEPEngine:
         self.num_local_experts = num_experts // ep_size
         self.async_finish = async_finish
 
-        self.prefill_deepep_engine = None
-        self.decode_deepep_engine = None
+        self.deepep_engine = None
 
         self.ep_config = Config(24, 6, 256)
         self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
@@ -77,16 +105,12 @@ class DeepEPEngine:
         # In mixed EP mode on a single node, we dynamically switch between
         # high throughput and low latency modes.
         if splitwise_role == "mixed":
-            # decode engine
-            logger.info("Initializing Low Latency Buffer")
-            self.get_low_latency_buffer()
-            # prefill engine
-            self.prefill_deepep_engine = deep_ep.Buffer(
+            self.deepep_engine = deep_ep.Buffer(
                 self.group,
-                int(5e8),
-                0,
-                low_latency_mode=False,
-                num_qps_per_rank=1,
+                int(2e9),
+                int(5e9),
+                low_latency_mode=True,
+                num_qps_per_rank=24,
             )
         # In disaggregated mode on mutiple nodes, we either use
         # high throughput mode or low latency mode.
@@ -95,7 +119,7 @@ class DeepEPEngine:
                 logger.info("Initializing Low Latency Buffer")
                 self.get_low_latency_buffer()
             elif moe_phase.phase == "prefill":
-                self.prefill_deepep_engine = deep_ep.Buffer(
+                self.deepep_engine = deep_ep.Buffer(
                     self.group,
                     int(5e8),
                     0,
@@ -124,14 +148,14 @@ class DeepEPEngine:
         )
         # Allocate a buffer if not existed or not enough buffer size
         if (
-            self.decode_deepep_engine is None
-            or self.decode_deepep_engine.group != self.group
-            or not self.decode_deepep_engine.low_latency_mode
-            or self.decode_deepep_engine.num_rdma_bytes < num_rdma_bytes
+            self.deepep_engine is None
+            or self.deepep_engine.group != self.group
+            or not self.deepep_engine.low_latency_mode
+            or self.deepep_engine.num_rdma_bytes < num_rdma_bytes
         ):
             # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
             assert self.num_experts % self.ep_size == 0
-            self.decode_deepep_engine = deep_ep.Buffer(
+            self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 0,
                 num_rdma_bytes,
@@ -168,7 +192,7 @@ class DeepEPEngine:
             handle,
             _,
             dispatch_hook,
-        ) = self.decode_deepep_engine.low_latency_dispatch(
+        ) = self.deepep_engine.low_latency_dispatch(
             hidden_states,
             topk_idx,
             expertwise_scale,
@@ -210,7 +234,7 @@ class DeepEPEngine:
                 num_experts,
             )
 
-        combined_hidden_states, _, combine_hook = self.decode_deepep_engine.low_latency_combine(
+        combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
@@ -224,7 +248,7 @@ class DeepEPEngine:
         """
         clean_low_latency_buffer
         """
-        self.decode_deepep_engine.clean_low_latency_buffer(
+        self.deepep_engine.clean_low_latency_buffer(
             self.num_max_dispatch_tokens_per_rank, self.hidden, self.num_experts
         )
 
@@ -232,11 +256,7 @@ class DeepEPEngine:
         """
         barrier_all
         """
-        if self.prefill_deepep_engine is not None:
-            self.prefill_deepep_engine.barrier_all()
-
-        if self.decode_deepep_engine is not None:
-            self.decode_deepep_engine.barrier_all()
+        self.deepep_engine.barrier_all()
 
 
 class EPRunner:
@@ -293,13 +313,23 @@ class EPRunner:
                 redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
             )
         else:
-            topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-                gate_out,
-                layer.gate_correction_bias,
-                self.top_k,
-                True,  # apply_norm_weight,
-                False,
-            )
+            if layer.topk_method == "noaux_tc":
+                score, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                )
+            else:
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                    gate_out,
+                    layer.gate_correction_bias,
+                    self.top_k,
+                    True,  # apply_norm_weight,
+                    False,
+                )
         return topk_idx, topk_weights
 
     @abstractmethod
@@ -316,6 +346,9 @@ class EPRunner:
         """
         raise NotImplementedError
 
+    def clean_low_latency_buffer(self):
+        self.ep_engine.clean_low_latency_buffer()
+
 
 class EPPrefillRunner(EPRunner):
     """
@@ -328,6 +361,7 @@ class EPPrefillRunner(EPRunner):
         hidden: int,
         num_experts: int,
         splitwise_role: str,
+        num_max_dispatch_tokens_per_rank: int,
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
@@ -339,7 +373,7 @@ class EPPrefillRunner(EPRunner):
             num_experts,
             splitwise_role,
             moe_phase,
-            num_max_dispatch_tokens_per_rank=256,
+            num_max_dispatch_tokens_per_rank=num_max_dispatch_tokens_per_rank,
             ep_size=ep_size,
             ep_rank=ep_rank,
             redundant_experts_num=redundant_experts_num,
@@ -359,7 +393,7 @@ class EPPrefillRunner(EPRunner):
             num_tokens_per_expert,
             is_token_in_rank,
             _,
-        ) = self.ep_engine.prefill_deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
+        ) = self.ep_engine.deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -372,7 +406,7 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
         }
-        return self.ep_engine.prefill_deepep_engine.dispatch(**dispatch_args)
+        return self.ep_engine.deepep_engine.dispatch(**dispatch_args)
 
     def combine(
         self,
@@ -387,14 +421,14 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
         }
-        fused_moe_out, _, _ = self.ep_engine.prefill_deepep_engine.combine(**combine_args)
+        fused_moe_out, _, _ = self.ep_engine.deepep_engine.combine(**combine_args)
 
         return fused_moe_out
 
 
 class EPDecoderRunner(EPRunner):
     """
-    EPPrefillRunner
+    EPDecoderRunner
     """
 
     def __init__(

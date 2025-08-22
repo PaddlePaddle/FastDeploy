@@ -23,7 +23,7 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 from fastdeploy.worker.xpu_model_runner import XPUModelRunner
@@ -60,6 +60,7 @@ class XpuWorker(WorkerBase):
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
+        set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
         self.model_runner: XPUModelRunner = XPUModelRunner(
             fd_config=self.fd_config,
@@ -110,6 +111,7 @@ class XpuWorker(WorkerBase):
 
         self.model_runner.prepare_profile()
         self.model_runner.profile_run()
+        set_random_seed(self.fd_config.model_config.seed)
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
         used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
@@ -145,9 +147,13 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
+        num_running_requests: Optional[int] = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
+
         output = self.model_runner.execute_model(model_forward_batch)
+
         return output
 
     def exist_prefill(self):
@@ -156,7 +162,7 @@ class XpuWorker(WorkerBase):
         """
         return self.model_runner.exist_prefill()
 
-    def preprocess_new_task(self, req_dicts: List[Request]) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int = -1) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.

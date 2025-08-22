@@ -24,6 +24,7 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     DecodingConfig,
@@ -74,6 +75,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.gcu_worker import GcuWorker
 
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_maca():
+        from fastdeploy.worker.metax_worker import MetaxWorker
+
+        return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -245,6 +250,7 @@ class PaddleDisWorkerProc:
         while True:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
+            num_running_requests = 0
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
 
@@ -257,11 +263,11 @@ class PaddleDisWorkerProc:
                     f"num_insert_requests: {len(req_dicts)}"
                 )
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model()
+            self.worker.execute_model(num_running_requests)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
@@ -271,6 +277,7 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
+        num_running_requests = 0
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -289,8 +296,9 @@ class PaddleDisWorkerProc:
             if self.local_rank % mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
-
-                    if not self.fd_config.model_config.enable_mm or not self.worker.exist_prefill():
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
+                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                    ):
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
@@ -338,7 +346,7 @@ class PaddleDisWorkerProc:
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts)
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if not self.worker.model_runner.not_need_stop():
                 if self.ranks > 1:
@@ -349,7 +357,7 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model(req_dicts)
+            self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
@@ -431,7 +439,19 @@ class PaddleDisWorkerProc:
 
     def load_model(self) -> None:
         """Load weights and create model"""
+
         self.worker.load_model()
+        loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
+        if self.ranks > 1:
+            paddle.distributed.barrier()
+        self.loaded_model_signal.value[0] = 1
 
 
 def parse_args():
@@ -567,7 +587,6 @@ def parse_args():
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
     )
-    parser.add_argument("--enable_mm", action="store_true", help="Whether to enable vl model")
     parser.add_argument(
         "--enable_logprob",
         action="store_true",
@@ -688,8 +707,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     else:
         logger.info("No quantization config found and use original weight and act dtype.")
 
-    # Set VL tag
-    model_config.enable_mm = args.enable_mm
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
@@ -723,7 +740,12 @@ def run_worker_proc() -> None:
     fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarPaddleDisWorkerProc
+
+        worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
+    else:
+        worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()

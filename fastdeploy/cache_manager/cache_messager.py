@@ -17,6 +17,7 @@
 import math
 import threading
 import time
+import traceback
 
 import numpy as np
 import paddle
@@ -142,7 +143,9 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
-        self.rank_id = self.rank + local_data_parallel_id * self.nranks  # align with engine worker rank (paddle.distributed.launch)
+        self.rank_id = (
+            self.rank + local_data_parallel_id * self.nranks
+        )  # align with engine worker rank (paddle.distributed.launch)
 
         layerwise_send_cache_thread = threading.Thread(target=self._prefill_layerwise_send_cache_thread)
         layerwise_send_cache_thread.daemon = True
@@ -199,6 +202,9 @@ class CacheMessager:
             self.last_step_idx = -1
             self.last_layer_idx = -1  # int32
 
+            max_step_idx = 100003
+            engine_recycled_count = 0
+
             while True:
 
                 cache_info = self.engine_worker_queue.get_cache_info()
@@ -218,7 +224,6 @@ class CacheMessager:
                                 current_info["status"] = "init"
                                 logger.info(f"start cache_infos: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
-                            self.last_step_idx = min(self.last_step_idx, current_info["current_id"])
                         else:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
@@ -234,7 +239,17 @@ class CacheMessager:
                 if not self.cache_info:
                     time.sleep(0.001)
                     continue
-                logger.debug(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
+                if self.last_step_idx > prefilled_step_idx:
+                    engine_recycled_count += 1
+                self.last_step_idx = prefilled_step_idx  # only copy value read from shm memory
+                prefilled_step_idx = (
+                    prefilled_step_idx + max_step_idx * engine_recycled_count
+                )  # remap prefilled_step_idx for comparison
+
+                logger.debug(
+                    f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx in shm: {self.last_step_idx},"
+                    f"prefilled_step_idx: {prefilled_step_idx} engine_recycled_count {engine_recycled_count}"
+                )
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
                         continue
@@ -308,13 +323,11 @@ class CacheMessager:
                             self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
                             logger.info(f"put write cache {item['request_id']}")
                         del self.cache_info[req_id]
-
-                    self.last_step_idx = prefilled_step_idx
-                    self.last_layer_idx = prefilled_layer_idx
+                self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:
-            logger.error(f"prefill layerwise send cache thread has exception: {e}")
-    
+            logger.error(f"prefill layerwise send cache thread has exception: {e}, {str(traceback.format_exc())}")
+
     def _handle_connect_task(self):
         while True:
             try:

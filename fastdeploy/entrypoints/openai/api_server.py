@@ -14,20 +14,24 @@
 # limitations under the License.
 """
 
+import asyncio
 import os
 import threading
 import time
+import traceback
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from multiprocessing import current_process
 
 import uvicorn
 import zmq
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -36,18 +40,25 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponse,
     ControlSchedulerRequest,
     ErrorResponse,
+    ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
+from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
     get_filtered_metrics,
     main_process_metrics,
 )
-from fastdeploy.metrics.trace_util import inject_to_metadata, instrument
+from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
+from fastdeploy.plugins.model_register import load_model_register_plugins
+
+load_model_register_plugins()
 from fastdeploy.utils import (
     FlexibleArgumentParser,
+    StatefulSemaphore,
     api_server_logger,
     console_logger,
     is_port_available,
@@ -60,10 +71,19 @@ parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the htt
 parser.add_argument("--workers", default=1, type=int, help="number of workers")
 parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
+parser.add_argument(
+    "--max-waiting-time",
+    default=-1,
+    type=int,
+    help="max waiting time for connection, if set value -1 means no waiting time limit",
+)
+parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
-
+chat_template = load_chat_template(args.chat_template)
+if args.tool_parser_plugin:
+    ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
 
 
@@ -91,6 +111,12 @@ def load_engine():
     return engine
 
 
+app = FastAPI()
+
+MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
+connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -104,6 +130,15 @@ async def lifespan(app: FastAPI):
     else:
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
+
+    if args.served_model_name is not None:
+        served_model_names = args.served_model_name
+        verification = True
+    else:
+        served_model_names = args.model
+        verification = False
+    model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
+
     engine_client = EngineClient(
         args.model,
         args.tokenizer,
@@ -116,10 +151,26 @@ async def lifespan(app: FastAPI):
         args.reasoning_parser,
         args.data_parallel_size,
         args.enable_logprob,
+        args.workers,
+        args.tool_call_parser,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
-    chat_handler = OpenAIServingChat(engine_client, pid, args.ips)
-    completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips)
+    model_handler = OpenAIServingModels(
+        model_paths,
+        args.max_model_len,
+        args.ips,
+    )
+    app.state.model_handler = model_handler
+    chat_handler = OpenAIServingChat(
+        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
+    )
+    completion_handler = OpenAIServingCompletion(
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
@@ -128,17 +179,33 @@ async def lifespan(app: FastAPI):
     yield
     # close zmq
     try:
+        await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
 
         multiprocess.mark_process_dead(os.getpid())
         api_server_logger.info(f"Closing metrics client pid: {pid}")
     except Exception as e:
-        api_server_logger.warning(e)
+        api_server_logger.warning(f"exit error: {e}, {str(traceback.format_exc())}")
 
 
 app = FastAPI(lifespan=lifespan)
 instrument(app)
+
+
+@asynccontextmanager
+async def connection_manager():
+    """
+    async context manager for connection manager
+    """
+    try:
+        await asyncio.wait_for(connection_semaphore.acquire(), timeout=0.001)
+        yield
+    except asyncio.TimeoutError:
+        api_server_logger.info(f"Reach max request concurrency, semaphore status: {connection_semaphore.status()}")
+        raise HTTPException(
+            status_code=429, detail=f"Too many requests,current max concurrency is {args.max_concurrency}"
+        )
 
 
 # TODO 传递真实引擎值 通过pid 获取状态
@@ -194,25 +261,51 @@ def ping(raw_request: Request) -> Response:
     return health(raw_request)
 
 
+def wrap_streaming_generator(original_generator: AsyncGenerator):
+    """
+    Wrap an async generator to release the connection semaphore when the generator is finished.
+    """
+
+    async def wrapped_generator():
+        try:
+            async for chunk in original_generator:
+                yield chunk
+        finally:
+            api_server_logger.debug(f"release: {connection_semaphore.status()}")
+            connection_semaphore.release()
+
+    return wrapped_generator
+
+
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """
     Create a chat completion for the provided prompt and parameters.
     """
+    api_server_logger.info(f"Chat Received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
-    inject_to_metadata(request)
-    generator = await app.state.chat_handler.create_chat_completion(request)
+    try:
+        async with connection_manager():
+            inject_to_metadata(request)
+            generator = await app.state.chat_handler.create_chat_completion(request)
+            if isinstance(generator, ErrorResponse):
+                api_server_logger.debug(f"release: {connection_semaphore.status()}")
+                connection_semaphore.release()
+                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
+            elif isinstance(generator, ChatCompletionResponse):
+                api_server_logger.debug(f"release: {connection_semaphore.status()}")
+                connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump())
+            else:
+                wrapped_generator = wrap_streaming_generator(generator)
+                return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
 
-    if isinstance(generator, ErrorResponse):
-        return JSONResponse(content=generator.model_dump(), status_code=generator.code)
-
-    elif isinstance(generator, ChatCompletionResponse):
-        return JSONResponse(content=generator.model_dump())
-
-    return StreamingResponse(content=generator, media_type="text/event-stream")
+    except HTTPException as e:
+        api_server_logger.error(f"Error in chat completion: {str(e)}")
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
 @app.post("/v1/completions")
@@ -220,18 +313,42 @@ async def create_completion(request: CompletionRequest):
     """
     Create a completion for the provided prompt and parameters.
     """
+    api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+    try:
+        async with connection_manager():
+            generator = await app.state.completion_handler.create_completion(request)
+            if isinstance(generator, ErrorResponse):
+                connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+            elif isinstance(generator, CompletionResponse):
+                connection_semaphore.release()
+                return JSONResponse(content=generator.model_dump())
+            else:
+                wrapped_generator = wrap_streaming_generator(generator)
+                return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+
+
+@app.get("/v1/models")
+async def list_models() -> Response:
+    """
+    List all available models.
+    """
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
 
-    generator = await app.state.completion_handler.create_completion(request)
-    if isinstance(generator, ErrorResponse):
-        return JSONResponse(content=generator.model_dump(), status_code=generator.code)
-    elif isinstance(generator, CompletionResponse):
-        return JSONResponse(content=generator.model_dump())
-
-    return StreamingResponse(content=generator, media_type="text/event-stream")
+    models = await app.state.model_handler.list_models()
+    if isinstance(models, ErrorResponse):
+        return JSONResponse(content=models.model_dump(), status_code=models.code)
+    elif isinstance(models, ModelList):
+        return JSONResponse(content=models.model_dump())
 
 
 @app.get("/update_model_weight")
@@ -271,6 +388,7 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
+    fd_start_span("FD_START")
 
     try:
         uvicorn.run(
@@ -281,7 +399,7 @@ def launch_api_server() -> None:
             log_level="info",
         )  # set log level to error to avoid log
     except Exception as e:
-        api_server_logger.error(f"launch sync http server error, {e}")
+        api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
 
 metrics_app = FastAPI()
@@ -392,7 +510,6 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-
     if load_engine() is None:
         return
 

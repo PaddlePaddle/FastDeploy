@@ -34,6 +34,7 @@ class InternalAdapter:
         self.engine = engine
         self.dp_rank = dp_rank
         recv_control_cmd_ports = envs.FD_ZMQ_CONTROL_CMD_SERVER_PORTS.split(",")
+        self.response_lock = threading.Lock()  # prevent to call send_multipart in zmq concurrently
         self.recv_control_cmd_server = ZmqTcpServer(port=recv_control_cmd_ports[dp_rank], mode=zmq.ROUTER)
         self.recv_external_instruct_thread = threading.Thread(
             target=self._recv_external_module_control_instruct, daemon=True
@@ -55,11 +56,13 @@ class InternalAdapter:
             "splitwise_role": self.cfg.splitwise_role,
             "block_size": int(self.cfg.cache_config.block_size),
             "block_num": int(available_block_num),
+            "max_block_num": int(self.cfg.cache_config.total_block_num),
             "dec_token_num": int(self.cfg.cache_config.dec_token_num),
-            "available_resource": 1.0 * available_block_num / self.cfg.cache_config.total_block_num,
+            "available_resource": float(1.0 * available_block_num / self.cfg.cache_config.total_block_num),
             "max_batch_size": int(available_batch_size),
             "max_input_token_num": self.cfg.max_num_batched_tokens,
             "unhandled_request_num": self.engine.scheduler.get_unhandled_request_num(),
+            "available_batch": int(self.engine.resource_manager.available_batch()),
         }
         return server_info
 
@@ -69,14 +72,19 @@ class InternalAdapter:
         """
         while True:
             try:
-                task = self.recv_control_cmd_server.recv_control_cmd()
+                with self.response_lock:
+                    task = self.recv_control_cmd_server.recv_control_cmd()
+                if task is None:
+                    time.sleep(0.001)
+                    continue
                 logger.info(f"Recieve control task: {task}")
                 task_id_str = task["task_id"]
                 if task["cmd"] == "get_payload":
                     payload_info = self._get_current_server_info()
                     result = {"task_id": task_id_str, "result": payload_info}
-                    logger.info(f"Response for task: {task_id_str}")
-                    self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
+                    logger.debug(f"Response for task: {task_id_str}")
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
                 elif task["cmd"] == "get_metrics":
                     metrics_text = get_filtered_metrics(
@@ -84,8 +92,9 @@ class InternalAdapter:
                         extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=1),
                     )
                     result = {"task_id": task_id_str, "result": metrics_text}
-                    logger.info(f"Response for task: {task_id_str}")
-                    self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
+                    logger.debug(f"Response for task: {task_id_str}")
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 elif task["cmd"] == "connect_rdma":
                     self.engine.engine_worker_queue.put_connect_rdma_task(task)
 
@@ -100,7 +109,8 @@ class InternalAdapter:
                     task_id_str = result_data["task_id"]
                     result = {"task_id": task_id_str, "result": result_data}
                     logger.info(f"Response for task: {task_id_str}")
-                    self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 else:
                     time.sleep(0.001)
             except Exception as e:

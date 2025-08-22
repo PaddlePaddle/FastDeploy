@@ -15,6 +15,7 @@
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
     ModelConfig,
@@ -29,9 +31,13 @@ from fastdeploy.config import (
     SpeculativeConfig,
     TaskOption,
 )
-from fastdeploy.engine.config import Config
+from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
+from fastdeploy.utils import (
+    DeprecatedOptionWarning,
+    FlexibleArgumentParser,
+    is_port_available,
+)
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -47,6 +53,10 @@ class EngineArgs:
     model: str = "baidu/ernie-45-turbo"
     """
     The name or path of the model to be used.
+    """
+    served_model_name: Optional[str] = None
+    """
+    The name of the model being served.
     """
     revision: Optional[str] = "master"
     """
@@ -91,6 +101,18 @@ class EngineArgs:
     reasoning_parser: str = None
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
+    """
+    chat_template: str = None
+    """
+    chat template or chat template file path
+    """
+    tool_call_parser: str = None
+    """
+    specifies the tool call parser  to use for extracting tool call from the model output
+    """
+    tool_parser_plugin: str = None
+    """
+    tool parser plugin used to register user defined tool parsers
     """
     enable_mm: bool = False
     """
@@ -316,6 +338,11 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    seed: int = 0
+    """
+    Random seed to use for initialization. If not set, defaults to 0.
+    """
+
     enable_early_stop: bool = False
     """
     Flag to enable early stop. Default is False (disabled).
@@ -339,6 +366,13 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.enable_logprob:
+            if self.speculative_config is not None:
+                raise NotImplementedError("Logprob does not support speculation_config.")
+            if self.enable_expert_parallel:
+                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
+            if not current_platform.is_cuda():
+                raise NotImplementedError("Only CUDA platform supports logprob.")
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -352,6 +386,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.model,
             help="Model name or path to be used.",
+        )
+        model_group.add_argument(
+            "--served-model-name",
+            type=nullable_str,
+            default=EngineArgs.served_model_name,
+            help="Served model name",
         )
         model_group.add_argument(
             "--revision",
@@ -421,6 +461,24 @@ class EngineArgs:
             "reasoning content from the model output",
         )
         model_group.add_argument(
+            "--chat-template",
+            type=str,
+            default=EngineArgs.chat_template,
+            help="chat template or chat template file path",
+        )
+        model_group.add_argument(
+            "--tool-call-parser",
+            type=str,
+            default=EngineArgs.tool_call_parser,
+            help="Flag specifies the tool call parser to use for extracting" "tool call from the model output",
+        )
+        model_group.add_argument(
+            "--tool-parser-plugin",
+            type=str,
+            default=EngineArgs.tool_parser_plugin,
+            help="tool parser plugin used to register user defined tool parsers",
+        )
+        model_group.add_argument(
             "--speculative-config",
             type=json.loads,
             default=EngineArgs.speculative_config,
@@ -483,6 +541,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--seed",
+            type=int,
+            default=EngineArgs.seed,
+            help="Random seed for initialization. If not specified, defaults to 0.",
         )
         model_group.add_argument(
             "--enable-early-stop",
@@ -820,7 +884,7 @@ class EngineArgs:
             "max_num_partial_prefills",
             "max_long_partial_prefills",
             "long_prefill_token_threshold",
-            "splitwise_role"
+            "splitwise_role",
         ]
 
         all = asdict(self)
@@ -853,7 +917,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> Config:
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -866,7 +930,10 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                self.max_num_batched_tokens = self.max_model_len
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
@@ -885,8 +952,11 @@ class EngineArgs:
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
-        return Config(
-            model_name_or_path=self.model,
+        assert is_port_available(
+            "0.0.0.0", self.engine_worker_queue_port
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+
+        return FDConfig(
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
@@ -894,7 +964,6 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            tensor_parallel_size=self.tensor_parallel_size,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
@@ -903,17 +972,15 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
+            tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
-            graph_optimization_config=graph_opt_cfg,
+            graph_opt_config=graph_opt_cfg,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_logprob=self.enable_logprob,
             early_stop_config=early_stop_cfg,
-            load_choices=self.load_choices,
         )
