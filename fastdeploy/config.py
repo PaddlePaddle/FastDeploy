@@ -977,6 +977,8 @@ class FDConfig:
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
+        load_choices: str = "default",
+        hugging_face_format: bool = False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -990,6 +992,8 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
+        self.load_choices: str = load_choices
+        self.hugging_face_format: bool = hugging_face_format
 
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
