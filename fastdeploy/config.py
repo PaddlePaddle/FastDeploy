@@ -278,7 +278,7 @@ class ParallelConfig:
         self.disable_any_whitespace: bool = True
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
-        self.enable_custom_all_reduce: bool = False
+        self.disable_custom_all_reduce: bool = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
