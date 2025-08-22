@@ -14,159 +14,50 @@
 # limitations under the License.
 """
 
-import io
 import math
-import os
-from tempfile import NamedTemporaryFile as ntf
 from typing import Optional, Union
 
-import decord
 import numpy as np
+from PIL import Image
 
-try:
-    # moviepy 1.0
-    import moviepy.editor as mp
-except:
-    # moviepy 2.0
-    import moviepy as mp
+from fastdeploy.input.mm_processor import read_video_decord
 
 
-def is_gif(data: bytes) -> bool:
+def read_frames(video_path):
     """
-    Check if given bytes data is a GIF file by examining magic number.
+    Read and decode video frames from the given path
+
+    This function reads a video file and decodes it into individual RGB frames
+    using decord video reader. It also extracts video metadata including fps,
+    duration and frame count.
 
     Args:
-        data: Binary data to check
+        video_path (str): Path to the video file or bytes object containing video data
 
     Returns:
-        bool: True if data is a GIF file (GIF87a or GIF89a format)
+        tuple: A tuple containing:
+            frames (numpy.ndarray): Array of shape (num_frames, height, width, 3)
+                containing decoded RGB video frames
+            meta (dict): Dictionary containing video metadata:
+                - fps (float): Frames per second
+                - duration (float): Video duration in seconds
+                - num_of_frame (int): Total number of frames
+                - width (int): Frame width in pixels
+                - height (int): Frame height in pixels
+
+    Note:
+        - The function uses decord library for efficient video reading
+        - All frames are converted to RGB format regardless of input format
     """
-    return data[:6] in (b"GIF87a", b"GIF89a")
+    reader, meta, _ = read_video_decord(video_path, save_to_disk=False)
 
-
-class VideoReaderWrapper(decord.VideoReader):
-    """
-    Wrapper around decord.VideoReader to handle GIF files and fix memory leaks.
-
-    This wrapper converts GIF inputs to MP4 format to work around decord's limitations,
-    and implements proper cleanup to prevent memory leaks (https://github.com/dmlc/decord/issues/208).
-
-    Attributes:
-        original_file (str): Path to the original video file (for cleanup)
-    """
-
-    def __init__(self, video_path, *args, **kwargs):
-        """
-        Initialize the video reader wrapper.
-
-        Args:
-            video_path: Can be one of:
-                - str: Path to video file
-                - bytes: Raw video bytes
-                - io.BytesIO: Video data stream
-            *args: Additional arguments for decord.VideoReader
-            **kwargs: Additional keyword arguments for decord.VideoReader
-
-        Note:
-            Automatically converts GIF files to MP4 format for compatibility.
-        """
-        with ntf(delete=True, suffix=".gif") as gif_file:
-            gif_input = None
-            self.original_file = None
-            if isinstance(video_path, str):
-                self.original_file = video_path
-                if video_path.lower().endswith(".gif"):
-                    gif_input = video_path
-            elif isinstance(video_path, bytes):
-                if is_gif(video_path):
-                    gif_file.write(video_path)
-                    gif_input = gif_file.name
-            elif isinstance(video_path, io.BytesIO):
-                video_path.seek(0)
-                tmp_bytes = video_path.read()
-                video_path.seek(0)
-                if is_gif(tmp_bytes):
-                    gif_file.write(tmp_bytes)
-                    gif_input = gif_file.name
-
-            if gif_input is not None:
-                # Convert GIF to MP4 for decord compatibility
-                clip = mp.VideoFileClip(gif_input)
-                mp4_file = ntf(delete=False, suffix=".mp4")
-                clip.write_videofile(mp4_file.name, verbose=False, logger=None)
-                clip.close()
-                video_path = mp4_file.name
-                self.original_file = video_path  # Store path for cleanup
-
-            super().__init__(video_path, *args, **kwargs)
-            self.seek(0)
-
-    def __getitem__(self, key):
-        """
-        Get video frames by index/slice and reset reader position.
-
-        Args:
-            key: Index or slice of frames to retrieve
-
-        Returns:
-            decord.ndarray.NDArray: Requested video frames
-
-        Note:
-            Resets read position to start after frame retrieval
-        """
-        frames = super().__getitem__(key)
-        self.seek(0)
-        return frames
-
-    def __del__(self):
-        """
-        Clean up temporary files when object is destroyed.
-
-        Note:
-            Removes any temporary MP4 files created from GIF conversions
-        """
-        if self.original_file and os.path.exists(self.original_file):
-            os.remove(self.original_file)
-
-
-def read_video_decord(video_path):
-    """
-    Read video file using decord video reader and get metadata.
-
-    Args:
-        video_path: Can be one of:
-            - str: Path to video file
-            - bytes: Raw video bytes
-            - io.BytesIO: Video data stream
-            - VideoReaderWrapper: Existing video reader instance
-
-    Returns:
-        tuple: (video_reader, video_meta) where:
-            - video_reader: VideoReaderWrapper instance
-            - video_meta: Dictionary containing:
-                - fps: Frames per second
-                - duration: Video duration in seconds
-                - num_of_frame: Total number of frames
-    """
-    if isinstance(video_path, VideoReaderWrapper):
-        video_reader = video_path  # Reuse existing reader if provided
-    else:
-        if isinstance(video_path, bytes):
-            video_path = io.BytesIO(video_path)  # Convert bytes to BytesIO
-        video_reader = VideoReaderWrapper(video_path, num_threads=1)
-
-    # Extract video metadata
-    vlen = len(video_reader)
-    fps = video_reader.get_avg_fps()
-    duration = vlen / float(fps)
-
-    # Package metadata
-    video_meta = {
-        "fps": fps,  # Frames per second
-        "duration": duration,  # Total duration in seconds
-        "num_of_frame": vlen,  # Total frame count
-    }
-    return video_reader, video_meta
+    frames = []
+    for i in range(meta["num_of_frame"]):
+        frame = reader[i].asnumpy()
+        image = Image.fromarray(frame, "RGB")
+        frames.append(image)
+    frames = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
+    return frames, meta
 
 
 def sample_frames(

@@ -57,7 +57,7 @@ VideoInput = Union[
     List["np.ndarray"],
     List["paddle.Tensor"],
     List[List["PIL.Image.Image"]],
-    List[List["np.ndarrray"]],
+    List[List["np.ndarray"]],
     List[List["paddle.Tensor"]],
 ]
 

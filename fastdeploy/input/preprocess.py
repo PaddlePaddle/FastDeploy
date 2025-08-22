@@ -98,7 +98,6 @@ class InputPreprocessor:
                 )
         else:
             if ErnieArchitectures.contains_ernie_arch(architectures):
-                # raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VL model.")
                 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 
                 self.processor = ErnieMoEVLProcessor(

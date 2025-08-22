@@ -1108,6 +1108,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --ips {self.cfg.ips}"
         )
 
         worker_append_flag = {
@@ -1292,7 +1293,7 @@ class LLMEngine:
                     )
                 )
                 llm_logger.info(
-                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                    f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                     + f" data parallel id {i}"
                 )
                 self.dp_processed[-1].start()
