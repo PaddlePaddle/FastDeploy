@@ -107,7 +107,9 @@ __global__ void moba_mlp_einsum_kernel(
 
     const int base_store_idx = bidb * kMaxN * head_num * kHeadDim + (block_idx * (moba_block_size / 128) + store_row_id) * head_num * kHeadDim + bidh * kHeadDim + store_col_id;
 
-    sums.store_to(dst_data + base_store_idx);
+    if (store_row_id < moba_block_size / 128) {
+        sums.store_to(dst_data + base_store_idx);
+    }
 }
 
 
@@ -132,6 +134,15 @@ void moba_mlp_einsum(
 
     if (moba_block_size == 1024) {
         moba_mlp_einsum_kernel<T, 1024, kHeadDim, kMaxN><<<grid_dims, 128, 0, stream>>>(
+            src_data,
+            weight_data,
+            seq_lens_encoder,
+            seq_lens_decoder,
+            cu_seq_k,
+            dst_data,
+            head_num);
+    } else if (moba_block_size == 128) {
+        moba_mlp_einsum_kernel<T, 128, kHeadDim, kMaxN><<<grid_dims, 128, 0, stream>>>(
             src_data,
             weight_data,
             seq_lens_encoder,
