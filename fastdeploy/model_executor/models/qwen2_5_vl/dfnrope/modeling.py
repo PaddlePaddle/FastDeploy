@@ -15,7 +15,6 @@
 """
 
 from functools import partial
-import math
 
 import numpy as np
 import paddle
@@ -132,44 +131,6 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
     output = paddle.cast(output, orig_dtype)
     return output
 
-
-class Qwen2_5_VLVisionAttention(nn.Layer):
-    def __init__(self, dim: int, num_heads: int = 16) -> None:
-        super().__init__()
-        self.num_heads = num_heads
-        self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
-        self.proj = nn.Linear(dim, dim)
-        self.head_dim = dim // num_heads  # must added
-
-    def forward(
-        self, hidden_states: paddle.Tensor, cu_seqlens: paddle.Tensor, rotary_pos_emb: paddle.Tensor = None
-    ) -> paddle.Tensor:
-        seq_length = hidden_states.shape[0]
-        q, k, v = (
-            self.qkv(hidden_states).reshape([seq_length, 3, self.num_heads, -1]).transpose([1, 0, 2, 3]).unbind(0)
-        )
-        q = apply_rotary_pos_emb_vision(q.unsqueeze(0), rotary_pos_emb).squeeze(0)
-        k = apply_rotary_pos_emb_vision(k.unsqueeze(0), rotary_pos_emb).squeeze(0)
-
-        attention_mask = paddle.zeros([1, seq_length, seq_length], dtype="bool")
-        for i in range(1, len(cu_seqlens)):
-            attention_mask[..., cu_seqlens[i - 1] : cu_seqlens[i], cu_seqlens[i - 1] : cu_seqlens[i]] = True
-
-        zero = paddle.zeros(attention_mask.shape, dtype=hidden_states.dtype)
-        neg_inf = paddle.full_like(attention_mask, paddle.finfo(hidden_states.dtype).min, dtype=hidden_states.dtype)
-        attention_mask = paddle.where(attention_mask, zero, neg_inf)
-
-        q = q.transpose([1, 0, 2])
-        k = k.transpose([1, 0, 2])
-        v = v.transpose([1, 0, 2])
-        attn_weights = paddle.matmul(q, k.transpose([0, 2, 1])) / math.sqrt(self.head_dim)
-        attn_weights = attn_weights + attention_mask
-        attn_weights = nn.functional.softmax(attn_weights, axis=-1)
-        attn_output = paddle.matmul(attn_weights, v)
-        attn_output = attn_output.transpose([1, 0, 2])
-        attn_output = attn_output.reshape([seq_length, -1])
-        attn_output = self.proj(attn_output)
-        return attn_output
 
 class VisionFlashAttention2(nn.Layer):
     """_summary_
@@ -305,9 +266,9 @@ class PatchEmbed(nn.Layer):
             [-1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size]
         )
 
-        # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
         hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.hidden_size])
         return hidden_states
+
 
 class VisionMlp(nn.Layer):
     """_summary_
@@ -328,8 +289,6 @@ class VisionMlp(nn.Layer):
         self.tensor_parallel_degree = tensor_parallel_degree
 
         if self.tensor_parallel_degree > 1:
-            # vllm 那边是 merge 的，需要 hidden_dim * 2
-            # fd 这边应该不需要 *2
             self.gate_proj = ColumnParallelLinear(
                 dim,
                 hidden_dim,
@@ -376,8 +335,6 @@ class VisionMlp(nn.Layer):
         return x_down
 
 
-# 对于seqlen的操作有些不同，其他是对齐qwen的，qwen还多了 seqlen *= 2 和 cached 的操作
-# 操作和参数对齐qwen
 class VisionRotaryEmbedding(nn.Layer):
     """_summary_
 
@@ -423,6 +380,7 @@ class VisionRotaryEmbedding(nn.Layer):
         self.update_freqs_cache(seqlen)
         return self._freqs_cached[:seqlen]
 
+
 class Qwen2RMSNorm(nn.Layer):
     def __init__(self, hidden_size, eps=1e-6):
         """
@@ -450,7 +408,6 @@ class Qwen2RMSNorm(nn.Layer):
         return hidden_states * self.weight
 
 
-# 操作和参数对齐qwen
 class DFNRopeVisionBlock(nn.Layer):
     """_summary_
 
@@ -475,24 +432,14 @@ class DFNRopeVisionBlock(nn.Layer):
         """
         super().__init__()
         
-        
-        # self.norm1 = nn.LayerNorm(dim, epsilon=1e-6, bias_attr=False)
-        # self.norm2 = nn.LayerNorm(dim, epsilon=1e-6, bias_attr=False)
         self.norm1 = Qwen2RMSNorm(dim, eps=1e-6)
         self.norm2 = Qwen2RMSNorm(dim, eps=1e-6)
-        
-        # qwen 是有参数直接得到的，为 intermediate_size 参数
-        # hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
         self.attn = VisionFlashAttention2(
             dim=dim,
             num_heads=num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
         )
-        # self.attn = Qwen2_5_VLVisionAttention(
-        #     dim=dim,
-        #     num_heads=num_heads
-        # )
         
         self.mlp = VisionMlp(
             dim=dim,
@@ -523,7 +470,6 @@ class DFNRopeVisionBlock(nn.Layer):
         return hidden_states
 
 
-# 操作和参数对齐qwen
 class PatchMerger(nn.Layer):
     """_summary_
 
@@ -562,7 +508,6 @@ class PatchMerger(nn.Layer):
         return x
 
 
-# qwen 有些block是windows-attention，有些是普通attention，会根据fullatt_block_indexes参数选择
 class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
     """_summary_
 
@@ -610,7 +555,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             ]
         )
 
-        #qwen 对齐
         self.merger = PatchMerger(dim=config.vision_config.out_hidden_size, context_dim=config.vision_config.hidden_size)
 
     @property
@@ -689,7 +633,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
 
-    # @lru_cache(maxsize=1024)  # noqa: B019
     def get_rope_by_thw(self, t, h, w):
         window_index_thw, cu_seqlens_window_thw = self.get_window_index_thw(
             t, h, w)

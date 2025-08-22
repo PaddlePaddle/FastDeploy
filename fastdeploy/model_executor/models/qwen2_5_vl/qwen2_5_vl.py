@@ -27,18 +27,14 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
-from fastdeploy.model_executor.layers.linear import ReplicatedLinear
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -162,7 +158,6 @@ class Qwen2_5_VLModel(nn.Layer):
         return out
 
 
-
 class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     """
     Qwen2_5_VLForConditionalGeneration
@@ -176,8 +171,6 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         super(Qwen2_5_VLForConditionalGeneration, self).__init__(fd_config)
         # ----------- vision model ------------
         self.visual = self._init_vision_model(fd_config.model_config)
-        # -----------  resampler_model ------------   qwen2_5_VL 没有这部分操作
-        # self.resampler_model = self._init_resampler_model_model(fd_config.model_config)
         # -----------  language model -------------
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
@@ -189,7 +182,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
-        # self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
+        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
     def _init_vision_model(self, model_config) -> nn.Layer:
         from fastdeploy.model_executor.models.qwen2_5_vl.dfnrope.modeling import (
@@ -217,7 +210,10 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         self.visual.load_state_dict(state_dict)
-        self.lm_head.load_state_dict(state_dict)
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+        else:
+            self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
@@ -247,8 +243,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
-        # 在 gpu_model_runner.py 中，针对多模态，先调用 vision model 然后调用 language model
-        # image_features 就是 vision model 的输出，image_embeds
+
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
