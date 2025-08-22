@@ -273,6 +273,14 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         self.mlp.load_state_dict(state_dict)
         self.input_layernorm.load_state_dict(state_dict)
         self.post_attention_layernorm.load_state_dict(state_dict)
+        
+        
+        
+        if self.fd_config.parallel_config.is_H20:
+            pass
+        else:
+            del self.self_attn
+            del self.input_layernorm
 
     def forward_old(
         self,
@@ -309,6 +317,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
     def forward_attn(
         self,
+        metadata,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
@@ -324,8 +333,10 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
         hidden_states, residual = self.input_layernorm(hidden_states, residual)
 
-
-        forward_meta.attn_backend.init_attention_metadata(forward_meta)
+        # 为了计算attn！
+        forward_meta.attn_backend.attention_metadata = metadata
+        forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
+        forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -337,6 +348,9 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         gate_out = paddle.matmul(hidden_states.cast("float32"), self.mlp.fused_moe.gate_weight)
 
         topk_idx, topk_weights = self.mlp.fused_moe.quant_method.ep_decoder_runner.moe_select(self.mlp.fused_moe, gate_out)
+
+
+        topk_idx += 128
 
         return hidden_states, residual, topk_idx, topk_weights
 
@@ -499,6 +513,8 @@ class Ernie4_5_Model(nn.Layer):
         dispatch_events = [None] * split_num
         combine_events = [None] * split_num
 
+        metadatas = [None] * split_num
+
         from collections import deque
         for j in range(split_num):
             send_hooks[j] = deque()
@@ -506,6 +522,10 @@ class Ernie4_5_Model(nn.Layer):
             handles[j] = deque()
             dispatch_events[j] = deque()
             combine_events[j] = deque()
+
+            if attention_input[j][0] is not None:
+                forward_meta.attn_backend.init_attention_metadata(attention_input[j][0])
+                metadatas[j] = forward_meta.attn_backend.attention_metadata
 
         self.barrier_id = -1
         def zkk_barrier():
@@ -521,15 +541,15 @@ class Ernie4_5_Model(nn.Layer):
             def dispatch_wait(j):
                 #print(f"dispatch_wait({j})")
                 a = dispatch_events[j].pop()
-                a.current_stream_wait()
+                # a.current_stream_wait()
                 tmp = send_hooks[j].pop()()
-                tmp.current_stream_wait()
+                # tmp.current_stream_wait()
                 
 
             def combine_wait(j):
                 #print(f"combine_wait({j})")
                 a = combine_events[j].pop()
-                a.current_stream_wait()
+                # a.current_stream_wait()
                 
                 tmp = recv_hooks[j].pop()()
                 tmp.current_stream_wait()
@@ -538,7 +558,7 @@ class Ernie4_5_Model(nn.Layer):
 
             def compute_atten(layer_id, i):
                 #print(f"compute_atten({layer_id}, {i})")
-                hidden_states, residual, topk_idx, topk_weights = self.layers[layer_id].forward_attn(attention_input[i][0], attention_input[i][1], attention_input[i][2])
+                hidden_states, residual, topk_idx, topk_weights = self.layers[layer_id].forward_attn(metadatas[i], attention_input[i][0], attention_input[i][1], attention_input[i][2])
                 
                 attention_out[i] = [hidden_states, residual, topk_idx, topk_weights]
                 attention_input[i][2] = attention_out[i][1]
@@ -596,7 +616,7 @@ class Ernie4_5_Model(nn.Layer):
             def dispatch_wait(j):
                 #print(f"dispatch_wait({j})")
                 a = dispatch_events[j].pop()
-                a.current_stream_wait()
+                # a.current_stream_wait()
                 tmp = recv_hooks[j].pop()()
                 tmp.current_stream_wait()
                 
@@ -604,11 +624,10 @@ class Ernie4_5_Model(nn.Layer):
             def combine_wait(j):
                 #print(f"combine_wait({j})")
                 a = combine_events[j].pop()
-                a.current_stream_wait()
+                # a.current_stream_wait()
                 
                 tmp = send_hooks[j].pop()()
-                tmp.current_stream_wait()
-                
+                # tmp.current_stream_wait()
 
             def dispatch_receive(i):
                 #print(f"dispatch_receive({i})")
