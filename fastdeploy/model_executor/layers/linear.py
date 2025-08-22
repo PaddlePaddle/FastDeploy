@@ -51,7 +51,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             layer.weight,
             {
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                "hugging_face_format": extra_weight_attrs.get("hugging_face_format", None),  # 添加这行
+                "hugging_face_format": extra_weight_attrs.get("hugging_face_format", None),
             },
         )
         if hasattr(layer, "nranks") and layer.nranks > 1:

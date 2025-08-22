@@ -100,7 +100,7 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "hugging_face_format": self.fd_config.load_config.hugging_face_format,  # 添加这行
+                        "hugging_face_format": self.fd_config.load_config.hugging_face_format,
                     },
                 )
 
@@ -120,7 +120,7 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "hugging_face_format": self.fd_config.load_config.hugging_face_format,  # 添加这行
+                        "hugging_face_format": self.fd_config.load_config.hugging_face_format,
                     },
                 )
                 if self.nranks > 1:
