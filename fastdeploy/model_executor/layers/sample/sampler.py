@@ -40,6 +40,18 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
 
+def top_p_normalize_probs_paddle(
+    probs: paddle.Tensor,
+    top_ps: paddle.Tensor,
+):
+    probs_idx = probs.argsort(axis=-1, descending=True)
+    probs_sort = paddle.take_along_axis(probs, probs_idx, axis=-1)
+    probs_sum = paddle.cumsum(probs_sort, axis=-1)
+    probs_sort = paddle.where((probs_sum - probs_sort) > top_ps, paddle.zeros_like(probs_sort), probs_sort)
+    probs_sort.divide_(probs_sort.sum(axis=-1, keepdim=True))
+    return paddle.put_along_axis(paddle.zeros_like(probs_sort), probs_idx, probs_sort, -1)
+
+
 class SamplerProcessor:
     """
     SamplingProcessor for guided decoding.
@@ -207,9 +219,40 @@ class Sampler(nn.Layer):
         """pre process before running"""
         self.processor.pre_process(skip_idx_list)
 
-    def compute_logprobs(self, logits: paddle.Tensor) -> paddle.Tensor:
+    def compute_logprobs(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> paddle.Tensor:
         """ """
-        return F.log_softmax(logits, axis=-1)
+        last_logits = logits
+        real_bsz = last_logits.shape[0]
+        temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
+        top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
+        share_inputs = sampling_metadata.share_inputs
+        if temp_scaled_logprobs is not None:
+            temp_scaled_logprobs = temp_scaled_logprobs[:real_bsz]
+            if temp_scaled_logprobs.any():
+                temperature = sampling_metadata.temperature[:real_bsz]
+                mask = paddle.logical_not(temp_scaled_logprobs)
+                temp_temperature = paddle.where(mask, paddle.ones_like(temperature), temperature)
+                last_logits = last_logits / temp_temperature
+        if top_p_normalized_logprobs is not None and share_inputs is not None:
+            seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])
+            seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])
+            seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])
+            seq_lens_time_sum = seq_lens_this_time + seq_lens_encoder + seq_lens_decoder
+            no_stop_seqs_mask = seq_lens_time_sum[:real_bsz] > 0
+            real_req_top_p_normalized_logprobs = paddle.logical_and(
+                top_p_normalized_logprobs[:real_bsz], no_stop_seqs_mask
+            )
+            real_req_top_p = sampling_metadata.top_p[:real_bsz] * no_stop_seqs_mask.cast(sampling_metadata.top_p.dtype)
+            if real_req_top_p_normalized_logprobs.any():
+                if (real_req_top_p != 1.0).any():
+                    probs = F.softmax(last_logits, axis=-1)
+                    probs = top_p_normalize_probs_paddle(probs, real_req_top_p)
+                    return paddle.log(probs)
+        return F.log_softmax(last_logits, axis=-1)
 
     def gather_logprobs(
         self,
@@ -260,7 +303,7 @@ class Sampler(nn.Layer):
         """ """
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
-            raw_logprobs = self.compute_logprobs(logits)
+            raw_logprobs = self.compute_logprobs(logits, sampling_metadata)
 
         logits = self.processor.apply_token_mask(logits, skip_idx_list)
 
