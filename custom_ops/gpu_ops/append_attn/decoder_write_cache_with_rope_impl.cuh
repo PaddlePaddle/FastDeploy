@@ -402,7 +402,8 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     const int head_size,
     const int block_size,
     const uint32_t elem_cnt,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
   using LoadKVT = AlignedVector<T, VecSize>;
@@ -449,8 +450,9 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     if (hi < num_heads + kv_num_heads) {
       // q k rope
       const uint32_t emb_idx = write_seq_id * head_size + h_bias;
-      Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size * 2 : emb_idx;
+      Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
 #pragma unroll
     for (int i = 0; i < VecSize; i++) {
@@ -518,7 +520,8 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     const int head_size,
     const int block_size,
     const uint32_t elem_cnt,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   using LoadT = AlignedVector<int, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
   using LoadOutScaleT = AlignedVector<float, VecSize>;
@@ -575,8 +578,9 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     if (hi < num_heads + kv_num_heads) {
       // q k rope
       const uint32_t emb_idx = write_seq_id * head_size + h_bias;
-      Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size * 2 : emb_idx;
+      Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
 #pragma unroll
     for (int i = 0; i < VecSize; i++) {
@@ -1203,7 +1207,8 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
     const int block_size,
     const float max_bound,
     const float min_bound,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
   constexpr int NUM_WARPS = 4;
@@ -1251,8 +1256,9 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-      Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+      Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 
 #pragma unroll
       for (int i = 0; i < VecSize; i++) {
@@ -1333,10 +1339,11 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 
         T scale;
         const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx], &cos_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx + 8], &cos_emb_vec2);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx], &sin_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx + 8], &sin_emb_vec2);
+        uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx], &cos_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx + 8], &cos_emb_vec2);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx], &sin_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx + 8], &sin_emb_vec2);
         scale = __ldg(&cache_k_scales[kv_head_idx]);
 #pragma unroll
         for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
@@ -1506,7 +1513,8 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
     const int block_size,
     const float max_bound,
     const float min_bound,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
   constexpr int NUM_WARPS = 4;
@@ -1566,8 +1574,10 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-      Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+      Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+
 
 #pragma unroll
       for (int i = 0; i < VecSize; i++) {
@@ -1675,10 +1685,11 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 
         T scale;
         const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx], &cos_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx + 8], &cos_emb_vec2);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx], &sin_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx + 8], &sin_emb_vec2);
+        uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx], &cos_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx + 8], &cos_emb_vec2);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx], &sin_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx + 8], &sin_emb_vec2);
         scale = __ldg(&cache_k_scales[kv_head_idx]);
 #pragma unroll
         for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
@@ -1897,7 +1908,8 @@ __global__ void append_decode_cache_int4_rope_kernel(
     const int block_size,
     const float max_bound,
     const float min_bound,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
   constexpr int NUM_WARPS = 4;
@@ -1941,8 +1953,9 @@ __global__ void append_decode_cache_int4_rope_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
       for (int i = 0; i < HalfVecSize; i++) {
         // dequant + add_bias + rope
@@ -2016,10 +2029,11 @@ __global__ void append_decode_cache_int4_rope_kernel(
     Load<T, HALF_K_VEC_SIZE>(&qkv_now[bias_idx + 8], &src_vec2);
     if (head_idx < num_heads + kv_num_heads) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      Load<float, 1>(&cos_emb[emb_idx], &cos_emb_vec1);
-      Load<float, 1>(&cos_emb[emb_idx + 4], &cos_emb_vec2);
-      Load<float, 1>(&sin_emb[emb_idx], &sin_emb_vec1);
-      Load<float, 1>(&sin_emb[emb_idx + 4], &sin_emb_vec2);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      Load<float, 1>(&cos_emb[new_emb_idx], &cos_emb_vec1);
+      Load<float, 1>(&cos_emb[new_emb_idx + 4], &cos_emb_vec2);
+      Load<float, 1>(&sin_emb[new_emb_idx], &sin_emb_vec1);
+      Load<float, 1>(&sin_emb[new_emb_idx + 4], &sin_emb_vec2);
       Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[cache_idx], &scale_vec1);
       Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[cache_idx + 8], &scale_vec2);
       Load<T, HALF_K_VEC_SIZE>(&cache_k_zero_points[cache_idx], &zp_vec1);
@@ -2196,7 +2210,8 @@ __global__ void append_decode_cache_int4_rope_kernel(
     const int block_size,
     const float max_bound,
     const float min_bound,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
   constexpr int NUM_WARPS = 4;
@@ -2245,8 +2260,9 @@ __global__ void append_decode_cache_int4_rope_kernel(
       Load<float, VecSize>(&qkv_out_scales[bias_idx], &out_scale_vec);
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
       for (int i = 0; i < HalfVecSize; i++) {
         // dequant + add_bias + rope
@@ -2333,10 +2349,11 @@ __global__ void append_decode_cache_int4_rope_kernel(
                                  &out_scale_vec2);
     if (head_idx < num_heads + kv_num_heads) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      Load<float, 1>(&cos_emb[emb_idx], &cos_emb_vec1);
-      Load<float, 1>(&cos_emb[emb_idx + 4], &cos_emb_vec2);
-      Load<float, 1>(&sin_emb[emb_idx], &sin_emb_vec1);
-      Load<float, 1>(&sin_emb[emb_idx + 4], &sin_emb_vec2);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      Load<float, 1>(&cos_emb[new_emb_idx], &cos_emb_vec1);
+      Load<float, 1>(&cos_emb[new_emb_idx + 4], &cos_emb_vec2);
+      Load<float, 1>(&sin_emb[new_emb_idx], &sin_emb_vec1);
+      Load<float, 1>(&sin_emb[new_emb_idx + 4], &sin_emb_vec2);
       Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[cache_idx], &scale_vec1);
       Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[cache_idx + 8], &scale_vec2);
       Load<T, HALF_K_VEC_SIZE>(&cache_k_zero_points[cache_idx], &zp_vec1);
@@ -2520,7 +2537,8 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
     const int block_size,
     const float max_bound,
     const float min_bound,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
   constexpr int NUM_WARPS = 4;
@@ -2567,8 +2585,9 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-      Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+      Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
       for (int i = 0; i < VecSize; i++) {
         // dequant + add_bias + rope
@@ -2649,10 +2668,11 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
         Load<T, HALF_K_VEC_SIZE>(&qkv_now[right_bias_idx], &right_src_vec1);
         Load<T, HALF_K_VEC_SIZE>(&qkv_now[right_bias_idx + 8], &right_src_vec2);
         const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx], &cos_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx + 8], &cos_emb_vec2);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx], &sin_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx + 8], &sin_emb_vec2);
+        uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx], &cos_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx + 8], &cos_emb_vec2);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx], &sin_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx + 8], &sin_emb_vec2);
         Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[left_cache_idx],
                                  &left_scale_vec1);
         Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[left_cache_idx + 8],
@@ -2894,7 +2914,8 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
     const int block_size,
     const float max_bound,
     const float min_bound,
-    const int kv_num_heads) {
+    const int kv_num_heads,
+    const bool rope_3d) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
   constexpr int NUM_WARPS = 4;
@@ -2952,8 +2973,9 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
                            &right_out_scale_vec);
       // q rope
       const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-      Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+      Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
       for (int i = 0; i < VecSize; i++) {
         // dequant + add_bias + rope
@@ -3062,10 +3084,11 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
                                      &right_out_scale_vec2);
 
         const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx], &cos_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&cos_emb[emb_idx + 8], &cos_emb_vec2);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx], &sin_emb_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&sin_emb[emb_idx + 8], &sin_emb_vec2);
+        uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx], &cos_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx + 8], &cos_emb_vec2);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx], &sin_emb_vec1);
+        Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx + 8], &sin_emb_vec2);
         Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[left_cache_idx],
                                  &left_scale_vec1);
         Load<T, HALF_K_VEC_SIZE>(&cache_k_scale[left_cache_idx + 8],
