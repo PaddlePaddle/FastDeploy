@@ -76,7 +76,7 @@ class InputPreprocessor:
         if self.tool_parser:
             tool_parser_obj = ToolParserManager.get_tool_parser(self.tool_parser)
 
-        config = ModelConfig(self.model_name_or_path)
+        config = ModelConfig({"model": self.model_name_or_path})
         architectures = config.architectures[0]
 
         if not self.enable_mm:

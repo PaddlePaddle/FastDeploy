@@ -771,12 +771,7 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
-    
-    # import debugpy
-    # debugpy.listen(("0.0.0.0", 5678))
-    # print("🚀 Debugger is ready to attach")
-    # debugpy.wait_for_client()  # 可选：阻塞直到 VSCode 连接
-    
+
     from fastdeploy.plugins.model_register import load_model_register_plugins
 
     load_model_register_plugins()

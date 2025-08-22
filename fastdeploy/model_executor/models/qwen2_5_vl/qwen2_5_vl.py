@@ -162,7 +162,7 @@ class Qwen2_5_VLModel(nn.Layer):
         return out
 
 
-@MultimodalRegistry.register_model()
+
 class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     """
     Qwen2_5_VLForConditionalGeneration
