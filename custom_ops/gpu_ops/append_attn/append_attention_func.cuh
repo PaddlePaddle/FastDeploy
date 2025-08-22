@@ -905,11 +905,13 @@ template <typename T,
           uint32_t num_frags_y,
           uint32_t num_frags_z,
           bool IS_SYSTEM = false>
-__device__ __forceinline__ void mask_s(const uint32_t qo_idx_base,
+__device__ __forceinline__ void mask_s(const bool* attn_mask,
+                                       const uint32_t qo_idx_base,
                                        const uint32_t kv_idx_base,
                                        const uint32_t qo_len,
                                        const uint32_t kv_len,
                                        const uint32_t chunk_end,
+                                       const uint32_t attn_mask_len,
                                        float (*s_frag)[num_frags_z][8],
                                        const int *mask_offset = nullptr) {
   const uint32_t tx = threadIdx.x;
@@ -933,7 +935,13 @@ __device__ __forceinline__ void mask_s(const uint32_t qo_idx_base,
                 (causal
                     ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
                     : kv_idx >= chunk_end);
+            if (attn_mask != nullptr && kv_idx > kv_len - qo_len && kv_idx < chunk_end && q_idx < attn_mask_len) {
+              const int32_t mask_idx = q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
+              bool mask = attn_mask[mask_idx];
+              out_of_boundary |= mask;
+            }
           }
+
           if constexpr (std::is_same<T, half>::value) {
             s_frag[fx][fz][reg_id] =
                 out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
@@ -941,6 +949,7 @@ __device__ __forceinline__ void mask_s(const uint32_t qo_idx_base,
             s_frag[fx][fz][reg_id] =
                 out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
           }
+          // printf("tid: %d. qk[%u,%u] = %f, mask: %d \n ", threadIdx.x, kv_idx, q_idx, static_cast<float>(s_frag[fx][fz][reg_id]), int(out_of_boundary));
         } else {
           const uint32_t q_idx = qo_idx_base,
                          kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
