@@ -40,6 +40,8 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponse,
     ControlSchedulerRequest,
     ErrorResponse,
+    ErrorType,
+    ErrorCode,
     ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat

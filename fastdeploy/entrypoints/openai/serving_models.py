@@ -19,6 +19,8 @@ from typing import List, Union
 
 from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
+    ErrorType,
+    ErrorCode,
     ModelInfo,
     ModelList,
     ModelPermission,
@@ -86,7 +88,12 @@ class OpenAIServingModels:
                 f"Only master node can accept models request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(
+                message=err_msg,
+                type=ErrorType.SERVER_ERROR,
+                error_code=ErrorCode.SERVER_ERROR,
+                code=503
+            )
         model_infos = [
             ModelInfo(
                 id=model.name, max_model_len=self.max_model_len, root=model.model_path, permission=[ModelPermission()]
