@@ -28,14 +28,14 @@ prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
 def get_model_paths(base_model_name: str) -> tuple[str, str]:
     """返回 (fastdeploy_path, huggingface_path)"""
-    # FastDeploy 模型路径
+    # FastDeploy model path
     fd_base_path = os.getenv("FD_MODEL_PATH")
     if fd_base_path:
         fd_model_path = os.path.join(fd_base_path, base_model_name)
     else:
         fd_model_path = base_model_name
 
-    # HuggingFace 模型路径
+    # HuggingFace model path
     hf_base_path = os.getenv("HF_MODEL_PATH")
     if hf_base_path:
         hf_model_path = os.path.join(hf_base_path, base_model_name)
