@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from functools import partial
 from typing import Dict, Optional, Union
@@ -562,6 +563,93 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def name(self):
         return "Ernie4_5_VLMoeForConditionalGeneration"
 
+    def gate_correction_bias_loader(self, params_dict, loaded_weight_name, loaded_weight):
+        text_param_name = loaded_weight_name.replace(
+            "moe_statics.e_score_correction_bias", "text_fused_moe.experts.gate_correction_bias"
+        )
+        image_param_name = loaded_weight_name.replace(
+            "moe_statics.e_score_correction_bias", "image_fused_moe.experts.gate_correction_bias"
+        )
+        text_param = params_dict[text_param_name]
+        image_param = params_dict[image_param_name]
+        loaded_weight = get_tensor(loaded_weight)
+        text_param.copy_(loaded_weight[0].unsqueeze(0), False)
+        image_param.copy_(loaded_weight[1].unsqueeze(0), False)
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.models.utils import default_weight_loader
+
+        general_params_mapping = [
+            # (param_name, weight_name, expert_id, shard_id)
+            ("embed_tokens.embeddings", "embed_tokens", None, None),
+            ("lm_head.linear", "lm_head", None, None),
+            ("mlp.image_fused_moe.gate.weight", "mlp.gate.weight_1", None, "gate"),
+            ("mlp.text_fused_moe.gate.weight", "mlp.gate.weight", None, "gate"),
+            ("resampler_model", "ernie.resampler_model", None, None),
+        ]
+
+        text_expert_params_mapping = []
+        if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
+            text_expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                num_experts=self.fd_config.model_config.moe_num_experts[0],
+                ckpt_down_proj_name="down_proj",
+                ckpt_gate_up_proj_name="up_gate_proj",
+                param_gate_up_proj_name="text_fused_moe.experts.up_gate_proj_",
+                param_down_proj_name="text_fused_moe.experts.down_proj_",
+            )
+            image_expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                num_experts=self.fd_config.model_config.moe_num_experts[1],
+                ckpt_down_proj_name="down_proj",
+                ckpt_gate_up_proj_name="up_gate_proj",
+                param_gate_up_proj_name="image_fused_moe.experts.up_gate_proj_",
+                param_down_proj_name="image_fused_moe.experts.down_proj_",
+                experts_offset=self.fd_config.model_config.moe_num_experts[0],
+            )
+
+        all_param_mapping = general_params_mapping + text_expert_params_mapping + image_expert_params_mapping
+
+        params_dict = dict(self.named_parameters())
+        expert_id = None
+        shard_id = None
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, exp_id, shard_id in all_param_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                param = params_dict[model_param_name]
+                expert_id = exp_id
+                shard_id = shard_id
+                break
+            else:
+                # text and image gate_correction_bias is fused in ckpt and need load independently
+                if "moe_statics.e_score_correction_bias" in loaded_weight_name:
+                    self.gate_correction_bias_loader(params_dict, loaded_weight_name, loaded_weight)
+                    continue
+                if loaded_weight_name not in params_dict.keys():
+                    continue
+                model_param_name = loaded_weight_name
+                param = params_dict[model_param_name]
+
+            # Get weight loader from parameter and set weight
+            weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+            sig = inspect.signature(weight_loader)
+
+            if "expert_id" in sig.parameters:
+                weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
+            else:
+                weight_loader(param, loaded_weight)
+
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
@@ -715,7 +803,6 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
         from fastdeploy.model_executor.models.tp_utils import (
             build_expanded_keys,
             has_prefix,
