@@ -88,7 +88,7 @@ jobs:
           echo "FD_API_PORT=${FD_API_PORT}"
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
-          echo "FD_INFERENCE_MSG_QUEUE_ID=${INFERENCE_MSG_QUEUE_ID}"
+          echo "FD_INFERENCE_MSG_QUEUE_ID=${FD_INFERENCE_MSG_QUEUE_ID}"
           echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
@@ -122,7 +122,15 @@ jobs:
 
           echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
 
+          echo "========================================================="
+          echo "Ensuring no stale container named ${runner_name} ..."
+          if [ "$(docker ps -a -q -f name=${runner_name})" ]; then
+            echo "Removing stale container: ${runner_name}"
+            docker rm -f ${runner_name} || true
+          fi
+
           docker run --rm --ipc=host --pid=host --net=host \
+          --name ${runner_name} \
           -v $(pwd):/workspace \
           -w /workspace \
           -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
