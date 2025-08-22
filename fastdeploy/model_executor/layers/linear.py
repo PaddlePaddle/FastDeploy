@@ -490,10 +490,10 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
         if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
             self.kv_num_heads_per_rank = 1
-            output_size = (self.num_heads + 2 * self.nranks) * self.head_dim
+            output_size = (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * self.head_dim
         else:
             self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
-            output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
+            output_size = (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * self.head_dim
         input_size = self.hidden_size
         super().__init__(
             fd_config=fd_config,
