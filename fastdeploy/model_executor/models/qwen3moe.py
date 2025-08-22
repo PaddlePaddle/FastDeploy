@@ -82,22 +82,28 @@ class Qwen3MoeBlock(nn.Layer):
             weight_dtype="float32",
         )
 
+    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
+        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
+        # AllGather will hang when the data shapes on multi-ranks are different!
+        part_hidden_states = paddle.zeros(
+            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
+        )
+        start_offset = self.tensor_parallel_rank * token_num_per_rank
+        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
+        if end_offset > token_num:
+            end_offset = token_num
+        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
+        out = self.experts(part_hidden_states, self.gate)
+        multi_outs = []
+        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
+        out = paddle.concat(multi_outs, axis=0)
+        out = out[:token_num, :]
+        return out
+
     def forward(self, x):
         token_num = x.shape[0]
         if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
-            token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
-            # AllGather will hang when the data shapes on multi-ranks are different!
-            part_hidden_states = paddle.zeros(shape=[token_num_per_rank, x.shape[1]], dtype=x.dtype)
-            start_offset = self.tensor_parallel_rank * token_num_per_rank
-            end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
-            if end_offset > token_num:
-                end_offset = token_num
-            part_hidden_states[: (end_offset - start_offset), :] = x[start_offset:end_offset, :]
-            out = self.experts(part_hidden_states, self.gate)
-            multi_outs = []
-            paddle.distributed.all_gather(multi_outs, out, self.tp_group)
-            out = paddle.concat(multi_outs, axis=0)
-            out = out[:token_num, :]
+            out = self.split_allgather_out(x, token_num)
         else:
             out = self.experts(x, self.gate)
         return out
