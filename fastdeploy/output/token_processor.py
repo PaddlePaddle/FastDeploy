@@ -163,77 +163,54 @@ class TokenProcessor:
 
         while True:
             try:
-                is_blocking = True
-                if self.speculative_decoding:
-                    speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
-                    if self.output_tokens[0] == -2:
+                if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                    try:
+                        receive_data = self.zmq_server.recv_pyobj()
+                        assert isinstance(receive_data, StreamTransferData)
+                        if receive_data is not None:
+                            # TODO(Wanglongzhi2001): adapt more type of message.
+                            if receive_data.decoder_state == DecoderState.TEXT:
+                                self.output_tokens[0, 0] = paddle.to_tensor(
+                                    receive_data.data.not_need_stop, dtype="int64"
+                                )
+                                self.output_tokens[1, 0] = paddle.to_tensor(receive_data.data.batch, dtype="int64")
+                                self.output_tokens[2 : 2 + receive_data.data.batch, 0] = paddle.to_tensor(
+                                    receive_data.data.tokens[:, 0], dtype="int64"
+                                )
+
+                    except Exception as e:
+                        print(f"Recieve message error: {e}")
                         continue
-
                 else:
-                    if (
-                        self.cfg.parallel_config.enable_expert_parallel
-                        and self.cfg.parallel_config.data_parallel_size > 1
-                    ):
-                        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                            try:
-                                receive_data = self.zmq_server.recv_pyobj()
-                                assert isinstance(receive_data, StreamTransferData)
-                                if receive_data is not None:
-                                    # TODO(Wanglongzhi2001): adapt more type of message.
-                                    if receive_data.decoder_state == DecoderState.TEXT:
-                                        self.output_tokens[0, 0] = paddle.to_tensor(
-                                            receive_data.data.not_need_stop, dtype="int64"
-                                        )
-                                        self.output_tokens[1, 0] = paddle.to_tensor(
-                                            receive_data.data.batch, dtype="int64"
-                                        )
-                                        self.output_tokens[2:, 0] = paddle.to_tensor(
-                                            receive_data.data.tokens, dtype="int64"
-                                        )
-
-                            except Exception as e:
-                                print(f"Recieve message error: {e}")
-                                continue
-                        else:
-                            get_output_ep(self.output_tokens, rank_id, is_blocking)
+                    is_blocking = True
+                    if self.speculative_decoding:
+                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                        if self.output_tokens[0] == -2:
+                            continue
 
                     else:
-                        if self.use_logprobs:
-                            get_output_topk(
-                                self.output_tokens,
-                                self.output_scores,
-                                self.output_ranks,
-                                K,
-                                rank_id,
-                                is_blocking,
-                            )
-                        else:
-                            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                                try:
-                                    receive_data = self.zmq_server.recv_pyobj()
-                                    assert isinstance(receive_data, StreamTransferData)
-                                    if receive_data is not None:
-                                        # TODO(Wanglongzhi2001): adapt more type of message.
-                                        if receive_data.decoder_state == DecoderState.TEXT:
-                                            self.output_tokens[0, 0] = paddle.to_tensor(
-                                                receive_data.data.not_need_stop, dtype="int64"
-                                            )
-                                            self.output_tokens[1, 0] = paddle.to_tensor(
-                                                receive_data.data.batch, dtype="int64"
-                                            )
-                                            self.output_tokens[2:, 0] = paddle.to_tensor(
-                                                receive_data.data.tokens, dtype="int64"
-                                            )
+                        if (
+                            self.cfg.parallel_config.enable_expert_parallel
+                            and self.cfg.parallel_config.data_parallel_size > 1
+                        ):
+                            get_output_ep(self.output_tokens, rank_id, is_blocking)
 
-                                except Exception as e:
-                                    print(f"Recieve message error: {e}")
-                                    continue
+                        else:
+                            if self.use_logprobs:
+                                get_output_topk(
+                                    self.output_tokens,
+                                    self.output_scores,
+                                    self.output_ranks,
+                                    K,
+                                    rank_id,
+                                    is_blocking,
+                                )
                             else:
                                 get_output(self.output_tokens, rank_id, is_blocking)
 
-                    if self.output_tokens[0, 0] == -2:
-                        continue
-                    llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
+                        if self.output_tokens[0, 0] == -2:
+                            continue
+                        llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
                 self._process_prefill_metrics()
                 self._process_batch_output()
             except Exception as e:
