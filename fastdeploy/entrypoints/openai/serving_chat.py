@@ -99,6 +99,7 @@ class OpenAIServingChat:
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except Exception as e:
+                self.engine_client.semaphore.release()
                 return ErrorResponse(code=400, message=str(e))
 
             del current_req_dict
