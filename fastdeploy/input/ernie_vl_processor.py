@@ -34,6 +34,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         limit_mm_per_prompt=None,
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
+        tool_parser_obj=None,
     ):
         self.use_hf_tokenizer = False
 
@@ -53,6 +54,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         self.image_patch_id = self.ernie_processor.image_patch_id
         self.spatial_conv_size = self.ernie_processor.spatial_conv_size
 
+        self.tool_parser_dict = dict()
         self.decode_status = dict()
         self._load_tokenizer()
         self.eos_token_ids = [self.tokenizer.eos_token_id]
@@ -60,6 +62,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         self.pad_token_id = self.get_pad_id()
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
         self.reasoning_parser = None
+        self.tool_parser_obj = tool_parser_obj
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 

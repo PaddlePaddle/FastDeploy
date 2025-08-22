@@ -46,6 +46,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
 | ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
+| ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
+| ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 

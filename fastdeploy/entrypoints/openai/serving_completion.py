@@ -240,9 +240,9 @@ class OpenAIServingCompletion:
                 dealer.close()
                 self.engine_client.semaphore.release()
 
-    def calc_finish_reason(self, max_tokens, token_num, output):
+    def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
-            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+            if tool_called or output.get("tool_call"):
                 return "tool_calls"
             else:
                 return "stop"
@@ -271,6 +271,7 @@ class OpenAIServingCompletion:
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
             first_iteration = [True] * num_choices
+            tool_called = [False] * num_choices
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -343,25 +344,34 @@ class OpenAIServingCompletion:
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
-                    choices.append(
-                        CompletionResponseStreamChoice(
-                            index=idx,
-                            text=output["text"],
-                            prompt_token_ids=None,
-                            completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                            tool_calls=output.get("tool_call_content"),
-                            reasoning_content=output.get("reasoning_content"),
-                            arrival_time=arrival_time,
-                            logprobs=logprobs_res,
-                        )
-                    )
                     output_tokens[idx] += 1
+                    delta_message = CompletionResponseStreamChoice(
+                        index=idx,
+                        text=output["text"],
+                        prompt_token_ids=None,
+                        completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
+                        tool_calls=None,
+                        raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                        completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        reasoning_content="",
+                        arrival_time=arrival_time,
+                        logprobs=logprobs_res,
+                    )
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
+                            continue
+                        delta_message.text = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called[idx] = True
+
+                    choices.append(delta_message)
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output
+                            request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
@@ -460,7 +470,7 @@ class OpenAIServingCompletion:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
 
-            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output)
+            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
@@ -473,7 +483,7 @@ class OpenAIServingCompletion:
                 text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
                 prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
                 reasoning_content=output.get("reasoning_content"),
-                tool_calls=output.get("tool_call_content"),
+                tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
                 finish_reason=finish_reason,
             )

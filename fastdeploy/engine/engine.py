@@ -106,6 +106,7 @@ class LLMEngine:
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
             cfg.enable_mm,
+            cfg.tool_parser,
         )
 
         self.start_queue_service()
