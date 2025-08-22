@@ -26,7 +26,7 @@ success_special=0
 for test_file in "${special_tests[@]}"; do
     if [ -f "$test_file" ]; then
         echo "Running special test: $test_file"
-        #python -m coverage run --parallel-mode "$test_file"
+        python -m coverage run --parallel-mode "$test_file"
         status=$?
         if [ "$status" -ne 0 ]; then
             echo "$test_file" >> "$failed_tests_file"

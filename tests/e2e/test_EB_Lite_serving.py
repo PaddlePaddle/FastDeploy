@@ -14,6 +14,7 @@
 
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -85,7 +86,9 @@ def setup_and_run_server():
     """
     print("Pre-test port cleanup...")
     clean_ports()
-
+    print("log dir clean ")
+    if os.path.exists("log") and os.path.isdir("log"):
+        shutil.rmtree("log")
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
