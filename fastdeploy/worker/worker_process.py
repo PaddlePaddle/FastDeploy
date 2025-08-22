@@ -129,7 +129,7 @@ def update_think_end_id_for_ernie(fd_config: FDConfig) -> None:
     if it exists, otherwise defaults to None.
     """
     is_ernie = ErnieArchitectures.contains_ernie_arch(fd_config.model_config.architectures)
-    if is_ernie:
+    if current_platform.is_cuda() and is_ernie:
         tokenizer = ErnieBotTokenizer.from_pretrained(
             fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
