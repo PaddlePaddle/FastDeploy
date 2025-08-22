@@ -86,7 +86,7 @@ __global__ void text_image_scatter_kernel(
         } else if(token_type_ids_num == 1){
           int64_t image_load_offset = image_index[token_idx] * hidden_size + hidden_offset;
           Store<T,VecSize>(text_images_vec, image_gather_ptr + image_load_offset);
-          
+
         } else {
           // for cuda graph padding value
           continue;

@@ -47,7 +47,8 @@ void TextImageIndexOut(
              paddle::Tensor& image_index) {
 
     const int64_t token_num = token_type_ids.shape()[0];
-    text_image_index_out_kernel<1><<<1, 1>>>(
+    auto stream = token_type_ids.stream();
+    text_image_index_out_kernel<1><<<1, 1, 0, stream>>>(
         token_type_ids.data<int32_t>(),
         text_index.data<int32_t>(),
         image_index.data<int32_t>(),
