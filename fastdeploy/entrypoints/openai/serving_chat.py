@@ -31,6 +31,8 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatMessage,
     DeltaMessage,
     ErrorResponse,
+    ErrorType,
+    ErrorCode,
     LogProbEntry,
     LogProbs,
     PromptTokenUsageInfo,
@@ -81,14 +83,25 @@ class OpenAIServingChat:
         if not self._check_master():
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(
+                message=err_msg,
+                type=ErrorType.SERVER_ERROR,
+                error_code=ErrorCode.SERVER_ERROR,
+                code=503
+            )
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
-                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                err_msg = f"The model `{request.model}` does not exist or you do not have access to it."
                 api_server_logger.error(err_msg)
-                return ErrorResponse(message=err_msg, code=400)
+                return ErrorResponse(
+                    message=err_msg,
+                    type=ErrorType.NOT_FOUND_ERROR,
+                    error_code=ErrorCode.MODEL_NOT_FOUND,
+                    param="model",
+                    code=404
+                )
 
         try:
             if self.max_waiting_time < 0:
@@ -113,9 +126,26 @@ class OpenAIServingChat:
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except Exception as e:
-                error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
-                api_server_logger.error(error_msg)
-                return ErrorResponse(code=400, message=error_msg)
+                # Check if this is a context length error
+                error_str = str(e)
+                if "too long" in error_str.lower() or "exceeds" in error_str.lower() or "context" in error_str.lower():
+                    error_msg = "This model's maximum context length is exceeded. Please reduce the length of your message."
+                    api_server_logger.error(f"request[{request_id}] context length error: {error_str}")
+                    return ErrorResponse(
+                        message=error_msg,
+                        type=ErrorType.INVALID_REQUEST_ERROR,
+                        error_code=ErrorCode.CONTEXT_LENGTH_EXCEEDED,
+                        code=400
+                    )
+                else:
+                    error_msg = f"Invalid request: {error_str}"
+                    api_server_logger.error(f"request[{request_id}] request processing error: {error_str}, {str(traceback.format_exc())}")
+                    return ErrorResponse(
+                        message=error_msg,
+                        type=ErrorType.INVALID_REQUEST_ERROR,
+                        error_code=ErrorCode.INVALID_PARAMETER,
+                        code=400
+                    )
 
             del current_req_dict
 
@@ -129,22 +159,43 @@ class OpenAIServingChat:
                         request, request_id, request.model, prompt_token_ids, text_after_process
                     )
                 except Exception as e:
-                    error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
-                    api_server_logger.error(error_msg)
-                    return ErrorResponse(code=408, message=error_msg)
+                    error_msg = "The server had an error while processing your request. Please try again."
+                    api_server_logger.error(f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}")
+                    return ErrorResponse(
+                        message=error_msg,
+                        type=ErrorType.SERVER_ERROR,
+                        error_code=ErrorCode.SERVER_ERROR,
+                        code=500
+                    )
         except Exception as e:
-            error_msg = (
-                f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
-                f"max waiting time: {self.max_waiting_time}"
-            )
-            api_server_logger.error(error_msg)
-            return ErrorResponse(code=408, message=error_msg)
+            # This is likely a timeout error during semaphore acquisition
+            error_str = str(e)
+            if "timeout" in error_str.lower() or "wait" in error_str.lower():
+                error_msg = "Request timed out. Please try again."
+                api_server_logger.error(f"request[{request_id}] timeout error: {error_str}, max waiting time: {self.max_waiting_time}")
+                return ErrorResponse(
+                    message=error_msg,
+                    type=ErrorType.SERVER_ERROR,
+                    error_code=ErrorCode.TIMEOUT,
+                    code=408
+                )
+            else:
+                error_msg = "The server had an error while processing your request. Please try again."
+                api_server_logger.error(f"request[{request_id}] server error: {error_str}, {str(traceback.format_exc())}")
+                return ErrorResponse(
+                    message=error_msg,
+                    type=ErrorType.SERVER_ERROR,
+                    error_code=ErrorCode.SERVER_ERROR,
+                    code=500
+                )
 
     def _create_streaming_error_response(self, message: str) -> str:
         api_server_logger.error(message)
         error_response = ErrorResponse(
-            code=400,
-            message=message,
+            message="The server had an error while processing your request. Please try again.",
+            type=ErrorType.SERVER_ERROR,
+            error_code=ErrorCode.SERVER_ERROR,
+            code=500
         )
         return error_response.model_dump_json()
 

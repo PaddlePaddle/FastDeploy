@@ -34,7 +34,37 @@ class ErrorResponse(BaseModel):
 
     object: str = "error"
     message: str
-    code: int
+    type: Optional[str] = None
+    param: Optional[str] = None
+    
+    # OpenAI-style error code (string)
+    error_code: Optional[str] = Field(default=None, alias="code")
+    
+    # Keep old code field for backward compatibility (HTTP status code as integer)
+    code: int = 400
+
+
+# OpenAI Error Types
+class ErrorType:
+    INVALID_REQUEST_ERROR = "invalid_request_error"
+    AUTHENTICATION_ERROR = "authentication_error"
+    PERMISSION_ERROR = "permission_error"
+    NOT_FOUND_ERROR = "not_found_error"
+    REQUEST_TOO_LARGE = "request_too_large"
+    RATE_LIMIT_ERROR = "rate_limit_error"
+    SERVER_ERROR = "server_error"
+
+
+# OpenAI Error Codes
+class ErrorCode:
+    INVALID_PARAMETER = "invalid_parameter"
+    MISSING_PARAMETER = "missing_parameter"
+    CONTEXT_LENGTH_EXCEEDED = "context_length_exceeded"
+    MODEL_NOT_FOUND = "model_not_found"
+    INSUFFICIENT_QUOTA = "insufficient_quota"
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+    SERVER_ERROR = "server_error"
+    TIMEOUT = "timeout"
 
 
 class PromptTokenUsageInfo(BaseModel):
