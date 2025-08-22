@@ -197,53 +197,6 @@ class LLMEngine:
             self.recv_result_handle_thread.start()
             time.sleep(3)
 
-        self.cfg.init_cache_info()
-
-        role = self.cfg.splitwise_role
-        host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
-        request_queues_for_dp_ipc = (
-            None  # Different dp has its own process, use multiprocessing.Queue to deliver requests for each dp
-        )
-        result_queue_for_dp_ipc = None
-        if self.cfg.scheduler_config.name == "splitwise":
-            self.scheduler.start(role, host_ip, disaggregate)
-        elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
-            for i in range(self.cfg.parallel_config.data_parallel_size):
-                request_queues_for_dp_ipc.append(multiprocessing.Queue())
-            self.scheduler.start(
-                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
-            )
-
-        time.sleep(1)
-
-        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
-            self.dp_processed = []
-            for i in range(
-                1,
-                self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
-            ):
-                time.sleep(1)
-                self.dp_processed.append(
-                    multiprocessing.Process(
-                        target=start_expert_service,
-                        args=(
-                            self.cfg,
-                            i + self.cfg.node_rank * self.cfg.worker_num_per_node,
-                            self.ipc_signal_suffix,
-                            request_queues_for_dp_ipc,
-                            result_queue_for_dp_ipc,
-                        ),
-                    )
-                )
-                llm_logger.info(
-                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
-                    + f" data parallel id {i}"
-                )
-                self.dp_processed[-1].start()
-
         if self.do_profile == 0 and (
             self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"
         ):
