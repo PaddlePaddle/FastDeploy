@@ -328,7 +328,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             residual = paddle.empty([0,8192], dtype="bfloat16")
             topk_idx = paddle.empty([0,8], dtype="int64")
             topk_weights = paddle.empty([0,8], dtype="float32")
-            
+
             return hidden_states, residual, topk_idx, topk_weights
 
         hidden_states, residual = self.input_layernorm(hidden_states, residual)
@@ -446,18 +446,23 @@ class Ernie4_5_Model(nn.Layer):
         mc_bs = (bs + split_num - 1) // split_num
 
         if IsH20:
-            # H20 机器
-            hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
+            hidden_states = None
             residual = None
-            for i in range(3):
-                hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
+            if ids_remove_padding.shape[0] == 0:
+                pass
+            else:
+                hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+                residual = None
+                for i in range(3):
+                    hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
 
             for i in range(0, split_num):
                 from copy import copy
                 forward_meta_copy = copy(forward_meta)
                 
                 start_bs = i * mc_bs
-                end_bs = i + mc_bs
+                end_bs = start_bs + mc_bs
                 end_bs = min(end_bs, bs)
 
                 start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
@@ -484,7 +489,7 @@ class Ernie4_5_Model(nn.Layer):
             # MoE 机器啥也不需要做！
             pass
 
-        print(len([a for a in all_hidden_states if a is not None]))
+        print("microbatch 中非空数量为：", len([a for a in all_hidden_states if a is not None]))
         print("大王啊")
 
         IsH20 = self.fd_config.parallel_config.is_H20
@@ -686,6 +691,8 @@ class Ernie4_5_Model(nn.Layer):
         paddle.distributed.barrier()
 
         if IsH20:
+            if ids_remove_padding.shape[0] == 0:
+                return None
             hidden_states = paddle.concat([attention_input[j][1] for j in range(split_num)], axis=0)
             residuals = paddle.concat([attention_input[j][2]  for j in range(split_num)], axis=0)
             hidden_states = hidden_states + residuals

@@ -1080,6 +1080,11 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+            
+            if model_output is None:
+                # no need do 后处理！
+                return None
+            
             hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cum_offsets"],
