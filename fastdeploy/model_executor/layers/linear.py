@@ -570,7 +570,6 @@ class QKVParallelLinear(ColumnParallelLinear):
                 param_shard_offset = self.num_heads_per_rank * self.head_dim
                 param_shard_size = self.kv_num_heads_per_rank * self.head_dim
             else:
-                # loaded_shard_id == "v"
                 param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
                 param_shard_size = self.kv_num_heads_per_rank * self.head_dim
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
