@@ -234,8 +234,7 @@ class Sampler(nn.Layer):
             temp_scaled_logprobs = temp_scaled_logprobs[:real_bsz]
             if temp_scaled_logprobs.any():
                 temperature = sampling_metadata.temperature[:real_bsz]
-                mask = paddle.logical_not(temp_scaled_logprobs)
-                temp_temperature = paddle.where(mask, paddle.ones_like(temperature), temperature)
+                temp_temperature = paddle.where(temp_scaled_logprobs, temperature, paddle.ones_like(temperature))
                 last_logits = last_logits / temp_temperature
         if top_p_normalized_logprobs is not None and share_inputs is not None:
             seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])
