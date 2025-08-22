@@ -20,10 +20,7 @@ import traceback
 import uuid
 from typing import List, Optional
 
-import aiozmq
-import msgpack
 import numpy as np
-from aiozmq import zmq
 
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -49,8 +46,9 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, ips, max_waiting_time, chat_template):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
         self.engine_client = engine_client
+        self.models = models
         self.pid = pid
         self.master_ip = ips
         self.max_waiting_time = max_waiting_time
@@ -61,6 +59,12 @@ class OpenAIServingChat:
                 self.master_ip = self.master_ip[0]
             else:
                 self.master_ip = self.master_ip.split(",")[0]
+
+    async def _ensure_connection_manager(self):
+        """ensure connection manager initialized"""
+        if not self.engine_client.connection_initialized:
+            await self.engine_client.connection_manager.initialize()
+            self.engine_client.connection_initialized = True
 
     def _check_master(self):
         if self.master_ip is None:
@@ -78,6 +82,14 @@ class OpenAIServingChat:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+
+        if self.models:
+            is_supported, request.model = self.models.is_supported_model(request.model)
+            if not is_supported:
+                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                api_server_logger.error(err_msg)
+                return ErrorResponse(message=err_msg, code=400)
+
         try:
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
@@ -101,7 +113,9 @@ class OpenAIServingChat:
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except Exception as e:
-                return ErrorResponse(code=400, message=str(e))
+                error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
+                api_server_logger.error(error_msg)
+                return ErrorResponse(code=400, message=error_msg)
 
             del current_req_dict
 
@@ -115,11 +129,19 @@ class OpenAIServingChat:
                         request, request_id, request.model, prompt_token_ids, text_after_process
                     )
                 except Exception as e:
-                    return ErrorResponse(code=400, message=str(e))
-        except Exception:
-            return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
+                    error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
+                    api_server_logger.error(error_msg)
+                    return ErrorResponse(code=408, message=error_msg)
+        except Exception as e:
+            error_msg = (
+                f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
+                f"max waiting time: {self.max_waiting_time}"
+            )
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=408, message=error_msg)
 
     def _create_streaming_error_response(self, message: str) -> str:
+        api_server_logger.error(message)
         error_response = ErrorResponse(
             code=400,
             message=message,
@@ -170,14 +192,16 @@ class OpenAIServingChat:
             choices=[],
             model=model_name,
         )
+
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -192,7 +216,6 @@ class OpenAIServingChat:
                             current_waiting_time = 0
                     await asyncio.sleep(0.01)
                     continue
-                response = msgpack.unpackb(raw_data[-1])
                 for res in response:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
@@ -227,6 +250,7 @@ class OpenAIServingChat:
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
                                 choice.delta.text_after_process = text_after_process
+                                choice.delta.prompt_tokens = text_after_process
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
                                 object=chunk_object_type,
@@ -255,22 +279,20 @@ class OpenAIServingChat:
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
 
-                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
-                        tool_delta_message = output["tool_delta_message"]
-                        if tool_delta_message is None:
+                    delta_message = DeltaMessage(
+                        content=delta_text,
+                        reasoning_content="",
+                        prompt_token_ids=None,
+                        completion_token_ids=None,
+                        tool_calls=None,
+                    )
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
                             continue
-                        delta_message = tool_delta_message
-                        delta_message.reasoning_content = output.get("reasoning_content")
-                        if delta_message.tool_calls:
-                            tool_called = True
-                    else:
-                        delta_message = DeltaMessage(
-                            content=delta_text,
-                            reasoning_content=output.get("reasoning_content"),
-                            prompt_token_ids=None,
-                            completion_token_ids=None,
-                            tool_calls=None,
-                        )
+                        delta_message.content = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        delta_message.tool_calls = delta_message_output.tool_calls
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -298,6 +320,7 @@ class OpenAIServingChat:
                     if request.return_token_ids:
                         choice.delta.completion_token_ids = list(output["token_ids"])
                         choice.delta.raw_prediction = output.get("raw_prediction")
+                        choice.delta.completion_tokens = output.get("raw_prediction")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -336,12 +359,14 @@ class OpenAIServingChat:
                 yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
 
         except Exception as e:
-            error_data = self._create_streaming_error_response(str(e))
+            error_data = self._create_streaming_error_response(
+                f"request[{request_id}] generate stream error: {str(e)}, {str(traceback.format_exc())}"
+            )
             yield f"data: {error_data}\n\n"
         finally:
-            dealer.close()
+            await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
+            api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
@@ -364,7 +389,8 @@ class OpenAIServingChat:
         include_stop_str_in_output = request.include_stop_str_in_output
 
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
             final_res = None
             previous_num_tokens = 0
@@ -373,7 +399,7 @@ class OpenAIServingChat:
             completion_token_ids = []
             while True:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -386,7 +412,6 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
-                response = msgpack.unpackb(raw_data[-1])
                 task_is_finished = False
                 for data in response:
                     if data.get("error_code", 200) != 200:
@@ -416,7 +441,7 @@ class OpenAIServingChat:
                 if task_is_finished:
                     break
         finally:
-            dealer.close()
+            await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
 
@@ -430,7 +455,9 @@ class OpenAIServingChat:
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             text_after_process=text_after_process if request.return_token_ids else None,
+            prompt_tokens=text_after_process if request.return_token_ids else None,
             raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:
@@ -446,7 +473,7 @@ class OpenAIServingChat:
         max_tokens = request.max_completion_tokens or request.max_tokens
         if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
-            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
+            if output.get("tool_call"):
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
@@ -556,6 +583,6 @@ class OpenAIServingChat:
             return LogProbs(content=[sampled_entry])
 
         except Exception as e:
-            api_server_logger.error("Error in _build_logprobs_response: %s", e)
-            api_server_logger.error(traceback.format_exc())
+            error_msg = f"Error in _build_logprobs_response: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
             return None

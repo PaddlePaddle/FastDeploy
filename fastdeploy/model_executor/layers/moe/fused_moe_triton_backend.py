@@ -642,8 +642,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer.create_parameter(
                 shape=[
                     layer.num_local_experts,
-                    layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
-                    layer.hidden_size // self.quant_config.weight_block_size[1],
+                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
                 ],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(0),
@@ -655,8 +655,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer.create_parameter(
                 shape=[
                     layer.num_local_experts,
-                    layer.hidden_size // self.quant_config.weight_block_size[0],
-                    layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
                 ],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(0),

@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import traceback
+
 import paddle
 
 from fastdeploy.utils import console_logger as logger
@@ -38,7 +40,8 @@ class XPUPlatform(Platform):
             logger.warning(
                 "You are using XPU version PaddlePaddle, but there is no XPU "
                 "detected on your machine. Maybe CUDA devices is not set properly."
-                f"\n Original Error is {e}"
+                f"\n Original Error is {e}, "
+                f"{str(traceback.format_exc())}"
             )
             return False
 

@@ -57,7 +57,7 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
-        self.use_logprobs = self.cfg.enable_logprob
+        self.use_logprobs = self.cfg.model_config.enable_logprob
 
         if self.speculative_decoding:
             self.output_tokens = paddle.full(
@@ -201,7 +201,7 @@ class TokenProcessor:
                         self.prefill_time_signal.value[current_index] = 0
                     current_index += 1
             except Exception as e:
-                llm_logger.error(f"Error processing prefill metrics: {e}")
+                llm_logger.error(f"Error processing prefill metrics: {e}, {str(traceback.format_exc())}")
 
         self.executor.submit(process_metrics)
 
@@ -215,7 +215,7 @@ class TokenProcessor:
         try:
             self.cached_generated_tokens.put_results(batch_result)
         except Exception as e:
-            llm_logger.error(f"Error in TokenProcessor's postprocess: {e}")
+            llm_logger.error(f"Error in TokenProcessor's postprocess: {e}, {str(traceback.format_exc())}")
 
     def _recycle_resources(self, task_id, index, task, result=None, is_prefill=False):
         """

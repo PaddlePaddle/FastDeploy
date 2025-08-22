@@ -49,7 +49,7 @@ fptr_t init_custom_all_reduce(const std::vector<fptr_t>& fake_ipc_ptrs,
  * Otherwise, _reg_buffer is assumed to be IPC-registered and inp is first
  * copied into _reg_buffer.
  */
-void all_reduce(fptr_t _fa, paddle::Tensor& inp, paddle::Tensor& out,
+void all_reduce(paddle::Tensor& inp, paddle::Tensor& out, fptr_t _fa,
                 fptr_t _reg_buffer, int64_t reg_buffer_sz_bytes) {
   auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
   auto stream = inp.stream();
@@ -168,3 +168,11 @@ bool is_tensor_stream_capturing(paddle::Tensor& input, fptr_t _fa) {
   auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
   return fa->is_tensor_stream_capturing(input);
 }
+
+PD_BUILD_STATIC_OP(all_reduce)
+    .Inputs({"inp",
+             "out"})
+    .Outputs({"new_out"})
+    .Attrs({"_fa: int64_t", "_reg_buffer: int64_t", "reg_buffer_sz_bytes: int64_t"})
+    .SetInplaceMap({{"out", "new_out"}})
+    .SetKernelFn(PD_KERNEL(all_reduce));
