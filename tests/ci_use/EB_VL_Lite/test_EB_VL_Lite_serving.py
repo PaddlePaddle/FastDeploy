@@ -524,7 +524,8 @@ def test_chat_with_thinking(openai_client, capsys):
         stream=True,
         max_tokens=10,
     )
-    completion_tokens = reasoning_tokens = 1
+    completion_tokens = 1
+    reasoning_tokens = 0
     total_tokens = 0
     for chunk_id, chunk in enumerate(response):
         if chunk_id == 0:  # the first chunk is an extra chunk
