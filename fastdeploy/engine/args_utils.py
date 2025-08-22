@@ -188,7 +188,7 @@ class EngineArgs:
     Flag to enable prefix caching.
     """
 
-    enable_custom_all_reduce: bool = False
+    disable_custom_all_reduce: bool = False
     """
     Flag to enable the custom all-reduce kernel.
     """
@@ -571,10 +571,10 @@ class EngineArgs:
             help="Degree of tensor parallelism.",
         )
         parallel_group.add_argument(
-            "--enable-custom-all-reduce",
+            "--disable-custom-all-reduce",
             action="store_true",
-            default=EngineArgs.enable_custom_all_reduce,
-            help="Flag to enable custom all-reduce.",
+            default=EngineArgs.disable_custom_all_reduce,
+            help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -946,10 +946,6 @@ class EngineArgs:
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
-
-        assert not (
-            self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
-        ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
         assert is_port_available(
             "0.0.0.0", self.engine_worker_queue_port
