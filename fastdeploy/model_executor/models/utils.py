@@ -100,6 +100,20 @@ def default_weight_loader(fd_config: FDConfig) -> None:
     return fn
 
 
+def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
+    if hasattr(weight_or_paramter, "get_shape"):
+        shape = weight_or_paramter.get_shape()
+    else:
+        shape = weight_or_paramter.shape
+    if len(shape) == 1:
+        weight_or_paramter = weight_or_paramter[start:end]
+    elif output_dim:
+        weight_or_paramter = weight_or_paramter[..., start:end]
+    else:
+        weight_or_paramter = weight_or_paramter[start:end, ...]
+    return weight_or_paramter
+
+
 class LayerIdPlaceholder(str, enum.Enum):
     """LayerIdPlaceholder"""
 

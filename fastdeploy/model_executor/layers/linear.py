@@ -26,6 +26,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethod
 from fastdeploy.model_executor.models.utils import (
     default_weight_loader,
     set_weight_attrs,
+    slice_fn,
 )
 from fastdeploy.platforms import current_platform
 
@@ -519,29 +520,35 @@ class QKVParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        """
-        Unified loader for both weights and biases.
-        """
+        hugging_face_format = getattr(param, "hugging_face_format", None)
+        if hugging_face_format:
+            loaded_weight = loaded_weight.transpose([1, 0])
+        output_dim = getattr(param, "output_dim", None)
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
-            loaded_weight = get_tensor(loaded_weight)
-            split_loaded_weight = loaded_weight
-            param.copy_(split_loaded_weight, False)
+            if self.nranks != 1:
+                shard_offsets = [
+                    # (shard_id, shard_offset, shard_size)
+                    ("q", 0, self.num_heads * self.head_dim),
+                    ("k", self.num_heads * self.head_dim, self.kv_num_heads * self.head_dim),
+                    ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.head_dim),
+                ]
+                for shard_id, shard_offset, shard_size in shard_offsets:
+                    loaded_weight_shard = loaded_weight_shard = slice_fn(
+                        loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
+                    )
+                    self.weight_loader(param, loaded_weight_shard, shard_id)
+            else:
+                loaded_weight = get_tensor(loaded_weight)
+                split_loaded_weight = loaded_weight
+                param.copy_(split_loaded_weight, False)
         else:
-            # 1. fused qkv in disk
-            # 2. split q k v
+            # 1.fused qkv in disk
+            # 2.split q k v
             assert loaded_shard_id in ["q", "k", "v"]
-
-            # Handle weight transpose for hugging face format (only for 2D weights)
-            if loaded_weight.ndim == 2:  # Weight matrix
-                hugging_face_format = getattr(param, "hugging_face_format", None)
-                if hugging_face_format:
-                    loaded_weight = loaded_weight.transpose([1, 0])
-
-            output_dim = getattr(param, "output_dim", None)
-            # Tensor parallelism splits along the output_dim
+            # Tensor parallelism splits the weight along the output_dim
             if output_dim is not None:
-                dim = -1
+                dim = -1 if output_dim else 0
                 if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
@@ -549,35 +556,23 @@ class QKVParallelLinear(ColumnParallelLinear):
                 block_size = size // self.nranks
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
-
-                # Handle both 2D (weight) and 1D (bias) tensors
-                if loaded_weight.ndim == 2:
-                    loaded_weight = loaded_weight[..., shard_offset:shard_size]
-                else:  # 1D bias
-                    loaded_weight = loaded_weight[shard_offset:shard_size]
+                loaded_weight = loaded_weight[..., shard_offset:shard_size]
 
             loaded_weight = get_tensor(loaded_weight)
 
-            # Determine the slice indices based on shard_id
             if loaded_shard_id == "q":
-                start_idx = 0
-                end_idx = self.num_heads_per_rank * self.head_dim
+                param_shard_offset = 0
+                param_shard_size = self.num_heads_per_rank * self.head_dim
             elif loaded_shard_id == "k":
-                start_idx = self.num_heads_per_rank * self.head_dim
-                end_idx = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
-            elif loaded_shard_id == "v":
-                start_idx = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
-                end_idx = None  # Till the end
-
-            # Apply slicing based on tensor dimensionality
-            if param.ndim == 2:  # Weight matrix
-                param = param[:, start_idx:end_idx]
-            else:  # 1D bias
-                param = param[start_idx:end_idx]
-
+                param_shard_offset = self.num_heads_per_rank * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.head_dim
+            else:
+                # loaded_shard_id == "v"
+                param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.head_dim
+            param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
             assert param.shape == loaded_weight.shape, (
-                f"Attempted to load {'weight' if param.ndim == 2 else 'bias'} "
-                f"({loaded_weight.shape}) into parameter ({param.shape})"
+                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
             )
             param.copy_(loaded_weight, False)
 
