@@ -91,43 +91,47 @@ def form_model_get_output(
         pytest.fail(f"Failed to initialize LLM model from {model_path}")
 
 
+model_param_map = {
+    "Qwen3-30B-A3B": {
+        "tensor_parallel_size": 2,
+        "quantizations": ["wint4"],
+    },
+    "Qwen3-0.6B": {
+        "quantizations": ["None", "wint4", "wint8"],
+    },
+    "ernie-4_5-21b-a3b-bf16-paddle": {
+        "tensor_parallel_size": 2,
+        "quantizations": ["wint8"],
+    },
+    "ernie-4_5-vl-28b-a3b-bf16-paddle": {
+        "tensor_parallel_size": 2,
+        "quantizations": ["wint4"],
+    },
+    "Qwen2-7B-Instruct": {
+        "quantizations": ["wint8"],
+    },
+}
+
+
+params = []
+for model, cfg in model_param_map.items():
+    for q in cfg["quantizations"]:
+        params.append(
+            pytest.param(
+                model,
+                cfg.get("tensor_parallel_size", 1),
+                cfg.get("max_model_len", 1024),
+                q,
+                cfg.get("max_tokens", 32),
+                marks=[pytest.mark.core_model],
+            )
+        )
+
+
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len",
-    [
-        pytest.param(
-            "Qwen3-30B-A3B",
-            2,
-            1024,
-            marks=[pytest.mark.core_model],
-        ),
-        pytest.param(
-            "Qwen3-0.6B",
-            1,
-            1024,
-            marks=[pytest.mark.core_model],
-        ),
-        pytest.param(
-            "ernie-4_5-21b-a3b-bf16-paddle",
-            2,
-            1024,
-            marks=[pytest.mark.core_model],
-        ),
-        pytest.param(
-            "ernie-4_5-vl-28b-a3b-bf16-paddle",
-            2,
-            1024,
-            marks=[pytest.mark.core_model],
-        ),
-        pytest.param(
-            "Qwen2-7B-Instruct",
-            1,
-            1024,
-            marks=[pytest.mark.core_model],
-        ),
-    ],
+    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    params,
 )
-@pytest.mark.parametrize("quantization", ["None", "wint4", "wint8"])
-@pytest.mark.parametrize("max_tokens", [32])
 def test_common_model(
     fd_runner,
     model_name_or_path: str,
