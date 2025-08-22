@@ -341,7 +341,7 @@ class ColumnParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
-            hugging_face_format=self.fd_config.load_config.hugging_face_format,
+            hugging_face_format=fd_config.model_config.model_format == "hugging_face",
         )
 
         if self.nranks > 0:
@@ -407,6 +407,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         hugging_face_format = getattr(param, "hugging_face_format", None)
         if hugging_face_format:
             loaded_weight = loaded_weight.transpose([1, 0])
+        output_dim = getattr(param, "output_dim", None)
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk.
             if self.nranks != 1:
@@ -416,7 +417,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                     ("up", self.output_size * self.nranks // 2, self.output_size * self.nranks // 2),
                 ]
                 for shard_id, shard_offset, shard_size in shard_offsets:
-                    loaded_weight_shard = loaded_weight[..., shard_offset : shard_offset + shard_size]
+                    loaded_weight_shard = slice_fn(
+                        loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
+                    )
                     self.weight_loader(param, loaded_weight_shard, shard_id)
             else:
                 loaded_weight = get_tensor(loaded_weight)
@@ -437,7 +440,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 block_size = size // self.nranks
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
-                loaded_weight = loaded_weight[..., shard_offset:shard_size]
+                loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_size)
 
             loaded_weight = get_tensor(loaded_weight)
 
@@ -715,7 +718,7 @@ class RowParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
-            hugging_face_format=self.fd_config.load_config.hugging_face_format,
+            hugging_face_format=fd_config.model_config.model_format == "hugging_face",
         )
         if self.nranks > 0:
             _set_var_distributed(self.weight, split_axis=0)

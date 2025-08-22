@@ -217,7 +217,8 @@ class Qwen2Model(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        hugging_face_format = fd_config.load_config.hugging_face_format
+        hugging_face_format = fd_config.model_config.model_format == "hugging_face"
+        print("hugging_face_fotmat", hugging_face_format)
         if hugging_face_format:
             fd_config.model_config.pretrained_config.prefix_name = "model"
         else:
@@ -335,7 +336,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
 
         for loaded_weight_name, loaded_weight in weights_iterator:
-            hugging_face_format = self.fd_config.load_config.hugging_face_format
+            hugging_face_format = self.fd_config.model_config.model_format == "hugging_face"
             # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
             if hugging_face_format:
                 loaded_weight_name = loaded_weight_name.replace("model", "qwen2")

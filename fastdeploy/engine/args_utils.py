@@ -361,11 +361,6 @@ class EngineArgs:
         - "new_loader": default_v1.
     """
 
-    hugging_face_format: bool = False
-    """
-    Whether to use models in Hugging Face format
-    """
-
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -628,12 +623,6 @@ class EngineArgs:
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
                  default/new_loader.",
-        )
-        load_group.add_argument(
-            "--hugging_face_format",
-            action="store_true",
-            default=EngineArgs.hugging_face_format,
-            help="Enable when loading models in Hugging Face format",
         )
 
         # CacheConfig parameters group
@@ -995,5 +984,4 @@ class EngineArgs:
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,
             load_choices=self.load_choices,
-            hugging_face_format=self.hugging_face_format,
         )

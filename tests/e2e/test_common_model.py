@@ -53,7 +53,6 @@ def form_model_get_output(
     max_tokens,
     quantization,
     load_choices,
-    hugging_face_format,
     result_queue,
 ):
     try:
@@ -62,7 +61,6 @@ def form_model_get_output(
             tensor_parallel_size=tensor_parallel_size,
             max_model_len=max_model_len,
             load_choices=load_choices,
-            hugging_face_format=hugging_face_format,
             quantization=quantization,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
         ) as fd_model:
@@ -107,7 +105,6 @@ def test_common_model(
             max_tokens,
             quantization,
             "default",
-            False,
             result_queue,
         ),
     )
@@ -125,7 +122,6 @@ def test_common_model(
             max_tokens,
             quantization,
             "default_v1",
-            True,
             result_queue,
         ),
     )

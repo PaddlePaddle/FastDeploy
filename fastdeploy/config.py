@@ -129,6 +129,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.model_format = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -165,6 +166,7 @@ class ModelConfig:
         self.is_unified_ckpt = check_unified_ckpt(self.model)
 
         self.override_name_from_config()
+        self.read_model_config()
         self.read_from_env()
 
     def override_name_from_config(self):
@@ -206,6 +208,20 @@ class ModelConfig:
 
         reset_config_value("COMPRESSION_RATIO", 1.0)
         reset_config_value("ROPE_THETA", 10000)
+
+    def read_model_config(self):
+        self.model_config = {}
+        config_path = os.path.join(self.model, "config.json")
+        if os.path.exists(config_path):
+            self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
+            print("self.model_config", self.model_config)
+            if "torch_dtype" in self.model_config:
+                self.model_format = "hugging_face"
+                logger.info("The model format is Hugging Face")
+            else:
+                self.model_format = "paddle"
+                logger.info("The model format is Paddle")
+        print("self.model_config.model_format", self.model_format)
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -684,7 +700,6 @@ class LoadConfig:
             - 'ipc': Real-time IPC streaming with automatic resharding
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
             - None: No dynamic loading
-        hugging_face_format: Whether to use models in Hugging Face format
     """
 
     def __init__(
@@ -692,7 +707,6 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
-        self.hugging_face_format: bool = False
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
@@ -978,7 +992,6 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         load_choices: str = "default",
-        hugging_face_format: bool = False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -993,7 +1006,6 @@ class FDConfig:
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.load_choices: str = load_choices
-        self.hugging_face_format: bool = hugging_face_format
 
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
