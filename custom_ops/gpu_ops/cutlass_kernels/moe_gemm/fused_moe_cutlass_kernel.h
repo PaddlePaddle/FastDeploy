@@ -841,6 +841,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       // to implement a 'transposed' GEMM that computes the transposed problems.
       //
       CUTLASS_TRACE_DEVICE(" Now in run_kernel");
+      CUTLASS_TRACE_DEVICE(" eplogue output op alpha = %f", params.output_op.alpha);
       using ElementA = typename Mma::IteratorA::Element;
       using LayoutA = typename Mma::IteratorA::Layout;
       using ElementB = typename Mma::IteratorB::Element;

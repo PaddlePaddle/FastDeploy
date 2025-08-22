@@ -43,7 +43,9 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
                             const int64_t inter_size,
                             const int64_t hidden_size,
                             const int num_experts,
-                            bool used_in_ep_low_latency) {
+                            const float up_out_scale,
+                            const float down_out_scale,
+                            const bool used_in_ep_low_latency) {
     using namespace phi;
     using in_data_t = typename PDTraits<IN_DTYPE>::data_t;
     using InNvType = typename PDTraits<IN_DTYPE>::DataType;
@@ -66,7 +68,6 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
     }
 
     if constexpr (std::is_same<InNvType, OutNvType>::value) {
-
         auto moe_gemm_runner = MoeGemmRunner<InNvType, WeightOnlyTraits>();
         auto stream = permute_input.stream();
 
@@ -103,6 +104,7 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
             inter_size,
             hidden_size,
             num_experts,
+            up_out_scale,
             up_gate_proj_quant_args,
             "none",
             stream);
@@ -144,6 +146,7 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
 //         inter_size,
 //         hidden_size,
 //         num_experts,
+//         down_out_scale,
 //         up_gate_proj_quant_args,
 //         "none",
 //         stream);
@@ -188,8 +191,10 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
                        const paddle::optional<paddle::Tensor>& down_proj_local_scale,
                        const paddle::optional<paddle::Tensor>& down_proj_code_scale,
                        const paddle::optional<paddle::Tensor>& down_proj_code_zp,
-                       paddle::Tensor ffn_out,
-                       bool used_in_ep_low_latency) {
+                       const float up_out_scale,
+                       const float down_out_scale,
+                       const bool used_in_ep_low_latency,
+                       paddle::Tensor ffn_out) {
     // using namespace phi;
     // using data_t = typename PDTraits<IN_DTYPE>::data_t;
     // using NvType = typename PDTraits<IN_DTYPE>::DataType;
@@ -254,6 +259,8 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
         inter_size,
         hidden_size,
         num_experts,
+        up_out_scale,
+        down_out_scale,
         used_in_ep_low_latency);
 }
 
@@ -271,6 +278,8 @@ paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::optional<paddle::Tensor>& down_proj_local_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_zp,
+    const float up_out_scale,
+    const float down_out_scale,
     const bool used_in_ep_low_latency) {
 #define dispatch_out_dtype_macro(IN_DTYPE, OUT_DTYPE)                       \
     case OUT_DTYPE:                                                        \
@@ -287,8 +296,10 @@ paddle::Tensor MoeExpertFFNWint2Func(
                                                down_proj_local_scale,      \
                                                down_proj_code_scale,       \
                                                down_proj_code_zp,          \
-                                               ffn_out,                    \
-                                               used_in_ep_low_latency);    \
+                                               up_out_scale,               \
+                                               down_out_scale,             \
+                                               used_in_ep_low_latency,      \
+                                               ffn_out);                   \
     break;                                                          
 
 #define dispatch_in_dtype_macro(IN_DTYPE)                                 \
@@ -339,6 +350,8 @@ std::vector<paddle::Tensor> MoeExpertFFNWint2(
     const paddle::optional<paddle::Tensor>& down_proj_local_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_zp,
+    const float up_out_scale,
+    const float down_out_scale,
     const bool used_in_ep_low_latency) {
 
     return {MoeExpertFFNWint2Func(permute_input,
@@ -354,6 +367,8 @@ std::vector<paddle::Tensor> MoeExpertFFNWint2(
                                   down_proj_local_scale,
                                   down_proj_code_scale,
                                   down_proj_code_zp,
+                                  up_out_scale,
+                                  down_out_scale,
                                   used_in_ep_low_latency)};
 }
 
@@ -371,6 +386,8 @@ std::vector<std::vector<int64_t>> MoeExpertFFNWint2InferShape(
     const paddle::optional<std::vector<int64_t>>& down_proj_local_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_proj_code_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_proj_code_zp_shape,
+    const float up_out_scale,
+    const float down_out_scale,
     const bool used_in_ep_low_latency) {
 #if _GROUP_GEMM_ONLY
     int64_t expanded_active_expert_rows = permute_input_shape[0];
@@ -396,6 +413,8 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
     const paddle::optional<paddle::DataType> &down_proj_local_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_code_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_code_zp_dtype,
+    const float up_out_scale,
+    const float down_out_scale,
     const bool used_in_ep_low_latency) {
 // if (up_gate_proj_bias_dtype) {
 //     return {up_gate_proj_bias_dtype.value()};  // 解包 optional，返回 vector<paddle::DataType>
@@ -444,13 +463,14 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
  *   - down_proj_scale: Quantization scales for second FFN layer
  *                Shape: [num_experts, hidden_size]
  *                dtype: Same as input
- *
  * Outputs:
  *   - output_tensor: Output tensor after MoE FFN computation
  *                   Shape: Same as permute_input
  *                   dtype: Same as input (or up_gate_proj_scale dtype for w4a8)
  *
  * Attributes:
+ *   - up_out_scale: Out scales for first FFN layer
+ *   - down_out_scale: Out scales for second FFN layer
  *   - used_in_ep_low_latency: Whether running in low latency mode
  *                            Affects activation function implementation
  *
@@ -458,7 +478,6 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
  * - Low latency mode uses specialized grouped SwiGLU implementation
  */
 PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
-// PD_BUILD_OP(moe_expert_ffn_wint2)
   .Inputs({"permute_input",
            "tokens_expert_prefix_sum",
            "up_gate_proj_weight",
@@ -473,7 +492,9 @@ PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
            paddle::Optional("down_proj_code_scale"),
            paddle::Optional("down_proj_code_zp")})
     .Outputs({"output_tensor"})
-    .Attrs({"used_in_ep_low_latency:bool"})
+    .Attrs({"up_out_scale: float",
+            "down_out_scale: float",
+            "used_in_ep_low_latency: bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFNWint2))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertFFNWint2InferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertFFNWint2InferDtype));

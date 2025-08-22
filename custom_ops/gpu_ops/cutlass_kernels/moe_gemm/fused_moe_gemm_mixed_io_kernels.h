@@ -45,6 +45,7 @@ class MixedMoeGemmRunner {
                          int64_t gemm_n,
                          int64_t gemm_k,
                          int num_experts,
+                         const float out_scale,
                          const Arguments& quant_args_B,
                          std::string activation_type,
                          cudaStream_t stream);
@@ -59,6 +60,7 @@ class MixedMoeGemmRunner {
                 int64_t gemm_n,
                 int64_t gemm_k,
                 int num_experts,
+                const float out_scale,
                 const Arguments& quant_args_B,
                 cudaStream_t stream);
 
@@ -74,6 +76,7 @@ class MixedMoeGemmRunner {
                         int64_t gemm_n,
                         int64_t gemm_k,
                         int num_experts,
+                        const float out_scale,
                         const Arguments& quant_args_B,
                         CutlassGemmConfig gemm_config,
                         cudaStream_t stream,
@@ -91,6 +94,7 @@ class MixedMoeGemmRunner {
                 int64_t gemm_n,
                 int64_t gemm_k,
                 int num_experts,
+                const float out_scale,
                 const Arguments& quant_args_B,
                 cudaStream_t stream);
 

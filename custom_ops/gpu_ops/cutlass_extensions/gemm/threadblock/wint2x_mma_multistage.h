@@ -771,50 +771,50 @@ public:
             static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][4]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][5]),
             static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][6]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][7]));
 
-      CUTLASS_TRACE_DEVICE_TID(" tile_A[8:15]=[%f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][8]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][9]),
-            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][10]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][11]),
-            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][12]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][13]),
-            static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][14]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][15]));
+      // CUTLASS_TRACE_DEVICE_TID(" tile_A[8:15]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][8]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][9]),
+      //       static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][10]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][11]),
+      //       static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][12]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][13]),
+      //       static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][14]), static_cast<float>(pipe_state.warp_frag_A_[warp_mma_k % 2][15]));
 
-      CUTLASS_TRACE_DEVICE_TID(" tile_B[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][0]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][1]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][2]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][3]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][4]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][5]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][6]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][7]));
+      // CUTLASS_TRACE_DEVICE_TID(" tile_B[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][0]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][1]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][2]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][3]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][4]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][5]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][6]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][7]));
   
-      CUTLASS_TRACE_DEVICE_TID(" tile_B[8:15]=[%f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][8]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][9]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][10]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][11]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][12]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][13]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][14]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][15]));
+      // CUTLASS_TRACE_DEVICE_TID(" tile_B[8:15]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][8]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][9]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][10]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][11]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][12]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][13]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][14]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][15]));
 
-      CUTLASS_TRACE_DEVICE_TID(" tile_B[32:39]=[%f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][32]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][33]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][34]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][35]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][36]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][37]),
-            static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][38]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][39]));
+      // CUTLASS_TRACE_DEVICE_TID(" tile_B[32:39]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][32]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][33]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][34]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][35]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][36]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][37]),
+      //       static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][38]), static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][39]));
 
 
-      CUTLASS_TRACE_DEVICE_TID(" tile_C[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(accum[0]), static_cast<float>(accum[1]),
-            static_cast<float>(accum[2]), static_cast<float>(accum[3]),
-            static_cast<float>(accum[4]), static_cast<float>(accum[5]),
-            static_cast<float>(accum[6]), static_cast<float>(accum[7]),
-            static_cast<float>(accum[8]), static_cast<float>(accum[9]),
-            static_cast<float>(accum[10]), static_cast<float>(accum[11]),
-            static_cast<float>(accum[12]), static_cast<float>(accum[13]),
-            static_cast<float>(accum[14]), static_cast<float>(accum[15]));
+      // CUTLASS_TRACE_DEVICE_TID(" tile_C[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(accum[0]), static_cast<float>(accum[1]),
+      //       static_cast<float>(accum[2]), static_cast<float>(accum[3]),
+      //       static_cast<float>(accum[4]), static_cast<float>(accum[5]),
+      //       static_cast<float>(accum[6]), static_cast<float>(accum[7]),
+      //       static_cast<float>(accum[8]), static_cast<float>(accum[9]),
+      //       static_cast<float>(accum[10]), static_cast<float>(accum[11]),
+      //       static_cast<float>(accum[12]), static_cast<float>(accum[13]),
+      //       static_cast<float>(accum[14]), static_cast<float>(accum[15]));
 
-      CUTLASS_TRACE_DEVICE_TID(" tile_C[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(accum[16]), static_cast<float>(accum[17]),
-            static_cast<float>(accum[18]), static_cast<float>(accum[19]),
-            static_cast<float>(accum[20]), static_cast<float>(accum[21]),
-            static_cast<float>(accum[22]), static_cast<float>(accum[23]),
-            static_cast<float>(accum[24]), static_cast<float>(accum[25]),
-            static_cast<float>(accum[26]), static_cast<float>(accum[27]),
-            static_cast<float>(accum[28]), static_cast<float>(accum[29]),
-            static_cast<float>(accum[30]), static_cast<float>(accum[31]));
+      // CUTLASS_TRACE_DEVICE_TID(" tile_C[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+      //       static_cast<float>(accum[16]), static_cast<float>(accum[17]),
+      //       static_cast<float>(accum[18]), static_cast<float>(accum[19]),
+      //       static_cast<float>(accum[20]), static_cast<float>(accum[21]),
+      //       static_cast<float>(accum[22]), static_cast<float>(accum[23]),
+      //       static_cast<float>(accum[24]), static_cast<float>(accum[25]),
+      //       static_cast<float>(accum[26]), static_cast<float>(accum[27]),
+      //       static_cast<float>(accum[28]), static_cast<float>(accum[29]),
+      //       static_cast<float>(accum[30]), static_cast<float>(accum[31]));
 
 #endif
 

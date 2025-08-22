@@ -390,22 +390,44 @@ public:
             static_cast<float>(scale_frag_[4]), static_cast<float>(scale_frag_[5]),
             static_cast<float>(scale_frag_[6]), static_cast<float>(scale_frag_[7]));
 
+        // int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
+        // const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
+
+        // // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
+        // // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
+        // int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
+   
+        // CUTLASS_TRACE_DEVICE("tb_offset_k = %d, scale_frag_[0] = %f", tb_offset_k, float(scale_frag_[0]));
+        // CUTLASS_PRAGMA_UNROLL
+        // for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+        //     int mapped_idx_base = mma_n_iter * kExpansionFactor * kOutputColumns + offset + mapped_offset;
+
+        //     CUTLASS_PRAGMA_UNROLL
+        //     for (int j = 0; j < kOutputColumns; ++j) {
+        //         ElementOperand scaled_value =
+        //             static_cast<ElementOperand>(unpacked_frag_[mapped_idx_base + 2 * j]) * scale_frag_[mma_n_iter];
+
+        //         output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
+        //     }
+        // }
+
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
         const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
 
         // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
         // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
-        int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
-   
-        CUTLASS_TRACE_DEVICE("tb_offset_k = %d, scale_frag_[0] = %f", tb_offset_k, float(scale_frag_[0]));
+        int unpacked_reorder[8] = {0, 2, 4, 6, 1, 3, 5, 7};
+
         CUTLASS_PRAGMA_UNROLL
         for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
-            int mapped_idx_base = mma_n_iter * kExpansionFactor * kOutputColumns + offset + mapped_offset;
+            int mapped_idx_base = mma_n_iter * kExpansionFactor * kOutputColumns + offset;
+            // CUTLASS_TRACE_DEVICE_TID(" mapped_idx_base=%d, kOutputColumns = %d", mapped_idx_base, kOutputColumns);
 
             CUTLASS_PRAGMA_UNROLL
             for (int j = 0; j < kOutputColumns; ++j) {
+                int unpacked_idx = unpacked_reorder[(mapped_idx_base + j) % 8] + (mapped_idx_base + j) / 8 * 8;
                 ElementOperand scaled_value =
-                    static_cast<ElementOperand>(unpacked_frag_[mapped_idx_base + 2 * j]) * scale_frag_[mma_n_iter];
+                    static_cast<ElementOperand>(unpacked_frag_[unpacked_idx]) * scale_frag_[mma_n_iter];
 
                 output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
             }

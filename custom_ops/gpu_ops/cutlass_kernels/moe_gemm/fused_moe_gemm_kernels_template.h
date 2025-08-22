@@ -188,8 +188,16 @@ void generic_moe_gemm_kernelLauncher(const T* A,
   }
   const int threadblock_count = multi_processor_count * occupancy;
 
+  // typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
+  //                                         ElementAccumulator(0.21679688));
+  //                                         // ElementAccumulator(0.f));
+
   typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
+                                          
+  // typename EpilogueOp::Params epilogue_op(ElementAccumulator(0.21679688),
+  //                                         ElementAccumulator(0.f));
+  CUTLASS_TRACE_DEVICE(" eplogue output op alpha = %f", epilogue_op.alpha);
 
   const uint8_t* local_scale_B = nullptr;
   const float* code_scale_B = nullptr;
@@ -199,6 +207,7 @@ void generic_moe_gemm_kernelLauncher(const T* A,
     code_scale_B = quant_args_B.code_scale_ptr;
     code_zp_B = quant_args_B.code_zp_ptr;
   }
+
 
   typename GemmGrouped::Arguments args(
       num_experts,
@@ -429,9 +438,9 @@ void dispatch_gemm_config(const T* A,
 
   switch (gemm_config.stages) {
     dispatch_stages_macro(2);
-    dispatch_stages_macro(3);
-    dispatch_stages_macro(4);
-    dispatch_stages_macro(5);
+    // dispatch_stages_macro(3);
+    // dispatch_stages_macro(4);
+    // dispatch_stages_macro(5);
     default:
       std::string err_msg = "dispatch_gemm_config does not support stages " +
                             std::to_string(gemm_config.stages);
@@ -563,16 +572,16 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   } else {
     switch (gemm_config.tile_config) {
       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-      dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
-      dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
-      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-      dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
-      dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
-      dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
-      dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
-      dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
-      dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
-      dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
+      // dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
+      // dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
+      // dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+      // dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
+      // dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+      // dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
+      // dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
+      // dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
+      // dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
+      // dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
       case CutlassTileConfig::Undefined:
         throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
         break;
@@ -679,9 +688,9 @@ void MoeGemmRunner<T, WeightQuantTraits>::dispatch_to_arch<EpilogueTag>(
       occupancy);
 
   if (sm_ >= 70 && sm_ < 75) {
-    dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm70);
+    // dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm70);
   } else if (sm_ >= 75 && sm_ < 80) {
-    dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm75);
+    // dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm75);
   } else if (sm_ >= 80 && sm_ < 91) {
     dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm80);
   } else {

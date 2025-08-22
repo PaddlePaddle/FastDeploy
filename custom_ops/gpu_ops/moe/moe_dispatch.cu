@@ -279,6 +279,7 @@ MoeExpertDispatchInferDtype(const paddle::DataType &input_dtype,
  * - When group_moe is true, expert_num must be divisible by moe_topk
  */
 PD_BUILD_STATIC_OP(moe_expert_dispatch)
+// PD_BUILD_OP(moe_expert_dispatch)
     .Inputs({"input", "gating_output",
              paddle::Optional("gating_correction_bias"),
              paddle::Optional("w4a8_in_scale")})
