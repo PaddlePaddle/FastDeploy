@@ -18,6 +18,8 @@ special_tests=(
     "operators/test_split_fuse.py"
     "operators/test_flash_mask_attn.py"
     "operators/test_w4afp8_gemm.py"
+    "model_loader/test_load_ernie_vl.py"
+    "operators/test_tree_mask.py"
 )
 
 failed_special=0
