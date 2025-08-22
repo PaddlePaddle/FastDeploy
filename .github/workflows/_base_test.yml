@@ -132,6 +132,7 @@ jobs:
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
+          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -155,7 +156,19 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\"}"
 
-          curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+          check_service() {
+            local timeout=${1:-90}
+            local url="http://localhost:${FLASK_PORT}/wait_for_infer?timeout=${timeout}"
+            local resp
+
+            resp=$(curl -s -X POST "$url")
+
+            if echo "$resp" | grep -q "服务启动超时"; then
+              exit 8
+            fi
+          }
+
+          check_service 90
           popd
 
           pushd tests/ce/server
@@ -166,8 +179,16 @@ jobs:
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
             -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
-          curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
+          check_service 90
           python -m pytest -sv test_repetition_early_stop.py || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"21b_mtp.yaml\", \"--enable-logprob\": \"False\"}"
+          check_service 180
+          export TEMPLATE=TOKEN_NORMAL
+          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
+
           popd
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
           '

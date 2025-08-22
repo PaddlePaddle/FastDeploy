@@ -85,7 +85,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # set trace attribute job_id.
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
     # support max connections
-    "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
+    "FD_SUPPORT_MAX_CONNECTIONS": lambda: int(os.getenv("FD_SUPPORT_MAX_CONNECTIONS", "1024")),
 }
 
 
