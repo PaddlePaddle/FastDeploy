@@ -35,7 +35,7 @@
 | ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
 | ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False。开启前建议仔细阅读  [graph_optimization.md](./features/graph_optimization.md)，在多卡场景需要同时开启 Custom all-reduce。 |
 | ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
-| ```enable_custom_all_reduce```     | `bool`      | 开启Custom all-reduce，默认False |
+| ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
 | ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、`off`, 默认为 `off` |

@@ -461,6 +461,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --ips {self.cfg.ips}"
         )
 
         worker_append_flag = {
@@ -470,7 +471,7 @@ class LLMEngine:
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
-            "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
@@ -623,6 +624,7 @@ class LLMEngine:
                     self.dp_processed[-1].start()
                     while self.launched_expert_service_signal.value[i] == 0:
                         time.sleep(1)
+
 
     def check_worker_initialize_status(self):
         """

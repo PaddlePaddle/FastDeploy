@@ -526,7 +526,7 @@ def parse_args():
         help="enable prefix cache",
     )
     parser.add_argument(
-        "--enable_custom_all_reduce",
+        "--disable_custom_all_reduce",
         action="store_true",
         help="enable custom all-reduce",
     )
@@ -614,6 +614,13 @@ def parse_args():
         type=str,
         default="default",
         help="The format of the model weights to load. default/new_loader.",
+    )
+
+    parser.add_argument(
+        "--ips",
+        type=str,
+        default=None,
+        help="The ips of multinode deployment.",
     )
 
     args = parser.parse_args()
@@ -738,6 +745,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         early_stop_config=early_stop_config,
         cache_config=cache_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
+        ips=args.ips,
     )
     update_fd_config_for_mm(fd_config)
 

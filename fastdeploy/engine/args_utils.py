@@ -188,7 +188,7 @@ class EngineArgs:
     Flag to enable prefix caching.
     """
 
-    enable_custom_all_reduce: bool = False
+    disable_custom_all_reduce: bool = False
     """
     Flag to enable the custom all-reduce kernel.
     """
@@ -576,10 +576,10 @@ class EngineArgs:
             help="Degree of tensor parallelism.",
         )
         parallel_group.add_argument(
-            "--enable-custom-all-reduce",
+            "--disable-custom-all-reduce",
             action="store_true",
-            default=EngineArgs.enable_custom_all_reduce,
-            help="Flag to enable custom all-reduce.",
+            default=EngineArgs.disable_custom_all_reduce,
+            help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -967,7 +967,6 @@ class EngineArgs:
             self.engine_worker_queue_port = str(self.engine_worker_queue_port)
         if isinstance(self.engine_worker_queue_port, str):
             self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
-
 
         assert is_port_available(
                 "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
