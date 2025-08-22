@@ -18,6 +18,86 @@
 
 ## 快速开始
 
+### 使用 Docker 部署（推荐）
+
+**最简单的方式是使用预构建的 Docker 镜像，开箱即用，无需编译！**
+
+#### 第一步：启动 Docker 容器
+
+```bash
+# 拉取预构建镜像（包含所有依赖）
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
+
+# 启动容器
+docker run --name fastdeploy-xpu --net=host -itd --privileged \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
+
+# 进入容器
+docker exec -it fastdeploy-xpu bash
+```
+
+#### 第二步：在容器内部署 ERNIE 模型
+
+**部署 ERNIE-4.5-0.3B 模型（单卡）**
+```bash
+export XPU_VISIBLE_DEVICES="0"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+
+**部署 ERNIE-4.5-300B-A47B 模型（4卡）**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+#### 第三步：通过 OpenAI API 调用
+
+```bash
+# 使用 curl 测试
+curl -X POST "http://localhost:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "你好，请介绍一下文心大模型"}
+  ]
+}'
+```
+
+```python
+# 使用 Python OpenAI 客户端
+import openai
+client = openai.Client(base_url="http://localhost:8188/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "user", "content": "你好，请介绍一下文心大模型"}
+    ],
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
+### 本地环境部署
+
+如果您已经在本地安装了 FastDeploy XPU 版本，可以直接运行以下命令：
+
 ### OpenAI 兼容服务器
 
 您还可以通过如下命令，基于 FastDeploy 实现 OpenAI API 协议兼容的服务器部署。

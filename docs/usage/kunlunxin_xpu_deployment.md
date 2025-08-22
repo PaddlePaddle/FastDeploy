@@ -18,6 +18,86 @@
 
 ## Quick start
 
+### Using Docker Deployment (Recommended)
+
+**The easiest way is to use the pre-built Docker image, which is ready-to-use without compilation!**
+
+#### Step 1: Start Docker Container
+
+```bash
+# Pull the pre-built image (includes all dependencies)
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
+
+# Start container
+docker run --name fastdeploy-xpu --net=host -itd --privileged \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
+
+# Enter container
+docker exec -it fastdeploy-xpu bash
+```
+
+#### Step 2: Deploy ERNIE Models Inside Container
+
+**Deploy ERNIE-4.5-0.3B model (single card)**
+```bash
+export XPU_VISIBLE_DEVICES="0"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+
+**Deploy ERNIE-4.5-300B-A47B model (4 cards)**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+#### Step 3: Call via OpenAI API
+
+```bash
+# Test using curl
+curl -X POST "http://localhost:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "Hello, please introduce ERNIE large language model"}
+  ]
+}'
+```
+
+```python
+# Use Python OpenAI client
+import openai
+client = openai.Client(base_url="http://localhost:8188/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "user", "content": "Hello, please introduce ERNIE large language model"}
+    ],
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
+### Local Environment Deployment
+
+If you have already installed FastDeploy XPU version locally, you can run the following commands directly:
+
 ### Online serving (OpenAI API-Compatible server)
 
 Deploy an OpenAI API-compatible server using FastDeploy with the following commands:

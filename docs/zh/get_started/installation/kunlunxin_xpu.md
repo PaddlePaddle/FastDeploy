@@ -22,6 +22,10 @@
 
 ## 1. 使用 Docker 安装（推荐）
 
+**此 Docker 镜像是开箱即用的，已预装所有必需依赖，无需额外编译！**
+
+### 基础安装
+
 ```bash
 mkdir Work
 cd Work
@@ -30,6 +34,35 @@ docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /
     ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
+```
+
+### 直接部署 ERNIE 模型（开箱即用示例）
+
+如果您想直接部署 ERNIE 文心模型并通过 OpenAI API 接口访问，可以直接在容器内运行：
+
+```bash
+# 进入容器后，直接部署 ERNIE-4.5-0.3B 模型
+export XPU_VISIBLE_DEVICES="0"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+
+然后您可以通过 OpenAI 兼容的 API 接口访问模型：
+
+```bash
+# 在宿主机或另一个终端中测试
+curl -X POST "http://localhost:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "你好，请介绍一下文心大模型"}
+  ]
+}'
 ```
 
 ## 2. 使用 Pip 安装
@@ -118,6 +151,59 @@ python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 ```
 
 如果上述步骤均执行成功，代表 FastDeploy 已安装成功。
+
+## 常见问题解答
+
+### Q: 有没有开箱即用的镜像，不需要在容器中编译依赖？
+
+**A: 有的！推荐的 Docker 镜像 `ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0` 就是开箱即用的。**
+
+这个镜像已经预装了：
+- PaddlePaddle XPU 版本
+- FastDeploy XPU 版本  
+- 所有必需的昆仑芯 XPU 依赖
+- XRE 运行时环境
+
+您可以直接在容器内部署 ERNIE 文心模型，无需任何额外的编译步骤：
+
+```bash
+# 拉取并运行容器
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
+docker run --name fastdeploy-xpu --net=host -itd --privileged \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
+
+# 进入容器直接部署模型
+docker exec -it fastdeploy-xpu bash
+export XPU_VISIBLE_DEVICES="0"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.9
+```
+
+然后通过 OpenAI API 接口调用：
+
+```python
+import openai
+client = openai.Client(base_url="http://localhost:8188/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[{"role": "user", "content": "你好，请介绍一下文心大模型"}],
+)
+print(response.choices[0].message.content)
+```
+
+### Q: 什么时候需要从源码编译？
+
+A: 只有在以下情况下才需要从源码编译：
+- 需要最新的开发版本功能
+- 需要自定义修改 FastDeploy 源码
+- Docker 镜像版本不满足需求
+
+对于大多数用户，推荐直接使用 Docker 镜像。
 
 ## 如何在昆仑芯 XPU 上部署服务
 请参考 [**支持的模型与服务部署**](../../usage/kunlunxin_xpu_deployment.md) 以了解昆仑芯 XPU 支持的模型与服务部署方法。
