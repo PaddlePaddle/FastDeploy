@@ -606,6 +606,13 @@ def parse_args():
         help="The format of the model weights to load. default/new_loader.",
     )
 
+    parser.add_argument(
+        "--ips",
+        type=str,
+        default=None,
+        help="The ips of multinode deployment.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -721,6 +728,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        ips=args.ips,
     )
     update_fd_config_for_mm(fd_config)
 
