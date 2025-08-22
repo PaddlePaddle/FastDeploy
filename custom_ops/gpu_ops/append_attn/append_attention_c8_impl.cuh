@@ -1254,10 +1254,10 @@ void MultiQueryAppendC8Attention(
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
 
-    const int num_chunks = div_up(max_dec_len, chunk_size);
+    const int num_chunks = div_up(max_seq_len, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
-    if (num_chunks <= 1) {
+    if (num_chunks <= 0) {
       auto nosplit_kv_kernel =
           multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
                                                          uint8_t,
@@ -1377,8 +1377,8 @@ void MultiQueryAppendC8Attention(
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k_scale.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v_scale.data<T>())),
           shift_bias ? reinterpret_cast<NV_TYPE *>(
-                           const_cast<T *>(shift_bias.get().data<T>()))
-                     : nullptr,
+                            const_cast<T *>(shift_bias.get().data<T>()))
+                      : nullptr,
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
@@ -1418,8 +1418,8 @@ void MultiQueryAppendC8Attention(
                 seq_lens_encoder.data<int>(),
                 cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
+                                  const_cast<T *>(shift_bias.get().data<T>()))
+                            : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
@@ -1436,14 +1436,14 @@ void MultiQueryAppendC8Attention(
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
         dim3 grids_merge(min(sm_count * 4, token_num),
-                         num_heads);
+                          num_heads);
         dim3 blocks_merge(blockx, blocky);
         merge_multi_chunks_v2_kernel<NV_TYPE,
-                                     vec_size,
-                                     blocky,
-                                     HEAD_DIM,
-                                     OUT_NV_TYPE,
-                                     ENABLE_PREFILL>
+                                      vec_size,
+                                      blocky,
+                                      HEAD_DIM,
+                                      OUT_NV_TYPE,
+                                      ENABLE_PREFILL>
             <<<grids_merge, blocks_merge, 0, stream>>>(
                 reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
                 static_cast<float *>(tmp_m->ptr()),
@@ -1454,8 +1454,8 @@ void MultiQueryAppendC8Attention(
                 batch_id_per_token.data<int>(),
                 cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
+                                  const_cast<T *>(shift_bias.get().data<T>()))
+                            : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
