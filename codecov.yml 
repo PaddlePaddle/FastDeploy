@@ -1,0 +1,7 @@
+coverage:
+  status:
+    project: off   # 关闭全量覆盖率检查
+    patch:
+      diff:
+        enabled: true
+        target: 80%   # 你自己设定的阈值
