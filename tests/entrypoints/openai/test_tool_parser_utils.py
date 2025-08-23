@@ -118,7 +118,7 @@ class TestToolParserUtils(unittest.TestCase):
     def test_partial_json_loads_success(self, mock_loads):
         """Test partial_json_loads successful parsing"""
         mock_loads.return_value = {"key": "value"}
-        
+
         result = partial_json_loads('{"key": "value"}', None)
         self.assertEqual(result, ({"key": "value"}, 15))
         mock_loads.assert_called_once()
@@ -127,10 +127,10 @@ class TestToolParserUtils(unittest.TestCase):
     def test_partial_json_loads_extra_data(self, mock_loads):
         """Test partial_json_loads with extra data error"""
         from json import JSONDecodeError
-        
+
         # Mock partial_json_parser to raise JSONDecodeError with "Extra data"
         mock_loads.side_effect = JSONDecodeError("Extra data", '{"key": "value"} extra', 15)
-        
+
         # This should fall back to JSONDecoder.raw_decode
         result = partial_json_loads('{"key": "value"} extra', None)
         self.assertEqual(result[0], {"key": "value"})
@@ -140,27 +140,27 @@ class TestToolParserUtils(unittest.TestCase):
     def test_partial_json_loads_other_error(self, mock_loads):
         """Test partial_json_loads with other JSONDecodeError"""
         from json import JSONDecodeError
-        
+
         # Mock to raise a different JSONDecodeError
         mock_loads.side_effect = JSONDecodeError("Invalid JSON", '{"key":}', 7)
-        
+
         with self.assertRaises(JSONDecodeError):
             partial_json_loads('{"key":}', None)
 
     def test_is_complete_json_valid(self):
         """Test is_complete_json with valid JSON"""
         self.assertTrue(is_complete_json('{"key": "value"}'))
-        self.assertTrue(is_complete_json('[]'))
-        self.assertTrue(is_complete_json('null'))
-        self.assertTrue(is_complete_json('true'))
-        self.assertTrue(is_complete_json('123'))
+        self.assertTrue(is_complete_json("[]"))
+        self.assertTrue(is_complete_json("null"))
+        self.assertTrue(is_complete_json("true"))
+        self.assertTrue(is_complete_json("123"))
 
     def test_is_complete_json_invalid(self):
         """Test is_complete_json with invalid JSON"""
         self.assertFalse(is_complete_json('{"key": "value"'))
         self.assertFalse(is_complete_json('{"key":}'))
-        self.assertFalse(is_complete_json('[1,2,'))
-        self.assertFalse(is_complete_json(''))
+        self.assertFalse(is_complete_json("[1,2,"))
+        self.assertFalse(is_complete_json(""))
 
     def test_consume_space(self):
         """Test consume_space function"""

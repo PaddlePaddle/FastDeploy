@@ -28,14 +28,10 @@ class TestErnieX1ToolParser(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         self.mock_tokenizer = MagicMock()
-        self.mock_tokenizer.get_vocab.return_value = {
-            "<tool_call>": 100,
-            "</tool_call>": 101,
-            "other_token": 102
-        }
-        
+        self.mock_tokenizer.get_vocab.return_value = {"<tool_call>": 100, "</tool_call>": 101, "other_token": 102}
+
         # Initialize parser with mocked dependencies
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
             self.parser = ErnieX1ToolParser(self.mock_tokenizer)
 
     def test_initialization(self):
@@ -51,23 +47,23 @@ class TestErnieX1ToolParser(unittest.TestCase):
         """Test initialization fails when tool call tokens are missing"""
         mock_tokenizer = MagicMock()
         mock_tokenizer.get_vocab.return_value = {"other": 1}
-        
+
         with self.assertRaises(RuntimeError) as context:
             ErnieX1ToolParser(mock_tokenizer)
-        
+
         self.assertIn("could not locate tool call start/end tokens", str(context.exception))
 
     def test_extract_tool_calls_complete_single_tool(self):
         """Test extracting complete single tool call"""
-        model_output = '''<tool_call>
+        model_output = """<tool_call>
 {"name": "get_weather", "arguments": {"location": "Beijing"}}
-</tool_call>'''
-        
+</tool_call>"""
+
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
+
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
             result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertTrue(result.tools_called)
         self.assertIsNotNone(result.tool_calls)
         self.assertEqual(len(result.tool_calls), 1)
@@ -77,18 +73,18 @@ class TestErnieX1ToolParser(unittest.TestCase):
 
     def test_extract_tool_calls_multiple_tools(self):
         """Test extracting multiple tool calls"""
-        model_output = '''<tool_call>
+        model_output = """<tool_call>
 {"name": "get_weather", "arguments": {"location": "Beijing"}}
 </tool_call>
 <tool_call>
 {"name": "calculate", "arguments": {"x": 5, "y": 10}}
-</tool_call>'''
-        
+</tool_call>"""
+
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
+
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
             result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertTrue(result.tools_called)
         self.assertIsNotNone(result.tool_calls)
         self.assertEqual(len(result.tool_calls), 2)
@@ -97,16 +93,16 @@ class TestErnieX1ToolParser(unittest.TestCase):
 
     def test_extract_tool_calls_incomplete_tool(self):
         """Test extracting incomplete tool call"""
-        model_output = '''<tool_call>
-{"name": "get_weather", "arguments": {"location": "Bei'''
-        
+        model_output = """<tool_call>
+{"name": "get_weather", "arguments": {"location": "Bei"""
+
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
-            with patch('partial_json_parser.loads') as mock_partial_loads:
+
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
+            with patch("partial_json_parser.loads") as mock_partial_loads:
                 mock_partial_loads.return_value = {"location": "Bei"}
                 result = self.parser.extract_tool_calls(model_output, request)
-        
+
         # Incomplete tool calls should not set tools_called=True
         self.assertFalse(result.tools_called)
         self.assertIsNotNone(result.tool_calls)
@@ -114,18 +110,20 @@ class TestErnieX1ToolParser(unittest.TestCase):
 
     def test_extract_tool_calls_invalid_response_tag(self):
         """Test handling invalid <response> tags before tool calls"""
-        model_output = '''<response>
+        model_output = """<response>
 Some response content
 </response>
 <tool_call>
 {"name": "test", "arguments": {}}
-</tool_call>'''
-        
+</tool_call>"""
+
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger') as mock_logger:
+
+        with patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"
+        ) as mock_logger:
             result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertFalse(result.tools_called)
         self.assertEqual(result.content, model_output)
         mock_logger.error.assert_called_once()
@@ -134,70 +132,64 @@ Some response content
         """Test handling output with no tool calls"""
         model_output = "Just regular text output"
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
+
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
             result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertFalse(result.tools_called)
         self.assertEqual(result.content, model_output)
 
     def test_extract_tool_calls_malformed_json(self):
         """Test handling malformed JSON in tool calls"""
-        model_output = '''<tool_call>
+        model_output = """<tool_call>
 {invalid json
-</tool_call>'''
-        
+</tool_call>"""
+
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
-            with patch('partial_json_parser.loads', side_effect=Exception("Parse error")):
+
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
+            with patch("partial_json_parser.loads", side_effect=Exception("Parse error")):
                 result = self.parser.extract_tool_calls(model_output, request)
-        
+
         self.assertFalse(result.tools_called)
 
     def test_extract_tool_calls_streaming_no_tool_start(self):
         """Test streaming when no tool start token present"""
-        result = self.parser.extract_tool_calls_streaming(
-            "", "regular text", "regular text", [], [102], [102], {}
-        )
-        
+        result = self.parser.extract_tool_calls_streaming("", "regular text", "regular text", [], [102], [102], {})
+
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.content, "regular text")
 
     def test_extract_tool_calls_streaming_empty_delta(self):
         """Test streaming with empty delta text"""
-        result = self.parser.extract_tool_calls_streaming(
-            "", "text", "  ", [], [100], [100], {}
-        )
-        
+        result = self.parser.extract_tool_calls_streaming("", "text", "  ", [], [100], [100], {})
+
         self.assertIsNone(result)
 
     def test_extract_tool_calls_streaming_tool_start(self):
         """Test streaming when tool call starts"""
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
-            result = self.parser.extract_tool_calls_streaming(
-                "", "<tool_call>", "<tool_call>", [], [100], [100], {}
-            )
-        
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
+            result = self.parser.extract_tool_calls_streaming("", "<tool_call>", "<tool_call>", [], [100], [100], {})
+
         self.assertEqual(self.parser.current_tool_id, 0)
         self.assertFalse(self.parser.current_tool_name_sent)
         self.assertEqual(len(self.parser.streamed_args_for_tool), 1)
 
-    @patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.random_tool_call_id')
+    @patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.random_tool_call_id")
     def test_extract_tool_calls_streaming_name_extraction(self, mock_random_id):
         """Test streaming name extraction"""
         mock_random_id.return_value = "call_123"
-        
+
         # First, start a tool call
         self.parser.current_tool_id = 0
         self.parser.current_tool_name_sent = False
         self.parser.buffer = '{"name": "get_weather"'
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger'):
+
+        with patch("fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"):
             result = self.parser.extract_tool_calls_streaming(
                 "", 'text{"name": "get_weather"', '"', [], [100], [100], {}
             )
-        
+
         self.assertIsInstance(result, DeltaMessage)
         self.assertIsNotNone(result.tool_calls)
         self.assertEqual(len(result.tool_calls), 1)
@@ -207,24 +199,24 @@ Some response content
     def test_extract_tool_calls_exception_handling(self):
         """Test exception handling in extract_tool_calls"""
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "test"}])
-        
-        with patch('fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger') as mock_logger:
-            with patch.object(self.parser, 'extract_tool_calls', side_effect=Exception("Test error")):
+
+        with patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.data_processor_logger"
+        ) as mock_logger:
+            with patch.object(self.parser, "extract_tool_calls", side_effect=Exception("Test error")):
                 # Call the original method directly
                 original_method = ErnieX1ToolParser.extract_tool_calls
                 result = original_method(self.parser, "test", request)
-        
+
         # Should be handled gracefully
         self.assertIsInstance(result, ExtractedToolCallInformation)
 
     def test_buffer_management(self):
         """Test buffer management in streaming"""
         self.parser.buffer = "initial"
-        
-        self.parser.extract_tool_calls_streaming(
-            "", "text", "new_content", [], [102], [102], {}
-        )
-        
+
+        self.parser.extract_tool_calls_streaming("", "text", "new_content", [], [102], [102], {})
+
         self.assertEqual(self.parser.buffer, "initialnew_content")
 
     def test_bracket_counting(self):
@@ -232,18 +224,18 @@ Some response content
         # Initialize state
         self.parser.current_tool_id = 0
         self.parser.buffer = '"arguments": {"x": 1}'
-        
+
         # Test bracket counting
         delta_text = '{"x": 1}}'
         self.parser.bracket_counts = {"total_l": 0, "total_r": 0}
-        
+
         # Simulate processing characters with brackets
         for char in delta_text:
             if char == "{":
                 self.parser.bracket_counts["total_l"] += 1
             elif char == "}":
                 self.parser.bracket_counts["total_r"] += 1
-        
+
         self.assertEqual(self.parser.bracket_counts["total_l"], 1)
         self.assertEqual(self.parser.bracket_counts["total_r"], 2)
 

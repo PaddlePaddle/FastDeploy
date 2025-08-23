@@ -100,7 +100,7 @@ class TestProtocolModels(unittest.TestCase):
         model1 = ModelInfo(id="model1")
         model2 = ModelInfo(id="model2")
         model_list = ModelList(data=[model1, model2])
-        
+
         self.assertEqual(model_list.object, "list")
         self.assertEqual(len(model_list.data), 2)
         self.assertEqual(model_list.data[0].id, "model1")
@@ -108,10 +108,7 @@ class TestProtocolModels(unittest.TestCase):
 
     def test_function_call(self):
         """Test FunctionCall model"""
-        func_call = FunctionCall(
-            name="get_weather",
-            arguments='{"location": "New York"}'
-        )
+        func_call = FunctionCall(name="get_weather", arguments='{"location": "New York"}')
         self.assertEqual(func_call.name, "get_weather")
         self.assertEqual(func_call.arguments, '{"location": "New York"}')
 
@@ -119,7 +116,7 @@ class TestProtocolModels(unittest.TestCase):
         """Test ToolCall model"""
         func_call = FunctionCall(name="test_func", arguments="{}")
         tool_call = ToolCall(id="call_123", function=func_call)
-        
+
         self.assertEqual(tool_call.id, "call_123")
         self.assertEqual(tool_call.type, "function")
         self.assertEqual(tool_call.function.name, "test_func")
@@ -137,9 +134,7 @@ class TestProtocolModels(unittest.TestCase):
         func_call = FunctionCall(name="test", arguments="{}")
         tool_call = ToolCall(id="123", function=func_call)
         info_with_tools = ExtractedToolCallInformation(
-            tools_called=True,
-            tool_calls=[tool_call],
-            content="Some content"
+            tools_called=True, tool_calls=[tool_call], content="Some content"
         )
         self.assertTrue(info_with_tools.tools_called)
         self.assertEqual(len(info_with_tools.tool_calls), 1)
@@ -150,7 +145,7 @@ class TestProtocolModels(unittest.TestCase):
         func_def = FunctionDefinition(
             name="calculate",
             description="Performs calculations",
-            parameters={"type": "object", "properties": {"x": {"type": "number"}}}
+            parameters={"type": "object", "properties": {"x": {"type": "number"}}},
         )
         self.assertEqual(func_def.name, "calculate")
         self.assertEqual(func_def.description, "Performs calculations")
