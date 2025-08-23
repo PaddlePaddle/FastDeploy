@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import math
+import re
 from functools import partial
 
 import paddle
@@ -122,6 +123,25 @@ class DeepSeekV3MoE(nn.Layer):
             "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
         }
 
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.n_routed_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+        )
+
+        if fd_config.model_config.topk_method == "noaux_tc":
+            self.gate.e_score_correction_bias = self.create_parameter(
+                shape=[1, fd_config.model_config.n_routed_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+        else:
+            self.gate.e_score_correction_bias = None
+
         self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=False,
@@ -133,17 +153,8 @@ class DeepSeekV3MoE(nn.Layer):
             n_group=fd_config.model_config.n_group,
             routed_scaling_factor=fd_config.model_config.routed_scaling_factor,
             layer_idx=layer_id,
+            gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
-        )
-
-        self.gate = ReplicatedLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.gate",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.n_routed_experts,
-            with_bias=False,
-            skip_quant=True,
-            weight_dtype="float32",
         )
 
         self.num_shared_experts = fd_config.model_config.n_shared_experts
@@ -258,6 +269,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         self.kv_b_proj_bmm = KVBatchLinear(
             fd_config=fd_config,
+            kv_b_proj=self.kv_b_proj,
             prefix=f"{prefix}.kv_b_proj",
             kv_lora_rank=self.kv_lora_rank,
             num_attention_heads=self.num_attention_heads,
@@ -617,7 +629,10 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         Args:
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -637,7 +652,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             param_down_proj_name="experts.down_proj_",
         )
         params_dict = dict(self.named_parameters())
-
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
 
@@ -668,19 +683,18 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
                     weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
                     break
                 else:
-                    if loaded_weight_name not in params_dict:
+                    model_param_name = loaded_weight_name
+                    if model_param_name not in params_dict:
                         continue
-                    param = params_dict[loaded_weight_name]
+                    param = params_dict[model_param_name]
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
-                    if "kv_b_proj.weight" in loaded_weight_name:
-                        # handle kv_b_proj_bmm
-                        model_param_name = loaded_weight_name.replace(
-                            "kv_b_proj.weight", "kv_b_proj_bmm.k_b_proj_weight"
-                        )
-                        param = params_dict[model_param_name]
-                        weight_loader = getattr(param, "weight_loader", None)
-                        weight_loader(param, loaded_weight, shard_id)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            if "kv_b_proj" in model_sublayer_name:
+                kv_model_sublayer_name = model_sublayer_name.replace("kv_b_proj", "kv_b_proj_bmm")
+                process_weights_after_loading_fn(kv_model_sublayer_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
