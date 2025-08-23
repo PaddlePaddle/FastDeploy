@@ -1,4 +1,5 @@
 [run]
+branch = True
 source = fastdeploy
 parallel = True
 concurrency = multiprocessing
