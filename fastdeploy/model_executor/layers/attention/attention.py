@@ -85,7 +85,6 @@ class Attention(nn.Layer):
         self.rope_type: str = rope_type
         self.qk_head_dim: int = self.head_dim
         self.prefix: str = prefix
-        print("cov report debug!")
         # not use
         self.linear_shift: paddle.Tensor | None = linear_shift
         self.linear_smooth: paddle.Tensor | None = linear_smooth
