@@ -94,7 +94,11 @@ def form_model_get_output(
 model_param_map = {
     "Qwen3-0.6B": {
         "quantizations": ["None", "wint4", "wint8"],
-    }
+    },
+    "ernie-4_5-21b-a3b-bf16-paddle": {
+        "tensor_parallel_size": 2,
+        "quantizations": ["wint8"],
+    },
 }
 
 params = []

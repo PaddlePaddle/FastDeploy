@@ -54,7 +54,7 @@ success_pytest=0
 
 for file in $TEST_FILES; do
     echo "Running pytest file: $file"
-    python -m coverage run --parallel-mode -m pytest "$file"
+    python -m coverage run --parallel-mode -m pytest "$file" -vv -s
     status=$?
     if [ "$status" -ne 0 ]; then
         echo "$file" >> "$failed_tests_file"
