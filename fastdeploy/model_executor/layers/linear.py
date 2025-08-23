@@ -57,6 +57,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             {
                 **extra_weight_attrs,
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "hugging_face_format": extra_weight_attrs.get("hugging_face_format", False),
             },
         )
 
@@ -343,11 +344,13 @@ class ColumnParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            hugging_face_format=fd_config.model_config.model_format == "hugging_face",
         )
         if self.nranks > 0:
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
+                set_weight_attrs(self.bias, {"output_dim": True})
                 if self.nranks > 1:
                     set_weight_attrs(self.bias, {"output_dim": True})
 
@@ -403,7 +406,11 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        hugging_face_format = getattr(param, "hugging_face_format", None)
+        if hugging_face_format:
+            loaded_weight = loaded_weight.transpose([1, 0])
         output_dim = getattr(param, "output_dim", None)
+        assert output_dim is not None
         shard_dim = -1 if output_dim else 0
         output_size = param.shape[shard_dim]
         if loaded_shard_id is None:
@@ -424,7 +431,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if self.nranks != 1:
                 dim = -1 if output_dim else 0
-                if isinstance(loaded_weight, np.ndarray):
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
@@ -521,7 +528,12 @@ class QKVParallelLinear(ColumnParallelLinear):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
-        head_dim = param.shape[output_dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
+        assert output_dim is not None
+        dim = -1 if output_dim else 0
+        head_dim = param.shape[dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
+        hugging_face_format = getattr(param, "hugging_face_format", False)
+        if hugging_face_format:
+            loaded_weight = loaded_weight.transpose([1, 0])
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
             shard_offsets = [
@@ -541,7 +553,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if self.nranks != 1:
                 dim = -1 if output_dim else 0
-                if isinstance(loaded_weight, np.ndarray):
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
@@ -712,18 +724,18 @@ class RowParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            hugging_face_format=fd_config.model_config.model_format == "hugging_face",
         )
         if self.nranks > 0:
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=0)
-                if self.nranks > 1:
-                    set_weight_attrs(
-                        self.bias,
-                        {
-                            "output_dim": False,
-                        },
-                    )
+                set_weight_attrs(
+                    self.bias,
+                    {
+                        "output_dim": False,
+                    },
+                )
 
         self.reduce_results = reduce_results
 

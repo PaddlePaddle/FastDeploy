@@ -27,6 +27,25 @@ TokensIdText = list[tuple[list[int], str]]
 # (token_ids, text)
 
 
+def get_model_paths(base_model_name: str) -> tuple[str, str]:
+    """return (fastdeploy_path, huggingface_path)"""
+    # FastDeploy model path
+    fd_base_path = os.getenv("FD_MODEL_PATH")
+    if fd_base_path:
+        fd_model_path = os.path.join(fd_base_path, base_model_name)
+    else:
+        fd_model_path = base_model_name
+
+    # HuggingFace model path
+    hf_base_path = os.getenv("HF_MODEL_PATH")
+    if hf_base_path:
+        hf_model_path = os.path.join(hf_base_path, base_model_name)
+    else:
+        hf_model_path = base_model_name
+
+    return fd_model_path, hf_model_path
+
+
 def check_tokens_id_and_text_close(
     *,
     outputs_0_lst: TokensIdText,
@@ -99,7 +118,11 @@ model_param_map = {
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
+    "Qwen2-7B-Instruct": {
+        "quantizations": ["None", "wint8"],
+    },
 }
+
 
 params = []
 for model, cfg in model_param_map.items():
@@ -172,4 +195,87 @@ def test_common_model(
         outputs_1_lst=fd_outputs_v1,
         name_0="default loader",
         name_1="default_v1 loader",
+    )
+
+
+hugging_face_model_param_map = {
+    "Qwen2.5-7B-Instruct": {
+        "tensor_parallel_size": 2,
+        "quantizations": ["None"],
+    },
+}
+
+hf_params = []
+for model, cfg in hugging_face_model_param_map.items():
+    for q in cfg["quantizations"]:
+        hf_params.append(
+            pytest.param(
+                model,
+                cfg.get("tensor_parallel_size", 1),
+                cfg.get("max_model_len", 1024),
+                q,
+                cfg.get("max_tokens", 32),
+                marks=[pytest.mark.core_model],
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    hf_params,
+)
+def test_paddle_vs_huggingface_model(
+    fd_runner,
+    model_name_or_path: str,
+    tensor_parallel_size: int,
+    max_model_len: int,
+    max_tokens: int,
+    quantization: str,
+) -> None:
+    """测试 Paddle 模型（default loader）和 HuggingFace 模型（default_v1 loader）"""
+
+    fd_model_path, hf_model_path = get_model_paths(model_name_or_path)
+
+    result_queue = Queue()
+
+    p_paddle = Process(
+        target=form_model_get_output,
+        args=(
+            fd_runner,
+            fd_model_path,
+            tensor_parallel_size,
+            max_model_len,
+            max_tokens,
+            quantization,
+            "default",
+            result_queue,
+        ),
+    )
+    p_paddle.start()
+    p_paddle.join()
+    paddle_outputs = result_queue.get(timeout=60)
+
+    print(f"Testing HuggingFace model with default_v1 loader: {hf_model_path}")
+    p_hf = Process(
+        target=form_model_get_output,
+        args=(
+            fd_runner,
+            hf_model_path,
+            tensor_parallel_size,
+            max_model_len,
+            max_tokens,
+            quantization,
+            "default_v1",
+            result_queue,
+        ),
+    )
+    p_hf.start()
+    p_hf.join()
+    hf_outputs = result_queue.get(timeout=60)
+
+    check_tokens_id_and_text_close(
+        outputs_0_lst=paddle_outputs,
+        outputs_1_lst=hf_outputs,
+        name_0="Paddle model (default loader)",
+        name_1="HuggingFace model (default_v1 loader)",
     )
