@@ -156,12 +156,12 @@ class DPLocalScheduler(LocalScheduler):
                         required_total_blocks += required_input_blocks + reserved_output_blocks
                         if required_total_blocks > available_blocks:
                             break
-                        if current_prefill_tokens > max_num_batched_tokens:
-                            break
 
                         requests.append(request.raw)
                         self.ids_read_cursor += 1
                         start_batch_time = time.time()
+                        if current_prefill_tokens > max_num_batched_tokens:
+                            break
                         if len(requests) >= batch:
                             break
                 if (
