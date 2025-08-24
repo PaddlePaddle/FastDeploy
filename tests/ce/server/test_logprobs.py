@@ -167,6 +167,7 @@ def test_stream_with_temp_scaled_logprobs():
         "max_tokens": 3,
         "temperature": 0.8,
         "top_p": 0,
+        "temp_scaled_logprobs": True,
     }
 
     payload = build_request_payload(TEMPLATE, data)
@@ -211,6 +212,7 @@ def test_stream_with_top_p_normalized_logprobs():
         ],
         "max_tokens": 3,
         "top_p": 0,
+        "top_p_normalized_logprobs": True,
     }
 
     payload = build_request_payload(TEMPLATE, data)
