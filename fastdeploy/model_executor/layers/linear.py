@@ -348,8 +348,7 @@ class ColumnParallelLinear(LinearBase):
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
-                if self.nranks > 1:
-                    set_weight_attrs(self.bias, {"output_dim": True})
+                set_weight_attrs(self.bias, {"output_dim": True})
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -404,6 +403,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
+        assert output_dim is not None
         shard_dim = -1 if output_dim else 0
         output_size = param.shape[shard_dim]
         if loaded_shard_id is None:
@@ -517,11 +517,12 @@ class QKVParallelLinear(ColumnParallelLinear):
             with_bias=with_bias,
             add_bias=add_bias,
         )
-        setattr(self.weight, "output_dim", True)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
-        head_dim = param.shape[output_dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
+        assert output_dim is not None
+        dim = -1 if output_dim else 0
+        head_dim = param.shape[dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
             shard_offsets = [
@@ -540,7 +541,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             assert loaded_shard_id in ["q", "k", "v"]
             # Tensor parallelism splits the weight along the output_dim
             if self.nranks != 1:
-                dim = -1 if output_dim else 0
                 if isinstance(loaded_weight, np.ndarray):
                     size = loaded_weight.shape[dim]
                 else:
@@ -717,13 +717,12 @@ class RowParallelLinear(LinearBase):
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=0)
-                if self.nranks > 1:
-                    set_weight_attrs(
-                        self.bias,
-                        {
-                            "output_dim": False,
-                        },
-                    )
+                set_weight_attrs(
+                    self.bias,
+                    {
+                        "output_dim": False,
+                    },
+                )
 
         self.reduce_results = reduce_results
 
