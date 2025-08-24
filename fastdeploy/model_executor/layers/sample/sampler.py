@@ -228,11 +228,11 @@ class Sampler(nn.Layer):
         top_p_req_mask = None
 
         if top_p_normalized_logprobs is not None and share_inputs is not None:
-            seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])
-            seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])
-            seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])
+            seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])[:real_bsz]
+            seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])[:real_bsz]
+            seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])[:real_bsz]
             seq_lens_time_sum = seq_lens_this_time + seq_lens_encoder + seq_lens_decoder
-            real_req_mask = seq_lens_time_sum[:real_bsz] > 0
+            real_req_mask = seq_lens_time_sum > 0
             top_p_req_mask = paddle.logical_and(top_p_normalized_logprobs[:real_bsz], real_req_mask)
             real_req_top_p = sampling_metadata.top_p[:real_bsz]
             # Normalize logprobs if top_p normalization is enabled
