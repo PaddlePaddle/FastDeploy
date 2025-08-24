@@ -99,6 +99,9 @@ model_param_map = {
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
+    "Qwen2-7B-Instruct": {
+        "quantizations": ["None", "wint8"],
+    },
 }
 
 params = []
