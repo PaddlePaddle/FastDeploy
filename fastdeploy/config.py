@@ -1053,8 +1053,6 @@ class FDConfig:
         if self.load_config.hugging_face_format:
             self.model_config.model_format = "hugging_face"
 
-        print("self.model_config.model_format", self.model_config.model_format)
-
         # TODO
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
