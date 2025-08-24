@@ -59,16 +59,6 @@ class Wint2MoeMethod(QuantMethodBase):
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Paddle cutlass create weight process.
-        name='up_gate_proj_weight' [64, 2048, 3584] paddle.uint8 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='down_proj_weight' [64, 448, 8192] paddle.uint8 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='up_gate_proj_weight_scale' [64, 64, 3584] paddle.uint8 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='down_proj_weight_scale' [64, 14, 8192] paddle.uint8 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='up_gate_proj_super_scales' [64, 3584] paddle.bfloat16 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='down_proj_super_scales' [64, 8192] paddle.bfloat16 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='up_gate_proj_code_scale' [64, 3584] paddle.float32 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='down_proj_code_scale' [64, 8192] paddle.float32 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='up_gate_proj_code_zp' [64, 3584] paddle.float32 layer.moe_intermediate_size=1792 layer.hidden_size=8192
-        name='down_proj_code_zp' [64, 8192] paddle.float32 layer.moe_intermediate_size=1792 layer.hidden_size=8192
         """
         self.weight_dtype = "uint8"
         self.default_dtype = layer._helper.get_default_dtype()
