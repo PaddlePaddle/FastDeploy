@@ -248,3 +248,5 @@ if __name__ == "__main__":
     test_unstream_without_logprobs()
     test_stream_with_logprobs()
     test_stream_without_logprobs()
+    test_stream_with_temp_scaled_logprobs()
+    test_stream_with_top_p_normalized_logprobs()

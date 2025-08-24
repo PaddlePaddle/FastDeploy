@@ -199,7 +199,7 @@ temp_scaled_logprobs: Optional[bool] = False
 # Whether to divide the logits by the temperature coefficient when calculating logprobs (default is False, meaning the logits are not divided by the temperature coefficient).
 
 top_p_normalized_logprobs: Optional[bool] = False
-# Whether to set the probabilities of tokens lower than top_p to 0 when calculating logprobs (default is False, meaning no zeroing operation is performed).
+# Whether to perform top-p normalization when calculating logprobs (default is False, indicating that top-p normalization is not performed).
 ```
 
 ### Differences in Return Fields

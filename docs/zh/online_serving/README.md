@@ -198,7 +198,7 @@ temp_scaled_logprobs: Optional[bool] = False
 # 计算logprob时是否对logits除以温度系数（默认 False 表示不除以温度系数）。
 
 top_p_normalized_logprobs: Optional[bool] = False
-# 计算logprob时是否将概率低于 top_p 的 token的概率 置为0（默认 False 表示不进行置0操作）。
+# 计算logprob时是否进行 top_p 归一化（默认 False 表示不进行top_p归一化）。
 ```
 
 ### 返回字段差异
