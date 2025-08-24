@@ -38,6 +38,8 @@ elif current_platform.is_iluvatar():
         moe_expert_reduce,
     )
 
+from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
+
 
 # used for deepseek_v3
 def get_moe_scores(
@@ -93,8 +95,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
-                layer.up_gate_proj_weight,
-                layer.down_proj_weight,
+                getattr(layer, self.added_weight_attrs[0]),
+                getattr(layer, self.added_weight_attrs[1]),
                 None,
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -106,8 +108,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
             token_nums_per_expert,
-            layer.up_gate_proj_weight,
-            layer.down_proj_weight,
+            getattr(layer, self.added_weight_attrs[0]),
+            getattr(layer, self.added_weight_attrs[1]),
             None,
             (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
             (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -392,12 +394,12 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         Paddle cutlass create weight process.
         """
         self.weight_dtype = "int8"
-        self.ffn1_weight_shape = [
+        self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size // 2,
             layer.moe_intermediate_size * 2,
         ]
-        self.ffn2_weight_shape = [
+        self.down_proj_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size // 2,
             layer.hidden_size,
@@ -406,7 +408,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
             layer,
             self.added_weight_attrs[0],
             layer.create_parameter(
-                shape=self.ffn1_weight_shape,
+                shape=self.up_gate_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -415,7 +417,7 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
             layer,
             self.added_weight_attrs[1],
             layer.create_parameter(
-                shape=self.ffn2_weight_shape,
+                shape=self.down_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -625,71 +627,177 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         Paddle cutlass create weight process.
         """
         self.default_dtype = layer._helper.get_default_dtype()
-        self.weight_dtype = "int8"
-
-        up_gate_proj_weight_name = self.added_weight_attrs[0]
-        down_proj_weight_name = self.added_weight_attrs[1]
         if self.moe_quant_type == "weight_only_int4":
-            self.ffn1_weight_shape = [
+            self.up_gate_proj_weight_shape = [
                 layer.num_local_experts,
                 layer.moe_intermediate_size,
                 layer.hidden_size,
             ]
         else:
-            self.ffn1_weight_shape = [
+            self.up_gate_proj_weight_shape = [
                 layer.num_local_experts,
                 layer.moe_intermediate_size * 2,
                 layer.hidden_size,
             ]
         if self.moe_quant_type == "weight_only_int4":
-            self.ffn2_weight_shape = [
+            self.down_proj_weight_shape = [
                 layer.num_local_experts,
                 layer.hidden_size // 2,
                 layer.moe_intermediate_size,
             ]
         else:
-            self.ffn2_weight_shape = [
+            self.down_proj_weight_shape = [
                 layer.num_local_experts,
                 layer.hidden_size,
                 layer.moe_intermediate_size,
             ]
+        self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
+        self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
+
+        if layer.fd_config.load_config.load_choices == "default_v1":
+            layer.up_gate_proj_weight = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_weight = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_weight,
+                {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=True),
+                },
+            )
+            set_weight_attrs(
+                layer.down_proj_weight,
+                {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=False),
+                },
+            )
+        else:
+            self.weight_dtype = "int8"
+
+            up_gate_proj_weight_name = self.added_weight_attrs[0]
+            down_proj_weight_name = self.added_weight_attrs[1]
+            up_gate_proj_scale_name = self.added_scale_attrs[0]
+            down_proj_scale_name = self.added_scale_attrs[1]
+
+            setattr(
+                layer,
+                up_gate_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.down_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            # weight_scale
+            setattr(
+                layer,
+                up_gate_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_scale_shape,
+                    dtype=self.default_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.down_proj_scale_shape,
+                    dtype=self.default_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+            moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+            set_weight_attrs(layer.up_gate_proj_weight, moe_extra_weight_attrs)
+            set_weight_attrs(layer.down_proj_weight, moe_extra_weight_attrs)
+            scale_extra_weight_attrs = {
+                **extra_weight_attrs,
+                "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "up": 0, "down": None},
+            }
+            set_weight_attrs(layer.up_gate_proj_weight_scale, scale_extra_weight_attrs)
+            set_weight_attrs(layer.down_proj_weight_scale, scale_extra_weight_attrs)
+
+    def process_weights_after_loading(self, layer):
+        """ """
+        if not layer.fd_config.load_config.load_choices == "default_v1":
+            return
+        weight_id_map = {"gate_up": 0, "down": 1}
+        if (
+            hasattr(layer.up_gate_proj_weight, "tensor_track")
+            and layer.up_gate_proj_weight.tensor_track is not None
+            and layer.up_gate_proj_weight.tensor_track.is_fully_copied()
+        ):
+            weight_type = "gate_up"
+        else:
+            weight_type = "down"
+
+        # 1.init shape and type
+        # weight
+        weight_name = self.added_weight_attrs[weight_id_map[weight_type]]
+        unquantized_weight_name = weight_name.replace("quant_weight", "weight")
+        weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
+        weight_dtype = "int8"
+        # scale
+        scale_name = self.added_scale_attrs[weight_id_map[weight_type]]
+        scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+        scale_dtype = self.default_dtype
+
+        # 2.crate tmp tensor
+
+        weight = paddle.empty(weight_shape, dtype=weight_dtype)
+        scale = paddle.empty(scale_shape, dtype=scale_dtype)
+
+        # 3.quantize weight
+
+        for expert_id in range(layer.num_experts):
+            weight[expert_id], scale[expert_id] = weight_quantize(
+                getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
+            )
+
+        free_tensor(getattr(layer, unquantized_weight_name))
+
+        # create weight
         setattr(
             layer,
-            up_gate_proj_weight_name,
+            weight_name,
             layer.create_parameter(
-                shape=self.ffn1_weight_shape,
-                dtype=self.weight_dtype,
+                shape=weight_shape,
+                dtype=weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        # create scale
         setattr(
             layer,
-            down_proj_weight_name,
+            scale_name,
             layer.create_parameter(
-                shape=self.ffn2_weight_shape,
-                dtype=self.weight_dtype,
+                shape=scale_shape,
+                dtype=scale_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
-        # weight_scale
-        setattr(
-            layer,
-            self.added_scale_attrs[0],
-            layer.create_parameter(
-                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
-                dtype=self.default_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            self.added_scale_attrs[1],
-            layer.create_parameter(
-                shape=[layer.num_local_experts, layer.hidden_size],
-                dtype=self.default_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
+        getattr(layer, weight_name).copy_(weight, False)
+        getattr(layer, scale_name).copy_(scale, False)
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
