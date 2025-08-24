@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
@@ -48,7 +50,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         self.image_patch_id = self.ernie_processor.image_patch_id
         self.spatial_conv_size = self.ernie_processor.spatial_conv_size
 
-        self.tool_parsers = dict()
+        self.tool_parser_dict = dict()
         self.decode_status = dict()
         self._load_tokenizer()
 
@@ -152,7 +154,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             return kwargs
 
         except Exception as e:
-            data_processor_logger.warning(f"Invalid mm-processor-kwargs format: {e}")
+            data_processor_logger.warning(f"Invalid mm-processor-kwargs format: {e}, {str(traceback.format_exc())}")
             return {}
 
     def _parse_limits(self, limits):
