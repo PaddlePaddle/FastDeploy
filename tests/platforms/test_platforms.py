@@ -46,7 +46,9 @@ class TestCUDAPlatform(unittest.TestCase):
     @patch("paddle.is_compiled_with_cuda", return_value=True)
     @patch("paddle.device.get_device", return_value="cuda")
     @patch("paddle.static.cuda_places", return_value=[0])
-    def test_is_cuda(self, mock_get_device, mock_is_cuda, mock_cuda_places):
+    def test_is_cuda_and_available(
+        self, mock_get_device, mock_is_cuda, mock_cuda_places
+    ):
         """
         Check hardware type (CUDA) and availability
         """
