@@ -499,17 +499,15 @@ class Ernie4_5_Model(nn.Layer):
         paddle.distributed.barrier()
 
 
-        attention_input = [None] * split_num
-        attention_out = [None] * split_num
-        for i in range(split_num):
-            attention_input[i] = [None] * 3
-            attention_out[i] = [None] * 4
-            
-            # 这个是永远不改变的！
-            attention_input[i][0] = forward_metas[i]
-            # 下面俩是动态变化的！
-            attention_input[i][1] = all_hidden_states[i]
-            attention_input[i][2] = all_residual[i]
+        class AttentionInOut:
+            forward_meta = None
+            attn_metadata = None
+            hidden_states = None
+            residual = None            
+            topk_idx = None
+            topk_weights = None
+
+        attention_in_out = [None] * split_num
 
         handles = [None] * split_num
         send_hooks = [None] * split_num
@@ -518,7 +516,7 @@ class Ernie4_5_Model(nn.Layer):
         dispatch_events = [None] * split_num
         combine_events = [None] * split_num
 
-        metadatas = [None] * split_num
+        dispatch_allocated_memory = [None] * split_num
 
         from collections import deque
         for j in range(split_num):
@@ -528,9 +526,34 @@ class Ernie4_5_Model(nn.Layer):
             dispatch_events[j] = deque()
             combine_events[j] = deque()
 
-            if attention_input[j][0] is not None:
-                forward_meta.attn_backend.init_attention_metadata(attention_input[j][0])
-                metadatas[j] = forward_meta.attn_backend.attention_metadata
+            token_num = 0
+            if all_hidden_states[j] is not None:
+                token_num = all_hidden_states[j].shape[0]
+            
+            a = paddle.empty([8, runner.num_max_tokens * 24, 8192], dtype="float8_e4m3fn")
+            b = paddle.empty([token_num, 3], dtype="bool")
+            c = paddle.empty([8, runner.num_max_tokens * 24], dtype="int32")
+            d = paddle.empty([8, 24], dtype="int64")
+            e = paddle.empty([8], dtype="int32")
+            f = paddle.empty([3], dtype="int32")
+            g = paddle.empty([3, runner.num_max_tokens, 8768], dtype="uint8")
+            h = paddle.empty([8, 8192//128, runner.num_max_tokens * 24], dtype="float32")
+
+            dispatch_allocated_memory[j] = (a, b, c, d, e, f, g, h)
+
+
+            attention_in_out[j] = AttentionInOut()
+            
+            # 这个是永远不改变的！
+            attention_in_out[j].forward_meta = forward_metas[j]
+
+            if attention_in_out[j].forward_meta is not None:
+                forward_meta.attn_backend.init_attention_metadata(attention_in_out[j].forward_meta)
+                attention_in_out[j].attn_metadata = forward_meta.attn_backend.attention_metadata
+
+            # 下面俩是动态变化的，每层的时候是会变化的哦！
+            attention_in_out[j].hidden_states = all_hidden_states[j]
+            attention_in_out[j].residual = all_residual[j]
 
         self.barrier_id = -1
         def zkk_barrier():
@@ -546,34 +569,39 @@ class Ernie4_5_Model(nn.Layer):
             def dispatch_wait(j):
                 #print(f"dispatch_wait({j})")
                 a = dispatch_events[j].pop()
-                # a.current_stream_wait()
                 tmp = send_hooks[j].pop()()
-                # tmp.current_stream_wait()
                 
-
             def combine_wait(j):
                 #print(f"combine_wait({j})")
                 a = combine_events[j].pop()
                 # a.current_stream_wait()
                 
                 tmp = recv_hooks[j].pop()()
+                #recv_hooks[j].appendleft(tmp)
                 tmp.current_stream_wait()
-                
 
 
             def compute_atten(layer_id, i):
                 #print(f"compute_atten({layer_id}, {i})")
-                hidden_states, residual, topk_idx, topk_weights = self.layers[layer_id].forward_attn(metadatas[i], attention_input[i][0], attention_input[i][1], attention_input[i][2])
+                hidden_states, residual, topk_idx, topk_weights = self.layers[layer_id].forward_attn(
+                                                                  attention_in_out[i].attn_metadata, 
+                                                                  attention_in_out[i].forward_meta, 
+                                                                  attention_in_out[i].hidden_states, 
+                                                                  attention_in_out[i].residual)
                 
-                attention_out[i] = [hidden_states, residual, topk_idx, topk_weights]
-                attention_input[i][2] = attention_out[i][1]
+                attention_in_out[i].hidden_states = hidden_states
+                attention_in_out[i].topk_idx = topk_idx
+                attention_in_out[i].topk_weights = topk_weights
+            
+                attention_in_out[i].residual = residual
             
             def dispatch_send(i):
                 #print(f"dispatch_send({i})")
                 _, handle, event, a2e_isend_hook = runner.buffer.a2e_isend_two_stage_v3(
-                    attention_out[i][0],
-                    attention_out[i][2],
-                    attention_out[i][3],
+                    attention_in_out[i].hidden_states,
+                    attention_in_out[i].topk_idx,
+                    attention_in_out[i].topk_weights,
+                    dispatch_allocated_memory[i],
                     runner.num_max_tokens,
                     runner.num_experts,
                     use_fp8=runner.use_fp8,
@@ -585,32 +613,25 @@ class Ernie4_5_Model(nn.Layer):
             def combine_receive(i):
                 #print(f"combine_receive({i})")
                 e2a_x, event, e2a_irecv_hook = runner.buffer.e2a_irecv_two_stage_v3(
-                    attention_out[i][2],
-                    attention_out[i][3],
+                    attention_in_out[i].topk_idx,
+                    attention_in_out[i].topk_weights,
                     handles[i].pop(),
                     dispatch_use_fp8=runner.use_fp8,
-                    out=None,
+                    out=attention_in_out[i].hidden_states,
                 )
 
                 recv_hooks[i].appendleft(e2a_irecv_hook)
 
-                attention_input[i][1] = e2a_x
                 combine_events[i].appendleft(event)
-            
+
             for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
-                    zkk_barrier()
                     compute_atten(layer_id, j)
-                    zkk_barrier()
                     dispatch_send(j)
-                    zkk_barrier()
                     dispatch_wait(j)
-                    zkk_barrier()
                     combine_receive(j)
-                    zkk_barrier()
                     combine_wait(j)
-                    zkk_barrier()
-        
+
         else:
             # 搞一个大槽子放东西！
             moe_input = [None] * split_num
@@ -632,7 +653,7 @@ class Ernie4_5_Model(nn.Layer):
                 # a.current_stream_wait()
                 
                 tmp = send_hooks[j].pop()()
-                # tmp.current_stream_wait()
+                #tmp.current_stream_wait()
 
             def dispatch_receive(i):
                 #print(f"dispatch_receive({i})")
@@ -644,6 +665,7 @@ class Ernie4_5_Model(nn.Layer):
                     event,
                     a2e_irecv_hook,
                 ) = runner.buffer.a2e_irecv_two_stage_v3(
+                    dispatch_allocated_memory[i],
                     runner.hidden,
                     runner.top_k,
                     runner.num_max_tokens,
@@ -672,29 +694,22 @@ class Ernie4_5_Model(nn.Layer):
                 )
                 send_hooks[i].appendleft(e2a_isend_hook)
                 combine_events[i].appendleft(event)
-        
+
             for layer_id in range(3, self.num_layers):
                 for j in range(split_num):
-                    zkk_barrier()
                     dispatch_receive(j)
-                    zkk_barrier()
                     dispatch_wait(j)
-                    zkk_barrier()
                     compute_moe(layer_id, j)
-                    zkk_barrier()
                     combine_send(j)
-                    zkk_barrier()
                     combine_wait(j)
-                    zkk_barrier()
-
 
         paddle.distributed.barrier()
 
         if IsH20:
             if ids_remove_padding.shape[0] == 0:
                 return None
-            hidden_states = paddle.concat([attention_input[j][1] for j in range(split_num)], axis=0)
-            residuals = paddle.concat([attention_input[j][2]  for j in range(split_num)], axis=0)
+            hidden_states = paddle.concat([attention_in_out[j].hidden_states for j in range(split_num)], axis=0)
+            residuals = paddle.concat([attention_in_out[j].residual for j in range(split_num)], axis=0)
             hidden_states = hidden_states + residuals
             out = self.norm(hidden_states)
             return out
@@ -810,9 +825,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             from paddle.framework import core
             core.nvprof_start()
         
-        if ids_remove_padding is not None:
-            print(ids_remove_padding.shape)
-            print(forward_meta.seq_lens_decoder)
+        # if ids_remove_padding is not None:
+        #     print(ids_remove_padding.shape)
+        #     print(forward_meta.seq_lens_decoder)
         
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
