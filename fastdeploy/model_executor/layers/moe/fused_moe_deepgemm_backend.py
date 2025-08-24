@@ -39,12 +39,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self.weight_dtype = paddle.float8_e4m3fn
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
-        self.ffn1_weight_shape = [
+        self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size * 2,
             layer.hidden_size,
         ]
-        self.ffn2_weight_shape = [
+        self.down_proj_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size,
             layer.moe_intermediate_size,
@@ -53,7 +53,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer,
             up_gate_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn1_weight_shape,
+                shape=self.up_gate_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -62,7 +62,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer,
             down_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn2_weight_shape,
+                shape=self.down_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
