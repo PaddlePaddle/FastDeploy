@@ -301,7 +301,10 @@ class DataProcessor(BaseDataProcessor):
         return request
 
     def process_logprob_response(self, token_ids, **kwargs):
-        full_text = self.tokenizer.decode(token_ids, **kwargs)
+        try:
+            full_text = self.tokenizer.decode(token_ids, **kwargs)
+        except Exception:
+            full_text = "Invalid Token"
         return full_text
 
     def process_response(self, response_dict, **kwargs):

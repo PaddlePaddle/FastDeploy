@@ -422,5 +422,8 @@ class ErnieProcessor(BaseDataProcessor):
         return stop_seqs, stop_seqs_len
 
     def process_logprob_response(self, token_ids, **kwargs):
-        full_text = self.tokenizer.decode(token_ids, **kwargs)
+        try:
+            full_text = self.tokenizer.decode(token_ids, **kwargs)
+        except Exception:
+            full_text = "Invalid Token"
         return full_text
