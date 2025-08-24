@@ -9,7 +9,7 @@ python -m pip install -r requirements.txt
 python -m pip install jsonschema aistudio_sdk==0.3.5
 
 failed_files=()
-run_path="$DIR/../test/ci_use/"
+run_path="$DIR/../tests/ci_use/"
 
 # load all test files
 for subdir in "$run_path"*/; do

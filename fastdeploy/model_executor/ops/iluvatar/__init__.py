@@ -17,7 +17,6 @@ from fastdeploy.import_ops import import_custom_ops
 
 PACKAGE = "fastdeploy.model_executor.ops.iluvatar"
 
-import_custom_ops(PACKAGE, "..base.fastdeploy_base_ops", globals())
 import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
 
 from .moe_ops import iluvatar_moe_expert_ffn as moe_expert_ffn  # noqa: F401

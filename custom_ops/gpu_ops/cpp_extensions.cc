@@ -77,6 +77,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &out_linear_shifts,
     const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
@@ -529,7 +530,7 @@ paddle::Tensor FusedHadamardQuantFp8Func(
 int64_t init_custom_all_reduce(const std::vector<int64_t>& fake_ipc_ptrs,
                       paddle::Tensor& rank_data, int64_t rank, bool full_nvlink);
 
-void all_reduce(int64_t _fa, paddle::Tensor& inp, paddle::Tensor& out,
+void all_reduce(paddle::Tensor& inp, paddle::Tensor& out, int64_t _fa,
                 int64_t reg_buffer, int64_t reg_buffer_sz_bytes);
 
 void dispose(int64_t _fa);
@@ -675,6 +676,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
+                          const paddle::Tensor& base_model_seq_lens_this_time,
                           const paddle::Tensor& base_model_seq_lens_encoder,
                           const paddle::Tensor& base_model_seq_lens_decoder,
                           const paddle::Tensor& base_model_step_idx,
@@ -774,6 +776,22 @@ void MergePrefillDecodeOutput(
         const int head_num,
         const int head_dim,
         const int max_token);
+
+std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
+                                               const paddle::Tensor &top_p,
+                                               const paddle::optional<paddle::Tensor> &top_k,
+                                               int64_t seed);
+
+std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor &probs,
+                                       const paddle::Tensor &top_k);
+
+std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
+                                               const paddle::Tensor &min_p);
+
+void SaveOutMmsgStatic(const paddle::Tensor& x,
+                       const paddle::Tensor& not_need_stop,
+                       int64_t rank_id,
+                       bool save_each_rank);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -1127,4 +1145,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_step_paddle",&SpeculateStepPaddle, "speculate_step_paddle function");
 
   m.def("merge_prefill_decode_output", &MergePrefillDecodeOutput, "merge_prefill_decode_output function");
+
+  m.def("rejection_top_p_sampling", &TopPSamplingReject, "rejection_top_p_sampling function");
+
+  m.def("top_k_renorm_probs", &TopKRenorm, "top_k_renorm_probs function");
+
+  m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
+
+  m.def("save_output", &SaveOutMmsgStatic, "save_output function");
 }

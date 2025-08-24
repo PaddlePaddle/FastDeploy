@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 
 import paddle
@@ -317,12 +318,12 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
     ) -> list[tuple[str, str, int, str]]:
         # (param_name, weight_name, expert_id, shard_id)
         return FusedMoE.make_expert_params_mapping(
+            num_experts=self.fd_config.model_config.num_experts,
             ckpt_gate_proj_name="gate_proj",
             ckpt_down_proj_name="down_proj",
             ckpt_up_proj_name="up_proj",
             param_gate_up_proj_name="experts.up_gate_proj_",
             param_down_proj_name="experts.down_proj_",
-            num_experts=self.fd_config.model_config.num_experts,
         )
 
     @paddle.no_grad()
@@ -334,7 +335,10 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -348,6 +352,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -374,11 +379,15 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                     weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
                     break
                 else:
-                    if loaded_weight_name not in params_dict:
+                    model_param_name = loaded_weight_name
+                    if model_param_name not in params_dict:
                         continue
-                    param = params_dict[loaded_weight_name]
+                    param = params_dict[model_param_name]
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

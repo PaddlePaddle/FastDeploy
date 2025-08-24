@@ -250,7 +250,6 @@ class PaddleDisWorkerProc:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             num_running_requests = 0
-
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
                 tasks, read_finish = self.task_queue.get_tasks()
 
@@ -277,6 +276,7 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
+        num_running_requests = 0
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -515,7 +515,7 @@ def parse_args():
         help="enable prefix cache",
     )
     parser.add_argument(
-        "--enable_custom_all_reduce",
+        "--disable_custom_all_reduce",
         action="store_true",
         help="enable custom all-reduce",
     )
@@ -586,7 +586,6 @@ def parse_args():
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
     )
-    parser.add_argument("--enable_mm", action="store_true", help="Whether to enable vl model")
     parser.add_argument(
         "--enable_logprob",
         action="store_true",
@@ -604,6 +603,13 @@ def parse_args():
         type=str,
         default="default",
         help="The format of the model weights to load. default/new_loader.",
+    )
+
+    parser.add_argument(
+        "--ips",
+        type=str,
+        default=None,
+        help="The ips of multinode deployment.",
     )
 
     args = parser.parse_args()
@@ -707,8 +713,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     else:
         logger.info("No quantization config found and use original weight and act dtype.")
 
-    # Set VL tag
-    model_config.enable_mm = args.enable_mm
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
@@ -723,6 +727,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        ips=args.ips,
     )
     update_fd_config_for_mm(fd_config)
 

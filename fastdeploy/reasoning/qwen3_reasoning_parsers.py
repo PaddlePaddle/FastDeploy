@@ -48,6 +48,9 @@ class Qwen3ReasoningParser(ReasoningParser):
         if self.think_end_token_id is None:
             raise RuntimeError("Qwen3  reasoning parser could not locate think end " "tokens in the tokenizer!")
 
+    def is_reasoning_end(self, input_ids: list[int]) -> bool:
+        return self.think_end_token_id in input_ids
+
     def extract_reasoning_content_streaming(
         self,
         previous_text: str,
@@ -66,7 +69,7 @@ class Qwen3ReasoningParser(ReasoningParser):
         - 'xyz' goes to content
         """
         if len(delta_token_ids) == 1 and (delta_token_ids[0] in [self.think_start_token_id, self.think_end_token_id]):
-            return "", ""
+            return None
 
         # </think> in delta
         if self.think_end_token_id in delta_token_ids:
@@ -76,28 +79,28 @@ class Qwen3ReasoningParser(ReasoningParser):
                 end_index = delta_token_ids.find(self.think_end_token)
                 reasoning_content = delta_text[start_index + len(self.think_start_token) : end_index]
                 content = delta_text[end_index + len(self.think_end_token) :]
-                return reasoning_content, content
+                return DeltaMessage(reasoning_content=reasoning_content, content=content)
             # <think> in previous, </think> in delta,
             else:
                 end_index = delta_text.find(self.think_end_token)
                 reasoning_content = delta_text[:end_index]
                 content = delta_text[end_index + len(self.think_end_token) :]
                 content = content if content else None
-                return reasoning_content, content
+                return DeltaMessage(reasoning_content=reasoning_content, content=content)
         # </think> in previous reasoning content continues
         elif self.think_end_token_id in previous_token_ids:
-            return "", delta_text
+            return DeltaMessage(content=delta_text)
         # <think> in previous
         elif self.think_start_token_id in previous_token_ids:
-            return delta_text, ""
+            return DeltaMessage(reasoning_content=delta_text)
         # <think> in delta
         elif self.think_start_token_id in delta_token_ids:
             start_index = delta_text.find(self.think_start_token)
             reasoning_content = delta_text[start_index + len(self.think_start_token) :]
             content = ""
-            return reasoning_content, content
+            return DeltaMessage(reasoning_content=reasoning_content, content=content)
         else:
-            return delta_text, ""
+            return DeltaMessage(reasoning_content=delta_text)
 
     def extract_reasoning_content(
         self, model_output: str, request: ChatCompletionRequest

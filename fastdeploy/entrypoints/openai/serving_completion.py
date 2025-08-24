@@ -16,13 +16,11 @@
 
 import asyncio
 import time
+import traceback
 import uuid
 from typing import List, Optional
 
-import aiozmq
-import msgpack
 import numpy as np
-from aiozmq import zmq
 
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
@@ -40,8 +38,9 @@ from fastdeploy.worker.output import LogprobsLists
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
         self.engine_client = engine_client
+        self.models = models
         self.pid = pid
         self.master_ip = ips
         self.host_ip = get_host_ip()
@@ -51,6 +50,12 @@ class OpenAIServingCompletion:
                 self.master_ip = self.master_ip[0]
             else:
                 self.master_ip = self.master_ip.split(",")[0]
+
+    async def _ensure_connection_manager(self):
+        """ensure connection manager initialized"""
+        if not self.engine_client.connection_initialized:
+            await self.engine_client.connection_manager.initialize()
+            self.engine_client.connection_initialized = True
 
     def _check_master(self):
         if self.master_ip is None:
@@ -67,6 +72,12 @@ class OpenAIServingCompletion:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+        if self.models:
+            is_supported, request.model = self.models.is_supported_model(request.model)
+            if not is_supported:
+                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                api_server_logger.error(err_msg)
+                return ErrorResponse(message=err_msg, code=400)
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
@@ -92,7 +103,9 @@ class OpenAIServingCompletion:
             else:
                 raise ValueError("Prompt must be a string, a list of strings or a list of integers.")
         except Exception as e:
-            return ErrorResponse(message=str(e), code=400)
+            error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(message=error_msg, code=400)
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
@@ -101,6 +114,19 @@ class OpenAIServingCompletion:
         api_server_logger.info(f"start inference for request {num_choices}")
         prompt_batched_token_ids = []
         text_after_process_list = []
+        try:
+            if self.max_waiting_time < 0:
+                await self.engine_client.semaphore.acquire()
+            else:
+                await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
+        except Exception as e:
+            error_msg = (
+                f"OpenAIServingCompletion waiting error: {e}, {str(traceback.format_exc())}, "
+                f"max waiting time: {self.max_waiting_time}"
+            )
+            api_server_logger.error(error_msg)
+            return ErrorResponse(code=408, message=error_msg)
+
         try:
             for idx, prompt in enumerate(request_prompts):
                 request_id_idx = f"{request_id}-{idx}"
@@ -113,17 +139,11 @@ class OpenAIServingCompletion:
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                 except Exception as e:
+                    error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
+                    api_server_logger.error(error_msg)
                     return ErrorResponse(message=str(e), code=400)
 
                 del current_req_dict
-
-            try:
-                if self.max_waiting_time < 0:
-                    await self.engine_client.semaphore.acquire()
-                else:
-                    await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            except Exception:
-                return ErrorResponse(code=408, message=f"Request queued time exceed {self.max_waiting_time}")
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -147,10 +167,16 @@ class OpenAIServingCompletion:
                         text_after_process_list=text_after_process_list,
                     )
                 except Exception as e:
-                    return ErrorResponse(code=400, message=str(e))
+                    error_msg = (
+                        f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
+                    )
+                    api_server_logger.error(error_msg)
+                    return ErrorResponse(code=400, message=error_msg)
 
         except Exception as e:
-            return ErrorResponse(message=str(e), code=400)
+            error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(message=error_msg, code=400)
 
     async def completion_full_generator(
         self,
@@ -169,7 +195,10 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
 
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
@@ -182,7 +211,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -194,7 +223,7 @@ class OpenAIServingCompletion:
                             current_waiting_time = 0
                     await asyncio.sleep(0.1)
                     continue
-                response = msgpack.unpackb(raw_data[-1])
+
                 for data in response:
                     rid = int(data["request_id"].split("-")[-1])
                     if data.get("error_code", 200) != 200:
@@ -221,8 +250,7 @@ class OpenAIServingCompletion:
                         valid_results[rid] = data
                         num_choices -= 1
                         break
-
-            return self.request_output_to_completion_response(
+            res = self.request_output_to_completion_response(
                 final_res_batch=valid_results,
                 request=request,
                 request_id=request_id,
@@ -232,13 +260,23 @@ class OpenAIServingCompletion:
                 completion_batched_token_ids=completion_batched_token_ids,
                 text_after_process_list=text_after_process_list,
             )
+            api_server_logger.info(f"Completion response: {res.model_dump_json()}")
+            return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
             raise
         finally:
             self.engine_client.semaphore.release()
             if dealer is not None:
-                dealer.close()
+                await self.engine_client.connection_manager.cleanup_request(request_id)
+
+    async def _echo_back_prompt(self, request, res, idx):
+        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
+            if isinstance(request.prompt, list):
+                prompt_text = request.prompt[idx]
+            else:
+                prompt_text = request.prompt
+            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
@@ -263,7 +301,10 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            await self._ensure_connection_manager()
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"
@@ -271,7 +312,7 @@ class OpenAIServingCompletion:
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
             first_iteration = [True] * num_choices
-            tool_called = False
+            tool_called = [False] * num_choices
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -287,7 +328,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
@@ -300,7 +341,6 @@ class OpenAIServingCompletion:
                     await asyncio.sleep(0.1)
                     continue
 
-                response = msgpack.unpackb(raw_data[-1])
                 for res in response:
                     idx = int(res["request_id"].split("-")[-1])
                     if res.get("error_code", 200) != 200:
@@ -318,11 +358,15 @@ class OpenAIServingCompletion:
                                         text="",
                                         prompt_token_ids=list(prompt_batched_token_ids[idx]),
                                         text_after_process=text_after_process_list[idx],
+                                        prompt_tokens=text_after_process_list[idx],
                                         completion_token_ids=None,
                                     )
                                 ],
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                            api_server_logger.info(
+                                f"Completion Streaming response send_idx 0: {chunk.model_dump_json()}"
+                            )
                         first_iteration[idx] = False
 
                     self.engine_client.data_processor.process_response_dict(
@@ -334,6 +378,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -341,41 +386,41 @@ class OpenAIServingCompletion:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
                     output_tokens[idx] += 1
-                    if self.engine_client.data_processor.tool_parser_obj and not res["finished"]:
-                        tool_delta_message = output["tool_delta_message"]
-                        if tool_delta_message is None:
+                    delta_message = CompletionResponseStreamChoice(
+                        index=idx,
+                        text=output["text"],
+                        prompt_token_ids=None,
+                        completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
+                        tool_calls=None,
+                        raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                        completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        reasoning_content="",
+                        arrival_time=arrival_time,
+                        logprobs=logprobs_res,
+                    )
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
                             continue
-                        delta_message = CompletionResponseStreamChoice(
-                            index=idx,
-                            text=output["text"],
-                            completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                            tool_calls=tool_delta_message.tool_calls,
-                            reasoning_content=output.get("reasoning_content"),
-                            arrival_time=arrival_time,
-                            logprobs=logprobs_res,
-                        )
-                        if tool_delta_message.tool_calls:
-                            tool_called = True
-                    else:
-                        delta_message = CompletionResponseStreamChoice(
-                            index=idx,
-                            text=output["text"],
-                            prompt_token_ids=None,
-                            completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                            tool_calls=None,
-                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                            reasoning_content=output.get("reasoning_content"),
-                            arrival_time=arrival_time,
-                            logprobs=logprobs_res,
-                        )
+                        delta_message.text = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        delta_message.tool_calls = delta_message_output.tool_calls
 
                     choices.append(delta_message)
-                    output_tokens[idx] += 1
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output, tool_called
+                            request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
+                    send_idx = output.get("send_idx")
+                    # 只有当 send_idx 明确为 0 时才记录日志
+                    if send_idx == 0 and not request.return_token_ids:
+                        chunk_temp = chunk
+                        chunk_temp.choices = choices
+                        api_server_logger.info(
+                            f"Completion Streaming response send_idx 0: {chunk_temp.model_dump_json()}"
+                        )
+                        del chunk_temp
 
                     if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
@@ -402,18 +447,20 @@ class OpenAIServingCompletion:
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
                 if choices:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                     choices = []
 
         except Exception as e:
+            api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
-            self.engine_client.semaphore.release()
             if dealer is not None:
-                dealer.close()
+                await self.engine_client.connection_manager.cleanup_request(request_id)
+                self.engine_client.semaphore.release()
             yield "data: [DONE]\n\n"
 
     def request_output_to_completion_response(
@@ -436,7 +483,7 @@ class OpenAIServingCompletion:
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            prompt_text = final_res["prompt"]
+            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
@@ -454,16 +501,14 @@ class OpenAIServingCompletion:
 
             if request.echo:
                 assert prompt_text is not None
-                if request.max_tokens == 0:
-                    token_ids = prompt_token_ids
-                    output_text = prompt_text
+                token_ids = [*prompt_token_ids, *output["token_ids"]]
+                if isinstance(prompt_text, list):
+                    output_text = prompt_text[idx] + output["text"]
                 else:
-                    token_ids = [*prompt_token_ids, *output["token_ids"]]
-                    output_text = prompt_text + output["text"]
+                    output_text = str(prompt_text) + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
             choice_data = CompletionResponseChoice(
@@ -473,7 +518,9 @@ class OpenAIServingCompletion:
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
                 raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
                 text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
+                prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
@@ -593,5 +640,5 @@ class OpenAIServingCompletion:
             )
 
         except Exception as e:
-            api_server_logger.error("Error in _build_logprobs_response: %s", e)
+            api_server_logger.error(f"Error in _build_logprobs_response: {str(e)}, {str(traceback.format_exc())}")
             return None
