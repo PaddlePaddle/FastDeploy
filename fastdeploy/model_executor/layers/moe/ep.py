@@ -50,14 +50,30 @@ def get_moe_scores(
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
     scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group,
-        topk_group,
-        top_k,
-        routed_scaling_factor,
-    )
+    if n_group == 0 or n_group == 1:
+        _, topk_idx = paddle.topk(scores_with_bias, k=top_k, axis=-1) 
+        token_num, top_k = topk_idx.shape
+        
+        topk_idx_expanded = paddle.unsqueeze(topk_idx, axis=-1)
+        indices = paddle.concat([
+                paddle.arange(token_num, dtype='int64').unsqueeze(1).tile([1, top_k]).unsqueeze(-1),  # batch_index
+                topk_idx_expanded                                                                     # expert_index
+            ], axis=-1)
+        selected_gate_probs = paddle.gather_nd(scores, indices)
+
+        selected_gate_probs_sum = paddle.sum(selected_gate_probs, axis=1, keepdim=True)
+        topk_weights = selected_gate_probs / selected_gate_probs_sum
+        topk_values = topk_weights * routed_scaling_factor
+        scores = None
+    else:
+        scores, topk_values, topk_idx = noaux_tc(
+            scores,
+            scores_with_bias,
+            n_group,
+            topk_group,
+            top_k,
+            routed_scaling_factor,
+        )
     return scores, topk_values, topk_idx
 
 
@@ -112,6 +128,7 @@ class DeepEPEngine:
                 low_latency_mode=True,
                 num_qps_per_rank=24,
             )
+            logger.info("Inited deepep_engine")
         # In disaggregated mode on mutiple nodes, we either use
         # high throughput mode or low latency mode.
         else:

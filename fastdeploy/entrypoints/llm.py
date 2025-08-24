@@ -76,9 +76,9 @@ class LLM:
         enable_logprob: Optional[bool] = False,
         **kwargs,
     ):
+        load_model_register_plugins()
         deprecated_kwargs_warning(**kwargs)
 
-        load_model_register_plugins()
         model = retrive_model_from_server(model, revision)
         tool_parser_plugin = kwargs.get("tool_parser_plugin")
         if tool_parser_plugin:

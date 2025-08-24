@@ -375,7 +375,10 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         self.max_enc_len_this_time = paddle.to_tensor([self.max_enc_len_this_time], "int32", place=paddle.CPUPlace())
         self.max_dec_len_this_time = paddle.to_tensor([self.max_dec_len_this_time], "int32", place=paddle.CPUPlace())
-        self.seq_lens_this_time = self.seq_lens_encoder
+        self.seq_lens_this_time = paddle.to_tensor(
+            self.seq_lens_enc,
+            "int32",
+        )
 
         self.decoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
         self.decoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
@@ -559,7 +562,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         # encoder
         # self.seq_lens_encoder,self.seq_lens_decoder,self.max_enc_len_this_time,self.max_dec_len_this_time=get_encoder_decoder_len(self.batch_size,self.seq_len)
-        self.seq_lens_this_time = self.seq_lens_encoder
+        self.seq_lens_this_time[:] = self.seq_lens_encoder[:]
         self.cmp_append_attention(attn_mask=self.attention_mask)
         naive_cache_k, naive_cache_v = block_cache_to_naive_cache(
             self.cache_k,

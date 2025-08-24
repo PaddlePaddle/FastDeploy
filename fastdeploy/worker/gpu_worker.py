@@ -36,7 +36,8 @@ logger = get_logger("gpu_worker", "gpu_worker.log")
 
 try:
     ModelRunner = load_model_runner_plugins()
-except:
+except Exception as e:
+    logger.info(f"load_model_runner_plugins encounter error {str(e)}, using default GPUModelRunner")
     from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 

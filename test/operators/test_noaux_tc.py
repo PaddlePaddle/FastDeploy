@@ -21,12 +21,12 @@ class TestMoeRouting(unittest.TestCase):
         assert len(gate_probs.shape) == 2
         seq_length, n_experts = gate_probs.shape
 
-        group_scores = gate_probs.reshape([seq_length, 8, -1]).topk(2, axis=-1)[0].sum(axis=-1)
-        group_idx = paddle.topk(group_scores, k=4, axis=-1, sorted=True)[1]
+        group_scores = gate_probs.reshape([seq_length, self.n_group, -1]).topk(2, axis=-1)[0].sum(axis=-1)
+        group_idx = paddle.topk(group_scores, k=self.topk_group, axis=-1, sorted=True)[1]
         group_mask = paddle.zeros_like(group_scores).put_along_axis(
             group_idx, paddle.ones([], dtype="float32"), axis=-1
         )
-        score_mask = group_mask.unsqueeze(-1).expand([seq_length, 8, n_experts // 8]).reshape([seq_length, -1])
+        score_mask = group_mask.unsqueeze(-1).expand([seq_length, self.n_group, n_experts // self.n_group]).reshape([seq_length, -1])
         gate_probs = gate_probs.masked_fill(~score_mask.astype(paddle.bool), float("-inf"))
         return gate_probs
 
@@ -68,8 +68,8 @@ class TestMoeRouting(unittest.TestCase):
 
         ref_topk_values, ref_topk_idx = self.ref_moe_routing()
 
-        paddle.allclose(topk_values, ref_topk_values)
-        paddle.allclose(topk_idx.cast(int), ref_topk_idx.cast(int))
+        assert paddle.allclose(topk_values, ref_topk_values).item()
+        assert paddle.allclose(topk_idx.cast(int), ref_topk_idx.cast(int)).item()
 
 
 if __name__ == "__main__":
