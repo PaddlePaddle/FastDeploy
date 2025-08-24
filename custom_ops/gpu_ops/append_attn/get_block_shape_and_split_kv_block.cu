@@ -212,11 +212,15 @@ __global__ void search_chunk_size_for_decoder(
       if (threadIdx.x == 0) {
         uint32_t res_id = 0;
         uint32_t max_last_wave_block = 0;
+        float max_score = 0;
         for (uint32_t i = 0; i < config_size; i++) {
           uint32_t last_wave_block = (gridx_shared[i]) % sm_cout;
-          if (last_wave_block >= max_last_wave_block) {
+          float n_waves = static_cast<float>(gridx_shared[i]) / sm_cout;
+          float efficiency = n_waves / ceil(n_waves);
+          float score = static_cast<float>(last_wave_block) * efficiency;
+          if (score >= max_score) {
             res_id = i;
-            max_last_wave_block = last_wave_block;
+            max_score = score;
           }
         }
         const int res_chunk_size = min_chunk_size << res_id;
@@ -395,7 +399,7 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     // auto decoder_num_blocks_x =
     //     GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
 
-    const int config_size = 5;  // search space for chunk size:[512, 1024, 2048, ... 32768]
+    const int config_size = 7;  // search space for chunk size:[512, 1024, 2048, ... 32768]
     const int min_chunk_size = 512;
     search_chunk_size_for_decoder<config_size><<<1, 32, 0, stream>>>(
         seq_lens_this_time.data<int>(),
