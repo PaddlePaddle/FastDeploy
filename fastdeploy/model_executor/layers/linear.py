@@ -351,8 +351,6 @@ class ColumnParallelLinear(LinearBase):
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
                 set_weight_attrs(self.bias, {"output_dim": True})
-                if self.nranks > 1:
-                    set_weight_attrs(self.bias, {"output_dim": True})
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -524,7 +522,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             with_bias=with_bias,
             add_bias=add_bias,
         )
-        setattr(self.weight, "output_dim", True)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
