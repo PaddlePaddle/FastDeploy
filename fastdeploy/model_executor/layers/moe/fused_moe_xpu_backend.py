@@ -122,7 +122,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         """
         Paddle cutlass create weight process.
         """
-        self.default_dtype = layer._helper.get_default_dtype()
+        self.default_dtype = "float32"
         self.weight_dtype = "int8"
 
         if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
