@@ -357,7 +357,7 @@ class EngineArgs:
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
-        - "new_loader": default_v1.
+        - "default_v1": default_v1 loader.
     """
     hugging_face_format: bool = False
     """
