@@ -1107,15 +1107,21 @@ class FDConfig:
                 self.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
-        if ((self.speculative_config.method is not None) or 
-            (self.load_config.dynamic_load_weight is True) or
-            (self.model_config.enable_mm is True)
+        if (
+            (self.speculative_config.method is not None)
+            or (self.load_config.dynamic_load_weight is True)
+            or (self.model_config.enable_mm is True)
         ):
+
             self.graph_opt_config.use_cudagraph = False
-            logger.info("CUDAGraph does not support to be started together with SpeculativeDecode, RL Training and MultiModel temporarily, but has been automatically closed!")
-        if (self.load_config.dynamic_load_weight is True):
+            logger.info(
+                "CUDAGraph does not support to be started together with SpeculativeDecode, RL Training and MultiModel temporarily, but has been automatically closed!"
+            )
+        if self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
-            logger.info("Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!")
+            logger.info(
+                "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
+            )
 
     def check(self):
         """
