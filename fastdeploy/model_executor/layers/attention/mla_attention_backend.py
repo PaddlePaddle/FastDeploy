@@ -24,6 +24,11 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
+try:
+    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+except:
+    flash_attention_v3_varlen = None
+
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
     init_kv_signal_per_query,
@@ -76,6 +81,9 @@ class MLAAttentionMetadata(AttentionMetadata):
     kv_signal_metadata: Optional[paddle.Tensor] = None
     kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
+    max_enc_len_this_time: Optional[paddle.Tensor] = None
+    max_dec_len_this_time: Optional[paddle.Tensor] = None
+
 
 class MLAAttentionBackend(AttentionBackend):
     """
@@ -84,6 +92,7 @@ class MLAAttentionBackend(AttentionBackend):
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
     attention_metadata: MLAAttentionMetadata
+    flash_attn_func: callable = None
 
     def __init__(
         self,
@@ -139,6 +148,22 @@ class MLAAttentionBackend(AttentionBackend):
         self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
+
+        if self.flash_attn_func is None:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            is_current_sm_supported = cc >= 90
+            is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
+            if is_current_sm_supported and is_paddle_supported:
+                self.flash_attn_func = flash_attention_v3_varlen
+                print("The current platform supports Flash Attention V3.")
+                self.flash_attn_kwargs = {"softmax_scale": self.attn_softmax_scale}
+            else:
+                self.flash_attn_func = flash_attn_unpadded
+                self.flash_attn_kwargs = {"scale": self.attn_softmax_scale, "training": False}
+                print(
+                    "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
+                )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
@@ -260,7 +285,7 @@ class MLAAttentionBackend(AttentionBackend):
         )
 
         # Flash注意力计算
-        fmha_out = flash_attn_unpadded(
+        fmha_out = self.flash_attn_func(
             q,
             k,
             v,
@@ -268,9 +293,8 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.cu_seqlens_k,
             metadata.max_enc_len_this_time,
             metadata.max_enc_len_this_time,
-            self.attn_softmax_scale,
-            causal=True,
-            training=False,
+            causal=self.causal,
+            **self.flash_attn_kwargs,
         )[0]
 
         return fmha_out
@@ -409,7 +433,7 @@ class MLAAttentionBackend(AttentionBackend):
             )
 
             # FA
-            fmha_out = flash_attn_unpadded(
+            fmha_out = self.flash_attn_func(
                 q,
                 k,
                 v,
@@ -417,9 +441,8 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.cu_seqlens_k,
                 metadata.max_enc_len_this_time,
                 metadata.max_enc_len_this_time,
-                self.attn_softmax_scale,
-                causal=True,
-                training=False,
+                causal=self.causal,
+                **self.flash_attn_kwargs,
             )[0]
 
             return fmha_out

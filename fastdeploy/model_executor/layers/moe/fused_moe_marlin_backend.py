@@ -139,9 +139,63 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         ]
         self.added_zeros_attrs = ["zeros0", "zeros1"]
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+        self.default_dtype = layer._helper.get_default_dtype()
+        self.weight_dtype = "int32"
+
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size // 16,
+            layer.moe_intermediate_size * 4,
+        ]
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size // 16,
+            layer.hidden_size * 2,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, 1, layer.moe_intermediate_size * 2],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, 1, layer.hidden_size],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
-        Marlin MoE create weight process.
+        Marlin MoE load weight process.
         """
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
@@ -204,15 +258,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 (weight_name, quanted_weight),
                 (scale_name, weight_scale),
             ]:
-                setattr(
-                    layer,
-                    name,
-                    layer.create_parameter(
-                        shape=tensor.shape,
-                        dtype=tensor.dtype,
-                        default_initializer=paddle.nn.initializer.Constant(0),
-                    ),
-                )
                 getattr(layer, name).set_value(tensor)
 
     def apply(
