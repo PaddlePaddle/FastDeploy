@@ -388,9 +388,14 @@ class EPPrefillRunner(EPRunner):
         *args,
         **kwargs,
     ):
-        (num_tokens_per_rank, num_tokens_per_rdma_rank, num_tokens_per_expert, is_token_in_rank, _) = (
-            self.ep_engine.deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
-        )
+
+        (
+            num_tokens_per_rank,
+            num_tokens_per_rdma_rank,
+            num_tokens_per_expert,
+            is_token_in_rank,
+            _,
+        ) = self.ep_engine.deepep_engine.get_dispatch_layout(topk_idx, self.num_experts)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
