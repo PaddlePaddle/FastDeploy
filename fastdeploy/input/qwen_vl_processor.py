@@ -212,6 +212,12 @@ class QwenVLProcessor(TextProcessor):
             request["stop_token_ids"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
 
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
+
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
