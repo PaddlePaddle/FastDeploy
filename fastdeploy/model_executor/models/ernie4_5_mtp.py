@@ -371,7 +371,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import default_weight_loader
 
         all_param_mapping = [
             # (param_name, weight_name, expert_id, shard_id)
