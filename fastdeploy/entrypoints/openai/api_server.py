@@ -523,7 +523,7 @@ def launch_worker_monitor():
                 )
                 os.kill(os.getpid(), signal.SIGINT)
                 break
-            time.sleep(1)
+            time.sleep(5)
 
     worker_monitor_thread = threading.Thread(target=_monitor, daemon=True)
     worker_monitor_thread.start()
