@@ -267,7 +267,6 @@ class EngineWorkerQueue:
         if all_client_read:
             self.tasks[:] = list()
         self.lock.release()
-        llm_logger.info(f"get gaoziyuan test {tasks}")
         return tasks, all_client_read
 
     def num_tasks(self) -> int:
