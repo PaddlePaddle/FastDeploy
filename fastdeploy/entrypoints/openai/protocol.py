@@ -72,7 +72,6 @@ class ToolCall(BaseModel):
     id: str = None
     type: Literal["function"] = "function"
     function: FunctionCall
-    index: int
 
 
 class DeltaFunctionCall(BaseModel):
@@ -94,6 +93,18 @@ class DeltaToolCall(BaseModel):
     type: Optional[Literal["function"]] = None
     index: int
     function: Optional[DeltaFunctionCall] = None
+
+
+class ExtractedToolCallInformation(BaseModel):
+    # indicate if tools were called
+    tools_called: bool
+
+    # extracted tool calls
+    tool_calls: Optional[list[ToolCall]] = None
+
+    # content - per OpenAI spec, content AND tool calls can be returned rarely
+    # But some models will do this intentionally
+    content: Optional[str] = None
 
 
 class FunctionDefinition(BaseModel):
@@ -563,12 +574,13 @@ class ChatCompletionRequest(BaseModel):
             if "messages" in req_dict:
                 del req_dict["messages"]
         else:
-            assert len(self.messages) > 0
-
-        # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-        if self.disable_chat_template:
-            req_dict["prompt"] = req_dict["messages"][0]["content"]
-            del req_dict["messages"]
+            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+            assert (
+                len(req_dict["messages"]) > 0
+            ), "messages can not be an empty list, unless prompt_token_ids is passed"
+            if self.disable_chat_template:
+                req_dict["prompt"] = req_dict["messages"][0]["content"]
+                del req_dict["messages"]
 
         guided_json_object = None
         if self.response_format is not None:

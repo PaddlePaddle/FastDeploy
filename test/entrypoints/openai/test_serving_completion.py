@@ -18,9 +18,9 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为"tool_calls"
-        output = {"finish_reason": "tool_calls"}
+        output = {"tool_call": True}
         # 调用calc_finish_reason方法
-        result = serving_completion.calc_finish_reason(None, 100, output)
+        result = serving_completion.calc_finish_reason(None, 100, output, False)
         # 断言结果为"tool_calls"
         assert result == "tool_calls"
 
@@ -31,9 +31,9 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为其他值
-        output = {"finish_reason": "other_reason"}
+        output = {"tool_call": False}
         # 调用calc_finish_reason方法
-        result = serving_completion.calc_finish_reason(None, 100, output)
+        result = serving_completion.calc_finish_reason(None, 100, output, False)
         # 断言结果为"stop"
         assert result == "stop"
 
@@ -45,7 +45,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         # 创建一个模拟的output
         output = {}
         # 调用calc_finish_reason方法
-        result = serving_completion.calc_finish_reason(100, 100, output)
+        result = serving_completion.calc_finish_reason(100, 100, output, False)
         # 断言结果为"length"
         assert result == "length"
 
@@ -55,7 +55,6 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         openai_serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
         final_res_batch: List[RequestOutput] = [
             {
-                "prompt": "Hello, world!",
                 "outputs": {
                     "token_ids": [1, 2, 3],
                     "text": " world!",
@@ -67,7 +66,6 @@ class TestOpenAIServingCompletion(unittest.TestCase):
                 "output_token_ids": 3,
             },
             {
-                "prompt": "Hello, world!",
                 "outputs": {
                     "token_ids": [4, 5, 6],
                     "text": " world!",
@@ -81,12 +79,13 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         ]
 
         request: CompletionRequest = Mock()
+        request.prompt = "Hello, world!"
+        request.echo = True
         request_id = "test_request_id"
         created_time = 1655136000
         model_name = "test_model"
         prompt_batched_token_ids = [[1, 2, 3], [4, 5, 6]]
         completion_batched_token_ids = [[7, 8, 9], [10, 11, 12]]
-
         completion_response = openai_serving_completion.request_output_to_completion_response(
             final_res_batch=final_res_batch,
             request=request,
