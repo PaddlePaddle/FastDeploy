@@ -60,3 +60,6 @@ def test_rollout_model_with_distributed_launch():
     print(stderr)
 
     assert return_code == 0, f"Process exited with code {return_code}"
+
+
+test_rollout_model_with_distributed_launch()
