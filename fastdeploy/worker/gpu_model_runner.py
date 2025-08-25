@@ -1321,6 +1321,8 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
+        print("model_forward_batch: ", model_forward_batch)
+        print("num_running_requests: ", num_running_requests)
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
@@ -1472,7 +1474,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        if (not envs.ENABLE_V1_KVCACHE_SCHEDULER) and (model_forward_batch is not None):
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
