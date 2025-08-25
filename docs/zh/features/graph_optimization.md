@@ -19,7 +19,7 @@ FastDeploy 的 `GraphOptimizationBackend` 设计架构如下，**部分功能仍
 ### 1.1 多卡场景需要开启 Custom all-reduce
 在 CUDAGraph 多卡推理任务中需要使用 Custom all-reduce 算子进行多卡 all-reduce，
 
-在 2.2 版本之前，CUDAGraph 和 Custom all-reduce 算子都未默认开启，需要在启动命令中添加 `--enable-custom-all-reduce` 手动开启。
+在 2.2 版本之前，CUDAGraph 未默认开启，Custom all-reduce 算子默认开启。
 
 ### 1.2 FLAGS_max_partition_size 相关的 Kernel 的动态执行配置导致 CUDAGraph 执行失败
 `FLAGS_max_partition_size` 环境变量控制了 CascadeAppend Attention 中 Kernel 的`gridDim` 执行配置 , 而动态的执行配置会导致 CUDAGraph 执行失败。

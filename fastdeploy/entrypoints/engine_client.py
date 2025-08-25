@@ -22,7 +22,7 @@ import uuid
 import numpy as np
 
 from fastdeploy import envs
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor

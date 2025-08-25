@@ -22,7 +22,7 @@ class MultimodalRegistry:
     A registry for multimodal models
     """
 
-    mm_models: set[str] = set()
+    mm_models: set[str] = {"Ernie4_5_VLMoeForConditionalGeneration"}
 
     @classmethod
     def register_model(cls, name: str = "") -> Callable:
