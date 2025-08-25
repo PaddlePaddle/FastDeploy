@@ -1,3 +1,5 @@
+import unittest
+
 import paddle
 
 from fastdeploy.config import (
@@ -78,45 +80,52 @@ class TestModel1(paddle.nn.Layer):
         self.sublayer2.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
-def run_test_case():
-    """Run test case"""
-    # Set FastDeploy config
-    graph_opt_config = GraphOptimizationConfig(args={})
-    graph_opt_config.use_cudagraph = True
-    parallel_config = ParallelConfig(args={})
-    cache_config = CacheConfig(args={})
-    parallel_config.max_num_seqs = 1
-    fd_config = FDConfig(graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config)
+class TestCUDAGrpahRecapture(unittest.TestCase):
+    """
+    Test CUDAGraph Memory change
+    """
 
-    # Run Test Case1
-    test_model1 = TestModel1(fd_config=fd_config)
-    input_tensor1 = paddle.ones([32768])
-    forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
+    def test_cuda_graph_recapture(self):
+        """Run test case"""
+        # Set FastDeploy config
+        graph_opt_config = GraphOptimizationConfig(args={})
+        graph_opt_config.use_cudagraph = True
+        parallel_config = ParallelConfig(args={})
+        cache_config = CacheConfig(args={})
+        parallel_config.max_num_seqs = 1
+        fd_config = FDConfig(
+            graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config
+        )
 
-    # Triger Capture
-    print_gpu_memory_use(0, "before capture")
-    _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    print_gpu_memory_use(0, "after capture")
-    # Reaplay
-    output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    # Destory
-    print_gpu_memory_use(0, "before destory")
-    test_model1.clear_grpah_opt_backend()
-    print_gpu_memory_use(0, "after destory")
+        # Run Test Case1
+        test_model1 = TestModel1(fd_config=fd_config)
+        input_tensor1 = paddle.ones([32768])
+        forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
-    # Triger Capture
-    print_gpu_memory_use(0, "before recapture")
-    _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    print_gpu_memory_use(0, "after recapture")
-    # Reaplay
-    output2 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Triger Capture
+        print_gpu_memory_use(0, "before capture")
+        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        print_gpu_memory_use(0, "after capture")
+        # Reaplay
+        output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Destory
+        print_gpu_memory_use(0, "before destory")
+        test_model1.clear_grpah_opt_backend()
+        print_gpu_memory_use(0, "after destory")
 
-    # Corrent output
-    output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Triger Capture
+        print_gpu_memory_use(0, "before recapture")
+        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        print_gpu_memory_use(0, "after recapture")
+        # Reaplay
+        output2 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-    assert sum(output1 - output2) == 0
-    assert sum(output1_correct - output1) == 0
+        # Corrent output
+        output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+
+        assert sum(output1 - output2) == 0
+        assert sum(output1_correct - output1) == 0
 
 
 if __name__ == "__main__":
-    run_test_case()
+    unittest.main()
