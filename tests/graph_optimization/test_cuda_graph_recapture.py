@@ -1,10 +1,16 @@
 import paddle
 
-from fastdeploy.config import FDConfig, GraphOptimizationConfig, ParallelConfig
+from fastdeploy.config import (
+    CacheConfig,
+    FDConfig,
+    GraphOptimizationConfig,
+    ParallelConfig,
+)
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.utils import print_gpu_memory_use
 
 
 @support_graph_optimization
@@ -78,37 +84,38 @@ def run_test_case():
     graph_opt_config = GraphOptimizationConfig(args={})
     graph_opt_config.use_cudagraph = True
     parallel_config = ParallelConfig(args={})
+    cache_config = CacheConfig(args={})
     parallel_config.max_num_seqs = 1
-    fd_config = FDConfig(graph_opt_config=graph_opt_config, parallel_config=parallel_config)
+    fd_config = FDConfig(graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config)
 
     # Run Test Case1
     test_model1 = TestModel1(fd_config=fd_config)
-    input_tensor1 = paddle.ones([1])
+    input_tensor1 = paddle.ones([32768])
     forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
     # Triger Capture
-    # print_gpu_memory_use(0, "before capture")
+    print_gpu_memory_use(0, "before capture")
     _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    # print_gpu_memory_use(0, "after capture")
+    print_gpu_memory_use(0, "after capture")
     # Reaplay
     output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
     # Destory
-    # print_gpu_memory_use(0, "before destory")
+    print_gpu_memory_use(0, "before destory")
     test_model1.clear_grpah_opt_backend()
-    # print_gpu_memory_use(0, "after destory")
+    print_gpu_memory_use(0, "after destory")
 
     # Triger Capture
-    # print_gpu_memory_use(0, "before recapture")
+    print_gpu_memory_use(0, "before recapture")
     _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    # print_gpu_memory_use(0, "after recapture")
+    print_gpu_memory_use(0, "after recapture")
     # Reaplay
     output2 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
     # Corrent output
     output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-    assert output1 == output2
-    assert output2 == output1_correct
+    assert sum(output1 - output2) == 0
+    assert sum(output1_correct - output1) == 0
 
 
 if __name__ == "__main__":
