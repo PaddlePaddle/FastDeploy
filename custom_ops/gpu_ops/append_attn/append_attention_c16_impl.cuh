@@ -1068,7 +1068,10 @@ void MultiQueryAppendAttention(
                            smem_size);
     }
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    const int max_num_chunks = div_up(max_seq_len, chunk_size > 0 ? chunk_size: 512);
+    if (chunk_size <= 0){
+      chunk_size = 512;
+    }
+    const int max_num_chunks = div_up(max_seq_len, chunk_size);
     const int dev_id = 0;
     int sm_count;
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
@@ -1214,7 +1217,7 @@ void MultiQueryAppendAttention(
               max_seq_len,
               max_num_chunks,
               num_heads,
-              512,
+              chunk_size,
               HEAD_DIM,
               token_num,
               speculate_max_draft_token_num);
