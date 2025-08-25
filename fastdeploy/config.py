@@ -209,7 +209,6 @@ class ModelConfig:
         reset_config_value("ROPE_THETA", 10000)
 
     def read_model_config(self):
-        self.model_config = {}
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
             self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
