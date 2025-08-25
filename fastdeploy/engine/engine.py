@@ -433,7 +433,9 @@ class LLMEngine:
         )
 
         ports = ",".join(self.cfg.engine_worker_queue_port)
-        ips = ",".join(self.cfg.ips)
+        ips = None
+        if self.cfg.ips is not None:
+            ips = ",".join(self.cfg.ips)
         arguments = (
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
