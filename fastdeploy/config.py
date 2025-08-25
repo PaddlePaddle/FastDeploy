@@ -128,7 +128,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
-        self.model_format = None
+        self.model_format = "auto"
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
