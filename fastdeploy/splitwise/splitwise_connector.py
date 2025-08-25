@@ -50,6 +50,7 @@ class SplitwiseConnector:
         self.connect_innode_instances = {}
         self.temp_cache_info = dict()
         self.current_request_ids = dict()
+        self.idx = self.cfg.parallel_config.local_data_parallel_id
 
         if self.cfg.cache_config.pd_comm_port is not None:
             self.zmq_ctx = zmq.Context()
@@ -203,7 +204,7 @@ class SplitwiseConnector:
                             "cache_info": {
                                 "ipc": {
                                     "ip": "0.0.0.0",
-                                    "port": self.cfg.engine_worker_queue_port,
+                                    "port": self.cfg.engine_worker_queue_port[self.idx],
                                     "current_id": current_id,
                                 },
                             },
@@ -286,7 +287,7 @@ class SplitwiseConnector:
         if port not in self.connect_innode_instances:
             self.create_connection(port)
         for task in tasks:
-            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.engine_worker_queue_port
+            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.engine_worker_queue_port[self.idx]
         self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = port
