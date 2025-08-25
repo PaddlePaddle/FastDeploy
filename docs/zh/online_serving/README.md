@@ -45,8 +45,9 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
-  ]
+    {"role": "user", "content": "Hello!"}
+  ],
+  "logprobs": true, "top_logprobs": 0,
 }'
 ```
 
@@ -192,6 +193,12 @@ max_streaming_response_tokens: Optional[int] = None
 
 disable_chat_template: Optional[bool] = False
 # 是否禁用聊天模板渲染，直接使用原始输入（默认 False 表示启用模板）。
+
+temp_scaled_logprobs: Optional[bool] = False
+# 计算logprob时是否对logits除以温度系数（默认 False 表示不除以温度系数）。
+
+top_p_normalized_logprobs: Optional[bool] = False
+# 计算logprob时是否进行 top_p 归一化（默认 False 表示不进行top_p归一化）。
 ```
 
 ### 返回字段差异
