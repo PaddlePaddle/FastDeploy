@@ -297,7 +297,7 @@ jobs:
         if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
         uses: codecov/codecov-action@v4
         with:
-          files: ./FastDeploy/diff_coverage.xml
+          directory: ./FastDeploy/
           name: python diff coverage
           verbose: true
           flags: diff
