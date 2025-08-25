@@ -707,10 +707,25 @@ def test_streaming_completion_with_prompt_token_ids(openai_client, capsys):
             assert chunk.usage.prompt_tokens == 9
 
 
-def test_non_streaming_chat_completion_disable_chat_template(openai_client, capsys):
+def test_non_streaming_chat_with_disable_chat_template(openai_client, capsys):
     """
     Test disable_chat_template option in chat functionality with the local service.
     """
+    enabled_response = openai_client.chat.completions.create(
+        model="default",
+        messages=[],
+        max_tokens=10,
+        temperature=0.0,
+        top_p=0,
+        extra_body={
+            "disable_chat_template": True,
+            "prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        },
+        stream=False,
+    )
+    assert hasattr(enabled_response, "choices")
+    assert len(enabled_response.choices) > 0
+
     enabled_response = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],

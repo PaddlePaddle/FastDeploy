@@ -16,7 +16,12 @@
 
 import paddle
 
-from fastdeploy.config import FDConfig, GraphOptimizationConfig, ParallelConfig
+from fastdeploy.config import (
+    CacheConfig,
+    FDConfig,
+    GraphOptimizationConfig,
+    ParallelConfig,
+)
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -144,7 +149,13 @@ def run_test_case():
     graph_opt_config.use_cudagraph = True
     parallel_config = ParallelConfig(args={})
     parallel_config.max_num_seqs = 1
-    fd_config = FDConfig(graph_opt_config=graph_opt_config, parallel_config=parallel_config)
+    cache_config = CacheConfig({})
+    # Initialize cuda graph capture list
+    graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
+    graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+    fd_config = FDConfig(
+        graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config, test_mode=True
+    )
 
     # Run Test Case1
     test_model1 = TestModel1(fd_config=fd_config)
