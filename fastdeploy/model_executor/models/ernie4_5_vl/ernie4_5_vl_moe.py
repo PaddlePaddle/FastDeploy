@@ -472,11 +472,12 @@ class Ernie4_5_VLModel(nn.Layer):
 
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
-        token_num = ids_remove_padding.shape[0]
         image_token_num = image_mask.sum()
+        token_num = ids_remove_padding.shape[0]
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
-        self._mm_buffers["token_type_ids"].fill_(-1)
+        # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
+        self._mm_buffers["token_type_ids"][: self.fd_config.parallel_config.max_num_seqs].fill_(-1)
         self._mm_buffers["token_type_ids"].copy_(token_type_ids, False)
         self._mm_buffers["image_token_num"].copy_(image_token_num, False)
 
@@ -645,9 +646,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
     ):
-        vl_moe_meta = self.ernie._prepare_vl_moe_meta(
-            ids_remove_padding=ids_remove_padding
-        )
+        vl_moe_meta = self.ernie._prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
         return {"vl_moe_meta": vl_moe_meta}
 
     def forward(

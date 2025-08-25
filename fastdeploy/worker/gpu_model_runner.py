@@ -1628,8 +1628,6 @@ class GPUModelRunner(ModelRunnerBase):
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.use_cudagraph:
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
-        if self.enable_mm:
-            self.share_inputs["input_embeds"].fill_(0)
         return
 
     def _init_image_preprocess(self) -> None:

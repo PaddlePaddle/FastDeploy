@@ -35,7 +35,7 @@ __global__ void text_image_index_out_kernel(
             image_index[i] = images_count;
             images_count += 1;
         } else {
-            // for cuda graph padding value
+            // skip cuda graph padding value
             continue;
         }
     }
