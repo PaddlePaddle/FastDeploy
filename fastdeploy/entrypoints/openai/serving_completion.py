@@ -33,7 +33,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
     UsageInfo,
 )
-from fastdeploy.utils import api_server_logger, get_host_ip
+from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -50,7 +50,6 @@ class OpenAIServingCompletion:
                 self.master_ip = ips.split(",")[0]
         else:
             self.master_ip = "0.0.0.0"
-        
 
     async def _ensure_connection_manager(self):
         """ensure connection manager initialized"""
@@ -61,13 +60,14 @@ class OpenAIServingCompletion:
     def _check_master(self):
         return self.engine_client.is_master
 
-
     async def create_completion(self, request: CompletionRequest):
         """
         Create a completion for the given prompt.
         """
         if not self._check_master():
-            err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
+            err_msg = (
+                f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
+            )
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
         if self.models:

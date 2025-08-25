@@ -214,7 +214,9 @@ class EngineSevice:
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
-        llm_logger.info(f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}")
+        llm_logger.info(
+            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
+        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -224,8 +226,9 @@ class EngineSevice:
             local_data_parallel_id=min(
                 self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
                 self.cfg.parallel_config.data_parallel_size - 1,
-            )
+            ),
         )
+
     def insert_tasks(self, tasks, current_id=-1, allocated=False):
         """
         Insert tasks to engine.

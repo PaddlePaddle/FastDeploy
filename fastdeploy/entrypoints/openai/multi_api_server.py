@@ -30,7 +30,7 @@ def start_servers(server_count, server_args, ports, metrics_ports):
     logger.info(f"Starting servers on ports: {ports} with args: {server_args} and metrics ports: {metrics_ports}")
     for i in range(len(server_args)):
         if server_args[i] == "--engine-worker-queue-port":
-            engine_worker_queue_port = server_args[i+1].split(",")
+            engine_worker_queue_port = server_args[i + 1].split(",")
             break
     check_param(ports, server_count)
     check_param(metrics_ports, server_count)
@@ -62,6 +62,7 @@ def start_servers(server_count, server_args, ports, metrics_ports):
 
     return processes
 
+
 def check_param(ports, num_servers):
     logger.info(f"check param {ports}, {num_servers}")
     assert len(ports) == num_servers, "Number of ports must match num-servers"
@@ -69,7 +70,8 @@ def check_param(ports, num_servers):
         logger.info(f"check port {port}")
         if not is_port_available("0.0.0.0", int(port)):
             raise ValueError(f"Port {port} is already in use.")
-    
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ports", default="8000,8002", type=str, help="ports to the http server")

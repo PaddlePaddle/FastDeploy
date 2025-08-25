@@ -629,7 +629,6 @@ class LLMEngine:
                     while self.launched_expert_service_signal.value[i] == 0:
                         time.sleep(1)
 
-
     def check_worker_initialize_status(self):
         """
         Check the initlialize status of workers by stdout logging

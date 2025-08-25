@@ -30,7 +30,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger, is_port_available
+from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
 
 logger = get_logger("config", "config.log")
 
@@ -1040,7 +1040,6 @@ class FDConfig:
         if isinstance(engine_worker_queue_port, int):
             self.engine_worker_queue_port = str(engine_worker_queue_port)
         self._str_to_list("engine_worker_queue_port", str)
-        
 
         # TODO
         self.max_prefill_batch = 3
@@ -1275,7 +1274,6 @@ class FDConfig:
                 setattr(self, attr_name, [default_type(i) for i in val.split(",")])
             else:
                 setattr(self, attr_name, [default_type(i) for i in val])
-
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, indent=4)

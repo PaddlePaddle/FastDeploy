@@ -37,7 +37,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import api_server_logger, get_host_ip
+from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -75,7 +75,9 @@ class OpenAIServingChat:
         Create a new chat completion using the specified parameters.
         """
         if not self._check_master():
-            err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
+            err_msg = (
+                f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
+            )
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
 

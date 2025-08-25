@@ -306,7 +306,6 @@ class LocalScheduler:
                 self.responses[response.request_id].append(response)
             self.responses_not_empty.notify_all()
 
-
     def get_results(self) -> Dict[str, List[RequestOutput]]:
         """
         Retrieve all available results from the scheduler and clean up completed requests.
