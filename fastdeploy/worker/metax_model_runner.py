@@ -741,6 +741,11 @@ class MetaxModelRunner(ModelRunnerBase):
             self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
+            self.share_inputs["input_embeds"] = paddle.zeros(
+                [self.parallel_config.max_model_len, self.model_config.hidden_size],
+                dtype=self.model_config.dtype,
+            )
+
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1009,10 +1014,22 @@ class MetaxModelRunner(ModelRunnerBase):
 
             # 3. Run model
             if self.enable_mm:
-                model_output = self.model(
+                input_embeddings = self.model.get_input_embeddings(
                     self.share_inputs["ids_remove_padding"],
                     self.share_inputs["image_features"],
-                    self.forward_meta,
+                )
+                self.share_inputs["input_embeds"].copy_(input_embeddings, False)
+                del input_embeddings
+                input_embeddings = self.share_inputs["input_embeds"]
+                mm_args = self.model.init_mm_data(
+                    input_embeddings,
+                    self.share_inputs["ids_remove_padding"],
+                )
+                model_output = self.model(
+                    input_embeddings=input_embeddings,
+                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    forward_meta=self.forward_meta,
+                    mm_args=mm_args,
                 )
                 hidden_states = model_output
             else:
@@ -1273,10 +1290,22 @@ class MetaxModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
-            model_output = self.model(
+            input_embeddings = self.model.get_input_embeddings(
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],
-                self.forward_meta,
+            )
+            self.share_inputs["input_embeds"].copy_(input_embeddings, False)
+            del input_embeddings
+            input_embeddings = self.share_inputs["input_embeds"]
+            mm_args = self.model.init_mm_data(
+                input_embeddings,
+                self.share_inputs["ids_remove_padding"],
+            )
+            model_output = self.model(
+                input_embeddings=input_embeddings,
+                ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                forward_meta=self.forward_meta,
+                mm_args=mm_args,
             )
             hidden_states = model_output
         else:
