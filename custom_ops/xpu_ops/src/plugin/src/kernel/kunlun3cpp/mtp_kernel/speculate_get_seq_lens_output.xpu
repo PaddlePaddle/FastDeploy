@@ -1,0 +1,58 @@
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_get_seq_lens_output(int* seq_lens_output,
+                                              const int* seq_lens_this_time,
+                                              const int* seq_lens_encoder,
+                                              const int* seq_lens_decoder,
+                                              const int real_bsz) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+  int thread_num = ncores * nclusters;
+  int bid = clusterid * ncores + cid;
+
+  int one = 1;
+  int lm_seq_lens_this_time;
+  int lm_seq_lens_encoder;
+  for (; bid < real_bsz; bid += thread_num) {
+    GM2LM_ASYNC(seq_lens_this_time + bid, &lm_seq_lens_this_time, sizeof(int));
+    GM2LM(seq_lens_encoder + bid, &lm_seq_lens_encoder, sizeof(int));
+    if (lm_seq_lens_this_time == 0) {
+      continue;
+    } else if (lm_seq_lens_this_time == 1) {
+      LM2GM_ASYNC(&one, seq_lens_output + bid, sizeof(int));
+    } else if (lm_seq_lens_encoder != 0) {
+      LM2GM_ASYNC(&one, seq_lens_output + bid, sizeof(int));
+    } else {
+      LM2GM_ASYNC(&lm_seq_lens_this_time, seq_lens_output + bid, sizeof(int));
+    }
+    mfence_lm();
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3
