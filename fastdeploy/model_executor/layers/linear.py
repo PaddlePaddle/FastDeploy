@@ -108,6 +108,7 @@ class LinearBase(nn.Layer):
             or current_platform.is_gcu()
             or current_platform.is_dcu()
             or current_platform.is_maca()
+            or current_platform.is_npu()
         ):
             self.forward = self.forward_cuda
         else:
@@ -555,6 +556,9 @@ class QKVParallelLinear(ColumnParallelLinear):
         if self.fd_config.quant_config:
             self.quant_method.process_loaded_weights(self, weight_tensor)
         else:
+            # Handle dtype conversion for NPU compatibility
+            if self.weight.dtype != weight_tensor.dtype: #FIXME: guozr 这里可能问题所在
+                weight_tensor = weight_tensor.cast(self.weight.dtype)
             self.weight.set_value(weight_tensor)
 
     def load_state_dict(self, state_dict: dict):

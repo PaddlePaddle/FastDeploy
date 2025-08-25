@@ -104,6 +104,9 @@ class WeightOnlyConfig(QuantConfigBase):
             else:
 
                 return GPUWeightOnlyLinearMethod(self)
+        elif current_platform.is_npu():
+            from fastdeploy.model_executor.layers.backends import NPUWeightOnlyLinearMethod
+            return NPUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":

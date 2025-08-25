@@ -268,6 +268,19 @@ def get_rope_xpu(
         return rotary_emb.to("xpu")
 
 
+def get_rope_npu(
+    rotary_dim: int,
+    base: 10000.0,
+    position_ids,
+    model_config: ModelConfig,
+    partial_rotary_factor=1,
+):
+    with CpuGuard():
+        position_ids = position_ids.cpu()
+        rotary_emb = get_rope_impl(rotary_dim, base, position_ids,
+                                   model_config, partial_rotary_factor)
+        return rotary_emb.to('npu')
+
 def get_rope(
     rotary_dim: int,
     base: 10000.0,
@@ -295,6 +308,8 @@ def get_rope(
     """
     if current_platform.is_xpu():
         return get_rope_xpu(rotary_dim, base, position_ids, model_config, partial_rotary_factor)
+    elif current_platform.is_npu():
+        return get_rope_npu(rotary_dim, base, position_ids, model_config, partial_rotary_factor)
     else:
         return get_rope_impl(rotary_dim, base, position_ids, model_config, partial_rotary_factor)
 

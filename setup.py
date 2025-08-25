@@ -153,6 +153,8 @@ def load_requirements():
         requirements_file_name = "requirements_dcu.txt"
     elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         requirements_file_name = "requirements_metaxgpu.txt"
+    elif paddle.device.is_compiled_with_custom_device("npu"):
+        requirements_file_name = "requirements_npu.txt"
     requirements_path = os.path.join(os.path.dirname(__file__), requirements_file_name)
     with open(requirements_path, "r") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]

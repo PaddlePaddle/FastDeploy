@@ -71,7 +71,7 @@ class SiluAndMul(nn.Layer):
             or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
-        elif current_platform.is_gcu():
+        elif current_platform.is_gcu() or current_platform.is_npu():
             self.forward = self.forward_gcu
         else:
             raise NotImplementedError

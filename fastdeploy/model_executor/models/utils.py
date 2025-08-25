@@ -237,7 +237,7 @@ def convert_ndarray_dtype(np_array: np.ndarray, target_dtype: str) -> np.ndarray
     if (
         source_dtype == "uint16"
         and target_dtype == "bfloat16"
-        and paddle.is_compiled_with_custom_device("iluvatar_gpu")
+        and (paddle.is_compiled_with_custom_device("iluvatar_gpu") or paddle.is_compiled_with_custom_device("npu"))
     ):
         return np_array.view(dtype=target_dtype)
     if source_dtype == "uint16" or target_dtype == "bfloat16":

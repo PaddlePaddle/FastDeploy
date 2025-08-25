@@ -180,6 +180,8 @@ class Sampler(nn.Layer):
             or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
+        elif current_platform.is_npu():
+            self.forward = self.forward_npu
         else:
             raise NotImplementedError
 
@@ -303,6 +305,39 @@ class Sampler(nn.Layer):
             # token per request.
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
+        )
+
+        return sampler_output
+    
+    def forward_npu(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> paddle.Tensor:
+        """
+        """
+        from fastdeploy.model_executor.ops.npu.top_p_sampling import top_p_sampling_npu
+        logits = apply_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            sampling_metadata.prompt_ids,
+            sampling_metadata.prompt_lens,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+        )
+        probs = F.softmax(logits)
+
+        _, next_tokens = top_p_sampling_npu(probs, sampling_metadata.top_p)
+
+        sampler_output = SamplerOutput(
+            sampled_token_ids=next_tokens,
+            logprobs_tensors=None,
         )
 
         return sampler_output

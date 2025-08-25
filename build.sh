@@ -104,8 +104,7 @@ function copy_ops(){
     is_npu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('npu'))"`
     if [ "$is_npu" = "True" ]; then
       DEVICE_TYPE="npu"
-      cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/npu
-      echo -e "npu ops have been copy to fastdeploy"
+      echo -e "npu ops are already present in fastdeploy"
       return
     fi
 
@@ -153,6 +152,7 @@ function build_and_install_ops() {
   echo -e "${BLUE}[build]${NONE} build and install fastdeploy_ops..."
   TMP_DIR_REAL_PATH=`readlink -f ${OPS_TMP_DIR}`
   is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
+  is_npu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('npu'))"`
   if [ "$is_xpu" = "True" ]; then
     cd xpu_ops/src
     bash build.sh ${TMP_DIR_REAL_PATH}
@@ -164,6 +164,8 @@ function build_and_install_ops() {
       FD_BUILDING_ARCS=${FD_BUILDING_ARCS} FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
     fi
     find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
+  elif [ "$is_npu" = "True" ]; then
+    echo -e "${BLUE}[build]${NONE} skipping NPU ops build (already present)"
   elif [ "$FD_CPU_USE_BF16" == "false" ]; then
     if [ "$FD_BUILDING_ARCS" == "" ]; then
       ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}

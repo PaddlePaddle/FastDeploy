@@ -15,3 +15,6 @@
 """
 npu backend methods
 """
+from .quantization.weight_only import NPUWeightOnlyLinearMethod
+
+__all__ = ['NPUWeightOnlyLinearMethod']

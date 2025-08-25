@@ -24,6 +24,9 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import fused_add_rms_norm, rms_norm
+elif current_platform.is_npu():
+    from fastdeploy.model_executor.ops.npu import rms_norm_npu as fused_rms_norm
+    from paddle.incubate.nn.functional import fused_layer_norm
 else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
