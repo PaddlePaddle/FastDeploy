@@ -33,7 +33,8 @@ from paddle.nn.functional.flash_attention import (
 )
 from paddleformers.transformers.model_utils import PretrainedModel
 
-from fastdeploy.model_executor.layers.utils import divide, get_tensor, set_weight_attrs
+from fastdeploy.model_executor.layers.utils import divide, get_tensor
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 from .activation import ACT2FN
 from .configuration import DFNRopeVisionTransformerConfig

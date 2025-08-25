@@ -23,17 +23,14 @@ from paddle import nn
 from paddle.autograd import PyLayer
 from paddle.distributed.fleet.utils import recompute
 
-from fastdeploy.model_executor.layers.utils import (
-    _set_var_distributed,
-    get_tensor,
-    set_weight_attrs,
-)
+from fastdeploy.model_executor.layers.utils import _set_var_distributed, get_tensor
 from fastdeploy.model_executor.models.ernie4_5_vl.dist_utils import (
     RowSequenceParallelLinear,
     all_gather_group,
     reduce_scatter_group,
     scatter_axis,
 )
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 
 class ScatterOp(PyLayer):

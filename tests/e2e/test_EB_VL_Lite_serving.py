@@ -15,6 +15,7 @@
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -53,8 +54,14 @@ def kill_process_on_port(port: int):
     """
     try:
         output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
+        current_pid = os.getpid()
+        parent_pid = os.getppid()
         for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
+            pid = int(pid)
+            if pid in (current_pid, parent_pid):
+                print(f"Skip killing current process (pid={pid}) on port {port}")
+                continue
+            os.kill(pid, signal.SIGKILL)
             print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
@@ -66,6 +73,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -79,6 +87,9 @@ def setup_and_run_server():
     """
     print("Pre-test port cleanup...")
     clean_ports()
+    print("log dir clean ")
+    if os.path.exists("log") and os.path.isdir("log"):
+        shutil.rmtree("log")
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
@@ -150,6 +161,7 @@ def setup_and_run_server():
     try:
         os.killpg(process.pid, signal.SIGTERM)
         print(f"API server (pid={process.pid}) terminated")
+        clean_ports()
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
 
@@ -524,7 +536,8 @@ def test_chat_with_thinking(openai_client, capsys):
         stream=True,
         max_tokens=10,
     )
-    completion_tokens = reasoning_tokens = 1
+    completion_tokens = 1
+    reasoning_tokens = 0
     total_tokens = 0
     for chunk_id, chunk in enumerate(response):
         if chunk_id == 0:  # the first chunk is an extra chunk
