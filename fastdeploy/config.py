@@ -213,7 +213,7 @@ class ModelConfig:
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
             self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
-            if "torch_dtype" and "dtype" in self.model_config:
+            if "torch_dtype" in self.model_config and "dtype" in self.model_config:
                 raise ValueError(
                     "Only one of 'torch_dtype' or 'dtype' should be present in config.json. "
                     "Found both, which indicates an ambiguous model format. "

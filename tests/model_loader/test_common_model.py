@@ -30,20 +30,20 @@ TokensIdText = list[tuple[list[int], str]]
 def get_model_paths(base_model_name: str) -> tuple[str, str]:
     """return (fastdeploy_path, huggingface_path)"""
     # FastDeploy model path
-    fd_base_path = os.getenv("FD_MODEL_PATH")
+    fd_base_path = os.getenv("MODEL_PATH")
     if fd_base_path:
         fd_model_path = os.path.join(fd_base_path, base_model_name)
     else:
         fd_model_path = base_model_name
 
     # HuggingFace model path
-    hf_base_path = os.getenv("HF_MODEL_PATH")
-    if hf_base_path:
-        hf_model_path = os.path.join(hf_base_path, base_model_name)
-    else:
-        hf_model_path = base_model_name
+    torch_model_path = os.path.join(
+        fd_base_path,
+        "torch",
+        base_model_name,
+    )
 
-    return fd_model_path, hf_model_path
+    return fd_model_path, torch_model_path
 
 
 def check_tokens_id_and_text_close(
@@ -224,7 +224,7 @@ for model, cfg in hugging_face_model_param_map.items():
     "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
     hf_params,
 )
-def test_paddle_vs_huggingface_model(
+def test_paddle_vs_torch_model(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
@@ -232,9 +232,8 @@ def test_paddle_vs_huggingface_model(
     max_tokens: int,
     quantization: str,
 ) -> None:
-    """测试 Paddle 模型（default loader）和 HuggingFace 模型（default_v1 loader）"""
 
-    fd_model_path, hf_model_path = get_model_paths(model_name_or_path)
+    fd_model_path, torch_model_path = get_model_paths(model_name_or_path)
 
     result_queue = Queue()
 
@@ -255,12 +254,11 @@ def test_paddle_vs_huggingface_model(
     p_paddle.join()
     paddle_outputs = result_queue.get(timeout=60)
 
-    print(f"Testing HuggingFace model with default_v1 loader: {hf_model_path}")
     p_hf = Process(
         target=form_model_get_output,
         args=(
             fd_runner,
-            hf_model_path,
+            torch_model_path,
             tensor_parallel_size,
             max_model_len,
             max_tokens,
