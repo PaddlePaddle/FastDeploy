@@ -1,22 +1,39 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import argparse
 import os
 import subprocess
 import sys
 import time
 
+from fastdeploy.utils import get_logger, is_port_available
+
+logger = get_logger("multi_api_server", "multi_api_server.log")
+
 
 def start_servers(server_count, server_args, ports, metrics_ports):
     processes = []
-    print(f"✅ 启动服务器 端口: {ports} {server_args} {metrics_ports}")
+    logger.info(f"Starting servers on ports: {ports} with args: {server_args} and metrics ports: {metrics_ports}")
     for i in range(server_count):
-        # 为每个服务器计算端口号
-
         port = int(ports[i])
         metrics_port = int(metrics_ports[i])
 
         env = os.environ.copy()
         env["FD_LOG_DIR"] = f"log_{i}"
-        # 构建完整的命令
         cmd = [
             sys.executable,
             "-m",
@@ -33,21 +50,30 @@ def start_servers(server_count, server_args, ports, metrics_ports):
         # 启动子进程
         proc = subprocess.Popen(cmd, env=env)
         processes.append(proc)
-        print(f"✅ 启动服务器 #{i+1} (PID: {proc.pid}) 端口: {port} | 命令: {' '.join(cmd)}")
+        logger.info(f"Starting servers #{i+1} (PID: {proc.pid}) port: {port} | command: {' '.join(cmd)}")
 
     return processes
 
-
+def check_param(ports, num_servers):
+    assert len(ports.split(",")) == num_servers, "Number of ports must match num-servers"
+    for port in ports.split(","):
+        logger.info(f"check port {port}")
+        if not is_port_available(port):
+            raise ValueError(f"Port {port} is already in use.")
+    
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ports", default="8000,8002", type=str, help="ports to the http server")
     parser.add_argument("--num-servers", default=2, type=int, help="number of workers")
     parser.add_argument("--metrics-ports", default="8800,8802", type=str, help="ports for metrics server")
     parser.add_argument("--args", nargs=argparse.REMAINDER, help="remaining arguments are passed to api_server.py")
-    # parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
 
-    print(f"🚀 启动 {args.num_servers} 个服务器...")
+    logger.info(f"Starting {args.num_servers} servers on ports: {args.ports} with args: {args.args}")
+    # check_param(args.ports, args.num_servers)
+    # check_param(args.metrics_ports, args.num_servers)
+    # check_param(args.args.engine_worker_queue_port, args.num_servers)
+
     processes = start_servers(
         server_count=args.num_servers,
         server_args=args.args,
@@ -56,16 +82,14 @@ def main():
     )
 
     try:
-        print("\n📡 服务器正在运行 (按 Ctrl+C 停止)...")
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n🛑 停止所有服务器...")
         for proc in processes:
             proc.terminate()
         for proc in processes:
             proc.wait()
-        print("✅ 所有服务器已停止")
+        logger.info("All servers stopped.")
 
 
 if __name__ == "__main__":

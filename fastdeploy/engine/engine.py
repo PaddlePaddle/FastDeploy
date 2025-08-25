@@ -433,6 +433,7 @@ class LLMEngine:
         )
 
         ports = ",".join(self.cfg.engine_worker_queue_port)
+        ips = ",".join(self.cfg.ips)
         arguments = (
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
@@ -461,7 +462,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
-            f" --ips {self.cfg.ips}"
+            f" --ips {ips}"
         )
 
         worker_append_flag = {
@@ -477,8 +478,9 @@ class LLMEngine:
         for worker_flag, value in worker_append_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
+        llm_logger.info(f"gaoziyuan test ips :{self.cfg.ips}")
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + f" --ips {','.join(self.cfg.ips)} --nnodes {len(self.cfg.ips)}"
+            pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(

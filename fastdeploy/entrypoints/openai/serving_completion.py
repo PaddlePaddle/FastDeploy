@@ -48,6 +48,8 @@ class OpenAIServingCompletion:
                 self.master_ip = ips[0]
             else:
                 self.master_ip = ips.split(",")[0]
+        else:
+            self.master_ip = "0.0.0.0"
         
 
     async def _ensure_connection_manager(self):

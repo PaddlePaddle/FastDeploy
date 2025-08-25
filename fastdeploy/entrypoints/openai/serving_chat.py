@@ -57,6 +57,8 @@ class OpenAIServingChat:
                 self.master_ip = ips[0]
             else:
                 self.master_ip = ips.split(",")[0]
+        else:
+            self.master_ip = "0.0.0.0"
         api_server_logger.info(f"master ip: {self.master_ip}")
 
     async def _ensure_connection_manager(self):
@@ -72,16 +74,13 @@ class OpenAIServingChat:
         """
         Create a new chat completion using the specified parameters.
         """
-        api_server_logger.info(f"request: {request} {self.engine_client.is_master}")
         if not self._check_master():
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
 
         if self.models:
-            api_server_logger.info(f"master ip: {self.models}")
             is_supported, request.model = self.models.is_supported_model(request.model)
-            api_server_logger.info(f"model check: {is_supported} {request.model}")
             if not is_supported:
                 err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
                 api_server_logger.error(err_msg)
@@ -113,9 +112,7 @@ class OpenAIServingChat:
                 error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
                 return ErrorResponse(code=400, message=error_msg)
-            api_server_logger.info(f"create chat completion request: {request_id}")
             del current_req_dict
-            api_server_logger.info(f"create chat completion request: {request_id}")
 
             if request.stream:
                 return self.chat_completion_stream_generator(
@@ -194,11 +191,8 @@ class OpenAIServingChat:
 
         try:
             await self._ensure_connection_manager()
-            api_server_logger.info(f"create chat completion request: {request_id}")
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
-            api_server_logger.info(f"create chat completion request: {request_id}")
             dealer.write([b"", request_id.encode("utf-8")])
-            api_server_logger.info(f"create chat completion request: {request_id}")
             choices = []
             current_waiting_time = 0
             while num_choices > 0:
@@ -382,7 +376,6 @@ class OpenAIServingChat:
         """
         Full chat completion generator.
         """
-        api_server_logger.info(f"create chat completion request: {request_id}")
         created_time = int(time.time())
         final_res = None
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
@@ -390,13 +383,10 @@ class OpenAIServingChat:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
 
         include_stop_str_in_output = request.include_stop_str_in_output
-        api_server_logger.info(f"create chat completion request: {request_id}")
         try:
             await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
-            api_server_logger.info(f"create chat completion request: {request_id}")
             dealer.write([b"", request_id.encode("utf-8")])
-            api_server_logger.info(f"create chat completion request: {request_id}")
             final_res = None
             previous_num_tokens = 0
             current_waiting_time = 0

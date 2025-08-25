@@ -221,13 +221,11 @@ class EngineSevice:
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-            # local_data_parallel_id=min(
-            #     self.cfg.worker_num_per_node * self.cfg.node_rank,
-            #     self.cfg.parallel_config.data_parallel_size - 1,
-            # ),
-            local_data_parallel_id=0
+            local_data_parallel_id=min(
+                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
+                self.cfg.parallel_config.data_parallel_size - 1,
+            )
         )
-
     def insert_tasks(self, tasks, current_id=-1, allocated=False):
         """
         Insert tasks to engine.

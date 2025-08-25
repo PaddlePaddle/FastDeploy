@@ -282,7 +282,6 @@ class ParallelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
         if isinstance(self.engine_worker_queue_port, str):
-            logger.info(f"engine_worker_queue_port type is str: {self.engine_worker_queue_port}")
             self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
             logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
         elif isinstance(self.engine_worker_queue_port, int):
@@ -1055,8 +1054,7 @@ class FDConfig:
         if num_ranks > self.max_chips_per_node:
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
-            logger.warning(f"nnode: {nnode}, but got {self.nnode} current ips {self.ips}")
-            self.nnode = nnode
+            assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
 
             # assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
         else:

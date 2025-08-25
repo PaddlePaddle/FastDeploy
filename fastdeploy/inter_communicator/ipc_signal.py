@@ -18,6 +18,8 @@ from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
 
+from fastdeploy.utils import llm_logger
+
 
 def shared_memory_exists(name: str) -> bool:
     """Check if a shared memory block with the given name exists.
@@ -35,7 +37,7 @@ def shared_memory_exists(name: str) -> bool:
     except FileNotFoundError:
         return False
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        llm_logger.error(f"Unexpected error: {e}")
         return False
 
 
@@ -79,7 +81,7 @@ class IPCSignal:
 
         if create:
             if shared_memory_exists(name):
-                print(f"ShareMemory: {name} already exists, delete it")
+                llm_logger.warning(f"ShareMemory: {name} already exists, delete it")
                 SharedMemory(name=name, create=False).unlink()
             self.shm = SharedMemory(create=True, size=array.nbytes, name=name)
             self.value: np.ndarray = np.ndarray(array.shape, dtype=array.dtype, buffer=self.shm.buf)

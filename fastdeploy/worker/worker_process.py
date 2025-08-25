@@ -431,13 +431,13 @@ class PaddleDisWorkerProc:
         """Initialize device and Construct model runner"""
         self.worker.init_device()
 
-    def start_queue_service(self):
+    def start_task_queue_service(self):
         # Initialize task queue
         task_address = (
             self.parallel_config.pod_ip,
             self.parallel_config.engine_worker_queue_port,
         )
-        logger.info(f"gaoziyuan test address {task_address}")
+        logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,
             is_server=False,
@@ -786,7 +786,7 @@ def run_worker_proc() -> None:
     # Initialize health status
     worker_proc.init_health_status()
 
-    worker_proc.start_queue_service()
+    worker_proc.start_task_queue_service()
 
     # Start event loop
     if fd_config.parallel_config.use_ep:
