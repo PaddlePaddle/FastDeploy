@@ -287,6 +287,7 @@ jobs:
           wget ${fd_archive_url}
           tar -xf FastDeploy.tar.gz
           cd FastDeploy
+          git log -n 3
           if [ -z "${diff_cov_file_url}" ]; then
             echo "No diff coverage file URL provided."
             exit 0
@@ -294,11 +295,9 @@ jobs:
           wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
       - name: Upload diff coverage report
         if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v4
         with:
           files: ./FastDeploy/diff_coverage.xml
           name: python diff coverage
           verbose: true
-          disable_search: true
-          commit_parent: false
           flags: diff
