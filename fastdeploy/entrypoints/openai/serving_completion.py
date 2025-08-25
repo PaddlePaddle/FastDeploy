@@ -128,22 +128,22 @@ class OpenAIServingCompletion:
             return ErrorResponse(code=408, message=error_msg)
 
         try:
-            for idx, prompt in enumerate(request_prompts):
-                request_id_idx = f"{request_id}-{idx}"
-                current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                try:
+            try:
+                for idx, prompt in enumerate(request_prompts):
+                    request_id_idx = f"{request_id}-{idx}"
+                    current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
                     prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
-                except Exception as e:
-                    error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
-                    api_server_logger.error(error_msg)
-                    return ErrorResponse(message=str(e), code=400)
-
-                del current_req_dict
+                    del current_req_dict
+            except Exception as e:
+                error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
+                api_server_logger.error(error_msg)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(message=str(e), code=400)
 
             if request.stream:
                 return self.completion_stream_generator(
