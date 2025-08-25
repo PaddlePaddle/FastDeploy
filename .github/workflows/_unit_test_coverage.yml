@@ -27,11 +27,23 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      github-token:
+        required: true
 
 jobs:
+  check_cov_skip:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: coverage
+
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
     timeout-minutes: 60
+    needs: check_cov_skip
+    if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
@@ -159,6 +171,7 @@ jobs:
 
           python -m pip install coverage
           python -m pip install diff-cover
+          python -m pip install pytest-cov
           python -m pip install jsonschema aistudio_sdk==0.3.5
           python -m pip install ${fd_wheel_url}
           if [ -d "tests/plugins" ]; then
