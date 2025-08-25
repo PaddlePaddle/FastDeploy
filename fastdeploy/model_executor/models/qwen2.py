@@ -52,6 +52,7 @@ class Qwen2MLP(nn.Layer):
     ) -> None:
         super().__init__()
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        print("qwen2的fd_config_format", fd_config.model_config.model_format)
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -334,9 +335,9 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
-            model_format = self.fd_config.model_config.model_format == "torch"
+            model_format = self.fd_config.model_config.model_format
             # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
-            if model_format:
+            if model_format == "torch":
                 loaded_weight_name = loaded_weight_name.replace("model", "qwen2")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:

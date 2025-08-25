@@ -97,7 +97,7 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "model_format": self.fd_config.model_config.model_format == "torch",
+                        "model_format": self.fd_config.model_config.model_format,
                     },
                 )
                 if self.nranks > 1:
@@ -116,7 +116,7 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "model_format": self.fd_config.model_config.model_format == "torch",
+                        "model_format": self.fd_config.model_config.model_format,
                     },
                 )
 
