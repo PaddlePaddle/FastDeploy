@@ -959,10 +959,6 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
-        assert not (
-            self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
-        ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
-
         if isinstance(self.engine_worker_queue_port, int):
             self.engine_worker_queue_port = str(self.engine_worker_queue_port)
         if isinstance(self.engine_worker_queue_port, str):
