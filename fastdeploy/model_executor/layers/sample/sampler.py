@@ -282,6 +282,7 @@ class Sampler(nn.Layer):
           Sampled token rank tensor, (num tokens)
         """
         assert token_ids.dtype == paddle.int64
+        logprobs.clip_(min=paddle.finfo(logprobs.dtype).min)
         # Get with the logprob of the prompt or sampled token.
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
