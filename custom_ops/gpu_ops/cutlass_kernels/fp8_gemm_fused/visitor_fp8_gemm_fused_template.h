@@ -69,6 +69,9 @@ bool per_channel_fp8_fp8_gemm_scale_bias(GemmEpilogueAllParams params, typename 
   Gemm per_channel_fp8_gemm;
 
   cutlass::Status status = per_channel_fp8_gemm.can_implement(args);
+
+  printf("%s\n", cutlassGetStatusString(status));
+
   if (status != cutlass::Status::kSuccess) {
     std::cerr << "per_channel_fp8_gemm::can_implement() failed" << std::endl;
     return false;

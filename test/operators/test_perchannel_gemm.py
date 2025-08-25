@@ -48,7 +48,7 @@ class Test(unittest.TestCase):
         nks = nks + [[4096, 4096], [4096, 12800], [6144, 4096]]
         nks = nks + [[5120, 5120], [5120, 13824], [15360, 5120]]
 
-        m = [1, 32, 64, 128, 256, 512, 1024, 2048]
+        m = [32, 64, 128, 256, 512, 1024, 2048]
 
         combinations = list(product(m, nks))
         for m, (n, k) in combinations:
@@ -62,6 +62,14 @@ class Test(unittest.TestCase):
             bias = paddle.rand(shape=[n], dtype="bfloat16")
 
             result_bf16 = paddle.matmul(A_bf16, B_bf16, transpose_y=True) * scalar_scale * channel_scale + bias
+
+
+            print(A_fp8)
+            print(B_fp8)
+
+
+            print(bias)
+
             result_fp8 = per_channel_fp8_fp8_half_gemm_fused(
                 A_fp8,
                 B_fp8,

@@ -18,7 +18,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Union
 
-import partial_json_parser
+#import partial_json_parser
 
 
 def random_tool_call_id() -> str:

@@ -656,7 +656,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 shape=[
                     layer.num_local_experts,
                     layer.hidden_size // self.quant_config.weight_block_size[0],
-                    layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+                    (layer.moe_intermediate_size + self.quant_config.weight_block_size[1] - 1 )// self.quant_config.weight_block_size[1],
                 ],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(0),
@@ -807,9 +807,14 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),
         )
 
+        tmp = paddle.ones([token_num*8, 512], dtype="bfloat16")
+        tmp[:,:448] = intermediate_cache2
+
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            intermediate_cache2, self.quant_config.weight_block_size[0]
+            tmp, self.quant_config.weight_block_size[0]
         )
+        x_q = x_q[:, :448]
+        x_scale = x_scale[:, :]
 
         fused_moe_kernel_paddle[grid](
             x_q,
