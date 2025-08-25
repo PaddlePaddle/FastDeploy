@@ -613,6 +613,13 @@ def parse_args():
         help="The ips of multinode deployment.",
     )
 
+    parser.add_argument(
+        "--lm_head_dtype",
+        type=str,
+        default=None,
+        help="The data type of lm_head",
+    )
+
     args = parser.parse_args()
     return args
 

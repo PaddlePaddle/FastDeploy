@@ -128,6 +128,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.lm_head_dtype: str = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

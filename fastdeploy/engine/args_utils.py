@@ -360,6 +360,12 @@ class EngineArgs:
         - "new_loader": new  loader.
     """
 
+    lm_head_dtype: Optional[str] = None
+    """
+    Flag to specify the data type of lm_head. Default is None (Using model default dtype).
+    Specify the data type for the lm_head layer in ['float32', 'bfloat16', 'float16'] when 'lm_head_dtype' not in the `config.json` of model
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -559,6 +565,12 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.early_stop_config,
             help="the config for early stop.",
+        )
+        model_group.add_argument(
+            "--lm_head-dtype",
+            type=str,
+            default=EngineArgs.lm_head_dtype,
+            help="Specify the data type for the lm_head layer in ['float32', 'bfloat16', 'float16'] when 'lm_head_dtype' not in the `config.json` of model.",
         )
 
         # Parallel processing parameters group

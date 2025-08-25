@@ -61,6 +61,10 @@ class ParallelLMHead(nn.Layer):
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.column_cut = True
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.dtype = paddle.get_default_dtype()
+        lm_head_dtype = fd_config.model_config.lm_head_dtype
+        if lm_head_dtype is not None and lm_head_dtype != "None":
+            self.dtype = lm_head_dtype
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -133,6 +137,12 @@ class ParallelLMHead(nn.Layer):
             if self.bias_key is not None:
                 bias = get_tensor(state_dict.pop(self.bias_key)).astype(paddle.get_default_dtype())
                 self.linear.bias.set_value(bias)
+        if self.dtype == "float32":
+            self.float()
+        elif self.dtype == "float16":
+            self.float16()
+        else:
+            self.bfloat16()
 
     def forward(self, input: paddle.Tensor) -> paddle.Tensor:
         """
@@ -144,7 +154,7 @@ class ParallelLMHead(nn.Layer):
         Returns:
             Tensor: The output tensor after processing through the layer.
         """
-        logits = input
+        logits = input.cast(self.dtype)
         if self.use_ep:
             if self.bias_key is None:
                 logits = paddle.matmul(logits, self.weight)
