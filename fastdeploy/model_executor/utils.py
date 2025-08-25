@@ -157,7 +157,7 @@ def default_weight_loader(fd_config: FDConfig) -> None:
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
         output_dim = getattr(param, "output_dim", None)
-        model_format = getattr(param, "model_format", None)
+        model_format = getattr(param, "model_format", "")
         if model_format == "torch":
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim

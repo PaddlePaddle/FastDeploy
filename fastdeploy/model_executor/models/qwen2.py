@@ -52,7 +52,6 @@ class Qwen2MLP(nn.Layer):
     ) -> None:
         super().__init__()
         self.nranks = fd_config.parallel_config.tensor_parallel_size
-        print("qwen2的fd_config_format", fd_config.model_config.model_format)
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
