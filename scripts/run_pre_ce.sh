@@ -49,7 +49,7 @@ for subdir in "$run_path"*/; do
                     fi
 
                     failed_files+=("$subdir$file")
-                    exit 1
+                    # exit 1
                 fi
                 echo "------------------------------------------------------------"
             fi
