@@ -174,6 +174,10 @@ macro(
   separate_arguments(arg_device_o_extra_flags)
   set(arg_host_o_extra_flags ${host_o_extra_flags})
   separate_arguments(arg_host_o_extra_flags)
+  set(MTP_KERNEL_COMPILE_FLAGS "")
+  if(${kernel_path} MATCHES "mtp_kernel")
+    list(APPEND MTP_KERNEL_COMPILE_FLAGS -mllvm -fix-mfence=all)
+  endif()
 
   add_custom_command(
     OUTPUT ${kernel_name}.device.bin.o ${kernel_name}.o
@@ -181,8 +185,8 @@ macro(
       ${XPU_CLANG} -std=c++11 ${OPT_LEVEL} ${arg_device_o_extra_flags} -c
       ${kernel_path} -D ${xpu_n_macro} --target=${TARGET_ARCH} ${HOST_XPU_FLAGS}
       --basename ${kernel_name} -fno-builtin --xpu-arch=${xpu_n} -fPIC
-      -Wno-int-to-void-pointer-cast -Wno-int-to-pointer-cast -Werror -mllvm
-      --xpu-inline-cost -mllvm --xpu-inline-hot-call -I${XDNN_INC_DIR} -I${XRE_INC_DIR}
+      -Wno-int-to-void-pointer-cast -Wno-int-to-pointer-cast -Werror ${MTP_KERNEL_COMPILE_FLAGS}
+      -mllvm --xpu-inline-cost -mllvm --xpu-inline-hot-call -I${XDNN_INC_DIR} -I${XRE_INC_DIR}
       -fxpu-launch-return
       -I${CMAKE_CURRENT_SOURCE_DIR}/include -I${CMAKE_CURRENT_SOURCE_DIR}/src
       -I${CMAKE_CURRENT_SOURCE_DIR}/src/kernel

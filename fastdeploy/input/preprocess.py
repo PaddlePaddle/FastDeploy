@@ -75,7 +75,10 @@ class InputPreprocessor:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
         if self.tool_parser:
             tool_parser_obj = ToolParserManager.get_tool_parser(self.tool_parser)
-        architectures = ModelConfig({"model": self.model_name_or_path}).architectures[0]
+
+        config = ModelConfig({"model": self.model_name_or_path})
+        architectures = config.architectures[0]
+
         if not self.enable_mm:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.text_processor import DataProcessor
@@ -94,9 +97,7 @@ class InputPreprocessor:
                     tool_parser_obj=tool_parser_obj,
                 )
         else:
-            if not ErnieArchitectures.contains_ernie_arch(architectures):
-                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VL model.")
-            else:
+            if ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
 
                 self.processor = ErnieMoEVLProcessor(
@@ -105,5 +106,15 @@ class InputPreprocessor:
                     mm_processor_kwargs=self.mm_processor_kwargs,
                     reasoning_parser_obj=reasoning_parser_obj,
                     tool_parser_obj=tool_parser_obj,
+                )
+            else:
+                from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
+
+                self.processor = QwenVLProcessor(
+                    config=config,
+                    model_name_or_path=self.model_name_or_path,
+                    limit_mm_per_prompt=self.limit_mm_per_prompt,
+                    mm_processor_kwargs=self.mm_processor_kwargs,
+                    reasoning_parser_obj=reasoning_parser_obj,
                 )
         return self.processor
