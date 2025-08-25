@@ -1083,7 +1083,7 @@ class FDConfig:
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
-            self.master_ip = self.host_ip
+            self.master_ip = "0.0.0.0"
         else:
             self.is_master = False
             self.master_ip = self.ips[0]
