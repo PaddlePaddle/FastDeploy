@@ -1190,6 +1190,22 @@ class FDConfig:
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 
+        # Check graph optimization config
+        if self.graph_opt_config.use_cudagraph:
+            # NOTE(gongshaotian): CUDAGraph cannot used with Speculative Decoding
+            assert (
+                self.speculative_config.method is None
+            ), "CUDAGraph does not support the simultaneous use of Speculative Decoding"
+            # NOTE(gongshaotian): CUDAGraph cannot be applied to multimodal model temporarily
+            assert self.model_config.enable_mm is False, "CUDAGraph cannot be applied to multimodal model temporarily"
+            # NOTE(gongshaotian): CUDAGraph cannot be used in RL training scene temporarily
+            assert (
+                self.load_config.dynamic_load_weight is False
+            ), "CUDAGraph cannot be used in RL training scene temporarily"
+        if self.graph_opt_config.graph_opt_level > 0:
+            # NOTE(gongshaotian): Static graph cannot be used in RL scene temporarily
+            assert self.load_config.dynamic_load_weight is False, "Static graph cannot be used in RL scene temporarily"
+
     def print(self):
         """
         print all config
