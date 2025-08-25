@@ -213,12 +213,24 @@ class ModelConfig:
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
             self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
-            if "torch_dtype" in self.model_config:
-                self.model_format = "hugging_face"
+            if "torch_dtype" and "dtype" in self.model_config:
+                raise ValueError(
+                    "Only one of 'torch_dtype' or 'dtype' should be present in config.json. "
+                    "Found both, which indicates an ambiguous model format. "
+                    "Please ensure your config.json contains only one dtype field."
+                )
+            elif "torch_dtype" in self.model_config:
+                self.model_format = "torch"
                 logger.info("The model format is Hugging Face")
-            else:
+            elif "dtype" in self.model_config:
                 self.model_format = "paddle"
                 logger.info("The model format is Paddle")
+            else:
+                raise ValueError(
+                    "Unknown model format. Please ensure your config.json contains "
+                    "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
+                    f"Config file path: {config_path}"
+                )
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -697,7 +709,6 @@ class LoadConfig:
             - 'ipc': Real-time IPC streaming with automatic resharding
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
             - None: No dynamic loading
-        hugging_face_format: Whether to use models in Hugging Face format
     """
 
     def __init__(
@@ -705,7 +716,6 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
-        self.hugging_face_format: bool = False
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
@@ -1050,8 +1060,8 @@ class FDConfig:
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
 
-        if self.load_config.hugging_face_format:
-            self.model_config.model_format = "hugging_face"
+        if envs.HUGGING_FACE_FORMAT:
+            self.model_config.model_format = "torch"
 
         # TODO
         self.max_prefill_batch = 3

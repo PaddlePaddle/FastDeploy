@@ -359,10 +359,6 @@ class EngineArgs:
         - "default": default loader.
         - "default_v1": default_v1 loader.
     """
-    hugging_face_format: bool = False
-    """
-    Whether to use models in Hugging Face format
-    """
 
     def __post_init__(self):
         """
@@ -626,12 +622,6 @@ class EngineArgs:
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
                  default/new_loader.",
-        )
-        load_group.add_argument(
-            "--hugging_face_format",
-            action=DeprecatedOptionWarning,
-            default=EngineArgs.hugging_face_format,
-            help="Enable when loading models in Hugging Face format",
         )
 
         # CacheConfig parameters group

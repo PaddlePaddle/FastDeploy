@@ -334,9 +334,9 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
-            hugging_face_format = self.fd_config.model_config.model_format == "hugging_face"
+            model_format = self.fd_config.model_config.model_format == "torch"
             # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
-            if hugging_face_format:
+            if model_format:
                 loaded_weight_name = loaded_weight_name.replace("model", "qwen2")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:

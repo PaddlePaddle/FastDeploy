@@ -57,7 +57,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             {
                 **extra_weight_attrs,
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                "hugging_face_format": extra_weight_attrs.get("hugging_face_format", False),
+                "model_format": extra_weight_attrs.get("model_format", False),
             },
         )
 
@@ -344,7 +344,7 @@ class ColumnParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
-            hugging_face_format=fd_config.model_config.model_format == "hugging_face",
+            model_format=fd_config.model_config.model_format == "torch",
         )
         if self.nranks > 0:
             if self.with_bias:
@@ -404,8 +404,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        hugging_face_format = getattr(param, "hugging_face_format", None)
-        if hugging_face_format:
+        model_format = getattr(param, "model_format", None)
+        if model_format:
             loaded_weight = loaded_weight.transpose([1, 0])
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
@@ -528,8 +528,8 @@ class QKVParallelLinear(ColumnParallelLinear):
         assert output_dim is not None
         dim = -1 if output_dim else 0
         head_dim = param.shape[dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
-        hugging_face_format = getattr(param, "hugging_face_format", False)
-        if hugging_face_format:
+        model_format = getattr(param, "model_format", False)
+        if model_format:
             loaded_weight = loaded_weight.transpose([1, 0])
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
@@ -721,7 +721,7 @@ class RowParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
-            hugging_face_format=fd_config.model_config.model_format == "hugging_face",
+            model_format=fd_config.model_config.model_format == "torch",
         )
         if self.nranks > 0:
             if self.with_bias:

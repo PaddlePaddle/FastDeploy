@@ -86,6 +86,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
     # support max connections
     "FD_SUPPORT_MAX_CONNECTIONS": lambda: int(os.getenv("FD_SUPPORT_MAX_CONNECTIONS", "1024")),
+    "HUGGING_FACE_FORMAT": lambda: os.getenv("HUGGING_FACE_FORMAT", "False"),
 }
 
 
