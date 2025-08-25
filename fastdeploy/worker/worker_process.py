@@ -331,10 +331,7 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
-            if req_dicts is not None:
-                self.worker.execute_model(req_dicts, num_running_requests)
-            else:
-                self.worker.execute_model(num_running_requests)
+            self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
 
     def initialize_kv_cache(self) -> None:
@@ -610,25 +607,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
-    parallel_config.tensor_parallel_size = args.tensor_parallel_size
-    parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
-    parallel_config.data_parallel_size = args.data_parallel_size
-    parallel_config.data_parallel_rank = local_rank // args.tensor_parallel_size
-    parallel_config.expert_parallel_size = args.expert_parallel_size
+    parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
+    parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
-    if args.expert_parallel_size > 1:
-        expert_parallel_rank = int(local_rank % args.expert_parallel_size)
+    if parallel_config.expert_parallel_size > 1:
+        expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
 
-        num_experts_per_rank = num_experts // args.expert_parallel_size
+        num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
+    parallel_config.set_tp_group()
 
     load_config = LoadConfig(vars(args))
 

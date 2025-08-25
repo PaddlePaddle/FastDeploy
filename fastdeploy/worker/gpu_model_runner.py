@@ -1192,15 +1192,19 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Update chunked prefill related parameters
         """
+        print("update enable_chunked_prefill: ", self.cache_config.enable_chunked_prefill)
+        print("update tasks: ", tasks)
         if not self.cache_config.enable_chunked_prefill:
             return
-        for task in tasks:
-            if task.get("prefill_chunk_info", None) is None:
-                continue
 
-            if task.chunk_idx > len(task.prefill_chunk_info):
-                continue
-            self.restore_chunked_prefill_request[task.request_id] = task
+        if tasks is not None:
+            for task in tasks:
+                if task.get("prefill_chunk_info", None) is None:
+                    continue
+
+                if task.chunk_idx > len(task.prefill_chunk_info):
+                    continue
+                self.restore_chunked_prefill_request[task.request_id] = task
 
         for id, task in list(self.restore_chunked_prefill_request.items()):
             idx = task.idx
@@ -1292,6 +1296,9 @@ class GPUModelRunner(ModelRunnerBase):
             A list of indices corresponding to the requests that need to be skipped.
         """
         skip_idx_list = []
+        print("enable_chunked_prefill: ", self.cache_config.enable_chunked_prefill)
+        print("guided_backend: ", self.guided_backend)
+        print("model_forward_batch: ", model_forward_batch)
         if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
             return skip_idx_list
 
@@ -1321,10 +1328,9 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
-        print("model_forward_batch: ", model_forward_batch)
-        print("num_running_requests: ", num_running_requests)
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
+        print("num_running_requests: ", num_running_requests)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
 
@@ -1470,11 +1476,11 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
-        # 7. Updata 'infer_seed' and step_cuda()
+        # 7. Update 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 
-        if (not envs.ENABLE_V1_KVCACHE_SCHEDULER) and (model_forward_batch is not None):
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
