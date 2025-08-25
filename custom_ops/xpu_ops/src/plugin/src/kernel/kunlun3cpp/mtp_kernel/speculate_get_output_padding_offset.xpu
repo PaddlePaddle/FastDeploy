@@ -1,0 +1,63 @@
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_get_output_padding_offset(
+    int* output_padding_offset,
+    int* output_cum_offsets,
+    const int* output_cum_offsets_tmp,
+    const int* seq_lens_output,
+    const int bsz,
+    const int max_seq_len) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+
+  int seq_lens_output_lm;
+  int cum_offset_lm;
+
+  for (int bi = clusterid; bi < bsz; bi += nclusters) {
+    if (bi == 0) {
+      cum_offset_lm = 0;
+    } else {
+      GM2LM_ASYNC(output_cum_offsets_tmp + bi - 1, &cum_offset_lm, sizeof(int));
+    }
+    GM2LM_ASYNC(seq_lens_output + bi, &seq_lens_output_lm, sizeof(int));
+    mfence_lm();
+
+    for (int i = cid; i < seq_lens_output_lm; i += ncores) {
+      LM2GM_ASYNC(&cum_offset_lm,
+                  output_padding_offset + bi * max_seq_len - cum_offset_lm + i,
+                  sizeof(int));
+    }
+    if (cid == 0) {
+      LM2GM_ASYNC(&cum_offset_lm, output_cum_offsets + bi, sizeof(int));
+    }
+    mfence_lm();
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3

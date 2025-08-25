@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -55,6 +56,37 @@ class UsageInfo(BaseModel):
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
 
 
+class ModelPermission(BaseModel):
+    id: str = Field(default_factory=lambda: f"modelperm-{str(uuid.uuid4().hex)}")
+    object: str = "model_permission"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    allow_create_engine: bool = False
+    allow_sampling: bool = True
+    allow_logprobs: bool = True
+    allow_search_indices: bool = False
+    allow_view: bool = True
+    allow_fine_tuning: bool = False
+    organization: str = "*"
+    group: Optional[str] = None
+    is_blocking: bool = False
+
+
+class ModelInfo(BaseModel):
+    id: str
+    object: str = "model"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    owned_by: str = "FastDeploy"
+    root: Optional[str] = None
+    parent: Optional[str] = None
+    max_model_len: Optional[int] = None
+    permission: list[ModelPermission] = Field(default_factory=list)
+
+
+class ModelList(BaseModel):
+    object: str = "list"
+    data: list[ModelInfo] = Field(default_factory=list)
+
+
 class FunctionCall(BaseModel):
     """
     Function call.
@@ -72,7 +104,6 @@ class ToolCall(BaseModel):
     id: str = None
     type: Literal["function"] = "function"
     function: FunctionCall
-    index: int
 
 
 class DeltaFunctionCall(BaseModel):
@@ -94,6 +125,18 @@ class DeltaToolCall(BaseModel):
     type: Optional[Literal["function"]] = None
     index: int
     function: Optional[DeltaFunctionCall] = None
+
+
+class ExtractedToolCallInformation(BaseModel):
+    # indicate if tools were called
+    tools_called: bool
+
+    # extracted tool calls
+    tool_calls: Optional[list[ToolCall]] = None
+
+    # content - per OpenAI spec, content AND tool calls can be returned rarely
+    # But some models will do this intentionally
+    content: Optional[str] = None
 
 
 class FunctionDefinition(BaseModel):
@@ -126,6 +169,10 @@ class ChatMessage(BaseModel):
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -183,6 +230,10 @@ class DeltaMessage(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
 
 
 class ChatCompletionResponseStreamChoice(BaseModel):
@@ -219,6 +270,10 @@ class CompletionResponseChoice(BaseModel):
     text: str
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
@@ -261,6 +316,10 @@ class CompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
@@ -344,6 +403,9 @@ class CompletionRequest(BaseModel):
     echo: Optional[bool] = False
     frequency_penalty: Optional[float] = None
     logprobs: Optional[int] = None
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
     max_tokens: Optional[int] = None
     n: int = 1
     presence_penalty: Optional[float] = None
@@ -475,6 +537,11 @@ class ChatCompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = None
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
+
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
+
     # remove max_tokens when field is removed from OpenAI API
     max_tokens: Optional[int] = Field(
         default=None,
@@ -505,6 +572,7 @@ class ChatCompletionRequest(BaseModel):
 
     # doc: start-completion-extra-params
     chat_template_kwargs: Optional[dict] = None
+    chat_template: Optional[str] = None
     reasoning_max_tokens: Optional[int] = None
     structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -531,6 +599,8 @@ class ChatCompletionRequest(BaseModel):
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
+        req_dict["temp_scaled_logprobs"] = self.temp_scaled_logprobs
+        req_dict["top_p_normalized_logprobs"] = self.top_p_normalized_logprobs
 
         # parse request model into dict, priority: request params > metadata params
         if self.metadata is not None:
@@ -547,12 +617,13 @@ class ChatCompletionRequest(BaseModel):
             if "messages" in req_dict:
                 del req_dict["messages"]
         else:
-            assert len(self.messages) > 0
-
-        # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-        if self.disable_chat_template:
-            req_dict["prompt"] = req_dict["messages"][0]["content"]
-            del req_dict["messages"]
+            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+            assert (
+                len(req_dict["messages"]) > 0
+            ), "messages can not be an empty list, unless prompt_token_ids is passed"
+            if self.disable_chat_template:
+                req_dict["prompt"] = req_dict["messages"][0]["content"]
+                del req_dict["messages"]
 
         guided_json_object = None
         if self.response_format is not None:

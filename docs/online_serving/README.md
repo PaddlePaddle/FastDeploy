@@ -45,8 +45,9 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
-  ]
+    {"role": "user", "content": "Hello!"}
+  ],
+  "logprobs": true, "top_logprobs": 0,
 }'
 ```
 
@@ -161,6 +162,9 @@ The following extra parameters are supported:
 chat_template_kwargs: Optional[dict] = None
 # Additional parameters passed to the chat template, used for customizing dialogue formats (default None).
 
+chat_template: Optional[str] = None
+# Custom chat template will override the model's default chat template (default None).
+
 reasoning_max_tokens: Optional[int] = None
 # Maximum number of tokens to generate during reasoning (e.g., CoT, chain of thought) (default None means using global max_tokens).
 
@@ -190,6 +194,12 @@ max_streaming_response_tokens: Optional[int] = None
 
 disable_chat_template: Optional[bool] = False
 # Whether to disable chat template rendering, using raw input directly (default False means template is enabled).
+
+temp_scaled_logprobs: Optional[bool] = False
+# Whether to divide the logits by the temperature coefficient when calculating logprobs (default is False, meaning the logits are not divided by the temperature coefficient).
+
+top_p_normalized_logprobs: Optional[bool] = False
+# Whether to perform top-p normalization when calculating logprobs (default is False, indicating that top-p normalization is not performed).
 ```
 
 ### Differences in Return Fields
