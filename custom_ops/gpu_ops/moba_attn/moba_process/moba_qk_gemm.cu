@@ -233,7 +233,7 @@ __global__ void qk_gemm_kernel(
     auto smem_thr_copy_QK = smem_tiled_copy_QK.get_thread_slice(tidx);
     Tensor tsQK = smem_thr_copy_QK.partition_D(sQK);
 
-    const int n_blocks = is_split_kv ? 1 : cute::ceil_div(cute::ceil_div(seq_len_k, kMobaBlockSize), kBlockN);
+    const int n_blocks = is_split_kv ? 1 : cute::ceil_div(cute::ceil_div(seq_len_qk, kMobaBlockSize), kBlockN);
 
     #pragma unroll
     for (int n_block = 0; n_block < n_blocks; ++n_block) {
@@ -453,10 +453,10 @@ PD_BUILD_OP(moba_qk_gemm)
         "seq_len_encoder",
         "seq_len_decoder",
         "cu_seq_q",
-        "cu_seq_k",
-        "max_seq_q",
-        "max_seq_k"})
+        "cu_seq_k"})
     .Attrs({
+        "max_seq_q: int",
+        "max_seq_k: int",
         "head_num: int",
         "kv_head_num: int",
         "is_split_kv: bool",

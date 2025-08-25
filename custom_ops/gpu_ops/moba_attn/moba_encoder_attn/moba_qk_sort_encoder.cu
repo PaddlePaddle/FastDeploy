@@ -142,7 +142,15 @@ __global__ void qk_gate_sort_encoder_kernel(
 
     if (tidx == 0) {
         int cur_idx = 0;
-        for (int i = seq_len_moba - 2; i >= 0; --i) {
+        int idx = -1;
+        const int last_idx = seq_len_moba - 1;
+        while (last_idx + idx >= 0 && qk_gate_mem[last_idx + idx] == 0) {
+            idx--;
+        }
+        qk_continue_idx_mem[cur_idx] = -idx;
+        cur_idx++;
+
+        for (int i = last_idx - 1; i >= 0; --i) {
             if (qk_gate_mem[i] == 1) {
                 int idx = -1;
                 while (i + idx >= 0 && qk_gate_mem[i + idx] == 0) {
@@ -152,8 +160,7 @@ __global__ void qk_gate_sort_encoder_kernel(
                 cur_idx++;
             }
         }
-
-        qk_continue_idx_mem[cur_idx] = 10000000000000;
+        qk_continue_idx_mem[cur_idx] = 10000000;
     }
 
     __syncthreads();
@@ -321,10 +328,10 @@ PD_BUILD_OP(moba_qk_sort_encoder)
         "cu_seq_q",
         "cu_seq_k",
         "cu_seq_q_pack",
-        "q_pack_tokens",
-        "max_seq_q",
-        "max_seq_k"})
+        "q_pack_tokens"})
     .Attrs({
+        "max_seq_q: int",
+        "max_seq_k: int",
         "head_num: int",
         "kv_head_num: int",
         "top_k_left: int",

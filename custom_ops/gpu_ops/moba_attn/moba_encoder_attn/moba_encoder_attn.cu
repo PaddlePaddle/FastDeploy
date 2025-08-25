@@ -371,10 +371,10 @@ PD_BUILD_OP(moba_encoder_attn)
         "cu_seq_q_pack",
         "seq_len_encoder",
         "seq_len_decoder",
-        "out",
-        "max_seq_q",
-        "max_seq_k"})
+        "out"})
     .Attrs({
+        "max_seq_q: int",
+        "max_seq_k: int",
         "head_num: int",
         "kv_head_num: int",
         "head_dim: int",
