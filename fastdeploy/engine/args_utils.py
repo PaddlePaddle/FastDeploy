@@ -15,10 +15,10 @@
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
-import os
 
 from fastdeploy.engine.config import (
     CacheConfig,
@@ -315,6 +315,12 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    lm_head_dtype: Optional[str] = None
+    """
+    Flag to specify the data type of lm_head. Default is None (Using model default dtype).
+    Specify the data type for the lm_head layer in ['float32', 'bfloat16', 'float16'] when 'lm_head_dtype' not in the `config.json` of model
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -465,6 +471,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--lm_head-dtype",
+            type=str,
+            default=EngineArgs.lm_head_dtype,
+            help="Specify the data type for the lm_head layer in ['float32', 'bfloat16', 'float16'] when 'lm_head_dtype' not in the `config.json` of model.",
         )
 
         # Parallel processing parameters group
@@ -769,6 +781,7 @@ class EngineArgs:
             quantization=self.quantization,
             dynamic_load_weight=self.dynamic_load_weight,
             load_strategy=self.load_strategy,
+            lm_head_dtype=self.lm_head_dtype,
         )
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
@@ -855,7 +868,7 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192

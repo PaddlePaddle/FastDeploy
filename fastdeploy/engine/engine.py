@@ -1087,6 +1087,7 @@ class LLMEngine:
             f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --lm_head_dtype {self.cfg.model_config.lm_head_dtype}"
         )
 
         worker_append_flag = {
@@ -1099,6 +1100,7 @@ class LLMEngine:
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
             "enable_mm": self.cfg.enable_mm,
+            "lm_head_dtype": self.cfg.lm_head_dtype,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

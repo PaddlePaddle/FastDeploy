@@ -587,6 +587,12 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
+    parser.add_argument(
+        "--lm_head_dtype",
+        type=str,
+        default=None,
+        help="The data type of lm_head",
+    )
 
     args = parser.parse_args()
     return args

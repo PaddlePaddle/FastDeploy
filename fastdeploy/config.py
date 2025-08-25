@@ -108,6 +108,7 @@ class ModelConfig:
         self.enable_mm = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
+        self.lm_head_dtype: str = (None,)
 
         for key, value in args.items():
             if hasattr(self, key):
