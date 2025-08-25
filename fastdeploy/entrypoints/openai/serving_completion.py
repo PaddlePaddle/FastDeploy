@@ -145,7 +145,6 @@ class OpenAIServingCompletion:
                 self.engine_client.semaphore.release()
                 return ErrorResponse(message=str(e), code=400)
 
-
             if request.stream:
                 return self.completion_stream_generator(
                     request=request,
