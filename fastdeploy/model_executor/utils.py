@@ -1,0 +1,179 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+from typing import Any, Optional, Union
+
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import get_tensor
+
+
+class BitMaskTracker:
+    def __init__(self, length: int):
+        """
+        Track filling status along a single dimension using a bitmask.
+
+        Args:
+            length (int): Number of positions to track (e.g., columns or rows)
+        """
+        self.length = length
+        self.mask = 0
+
+    def mark(self, start: int, end: int):
+        """
+        Mark the range [start, end) as filled.
+
+        Args:
+            start (int): Start index (inclusive)
+            end (int): End index (exclusive)
+        """
+        if start < 0 or end > self.length or start >= end:
+            raise ValueError("Invalid mark range")
+        block = ((1 << (end - start)) - 1) << start
+        self.mask |= block
+
+    def is_full(self) -> bool:
+        """Return True if all positions are filled."""
+        return self.mask == (1 << self.length) - 1
+
+
+class TensorTracker:
+    def __init__(self, shape: tuple, output_dim: int):
+        """
+        Unified tracker for 2D or 3D tensors.
+
+        Args:
+            shape (tuple): Tensor shape
+            output_dim (bool):
+                - 2D: True = track columns (dim=1), False = track rows (dim=0)
+                - 3D: True = track columns (dim=2), False = track rows (dim=1)
+        """
+        self.shape = shape
+        self.output_dim = output_dim
+
+        if len(shape) == 2:
+            self.track_dim = 1 if output_dim else 0
+            self.trackers = [BitMaskTracker(shape[self.track_dim])]
+        elif len(shape) == 3:
+            batch = shape[0]
+            self.track_dim = 2 if output_dim else 1
+            self.trackers = [BitMaskTracker(shape[self.track_dim]) for _ in range(batch)]
+        else:
+            raise ValueError("Only 2D or 3D tensors supported")
+
+    def mark(self, start: int = 0, end: int = None, batch_id: int = None):
+        """
+        Mark a slice of the tensor as filled.
+
+        Args:
+            batch_id (int, optional): Batch index for 3D tensors
+            start (int): Start index along tracked dimension
+            end (int): End index along tracked dimension
+        """
+        if end is None:
+            end = self.shape[self.track_dim]
+
+        if len(self.shape) == 2:
+            self.trackers[0].mark(start, end)
+        else:
+            if batch_id is None:
+                raise ValueError("batch_id must be provided for 3D tensor")
+            self.trackers[batch_id].mark(start, end)
+
+    def is_fully_copied(self) -> bool:
+        """Return True if the tensor is fully filled along tracked dimension(s)."""
+        return all(tr.is_full() for tr in self.trackers)
+
+
+def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
+    if param_attr_map is None:
+        return
+    for key, value in param_attr_map.items():
+        setattr(param, key, value)
+
+
+def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
+    if hasattr(weight_or_paramter, "get_shape"):
+        shape = weight_or_paramter.get_shape()
+    else:
+        shape = weight_or_paramter.shape
+    if len(shape) == 1:
+        weight_or_paramter = weight_or_paramter[start:end]
+    elif output_dim:
+        weight_or_paramter = weight_or_paramter[..., start:end]
+    else:
+        weight_or_paramter = weight_or_paramter[start:end, ...]
+    return weight_or_paramter
+
+
+def process_weights_after_loading(sublayers_dict: dict):
+    """
+    process_weights_after_loading: e.g., handle extracted weights (quantization, reshaping, etc.)
+    """
+
+    def fn(model_sublayer_name: str, param=None):
+        from fastdeploy.model_executor.layers.linear import KVBatchLinear
+
+        if model_sublayer_name not in sublayers_dict:
+            return
+        model_sublayer = sublayers_dict[model_sublayer_name]
+        if isinstance(model_sublayer, KVBatchLinear):
+            model_sublayer.process_weights_after_loading()
+        if hasattr(model_sublayer, "quant_method"):
+            quant_method = getattr(model_sublayer, "quant_method", None)
+            if not hasattr(quant_method, "process_weights_after_loading"):
+                return
+            if param is not None and hasattr(param, "tensor_track") and not param.tensor_track.is_fully_copied():
+                return
+            quant_method.process_weights_after_loading(model_sublayer)
+
+    return fn
+
+
+def free_tensor(tensor):
+    if hasattr(tensor, "tensor_track"):
+        tensor.tensor_track = None
+    tensor.value().get_tensor()._clear()
+    del tensor
+
+
+def default_weight_loader(fd_config: FDConfig) -> None:
+    """Default weight loader"""
+
+    def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
+        """fn"""
+        output_dim = getattr(param, "output_dim", None)
+        # Tensor parallelism splits the weight along the output_dim
+        if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+            dim = -1 if output_dim else 0
+            size = loaded_weight.get_shape()[dim]
+            block_size = size // fd_config.parallel_config.tensor_parallel_size
+            shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
+            shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+            loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
+
+        loaded_weight = get_tensor(loaded_weight)
+        # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+        if param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(param.dtype)
+        if param.shape != loaded_weight.shape:
+            # for e_score_correction_bias
+            loaded_weight = loaded_weight.reshape(param.shape)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(loaded_weight, False)
+
+    return fn

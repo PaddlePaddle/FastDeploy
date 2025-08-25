@@ -2,9 +2,9 @@
 #
 #
 from collections.abc import Sequence
-from typing import Tuple
+from typing import Tuple, Union
 
-from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 #
@@ -47,6 +47,10 @@ class ErnieX1ReasoningParser(ReasoningParser):
         self.think_end_token_id = self.vocab.get("</think>")
         if self.think_end_token_id is None:
             raise RuntimeError("Could not find think end token id in tokenizer vocabulary")
+        self.tool_call_start_token_id = self.vocab.get("<tool_call>")
+
+    def is_reasoning_end(self, input_ids: list[int]) -> bool:
+        return self.tool_call_start_token_id in input_ids
 
     def extract_reasoning_content_streaming(
         self,
@@ -56,50 +60,63 @@ class ErnieX1ReasoningParser(ReasoningParser):
         previous_token_ids: Sequence[int],
         current_token_ids: Sequence[int],
         delta_token_ids: Sequence[int],
-    ) -> tuple[str, str]:
+    ) -> Union[DeltaMessage, None]:
         """
         根据用户需求实现的流式解析方法:
-        1. 初始内容都视为思考内容
+        1. 初始内容都视为思考内容，返回delta_text,""
         2. 当遇到\n时检查后续是否是</think>
-        3. 思考结束后检查是<response>还是<tool_call>
-        4. 对于<response>内容，处理换行和结束标记
+        3. 如果直接遇到</think>也结束思考
+        4. 思考结束后检查是<response>还是<tool_call>
+        5. 对于<response>内容，处理各种边界条件
         """
-        # 如果还在思考阶段
-        if not previous_text.endswith(self.think_end_token):
-            # 如果遇到\n后接</think>或直接遇到</think>，思考结束
-            if (previous_text.endswith("\n") and delta_text == self.think_end_token) or (
-                not previous_text.endswith("\n") and delta_text == self.think_end_token
-            ):
-                return "", ""
+        if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
+            return None
+        # 思考阶段处理
+        if not previous_text.endswith(self.think_end_token) and self.think_end_token not in previous_text:
+            # 如果遇到\n，暂时不返回，等待下一个delta_text
+            if delta_text == "\n":
+                return None
+            # 如果前一个是\n且当前是</think>，结束思考
+            elif previous_text.endswith("\n") and delta_text.startswith(self.think_end_token):
+                return None
+            # 如果直接遇到</think>也结束思考
+            elif delta_text.startswith(self.think_end_token):
+                return None
             # 否则继续返回思考内容
-            return delta_text, ""
+            return DeltaMessage(reasoning_content=delta_text)
 
         # 思考结束后检查是tool_call还是response
         remaining_text = previous_text + delta_text
         after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token) :]
-
-        # 跳过think后的换行
-        after_think = after_think.lstrip("\n")
+        after_think = after_think.lstrip("\n")  # 跳过think后的换行
 
         # 处理tool_call情况
         if after_think.startswith(self.tool_call_start_token):
-            return "", ""
+            return None
 
         # 处理response情况
         if after_think.startswith(self.response_start_token):
-            response_content = after_think[len(self.response_start_token) :]
-            # 跳过response后的换行
-            response_content = response_content.lstrip("\n")
-
-            # 检查response是否结束
-            if response_content.endswith(self.response_end_token):
-                return "", ""
-
-            # 返回response内容(使用delta_text确保流式输出)
-            return "", delta_text
+            # 遇到<response>标签时不立即返回
+            if delta_text == self.response_start_token:
+                return None
+            # 遇到<response>后的换行符也不立即返回
+            elif delta_text == "\n" and previous_text.endswith(self.response_start_token):
+                return None
+            # 处理回复内容中的换行符
+            if delta_text == "\n":
+                return None
+            # 如果前一个是\n且当前是</response>，结束回复
+            elif previous_text.endswith("\n") and delta_text == self.response_end_token:
+                return None
+            # 如果直接遇到</response>也结束回复
+            elif delta_text == self.response_end_token:
+                return None
+            # 其他情况返回实际内容
+            else:
+                return DeltaMessage(content=delta_text)
 
         # 默认情况不返回内容
-        return "", ""
+        return None
 
     def extract_reasoning_content(self, model_output: str, request: ChatCompletionRequest) -> Tuple[str, str]:
         """
@@ -143,66 +160,3 @@ class ErnieX1ReasoningParser(ReasoningParser):
             reasoning_content = model_output
             response_content = ""
         return reasoning_content, response_content
-
-
-import unittest
-from unittest.mock import MagicMock
-
-
-class TestErnieX1ReasoningParser(unittest.TestCase):
-    def setUp(self):
-        self.tokenizer = MagicMock()
-        self.tokenizer.vocab = {
-            "\n</think>\n\n": 1001,
-            "<response>\n": 1002,
-            "\n</response>\n": 1003,
-            "<tool_call>\n": 1004,
-            "\n</tool_call>\n": 1005,
-        }
-        self.parser = ErnieX1ReasoningParser(self.tokenizer)
-
-    def test_streaming_with_think_and_response(self):
-        # 测试标准情况：\n</think>\n\n<response>\ncontent\n</response>\n
-        prev_text = "thinking"
-        delta_text = "\n</think>\n\n<response>\nanswer\n</response>\n"
-        result = self.parser.extract_reasoning_content_streaming(prev_text, "", delta_text, [], [], [])
-        self.assertEqual(result, ("thinking", "answer"))
-
-    def test_streaming_with_think_and_tool_call(self):
-        # 测试tool_call情况
-        prev_text = "thinking"
-        delta_text = "\n</think>\n\n<tool_call>\ndetails\n</tool_call>\n"
-        result = self.parser.extract_reasoning_content_streaming(prev_text, "", delta_text, [], [], [])
-        self.assertEqual(result, ("thinking", ""))
-
-    def test_streaming_with_think_no_newline(self):
-        # 测试没有前置换行的情况
-        prev_text = "thinking"
-        delta_text = "</think>\n\n<response>answer</response>\n"
-        result = self.parser.extract_reasoning_content_streaming(prev_text, "", delta_text, [], [], [])
-        self.assertEqual(result, ("thinking", "answer"))
-
-    def test_streaming_response_without_leading_newline(self):
-        # 测试response内容没有前置换行
-        prev_text = "thinking\n</think>\n\n"
-        delta_text = "<response>answer\n</response>\n"
-        result = self.parser.extract_reasoning_content_streaming(prev_text, "", delta_text, [1001], [], [])
-        self.assertEqual(result, ("thinking", "answer"))
-
-    def test_streaming_response_with_middle_newline(self):
-        # 测试response内容中间的换行符
-        prev_text = "thinking\n</think>\n\n<response>\n"
-        delta_text = "line1\nline2\n</response>\n"
-        result = self.parser.extract_reasoning_content_streaming(prev_text, "", delta_text, [1001], [], [])
-        self.assertEqual(result, ("thinking", "line1\nline2"))
-
-    def test_streaming_partial_response(self):
-        # 测试不完整的response流式输出
-        prev_text = "thinking\n</think>\n\n<response>\n"
-        delta_text = "partial answer"
-        result = self.parser.extract_reasoning_content_streaming(prev_text, "", delta_text, [1001], [], [])
-        self.assertEqual(result, ("thinking", "partial answer"))
-
-
-if __name__ == "__main__":
-    unittest.main()

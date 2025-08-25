@@ -89,6 +89,9 @@ class MLAAttentionMetadata(AttentionMetadata):
     kv_signal_metadata: Optional[paddle.Tensor] = None
     kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
+    max_enc_len_this_time: Optional[paddle.Tensor] = None
+    max_dec_len_this_time: Optional[paddle.Tensor] = None
+
 
 class MLAAttentionBackend(AttentionBackend):
     """

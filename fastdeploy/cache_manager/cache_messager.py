@@ -17,6 +17,7 @@
 import math
 import threading
 import time
+import traceback
 
 import numpy as np
 import paddle
@@ -309,4 +310,4 @@ class CacheMessager:
                     self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:
-            logger.error(f"prefill layerwise send cache thread has exception: {e}")
+            logger.error(f"prefill layerwise send cache thread has exception: {e}, {str(traceback.format_exc())}")
