@@ -43,6 +43,7 @@ class WeightOnlyConfig(QuantConfigBase):
     def __init__(
         self,
         algo: str,
+        is_checkpoint_bf16: bool = False,
     ) -> None:
         super().__init__()
         self.algo = algo
@@ -54,6 +55,7 @@ class WeightOnlyConfig(QuantConfigBase):
         self.quant_max_bound = 0
         self.quant_min_bound = 0
         self.quant_round_type = 0
+        self.is_checkpoint_bf16 = is_checkpoint_bf16
 
     def name(self) -> str:
         return "weight_only"
@@ -61,7 +63,8 @@ class WeightOnlyConfig(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "WeightOnlyConfig":
         algo = config["algo"]
-        return cls(algo)
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(algo, is_checkpoint_bf16)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
@@ -140,12 +143,13 @@ class WINT8Config(WeightOnlyConfig):
     weight only int8 config
     """
 
-    def __init__(self) -> None:
-        super().__init__("weight_only_int8")
+    def __init__(self, is_checkpoint_bf16: bool = False) -> None:
+        super().__init__("weight_only_int8", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT8Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint8"
@@ -158,12 +162,14 @@ class WINT4Config(WeightOnlyConfig):
 
     def __init__(
         self,
+        is_checkpoint_bf16: bool = False,
     ) -> None:
-        super().__init__("weight_only_int4")
+        super().__init__("weight_only_int4", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT4Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint4"
@@ -182,7 +188,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        if self.quant_config.is_checkpoint_bf16:
             layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
@@ -241,7 +247,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             )
 
     def process_weights_after_loading(self, layer) -> None:
-        if not layer.fd_config.load_config.load_choices == "default_v1":
+        if not self.quant_config.is_checkpoint_bf16:
             return
         quanted_weight_tensor, weight_scale_tensor = weight_quantize(
             layer.weight,
