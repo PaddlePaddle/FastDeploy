@@ -98,6 +98,9 @@ class SamplingParams:
     reasoning_max_tokens: Optional[int] = None
     min_tokens: int = 1
     logprobs: Optional[int] = None
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
     bad_words: Optional[List[str]] = None
     _bad_words_token_ids: Optional[List[int]] = None
 
