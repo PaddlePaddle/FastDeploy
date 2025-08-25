@@ -26,6 +26,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
+    get_input_length_list,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -613,14 +614,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         input_length_list = [input_length] * batch_size
         if prefill_only:
-            if num_tokens < batch_size:
-                input_length_list = [1] * num_tokens
-                batch_size = num_tokens
-                # input_length_list.extend([0]*(batch_size-num_tokens))
-            else:
-                input_length_list = [1] * (batch_size - 1)
-                input_length_list.append(num_tokens - batch_size + 1)
-        print()
+            input_length_list = get_input_length_list(num_tokens=num_tokens, batch_size=batch_size)
+            batch_size = len(input_length_list)
+
         for i in range(batch_size):
             idx = i
             input_length = input_length_list[i]
@@ -1111,6 +1107,7 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens:
             expected_decode_len: Expected number of tokens generated
             in_capturing: Is cuda graph in capturing state
+            prefill_only: Capture pure prefill for cuda graph
         """
         self._dummy_prefill_inputs(
             num_tokens=num_tokens,
@@ -1123,7 +1120,6 @@ class GPUModelRunner(ModelRunnerBase):
                 num_tokens=num_tokens,
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
-                prefill_only=prefill_only,
             )
         while True:
 

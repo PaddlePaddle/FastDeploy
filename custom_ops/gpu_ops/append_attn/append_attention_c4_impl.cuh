@@ -57,6 +57,7 @@ __global__ void multi_query_append_attention_c4_kernel(
     const float quant_min_bound,
     const float in_scale,
     const uint32_t chunk_size,
+    const int num_blocks_x_cpu,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
                                     // num_heads, head_dim]
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
@@ -84,6 +85,10 @@ __global__ void multi_query_append_attention_c4_kernel(
   const int *block_table_now = nullptr;
 
   block_table_now = block_table + batch_id * max_block_num_per_seq;
+
+  if(btid >= static_cast<uint32_t>(num_blocks_x_cpu)){
+    return;
+  }
 
   const uint32_t q_len = seq_lens[batch_id];
   if (q_len <= 0) {
@@ -517,6 +522,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
     const float quant_min_bound,
     const float in_scale,
     const uint32_t chunk_size,
+    const int num_blocks_x_cpu,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
                                     // num_heads, head_dim]
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
@@ -544,6 +550,10 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
+
+  if(btid >= static_cast<uint32_t>(num_blocks_x_cpu)){
+    return;
+  }
 
   const uint32_t q_len = seq_lens[batch_id];
   if (q_len <= 0) {
@@ -1102,6 +1112,7 @@ void MultiQueryAppendC4Attention(
           quant_min_bound,
           in_scale,
           chunk_size,
+          num_blocks_x_cpu,
           nullptr,
           nullptr,
           nullptr,
@@ -1166,6 +1177,7 @@ void MultiQueryAppendC4Attention(
           quant_min_bound,
           in_scale,
           chunk_size,
+          num_blocks_x_cpu,
           reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
@@ -1351,6 +1363,7 @@ void MultiQueryAppendC4Attention(
           quant_min_bound,
           in_scale,
           chunk_size,
+          num_blocks_x_cpu,
           nullptr,
           nullptr,
           nullptr,
@@ -1428,6 +1441,7 @@ void MultiQueryAppendC4Attention(
           quant_min_bound,
           in_scale,
           chunk_size,
+          num_blocks_x_cpu,
           reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
