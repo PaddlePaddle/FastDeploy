@@ -1060,7 +1060,7 @@ class FDConfig:
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
 
-        if envs.HUGGING_FACE_FORMAT:
+        if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
 
         # TODO
