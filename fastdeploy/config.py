@@ -580,22 +580,6 @@ class GraphOptimizationConfig:
                 len(self.cudagraph_capture_sizes) > 0
             ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
 
-    def update_use_cudagraph(self, argument: bool):
-        """
-        Unified user specifies the use_cudagraph parameter through two methods,
-        '--use-cudagraph' and '--graph-optimization-config'
-        """
-        if self.use_cudagraph is None:
-            # User only set '--use-cudagraph'
-            self.use_cudagraph = argument
-        else:
-            # User both set '--use-cudagraph' and '--graph-optimization-config'
-            if self.use_cudagraph is False and argument is True:
-                raise ValueError(
-                    "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
-                )
-            argument = self.use_cudagraph
-
 
 class EarlyStopConfig:
     def __init__(

@@ -46,7 +46,7 @@ T = TypeVar("T")
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
-ARGS_CORRECTION_LIST = [["early_stop_config", "enable_early_stop"], ["graph_optimization_config", "use_cudagraph"]]
+ARGS_CORRECTION_LIST = [["early_stop_config", "enable_early_stop"], ["graph_optimization_config"]]
 
 
 class EngineError(Exception):
