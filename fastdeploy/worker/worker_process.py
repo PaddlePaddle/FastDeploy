@@ -443,8 +443,7 @@ class PaddleDisWorkerProc:
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
-            # local_data_parallel_id=self.parallel_config.expert_parallel_rank,
-            local_data_parallel_id=0,
+            local_data_parallel_id=self.parallel_config.expert_parallel_rank
         )
 
     def load_model(self) -> None:
