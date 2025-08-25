@@ -629,7 +629,7 @@ class EngineArgs:
         )
         load_group.add_argument(
             "--hugging_face_format",
-            action="store_true",
+            action=DeprecatedOptionWarning,
             default=EngineArgs.hugging_face_format,
             help="Enable when loading models in Hugging Face format",
         )

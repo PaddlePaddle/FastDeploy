@@ -219,11 +219,7 @@ class Qwen2Model(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        hugging_face_format = fd_config.model_config.model_format == "hugging_face"
-        if hugging_face_format:
-            fd_config.model_config.pretrained_config.prefix_name = "model"
-        else:
-            fd_config.model_config.pretrained_config.prefix_name = "qwen2"
+        fd_config.model_config.pretrained_config.prefix_name = "qwen2"
 
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
