@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
@@ -955,7 +954,6 @@ class CommitConfig:
         logger.info("=============================================================")
 
 
-@dataclass
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
