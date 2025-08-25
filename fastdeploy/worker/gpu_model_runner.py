@@ -349,8 +349,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
-            print("bad_tokens", self.share_inputs["bad_tokens"])
-
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
