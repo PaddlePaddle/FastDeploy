@@ -279,7 +279,7 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         while True:
-            if self.local_rank == 0:
+            if self.local_rank % mp_num_per_node == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.exist_task_signal.value[0] = 2
                 else:
@@ -293,7 +293,7 @@ class PaddleDisWorkerProc:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if self.local_rank % mp_num_per_node == 0:
+            if self.local_rank % mp_num_per_node == 0 and self.exist_task_signal.value[0] != 2:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (

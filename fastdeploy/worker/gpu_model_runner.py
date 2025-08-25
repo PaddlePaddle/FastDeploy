@@ -1597,6 +1597,15 @@ class GPUModelRunner(ModelRunnerBase):
         paddle.device.cuda.empty_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
+    def clear_requests(self):
+        """ " Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["block_tables"][:, :] = -1
+        self.share_inputs["stop_flags"][:] = True
+        self.seq_lens_this_time_buffer[:] = 0
+        self.share_inputs["seq_lens_decoder"][:] = 0
+        self.share_inputs["seq_lens_encoder"][:] = 0
+        self.share_inputs["is_block_step"][:] = False
+
     def update_parameters(self, pid):
         """ " Dynamic model loader use to update parameters use for RL"""
         self.dynamic_weight_manager.update_parameters(pid)
