@@ -76,11 +76,6 @@ class ParallelLMHead(nn.Layer):
                 is_bias=False,
             )
         else:
-            self.weight = self.create_parameter(
-                shape=[embedding_dim, num_embeddings],
-                dtype=paddle.get_default_dtype(),
-                is_bias=False,
-            )
             if self.column_cut:
                 need_gather = True
                 self.linear = ColumnParallelLinear(
@@ -118,7 +113,6 @@ class ParallelLMHead(nn.Layer):
                 self.linear.weight.set_value(
                     get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype()).transpose([1, 0])
                 )
-                self.weight.set_value(self.linear.weight)
             else:
                 weight_tensor = get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype())
                 if self.linear.weight.shape != weight_tensor.shape:
