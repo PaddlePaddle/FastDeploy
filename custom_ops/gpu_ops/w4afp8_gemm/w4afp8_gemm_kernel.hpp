@@ -27,7 +27,7 @@
 #include "mainloop_fwd.h"
 
 template <typename Ktraits>
-void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp, 1) w4afp8_geem_kernel(
+void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp, 1) w4afp8_gemm_kernel(
         CUTE_GRID_CONSTANT typename CollectiveMainloopFwd<Ktraits>::Params const mainloop_params) {
 
     using Element = typename Ktraits::Element;
@@ -87,9 +87,9 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         __syncthreads();
     }
 
-    const int pre_fix_tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb] : 0;
+    const int pre_fix_tokens = TokenPackSize == 0 ? (bidb == 0 ? 0 : mainloop_params.tokens[bidb - 1]) : 0;
 
-    const int tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb + 1] - pre_fix_tokens : mainloop_params.tokens[bidb];
+    const int tokens = TokenPackSize == 0 ? mainloop_params.tokens[bidb] - pre_fix_tokens : mainloop_params.tokens[bidb];
 
 
     if (bidn * kBlockN >= tokens) {
@@ -207,7 +207,7 @@ auto get_gmem_layout(const int Rows, const int Cols) {
 
 template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Batch, int TokenPackSize>
 void run_gemm(const InputType * A, const InputType * B, OutputType * C, const float *weight_scale,
-        const float *input_row_sum, const int * tokens, const int max_tokens, cudaStream_t stream) {
+        const float *input_row_sum, const int64_t * tokens, const int64_t max_tokens, cudaStream_t stream) {
 
     using ElementOutput = typename Kernel_traits::ElementOutput;
     using Element = typename Kernel_traits::Element;
@@ -231,7 +231,7 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
         });
 
     void *kernel;
-    kernel = (void *)w4afp8_geem_kernel<Kernel_traits>;
+    kernel = (void *)w4afp8_gemm_kernel<Kernel_traits>;
 
     int smem_size = sizeof(typename Kernel_traits::SharedStorage) + sizeof(float) * Kernel_traits::kBlockN;
 

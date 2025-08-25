@@ -132,7 +132,7 @@ class ResourceManagerV1(ResourceManager):
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
 
-        if not self.config.enable_mm:
+        if not self.config.model_config.enable_mm:
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -290,7 +290,7 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if self.config.enable_mm and self.exist_prefill(scheduled_reqs):
+                    if self.config.model_config.enable_mm and self.exist_prefill(scheduled_reqs):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
