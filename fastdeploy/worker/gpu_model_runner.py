@@ -1692,6 +1692,10 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.clear_caches()
         paddle.device.cuda.empty_cache()
 
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
+
     def clear_parameters(self, pid):
         """ " Dynamic model loader use to clear parameters use for RL"""
         self.dynamic_weight_manager.clear_parameters(pid)

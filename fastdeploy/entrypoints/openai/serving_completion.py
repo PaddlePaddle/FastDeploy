@@ -216,6 +216,8 @@ class OpenAIServingCompletion:
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -333,6 +335,8 @@ class OpenAIServingCompletion:
             )
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
