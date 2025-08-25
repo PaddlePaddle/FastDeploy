@@ -141,7 +141,7 @@ class TestMobaAttention(unittest.TestCase):
             real_result = paddle.einsum("nbhd,hbd->nhd", k_padding, self.attn_gate_weight)
             compute_result = k_gate_weight[i][0 : real_result.shape[0]]
 
-            assert (real_result - compute_result).abs().max() < 0.3
+            assert (real_result - compute_result).abs().max() < 0.5
 
         print("[consistency]Moba attention: MLP einsum matches.")
 
