@@ -22,12 +22,12 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-300B-A47B` on the follo
 ### 2.1 Basic: Launching the Service
 Start the service by following command:
 ```bash
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --tensor-parallel-size 8 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --kv-cache-ratio 0.75 \
        --max-num-seqs 128
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
@@ -123,6 +123,19 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --innode-prefill-ports 8182 \
        --splitwise-role "decode"
 ```
+
+#### 2.2.8 CUDAGraph
+**Idea:**
+CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achieves efficient execution and optimization of GPU tasks by capturing CUDA operation sequences into a graph structure. The core idea of CUDAGraph is to encapsulate a series of GPU computing and memory operations into a re-executable graph, thereby reducing CPU-GPU communication overhead, reducing kernel startup latency, and improving overall computing performance.
+
+**How to enable:**
+Add the following lines to the startup parameters
+```
+--use-cudagraph
+```
+Notes:
+1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
+2. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
 
 ## FAQ
 If you encounter any problems during use, you can refer to [FAQ](./FAQ.md).

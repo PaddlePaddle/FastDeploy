@@ -14,13 +14,16 @@
 # limitations under the License.
 """
 
+import os
 import time
+import traceback
 import uuid
 
 import numpy as np
 
 from fastdeploy import envs
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
+from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
@@ -49,6 +52,7 @@ class EngineClient:
         data_parallel_size=1,
         enable_logprob=False,
         workers=1,
+        tool_parser=None,
     ):
         import fastdeploy.model_executor.models  # noqa: F401
 
@@ -64,6 +68,7 @@ class EngineClient:
             limit_mm_per_prompt,
             mm_processor_kwargs,
             self.enable_mm,
+            tool_parser,
         )
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
@@ -88,6 +93,10 @@ class EngineClient:
             suffix=pid,
             create=False,
         )
+        self.connection_manager = DealerConnectionManager(
+            pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
+        )
+        self.connection_initialized = False
 
     def create_zmq_client(self, model, mode):
         """
@@ -139,7 +148,7 @@ class EngineClient:
             work_process_metrics.prompt_tokens_total.inc(input_ids_len)
             work_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
-            api_server_logger.error(e)
+            api_server_logger.error(f"add_requests error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         if input_ids_len + min_tokens >= self.max_model_len:
@@ -192,7 +201,7 @@ class EngineClient:
             else:
                 self.zmq_client.send_pyobj(task)
         except Exception as e:
-            api_server_logger.error(e)
+            api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
     def vaild_parameters(self, data):
