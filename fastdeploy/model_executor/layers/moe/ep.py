@@ -217,23 +217,6 @@ class DeepEPEngine:
         Return:
             combined_hidden_states: [num_tokens, hidden]
         """
-        if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":  # not develop version of PaddlePaddle
-            # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
-            # and when the default recommended version of PaddlePaddle is greater than 3.1.0
-            (
-                src_info,
-                layout_range,
-                num_max_dispatch_tokens_per_rank,
-                num_experts,
-            ) = handle
-            handle = (
-                src_info,
-                layout_range,
-                num_max_dispatch_tokens_per_rank,
-                None,
-                num_experts,
-            )
-
         combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
