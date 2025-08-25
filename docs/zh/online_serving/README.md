@@ -45,8 +45,9 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
-  ]
+    {"role": "user", "content": "Hello!"}
+  ],
+  "logprobs": true, "top_logprobs": 0,
 }'
 ```
 
@@ -160,6 +161,9 @@ repetition_penalty: Optional[float] = None
 chat_template_kwargs: Optional[dict] = None
 # 传递给聊天模板（chat template）的额外参数，用于自定义对话格式（默认 None）。
 
+chat_template: Optional[str] = None
+# 自定义聊天模板，会覆盖模型默认的聊天模板，（默认 None）。
+
 reasoning_max_tokens: Optional[int] = None
 # 推理（如 CoT, 思维链）过程中生成的最大 token 数（默认 None 表示使用全局 max_tokens）。
 
@@ -189,6 +193,12 @@ max_streaming_response_tokens: Optional[int] = None
 
 disable_chat_template: Optional[bool] = False
 # 是否禁用聊天模板渲染，直接使用原始输入（默认 False 表示启用模板）。
+
+temp_scaled_logprobs: Optional[bool] = False
+# 计算logprob时是否对logits除以温度系数（默认 False 表示不除以温度系数）。
+
+top_p_normalized_logprobs: Optional[bool] = False
+# 计算logprob时是否进行 top_p 归一化（默认 False 表示不进行top_p归一化）。
 ```
 
 ### 返回字段差异

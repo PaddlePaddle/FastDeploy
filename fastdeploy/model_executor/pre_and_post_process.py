@@ -112,7 +112,6 @@ def pre_process(
     if speculative_decoding:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
@@ -142,14 +141,12 @@ def pre_process(
     else:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
     return (
         ids_remove_padding,
-        cum_offsets,
         batch_id_per_token,
         cu_seqlens_q,
         cu_seqlens_k,
@@ -523,7 +520,7 @@ def step_cuda(
 
 def rebuild_padding(
     tmp_out: paddle.Tensor,
-    cum_offsets: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
     seq_len_this_time: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
     seq_lens_encoder: paddle.Tensor,
@@ -539,7 +536,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -551,7 +548,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -563,7 +560,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -575,7 +572,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -587,7 +584,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding_cpu(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -599,7 +596,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
