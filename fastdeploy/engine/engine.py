@@ -1108,8 +1108,8 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
-            f" --ips {self.cfg.ips}",
-            f" --lm_head_dtype {self.cfg.model_config.lm_head_dtype}",
+            f" --ips {self.cfg.ips}"
+            f" --lm_head_dtype {self.cfg.model_config.lm_head_dtype}"
         )
 
         worker_append_flag = {
