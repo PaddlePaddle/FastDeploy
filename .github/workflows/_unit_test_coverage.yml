@@ -175,7 +175,7 @@ jobs:
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
-          coverage combine coveragedata/
+          coverage combine coveragedata/ || echo "No data to combine"
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
           if [[ "$IS_PR" == "true" ]]; then
@@ -276,12 +276,17 @@ jobs:
     needs: run_tests_with_coverage
     if: always()
     runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
     steps:
       - name: coverage diff file download
         shell: bash
         env:
           diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
+          wget ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          cd FastDeploy
           if [ -z "${diff_cov_file_url}" ]; then
             echo "No diff coverage file URL provided."
             exit 0
@@ -291,6 +296,9 @@ jobs:
         if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: ./diff_coverage.xml
+          files: ./FastDeploy/diff_coverage.xml
           name: python diff coverage
           verbose: true
+          disable_search: true
+          commit_parent: false
+          flags: diff

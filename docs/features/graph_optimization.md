@@ -18,7 +18,7 @@ FastDeploy's `GraphOptimizationBackend` design architecture is as follows, **som
 ## 1. GraphOptimizationBackend Current usage restrictions
 In the CUDAGraph multi-device inference task, you need to use the Custom all-reduce operator to perform multi-card all-reduce.
 
-Before version 2.2, neither the CUDAGraph nor the Custom all-reduce operators were enabled by default. You need to add `--enable-custom-all-reduce` to the startup command to manually enable it.
+Before version 2.2, the CUDAGraph was not enabled by default. the Custom all-reduce operators was enabled by default.
 
 ### 1.1 The multi-device scene needs to be enabled Custom all-reduce
 The `FLAGS_max_partition_size` environment variable controls the `gridDim` execution configuration of Kernel in CascadeAppend Attention, and dynamic execution configuration will cause CUDAGraph execution to fail.
