@@ -970,7 +970,7 @@ class EngineArgs:
 
         assert is_port_available(
                 "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-        ), f"The parameter `engine_worker_queue_port`:{port} is already in use."
+        ), f"The parameter `engine_worker_queue_port`:{int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])} is already in use."
 
 
         return FDConfig(
