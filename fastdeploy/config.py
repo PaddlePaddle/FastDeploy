@@ -466,7 +466,7 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = False
+        self.use_cudagraph: bool = True
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
@@ -1105,6 +1105,17 @@ class FDConfig:
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
+
+        # Adjustment GraphOptConfig
+        if ((self.speculative_config.method is not None) or 
+            (self.load_config.dynamic_load_weight is True) or
+            (self.model_config.enable_mm is True)
+        ):
+            self.graph_opt_config.use_cudagraph = False
+            logger.info("CUDAGraph does not support to be started together with SpeculativeDecode, RL Training and MultiModel temporarily, but has been automatically closed!")
+        if (self.load_config.dynamic_load_weight is True):
+            self.graph_opt_config.graph_opt_level = 0
+            logger.info("Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!")
 
     def check(self):
         """
