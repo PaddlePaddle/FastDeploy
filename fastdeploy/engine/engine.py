@@ -1100,7 +1100,6 @@ class LLMEngine:
             "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
             "enable_mm": self.cfg.enable_mm,
-            "lm_head_dtype": self.cfg.lm_head_dtype,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
