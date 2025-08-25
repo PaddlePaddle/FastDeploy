@@ -23,10 +23,8 @@ from paddle import nn
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
-from fastdeploy.model_executor.models.utils import (
-    default_weight_loader,
-    set_weight_attrs,
-)
+from fastdeploy.model_executor.layers.utils import set_weight_attrs
+from fastdeploy.model_executor.models.utils import default_weight_loader
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor

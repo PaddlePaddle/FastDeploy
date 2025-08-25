@@ -24,7 +24,7 @@ import random
 import re
 import struct
 from functools import partial
-from typing import Any, NamedTuple, Optional, Union
+from typing import NamedTuple, Optional, Union
 
 import numpy as np
 import paddle
@@ -45,13 +45,6 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
-
-
-def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
-    if param_attr_map is None:
-        return
-    for key, value in param_attr_map.items():
-        setattr(param, key, value)
 
 
 def default_weight_loader(fd_config: FDConfig) -> None:

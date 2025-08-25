@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 from paddle.distributed import fleet
 
-from fastdeploy.model_executor.models.utils import set_weight_attrs
+from fastdeploy.model_executor.layers.utils import set_weight_attrs
 
 from .utils import get_tensor
 
