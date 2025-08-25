@@ -212,7 +212,8 @@ class SamplingParams:
         """Support bad words"""
         if self.bad_words is None:
             return
-        self.bad_words_token_ids = []
+        if self.bad_words_token_ids is None:
+            self.bad_words_token_ids = []
         for bad_word in self.bad_words:
             # To prohibit words both at the beginning
             # and in the middle of text
