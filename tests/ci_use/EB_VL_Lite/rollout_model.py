@@ -48,8 +48,6 @@ for k, v in actor_eval_model.state_dict().items():
 for k, v in actor_eval_model.get_name_mappings_to_training().items():
     content += f"{k}:{v}\n"
 
-print(f"+++++++++++++++++++++++++++++++\n\n{content}\n\n++++++++++++++++++++++++++++++++++++")
-
 
 def compare_strings_line_by_line(a: str, b: str) -> bool:
     """
