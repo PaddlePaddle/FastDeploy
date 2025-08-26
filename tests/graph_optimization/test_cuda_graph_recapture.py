@@ -1,19 +1,3 @@
-"""
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""
-
 import unittest
 
 import paddle
@@ -28,6 +12,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.utils import print_gpu_memory_use
 
 
 @support_graph_optimization
@@ -89,27 +74,27 @@ class TestModel1(paddle.nn.Layer):
 
         return sublayer2_output
 
+    def clear_grpah_opt_backend(self):
+        """ """
+        self.sublayer1.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.sublayer2.clear_grpah_opt_backend(fd_config=self.fd_config)
 
-class TestCUDAGrpahSpecDecode(unittest.TestCase):
+
+class TestCUDAGrpahRecapture(unittest.TestCase):
     """
     Test CUDAGraph Memory change
     """
 
-    def test_cuda_graph_spec_decode(self):
+    def test_cuda_graph_recapture(self):
         """Run test case"""
+        # Set FastDeploy config
         graph_opt_config = GraphOptimizationConfig(args={})
         graph_opt_config.use_cudagraph = True
         parallel_config = ParallelConfig(args={})
+        cache_config = CacheConfig(args={})
         parallel_config.max_num_seqs = 1
-        cache_config = CacheConfig({})
-        # Initialize cuda graph capture list
-        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
         fd_config = FDConfig(
-            graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
-            cache_config=cache_config,
-            test_mode=True,
+            graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config
         )
 
         # Run Test Case1
@@ -118,16 +103,28 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
         # Triger Capture
+        print_gpu_memory_use(0, "before capture")
         _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-
+        print_gpu_memory_use(0, "after capture")
         # Reaplay
-        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Destory
+        print_gpu_memory_use(0, "before destory")
+        test_model1.clear_grpah_opt_backend()
+        print_gpu_memory_use(0, "after destory")
+
+        # Triger Capture
+        print_gpu_memory_use(0, "before recapture")
+        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        print_gpu_memory_use(0, "after recapture")
+        # Reaplay
+        output2 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
         # Corrent output
         output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        assert sum(output1 - output1_correct) == 0
+        assert sum(output1 - output2) == 0
+        assert sum(output1_correct - output1) == 0
 
 
 if __name__ == "__main__":

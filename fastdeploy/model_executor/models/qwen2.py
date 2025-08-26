@@ -334,6 +334,10 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
+            model_format = self.fd_config.model_config.model_format
+            # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
+            if model_format == "torch":
+                loaded_weight_name = loaded_weight_name.replace("model", "qwen2")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
@@ -389,6 +393,10 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         hidden_states = self.qwen2(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.qwen2.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Qwen2PretrainedModel(PretrainedModel):
