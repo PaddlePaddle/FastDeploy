@@ -366,7 +366,6 @@ class ExpertService:
                     os.killpg(p.pid, signal.SIGTERM)
                 except:
                     pass
-
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
 
@@ -381,7 +380,10 @@ def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix):
         if cfg.splitwise_role != "mixed":
             expert_service.split_connector.start_receiver()
         else:
-            while True:
-                time.sleep(100)
+            def deamon_thread():
+                while True:
+                    time.sleep(10)
+            t_deamon = threading.Thread(target=deamon_thread, daemon=True)
+            t_deamon.start()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}")
