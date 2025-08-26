@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import unittest
+
 import paddle
 
 from fastdeploy.config import (
@@ -94,7 +96,7 @@ class TestModel1(paddle.nn.Layer):
         self.fd_config = fd_config
 
         self.sublayer1 = TestCase1SubLayer1(self.fd_config)
-        self.sublayer2 = TestCase1SubLayer2(self.fd_config)
+        self.sublayer2 = TestCase1SubLayer2(self.fd_config)  # Attention
         self.sublayer3 = TestCase1SubLayer3(self.fd_config)
 
         self.sublayer2_output_buffer = paddle.zeros([1])
@@ -106,9 +108,7 @@ class TestModel1(paddle.nn.Layer):
         sublayer1_output = self.sublayer1(ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1)
 
         # sublayer2 not use cuda garph
-        sub_meta2 = ForwardMeta(
-            input_ids=sublayer1_output, ids_remove_padding=sublayer1_output, step_use_cudagraph=False
-        )
+        sub_meta2 = ForwardMeta(input_ids=sublayer1_output, ids_remove_padding=sublayer1_output)
         sublayer2_output = self.sublayer2(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
         self.sublayer2_output_buffer.copy_(sublayer2_output, False)
 
@@ -142,38 +142,46 @@ class TestModel1(paddle.nn.Layer):
         return sublayer3_output
 
 
-def run_test_case():
-    """Run test case"""
-    # Set FastDeploy config
-    graph_opt_config = GraphOptimizationConfig(args={})
-    graph_opt_config.use_cudagraph = True
-    parallel_config = ParallelConfig(args={})
-    parallel_config.max_num_seqs = 1
-    cache_config = CacheConfig({})
-    # Initialize cuda graph capture list
-    graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-    graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
-    fd_config = FDConfig(
-        graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config, test_mode=True
-    )
+class TestCUDAGrpahSubgraph(unittest.TestCase):
+    """
+    Test CUDAGraph Memory change
+    """
 
-    # Run Test Case1
-    test_model1 = TestModel1(fd_config=fd_config)
-    input_tensor1 = paddle.ones([1])
-    forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
+    def test_cuda_graph_subgraph(self):
+        """Run test case"""
+        # Set FastDeploy config
+        graph_opt_config = GraphOptimizationConfig(args={})
+        graph_opt_config.use_cudagraph = True
+        parallel_config = ParallelConfig(args={})
+        parallel_config.max_num_seqs = 1
+        cache_config = CacheConfig({})
+        # Initialize cuda graph capture list
+        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+        fd_config = FDConfig(
+            graph_opt_config=graph_opt_config,
+            parallel_config=parallel_config,
+            cache_config=cache_config,
+            test_mode=True,
+        )
 
-    # Triger Capture
-    _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Run Test Case1
+        test_model1 = TestModel1(fd_config=fd_config)
+        input_tensor1 = paddle.ones([32768])
+        forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
-    # Reaplay
-    _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-    output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Triger Capture
+        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-    # Corrent output
-    output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        # Reaplay
+        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-    assert output1 == output1_correct
+        # Corrent output
+        output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+
+        assert sum(output1 - output1_correct) == 0
 
 
 if __name__ == "__main__":
-    run_test_case()
+    unittest.main()

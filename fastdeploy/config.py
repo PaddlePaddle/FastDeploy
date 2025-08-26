@@ -128,6 +128,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.model_format = "auto"
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -165,6 +166,7 @@ class ModelConfig:
 
         self.override_name_from_config()
         self.read_from_env()
+        self.read_model_config()
 
     def override_name_from_config(self):
         """
@@ -205,6 +207,29 @@ class ModelConfig:
 
         reset_config_value("COMPRESSION_RATIO", 1.0)
         reset_config_value("ROPE_THETA", 10000)
+
+    def read_model_config(self):
+        config_path = os.path.join(self.model, "config.json")
+        if os.path.exists(config_path):
+            self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
+            if "torch_dtype" in self.model_config and "dtype" in self.model_config:
+                raise ValueError(
+                    "Only one of 'torch_dtype' or 'dtype' should be present in config.json. "
+                    "Found both, which indicates an ambiguous model format. "
+                    "Please ensure your config.json contains only one dtype field."
+                )
+            elif "torch_dtype" in self.model_config:
+                self.model_format = "torch"
+                logger.info("The model format is Hugging Face")
+            elif "dtype" in self.model_config:
+                self.model_format = "paddle"
+                logger.info("The model format is Paddle")
+            else:
+                raise ValueError(
+                    "Unknown model format. Please ensure your config.json contains "
+                    "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
+                    f"Config file path: {config_path}"
+                )
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -1033,6 +1058,9 @@ class FDConfig:
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self._str_to_list("innode_prefill_ports", int)
+
+        if envs.FD_FOR_TORCH_MODEL_FORMAT:
+            self.model_config.model_format = "torch"
 
         # TODO
         self.max_prefill_batch = 3
