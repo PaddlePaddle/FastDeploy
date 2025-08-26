@@ -163,12 +163,21 @@ model_param_map = {
         "tensor_parallel_size": 2,
         "quantizations": [
             "wint8",
-            {"quant_type": "block_wise_fp8", "backend": "triton", "env": {"FD_USE_DEEP_GEMM": "0"}},
-            {"quant_type": "block_wise_fp8", "backend": "deepgemm"},
         ],
     },
     "Qwen2-7B-Instruct": {
         "quantizations": ["None", "wint8"],
+    },
+    "Qwen3-30B-A3B": {
+        "tensor_parallel_size": 2,
+        "quantizations": [
+            {
+                "quant_type": "block_wise_fp8",
+                "backend": "triton",
+                "env": {"FD_USE_DEEP_GEMM": "0", "DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+            },
+            {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
+        ],
     },
 }
 
