@@ -51,6 +51,7 @@ class ModelConfig:
         load_strategy: str = "ipc_snapshot",
         quantization: str = None,
         download_dir: Optional[str] = None,
+        lm_head_fp32: bool = False,
     ):
         """
         Initialize the ModelConfig class.
@@ -65,6 +66,7 @@ class ModelConfig:
         self.dynamic_load_weight = dynamic_load_weight
         self.load_strategy = load_strategy
         self.quantization = quantization
+        self.lm_head_fp32 = lm_head_fp32
 
         config_file = os.path.join(model_name_or_path, config_json_file)
         if os.path.isfile(model_name_or_path):
@@ -804,7 +806,7 @@ class Config:
             if self.cache_config.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192
@@ -855,7 +857,7 @@ class Config:
         )
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv('ENABLE_V1_KVCACHE_SCHEDULER', '0')):
+            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
