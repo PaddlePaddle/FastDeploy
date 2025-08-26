@@ -224,7 +224,7 @@ class FusedMoE(nn.Layer):
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
         dim = -1 if shard_dim else 0
         if self.tp_size > 1:
-            if isinstance(loaded_weight, np.ndarray):
+            if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
             else:
                 size = loaded_weight.get_shape()[dim]
@@ -264,7 +264,7 @@ class FusedMoE(nn.Layer):
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
         if self.tp_size > 1 and shard_dim is not None:
             dim = -1 if shard_dim else 0
-            if isinstance(loaded_weight, np.ndarray):
+            if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
             else:
                 size = loaded_weight.get_shape()[dim]
