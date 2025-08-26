@@ -98,6 +98,11 @@ class FusedMoE(nn.Layer):
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.ep_size = fd_config.parallel_config.expert_parallel_size
         self.ep_rank = fd_config.parallel_config.expert_parallel_rank
+        self.tp_group = fd_config.parallel_config.tp_group
+        # NOTE(Zhenyu Li): just supports tp_size = 1 when ep_size > 1 in MOE now.
+        if self.ep_size > 1:
+            self.tp_size = 1
+            self.tp_rank = 0
 
         assert (self.tp_size >= 1 and self.ep_size == 1) or (
             self.tp_size == 1 and self.ep_size > 1
