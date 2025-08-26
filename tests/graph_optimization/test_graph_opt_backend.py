@@ -67,97 +67,135 @@ class TestGrpahOptBackend(unittest.TestCase):
     Test graph_opt_backend
     """
 
-    def test_graph_opt_backend(self):
-        """Run test case"""
+    def _setup_common_test_components(
+        self,
+        graph_opt_level=0,
+        use_cudagraph=False,
+        input_shape=(2, 4, 16),
+        dtype="float32",
+        model_config=None,
+        max_num_seqs=1,
+    ):
+        """Helper method: Setup common test components
+
+        Args:
+            graph_opt_level (int): Graph optimization level (0: dynamic, 1: static, 2: cinn)
+            use_cudagraph (bool): Whether to use cudagraph
+            input_shape (tuple): Input data shape (batch_size, seq_len, d_model)
+            dtype (str): Data type
+            model_config (dict): Model configuration parameters, default: {"d_model": 16, "d_hidden": 32}
+            max_num_seqs (int): Maximum number of sequences
+
+        Returns:
+            tuple: (fd_config, input_tensor, forward_meta, model_config)
+        """
+        # Default model configuration
+        if model_config is None:
+            model_config = {"d_model": 16, "d_hidden": 32}
+
+        # Setup graph optimization config
         graph_opt_config = GraphOptimizationConfig(args={})
-        graph_opt_config.use_cudagraph = False
+        graph_opt_config.use_cudagraph = use_cudagraph
+        graph_opt_config.graph_opt_level = graph_opt_level
+
+        # Setup parallel config
         parallel_config = ParallelConfig(args={})
-        parallel_config.max_num_seqs = 1
+        parallel_config.max_num_seqs = max_num_seqs
+
+        # Setup cache config
         cache_config = CacheConfig({})
+
         # Initialize cuda graph capture list
         graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
         graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+
+        # Create FD config
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             parallel_config=parallel_config,
             cache_config=cache_config,
             test_mode=True,
         )
-        input_np = np.ones([2, 4, 16], dtype="float32")
-        # Run Numpy Baseline
-        output_numpy = numpy_baseline(16, 32, input_np)
 
-        input_tensor = paddle.ones([2, 4, 16], dtype="float32")
-        # Run Test Dynamic Graph
-        test_model_dynamic = TinyModel(fd_config=fd_config, d_model=16, d_hidden=32)
+        # Create input data
+        input_tensor = paddle.ones(input_shape, dtype=dtype)
+
+        # Create forward_meta
         forward_meta = ForwardMeta(input_ids=input_tensor, ids_remove_padding=input_tensor, step_use_cudagraph=True)
-        output_dynamic = test_model_dynamic(ids_remove_padding=input_tensor, forward_meta=forward_meta)
-        np.testing.assert_allclose(output_numpy, output_dynamic.numpy())
 
-        # Run Test Static Graph
-        graph_opt_config.graph_opt_level = 1
-        fd_config = FDConfig(
-            graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
-            cache_config=cache_config,
-            test_mode=True,
-        )
-        test_model_static = TinyModel(fd_config=fd_config, d_model=16, d_hidden=32)
-        output_static = test_model_static(ids_remove_padding=input_tensor, forward_meta=forward_meta)
-        np.testing.assert_allclose(output_numpy, output_static.numpy())
+        return fd_config, input_tensor, forward_meta, model_config
 
-        # Run Test CINN
-        graph_opt_config.graph_opt_level = 2
-        fd_config = FDConfig(
-            graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
-            cache_config=cache_config,
-            test_mode=True,
-        )
-        test_model_cinn = TinyModel(fd_config=fd_config, d_model=16, d_hidden=32)
-        output_cinn = test_model_cinn(ids_remove_padding=input_tensor, forward_meta=forward_meta)
-        np.testing.assert_allclose(output_numpy, output_cinn.numpy())
+    def _run_model_test(
+        self, fd_config, input_tensor, forward_meta, model_config, test_name, model_class=None, baseline_func=None
+    ):
+        """Helper method: Run model test and validate results
 
-        graph_opt_config.use_cudagraph = True
-        # Run Test Dynamic + CudaGraph
-        graph_opt_config.graph_opt_level = 0
-        fd_config = FDConfig(
-            graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
-            cache_config=cache_config,
-            test_mode=True,
-        )
-        test_model_dynamic_cudagraph = TinyModel(fd_config=fd_config, d_model=16, d_hidden=32)
-        output_dynamic_cudagraph = test_model_dynamic_cudagraph(
-            ids_remove_padding=input_tensor, forward_meta=forward_meta
-        )
-        np.testing.assert_allclose(output_numpy, output_dynamic_cudagraph.numpy())
+        Args:
+            fd_config: FastDeploy configuration
+            input_tensor: Input tensor
+            forward_meta: Forward meta object
+            model_config (dict): Model configuration parameters
+            test_name (str): Test name for error reporting
+            model_class: Model class, default uses TinyModel
+            baseline_func: Baseline function, default uses numpy_baseline
+        """
+        if model_class is None:
+            model_class = TinyModel
+        if baseline_func is None:
+            baseline_func = numpy_baseline
 
-        # Run Test Static + CudaGraph
-        graph_opt_config.graph_opt_level = 1
-        fd_config = FDConfig(
-            graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
-            cache_config=cache_config,
-            test_mode=True,
-        )
-        test_model_static_cudagraph = TinyModel(fd_config=fd_config, d_model=16, d_hidden=32)
-        output_static_cudagraph = test_model_static_cudagraph(
-            ids_remove_padding=input_tensor, forward_meta=forward_meta
-        )
-        np.testing.assert_allclose(output_numpy, output_static_cudagraph.numpy())
+        # Calculate baseline results
+        input_np = input_tensor.numpy()
+        output_numpy = baseline_func(**model_config, x=input_np)
 
-        # Run Test CINN + CudaGraph
-        graph_opt_config.graph_opt_level = 2
-        fd_config = FDConfig(
-            graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
-            cache_config=cache_config,
-            test_mode=True,
+        # Run model test
+        test_model = model_class(fd_config=fd_config, **model_config)
+        output = test_model(ids_remove_padding=input_tensor, forward_meta=forward_meta)
+
+        # Validate results
+        np.testing.assert_allclose(output_numpy, output.numpy(), err_msg=f"Test {test_name} failed: output mismatch")
+
+    def test_dynamic_graph(self):
+        """Test dynamic graph mode"""
+        fd_config, input_tensor, forward_meta, model_config = self._setup_common_test_components(
+            graph_opt_level=0, use_cudagraph=False
         )
-        test_model_cinn_cudagraph = TinyModel(fd_config=fd_config, d_model=16, d_hidden=32)
-        output_cinn_cudagraph = test_model_cinn_cudagraph(ids_remove_padding=input_tensor, forward_meta=forward_meta)
-        np.testing.assert_allclose(output_numpy, output_cinn_cudagraph.numpy())
+        self._run_model_test(fd_config, input_tensor, forward_meta, model_config, "dynamic_graph")
+
+    def test_static_graph(self):
+        """Test static graph mode"""
+        fd_config, input_tensor, forward_meta, model_config = self._setup_common_test_components(
+            graph_opt_level=1, use_cudagraph=False
+        )
+        self._run_model_test(fd_config, input_tensor, forward_meta, model_config, "static_graph")
+
+    def test_cinn_graph(self):
+        """Test CINN optimization mode"""
+        fd_config, input_tensor, forward_meta, model_config = self._setup_common_test_components(
+            graph_opt_level=2, use_cudagraph=False
+        )
+        self._run_model_test(fd_config, input_tensor, forward_meta, model_config, "cinn_graph")
+
+    def test_dynamic_graph_with_cudagraph(self):
+        """Test dynamic graph + CudaGraph mode"""
+        fd_config, input_tensor, forward_meta, model_config = self._setup_common_test_components(
+            graph_opt_level=0, use_cudagraph=True
+        )
+        self._run_model_test(fd_config, input_tensor, forward_meta, model_config, "dynamic_graph_cudagraph")
+
+    def test_static_graph_with_cudagraph(self):
+        """Test static graph + CudaGraph mode"""
+        fd_config, input_tensor, forward_meta, model_config = self._setup_common_test_components(
+            graph_opt_level=1, use_cudagraph=True
+        )
+        self._run_model_test(fd_config, input_tensor, forward_meta, model_config, "static_graph_cudagraph")
+
+    def test_cinn_graph_with_cudagraph(self):
+        """Test CINN + CudaGraph mode"""
+        fd_config, input_tensor, forward_meta, model_config = self._setup_common_test_components(
+            graph_opt_level=2, use_cudagraph=True
+        )
+        self._run_model_test(fd_config, input_tensor, forward_meta, model_config, "cinn_graph_cudagraph")
 
 
 if __name__ == "__main__":
