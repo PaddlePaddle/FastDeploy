@@ -17,8 +17,9 @@
 import unittest
 from unittest.mock import patch
 
-from fastdeploy.metrics.metrics import get_filtered_metrics
 from prometheus_client import Gauge
+
+from fastdeploy.metrics.metrics import get_filtered_metrics
 
 
 class TestGetFilteredMetrics(unittest.TestCase):
