@@ -193,7 +193,6 @@ class LLMEngine:
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
-            sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
