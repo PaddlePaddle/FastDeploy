@@ -114,7 +114,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
 
         # Run Test Case1
         test_model1 = TestModel1(fd_config=fd_config)
-        input_tensor1 = paddle.ones([32768])
+        input_tensor1 = paddle.ones([1, 32768])
         forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
         # Triger Capture
@@ -127,7 +127,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         # Corrent output
         output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        assert sum(output1 - output1_correct) == 0
+        assert (output1 == output1_correct).all()
 
 
 if __name__ == "__main__":
