@@ -558,9 +558,9 @@ class Ernie4_5_Model(nn.Layer):
         self.barrier_id = -1
         def zkk_barrier():
             self.barrier_id += 1
-            # paddle.device.synchronize()
-            # paddle.distributed.barrier()
-            #print("到达", self.barrier_id)
+            paddle.device.synchronize()
+            paddle.distributed.barrier()
+            # print("到达", self.barrier_id)
             #paddle.device.synchronize()
 
         # 先只搞第三层！
@@ -623,14 +623,36 @@ class Ernie4_5_Model(nn.Layer):
                 recv_hooks[i].appendleft(e2a_irecv_hook)
 
                 combine_events[i].appendleft(event)
+            
+            compute_atten(3, 0)
+            dispatch_send(0)
+            dispatch_wait(0)
+            zkk_barrier()
 
+            compute_atten(3, 1)
+            
             for layer_id in range(3, self.num_layers):
-                for j in range(split_num):
+                tmp_split_num = range(split_num)
+                if layer_id == 3:
+                    tmp_split_num = [2]
+                for j in tmp_split_num:
+                    
+                    # 上一个batch
+                    dispatch_send((j-1+split_num)%split_num)
+                    dispatch_wait((j-1+split_num)%split_num)
+
                     compute_atten(layer_id, j)
-                    dispatch_send(j)
-                    dispatch_wait(j)
-                    combine_receive(j)
-                    combine_wait(j)
+
+                    # 上上个batch！
+                    combine_receive((j-2+split_num)%split_num)
+                    combine_wait((j-2+split_num)%split_num)
+            
+            dispatch_send(2)
+            dispatch_wait(2)
+            combine_receive(1)
+            combine_wait(1)
+            combine_receive(2)
+            combine_wait(2)
 
         else:
             # 搞一个大槽子放东西！
@@ -695,13 +717,40 @@ class Ernie4_5_Model(nn.Layer):
                 send_hooks[i].appendleft(e2a_isend_hook)
                 combine_events[i].appendleft(event)
 
+            dispatch_receive(0)
+            dispatch_wait(0)
+            zkk_barrier()
+            haha = 9
+            compute_moe(haha//3,0)
+            
+            dispatch_receive(1)
+            dispatch_wait(1)
+
             for layer_id in range(3, self.num_layers):
-                for j in range(split_num):
-                    dispatch_receive(j)
-                    dispatch_wait(j)
-                    compute_moe(layer_id, j)
-                    combine_send(j)
-                    combine_wait(j)
+                tmp_split_num = range(split_num)
+                if layer_id == 3:
+                    tmp_split_num = [1, 2]
+                if layer_id == self.num_layers - 1:
+                    tmp_split_num = [0, 1]
+                for j in tmp_split_num:
+                    
+                    # 上一个batch
+                    combine_send((j-1+split_num)%split_num)
+                    combine_wait((j-1+split_num)%split_num)
+
+                    haha += 1
+                    compute_moe(haha//3,j)
+
+                    # 下一个batch
+                    dispatch_receive((j+1)%split_num)
+                    dispatch_wait((j+1)%split_num)
+            
+            haha += 1
+            compute_moe(haha//3,2)
+            combine_send(1)
+            combine_wait(1)
+            combine_send(2)
+            combine_wait(2)
 
         paddle.distributed.barrier()
 
