@@ -57,6 +57,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             {
                 **extra_weight_attrs,
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "model_format": extra_weight_attrs.get("model_format", ""),
             },
         )
 
@@ -195,7 +196,14 @@ class LinearBase(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the weights
         """
-        weight_tensor = get_tensor(state_dict.pop(self.weight_key))
+        if "qkv_a_proj_with_mqa" in self.weight_key:
+            self.weight_key_q = self.weight_key.replace("qkv_a_proj_with_mqa", "q_a_proj")
+            self.weight_key_kv = self.weight_key.replace("qkv_a_proj_with_mqa", "kv_a_proj_with_mqa")
+            q_weight_tensor = get_tensor(state_dict.pop(self.weight_key_q))
+            kv_weight_tensor = get_tensor(state_dict.pop(self.weight_key_kv))
+            weight_tensor = paddle.concat([q_weight_tensor, kv_weight_tensor], axis=-1)
+        else:
+            weight_tensor = get_tensor(state_dict.pop(self.weight_key))
         self.quant_method.process_loaded_weights(self, weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
@@ -343,7 +351,9 @@ class ColumnParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            model_format=fd_config.model_config.model_format,
         )
+
         if self.nranks > 0:
             if self.with_bias:
                 # col parallel
@@ -402,6 +412,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
         shard_dim = -1 if output_dim else 0
@@ -424,7 +437,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if self.nranks != 1:
                 dim = -1 if output_dim else 0
-                if isinstance(loaded_weight, np.ndarray):
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
@@ -523,6 +536,9 @@ class QKVParallelLinear(ColumnParallelLinear):
         assert output_dim is not None
         dim = -1 if output_dim else 0
         head_dim = param.shape[dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
             shard_offsets = [
@@ -541,7 +557,8 @@ class QKVParallelLinear(ColumnParallelLinear):
             assert loaded_shard_id in ["q", "k", "v"]
             # Tensor parallelism splits the weight along the output_dim
             if self.nranks != 1:
-                if isinstance(loaded_weight, np.ndarray):
+                dim = -1 if output_dim else 0
+                if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
@@ -686,6 +703,7 @@ class RowParallelLinear(LinearBase):
         self.fd_config = fd_config
         self.skip_quant = False
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.tp_group = fd_config.parallel_config.tp_group
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
@@ -712,6 +730,7 @@ class RowParallelLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            model_format=fd_config.model_config.model_format,
         )
         if self.nranks > 0:
             if self.with_bias:
@@ -733,7 +752,7 @@ class RowParallelLinear(LinearBase):
             out = paddle.matmul(x, self.weight)
 
         if self.reduce_results and self.nranks > 1:
-            tensor_model_parallel_all_reduce(out)
+            tensor_model_parallel_all_reduce(out, self.tp_group)
 
         return out
 

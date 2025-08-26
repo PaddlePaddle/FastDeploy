@@ -461,7 +461,6 @@ class LLMEngine:
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
-            sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
@@ -762,8 +761,6 @@ class LLMEngine:
 
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
-            if task.sampling_params.bad_words is not None:
-                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 

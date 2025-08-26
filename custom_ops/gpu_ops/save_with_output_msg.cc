@@ -105,7 +105,8 @@ void SaveOutMmsg(const paddle::Tensor& x,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
-    if (!save_each_rank && rank_id > 0) {
+    // don't use save_each_rank now!
+    if (rank_id > 0) {
         return;
     }
     if (x.place() == paddle::CPUPlace()) {
