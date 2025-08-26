@@ -343,6 +343,9 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
+                        if res.get("error_msg") is not None and "Clear" in res["error_msg"]:
+                            choice.finish_reason = "clear_data"
+
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
                             choice.delta.multimodal_content[0]["completion_token_ids"] = list(output["token_ids"])
@@ -513,6 +516,8 @@ class OpenAIServingChat:
 
         if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "recover_stop"
+        if final_res.get("error_msg") is not None and "Clear" in final_res["error_msg"]:
+            choice.finish_reason = "clear_data"
         choices.append(choice)
 
         num_prompt_tokens = len(prompt_token_ids)
