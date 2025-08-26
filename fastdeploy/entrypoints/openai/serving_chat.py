@@ -115,6 +115,7 @@ class OpenAIServingChat:
             except Exception as e:
                 error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
+                self.engine_client.semaphore.release()
                 return ErrorResponse(code=400, message=error_msg)
 
             del current_req_dict

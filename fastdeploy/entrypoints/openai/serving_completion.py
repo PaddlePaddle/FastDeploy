@@ -128,22 +128,22 @@ class OpenAIServingCompletion:
             return ErrorResponse(code=408, message=error_msg)
 
         try:
-            for idx, prompt in enumerate(request_prompts):
-                request_id_idx = f"{request_id}-{idx}"
-                current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                try:
+            try:
+                for idx, prompt in enumerate(request_prompts):
+                    request_id_idx = f"{request_id}-{idx}"
+                    current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
                     prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
-                except Exception as e:
-                    error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
-                    api_server_logger.error(error_msg)
-                    return ErrorResponse(message=str(e), code=400)
-
-                del current_req_dict
+                    del current_req_dict
+            except Exception as e:
+                error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
+                api_server_logger.error(error_msg)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(message=str(e), code=400)
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -205,8 +205,8 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
-            aggregated_top_logprobs = [[[], [], []]] * num_choices
-            aggregated_token_ids = [[]] * num_choices
+            aggregated_top_logprobs = [[[], [], []] for _ in range(num_choices)]
+            aggregated_token_ids = [[] for _ in range(num_choices)]
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
@@ -477,7 +477,6 @@ class OpenAIServingCompletion:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
-        aggregated_logprobs: Optional[CompletionLogprobs] = None
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -489,15 +488,9 @@ class OpenAIServingCompletion:
             output = final_res["outputs"]
             output_top_logprobs = output["top_logprobs"]
 
+            aggregated_logprobs: Optional[CompletionLogprobs] = None
             if output_top_logprobs is not None:
-                logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
-                if aggregated_logprobs is None:
-                    aggregated_logprobs = logprobs_res
-                else:
-                    aggregated_logprobs.tokens.extend(logprobs_res.tokens)
-                    aggregated_logprobs.token_logprobs.extend(logprobs_res.token_logprobs)
-                    aggregated_logprobs.top_logprobs.extend(logprobs_res.top_logprobs)
-                    aggregated_logprobs.text_offset.extend(logprobs_res.text_offset)
+                aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
             if request.echo:
                 assert prompt_text is not None

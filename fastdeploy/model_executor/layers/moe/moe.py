@@ -80,6 +80,7 @@ class FusedMoE(nn.Layer):
         layer_idx: int = -1,
         moe_tag: str = "",
         gate_correction_bias=None,
+        redundant_table_manger: RedundantExpertManger = None,
         weight_key_map: dict = {},
     ):
         """
@@ -98,6 +99,11 @@ class FusedMoE(nn.Layer):
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.ep_size = fd_config.parallel_config.expert_parallel_size
         self.ep_rank = fd_config.parallel_config.expert_parallel_rank
+        self.tp_group = fd_config.parallel_config.tp_group
+        # NOTE(Zhenyu Li): just supports tp_size = 1 when ep_size > 1 in MOE now.
+        if self.ep_size > 1:
+            self.tp_size = 1
+            self.tp_rank = 0
 
         assert (self.tp_size >= 1 and self.ep_size == 1) or (
             self.tp_size == 1 and self.ep_size > 1
@@ -142,15 +148,8 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             self.quant_method = get_moe_method()
-        self.redundant_table_manger = None
+        self.redundant_table_manger = redundant_table_manger
         if self.ep_size > 1:
-            if fd_config.model_config.enable_redundant_experts is True:
-                self.redundant_table_manger = RedundantExpertManger(
-                    n_routed_experts=fd_config.model_config.moe_num_experts,
-                    num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                    redundant_experts_num=fd_config.model_config.redundant_experts_num,
-                    ep_size=self.ep_size,
-                )
             self.quant_method.init_ep(self)
 
         if fd_config.load_config.dynamic_load_weight:
@@ -219,7 +218,7 @@ class FusedMoE(nn.Layer):
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
         dim = -1 if shard_dim else 0
         if self.tp_size > 1:
-            if isinstance(loaded_weight, np.ndarray):
+            if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
             else:
                 size = loaded_weight.get_shape()[dim]
@@ -259,7 +258,7 @@ class FusedMoE(nn.Layer):
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
         if self.tp_size > 1 and shard_dim is not None:
             dim = -1 if shard_dim else 0
-            if isinstance(loaded_weight, np.ndarray):
+            if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
             else:
                 size = loaded_weight.get_shape()[dim]
@@ -418,6 +417,7 @@ class FusedMoE(nn.Layer):
         state_dict: dict,
         up_gate_proj_expert_weight_key: str,
         down_proj_expert_weight_key: str,
+        is_rearrange: bool = False,
     ):
         """
         Load experts weight from state_dict.
@@ -446,7 +446,12 @@ class FusedMoE(nn.Layer):
             ]
         up_gate_proj_weights = []
         down_proj_weights = []
-        is_ffn_merged = up_gate_proj_expert_weight_key.format(self.expert_id_offset) in state_dict
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+        is_ffn_merged = (
+            up_gate_proj_expert_weight_key.format(logical_expert_ids[0] if is_rearrange else self.expert_id_offset)
+            in state_dict
+        )
         if is_ffn_merged:
             for expert_idx in logical_expert_ids:
                 down_proj_expert_weight_key_name = down_proj_expert_weight_key.format(expert_idx)
@@ -528,10 +533,12 @@ class FusedMoE(nn.Layer):
         assert up_gate_proj_expert_weight_key is not None, "up_gate_proj_expert_weight_key should not be none."
         assert down_proj_expert_weight_key is not None, "down_proj_expert_weight_key should not be none."
 
-        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = self.load_experts_weight(
-            state_dict,
-            up_gate_proj_expert_weight_key,
-            down_proj_expert_weight_key,
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            self.load_experts_weight(
+                state_dict,
+                up_gate_proj_expert_weight_key,
+                down_proj_expert_weight_key,
+            )
         )
         assert (
             len(up_gate_proj_weights) == self.num_local_experts
@@ -540,7 +547,7 @@ class FusedMoE(nn.Layer):
             len(down_proj_weights) == self.num_local_experts
         ), "down_proj_weights length should be equal to num_local_experts."
 
-        return up_gate_proj_weights, down_proj_weights
+        return up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list
 
     def extract_gate_correction_bias(self, gate_correction_bias_key, state_dict):
         """
@@ -556,7 +563,7 @@ class FusedMoE(nn.Layer):
         if is_supported_moe_backend is not None and is_supported_moe_backend(self.quant_method):
             if self.fd_config.model_config.is_quantized:
                 if getattr(self.fd_config.quant_config, "is_permuted", True):
-                    self.quant_method.process_prequanted_weights(self, state_dict)
+                    self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
                 else:
                     self.quant_method.process_loaded_weights(self, state_dict)
             else:
@@ -564,7 +571,7 @@ class FusedMoE(nn.Layer):
         else:
             if self.fd_config.model_config.is_quantized:
                 if getattr(self.fd_config.quant_config, "is_permuted", True):
-                    self.quant_method.process_prequanted_weights(self, state_dict)
+                    self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
                 else:
                     self.quant_method.create_weights(self, state_dict)
             else:

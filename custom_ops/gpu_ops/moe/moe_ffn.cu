@@ -20,6 +20,7 @@
 #include "helper.h"
 #include "moe/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
+#include "w4afp8_gemm/w4afp8_gemm.h"
 
 template <paddle::DataType T>
 void MoeFFNKernel(const paddle::Tensor& permute_input,
@@ -33,7 +34,8 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                   const paddle::optional<paddle::Tensor>& expert_idx_per_token,
                   const std::string& quant_method,
                   paddle::Tensor ffn_out,
-                  bool used_in_ep_low_latency) {
+                  bool used_in_ep_low_latency,
+                  const int estimate_total_token_nums) {
     using namespace phi;
     typedef PDTraits<T> traits_;
     typedef typename traits_::DataType DataType_;
@@ -60,19 +62,22 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
     constexpr size_t workspace_size = 1 * 1024 * 1024 * 1024; // for nf4 stream-k
     Allocator* allocator = paddle::GetAllocator(place);
     Allocator::AllocationPtr workspace;
-    if (quant_method == "weight_only_int4" || quant_method == "w4a8") {
+    if (quant_method == "weight_only_int4" || quant_method == "w4a8" || quant_method == "w4afp8") {
         inter_dim = inter_dim * 2;
     }
-    if (quant_method == "w4a8") {
+    if (quant_method == "w4a8" || quant_method == "w4afp8") {
         workspace = allocator->Allocate(
             SizeOf(paddle::DataType::INT8) * workspace_size);
     }
 
     const int64_t inter_size = inter_dim;
 
+    typedef PDTraits<paddle::DataType::FLOAT8_E4M3FN> traits_fp8;
+    typedef typename traits_fp8::DataType DataType_fp8;
+    typedef typename traits_fp8::data_t data_t_fp8;
 
     int num_experts_ = num_experts;
-    int num_max_tokens_per_expert;
+    int num_max_tokens_per_expert = 256;
     int expanded_active_expert_rows;
 
     paddle::Tensor fc1_out_tensor;
@@ -161,12 +166,48 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
             reinterpret_cast<NvType *>(fc1_out),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
             total_rows_in_ll_else_minus1,
-            tune_total_rows,
+            used_in_ep_low_latency ? estimate_total_token_nums : tune_total_rows,
             inter_size,
             hidden_size,
             reinterpret_cast<char*>(workspace->ptr()),
             workspace_size,
             num_experts,
+            stream);
+    } else if (quant_method == "w4afp8") {
+        typedef PDTraits<paddle::DataType::FLOAT8_E4M3FN> traits_fp8;
+        typedef typename traits_fp8::DataType DataType_fp8;
+        typedef typename traits_fp8::data_t data_t_fp8;
+
+        Allocator::AllocationPtr ffn1_input_row_sum;
+        ffn1_input_row_sum = allocator->Allocate(
+            sizeof(float) * expanded_active_expert_rows);
+
+        compute_row_sum(
+            permute_input.data<data_t_fp8>(),
+            expanded_active_expert_rows,
+            hidden_size,
+            reinterpret_cast<float*>(ffn1_input_row_sum->ptr()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            num_max_tokens_per_expert,
+            used_in_ep_low_latency,
+            stream);
+
+
+        float* row_scale = nullptr;
+        DisPatchW4AFp8GemmWrapper(
+            reinterpret_cast<const DataType_fp8 *>(permute_input.data<data_t_fp8>()),
+            reinterpret_cast<const DataType_fp8 *>(up_gate_proj_weight.data<int8_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            reinterpret_cast<float*>(ffn1_input_row_sum->ptr()),
+            row_scale,
+            const_cast<paddle::Tensor*>(up_gate_proj_scale.get_ptr())
+                ->data<float>(),
+            reinterpret_cast<NvType *>(fc1_out),
+            used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
+            num_max_tokens_per_expert,
+            num_experts,
+            inter_size,
+            hidden_size,
             stream);
     } else {
         typename cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kNone>::Arguments quant_args;
@@ -194,7 +235,6 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         act_out_tensor = paddle::experimental::swiglu(fc1_out_tensor, nullptr);
     }
     auto act_out = act_out_tensor.data<data_t>();
-
     if (quant_method == "weight_only_int8") {
         typename cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kWeightOnlyInt8>::Arguments quant_args;
         int8_moe_gemm_runner.moe_gemm(
@@ -267,12 +307,72 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
             reinterpret_cast<NvType *>(ffn_out_data),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
             total_rows_in_ll_else_minus1,
-            tune_total_rows,
+            used_in_ep_low_latency ? estimate_total_token_nums : tune_total_rows,
             hidden_size,
             inter_size / 2,
             reinterpret_cast<char*>(workspace->ptr()),
             workspace_size,
             num_experts,
+            stream);
+    } else if (quant_method == "w4afp8") {
+        data_t *ffn2_shift = nullptr;
+        data_t *ffn2_smooth = nullptr;
+        float* row_scale = nullptr;
+        Allocator::AllocationPtr fp8_act_out;
+        fp8_act_out = allocator->Allocate(
+            SizeOf(paddle::DataType::INT8) * act_out_tensor.numel());
+        Allocator::AllocationPtr ffn2_input_row_sum;
+        ffn2_input_row_sum = allocator->Allocate(
+            sizeof(float) * expanded_active_expert_rows);
+
+        // note(yuanxiaolan): optimize this
+        MoeFastHardamardWrapper<data_t, data_t>(
+            act_out_tensor.data<data_t>(),
+            expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            ffn2_shift, // ffn2_shift->data<T>(),
+            ffn2_smooth, // ffn2_smooth->data<T>(),
+            nullptr,
+            1,
+            448.0f,
+            -448.0f,
+            expanded_active_expert_rows,
+            inter_size / 2,
+            num_max_tokens_per_expert,
+            used_in_ep_low_latency,
+            act_out_tensor.data<data_t>(),
+            stream
+        );
+
+        quantize_moe_input<data_t, data_t_fp8>(act_out_tensor.data<data_t>(),
+            expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
+            down_proj_in_scale ? const_cast<paddle::Tensor*>(down_proj_in_scale.get_ptr())->data<float>() : nullptr,
+            448.0f,
+            -448.0f,
+            expanded_active_expert_rows,
+            inter_size / 2,
+            reinterpret_cast<float*>(ffn2_input_row_sum->ptr()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            num_max_tokens_per_expert,
+            used_in_ep_low_latency,
+            reinterpret_cast<data_t_fp8 *>(fp8_act_out->ptr()),
+            stream
+            );
+
+        DisPatchW4AFp8GemmWrapper(
+            reinterpret_cast<const DataType_fp8 *>(fp8_act_out->ptr()),
+            reinterpret_cast<const DataType_fp8 *>(down_proj_weight.data<int8_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            reinterpret_cast<float*>(ffn2_input_row_sum->ptr()),
+            row_scale,
+            const_cast<paddle::Tensor*>(down_proj_scale.get_ptr())
+                    ->data<float>(),
+            reinterpret_cast<NvType*>(ffn_out_data),
+            used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
+            num_max_tokens_per_expert,
+            num_experts,
+            hidden_size,
+            inter_size / 2,
             stream);
     } else {
         typename cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kNone>::Arguments quant_args;
@@ -302,10 +402,12 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
-    const std::string& quant_method, const bool used_in_ep_low_latency) {
+    const std::string& quant_method, const bool used_in_ep_low_latency,
+    const int estimate_total_token_nums) {
 
-    cudaCheckError();
-    const auto t_type = quant_method == "w4a8" ? up_gate_proj_scale.get().dtype() : permute_input.dtype();
+const auto t_type = (quant_method == "w4a8") ? up_gate_proj_scale.get().dtype() :
+                    (quant_method == "w4afp8") ? paddle::DataType::BFLOAT16 :
+                    permute_input.dtype();
     auto ffn_out = paddle::empty_like(permute_input, t_type);
 
     switch (t_type) {
@@ -320,7 +422,9 @@ paddle::Tensor MoeExpertFFNFunc(
                                                      down_proj_in_scale,
                                                      expert_idx_per_token,
                                                      quant_method,
-                                                     ffn_out, used_in_ep_low_latency);
+                                                     ffn_out,
+                                                     used_in_ep_low_latency,
+                                                     estimate_total_token_nums);
             break;
         case paddle::DataType::FLOAT16:
             MoeFFNKernel<paddle::DataType::FLOAT16>(permute_input,
@@ -333,7 +437,9 @@ paddle::Tensor MoeExpertFFNFunc(
                                                     down_proj_in_scale,
                                                     expert_idx_per_token,
                                                     quant_method,
-                                                    ffn_out, used_in_ep_low_latency);
+                                                    ffn_out,
+                                                    used_in_ep_low_latency,
+                                                    estimate_total_token_nums);
             break;
         default:
             PD_THROW("Unsupported data type for MoeExpertFFN");
@@ -351,7 +457,8 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
-    const std::string& quant_method, const bool used_in_ep_low_latency) {
+    const std::string& quant_method, const bool used_in_ep_low_latency,
+    const int estimate_total_token_nums) {
     return {MoeExpertFFNFunc(permute_input,
                              tokens_expert_prefix_sum,
                              up_gate_proj_weight,
@@ -361,7 +468,9 @@ std::vector<paddle::Tensor> MoeExpertFFN(
                              down_proj_scale,
                              down_proj_in_scale,
                              expert_idx_per_token,
-                             quant_method, used_in_ep_low_latency)};
+                             quant_method,
+                             used_in_ep_low_latency,
+                             estimate_total_token_nums)};
 }
 
 std::vector<std::vector<int64_t>> MoeExpertFFNInferShape(
@@ -375,7 +484,8 @@ std::vector<std::vector<int64_t>> MoeExpertFFNInferShape(
     const paddle::optional<std::vector<int64_t>>& down_proj_in_scale_shape,
     const paddle::optional<std::vector<int64_t>>& expert_idx_per_token_shape,
     const std::string& quant_method,
-    const bool used_in_ep_low_latency) {
+    const bool used_in_ep_low_latency,
+    const int estimate_total_token_nums) {
     return {permute_input_shape};
 }
 
@@ -388,8 +498,9 @@ std::vector<paddle::DataType> MoeExpertFFNInferDtype(
     const paddle::optional<paddle::DataType> &up_gate_proj_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_in_scale_dtype,
-    const std::string &quant_method, const bool used_in_ep_low_latency) {
-  if (quant_method == "w4a8") {
+    const std::string &quant_method, const bool used_in_ep_low_latency,
+    const int estimate_total_token_nums) {
+  if (quant_method == "w4a8" || quant_method == "w4afp8") {
     return {up_gate_proj_scale_dtype.get()};
   } else {
     return {permute_input_dtype};
@@ -460,7 +571,7 @@ PD_BUILD_STATIC_OP(moe_expert_ffn)
              paddle::Optional("down_proj_in_scale"),
              paddle::Optional("expert_idx_per_token")})
     .Outputs({"output_tensor"})
-    .Attrs({"quant_method:std::string", "used_in_ep_low_latency:bool"})
+    .Attrs({"quant_method:std::string", "used_in_ep_low_latency:bool", "estimate_total_token_nums:int"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFN))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertFFNInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertFFNInferDtype));
