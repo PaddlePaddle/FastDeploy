@@ -137,7 +137,12 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
-                if bool(envs.FD_USE_MACHETE) and layer.weight_shape[1] and layer.weight_shape[1] % 128 == 0:
+                if (
+                    self.name() == "wint4"
+                    and bool(envs.FD_USE_MACHETE)
+                    and layer.weight_shape[1]
+                    and layer.weight_shape[1] % 128 == 0
+                ):
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 

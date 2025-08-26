@@ -475,8 +475,6 @@ def generate():
         tile_scheduler=TileSchedulerType.StreamK,
     )
 
-    # import pdb; pdb.set_trace()
-
     # Stored as "condition": ((tile_shape_mn), (cluster_shape_mnk))
     default_tile_heuristic_config = {
         # M = 257+

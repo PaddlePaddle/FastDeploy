@@ -512,6 +512,9 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
         os.system("python utils/auto_gen_wfp8afp8_sparse_gemm_kernel.py")
         sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
+
+        cutlass_py_dir = os.path.abspath("third_party/cutlass/python")
+        os.environ["PYTHONPATH"] = cutlass_py_dir + (os.pathsep + os.environ.get("PYTHONPATH", ""))
         os.system("python gpu_ops/machete/generate.py")
         sources += find_end_files("gpu_ops/machete", ".cu")
 
