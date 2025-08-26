@@ -24,6 +24,7 @@ class MockFDConfig:
     """
     A mock FDConfig used for unit testing ModelRunner without real FDConfig dependencies.
     """
+
     def __init__(self):
         self.model_config = SimpleNamespace()
         self.load_config = SimpleNamespace()
@@ -39,6 +40,7 @@ class MockModelRunner(ModelRunnerBase):
     """
     A mock ModelRunner returning fake data for testing purposes.
     """
+
     def load_model(self):
         # Simulate loading a model.
         self._model = "mock_model"
@@ -59,7 +61,7 @@ class MockModelRunner(ModelRunnerBase):
             req_ids=req_ids,
             req_id_to_index=req_id_to_index,
             sampled_token_ids=sampled_token_ids,
-            spec_token_ids=spec_token_ids
+            spec_token_ids=spec_token_ids,
         )
 
         # Add additional fields for testing
@@ -89,12 +91,10 @@ class TestMockModelRunner(unittest.TestCase):
     def test_execute_model_output_dimensions(self):
         # Test that execute_model returns output of correct batch and token dimensions.
         batch_size = 4
-        prompt_tokens = 6  
+        prompt_tokens = 6
         decode_tokens = 8
         output = self.runner.execute_model(
-            batch_size=batch_size,
-            prompt_tokens=prompt_tokens,
-            decode_tokens=decode_tokens
+            batch_size=batch_size, prompt_tokens=prompt_tokens, decode_tokens=decode_tokens
         )
         # Check batch size
         self.assertEqual(len(output.generated_ids), batch_size)
