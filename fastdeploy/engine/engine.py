@@ -345,6 +345,7 @@ class LLMEngine:
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
                     )
         self.worker_ready_signal.clear()
+        self.loaded_model_signal.clear()
 
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
