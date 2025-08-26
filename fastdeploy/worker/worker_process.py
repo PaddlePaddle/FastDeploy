@@ -588,9 +588,8 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
-        "--lm_head_dtype",
-        type=str,
-        default=None,
+        "--lm_head_fp32",
+        action="store_true",
         help="The data type of lm_head",
     )
 

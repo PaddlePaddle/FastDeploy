@@ -315,10 +315,9 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
-    lm_head_dtype: Optional[str] = None
+    lm_head_fp32: bool = None
     """
-    Flag to specify the data type of lm_head. Default is None (Using model default dtype).
-    Specify the data type for the lm_head layer in ['float32', 'bfloat16', 'float16'] when 'lm_head_dtype' not in the `config.json` of model
+    Flag to specify the data type of lm_head as FP32.
     """
 
     def __post_init__(self):
@@ -473,10 +472,10 @@ class EngineArgs:
             help="Enable output of token-level log probabilities.",
         )
         model_group.add_argument(
-            "--lm_head-dtype",
-            type=str,
-            default=EngineArgs.lm_head_dtype,
-            help="Specify the data type for the lm_head layer in ['float32', 'bfloat16', 'float16'] when 'lm_head_dtype' not in the `config.json` of model.",
+            "--lm_head-fp32",
+            action="store_true",
+            default=EngineArgs.lm_head_fp32,
+            help="Specify the dtype of lm_head weight as float32.",
         )
 
         # Parallel processing parameters group
@@ -781,7 +780,7 @@ class EngineArgs:
             quantization=self.quantization,
             dynamic_load_weight=self.dynamic_load_weight,
             load_strategy=self.load_strategy,
-            lm_head_dtype=self.lm_head_dtype,
+            lm_head_fp32=self.lm_head_fp32,
         )
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
