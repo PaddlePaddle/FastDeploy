@@ -56,6 +56,7 @@ class ErnieProcessor(BaseDataProcessor):
                 f"generation_config field in the model config, details={e}"
             )
             self.generation_config = None
+            
         self.decode_status = dict()
         self.tool_parser_dict = dict()
         self.thinking_parser_dict = dict()
@@ -69,7 +70,6 @@ class ErnieProcessor(BaseDataProcessor):
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
-        data_processor_logger.info(f"eos token ids length is : {self.eos_token_id_len}")
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
         self.tool_parser_obj = tool_parser_obj
