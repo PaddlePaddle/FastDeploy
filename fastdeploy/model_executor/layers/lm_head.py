@@ -38,7 +38,7 @@ class ParallelLMHead(nn.Layer):
         embedding_dim: int,
         prefix: str = "",
         with_bias: bool = False,
-        weight_dtype: str = paddle.get_default_dtype(),
+        dtype: str = None,
     ) -> None:
         """
         Parallelized LMhead.
@@ -51,7 +51,7 @@ class ParallelLMHead(nn.Layer):
             embedding_dim (int): size of hidden state.
             prefix (str): The name of current layer. Defaults to "".
             with_bias (bool): whether to have bias. Default: False.
-            weight_dtype (str): The dtype of weight. Defalut: paddle.get_default_dtype().
+            dtype (str): The dtype of weight. Defalut: None.
         """
         super(ParallelLMHead, self).__init__()
         self.weight_key: str = prefix + ".weight"
@@ -64,9 +64,9 @@ class ParallelLMHead(nn.Layer):
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
-
+        self.dtype = "float32" if fd_config.model_config.lm_head_fp32 else dtype
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
-        with temporary_dtype(weight_dtype):
+        with temporary_dtype(self.dtype):
             if self.use_ep:
                 self.weight = self.create_parameter(
                     shape=[embedding_dim, num_embeddings],
@@ -105,20 +105,20 @@ class ParallelLMHead(nn.Layer):
         """
 
         if self.use_ep:
-            self.weight.set_value(get_tensor(state_dict.pop(self.weight_key)).cast(self.weight.dtype))
+            self.weight.set_value(get_tensor(state_dict.pop(self.weight_key)).astype(self.weight.dtype))
         else:
             if self.tie_word_embeddings:
                 self.linear.weight.set_value(
-                    get_tensor(state_dict.pop(self.weight_key)).cast(self.linear.weight.dtype).transpose([1, 0])
+                    get_tensor(state_dict.pop(self.weight_key)).astype(self.linear.weight.dtype).transpose([1, 0])
                 )
             else:
-                weight_tensor = get_tensor(state_dict.pop(self.weight_key)).cast(self.linear.weight.dtype)
+                weight_tensor = get_tensor(state_dict.pop(self.weight_key)).astype(self.linear.weight.dtype)
                 if self.linear.weight.shape != weight_tensor.shape:
                     weight_tensor = weight_tensor.transpose([1, 0])
                 self.linear.weight.set_value(weight_tensor)
 
             if self.bias_key is not None:
-                bias = get_tensor(state_dict.pop(self.bias_key)).cast(self.linear.bias.dtype)
+                bias = get_tensor(state_dict.pop(self.bias_key)).astype(self.linear.bias.dtype)
                 self.linear.bias.set_value(bias)
 
     def forward(self, input: paddle.Tensor) -> paddle.Tensor:
@@ -133,12 +133,7 @@ class ParallelLMHead(nn.Layer):
         """
         logits = input
         if self.use_ep:
-            if logits.dtype != self.weight.dtype:
-                logits = logits.cast(self.weight.dtype)
-            logits = paddle.matmul(logits, self.weight)
+            logits = paddle.matmul(logits.astype(self.weight.dtype), self.weight)
         else:
-            if logits.dtype != self.linear.weight.dtype:
-                logits = logits.cast(self.linear.weight.dtype)
-            logits = self.linear(logits)
-            print(f"{self.linear.weight}")
+            logits = self.linear(logits.astype(self.linear.weight.dtype))
         return logits

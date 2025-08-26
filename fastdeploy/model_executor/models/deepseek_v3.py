@@ -595,7 +595,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-            weight_dtype="float32" if self.fd_config.model_config.lm_head_fp32 else paddle.get_default_dtype(),
         )
 
     @classmethod
@@ -614,8 +613,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
         logits = self.lm_head(hidden_states)
-        if not self.fd_config.model_config.lm_head_fp32:
-            logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
