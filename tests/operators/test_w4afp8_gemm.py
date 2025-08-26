@@ -51,11 +51,11 @@ BATCH = 1
 TokenPadding = 0
 
 tokens = [tokens_per_group] * BATCH
-tokens_perfix_sum = np.cumsum(tokens)
+tokens_prefix_sum = np.cumsum(tokens)
 
 
 tokens = paddle.to_tensor(tokens, dtype="int64")
-tokens_perfix_sum = paddle.to_tensor(tokens_perfix_sum, dtype="int64")
+tokens_prefix_sum = paddle.to_tensor(tokens_prefix_sum, dtype="int64")
 
 all_tokens = int(tokens.sum())
 
@@ -80,7 +80,7 @@ if TokenPadding == 0:
     out_cuda = w4afp8_gemm(
         input_fp8,
         weight_int4.cuda(),
-        tokens_perfix_sum,
+        tokens_prefix_sum,
         input_row_sum.astype("float32"),
         weight_dequant_scale.astype("float32"),
         int(TokenPadding),
