@@ -33,7 +33,7 @@ def test_completion_total_tokens():
     usage = last_data["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert "total_tokens" in usage, "total_tokens 不存在"
-    assert usage["total_tokens"]== total_tokens, "total_tokens计数不正确"
+    assert usage["total_tokens"] == total_tokens, "total_tokens计数不正确"
 
 
 def test_completion_echo_stream_one_prompt_rti():
