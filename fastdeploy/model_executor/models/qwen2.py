@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 
 import paddle
@@ -314,7 +315,10 @@ class Qwen2ForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -328,7 +332,12 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
+            model_format = self.fd_config.model_config.model_format
+            # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
+            if model_format == "torch":
+                loaded_weight_name = loaded_weight_name.replace("model", "qwen2")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
@@ -340,11 +349,14 @@ class Qwen2ForCausalLM(ModelForCasualLM):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
-                if loaded_weight_name not in params_dict:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
                     continue
-                param = params_dict[loaded_weight_name]
+                param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     @classmethod
     def name(self):
@@ -381,6 +393,10 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         hidden_states = self.qwen2(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.qwen2.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Qwen2PretrainedModel(PretrainedModel):

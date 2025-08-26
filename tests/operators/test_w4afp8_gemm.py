@@ -31,7 +31,7 @@ def w4afp8_gemm_naive(input_bf16, weight_quant, tokens, weight_dequant_scale, BA
     return out
 
 
-def peruate_scale(weight_scale):
+def permute_scale(weight_scale):
     weight_scale = weight_scale.reshape([BATCH, N])
     temp = paddle.zeros([16])
     for b in range(BATCH):
@@ -52,10 +52,10 @@ TokenPadding = 0
 
 tokens = [tokens_per_group] * BATCH
 tokens_perfix_sum = np.cumsum(tokens)
-tokens_perfix_sum = np.insert(tokens_perfix_sum, 0, 0)
 
-tokens = paddle.to_tensor(tokens, dtype="int32")
-tokens_perfix_sum = paddle.to_tensor(tokens_perfix_sum, dtype="int32")
+
+tokens = paddle.to_tensor(tokens, dtype="int64")
+tokens_perfix_sum = paddle.to_tensor(tokens_perfix_sum, dtype="int64")
 
 all_tokens = int(tokens.sum())
 
@@ -72,7 +72,7 @@ input_row_sum = input_bf16.sum(axis=1) * -7 / 512
 max_tokens = int(tokens.max())
 
 out_naive = w4afp8_gemm_naive(input_bf16, weight_quant, tokens, weight_dequant_scale, BATCH, N)
-weight_dequant_scale = paddle.to_tensor(peruate_scale(weight_dequant_scale) * 512)
+weight_dequant_scale = paddle.to_tensor(permute_scale(weight_dequant_scale) * 512)
 
 weight_int4 = w4afp8_gemm_weight_convert(weight_quant.astype("uint8").cpu())
 
