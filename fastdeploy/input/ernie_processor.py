@@ -56,7 +56,7 @@ class ErnieProcessor(BaseDataProcessor):
                 f"generation_config field in the model config, details={e}"
             )
             self.generation_config = None
-            
+
         self.decode_status = dict()
         self.tool_parser_dict = dict()
         self.thinking_parser_dict = dict()
