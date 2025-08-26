@@ -210,7 +210,7 @@ class ZmqIpcServer(ZmqServerBase):
             return
 
         self.running = False
-        llm_logger.info("Closing ZMQ connection...")
+        llm_logger.info("ZMQ server is closing connection...")
         try:
             if self.socket is not None and not self.socket.closed:
                 self.socket.close()
@@ -218,7 +218,7 @@ class ZmqIpcServer(ZmqServerBase):
                 self.context.term()
             self._clear_ipc(self.file_name)
         except Exception as e:
-            llm_logger.warning(f"Failed to close ZMQ connection - {e}")
+            llm_logger.warning(f"ZMQ server failed to close connection - {e}")
             return
 
 
@@ -290,7 +290,7 @@ class ZmqTcpServer(ZmqServerBase):
             return
 
         self.running = False
-        llm_logger.info("Closing ZMQ connection...")
+        llm_logger.info("ZMQ server is closing connection...")
         try:
             if self.socket is not None and not self.socket.closed:
                 self.socket.close()
@@ -298,5 +298,5 @@ class ZmqTcpServer(ZmqServerBase):
                 self.context.term()
 
         except Exception as e:
-            llm_logger.warning(f"Failed to close ZMQ connection - {e}")
+            llm_logger.warning(f"ZMQ server failed to close connection - {e}")
             return
