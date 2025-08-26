@@ -38,6 +38,12 @@ from ..utils import get_tensor
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
+def get_sm_version():
+    prop = paddle.device.cuda.get_device_properties()
+    cc = prop.major * 10 + prop.minor
+    return cc
+
+
 class WeightOnlyConfig(QuantConfigBase):
     """
     Quantization config for weight only
@@ -139,7 +145,8 @@ class WeightOnlyConfig(QuantConfigBase):
             else:
                 if (
                     self.name() == "wint4"
-                    and bool(envs.FD_USE_MACHETE)
+                    and envs.FD_USE_MACHETE == "1"
+                    and get_sm_version() == 90
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
                 ):

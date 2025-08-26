@@ -5,6 +5,7 @@ import itertools
 import math
 import os
 import shutil
+import sys
 from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass, fields
@@ -13,12 +14,21 @@ from typing import Optional, Union
 
 import jinja2
 
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+p = os.path.abspath(os.path.join(cur_dir, "../../third_party/cutlass/python"))
+sys.path.insert(0, p)
+
+from cutlass_library import (
+    EpilogueScheduleTag,
+    EpilogueScheduleType,
+    TileSchedulerTag,
+    TileSchedulerType,
+)
+
 # yapf conflicts with isort for this block
 # yapf: disable
 from machete_cutlass_library_extension import (
     DataType,
-    EpilogueScheduleTag,
-    EpilogueScheduleType,
     MACHETEDataType,
     MACHETEDataTypeMACHETEScalarTypeTag,
     MACHETEDataTypeNames,
@@ -27,8 +37,6 @@ from machete_cutlass_library_extension import (
     MACHETEDataTypeTag,
     MACHETEKernelScheduleTag,
     MixedInputKernelScheduleType,
-    TileSchedulerTag,
-    TileSchedulerType,
 )
 
 # yapf: enable

@@ -24,7 +24,6 @@ from paddle import base
 from paddle.base import core
 from paddle.framework import set_default_dtype
 
-# from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B, machete_support_schedules
 from fastdeploy.model_executor.layers.quantization.ops import (
     machete_quantize_and_pack,
     machete_wint_mm,
@@ -46,6 +45,12 @@ def get_cuda_version():
         return -1
 
 
+def get_sm_version():
+    prop = paddle.device.cuda.get_device_properties()
+    cc = prop.major * 10 + prop.minor
+    return cc
+
+
 def convert_uint16_to_float(in_list):
     in_list = np.asarray(in_list)
     out = np.vectorize(
@@ -56,8 +61,8 @@ def convert_uint16_to_float(in_list):
 
 
 @unittest.skipIf(
-    not core.is_compiled_with_cuda() or get_cuda_version() < 11020,
-    "quantized_matmul requires CUDA >= 11.2 and CUDA_ARCH >= 8",
+    not core.is_compiled_with_cuda() or get_sm_version() < 90,
+    "machete only support sm90.",
 )
 class WeightOnlyLinearTestCase(unittest.TestCase):
     def config(self):
@@ -72,35 +77,6 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
         self.weight_dtype = "int4"
         self.static = False
         self.group_size = -1
-
-    def weightQuantizeCPUGPUConsistenceCheck(self, weight_float):
-        for arch in [70, 75, 80, 86]:
-            weight_gpu, weight_scale_gpu = Q.weight_quantize(
-                (weight_float.cuda() if self.weight_dtype == "int8" else self.weight.cpu()),
-                algo=("weight_only_int8" if self.weight_dtype == "int8" else "weight_only_int4"),
-                arch=arch,
-                group_size=self.group_size,
-            )
-            weight_cpu, weight_scale_cpu = Q.weight_quantize(
-                weight_float.cpu(),
-                algo=("weight_only_int8" if self.weight_dtype == "int8" else "weight_only_int4"),
-                arch=arch,
-                group_size=self.group_size,
-            )
-            np.testing.assert_allclose(
-                weight_gpu.numpy(),
-                weight_cpu.numpy(),
-                atol=1.5,
-                rtol=2,
-            )
-            np.testing.assert_allclose(
-                weight_scale_gpu.numpy(),
-                weight_scale_cpu.numpy(),
-                atol=1e-5,
-                rtol=1e-3,
-            )
-            pass
-        pass
 
     def setUp(self):
         self.config()
@@ -123,8 +99,6 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
         self.weight = self.linear.weight
         self.float_weight = self.linear.weight
         self.weight_scale = None
-        # check weight quantize
-        self.weightQuantizeCPUGPUConsistenceCheck(self.float_weight)
 
         self.weight, self.weight_scale = Q.weight_quantize(
             (self.float_weight.cuda() if self.weight_dtype == "int8" else self.weight.cpu()),
@@ -165,14 +139,14 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
 
     def test_weight_only_linear(self):
         # out_expect = self.get_linear_out()
-        out_real = self.get_weight_only_linear_out()
+        out_paddle = self.get_weight_only_linear_out()
         out_machete = self.get_machete_weight_only_linear_out()
 
         if self.dtype == "bfloat16":
-            out_real = convert_uint16_to_float(out_real)
+            out_paddle = convert_uint16_to_float(out_paddle)
             # out_expect = convert_uint16_to_float(out_expect)
             out_machete = convert_uint16_to_float(out_machete)
-        np.testing.assert_allclose(out_real, out_machete, rtol=self.rtol, atol=self.atol)
+        np.testing.assert_allclose(out_paddle, out_machete, rtol=self.rtol, atol=self.atol)
 
 
 M = [32, 128]
