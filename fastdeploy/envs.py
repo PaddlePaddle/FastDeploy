@@ -66,16 +66,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
     # Whether to use aggregate send.
     "FD_USE_AGGREGATE_SEND": lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
-    # Whether to use mlp for MOBA.
-    "FD_MOBA_MLP_WEIGHT_PATH": lambda: os.getenv("FD_MOBA_MLP_WEIGHT_PATH", None),
-    "FD_MOBA_ENCODER_TOP_K_LEFT": lambda: os.getenv("FD_MOBA_ENCODER_TOP_K_LEFT", 0),
-    "FD_MOBA_ENCODER_TOP_K_RIGHT": lambda: os.getenv("FD_MOBA_ENCODER_TOP_K_RIGHT", 0),
-    "FD_MOBA_DECODER_TOP_K_LEFT": lambda: os.getenv("FD_MOBA_DECODER_TOP_K_LEFT", 0),
-    "FD_MOBA_DECODER_TOP_K_RIGHT": lambda: os.getenv("FD_MOBA_DECODER_TOP_K_RIGHT", 0),
-    "FD_MOBA_USE_ENCODER_SEQ_LIMIT": lambda: os.getenv("FD_MOBA_USE_ENCODER_SEQ_LIMIT", 0),
-    "FD_MOBA_USE_DECODER_SEQ_LIMIT": lambda: os.getenv("FD_MOBA_USE_DECODER_SEQ_LIMIT", 0),
-    "FD_MOBA_BLOCK_SIZE": lambda: os.getenv("FD_MOBA_BLOCK_SIZE", 128),
-    "FD_MOBA_MAX_SEQ_LENGTH": lambda: os.getenv("FD_MOBA_MAX_SEQ_LENGTH", 131072),
     # Whether to open Trace.
     "TRACES_ENABLE": lambda: os.getenv("TRACES_ENABLE", "false"),
     # set traec Server name.

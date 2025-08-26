@@ -21,8 +21,6 @@ from typing import TYPE_CHECKING
 
 import paddle
 
-from fastdeploy import envs
-
 try:
     from fastdeploy.model_executor.ops.gpu import get_cur_cu_seq_len_k, moba_attention
 except:
@@ -46,7 +44,6 @@ class MobaAttentionMetadata(AttentionMetadata):
     AppendAttentionMetadata
     """
 
-    moba_max_lengths: int = int(envs.FD_MOBA_MAX_SEQ_LENGTH)
     q_input: paddle.Tensor = None
     k_input: paddle.Tensor = None
     v_input: paddle.Tensor = None
@@ -77,6 +74,7 @@ class MobaAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: MobaAttentionMetadata = None
+        assert fd_config.moba_attention_config is not None, "moba_attention_config is None"
         self.block_size = fd_config.parallel_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
         self.max_num_seqs = fd_config.parallel_config.max_num_seqs
@@ -85,26 +83,14 @@ class MobaAttentionBackend(AttentionBackend):
         self.head_dim = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.attn_block_m = 128
-        self.moba_block_size = int(envs.FD_MOBA_BLOCK_SIZE)
-        self.moba_encoder_top_k_left = int(envs.FD_MOBA_ENCODER_TOP_K_LEFT)
-        self.moba_encoder_top_k_right = int(envs.FD_MOBA_ENCODER_TOP_K_RIGHT)
-        self.moba_use_encoder_seq_limit = int(envs.FD_MOBA_USE_ENCODER_SEQ_LIMIT)
-        if self.moba_use_encoder_seq_limit < self.moba_encoder_top_k_left * self.moba_block_size:
-            self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
-
-        self.moba_decoder_top_k_left = int(envs.FD_MOBA_DECODER_TOP_K_LEFT)
-        self.moba_decoder_top_k_right = int(envs.FD_MOBA_DECODER_TOP_K_RIGHT)
-        self.moba_use_decoder_seq_limit = int(envs.FD_MOBA_USE_DECODER_SEQ_LIMIT)
-        if self.moba_use_decoder_seq_limit < self.moba_decoder_top_k_left * self.moba_block_size:
-            self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
-
-        assert self.moba_encoder_top_k_left >= 0
-        assert self.moba_encoder_top_k_right >= 0
-        assert self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
-
-        assert self.moba_decoder_top_k_left >= 0
-        assert self.moba_decoder_top_k_right >= 0
-        assert self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
+        self.moba_block_size = fd_config.moba_attention_config.moba_block_size
+        self.moba_encoder_top_k_left = int(fd_config.moba_attention_config.moba_encoder_top_k_left)
+        self.moba_encoder_top_k_right = int(fd_config.moba_attention_config.moba_encoder_top_k_right)
+        self.moba_use_encoder_seq_limit = int(fd_config.moba_attention_config.moba_use_encoder_seq_limit)
+        self.moba_decoder_top_k_left = int(fd_config.moba_attention_config.moba_decoder_top_k_left)
+        self.moba_decoder_top_k_right = int(fd_config.moba_attention_config.moba_decoder_top_k_right)
+        self.moba_use_decoder_seq_limit = int(fd_config.moba_attention_config.moba_use_decoder_seq_limit)
+        self.moba_max_seq_length = fd_config.moba_attention_config.moba_max_seq_length
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Init the metadata for a forward pass."""
@@ -130,7 +116,7 @@ class MobaAttentionBackend(AttentionBackend):
             [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], dtype=metadata._dtype
         )
         self.attention_metadata = metadata
-        assert self.max_seq_len <= self.attention_metadata.moba_max_lengths
+        assert self.max_seq_len <= self.moba_max_seq_length
 
     def get_kv_cache_shape(
         self,

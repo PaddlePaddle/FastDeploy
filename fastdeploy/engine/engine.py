@@ -1109,6 +1109,7 @@ class LLMEngine:
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --ips {self.cfg.ips}"
+            f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
         )
 
         worker_append_flag = {
