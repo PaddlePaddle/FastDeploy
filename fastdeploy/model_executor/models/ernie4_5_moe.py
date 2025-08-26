@@ -492,7 +492,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-            weight_dtype="float32" if self.fd_config.model_config.lm_head_fp32 else paddle.get_default_dtype(),
         )
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
@@ -583,8 +582,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
-        if not self.fd_config.model_config.lm_head_fp32:
-            logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
