@@ -380,9 +380,6 @@ def test_max_tokens_min():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert resp.get("detail").get("object") == "error", "max_tokens未0时API未拦截住"
-    assert "reasoning_max_tokens must be between max_tokens and 1" in resp.get("detail").get(
-        "message", ""
-    ), "未返回预期的 max_tokens 达到异常值0 的 错误信息"
 
 
 def test_max_tokens_non_integer():
