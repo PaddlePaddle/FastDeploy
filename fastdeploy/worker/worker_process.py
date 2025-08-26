@@ -231,7 +231,6 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
-        logger.info("gaoziyuan test init_health_status")
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
