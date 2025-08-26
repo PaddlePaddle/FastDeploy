@@ -32,7 +32,7 @@ class ConcreteSizeEntry:
     """Record the concrete information corresponding to the current shape(num_tokens)"""
 
     # Concrete shape
-    runtime_bs: int
+    real_shape: int
     # The size is in cudagraph_capture_sizes
     use_cudagraph: bool = True
     # Has runtime-bs been captured before
@@ -62,15 +62,7 @@ class CudaGraphPiecewiseBackend:
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
 
-        # Runtime real shape -> ConcreteSizeEntry
-        self.concrete_size_entries: Dict[int, ConcreteSizeEntry] = {}
-
-        for shape in self.cudagraph_capture_sizes:
-            self.concrete_size_entries[shape] = ConcreteSizeEntry(runtime_bs=shape)
-
-        logger.info(
-            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, " "Created all real shape entry."
-        )
+        self._create_entry_dict()
 
     def __call__(self, **kwargs):
         # Get real shape(all num tokens)
@@ -122,9 +114,46 @@ class CudaGraphPiecewiseBackend:
             output._clear
 
             paddle.device.synchronize()
+
+            # For CUDAGraph debug
+            # self._save_cudagrpah_dot_files(entry)
             logger.debug(f"[CUDA GRAPH] CUDAGraph captured for real shape {padding_real_shape}")
 
         # Replay
         entry.cuda_graph.replay()
         logger.debug(f"[CUDA GRAPH] CUDAGraph replayed for real shape {padding_real_shape}")
         return entry.output_buffer
+
+    def _create_entry_dict(self):
+        """ """
+        # Runtime real shape -> ConcreteSizeEntry
+        self.concrete_size_entries: Dict[int, ConcreteSizeEntry] = {}
+
+        for shape in self.cudagraph_capture_sizes:
+            self.concrete_size_entries[shape] = ConcreteSizeEntry(real_shape=shape)
+
+        logger.info(
+            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, " "Created all real shape entry."
+        )
+
+    def clear_graph(self):
+        """ """
+        # Clear graphs
+        for id, entry in self.concrete_size_entries.items():
+            if entry.cuda_graph:
+                del entry.cuda_graph
+                logger.debug(f"[CUDA GRAPH] The CUDAGraph with shape {id} has been cleared.")
+
+        del self.concrete_size_entries
+        paddle.device.cuda.empty_cache()
+
+        # Create new entrys
+        self._create_entry_dict()
+
+    def _save_cudagrpah_dot_files(self, entry):
+        """Print CUDAGrpah to dot files"""
+        if entry.cuda_graph:
+            entry.cuda_graph.print_to_dot_files(
+                f"./log/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}",
+                1 << 0,
+            )

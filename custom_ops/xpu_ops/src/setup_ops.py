@@ -162,6 +162,11 @@ def xpu_setup_ops():
     ]
     ops = [os.path.join(base_dir, op) for op in ops]
 
+    for root, dirs, files in os.walk(base_dir / "ops/mtp_ops"):
+        for file in files:
+            if file.endswith(".cc"):
+                ops.append(os.path.join(root, file))
+
     include_dirs = [
         os.path.join(base_dir, "./"),
         os.path.join(base_dir, "./plugin/include"),

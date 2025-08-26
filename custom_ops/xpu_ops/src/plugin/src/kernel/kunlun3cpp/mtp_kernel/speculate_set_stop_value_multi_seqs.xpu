@@ -1,0 +1,98 @@
+#include "xpu/kernel/cluster_debug.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/xtdk.h"
+#include "xpu/kernel/xtdk_math.h"
+#include "xpu/kernel/xtdk_simd.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
+                                                    int64_t *accept_tokens,
+                                                    int *accept_nums,
+                                                    const int64_t *pre_ids,
+                                                    const int64_t *step_idx,
+                                                    const int64_t *stop_seqs,
+                                                    const int *stop_seqs_len,
+                                                    const int *seq_lens,
+                                                    const int64_t *end_ids,
+                                                    const int bs,
+                                                    const int accept_tokens_len,
+                                                    const int stop_seqs_bs,
+                                                    const int stop_seqs_max_len,
+                                                    const int pre_ids_len) {
+  int cls_id = cluster_id();
+  int cid = core_id();
+  int ncores = core_num();
+  int nclusters = cluster_num();
+
+  int accept_num = 0;
+  int64_t step_idx_now = 0;
+  bool stop_flags_now = false;
+  int stop_seq_len = 0;
+  for (int bid = cls_id; bid < bs; bid += nclusters) {
+    GM2LM_ASYNC(accept_nums + bid, &accept_num, sizeof(int));
+    GM2LM_ASYNC(step_idx + bid, &step_idx_now, sizeof(int64_t));
+    GM2LM(stop_flags + bid, &stop_flags_now, sizeof(bool));
+    if (stop_flags_now) {
+      continue;
+    }
+    for (int tid = cid; tid < stop_seqs_bs; tid += ncores) {
+      GM2LM_ASYNC(stop_seqs_len + tid, &stop_seq_len, sizeof(int));
+      if (stop_seq_len <= 0) {
+        continue;
+      }
+      int accept_idx = 0;
+      bool is_end = false;
+      int64_t stop_seq_now_lm = 0;
+      for (; accept_idx <= accept_num - 1 && !is_end; accept_idx++) {
+        if (step_idx_now - accept_num + accept_idx + 1 < stop_seq_len) {
+          continue;
+        }
+        // 遍历一个 stop_seqs
+        for (int i = stop_seq_len - 1; i >= 0; --i) {
+          int64_t cur_token_idx = -1;
+          // 通过当前值判断 token 是在 pre_ids 还是 accept_token 里
+          if (stop_seq_len - 1 - i < accept_idx) {
+            GM2LM(accept_tokens + bid * accept_tokens_len + accept_idx -
+                      (stop_seq_len - 1 - i) - 1,
+                  &cur_token_idx,
+                  sizeof(int64_t));
+          } else {
+            int pre_ids_idx =
+                step_idx_now - accept_num + accept_idx - (stop_seq_len - 1 - i);
+            // EC3
+            // 特殊拼接会导致input_ids最后一位无特殊token，即pre_ids[0]可能为23,
+            // 导致异常结束
+            if (pre_ids_idx <= 0) {
+              break;
+            }
+            GM2LM(pre_ids + bid * pre_ids_len + pre_ids_idx,
+                  &cur_token_idx,
+                  sizeof(int64_t));
+          }
+          GM2LM(stop_seqs + tid * stop_seqs_max_len + i,
+                &stop_seq_now_lm,
+                sizeof(int64_t));
+          if (cur_token_idx != stop_seq_now_lm) {
+            break;
+          }
+          if (i == 0) {
+            is_end = true;
+          }
+        }
+      }
+      if (is_end) {
+        int64_t end_id_lm;
+        bool value_true = true;
+        GM2LM(end_ids, &end_id_lm, sizeof(int64_t));
+        LM2GM_ASYNC(&end_id_lm,
+                    accept_tokens + bid * accept_tokens_len + accept_idx - 1,
+                    sizeof(int64_t));
+        LM2GM(&value_true, stop_flags + bid, sizeof(bool));
+      }
+    }
+  }
+}
+}  // namespace plugin
+}  // namespace xpu3

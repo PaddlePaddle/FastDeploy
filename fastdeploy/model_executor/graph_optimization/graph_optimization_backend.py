@@ -144,3 +144,7 @@ class GraphOptBackend:
             return self.runnable(**kwargs)
         else:
             return self.cudagraph_piecewise_backend.__call__(**kwargs)
+
+    def clear_cudagraph_piecewise_backend(self):
+        """ """
+        self.cudagraph_piecewise_backend.clear_graph()
