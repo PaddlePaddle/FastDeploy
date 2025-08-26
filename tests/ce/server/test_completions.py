@@ -231,3 +231,5 @@ def test_completion_finish_stop():
 
     finish_reason = response["choices"][0]["finish_reason"]
     assert finish_reason == "stop", "无任何中介，finish_reason不为stop"
+
+    
