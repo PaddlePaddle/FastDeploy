@@ -175,41 +175,37 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether prefill only
         """
-        only_prefill_batch = True
+        if_only_prefill = True
         decode_exists = None
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            # 收集所有 worker 的状态
             only_prefill_batch_list = []
             decode_exists = self.exist_decode()
             paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
-            only_prefill_batch = all(only_prefill_batch_list)
+            if_only_prefill = all(only_prefill_batch_list)
 
-        only_prefill_batch = only_prefill_batch and not (
-            decode_exists if decode_exists is not None else self.exist_decode()
-        )
+        if_only_prefill = if_only_prefill and not (decode_exists if decode_exists is not None else self.exist_decode())
 
-        return only_prefill_batch
+        return if_only_prefill
 
     def only_decode(self):
         """
         check whether decode only
         """
-        # Update Batch type for cuda graph for only_decode_batch
-        only_decode_batch = True
+        # Update Batch type for cuda graph for if_only_decode
+        if_only_decode = True
         prefill_exists = None
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
             only_decode_batch_list = []
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
-            only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+            if_only_decode = all(only_decode_batch_list)
 
-        only_decode_batch = only_decode_batch and not (
+        if_only_decode = if_only_decode and not (
             prefill_exists if prefill_exists is not None else self.exist_prefill()
         )
 
-        return only_decode_batch
+        return if_only_decode
 
     def _init_speculative_proposer(self):
         """
@@ -984,7 +980,12 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Update Batch type for cuda graph for only_decode_batch
-        only_decode_use_cudagraph = self.only_decode() and self.use_cudagraph
+        if_only_decode = self.only_decode()
+        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
+
+        # Update config about moe for better performance
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()

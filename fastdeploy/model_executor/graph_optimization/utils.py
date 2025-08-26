@@ -27,8 +27,8 @@ def get_input_length_list(num_tokens: int, batch_size: int) -> List[int]:
     CUDA Grid dimensions for kernels like `split_q_block`. This prevents CUDA Graph
     reuse.
 
-    The **`split_q_block`** kernel calculates the total number of blocks, which directly
-    determines the `griddim.x` launch parameter for the **`multi_query_append_attention_kernel`**.
+    The `split_q_block` kernel calculates the total number of blocks, which directly
+    determines the `griddim.x` launch parameter for the `multi_query_append_attention_kernel`.
     The blocks for a single sequence are determined by the formula:
     `num_blocks = ceil((sequence_length * group_size) / block_shape_q)`
 

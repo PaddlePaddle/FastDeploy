@@ -179,26 +179,26 @@ def test_append_c16_attention(q_len, kv_len, prefill=False, attn_mask=None):
 
     encoder_block_shape_q = 64
     decoder_block_shape_q = 16
+    group_size = num_q_head // num_kv_head
 
     decode_max_tile_size = (
-        bsz
-        * (decoder_step_token_num * (num_q_head // num_kv_head) + decoder_block_shape_q - 1)
-        / decoder_block_shape_q
+        bsz * (decoder_step_token_num * group_size + decoder_block_shape_q - 1) / decoder_block_shape_q
     )
+    encode_max_tile_size = bsz * np.ceil((max_seq_len * group_size) / encoder_block_shape_q)
+    kv_max_tile_size = bsz * np.ceil(max_seq_len / block_size)
     decoder_batch_ids = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
     decoder_tile_ids_per_batch = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
     decoder_num_blocks = paddle.full([1], 0, dtype="int32").pin_memory()
     max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
+    encoder_batch_ids = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+    encoder_tile_ids_per_batch = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+    encoder_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
+    kv_batch_ids = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
+    kv_tile_ids_per_batch = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
+    kv_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
+    max_len_kv_cpu = paddle.full([1], 0, dtype="int32").cpu()
     paddle.device.synchronize()
-    (
-        encoder_batch_ids,
-        encoder_tile_ids_per_batch,
-        encoder_num_blocks,
-        kv_batch_ids,
-        kv_tile_ids_per_batch,
-        kv_num_blocks,
-        max_len_kv,
-    ) = get_block_shape_and_split_kv_block(
+    get_block_shape_and_split_kv_block(
         seq_lens_encoder,
         seq_lens_decoder,
         seq_lens_this_time,
@@ -206,6 +206,13 @@ def test_append_c16_attention(q_len, kv_len, prefill=False, attn_mask=None):
         decoder_tile_ids_per_batch,
         decoder_num_blocks,
         max_len_tensor_cpu,
+        encoder_batch_ids,
+        encoder_tile_ids_per_batch,
+        encoder_num_blocks_x_cpu,
+        kv_batch_ids,
+        kv_tile_ids_per_batch,
+        kv_num_blocks_x_cpu,
+        max_len_kv_cpu,
         encoder_block_shape_q,
         decoder_block_shape_q,
         num_q_head // num_kv_head,
@@ -228,15 +235,15 @@ def test_append_c16_attention(q_len, kv_len, prefill=False, attn_mask=None):
             block_tables,
             encoder_batch_ids,
             encoder_tile_ids_per_batch,
-            encoder_num_blocks,
+            encoder_num_blocks_x_cpu,
             kv_batch_ids,
             kv_tile_ids_per_batch,
-            kv_num_blocks,
+            kv_num_blocks_x_cpu,
             decoder_batch_ids,
             decoder_tile_ids_per_batch,
             decoder_num_blocks,
             max_len_tensor_cpu,
-            max_len_kv,
+            max_len_kv_cpu,
             rotary_embs,
             attn_mask,  # attn_mask
             None,
