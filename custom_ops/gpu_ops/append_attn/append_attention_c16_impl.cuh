@@ -435,7 +435,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const uint32_t kv_num_heads = gridDim.z;
+  const uint32_t q_num_heads = kv_num_heads * GROUP_SIZE;
   const uint32_t kv_head_idx = blockIdx.z;
+  const uint32_t q_head_idx = kv_head_idx * GROUP_SIZE;
+  const uint32_t tid = threadIdx.x, wid = threadIdx.y;
+
   const uint32_t num_blocks_total_q = static_cast<uint32_t>(num_blocks_q_and_chunk_config[0]);
   const uint32_t chunk_size = static_cast<uint32_t>(num_blocks_q_and_chunk_config[1]);
   const uint32_t max_num_chunks_this_kv = static_cast<uint32_t>(num_blocks_q_and_chunk_config[2]);
@@ -443,9 +447,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   for(uint32_t bid = blockIdx.x; bid < total_num_blocks; bid += gridDim.x){
     const uint32_t btid = bid % num_blocks_total_q;
     const uint32_t chunk_idx = bid / num_blocks_total_q;
-    const uint32_t q_num_heads = kv_num_heads * GROUP_SIZE;
-    const uint32_t q_head_idx = kv_head_idx * GROUP_SIZE;
-    const uint32_t tid = threadIdx.x, wid = threadIdx.y;
+
     const uint32_t batch_id = batch_ids[btid];
     const uint32_t tile_id = tile_ids_per_batch[btid];
     const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
@@ -1080,8 +1082,9 @@ void MultiQueryAppendAttention(
         attn_mask_len = -1;
     }
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    if (chunk_size <= 0){
-      chunk_size = 512;
+    const uint32_t min_chunk_size = 512;
+    if (chunk_size < min_chunk_size){
+      chunk_size = min_chunk_size;
     }
     const int max_num_chunks = div_up(max_seq_len, chunk_size);
     const int dev_id = 0;
