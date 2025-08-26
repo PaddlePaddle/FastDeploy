@@ -153,8 +153,7 @@ class CudaGraphPiecewiseBackend:
     def _save_cudagrpah_dot_files(self, entry):
         """Print CUDAGrpah to dot files"""
         if entry.cuda_graph:
-            print("save graph")
             entry.cuda_graph.print_to_dot_files(
-                f"./GraphDotFiles/backend{id(self)}_shape{entry.real_shape}",
+                f"./log/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}",
                 1 << 0,
             )
