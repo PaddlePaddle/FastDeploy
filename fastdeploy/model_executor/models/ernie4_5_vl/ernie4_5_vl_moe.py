@@ -86,8 +86,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
     ) -> None:
         super().__init__()
         moe_quant_type = ""
-        if hasattr(fd_config, "quant_config") and fd_config.quant_config is not None:
-            moe_quant_type = getattr(fd_config.quant_config, "name", lambda: "")()
+        if hasattr(fd_config.quant_config, "moe_quant_type"):
+            moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
             moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
@@ -702,6 +702,10 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         )
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
