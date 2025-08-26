@@ -21,6 +21,7 @@ from typing import Optional
 import paddle
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.ops import (
     machete_quantize_and_pack,
     machete_wint_mm,
@@ -131,7 +132,8 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
-                # return MacheteWeightOnlyLinearMethod(self)
+                if bool(envs.FD_USE_MACHETE) and layer.weight_shape[1] and layer.weight_shape[1] % 128 == 0:
+                    return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 
 

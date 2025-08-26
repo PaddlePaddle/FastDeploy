@@ -143,6 +143,9 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
     paddle::Tensor const& B, std::string const& a_type_str, std::string const& b_type_str,
     std::string const& maybe_group_scales_type_str);
 
+std::vector<std::string> MacheteSupportedSchedules(
+    std::string const& a_type_str, std::string const& b_type_str);
+
 std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor &input, const paddle::Tensor &gating_output,
     const paddle::optional<paddle::Tensor> &gating_correction_bias,
@@ -922,13 +925,24 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("recv_expert_count"), py::arg("block_size"),
         "per token per block quant");
 
- m.def("machete_mm", &MacheteMMKernel, py::arg("A"), py::arg("B"), py::arg("maybe_group_scale"),
+  /*machete/machete_mm.cu
+   * machete_mm
+   */
+  m.def("machete_mm", &MacheteMMKernel, py::arg("A"), py::arg("B"), py::arg("maybe_group_scale"),
         py::arg("maybe_group_zeros"), py::arg("maybe_channel_scales"), py::arg("maybe_token_scales"),
         py::arg("b_type_str"), py::arg("maybe_out_type_str"), py::arg("maybe_group_size"),
         py::arg("maybe_schedule"),
         "machete mm function");
 
- m.def("machete_prepack_B", &MachetePrepackBKernel, "machete prepacked B function");
+  /*machete/machete_prepack_B.cu
+   * machete_prepack_B
+   */
+  m.def("machete_prepack_B", &MachetePrepackBKernel, "machete prepacked B function");
+
+  /*machete/machete_supported_schedules.cu
+   * machete_supported_schedules
+   */
+  m.def("machete_supported_schedules", &MacheteSupportedSchedules, "machete supported schedules function");
 
   /**
    * moe/fused_moe/moe_topk_select.cu
