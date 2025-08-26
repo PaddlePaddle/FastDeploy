@@ -289,6 +289,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -300,6 +301,8 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                if request.disaggregate_info is not None and request.disaggregate_info["role"] == "decode":
+                    self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")

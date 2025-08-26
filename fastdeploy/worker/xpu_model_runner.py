@@ -411,6 +411,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -420,6 +421,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                if request.disaggregate_info is not None and request.disaggregate_info["role"] == "decode":
+                    self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
