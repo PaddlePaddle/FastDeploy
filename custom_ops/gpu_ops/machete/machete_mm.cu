@@ -68,13 +68,3 @@ std::vector<paddle::Tensor> MacheteMMKernel(
                 maybe_schedule);
   return {out};
 }
-
-// PD_BUILD_STATIC_OP(machete_mm)
-//     .Inputs({"A", "B",
-//             paddle::Optional("maybe_group_scales"),
-//             paddle::Optional("maybe_group_zeros"),
-//             paddle::Optional("maybe_channel_scales"),
-//             paddle::Optional("maybe_token_scales")})
-//     .Outputs({"out"})
-//     .Attrs({"b_type_str:std::string", "maybe_out_type_str:std::string", "maybe_group_size:int64_t", "maybe_schedule:std::string"})
-//     .SetKernelFn(PD_KERNEL(MacheteMMKernel));

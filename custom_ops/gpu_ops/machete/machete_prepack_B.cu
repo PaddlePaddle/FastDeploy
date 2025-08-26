@@ -55,9 +55,3 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
   return {B_prepacked};
 
 }
-
-PD_BUILD_STATIC_OP(machete_prepack_B)
-    .Inputs({"B"})
-    .Outputs({"B_prepacked"})
-    .Attrs({"a_type_str:std::string", "b_type_str:std::string", "maybe_group_scales_type_str:std::string"})
-    .SetKernelFn(PD_KERNEL(MachetePrepackBKernel));
