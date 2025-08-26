@@ -461,7 +461,6 @@ class LLMEngine:
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
-            sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
@@ -762,8 +761,6 @@ class LLMEngine:
 
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
-            if task.sampling_params.bad_words is not None:
-                task.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
 
         self.resource_manager.check_and_free_block_tables()
 
@@ -1108,6 +1105,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --ips {self.cfg.ips}"
         )
 
         worker_append_flag = {
@@ -1117,7 +1115,7 @@ class LLMEngine:
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
-            "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
@@ -1292,7 +1290,7 @@ class LLMEngine:
                     )
                 )
                 llm_logger.info(
-                    f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                    f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                     + f" data parallel id {i}"
                 )
                 self.dp_processed[-1].start()

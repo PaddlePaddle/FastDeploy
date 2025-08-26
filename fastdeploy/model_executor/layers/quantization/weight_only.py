@@ -21,6 +21,11 @@ from typing import Optional
 import paddle
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
+from fastdeploy.model_executor.layers.linear import (
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
+)
+from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..moe import FusedMoE
@@ -135,9 +140,7 @@ class WINT8Config(WeightOnlyConfig):
     weight only int8 config
     """
 
-    def __init__(
-        self,
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__("weight_only_int8")
 
     @classmethod
@@ -179,27 +182,89 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
+        if layer.fd_config.load_config.load_choices == "default_v1":
+            layer.weight = layer.create_parameter(
+                shape=layer.weight_shape,
+                dtype=layer.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            quant_attrs = extra_weight_attrs
+            if isinstance(layer, MergedColumnParallelLinear) or isinstance(layer, QKVParallelLinear):
+                quant_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(
+                        shape=layer.weight_shape, output_dim=extra_weight_attrs.get("output_dim")
+                    ),
+                }
+            set_weight_attrs(
+                layer.weight,
+                quant_attrs,
+            )
+        else:
+            # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
+            weight_scale_shape = [layer.weight_shape[1]]
+            layer.weight_shape.reverse()
+            if self.quant_config.name() == "wint4":
+                layer.weight_shape[0] //= 2
+            layer.weight_dtype = "int8"
+            layer.weight = layer.create_parameter(
+                shape=layer.weight_shape,
+                dtype=layer.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
 
-        # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        weight_scale_shape = [layer.weight_shape[1]]
+            output_dim = extra_weight_attrs.get("output_dim")
+            output_dim = not output_dim
+            weight_loader = extra_weight_attrs.get("weight_loader")
+            set_weight_attrs(
+                layer.weight,
+                {
+                    "weight_loader": weight_loader,
+                    "output_dim": output_dim,
+                },
+            )
 
-        layer.weight_shape.reverse()
-        if self.quant_config.name() == "wint4":
-            layer.weight_shape[0] //= 2
-        layer.weight_dtype = "int8"
+            layer.weight_scale = layer.create_parameter(
+                shape=weight_scale_shape,
+                dtype=layer._dtype,
+                is_bias=False,
+            )
+
+            set_weight_attrs(
+                layer.weight_scale,
+                {
+                    "weight_loader": weight_loader,
+                    "output_dim": output_dim,
+                },
+            )
+
+    def process_weights_after_loading(self, layer) -> None:
+        if not layer.fd_config.load_config.load_choices == "default_v1":
+            return
+        quanted_weight_tensor, weight_scale_tensor = weight_quantize(
+            layer.weight,
+            algo=self.quant_config.algo,
+            arch=self.quant_config.weight_only_linear_arch,
+        )
+
+        free_tensor(layer.weight)
 
         layer.weight = layer.create_parameter(
-            shape=layer.weight_shape,
-            dtype=layer.weight_dtype,
+            shape=quanted_weight_tensor.shape,
+            dtype="int8",
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-
         layer.weight_scale = layer.create_parameter(
-            shape=weight_scale_shape,
+            shape=weight_scale_tensor.shape,
             dtype=layer._dtype,
             is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
         )
+        layer.weight.copy_(quanted_weight_tensor, False)
+        layer.weight_scale.copy_(weight_scale_tensor, False)
 
     @abstractmethod
     def process_loaded_weights(self, layer, weights) -> None:

@@ -45,6 +45,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         """process_prequanted_weights"""
         pass
 
+    @paddle.no_grad()
     def create_weights(self, layer: nn.Layer, state_dict):
         """
         Triton MoE create weight process.
@@ -125,11 +126,12 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
                 )
                 getattr(layer, scale_name).set_value(quanted_weight_scale)
 
+    @paddle.no_grad()
     def apply(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -141,6 +143,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
+        gate_out = gate(x.cast("float32"))
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
             layer.gate_correction_bias,
