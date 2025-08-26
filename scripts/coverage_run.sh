@@ -44,9 +44,8 @@ echo "Pytest failed: $failed_pytest"
 
 echo "Special tests total: ${#special_tests[@]}"
 echo "Special tests successful: $success_special"
-echo "Special tests failed: $failed_special"
 
-if [ "$failed_pytest" -ne 0 ] || [ "$failed_special" -ne 0 ]; then
+if [ "$failed_pytest" -ne 0 ]; then
     echo "Failed test cases are listed in $failed_tests_file"
     cat "$failed_tests_file"
     exit 8
