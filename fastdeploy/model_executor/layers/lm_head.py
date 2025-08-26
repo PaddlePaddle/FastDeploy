@@ -22,7 +22,7 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import default_weight_loader, set_weight_attrs
 
 from .utils import get_tensor
 
@@ -61,6 +61,7 @@ class ParallelLMHead(nn.Layer):
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.column_cut = True
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.fd_config = fd_config
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -90,7 +91,14 @@ class ParallelLMHead(nn.Layer):
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,
                     gather_output=need_gather,
-                    fuse_matmul_bias=False,  # False diff更小
+                    fuse_matmul_bias=False,
+                )
+                set_weight_attrs(
+                    self.linear.weight,
+                    {
+                        "weight_loader": default_weight_loader(self.fd_config),
+                        "model_format": self.fd_config.model_config.model_format,
+                    },
                 )
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": True})
@@ -102,8 +110,16 @@ class ParallelLMHead(nn.Layer):
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,
                     input_is_parallel=False,
-                    fuse_matmul_bias=False,  # False diff更小
+                    fuse_matmul_bias=False,
                 )
+                set_weight_attrs(
+                    self.linear.weight,
+                    {
+                        "weight_loader": default_weight_loader(self.fd_config),
+                        "model_format": self.fd_config.model_config.model_format,
+                    },
+                )
+
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": False})
 

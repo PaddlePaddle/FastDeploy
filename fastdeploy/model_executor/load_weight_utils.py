@@ -29,6 +29,7 @@ from safetensors import safe_open
 from tqdm import tqdm
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.tp_utils import (
     check_tensor_parallel_prerequisites,
 )
@@ -180,8 +181,9 @@ def fast_weights_iterator(safe_tensor_list: list[str]):
     ):
         with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
-                param = f.get_slice(name)
-                yield name, param
+                param_slice = f.get_slice(name)
+                paddle_tensor = get_tensor(param_slice)
+                yield name, paddle_tensor
 
 
 def fastsafetensors_weights_iterator(
