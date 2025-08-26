@@ -275,7 +275,6 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-            weight_dtype="float32" if self.fd_config.model_config.lm_head_fp32 else paddle.get_default_dtype(),
         )
 
     @classmethod
