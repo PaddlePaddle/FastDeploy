@@ -23,7 +23,11 @@ import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
-from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal, shared_memory_exists
+from fastdeploy.inter_communicator import (
+    EngineWorkerQueue,
+    IPCSignal,
+    shared_memory_exists,
+)
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
