@@ -1,0 +1,202 @@
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2025 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_primitive_template.h"
+
+namespace xpu3 {
+namespace plugin {
+
+static inline __device__ int v_reduce(int32x16_t &v0, int32x16_t &v1) {
+  int res;
+  v1 = vvadd_int32x16(v0, v1);
+  auto v = vsrlp_int32x16(256, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(128, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(64, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(32, v1);
+  v1 = vvadd_int32x16(v, v1);
+  res = vextract_int32x16(v1, 1);
+  return res;
+}
+
+static inline __device__ int ClusterReduce(
+    const _shared_ptr_ int *stop_flag_now_int_sm, int len) {
+  int sum = 0;
+  if (core_id() == 0) {
+    int32x16_t vec_x_0;
+    int32x16_t vec_x_1;
+    int32x16_t vec_y_0 = vzero<int>();
+    int32x16_t vec_y_1 = vzero<int>();
+    for (int i = 0; i < len; i += 32) {
+      vload2_sm(stop_flag_now_int_sm + i, vec_x_0, vec_x_1);
+      vec_y_0 = vvadd_int32x16(vec_y_0, vec_x_0);
+      vec_y_1 = vvadd_int32x16(vec_y_1, vec_x_1);
+    }
+    sum = v_reduce(vec_y_0, vec_y_1);
+  }
+  return sum;
+}
+
+template <int THREADBLOCK_SIZE>
+__global__ void speculate_update_v3(
+    int *seq_lens_encoder,          // 输入&输出 [B_max, ]
+    int *seq_lens_decoder,          // 输入&输出 [B_max, ]
+    bool *not_need_stop,            // 输出 [1,]
+    int64_t *draft_tokens,          // 输出 [B_max, T_max]
+    int *actual_draft_token_nums,   // 输入&输出 [B_max, ]
+    const int64_t *accept_tokens,   // 输入 [B_max, T_max]
+    const int *accept_num,          // 输入 [B_max, ]
+    const bool *stop_flags,         // 输入 [B_max, ]
+    const int *seq_lens_this_time,  // 输入 [B_real,]
+    const bool *is_block_step,      // 输入 [B_max, ]
+    const int64_t *stop_nums,       // 输入 [1,]
+    const int real_bsz,
+    const int max_bsz,
+    const int max_draft_tokens) {
+  // real_bsz <= max_bsz <= THREADBLOCK_SIZE;
+
+  const int cid = core_id();
+  const int tid = core_id() * cluster_num() + cluster_id();
+  const int nthreads = core_num() * cluster_num();
+
+  __shared__ int seq_lens_encoder_sm[THREADBLOCK_SIZE];  // 输入&输出 [B_max] 2K
+  __shared__ int seq_lens_decoder_sm[THREADBLOCK_SIZE];  // 输入&输出 [B_max] 2K
+  __shared__ int
+      actual_draft_token_nums_sm[THREADBLOCK_SIZE];  // 输出 [B_max]  2K
+  __shared__ int accept_num_sm[THREADBLOCK_SIZE];   // 输入&输出 [B_max]  2K
+  __shared__ bool stop_flags_sm[THREADBLOCK_SIZE];  // 输入 [B_max]  512B
+  __shared__ int seq_lens_this_time_sm[THREADBLOCK_SIZE];  // 输入 [B_real] 2K
+  __shared__ bool is_block_step_sm[THREADBLOCK_SIZE];  // 输入 [B_max]  512B
+  __shared__ int stop_flag_now_int_sm[64];
+
+  bool not_need_stop_lm;  // 输出[1]
+  int64_t stop_nums_lm;   // 输入[1]
+
+  int bid_start_core, bid_end_core;
+  partition(tid, nthreads, max_bsz, 1, &bid_start_core, &bid_end_core);
+
+  if (cid == 0) {
+    GM2SM_ASYNC(seq_lens_encoder, seq_lens_encoder_sm, max_bsz * sizeof(int));
+    GM2SM_ASYNC(seq_lens_decoder, seq_lens_decoder_sm, max_bsz * sizeof(int));
+    GM2SM_ASYNC(actual_draft_token_nums,
+                actual_draft_token_nums_sm,
+                max_bsz * sizeof(int));
+    GM2SM_ASYNC(accept_num, accept_num_sm, max_bsz * sizeof(int));
+    GM2SM_ASYNC(stop_flags, stop_flags_sm, max_bsz * sizeof(bool));
+    GM2SM_ASYNC(
+        seq_lens_this_time, seq_lens_this_time_sm, max_bsz * sizeof(int));
+    GM2SM_ASYNC(is_block_step, is_block_step_sm, max_bsz * sizeof(bool));
+    GM2LM_ASYNC(stop_nums, &stop_nums_lm, sizeof(int64_t));
+    mfence_lm_sm();
+  }
+  sync_all();
+
+  stop_flag_now_int_sm[cid] = 0;
+  for (int bid = bid_start_core; bid < bid_end_core; bid++) {
+    const int accept_num_now = accept_num_sm[bid];
+    int stop_flag_now_int = 0;
+    if (!is_block_step_sm[bid] && bid < real_bsz) {
+      if (stop_flags_sm[bid]) {
+        stop_flag_now_int = 1;
+      }
+      if (seq_lens_encoder_sm[bid] == 0) {
+        seq_lens_decoder_sm[bid] += accept_num_now;
+      }
+
+      // 对于append模式，需要根据接收与否确定是否要降低下次draft
+      // token的数量
+      if (seq_lens_this_time_sm[bid] > 1 && seq_lens_encoder_sm[bid] == 0) {
+        auto current_actual_draft_token_num = actual_draft_token_nums_sm[bid];
+        if (accept_num_now - 1 == current_actual_draft_token_num) {
+          if (current_actual_draft_token_num + 2 <= max_draft_tokens - 1) {
+            actual_draft_token_nums_sm[bid] =
+                current_actual_draft_token_num + 2;
+          } else if (current_actual_draft_token_num + 1 <=
+                     max_draft_tokens - 1) {
+            actual_draft_token_nums_sm[bid] =
+                current_actual_draft_token_num + 1;
+          } else {
+            actual_draft_token_nums_sm[bid] = max_draft_tokens - 1;
+          }
+        } else {
+          actual_draft_token_nums_sm[bid] =
+              actual_draft_token_nums_sm[bid] - 1 >= 1
+                  ? actual_draft_token_nums_sm[bid] - 1
+                  : 1;
+        }
+      }
+
+      if (seq_lens_encoder_sm[bid] != 0) {
+        seq_lens_decoder_sm[bid] += seq_lens_encoder_sm[bid];
+        seq_lens_encoder_sm[bid] = 0;
+      }
+
+      if (stop_flag_now_int) {
+        seq_lens_decoder_sm[bid] = 0;
+      } else {
+        // 这里试下编译器的新特性
+        draft_tokens[bid * max_draft_tokens] =
+            accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
+      }
+    } else if (bid >= real_bsz && bid < max_bsz) {
+      stop_flag_now_int = 1;
+    }
+    stop_flag_now_int_sm[cid] += stop_flag_now_int;
+    mfence_lm();
+  }
+  mfence_sm();
+  sync_all();
+  // printf("cid = %d, stop_sum = %d \n", cid, stop_flag_now_int_sm[cid]);
+  int64_t stop_sum = ClusterReduce(stop_flag_now_int_sm, 64);
+  sync_all();
+
+  if (cid == 0) {
+    // printf("stop_sum = %d \n", static_cast<int>(stop_sum));
+    not_need_stop_lm = stop_sum < stop_nums_lm;
+    mfence_lm();
+    SM2GM_ASYNC(seq_lens_encoder_sm, seq_lens_encoder, max_bsz * sizeof(int));
+    SM2GM_ASYNC(seq_lens_decoder_sm, seq_lens_decoder, max_bsz * sizeof(int));
+    LM2GM_ASYNC(&not_need_stop_lm, not_need_stop, 1 * sizeof(bool));
+    SM2GM_ASYNC(actual_draft_token_nums_sm,
+                actual_draft_token_nums,
+                max_bsz * sizeof(int));
+    mfence();
+  }
+}
+
+template __global__ void speculate_update_v3<512>(int *seq_lens_encoder,
+                                                  int *seq_lens_decoder,
+                                                  bool *not_need_stop,
+                                                  int64_t *draft_tokens,
+                                                  int *actual_draft_token_nums,
+                                                  const int64_t *accept_tokens,
+                                                  const int *accept_num,
+                                                  const bool *stop_flags,
+                                                  const int *seq_lens_this_time,
+                                                  const bool *is_block_step,
+                                                  const int64_t *stop_nums,
+                                                  const int real_bsz,
+                                                  const int max_bsz,
+                                                  const int max_draft_tokens);
+
+}  // namespace plugin
+}  // namespace xpu3
