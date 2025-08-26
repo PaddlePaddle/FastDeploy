@@ -53,17 +53,17 @@ class ConcreteSizeEntry:
 class Dy2StCudaGraphManager:
     def __init__(self):
         self.state = CUDAGraphState.DISABLE
-        self.captrued_batch_size = set()
+        self.captured_batch_size = set()
         self.batch_size = -1
 
     def run_impl(self, original_run_impl, inputs, parameters, attrs):
         run_state = self.state
         prog_attrs, cuda_graph_attrs = attrs
         if run_state == CUDAGraphState.REPLAY:
-            if self.batch_size not in self.captrued_batch_size:
+            if self.batch_size not in self.captured_batch_size:
                 run_state = CUDAGraphState.DISABLE
         elif run_state == CUDAGraphState.CAPTURE:
-            self.captrued_batch_size.add(self.batch_size)
+            self.captured_batch_size.add(self.batch_size)
 
         cuda_graph_attrs |= {
             "cuda_graph_state": run_state,
