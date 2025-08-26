@@ -14,9 +14,6 @@
 # limitations under the License.
 """
 
-from .process import IDS_TYPE_FLAG, DataProcessor
+from .ernie4_5_vl_tokenizer import Ernie4_5_VLTokenizer
 
-__all__ = [
-    "DataProcessor",
-    "IDS_TYPE_FLAG",
-]
+__all__ = ["Ernie4_5_VLTokenizer"]

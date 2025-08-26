@@ -1,6 +1,7 @@
 # Offline Inference
 
 ## 1. Usage
+
 FastDeploy supports offline inference by loading models locally and processing user data. Usage examples:
 
 ### Chat Interface (LLM.chat)
@@ -91,10 +92,10 @@ from PIL import Image
 
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 
 PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
-tokenizer = ErnieBotTokenizer.from_pretrained(PATH)
+tokenizer = Ernie4_5Tokenizer.from_pretrained(PATH)
 
 messages = [
     {
@@ -144,15 +145,16 @@ for output in outputs:
 
 ```
 
->Note: The `generate interface` does not currently support passing parameters to control the thinking function (on/off). It always uses the model's default parameters.
+> Note: The `generate interface` does not currently support passing parameters to control the thinking function (on/off). It always uses the model's default parameters.
 
 ## 2. API Documentation
 
 ### 2.1 fastdeploy.LLM
 
-For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
+For ``LLM`` configuration, refer to [Parameter Documentation](parameters.md).
 
 > Configuration Notes:
+>
 > 1. `port` and `metrics_port` is only used for online inference.
 > 2. After startup, the service logs KV Cache block count (e.g. `total_block_num:640`). Multiply this by block_size (default 64) to get total cacheable tokens.
 > 3. Calculate `max_num_seqs` based on cacheable tokens. Example: avg input=800 tokens, output=500 tokens, blocks=640 → `kv_cache_ratio = 800/(800+500)=0.6`, `max_seq_len = 640*64/(800+500)=31`.
@@ -163,7 +165,7 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 * sampling_params: See 2.4 for parameter details
 * use_tqdm: Enable progress visualization
 * chat_template_kwargs(dict): Extra template parameters (currently supports enable_thinking(bool))
-   *usage example: `chat_template_kwargs={"enable_thinking": False}`*
+  *usage example: `chat_template_kwargs={"enable_thinking": False}`*
 
 ### 2.3 fastdeploy.LLM.generate
 

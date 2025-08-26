@@ -1,6 +1,7 @@
 # 离线推理
 
 ## 1. 使用方式
+
 通过FastDeploy离线推理，可支持本地加载模型，并处理用户数据，使用方式如下，
 
 ### 对话接口(LLM.chat)
@@ -32,9 +33,9 @@ for output in outputs:
     generated_text = output.outputs.text
 ```
 
-上述示例中```LLM```配置方式， `SamplingParams` ，`LLM.generate` ，`LLM.chat`以及输出output对应的结构体 `RequestOutput` 接口说明见如下文档说明。
+上述示例中 ``LLM``配置方式， `SamplingParams` ，`LLM.generate` ，`LLM.chat`以及输出output对应的结构体 `RequestOutput` 接口说明见如下文档说明。
 
-> 注： 若为思考模型, 加载模型时需要指定`resoning_parser` 参数，并在请求时, 可以通过配置`chat_template_kwargs` 中 `enable_thinking`参数, 进行开关思考。
+> 注： 若为思考模型, 加载模型时需要指定 `resoning_parser` 参数，并在请求时, 可以通过配置 `chat_template_kwargs` 中 `enable_thinking`参数, 进行开关思考。
 
 ```python
 from fastdeploy.entrypoints.llm import LLM
@@ -82,7 +83,7 @@ for output in outputs:
 > 注： 续写接口, 适应于用户自定义好上下文输入, 并希望模型仅输出续写内容的场景; 推理过程不会增加其他 `prompt`拼接。
 > 对于 `chat`模型, 建议使用对话接口(LLM.chat)。
 
-对于多模模型, 例如`baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, 在调用`generate接口`时, 需要提供包含图片的prompt, 使用方式如下:
+对于多模模型, 例如 `baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, 在调用 `generate接口`时, 需要提供包含图片的prompt, 使用方式如下:
 
 ```python
 import io
@@ -91,10 +92,10 @@ from PIL import Image
 
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.input.ernie_tokenizer import Ernie4_5Tokenizer
 
 PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
-tokenizer = ErnieBotTokenizer.from_pretrained(PATH)
+tokenizer = Ernie4_5Tokenizer.from_pretrained(PATH)
 
 messages = [
     {
@@ -153,7 +154,8 @@ for output in outputs:
 支持配置参数参考 [FastDeploy参数说明](./parameters.md)
 
 > 参数配置说明：
-> 1. 离线推理不需要配置 `port` 和`metrics_port` 参数。
+>
+> 1. 离线推理不需要配置 `port` 和 `metrics_port` 参数。
 > 2. 模型服务启动后，会在日志文件log/fastdeploy.log中打印如 `Doing profile, the total_block_num:640` 的日志，其中640即表示自动计算得到的KV Cache block数量，将它乘以block_size(默认值64)，即可得到部署后总共可以在KV Cache中缓存的Token数。
 > 3. `max_num_seqs` 用于配置decode阶段最大并发处理请求数，该参数可以基于第1点中缓存的Token数来计算一个较优值，例如线上统计输入平均token数800, 输出平均token数500，本次计>算得到KV Cache block为640， block_size为64。那么我们可以配置 `kv_cache_ratio = 800 / (800 + 500) = 0.6` , 配置 `max_seq_len = 640 * 64 / (800 + 500) = 31`。
 
@@ -163,12 +165,12 @@ for output in outputs:
 * sampling_params: 模型超参设置具体说明见2.4
 * use_tqdm: 是否打开推理进度可视化
 * chat_template_kwargs(dict): 传递给对话模板的额外参数，当前支持enable_thinking(bool)
-  *使用示例`chat_template_kwargs={"enable_thinking": False}`*
+  *使用示例 `chat_template_kwargs={"enable_thinking": False}`*
 
 ### 2.3 fastdeploy.LLM.generate
 
 * prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): 输入的prompt, 支持batch prompt 输入，解码后的token ids 进行输入
-  *dict 类型使用示例`prompts={"prompt": prompt, "multimodal_data": {"image": images}}`*
+  *dict 类型使用示例 `prompts={"prompt": prompt, "multimodal_data": {"image": images}}`*
 * sampling_params: 模型超参设置具体说明见2.4
 * use_tqdm: 是否打开推理进度可视化
 
@@ -193,7 +195,7 @@ for output in outputs:
 * outputs(fastdeploy.engine.request.CompletionOutput): 输出结果
 * finished(bool)：标识当前query 是否推理结束
 * metrics(fastdeploy.engine.request.RequestMetrics)：记录推理耗时指标
-* num_cached_tokens(int): 缓存的token数量, 仅在开启```enable_prefix_caching```时有效
+* num_cached_tokens(int): 缓存的token数量, 仅在开启 ``enable_prefix_caching``时有效
 * error_code(int): 错误码
 * error_msg(str): 错误信息
 

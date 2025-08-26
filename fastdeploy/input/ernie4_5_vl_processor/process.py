@@ -26,7 +26,7 @@ from paddleformers.transformers.image_utils import ChannelDimension
 from PIL import Image
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.utils import data_processor_logger
 
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
@@ -477,9 +477,9 @@ class DataProcessor:
         ]
         for i in range(len(vocab_file_names)):
             if os.path.exists(os.path.join(self.model_name_or_path, vocab_file_names[i])):
-                ErnieBotTokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
+                Ernie4_5Tokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
                 break
-        self.tokenizer = ErnieBotTokenizer.from_pretrained(self.model_name_or_path)
+        self.tokenizer = Ernie4_5Tokenizer.from_pretrained(self.model_name_or_path)
 
     def apply_chat_template(self, request):
         """

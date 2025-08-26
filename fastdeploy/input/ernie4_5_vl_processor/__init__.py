@@ -14,6 +14,16 @@
 # limitations under the License.
 """
 
-from .tokenizer_vl import ErnieVLTokenizer
+from .ernie4_5_vl_processor import Ernie4_5_VLProcessor
+from .process import IDS_TYPE_FLAG, DataProcessor, fancy_print
+from .process_video import read_video_decord
+from .utils.video_utils import VideoReaderWrapper
 
-__all__ = ["ErnieVLTokenizer"]
+__all__ = [
+    "DataProcessor",
+    "fancy_print",
+    "IDS_TYPE_FLAG",
+    "VideoReaderWrapper",
+    "read_video_decord",
+    "Ernie4_5_VLProcessor",
+]
