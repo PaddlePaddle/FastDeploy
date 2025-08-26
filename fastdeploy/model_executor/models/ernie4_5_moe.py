@@ -273,7 +273,6 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         self.self_attn = Ernie4_5_Attention(
             fd_config=fd_config,
             layer_id=layer_id,
-            redundant_table_manger=redundant_table_manger,
             prefix=f"{prefix}.self_attn",
         )
 
@@ -284,6 +283,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             self.mlp = Ernie4_5_MoE(
                 fd_config=fd_config,
                 layer_id=layer_id,
+                redundant_table_manger=redundant_table_manger,
                 prefix=f"{prefix}.mlp",
             )
         else:
