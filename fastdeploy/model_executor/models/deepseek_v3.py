@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import math
+import re
 from functools import partial
 
 import paddle
@@ -117,13 +118,31 @@ class DeepSeekV3MoE(nn.Layer):
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
 
         weight_key_map = {
-            "gate_weight_key": f"{prefix}.gate.weight",
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
             "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
         }
 
-        self.fused_moe = FusedMoE(
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.n_routed_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+        )
+
+        if fd_config.model_config.topk_method == "noaux_tc":
+            self.gate.e_score_correction_bias = self.create_parameter(
+                shape=[1, fd_config.model_config.n_routed_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+        else:
+            self.gate.e_score_correction_bias = None
+
+        self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=False,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
@@ -134,6 +153,7 @@ class DeepSeekV3MoE(nn.Layer):
             n_group=fd_config.model_config.n_group,
             routed_scaling_factor=fd_config.model_config.routed_scaling_factor,
             layer_idx=layer_id,
+            gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
         )
 
@@ -149,13 +169,14 @@ class DeepSeekV3MoE(nn.Layer):
 
     def load_state_dict(self, state_dict):
         """ """
-        self.fused_moe.load_state_dict(state_dict)
+        self.gate.load_state_dict(state_dict)
+        self.experts.load_state_dict(state_dict)
         self.shared_experts.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
         """ """
         shared_experts_out = self.shared_experts(hidden_states)
-        moe_out = self.fused_moe(hidden_states)
+        moe_out = self.experts(hidden_states, self.gate)
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
@@ -189,11 +210,12 @@ class DeepseekV3MLAAttention(nn.Layer):
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
         if self.q_lora_rank is not None:
-            self.q_a_proj = ReplicatedLinear(
+            # NOTE: (changwenbin) qkv_a_proj horizontal fusion
+            self.qkv_a_proj_with_mqa = ReplicatedLinear(
                 fd_config=fd_config,
-                prefix=f"{prefix}.q_a_proj",
+                prefix=f"{prefix}.qkv_a_proj_with_mqa",
                 input_size=self.hidden_size,
-                output_size=self.q_lora_rank,
+                output_size=self.q_lora_rank + self.kv_lora_rank + self.qk_rope_head_dim,
                 with_bias=False,
             )
 
@@ -213,15 +235,6 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
         else:
             assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
-
-        # 不切TP,跑 W4A16 Gemm
-        self.kv_a_proj_with_mqa = ReplicatedLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.kv_a_proj_with_mqa",
-            input_size=self.hidden_size,
-            output_size=self.kv_lora_rank + self.qk_rope_head_dim,
-            with_bias=False,
-        )
 
         self.kv_a_layernorm = RMSNorm(
             fd_config,
@@ -248,6 +261,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         self.kv_b_proj_bmm = KVBatchLinear(
             fd_config=fd_config,
+            kv_b_proj=self.kv_b_proj,
             prefix=f"{prefix}.kv_b_proj",
             kv_lora_rank=self.kv_lora_rank,
             num_attention_heads=self.num_attention_heads,
@@ -306,30 +320,27 @@ class DeepseekV3MLAAttention(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        layernorm_out = hidden_states
-        fmha_out = paddle.zeros(
-            shape=[
-                layernorm_out.shape[0],
-                self.num_attention_heads_tp * self.v_head_dim,
-            ],
-            dtype=layernorm_out.dtype,
+
+        # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
+        fmha_out = None
+
+        # NOTE: (changwenbin) qkv_a_proj horizontal fusion
+        qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
+        query, compressed_kv, key_pe = qkv_a_out.split(
+            [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
         )
 
-        if forward_meta.max_enc_len_this_time:
-            query = self.q_a_proj(layernorm_out)
-            query = self.q_a_layernorm(query)
-            query = self.q_b_proj(query)
+        query = self.q_a_layernorm(query)
+        query = self.q_b_proj(query)
+        query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+        query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
-            query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+        key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+        compressed_kv = self.kv_a_layernorm(compressed_kv)
 
-            compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
-            compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
-            key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-            compressed_kv = self.kv_a_layernorm(compressed_kv)
+        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
-            query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
-
+        if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
             key_value = self.kv_b_proj(compressed_kv)
             key_value = key_value.reshape(
                 [
@@ -361,23 +372,9 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
-            fmha_out = fmha_out + fmha_out_prefill
-        if forward_meta.max_dec_len_this_time:
-            query = self.q_a_proj(layernorm_out)
-            query = self.q_a_layernorm(query)
-            ln_out_or_q_c = query
+            fmha_out = fmha_out_prefill
 
-            compressed_kv = self.kv_a_proj_with_mqa(layernorm_out)
-            compressed_kv, key_pe = compressed_kv.split([self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
-            key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-            compressed_kv = self.kv_a_layernorm(compressed_kv)
-
-            query = self.q_b_proj(ln_out_or_q_c)
-            query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-
-            query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
-            query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
-
+        if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -406,16 +403,18 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .transpose([1, 0, 2])
                 .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
-            fmha_out = fmha_out + fmha_out_decode
+            if fmha_out is None:
+                fmha_out = fmha_out_decode
+            else:
+                fmha_out = fmha_out + fmha_out_decode
 
         output = self.o_proj(fmha_out)
         return output
 
     def load_state_dict(self, state_dict):
         """ """
-        self.q_a_proj.load_state_dict(state_dict)
         self.q_a_layernorm.load_state_dict(state_dict)
-        self.kv_a_proj_with_mqa.load_state_dict(state_dict)
+        self.qkv_a_proj_with_mqa.load_state_dict(state_dict)
         self.kv_a_layernorm.load_state_dict(state_dict)
         self.q_b_proj.load_state_dict(state_dict)
         self.kv_b_proj_bmm.load_state_dict(state_dict)
@@ -529,7 +528,7 @@ class DeepSeekV3Model(nn.Layer):
             prefix="deepseek_v3.embed_tokens",
         )
 
-        self.decoder_layers = nn.LayerList(
+        self.layers = nn.LayerList(
             [
                 DeepSeekV3DecoderLayer(
                     fd_config,
@@ -554,7 +553,7 @@ class DeepSeekV3Model(nn.Layer):
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.decoder_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -568,7 +567,7 @@ class DeepSeekV3Model(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.decoder_layers[i](
+            hidden_states, residual = self.layers[i](
                 forward_meta,
                 hidden_states,
                 residual,
@@ -618,6 +617,80 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         self.model.load_state_dict(state_dict)
         self.lm_head.load_state_dict(state_dict)
 
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+            ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
+        ]
+        # (param_name, weight_name, expert_id, shard_id)
+        expert_params_mapping = FusedMoE.make_expert_params_mapping(
+            num_experts=self.fd_config.model_config.n_routed_experts,
+            ckpt_gate_proj_name="gate_proj",
+            ckpt_down_proj_name="down_proj",
+            ckpt_up_proj_name="up_proj",
+            param_gate_up_proj_name="experts.up_gate_proj_",
+            param_down_proj_name="experts.down_proj_",
+        )
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
+
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                if "mlp.experts." in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+
+                if model_param_name not in params_dict:
+                    continue
+
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                for mapping in expert_params_mapping:
+                    param_name, weight_name, expert_id, shard_id = mapping
+                    if weight_name not in loaded_weight_name:
+                        continue
+                    model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                    if model_param_name not in params_dict:
+                        continue
+                    param = params_dict[model_param_name]
+                    weight_loader = param.weight_loader
+                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    break
+                else:
+                    model_param_name = loaded_weight_name
+                    if model_param_name not in params_dict:
+                        continue
+                    param = params_dict[model_param_name]
+                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                    weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            if "kv_b_proj" in model_sublayer_name:
+                kv_model_sublayer_name = model_sublayer_name.replace("kv_b_proj", "kv_b_proj_bmm")
+                process_weights_after_loading_fn(kv_model_sublayer_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
         logits = self.lm_head(hidden_states)
@@ -659,6 +732,10 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         )
         return hidden_states
 
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+
 
 class DeepSeekV3PretrainedModel(PretrainedModel):
     """
@@ -672,6 +749,10 @@ class DeepSeekV3PretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "DeepseekV3ForCausalLM"
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):

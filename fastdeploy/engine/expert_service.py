@@ -26,7 +26,7 @@ import weakref
 import numpy as np
 
 from fastdeploy.engine.resource_manager import ResourceManager
-from fastdeploy.inter_communicator import EngineWorkerQueue
+from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
@@ -50,8 +50,8 @@ class ExpertService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % cfg.worker_num_per_node
-        end_pos = start_pos + self.cfg.tensor_parallel_size
+        start_pos = (local_data_parallel_id * self.cfg.parallel_config.tensor_parallel_size) % cfg.worker_num_per_node
+        end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
         if cfg.splitwise_role != "mixed":
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
         self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
@@ -59,8 +59,8 @@ class ExpertService:
         self.cfg.disaggregate_info = None
 
         self.scheduler = cfg.scheduler_config.scheduler()
-
-        self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
+        if cfg.splitwise_role != "mixed":
+            self.scheduler.reset_nodeid(f"{self.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 
@@ -69,13 +69,13 @@ class ExpertService:
             address=address,
             is_server=False,
             client_id=0,
-            num_client=cfg.tensor_parallel_size,
+            num_client=cfg.parallel_config.tensor_parallel_size,
             local_data_parallel_id=local_data_parallel_id,
         )
         self.resource_manager = ResourceManager(
             cfg.max_num_seqs,
             cfg,
-            cfg.tensor_parallel_size,
+            cfg.parallel_config.tensor_parallel_size,
             cfg.splitwise_role,
             local_data_parallel_id,
         )
@@ -125,9 +125,9 @@ class ExpertService:
         if self.cfg.splitwise_role != "mixed":
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
-                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
                 device_ids=self.cfg.local_device_ids,
-                pod_ip=self.cfg.pod_ips[0],
+                pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}",
             )
@@ -141,16 +141,29 @@ class ExpertService:
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(local_data_parallel_id + int(self.cfg.engine_worker_queue_port))
 
         self.token_processor.run()
-
         self.cfg.init_cache_info()
-
         role = self.cfg.splitwise_role
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
         self.scheduler.start(role, host_ip, disaggregate)
         self.cfg.print()
 
-        console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
+        launched_expert_service_signal_data = np.zeros(
+            shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
+        )
+        self.launched_expert_service_signal = IPCSignal(
+            name="launched_expert_service_signal",
+            array=launched_expert_service_signal_data,
+            dtype=np.int32,
+            suffix=ipc_signal_suffix,
+            create=False,
+        )
+        local_rank = local_data_parallel_id % self.cfg.worker_num_per_node
+        self.launched_expert_service_signal.value[local_rank] = 1
+
+        console_logger.info(
+            f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
+        )
         return True
 
     def _insert_task_to_worker(self):
@@ -256,7 +269,7 @@ class ExpertService:
                         time.sleep(0.001)
                         continue
                 except Exception as e:
-                    llm_logger.error(f"get decode tasks error: {e}")
+                    llm_logger.error(f"get decode tasks error: {e}, {str(traceback.format_exc())}")
 
         threading.Thread(target=receiver_loop, daemon=True).start()
 
@@ -330,7 +343,7 @@ class ExpertService:
         if not is_decode:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             if not is_prefill and self.cfg.cache_config.enable_chunked_prefill:
-                if not self.cfg.enable_mm:
+                if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -365,4 +378,4 @@ def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix):
         expert_service.start(ipc_signal_suffix, local_data_parallel_id)
         expert_service.split_connector.start_receiver()
     except Exception as e:
-        llm_logger.exception(f"Expert service failed to start: {e}")
+        llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")

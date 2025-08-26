@@ -15,7 +15,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
 
 import paddle
 
@@ -42,9 +42,15 @@ class SamplingMetadata:
 
     top_p: paddle.Tensor
     top_k: Optional[paddle.Tensor] = None
+    top_k_list: Optional[list] = None
     min_p: Optional[paddle.Tensor] = None
+    min_p_list: Optional[list] = None
+    seed: Optional[paddle.Tensor] = None
     max_num_logprobs: Optional[int] = None
     enable_early_stop: Optional[int] = False
     stop_flags: Optional[paddle.Tensor] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
+    temp_scaled_logprobs: Optional[paddle.Tensor] = None
+    top_p_normalized_logprobs: Optional[paddle.Tensor] = None
+    share_inputs: Optional[Dict[str, paddle.Tensor]] = None

@@ -77,7 +77,11 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &out_linear_shifts,
     const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
     const int max_input_length, const float quant_max_bound,
@@ -188,7 +192,8 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
-    const std::string& quant_method, const bool used_in_ep_low_latency);
+    const std::string& quant_method, const bool used_in_ep_low_latency,
+    const int estimate_total_token_nums);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
@@ -526,7 +531,7 @@ paddle::Tensor FusedHadamardQuantFp8Func(
 int64_t init_custom_all_reduce(const std::vector<int64_t>& fake_ipc_ptrs,
                       paddle::Tensor& rank_data, int64_t rank, bool full_nvlink);
 
-void all_reduce(int64_t _fa, paddle::Tensor& inp, paddle::Tensor& out,
+void all_reduce(paddle::Tensor& inp, paddle::Tensor& out, int64_t _fa,
                 int64_t reg_buffer, int64_t reg_buffer_sz_bytes);
 
 void dispose(int64_t _fa);
@@ -609,7 +614,7 @@ void SpeculateVerify(
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
     int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode);
 
-void SpeculateUpdateV3(const paddle::Tensor &seq_lens_encoder,
+void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
                        const paddle::Tensor &not_need_stop,
                        const paddle::Tensor &draft_tokens,
@@ -654,6 +659,20 @@ void NgramMatch(const paddle::Tensor &input_ids,
         const int max_draft_tokens);
 
 
+void HybridMtpNgram(const paddle::Tensor &input_ids,
+        const paddle::Tensor &input_ids_len,
+        const paddle::Tensor &pre_ids,
+        const paddle::Tensor &step_idx,
+        const paddle::Tensor &draft_token_num,
+        const paddle::Tensor &draft_tokens,
+        const paddle::Tensor &seq_lens_this_time,
+        const paddle::Tensor &seq_lens_decoder,
+        const paddle::Tensor &max_dec_len,
+        const int max_ngram_size,
+        const int min_ngram_size,
+        const int max_draft_tokens);
+
+
 // MTP
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
@@ -670,8 +689,10 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
                           const paddle::Tensor& batch_drop,
+                          const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
+                          const paddle::Tensor& base_model_seq_lens_this_time,
                           const paddle::Tensor& base_model_seq_lens_encoder,
                           const paddle::Tensor& base_model_seq_lens_decoder,
                           const paddle::Tensor& base_model_step_idx,
@@ -771,6 +792,22 @@ void MergePrefillDecodeOutput(
         const int head_num,
         const int head_dim,
         const int max_token);
+
+std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
+                                               const paddle::Tensor &top_p,
+                                               const paddle::optional<paddle::Tensor> &top_k,
+                                               int64_t seed);
+
+std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor &probs,
+                                       const paddle::Tensor &top_k);
+
+std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
+                                               const paddle::Tensor &min_p);
+
+void SaveOutMmsgStatic(const paddle::Tensor& x,
+                       const paddle::Tensor& not_need_stop,
+                       int64_t rank_id,
+                       bool save_each_rank);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -1099,7 +1136,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",&SpeculateVerify, "speculate_verify function");
 
-  m.def("speculate_update_v3",&SpeculateUpdateV3, "noaux_tc for Deepseekv3 MoE compute function");
+  m.def("speculate_update",&SpeculateUpdate, "Speculate Update Kernel");
 
   m.def("speculate_set_value_by_flags_and_idx",&SpeculateSetValueByFlagsAndIdx, "speculate_set_value_by_flags_and_idx function");
 
@@ -1108,6 +1145,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_clear_accept_nums",&SpeculateClearAcceptNums, "speculate_clear_accept_nums function");
 
   m.def("ngram_match", &NgramMatch, "ngram_match function");
+
+  m.def("hybird_mtp_ngram", &HybridMtpNgram, "ngram_match_mixed function");
 
   m.def("draft_model_postprocess",&DraftModelPostprocess, "draft_model_postprocess function");
 
@@ -1124,4 +1163,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_step_paddle",&SpeculateStepPaddle, "speculate_step_paddle function");
 
   m.def("merge_prefill_decode_output", &MergePrefillDecodeOutput, "merge_prefill_decode_output function");
+
+  m.def("rejection_top_p_sampling", &TopPSamplingReject, "rejection_top_p_sampling function");
+
+  m.def("top_k_renorm_probs", &TopKRenorm, "top_k_renorm_probs function");
+
+  m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
+
+  m.def("save_output", &SaveOutMmsgStatic, "save_output function");
 }

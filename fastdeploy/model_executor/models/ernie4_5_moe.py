@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import inspect
+import re
 from functools import partial
 from typing import Dict, Union
 
@@ -37,6 +39,7 @@ from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
+    ReplicatedLinear,
     RowParallelLinear,
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
@@ -46,6 +49,7 @@ from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
+from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 
 class Ernie4_5_MLP(nn.Layer):
@@ -94,13 +98,23 @@ class Ernie4_5_MLP(nn.Layer):
 
 
 class Ernie4_5_MoE(nn.Layer):
-    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
+    def __init__(
+        self, fd_config: FDConfig, layer_id: int, prefix: str, redundant_table_manger: RedundantExpertManger = None
+    ) -> None:
         super().__init__()
         moe_quant_type = ""
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        if moe_quant_type == "w4a8":
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+        self.tp_group = fd_config.parallel_config.tp_group
+
+        self.use_ep = self.expert_parallel_size > 1
+        self.us_tp = self.tensor_parallel_size > 1
+
+        if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -147,14 +161,35 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
             }
 
-        self.fused_moe = FusedMoE(
+        self.gate = ReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=fd_config.model_config.moe_num_experts,
+            with_bias=False,
+            skip_quant=True,
+            weight_dtype="float32",
+        )
+
+        self.experts = FusedMoE(
             fd_config=fd_config,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.moe_num_experts,
             top_k=fd_config.model_config.moe_k,
             layer_idx=layer_id,
+            gate_correction_bias=None,
+            redundant_table_manger=redundant_table_manger,
             weight_key_map=weight_key_map,
         )
+
+        if fd_config.model_config.moe_use_aux_free:
+            self.experts.gate_correction_bias = self.create_parameter(
+                shape=[1, fd_config.model_config.moe_num_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+        else:
+            self.experts.gate_correction_bias = None
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
@@ -166,12 +201,45 @@ class Ernie4_5_MoE(nn.Layer):
             )
 
     def load_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict)
+        self.gate.load_state_dict(state_dict)
+        self.experts.load_state_dict(state_dict)
+        if self.experts.gate_correction_bias is not None:
+            gate_correction_bias_tensor = state_dict.pop(self.experts.gate_correction_bias_key)
+            if self.experts.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(
+                    self.experts.gate_correction_bias.shape
+                )
+            self.experts.gate_correction_bias.set_value(gate_correction_bias_tensor)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
+    def update_state_dict(self, state_dict):
+        self.fused_moe.load_state_dict(state_dict, True)
+
+    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
+        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
+        # AllGather will hang when the data shapes on multi-ranks are different!
+        part_hidden_states = paddle.zeros(
+            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
+        )
+        start_offset = self.tensor_parallel_rank * token_num_per_rank
+        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
+        if end_offset > token_num:
+            end_offset = token_num
+        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
+        out = self.experts(part_hidden_states, self.gate)
+        multi_outs = []
+        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
+        out = paddle.concat(multi_outs, axis=0)
+        out = out[:token_num, :]
+        return out
+
     def forward(self, hidden_states: paddle.Tensor):
-        out = self.fused_moe(hidden_states)
+        token_num = hidden_states.shape[0]
+        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
+            out = self.split_allgather_out(hidden_states, token_num)
+        else:
+            out = self.experts(hidden_states, self.gate)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -226,6 +294,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
     def __init__(
         self,
         fd_config: FDConfig,
+        redundant_table_manger: RedundantExpertManger = None,
         prefix: str = "",
     ) -> None:
         super().__init__()
@@ -244,6 +313,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             self.mlp = Ernie4_5_MoE(
                 fd_config=fd_config,
                 layer_id=layer_id,
+                redundant_table_manger=redundant_table_manger,
                 prefix=f"{prefix}.mlp",
             )
         else:
@@ -272,6 +342,9 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         self.mlp.load_state_dict(state_dict)
         self.input_layernorm.load_state_dict(state_dict)
         self.post_attention_layernorm.load_state_dict(state_dict)
+
+    def update_state_dict(self, state_dict):
+        self.mlp.update_state_dict(state_dict)
 
     def forward(
         self,
@@ -313,6 +386,15 @@ class Ernie4_5_Model(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
+        self.fd_config = fd_config
+        self.redundant_table_manger = None
+        if fd_config.model_config.enable_redundant_experts is True:
+            self.redundant_table_manger = RedundantExpertManger(
+                n_routed_experts=fd_config.model_config.moe_num_experts,
+                num_hidden_layers=fd_config.model_config.num_hidden_layers,
+                redundant_experts_num=fd_config.model_config.redundant_experts_num,
+                ep_size=fd_config.parallel_config.expert_parallel_size,
+            )
 
         self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
@@ -326,6 +408,7 @@ class Ernie4_5_Model(nn.Layer):
             [
                 Ernie4_5_DecoderLayer(
                     fd_config=fd_config,
+                    redundant_table_manger=self.redundant_table_manger,
                     prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}",
                 )
                 for i in range(self.num_layers)
@@ -353,6 +436,22 @@ class Ernie4_5_Model(nn.Layer):
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
+
+    def update_state_dict(self, state_dict):
+        """
+        Update model parameters from a given state dictionary.
+
+        Args:
+            state_dict (dict[str, np.ndarray | paddle.Tensor]):
+                A dictionary containing model parameters, where keys are parameter names
+                and values are NumPy arrays or PaddlePaddle tensors.
+        """
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            logger.info(f"Start update layer {i}")
+            self.layers[i].update_state_dict(state_dict)
 
     def forward(
         self,
@@ -412,9 +511,77 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            if hasattr(self.lm_head, "linear"):
+                self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            else:  # ep
+                self.lm_head.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        general_params_mapping = [
+            # (param_name, weight_name, expert_id, shard_id)
+            ("embed_tokens.embeddings", "embed_tokens", None, None),
+            ("lm_head.linear", "lm_head", None, None),
+            ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
+        ]
+
+        expert_params_mapping = []
+        if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
+            expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                num_experts=self.fd_config.model_config.moe_num_experts,
+                ckpt_down_proj_name="down_proj",
+                ckpt_gate_up_proj_name="up_gate_proj",
+                param_gate_up_proj_name="experts.up_gate_proj_",
+                param_down_proj_name="experts.down_proj_",
+            )
+        all_param_mapping = general_params_mapping + expert_params_mapping
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        expert_id = None
+        shard_id = None
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, exp_id, shard_id in all_param_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                param = params_dict[model_param_name]
+                expert_id = exp_id
+                shard_id = shard_id
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict.keys():
+                    continue
+                param = params_dict[model_param_name]
+
+            # Get weight loader from parameter and set weight
+            weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+            sig = inspect.signature(weight_loader)
+            if "expert_id" in sig.parameters:
+                weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
+            else:
+                weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
@@ -435,7 +602,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.experts(fake_hidden_states, self.ernie.layers[i].mlp.gate)
 
     def forward(
         self,
@@ -445,6 +612,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
@@ -460,9 +631,9 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         return "Ernie4_5_ForCausalLM"
 
 
-class Ernie4_5_PretrainedModel(PretrainedModel):
+class Ernie4_5_MoePretrainedModel(PretrainedModel):
     """
-    Ernie4_5_PretrainedModel
+    Ernie4_5_MoePretrainedModel
     """
 
     config_class = FDConfig
@@ -472,6 +643,10 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Ernie4_5_MoeForCausalLM"
 
     weight_infos = [
         WeightMeta(
@@ -594,3 +769,16 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             config.prefix_name,
         )
         return mappings
+
+
+class Ernie4_5_PretrainedModel(Ernie4_5_MoePretrainedModel):
+    """
+    Ernie4_5_PretrainedModel
+    """
+
+    @classmethod
+    def arch_name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5_ForCausalLM"

@@ -24,10 +24,12 @@ from fastsafetensors import SafeTensorsFileLoader, SingleGroup
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from paddleformers.utils.log import logger
+from paddleformers.utils.safetensors import fast_safe_open
 from safetensors import safe_open
 from tqdm import tqdm
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.tp_utils import (
     check_tensor_parallel_prerequisites,
 )
@@ -65,7 +67,7 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
     """
     with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
         weight_list = json.load(f)["weight_map"]
-    filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
+    filtered_map = {k: v for k, v in weight_list.items() if ".experts." not in k}
     num_local_ffn_keys = []
 
     from itertools import chain
@@ -125,7 +127,11 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
             num_local_ffn_keys.append(down_proj_in_scale_key)
 
         # for EP w4a8, we need all expert's activation_scale for up_gate_proj
-        for j in range(fd_config.model_config.moe_num_experts):
+        num_experts = fd_config.model_config.moe_num_experts
+        if isinstance(num_experts, list):
+            num_experts = num_experts[0]
+
+        for j in range(num_experts):
             up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
@@ -155,9 +161,7 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
     return state_dict
 
 
-def safetensors_weights_iterator(
-    safe_tensor_list: list[str],
-):
+def safetensors_weights_iterator(safe_tensor_list: list[str]):
     """
     safetensors_weights_iterator
     """
@@ -165,12 +169,25 @@ def safetensors_weights_iterator(
         safe_tensor_list,
         desc="Loading safetensors checkpoint shards",
     ):
-        from paddleformers.utils.safetensors import fast_safe_open
+        with safe_open(st_file, framework="np") as f:
+            for name in f.keys():
+                param = f.get_tensor(name)
+                yield name, param
 
+
+def fast_weights_iterator(safe_tensor_list: list[str]):
+    """
+    paddleformers' iterator for safetensors
+    """
+    for st_file in tqdm(
+        safe_tensor_list,
+        desc="Loading safetensors checkpoint shards",
+    ):
         with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
-                param = f.get_slice(name)
-                yield name, param
+                param_slice = f.get_slice(name)
+                paddle_tensor = get_tensor(param_slice)
+                yield name, paddle_tensor
 
 
 def fastsafetensors_weights_iterator(
@@ -215,6 +232,7 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int, use_fastsafete
     """
     load_pre_sharded_checkpoint
     """
+
     state_dict = {}
     _, safetensor_files = get_all_safetensors(os.path.join(model_path, f"rank{local_rank}"))
     weights_iterator = safetensors_weights_iterator(safetensor_files)
@@ -307,33 +325,28 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
-        state_dict = load_ep_checkpoint(model_path, fd_config, return_numpy=True)
+    rank_dirs = [
+        f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
+    ]
+    if len(rank_dirs) > 1:
+        if fd_config.parallel_config.tensor_parallel_size != len(rank_dirs):
+            raise ValueError(f"Your model only supports loading with tp{len(rank_dirs)}")
+        state_dict = load_pre_sharded_checkpoint(
+            model_path,
+            fd_config.parallel_config.tensor_parallel_rank,
+            use_fastsafetensor=False,
+        )
     else:
-        rank_dirs = [
-            f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
-        ]
-        if len(rank_dirs) > 1:
-            if fd_config.parallel_config.tensor_parallel_size != len(rank_dirs):
-                raise ValueError(f"Your model only supports loading with tp{len(rank_dirs)}")
-            state_dict = load_pre_sharded_checkpoint(
-                model_path,
-                fd_config.parallel_config.tensor_parallel_rank,
-                use_fastsafetensor=False,
-            )
+        if fd_config.load_config.use_fastsafetensor and (current_platform.available() and current_platform.is_cuda()):
+            state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
+            deal_state_dict(state_dict)
         else:
-            if fd_config.load_config.use_fastsafetensor and (
-                current_platform.available() and current_platform.is_cuda()
-            ):
-                state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
-                deal_state_dict(state_dict)
-            else:
-                state_dict = load_tp_checkpoint(
-                    model_path,
-                    cls,
-                    fd_config.model_config.pretrained_config,
-                    return_numpy=return_numpy,
-                )
+            state_dict = load_tp_checkpoint(
+                model_path,
+                cls,
+                fd_config.model_config.pretrained_config,
+                return_numpy=return_numpy,
+            )
     if not state_dict:
         raise ValueError("weight not found in state_dict !")
     return state_dict

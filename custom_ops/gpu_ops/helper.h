@@ -193,6 +193,12 @@ public:
   typedef uint8_t data_t;
 };
 
+template <> class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
+public:
+  typedef __nv_fp8_e4m3 DataType;
+  typedef paddle::float8_e4m3fn data_t;
+};
+
 template <typename T, int Size> struct alignas(sizeof(T) * Size) AlignedVector {
   T val[Size];
 
@@ -509,6 +515,7 @@ static void PrintMatrix3(const T *mat_d, int num, std::string name) {
 }
 
 #ifndef PADDLE_WITH_HIP
+#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
 __forceinline__ __device__ uint32_t ld_flag_acquire(uint32_t *flag_addr,
                                                     int mode = 0) {
   uint32_t flag;
@@ -541,7 +548,7 @@ __forceinline__ __device__ void st_flag_release(uint32_t *flag_addr,
                  "l"(flag_addr));
   }
 }
-
+#endif
 inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
   int max_shared_mem_per_block_opt_in = 0;
   cudaDeviceGetAttribute(&max_shared_mem_per_block_opt_in,

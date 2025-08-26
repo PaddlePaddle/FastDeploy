@@ -35,6 +35,7 @@ from fastdeploy.model_executor.ops.gpu import (
     draft_model_update,
     eagle_get_hidden_states,
     eagle_get_self_hidden_states,
+    hybrid_mtp_ngram,
     mtp_save_first_token,
     mtp_step_paddle,
     share_external_data,
@@ -57,6 +58,8 @@ class MTPProposer(Proposer):
         self._update_cfg(main_model)
         self._load_model()
         self.main_model_inputs = main_model_inputs
+        self.mtp_strategy = self.speculative_config.mtp_strategy
+        self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
 
         # [mixed, prefill, decoder]
         self.role = "mixed"
@@ -107,7 +110,7 @@ class MTPProposer(Proposer):
             idx = i
             self.model_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.model_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.model_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.model_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.model_inputs["seq_lens_decoder"][idx : idx + 1] = 0
             self.model_inputs["step_idx"][idx : idx + 1] = 0
@@ -118,6 +121,7 @@ class MTPProposer(Proposer):
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def initialize_kv_cache(self):
         """
@@ -263,7 +267,8 @@ class MTPProposer(Proposer):
         # Same shape/dytpe with base model
         self.model_inputs["block_tables"] = paddle.clone(self.main_model_inputs["block_tables"])
         self.model_inputs["input_ids"] = paddle.clone(self.main_model_inputs["input_ids"])
-        self.model_inputs["seq_lens_this_time"] = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+        self.seq_lens_this_time_buffer = paddle.clone(self.main_model_inputs["seq_lens_this_time"])
+
         self.model_inputs["seq_lens_encoder"] = paddle.clone(self.main_model_inputs["seq_lens_encoder"])
         self.model_inputs["seq_lens_decoder"] = paddle.clone(self.main_model_inputs["seq_lens_decoder"])
         self.model_inputs["step_idx"] = paddle.clone(self.main_model_inputs["step_idx"])
@@ -272,7 +277,6 @@ class MTPProposer(Proposer):
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.main_model_inputs["pre_ids"])
         self.model_inputs["ids_remove_padding"] = paddle.clone(self.main_model_inputs["ids_remove_padding"])
-        self.model_inputs["cum_offsets"] = paddle.clone(self.main_model_inputs["cum_offsets"])
         self.model_inputs["batch_id_per_token"] = paddle.clone(self.main_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(self.main_model_inputs["cu_seqlens_q"])
         self.model_inputs["cu_seqlens_k"] = paddle.clone(self.main_model_inputs["cu_seqlens_k"])
@@ -315,7 +319,9 @@ class MTPProposer(Proposer):
         self.model_inputs["max_len_tensor_cpu"] = None  # CPU
 
         # Input tokens
-        self.model_inputs["draft_tokens"] = paddle.full(shape=[self.max_num_seqs, 2], fill_value=-1, dtype="int64")
+        self.model_inputs["draft_tokens"] = paddle.full(
+            shape=[self.max_num_seqs, self.max_draft_token_num + 1], fill_value=-1, dtype="int64"
+        )
 
         self.model_inputs["encoder_block_lens"] = paddle.clone(self.main_model_inputs["encoder_block_lens"])
 
@@ -333,12 +339,13 @@ class MTPProposer(Proposer):
 
         self.model_inputs["batch_drop"] = paddle.full(shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
         self.model_inputs["used_list_len"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
-        if self.max_draft_token_num > 1:
+        if self.num_model_steps > 1:
             self.last_seq_lens_this_time = paddle.full_like(
                 self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
+        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
 
-    def insert_prefill_inputs(self, req_dicts: List[Request]):
+    def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
         Process inputs for prefill tasks and insert it to model_inputs buffer
         """
@@ -361,6 +368,7 @@ class MTPProposer(Proposer):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
+            self.input_ids_len[idx] = length
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -372,7 +380,7 @@ class MTPProposer(Proposer):
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.model_inputs["seq_lens_this_time"][idx : idx + 1] = prefill_token_num
+                self.seq_lens_this_time_buffer[idx : idx + 1] = prefill_token_num
 
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
                 self.model_inputs["batch_drop"][idx : idx + 1] = False
@@ -397,10 +405,10 @@ class MTPProposer(Proposer):
                 if self.cache_config.enable_chunked_prefill:
                     token_chunk_size = request.prefill_chunk_info[0]
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
-                    self.model_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
                 else:
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = length
-                    self.model_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                    self.seq_lens_this_time_buffer[idx : idx + 1] = length
 
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
@@ -413,6 +421,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def _initialize_forward_meta(self):
         """
@@ -456,15 +465,17 @@ class MTPProposer(Proposer):
             self.model_inputs["step_idx"],
             self.model_inputs["not_need_stop"],
             self.model_inputs["batch_drop"],
+            self.model_inputs["pre_ids"],
             self.main_model_inputs["accept_tokens"],
             self.main_model_inputs["accept_num"],
+            self.main_model_inputs["seq_lens_this_time"],
             self.main_model_inputs["seq_lens_encoder"],
             self.main_model_inputs["seq_lens_decoder"],
             self.main_model_inputs["step_idx"],
             self.main_model_inputs["stop_flags"],
             self.main_model_inputs["is_block_step"],
             self.main_model_inputs["draft_tokens"],
-            self.max_draft_token_num,
+            self.num_model_steps,
             self.speculative_method in ["eagle", "mtp"],
             self.role == "prefill",
         )
@@ -478,7 +489,7 @@ class MTPProposer(Proposer):
             self.main_model_inputs["accept_num"],
             self.main_model_inputs["seq_lens_this_time"],
             self.main_model_inputs["seq_lens_encoder"],
-            self.max_draft_token_num,
+            self.num_model_steps,
         )
         if isinstance(target_hidden_states, list):
             target_hidden_states = target_hidden_states[0]
@@ -518,13 +529,12 @@ class MTPProposer(Proposer):
         """
         Main process for MTP inference
         """
-        for substep in range(self.max_draft_token_num):
+        for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
                 (
                     ids_remove_padding,
-                    cum_offsets,
                     batch_id_per_token,
                     cu_seqlens_q,
                     cu_seqlens_k,
@@ -538,9 +548,9 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["seq_lens_decoder"],
                 )
+
                 # Initialize forward meta data
                 self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-                self.model_inputs["cum_offsets"].copy_(cum_offsets, False)
                 self.model_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
                 self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
                 self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -564,7 +574,7 @@ class MTPProposer(Proposer):
                     eos_token_ids=self.model_inputs["eos_token_id"],
                 )
 
-                if self.max_draft_token_num > 1:
+                if self.num_model_steps > 1:
                     self.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
 
                 model_output = self.model(
@@ -575,7 +585,7 @@ class MTPProposer(Proposer):
 
                 hidden_states = rebuild_padding(
                     model_output,
-                    self.model_inputs["cum_offsets"],
+                    self.model_inputs["cu_seqlens_q"],
                     self.model_inputs["seq_lens_this_time"],
                     self.model_inputs["seq_lens_decoder"],
                     self.model_inputs["seq_lens_encoder"],
@@ -598,7 +608,7 @@ class MTPProposer(Proposer):
 
                 self._post_process(sampled_token_ids)
 
-                if substep != self.max_draft_token_num - 1:
+                if substep != self.num_model_steps - 1:
                     target_hidden_states = self._get_self_hidden_states(hidden_states)
 
     def _get_self_hidden_states(self, hidden_states):
@@ -670,11 +680,37 @@ class MTPProposer(Proposer):
             self.max_draft_token_num,
         )
 
+    def _extend_draft_token_with_ngram_match(self):
+        # TODO(liuzichang): Optimize this Kernel to CUDA Kernel to reduce lantency
+        device = paddle.CUDAPinnedPlace()
+
+        draft_tokens = self.main_model_inputs["draft_tokens"].cpu()
+        seq_lens_this_time = self.main_model_inputs["seq_lens_this_time"].cpu()
+        seq_lens_decoder = self.model_inputs["seq_lens_decoder"].cpu()
+        hybrid_mtp_ngram(
+            self.model_inputs["input_ids"]._copy_to(device, True),
+            self.input_ids_len,
+            self.model_inputs["pre_ids"]._copy_to(device, True),
+            self.model_inputs["step_idx"].cpu(),
+            self.main_model_inputs["actual_draft_token_num"].cpu(),
+            draft_tokens,
+            seq_lens_this_time,
+            seq_lens_decoder,
+            self.model_inputs["max_dec_len"].cpu(),
+            self.max_ngram_size,
+            self.min_ngram_size,
+            self.max_draft_token_num,
+        )
+        self.main_model_inputs["draft_tokens"][:] = draft_tokens.cuda()
+        self.main_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
+
     def _run_impl(self, full_hidden_states):
         """"""
         target_hidden_states = self._prepare_inputs(full_hidden_states)
         self._propose(target_hidden_states=target_hidden_states)
         self._update_status()
+        if self.hybrid_mode:
+            self._extend_draft_token_with_ngram_match()
 
     def is_chunk_prefill_enabled(self):
         """"""

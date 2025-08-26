@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 
 import paddle
@@ -254,7 +255,10 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -266,8 +270,8 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]
-
         params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -280,11 +284,17 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
-                if loaded_weight_name not in params_dict:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
                     continue
-                param = params_dict[loaded_weight_name]
+                param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
@@ -320,6 +330,10 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
         return hidden_states
 
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+
 
 class Qwen3PretrainedModel(PretrainedModel):
     """
@@ -333,6 +347,10 @@ class Qwen3PretrainedModel(PretrainedModel):
         _init_weight
         """
         return None
+
+    @classmethod
+    def arch_name(self):
+        return "Qwen3ForCausalLM"
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):

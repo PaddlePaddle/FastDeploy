@@ -17,6 +17,7 @@
 import math
 import threading
 import time
+import traceback
 
 import numpy as np
 import paddle
@@ -142,7 +143,7 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
-        self.dp_rank_id = local_data_parallel_id
+        self.dp_rank_id = self.rank + local_data_parallel_id * self.nranks
 
         layerwise_send_cache_thread = threading.Thread(target=self._prefill_layerwise_send_cache_thread)
         layerwise_send_cache_thread.daemon = True
@@ -309,4 +310,4 @@ class CacheMessager:
                     self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:
-            logger.error(f"prefill layerwise send cache thread has exception: {e}")
+            logger.error(f"prefill layerwise send cache thread has exception: {e}, {str(traceback.format_exc())}")

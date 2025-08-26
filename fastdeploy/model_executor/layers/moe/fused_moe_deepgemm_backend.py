@@ -22,8 +22,8 @@ import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
+from fastdeploy.utils import ceil_div
 
-from ..utils import create_and_set_parameter
 from .fused_moe_backend_base import MoEMethodBase
 
 
@@ -32,12 +32,74 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
     DeepGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for DeepGemm backend.
     """
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         deepgemm create weight process.
         """
+        self.weight_dtype = paddle.float8_e4m3fn
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        self.ffn1_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size,
+        ]
+        self.ffn2_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn1_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.ffn2_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[
+                    layer.num_local_experts,
+                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
+                ],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[
+                    layer.num_local_experts,
+                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
+                ],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
 
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        deepgemm create weight process.
+        """
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
@@ -56,13 +118,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
             quanted_weight = quanted_weight.transpose([0, 2, 1]).contiguous()
-            create_and_set_parameter(layer, weight_name, quanted_weight)
+            getattr(layer, weight_name).copy_(quanted_weight, False)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
             quanted_weight_scale = quanted_weight_scale.transpose([0, 2, 1]).contiguous()
-            create_and_set_parameter(layer, scale_name, quanted_weight_scale)
+            getattr(layer, scale_name).set_value(quanted_weight_scale)
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
@@ -72,9 +134,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = layer.load_experts_weight(
-            state_dict,
-            up_gate_proj_expert_weight_key,
-            down_proj_expert_weight_key,
+            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key, is_rearrange
         )
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
@@ -120,17 +180,18 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             "down_proj_weight_scale": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
-            create_and_set_parameter(layer, name, tensor)
+            getattr(layer, name).set_value(tensor)
 
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
@@ -233,11 +294,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
         """
+        gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
@@ -303,20 +365,33 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
+        gate_out = gate(x.cast("float32"))
 
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight
-            False,
-        )
+        if layer.topk_method == "noaux_tc":
+            from .ep import get_moe_scores
+
+            _, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+            )
+        else:
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,  # apply_norm_weight
+                False,
+            )
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
@@ -389,6 +464,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tensor_model_parallel_all_reduce(tmp_ffn_out, self.tp_group)
 
         return tmp_ffn_out

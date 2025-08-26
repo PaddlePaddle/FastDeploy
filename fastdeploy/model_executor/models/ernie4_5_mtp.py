@@ -47,6 +47,10 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         return None
 
     @classmethod
+    def arch_name(self):
+        return "Ernie4_5_MTPForCausalLM"
+
+    @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
         """
         get_tensor_parallel_mappings
@@ -244,6 +248,7 @@ class Ernie4_5_MTPModel(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.embed_tokens = fd_config.speculative_config.sharing_model.ernie.embed_tokens
+        self.norm = fd_config.speculative_config.sharing_model.ernie.norm
 
         self.layers = nn.LayerList(
             [
@@ -313,6 +318,8 @@ class Ernie4_5_MTPModel(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         hidden_states = hidden_states + residual
+
+        hidden_states = self.norm(hidden_states)
 
         return hidden_states
 
