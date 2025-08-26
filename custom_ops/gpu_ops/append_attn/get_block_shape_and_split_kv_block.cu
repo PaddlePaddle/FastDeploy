@@ -158,10 +158,10 @@ __global__ void search_chunk_size_for_decoder(
   const int kv_num_heads,
   const int min_chunk_size,
   const int sm_cout,
-  const int shared_mem_per_sm) {
+  const int shared_mem_per_sm,
+  const int regs_per_sm) {
   const uint32_t conf_id = threadIdx.x;
   int total_num_blocks_q = 0;
-  int total_num_blocks = 0;
   if(set_chunk_size > 0){
     if (threadIdx.x == 0) {
       int index = 0;
@@ -185,6 +185,7 @@ __global__ void search_chunk_size_for_decoder(
   }else{
     if (conf_id <= config_size) {
       __shared__ int gridx_shared[config_size];
+      int total_num_blocks = 0;
       // chunk_size is a multiple of min_chunk_size
       const int chunk_size = min_chunk_size << conf_id;
       const int max_num_chunks = div_up(max_len_kv, chunk_size);
@@ -202,12 +203,13 @@ __global__ void search_chunk_size_for_decoder(
             tile_ids_per_batch[index++] = tile_id;
           }
         }
-        // const int num_chunks = div_up(current_kv_len, chunk_size);
-        // const int num_blocks_this_batch = num_blocks_q_this_bsz * num_chunks;
+        const int current_kv_len = seq_len + seq_lens_decoder[bid];
+        const int num_chunks = div_up(current_kv_len, chunk_size);
+        const int num_blocks_this_batch = num_blocks_q_this_bsz * num_chunks;
         total_num_blocks_q += num_blocks_q_this_bsz;
-        // total_num_blocks += num_blocks_this_batch;
+        total_num_blocks += num_blocks_this_batch;
       }
-      gridx_shared[conf_id] = total_num_blocks_q * max_num_chunks * kv_num_heads;
+      gridx_shared[conf_id] = total_num_blocks * kv_num_heads;
       __syncthreads();
       if (threadIdx.x == 0) {
         uint32_t res_id = config_size;
@@ -215,30 +217,34 @@ __global__ void search_chunk_size_for_decoder(
         uint32_t last_wave_block = gridx_shared[res_id] % sm_cout;
         float max_efficiency = n_waves / ceil(n_waves);
         float max_score = max_efficiency * last_wave_block;
-        // const int smem_per_block = 36864;
-        // const int max_waves_per_sm = max(min(shared_mem_per_sm / kv_num_heads / smem_per_block, 65536 / 19200), 1);
-        // float min_wave_diff = abs(max_waves_per_sm - (int)n_waves);
-        for (int i = config_size-1; i >= 0; --i) {
-          uint32_t last_wave_block = gridx_shared[i] % sm_cout;
+        const int smem_per_block = 36864;
+        const int regs_per_block = 19200;
+        const int max_waves_per_sm = max(min(shared_mem_per_sm / kv_num_heads / smem_per_block, regs_per_sm / regs_per_block), 1);
+        float min_wave_diff = abs(max_waves_per_sm - (int)n_waves);
+        for (int i = config_size - 1; i >= 0; --i) {
+          last_wave_block = gridx_shared[i] % sm_cout;
           n_waves = static_cast<float>(gridx_shared[i]) / sm_cout;
           // if(n_waves > 16) continue;
-          // float wave_diff = abs(max_waves_per_sm - (int)n_waves);
+          float wave_diff = abs(max_waves_per_sm - (int)n_waves);
           float efficiency = n_waves / ceil(n_waves);
           float score = efficiency * last_wave_block;
-          // if (wave_diff < min_wave_diff){
-          //   res_id = i;
-          //   min_wave_diff = wave_diff;
-          // }
+          if (wave_diff <= min_wave_diff){
+            if (efficiency > max_efficiency){
+              res_id = i;
+              min_wave_diff = wave_diff;
+              max_efficiency = efficiency;
+            }
+          }
           // if (efficiency >= max_efficiency) {
           //   res_id = i;
           //   max_efficiency = efficiency;
           // }
-          if (score >= max_score){
-            res_id = i;
-            max_score = score;
-          }
+          // if (score >= max_score){
+          //   res_id = i;
+          //   max_score = score;
+          // }
         }
-        if (res_id > 1) res_id = 1; // 0.3b 短输入 48并发 性能最接近1k
+        // if (res_id > 1) res_id = 1; // 0.3b 短输入 48并发 性能最接近1k
         const int res_chunk_size = min_chunk_size << res_id;
         num_blocks_x_and_chunk_size[0] = total_num_blocks_q;
         num_blocks_x_and_chunk_size[1] = res_chunk_size;
@@ -317,10 +323,12 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
   int bsz = seq_lens_this_time.shape()[0];
   int device = 0;
   cudaGetDevice(&device);
-  cudaDeviceProp deviceProp;
-  cudaGetDeviceProperties(&deviceProp, device);
-  int sm_count = deviceProp.multiProcessorCount;
-  int shared_mem_per_sm = deviceProp.sharedMemPerMultiprocessor;
+  int sm_count = 0;
+  int shared_mem_per_sm = 0;
+  int regs_per_sm = 0;
+  cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device);
+  cudaDeviceGetAttribute(&shared_mem_per_sm, cudaDevAttrMaxSharedMemoryPerMultiprocessor, device);
+  cudaDeviceGetAttribute(&regs_per_sm, cudaDevAttrMaxRegistersPerMultiprocessor, device);
 
   paddle::Tensor max_len_tensor_gpu = GetEmptyTensor({max_len_tensor_cpu.shape()[0]}, paddle::DataType::INT32, seq_lens_this_time.place());
   GetMaxLen(seq_lens_decoder, seq_lens_this_time, seq_lens_encoder,
@@ -434,7 +442,8 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
         kv_num_heads,
         min_chunk_size,
         sm_count,
-        shared_mem_per_sm);
+        shared_mem_per_sm,
+        regs_per_sm);
     // decoder_num_blocks_x_cpu.copy_(decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
   }
 
