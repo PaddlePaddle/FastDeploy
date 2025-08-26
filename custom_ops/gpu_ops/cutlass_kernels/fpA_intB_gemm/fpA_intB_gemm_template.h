@@ -597,7 +597,7 @@ void CutlassFpAIntBGemmRunner<
             ScaleZeroType,
             BiasType,
             OutputType,
-            cutlass::arch::Sm89,
+            cutlass::arch::Sm90,
             QuantOp,
             EpilogueTag>(
             A,

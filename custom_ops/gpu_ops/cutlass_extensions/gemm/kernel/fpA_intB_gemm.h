@@ -550,7 +550,8 @@ struct GemmFpAIntB
 #elif (__CUDA_ARCH__ == 890)
         run_kernel<arch::Sm89>(params, shared_storage);
 #elif (__CUDA_ARCH__ >= 900)
-        CUTLASS_NOT_IMPLEMENTED(); // Don't compile these for Hopper or later. Use CUTLASS 3.x kernels.
+        run_kernel<arch::Sm90>(params, shared_storage);
+        // CUTLASS_NOT_IMPLEMENTED(); // Don't compile these for Hopper or later. Use CUTLASS 3.x kernels.
 #else
         static_assert(
             false, "Invalid architecture being compiled. Only Volta+ supported in weight-only quantization kernels.");

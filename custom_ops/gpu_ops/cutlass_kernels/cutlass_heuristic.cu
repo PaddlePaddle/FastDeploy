@@ -330,81 +330,81 @@ bool supports_mcast_along_n_sm100(CutlassTileConfigSM100 tile)
 std::vector<CutlassGemmConfig> get_candidate_configs(
     int sm, int const max_split_k, CutlassGemmConfig::CandidateConfigTypeParam const config_type_param)
 {
-    if (sm == 90 && (config_type_param & CutlassGemmConfig::HOPPER))
-    {
-        std::vector<CutlassTileConfigSM90> tiles = get_candidate_tiles_sm90(sm, config_type_param);
+    // if (sm == 90 && (config_type_param & CutlassGemmConfig::HOPPER))
+    // {
+    //     std::vector<CutlassTileConfigSM90> tiles = get_candidate_tiles_sm90(sm, config_type_param);
 
-        std::vector<CutlassGemmConfig> candidate_configs;
-        for (auto const& tile_config : tiles)
-        {
-            CutlassGemmConfig config(
-                tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO, ClusterShape::ClusterShape_1x1x1);
-            candidate_configs.push_back(config);
+    //     std::vector<CutlassGemmConfig> candidate_configs;
+    //     for (auto const& tile_config : tiles)
+    //     {
+    //         CutlassGemmConfig config(
+    //             tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO, ClusterShape::ClusterShape_1x1x1);
+    //         candidate_configs.push_back(config);
 
-            bool const has_m_mcast = supports_mcast_along_m(tile_config);
-            bool const has_n_mcast = supports_mcast_along_n(tile_config);
-            if (has_m_mcast)
-            {
-                CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
-                    ClusterShape::ClusterShape_2x1x1);
-                candidate_configs.push_back(config);
-            }
+    //         bool const has_m_mcast = supports_mcast_along_m(tile_config);
+    //         bool const has_n_mcast = supports_mcast_along_n(tile_config);
+    //         if (has_m_mcast)
+    //         {
+    //             CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+    //                 ClusterShape::ClusterShape_2x1x1);
+    //             candidate_configs.push_back(config);
+    //         }
 
-            if (has_n_mcast)
-            {
-                CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
-                    ClusterShape::ClusterShape_1x2x1);
-                candidate_configs.push_back(config);
-            }
+    //         if (has_n_mcast)
+    //         {
+    //             CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+    //                 ClusterShape::ClusterShape_1x2x1);
+    //             candidate_configs.push_back(config);
+    //         }
 
-            if (has_m_mcast && has_n_mcast)
-            {
-                CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
-                    ClusterShape::ClusterShape_2x2x1);
-                candidate_configs.push_back(config);
-            }
-        }
-        return candidate_configs;
-    }
-    else if (sm == 100 && (config_type_param & CutlassGemmConfig::BLACKWELL)) // Assuming SM100 for Blackwell
-    {
-        std::vector<CutlassTileConfigSM100> tiles = get_candidate_tiles_sm100(sm, config_type_param);
-        std::vector<CutlassGemmConfig> candidate_configs;
+    //         if (has_m_mcast && has_n_mcast)
+    //         {
+    //             CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+    //                 ClusterShape::ClusterShape_2x2x1);
+    //             candidate_configs.push_back(config);
+    //         }
+    //     }
+    //     return candidate_configs;
+    // }
+    // else if (sm == 100 && (config_type_param & CutlassGemmConfig::BLACKWELL)) // Assuming SM100 for Blackwell
+    // {
+    //     std::vector<CutlassTileConfigSM100> tiles = get_candidate_tiles_sm100(sm, config_type_param);
+    //     std::vector<CutlassGemmConfig> candidate_configs;
 
-        for (auto const& tile_config_sm100 : tiles)
-        {
-            // SM100 uses MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO similar to SM90.
-            // Cluster shapes are also handled similarly.
-            CutlassGemmConfig config(
-                tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO, ClusterShape::ClusterShape_1x1x1);
-            candidate_configs.push_back(config);
+    //     for (auto const& tile_config_sm100 : tiles)
+    //     {
+    //         // SM100 uses MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO similar to SM90.
+    //         // Cluster shapes are also handled similarly.
+    //         CutlassGemmConfig config(
+    //             tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO, ClusterShape::ClusterShape_1x1x1);
+    //         candidate_configs.push_back(config);
 
-            bool const has_m_mcast = supports_mcast_along_m_sm100(tile_config_sm100);
-            bool const has_n_mcast = supports_mcast_along_n_sm100(tile_config_sm100);
+    //         bool const has_m_mcast = supports_mcast_along_m_sm100(tile_config_sm100);
+    //         bool const has_n_mcast = supports_mcast_along_n_sm100(tile_config_sm100);
 
-            if (has_m_mcast)
-            {
-                CutlassGemmConfig mcast_m_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
-                    ClusterShape::ClusterShape_2x1x1);
-                candidate_configs.push_back(mcast_m_config);
-            }
+    //         if (has_m_mcast)
+    //         {
+    //             CutlassGemmConfig mcast_m_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+    //                 ClusterShape::ClusterShape_2x1x1);
+    //             candidate_configs.push_back(mcast_m_config);
+    //         }
 
-            if (has_n_mcast)
-            {
-                CutlassGemmConfig mcast_n_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
-                    ClusterShape::ClusterShape_1x2x1);
-                candidate_configs.push_back(mcast_n_config);
-            }
+    //         if (has_n_mcast)
+    //         {
+    //             CutlassGemmConfig mcast_n_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+    //                 ClusterShape::ClusterShape_1x2x1);
+    //             candidate_configs.push_back(mcast_n_config);
+    //         }
 
-            if (has_m_mcast && has_n_mcast)
-            {
-                CutlassGemmConfig mcast_mn_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
-                    ClusterShape::ClusterShape_2x2x1);
-                candidate_configs.push_back(mcast_mn_config);
-            }
-        }
-        return candidate_configs;
-    }
+    //         if (has_m_mcast && has_n_mcast)
+    //         {
+    //             CutlassGemmConfig mcast_mn_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+    //                 ClusterShape::ClusterShape_2x2x1);
+    //             candidate_configs.push_back(mcast_mn_config);
+    //         }
+    //     }
+    //     return candidate_configs;
+    // }
 
     // Fallback to older architecture configurations
     std::vector<CutlassTileConfig> tiles = get_candidate_tiles(sm, config_type_param);
