@@ -192,6 +192,10 @@ class FusedMoE(nn.Layer):
         if not param._is_initialized():
             param.initialize()
 
+        loaded_weight = (
+            loaded_weight.transpose([1, 0]) if "torch" == self.fd_config.model_config.model_format else loaded_weight
+        )
+
         if shard_id is None:
             # 1.gate up fused in disk
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]

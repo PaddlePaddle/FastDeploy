@@ -289,6 +289,8 @@ class ReplicatedLinear(LinearBase):
             ),
         )
 
+        set_weight_attrs(self.weight, {"model_format": fd_config.model_config.model_format})
+
 
 class ColumnParallelLinear(LinearBase):
     """
