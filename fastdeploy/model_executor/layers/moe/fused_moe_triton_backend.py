@@ -20,6 +20,7 @@ from paddle import nn
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -604,64 +605,170 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         """
         Triton MoE create weight process.
         """
-        self.weight_dtype = paddle.float8_e4m3fn
-        up_gate_proj_weight_name = self.added_weight_attrs[0]
-        down_proj_weight_name = self.added_weight_attrs[1]
-        self.ffn1_weight_shape = [
+        self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size * 2,
             layer.hidden_size,
         ]
-        self.ffn2_weight_shape = [
+        self.down_proj_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size,
             layer.moe_intermediate_size,
         ]
-        setattr(
-            layer,
-            up_gate_proj_weight_name,
-            layer.create_parameter(
-                shape=self.ffn1_weight_shape,
-                dtype=self.weight_dtype,
+        self.up_gate_proj_scale_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
+            layer.hidden_size // self.quant_config.weight_block_size[1],
+        ]
+        self.down_proj_scale_shape = [
+            layer.num_local_experts,
+            layer.hidden_size // self.quant_config.weight_block_size[0],
+            layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+        ]
+        if self.quant_config.is_checkpoint_bf16:
+            layer.up_gate_proj_weight = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            down_proj_weight_name,
-            layer.create_parameter(
-                shape=self.ffn2_weight_shape,
-                dtype=self.weight_dtype,
+            )
+
+            layer.down_proj_weight = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        # weight_scale
+            )
+            set_weight_attrs(
+                layer.up_gate_proj_weight,
+                {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=True),
+                },
+            )
+            set_weight_attrs(
+                layer.down_proj_weight,
+                {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=False),
+                },
+            )
+        else:
+            self.weight_dtype = paddle.float8_e4m3fn
+            self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
+            up_gate_proj_weight_name = self.added_weight_attrs[0]
+            down_proj_weight_name = self.added_weight_attrs[1]
+            up_gate_proj_scale_name = self.added_scale_attrs[0]
+            down_proj_scale_name = self.added_scale_attrs[1]
+            setattr(
+                layer,
+                up_gate_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            # weight_scale
+            setattr(
+                layer,
+                up_gate_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_scale_shape,
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.down_proj_scale_shape,
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+    def process_weights_after_loading(self, layer):
+        """ """
+        if not self.quant_config.is_checkpoint_bf16:
+            return
+        weight_id_map = {"gate_up": 0, "down": 1}
+        if (
+            hasattr(layer.up_gate_proj_weight, "tensor_track")
+            and layer.up_gate_proj_weight.tensor_track is not None
+            and layer.up_gate_proj_weight.tensor_track.is_fully_copied()
+        ):
+            weight_type = "gate_up"
+            layer.up_gate_proj_weight.tensor_track = None
+        else:
+            weight_type = "down"
+            layer.down_proj_weight.tensor_track = None
+
+        # 1.init shape and type
+        self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
+        # weight
+        weight_name = self.added_weight_attrs[weight_id_map[weight_type]]
+        unquantized_weight_name = weight_name.replace("quant_weight", "weight")
+        weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
+        weight_dtype = paddle.float8_e4m3fn
+        # scale
+        scale_name = self.added_scale_attrs[weight_id_map[weight_type]]
+        scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+        scale_dtype = "float32"
+
+        # 2.crate tmp tensor
+
+        weight = paddle.empty(shape=[weight_shape[0], weight_shape[2], weight_shape[1]], dtype=weight_dtype)
+        scale = paddle.empty(shape=[scale_shape[0], scale_shape[2], scale_shape[1]], dtype=scale_dtype)
+
+        # 3.quantize weight
+        from fastdeploy.model_executor.layers.utils import per_block_cast_to_fp8
+
+        for expert_id in range(layer.num_experts):
+            weight_quant, scale[expert_id] = per_block_cast_to_fp8(
+                getattr(layer, unquantized_weight_name)[expert_id], self.quant_config.weight_block_size
+            )
+            weight[expert_id].copy_(weight_quant, False)
+        getattr(layer, unquantized_weight_name).value().get_tensor()._clear()
+
+        # create weight
         setattr(
             layer,
-            self.added_scale_attrs[0],
+            weight_name,
             layer.create_parameter(
                 shape=[
                     layer.num_local_experts,
                     ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
                     ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
                 ],
-                dtype="float32",
+                dtype=weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        # create scale
         setattr(
             layer,
-            self.added_scale_attrs[1],
+            scale_name,
             layer.create_parameter(
                 shape=[
                     layer.num_local_experts,
                     ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
                     ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
                 ],
-                dtype="float32",
+                dtype=scale_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        getattr(layer, weight_name).copy_(weight.transpose([0, 2, 1]).contiguous(), False)
+        getattr(layer, scale_name).copy_(scale.transpose([0, 2, 1]).contiguous(), False)
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -719,8 +826,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
-        E, N1, _ = layer.up_gate_proj_weight.shape
-        N2 = layer.down_proj_weight.shape[1]
+        E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
+        N2 = getattr(layer, self.added_weight_attrs[1]).shape[1]
 
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
@@ -759,10 +866,10 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x_q,
-            layer.up_gate_proj_weight,
+            getattr(layer, self.added_weight_attrs[0]),
             intermediate_cache1,
             x_scale,
-            layer.up_gate_proj_weight_scale,
+            getattr(layer, self.added_scale_attrs[0]),
             None,
             sorted_token_ids,
             expert_ids,
@@ -773,17 +880,17 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             K=hidden_size,
             stride_am=x_q.strides[0],
             stride_ak=x_q.strides[1],
-            stride_be=layer.up_gate_proj_weight.strides[0],
-            stride_bk=layer.up_gate_proj_weight.strides[2],
-            stride_bn=layer.up_gate_proj_weight.strides[1],
+            stride_be=getattr(layer, self.added_weight_attrs[0]).strides[0],
+            stride_bk=getattr(layer, self.added_weight_attrs[0]).strides[2],
+            stride_bn=getattr(layer, self.added_weight_attrs[0]).strides[1],
             stride_cm=intermediate_cache1.strides[0],
             stride_cn=intermediate_cache1.strides[1],
             #
             stride_asm=x_scale.strides[0],  # only used in blockwise fp8
             stride_ask=x_scale.strides[1],  # only used in blockwise fp8
-            stride_bse=layer.up_gate_proj_weight_scale.strides[0],
-            stride_bsk=layer.up_gate_proj_weight_scale.strides[2],
-            stride_bsn=layer.up_gate_proj_weight_scale.strides[1],
+            stride_bse=getattr(layer, self.added_scale_attrs[0]).strides[0],
+            stride_bsk=getattr(layer, self.added_scale_attrs[0]).strides[2],
+            stride_bsn=getattr(layer, self.added_scale_attrs[0]).strides[1],
             group_n=self.quant_config.weight_block_size[1],
             group_k=self.quant_config.weight_block_size[0],
             # Meta-parameters
@@ -813,10 +920,10 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x_q,
-            layer.down_proj_weight,
+            getattr(layer, self.added_weight_attrs[1]),
             intermediate_cache3,
             x_scale,
-            layer.down_proj_weight_scale,
+            getattr(layer, self.added_scale_attrs[1]),
             topk_weights,
             sorted_token_ids,
             expert_ids,
@@ -827,16 +934,16 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             K=moe_intermediate_size,
             stride_am=x_q.strides[0],
             stride_ak=x_q.strides[1],
-            stride_be=layer.down_proj_weight.strides[0],
-            stride_bk=layer.down_proj_weight.strides[2],
-            stride_bn=layer.down_proj_weight.strides[1],
+            stride_be=getattr(layer, self.added_weight_attrs[1]).strides[0],
+            stride_bk=getattr(layer, self.added_weight_attrs[1]).strides[2],
+            stride_bn=getattr(layer, self.added_weight_attrs[1]).strides[1],
             stride_cm=intermediate_cache3.strides[0],
             stride_cn=intermediate_cache3.strides[1],
             stride_asm=x_scale.strides[0],  # only used in blockwise fp8
             stride_ask=x_scale.strides[1],  # only used in blockwise fp8
-            stride_bse=layer.down_proj_weight_scale.strides[0],
-            stride_bsk=layer.down_proj_weight_scale.strides[2],
-            stride_bsn=layer.down_proj_weight_scale.strides[1],
+            stride_bse=getattr(layer, self.added_scale_attrs[1]).strides[0],
+            stride_bsk=getattr(layer, self.added_scale_attrs[1]).strides[2],
+            stride_bsn=getattr(layer, self.added_scale_attrs[1]).strides[1],
             group_n=self.quant_config.weight_block_size[1],
             group_k=self.quant_config.weight_block_size[0],
             # Meta-parameters

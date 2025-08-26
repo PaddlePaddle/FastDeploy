@@ -21,7 +21,7 @@ import numpy as np
 from paddleformers.transformers import AutoTokenizer
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
-from fastdeploy.input.mm_processor import IDS_TYPE_FLAG
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.utils import data_processor_logger
 
 from .image_processor import ImageProcessor
