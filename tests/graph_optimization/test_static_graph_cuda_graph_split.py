@@ -19,6 +19,8 @@ import os
 os.environ["FLAGS_cuda_graph_blacklist"] = "pd_op.matmul,pd_op.transpose"
 
 
+import unittest
+
 import paddle
 import paddle.nn as nn
 
@@ -80,35 +82,40 @@ class TestModel(nn.Layer):
         return self.model.forward_dynamic(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
 
-def run_test_case():
-    """Run test case"""
-    # Set FastDeploy config
-    graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
-    parallel_config = ParallelConfig({"max_num_seqs": 1})
-    graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-    graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
-    cache_config = CacheConfig({})
+class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
 
-    fd_config = FDConfig(
-        graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config, test_mode=True
-    )
+    def test(self):
+        """Run test case"""
+        # Set FastDeploy config
+        graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
+        parallel_config = ParallelConfig({"max_num_seqs": 1})
+        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+        cache_config = CacheConfig({})
 
-    test_model1 = TestModel(fd_config=fd_config)
-    x = paddle.randint(32, shape=[1, 8])
-    forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
+        fd_config = FDConfig(
+            graph_opt_config=graph_opt_config,
+            parallel_config=parallel_config,
+            cache_config=cache_config,
+            test_mode=True,
+        )
 
-    # Triger Capture
-    _ = test_model1(x, forward_meta=forward_meta1)
+        test_model1 = TestModel(fd_config=fd_config)
+        x = paddle.randint(32, shape=[1, 8])
+        forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
 
-    # Reaplay
-    _ = test_model1(x, forward_meta=forward_meta1)
-    output1 = test_model1(x, forward_meta=forward_meta1)
+        # Triger Capture
+        _ = test_model1(x, forward_meta=forward_meta1)
 
-    # Corrent output
-    output1_correct = test_model1.forward_correct(x, forward_meta=forward_meta1)
+        # Reaplay
+        _ = test_model1(x, forward_meta=forward_meta1)
+        output1 = test_model1(x, forward_meta=forward_meta1)
 
-    assert (output1 == output1_correct).all()
+        # Corrent output
+        output1_correct = test_model1.forward_correct(x, forward_meta=forward_meta1)
+
+        assert (output1 == output1_correct).all()
 
 
 if __name__ == "__main__":
-    run_test_case()
+    unittest.main()
