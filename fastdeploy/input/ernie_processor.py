@@ -97,6 +97,12 @@ class ErnieProcessor(BaseDataProcessor):
             request.set("stop_token_ids", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
 
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
+
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is None and request.messages is None:
                 raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
@@ -159,6 +165,13 @@ class ErnieProcessor(BaseDataProcessor):
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request["stop_token_ids"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
+
+        # processing bad_words
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
 
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
@@ -481,3 +494,43 @@ class ErnieProcessor(BaseDataProcessor):
     def process_logprob_response(self, token_ids, **kwargs):
         full_text = self.tokenizer.decode(token_ids, **kwargs)
         return full_text
+
+    def update_bad_words(self, bad_words, bad_words_token_ids):
+        """Support bad words"""
+
+        token_ids = bad_words_token_ids
+
+        if token_ids is None:
+            token_ids = []
+        for bad_word in bad_words:
+            # To prohibit words both at the beginning
+            # and in the middle of text
+            # (related to add_prefix_space tokenizer parameter)
+            for add_prefix_space in [False, True]:
+                prefix = " " if add_prefix_space else ""
+                prompt = prefix + bad_word.lstrip()
+                prompt_token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(prompt))
+                data_processor_logger.debug(f"processed bad_words: {prompt}, {prompt_token_ids}")
+
+                if len(prompt_token_ids) != 1:
+                    if not add_prefix_space:
+                        data_processor_logger.warning(
+                            f"Skip bad_words: <{prompt}>."
+                            f"Bad words should be a single token."
+                            f"Got tokens: {prompt_token_ids}."
+                        )
+                    continue
+
+                if prompt_token_ids[0] > self.tokenizer.vocab_size:
+                    if not add_prefix_space:
+                        data_processor_logger.warning(
+                            f"Skip bad_words: <{prompt}>."
+                            f"All token id values should be satisfying:"
+                            f" 0 <= token_id < {self.tokenizer.vocab_size}."
+                            f"Got token: {prompt_token_ids}."
+                        )
+                    continue
+
+                if prompt_token_ids not in token_ids:
+                    token_ids.extend(prompt_token_ids)
+        return token_ids
