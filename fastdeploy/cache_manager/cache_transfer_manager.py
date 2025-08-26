@@ -19,6 +19,7 @@ import concurrent.futures
 import json
 import queue
 import time
+import traceback
 
 import numpy as np
 import paddle
@@ -342,7 +343,7 @@ class CacheTransferManager:
                     if self.rank == 0:
                         self.cache_task_queue.barrier3.reset()
             except Exception as e:
-                logger.info(f"do_data_transfer: error: {e}")
+                logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
 
     def _transfer_data(
         self,

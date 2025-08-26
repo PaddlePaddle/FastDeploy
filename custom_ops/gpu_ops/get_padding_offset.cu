@@ -101,7 +101,6 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
         cum_offsets_out.data<int>(),
         seq_length);
     return {x_remove_padding,
-            cum_offsets_out,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k};  // , enc_token_num, dec_token_num};
@@ -114,7 +113,7 @@ std::vector<std::vector<int64_t>> GetPaddingOffsetInferShape(
     const std::vector<int64_t> &seq_len_shape) {
     int64_t bsz = seq_len_shape[0];
     int64_t seq_len = input_ids_shape[1];
-    return {{-1}, {bsz}, {-1}, {bsz + 1}, {bsz + 1}};
+    return {{-1}, {-1}, {bsz + 1}, {bsz + 1}};
 }
 
 std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
@@ -125,14 +124,12 @@ std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
     return {input_ids_dtype,
             seq_len_dtype,
             seq_len_dtype,
-            seq_len_dtype,
             seq_len_dtype};
 }
 
 PD_BUILD_STATIC_OP(get_padding_offset)
     .Inputs({"input_ids", "token_num", "cum_offsets", "seq_len"})
     .Outputs({"x_remove_padding",
-              "cum_offsets_out",
               "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})

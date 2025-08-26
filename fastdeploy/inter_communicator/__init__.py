@@ -16,7 +16,7 @@
 
 from .engine_cache_queue import EngineCacheQueue
 from .engine_worker_queue import EngineWorkerQueue
-from .ipc_signal import IPCSignal
+from .ipc_signal import IPCSignal, shared_memory_exists
 from .zmq_client import ZmqClient
 
-__all__ = ["ZmqClient", "IPCSignal", "EngineWorkerQueue", "EngineCacheQueue"]
+__all__ = ["ZmqClient", "IPCSignal", "EngineWorkerQueue", "EngineCacheQueue", "shared_memory_exists"]

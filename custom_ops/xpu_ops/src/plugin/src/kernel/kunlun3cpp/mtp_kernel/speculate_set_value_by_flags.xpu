@@ -1,0 +1,83 @@
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
+                                                   const int64_t *accept_tokens,
+                                                   const int *accept_num,
+                                                   const bool *stop_flags,
+                                                   const int *seq_lens_encoder,
+                                                   const int *seq_lens_decoder,
+                                                   const int64_t *step_idx,
+                                                   int bs,
+                                                   int length,
+                                                   int max_draft_tokens) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  if (clusterid != 0) return;
+
+  int64_t pre_ids_all_lm[max_draft_tokens];
+  int64_t accept_tokens_lm[max_draft_tokens];
+  int accept_num_lm;
+  bool stop_flags_lm;
+  int seq_lens_encoder_lm;
+  int seq_lens_decoder_lm;
+  int64_t step_idx_lm;
+
+  for (int i = cid; i < bs; i += ncores) {
+    GM2LM_ASYNC(stop_flags + i, &stop_flags_lm, sizeof(bool));
+    GM2LM_ASYNC(seq_lens_encoder + i, &seq_lens_encoder_lm, sizeof(int));
+    GM2LM_ASYNC(seq_lens_decoder + i, &seq_lens_decoder_lm, sizeof(int));
+    GM2LM_ASYNC(step_idx + i, &step_idx_lm, sizeof(int64_t));
+    GM2LM_ASYNC(accept_num + i, &accept_num_lm, sizeof(int));
+    mfence_lm();
+
+    if (stop_flags_lm ||
+        (seq_lens_encoder_lm == 0 && seq_lens_decoder_lm == 0) ||
+        step_idx_lm < 0)
+      continue;
+
+    // Avoid loading large amounts of data
+    int pre_ids_start_idx = i * length + step_idx_lm - max_draft_tokens + 1;
+    GM2LM_ASYNC(pre_ids_all + pre_ids_start_idx,
+                pre_ids_all_lm,
+                max_draft_tokens * sizeof(int64_t));
+    GM2LM_ASYNC(accept_tokens + i * max_draft_tokens,
+                accept_tokens_lm,
+                max_draft_tokens * sizeof(int64_t));
+    mfence_lm();
+
+    for (int j = 0; j < accept_num_lm; j++) {
+      pre_ids_all_lm[max_draft_tokens - 1 - j] =
+          accept_tokens_lm[accept_num_lm - 1 - j];
+    }
+    LM2GM(&pre_ids_all_lm,
+          pre_ids_all + pre_ids_start_idx,
+          max_draft_tokens * sizeof(int64_t));
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3

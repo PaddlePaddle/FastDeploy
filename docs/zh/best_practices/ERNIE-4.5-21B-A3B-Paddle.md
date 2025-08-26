@@ -87,8 +87,7 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 ```
 注：
 1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
-2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
-3. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
+2. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
 
 #### 2.2.6 拒绝采样
 **原理：**

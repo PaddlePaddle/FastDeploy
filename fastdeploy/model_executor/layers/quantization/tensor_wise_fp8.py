@@ -90,7 +90,7 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-    def process_prequanted_weights(self, layer, state_dict) -> None:
+    def process_prequanted_weights(self, layer, state_dict, is_rearrange: bool = False) -> None:
         """
         Process pre-quantized weights before applying them to the model
         Args:

@@ -158,9 +158,9 @@ class CustomAllreduce:
         if out is None:
             out = paddle.empty_like(inp)
         if registered:
-            all_reduce(self._ptr, inp, out, 0, 0)
+            all_reduce(inp, out, self._ptr, 0, 0)
         else:
-            all_reduce(self._ptr, inp, out, self.buffer_ptrs[self.rank], self.max_size)
+            all_reduce(inp, out, self._ptr, self.buffer_ptrs[self.rank], self.max_size)
         return out
 
     def start_capture(self):

@@ -247,13 +247,16 @@ __global__ void multi_query_append_attention_kernel(
              NUM_WARPS,
              num_frags_x,
              num_frags_y,
-             num_frags_z>(q_base_seq_id_this_block,
+             num_frags_z>(nullptr,
+                          q_base_seq_id_this_block,
                           kv_idx_base,
                           q_len,
                           kv_len,
                           chunk_end,
+                          -1,
                           s_frag,
                           mask_offset_this_seq);
+
     }
 
     // update m,d
@@ -410,6 +413,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
+    const bool *__restrict__ attn_mask,    // [bsz, max_q, max_q] for tree-mask
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -424,7 +428,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     float *__restrict__ tmp_m,      // [token_num, max_num_chunks, num_heads]
     float *__restrict__ tmp_d,      // [token_num, max_num_chunks, num_heads]
     OutT *__restrict__ out,
-    const int speculate_max_draft_token_num = 5) {
+    const int speculate_max_draft_token_num = 5,
+    const uint32_t attn_mask_len = -1) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   static_assert(NUM_WARP_Q == 1, "NUM_WARP_Q must be 1");
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
@@ -433,8 +438,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const uint32_t kv_head_idx = blockIdx.z;
   const uint32_t num_blocks_total_q = static_cast<uint32_t>(num_blocks_q_and_chunk_config[0]);
   const uint32_t chunk_size = static_cast<uint32_t>(num_blocks_q_and_chunk_config[1]);
-  const uint32_t num_chunks = static_cast<uint32_t>(num_blocks_q_and_chunk_config[2]);
-  const uint32_t total_num_blocks = num_blocks_total_q * num_chunks;
+  const uint32_t max_num_chunks_this_kv = static_cast<uint32_t>(num_blocks_q_and_chunk_config[2]);
+  const uint32_t total_num_blocks = num_blocks_total_q * max_num_chunks_this_kv;
   for(uint32_t bid = blockIdx.x; bid < total_num_blocks; bid += gridDim.x){
     const uint32_t btid = bid % num_blocks_total_q;
     const uint32_t chunk_idx = bid / num_blocks_total_q;
@@ -447,7 +452,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
     const uint32_t q_len = seq_lens[batch_id];
     if (q_len <= 0) {
-      continue;
+      return;
     }
     const uint32_t q_end =
         min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
@@ -455,17 +460,17 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     if (ENABLE_PREFILL) {
       kv_len += q_len;
       if (kv_len <= 0) {
-        continue;
+        return;
       }
     } else {
       if (kv_len <= 0) {
-        continue;
+        return;
       }
       kv_len += q_len;
     }
     const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
     if (chunk_idx >= num_chunks_this_seq) {
-      continue;
+      return;
     }
 
     const uint32_t chunk_start = partition_kv ? chunk_idx * chunk_size : 0;
@@ -549,8 +554,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const uint32_t mask_check_iteration =
         (CAUSAL ? (min(chunk_len,
                       sub_if_greater_or_zero(
-                          kv_len - q_len +
-                              tile_id * num_rows_per_block / GROUP_SIZE,
+                          kv_len - q_len,
                           chunk_start)))
                 : mask_offset ? 0 : chunk_len) /
         (NUM_WARP_KV * num_frags_z * 16);
@@ -620,11 +624,13 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
               NUM_WARPS,
               num_frags_x,
               num_frags_y,
-              num_frags_z>(q_base_seq_id_this_block,
+              num_frags_z>(attn_mask ? attn_mask + batch_id * attn_mask_len *attn_mask_len : nullptr,
+                            q_base_seq_id_this_block,
                             kv_idx_base + wid * num_frags_z * 16,
                             q_len,
                             kv_len,
                             chunk_end,
+                            attn_mask_len,
                             s_frag,
                             mask_offset_this_seq);
       }
@@ -1067,6 +1073,12 @@ void MultiQueryAppendAttention(
                            cudaFuncAttributeMaxDynamicSharedMemorySize,
                            smem_size);
     }
+    uint32_t attn_mask_len;
+    if (attn_mask) {
+        attn_mask_len = attn_mask.get().shape()[1];
+    } else {
+        attn_mask_len = -1;
+    }
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
     if (chunk_size <= 0){
       chunk_size = 512;
@@ -1132,6 +1144,8 @@ void MultiQueryAppendAttention(
         cu_seqlens_q.data<int>(),
         block_table.data<int>(),
         meta_data.mask_offset,
+        attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
+                        : nullptr,
         max_seq_len,
         max_dec_len,
         max_block_num_per_seq,
@@ -1145,7 +1159,8 @@ void MultiQueryAppendAttention(
         static_cast<float *>(tmp_m->ptr()),
         static_cast<float *>(tmp_d->ptr()),
         reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-        speculate_max_draft_token_num);
+        speculate_max_draft_token_num,
+        attn_mask_len);
 
     // merge
     constexpr int vec_size = num_elems_per_128b<NV_TYPE>();

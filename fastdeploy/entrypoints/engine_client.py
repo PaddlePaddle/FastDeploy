@@ -14,13 +14,16 @@
 # limitations under the License.
 """
 
+import os
 import time
+import traceback
 import uuid
 
 import numpy as np
 
 from fastdeploy import envs
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
+from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
@@ -42,6 +45,7 @@ class EngineClient:
         max_model_len,
         tensor_parallel_size,
         pid,
+        port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
         # enable_mm=False,
@@ -72,13 +76,19 @@ class EngineClient:
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        array_size = min(max_chips_per_node, tensor_parallel_size * data_parallel_size)
+
+        if tensor_parallel_size < max_chips_per_node:
+            self.is_master = True
+        else:
+            self.is_master = False
+
+        array_size = min(max_chips_per_node, tensor_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=self.worker_healthy_live_recorded_time_array,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
@@ -87,9 +97,13 @@ class EngineClient:
             name="model_weights_status",
             array=model_weights_status,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
+        self.connection_manager = DealerConnectionManager(
+            pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
+        )
+        self.connection_initialized = False
 
     def create_zmq_client(self, model, mode):
         """
@@ -141,7 +155,7 @@ class EngineClient:
             work_process_metrics.prompt_tokens_total.inc(input_ids_len)
             work_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
-            api_server_logger.error(e)
+            api_server_logger.error(f"add_requests error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         if input_ids_len + min_tokens >= self.max_model_len:
@@ -194,7 +208,7 @@ class EngineClient:
             else:
                 self.zmq_client.send_pyobj(task)
         except Exception as e:
-            api_server_logger.error(e)
+            api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
     def vaild_parameters(self, data):
