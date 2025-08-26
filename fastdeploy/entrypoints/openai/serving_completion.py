@@ -412,6 +412,8 @@ class OpenAIServingCompletion:
                         choices[-1].finish_reason = self.calc_finish_reason(
                             request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
+                        if res.get("error_msg") is not None and "Clear" in res["error_msg"]:
+                            choices[-1].finish_reason = "clear_data"
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
                     if send_idx == 0 and not request.return_token_ids:
@@ -511,6 +513,8 @@ class OpenAIServingCompletion:
                 output_text = output["text"]
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
+            if final_res.get("error_msg") is not None and "Clear" in final_res["error_msg"]:
+                finish_reason = "clear_data"
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
