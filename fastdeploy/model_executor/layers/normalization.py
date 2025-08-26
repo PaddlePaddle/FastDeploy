@@ -86,7 +86,11 @@ class RMSNorm(nn.Layer):
         if self._norm_weight_dtype is None:
             self._norm_weight_dtype = self._helper.get_default_dtype()
         else:
-            assert dtype in ["float32", "bfloat16", "float16"]
+            assert dtype in [
+                "float32",
+                "bfloat16",
+                "float16",
+            ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
 
         self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
         self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
