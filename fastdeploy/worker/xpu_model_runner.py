@@ -421,8 +421,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
-                if request.disaggregate_info is not None and request.disaggregate_info["role"] == "decode":
-                    self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")

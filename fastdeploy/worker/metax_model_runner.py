@@ -288,8 +288,6 @@ class MetaxModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
-                if request.disaggregate_info is not None and request.disaggregate_info["role"] == "decode":
-                    self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
