@@ -1208,8 +1208,6 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Update chunked prefill related parameters
         """
-        print("update enable_chunked_prefill: ", self.cache_config.enable_chunked_prefill)
-        print("update tasks: ", tasks)
         if not self.cache_config.enable_chunked_prefill:
             return
 
@@ -1312,9 +1310,6 @@ class GPUModelRunner(ModelRunnerBase):
             A list of indices corresponding to the requests that need to be skipped.
         """
         skip_idx_list = []
-        print("enable_chunked_prefill: ", self.cache_config.enable_chunked_prefill)
-        print("guided_backend: ", self.guided_backend)
-        print("model_forward_batch: ", model_forward_batch)
         if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
             return skip_idx_list
 
@@ -1346,7 +1341,6 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
-        print("num_running_requests: ", num_running_requests)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
 
