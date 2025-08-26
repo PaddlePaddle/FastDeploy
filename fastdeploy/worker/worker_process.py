@@ -163,7 +163,7 @@ class PaddleDisWorkerProc:
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.expert_parallel_rank,
+            local_data_parallel_id=self.parallel_config.data_parallel_rank,
         )
 
     def init_health_status(self) -> None:
@@ -180,7 +180,7 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
             self.max_chips_per_node,
-            self.parallel_config.tensor_parallel_size * self.parallel_config.expert_parallel_size,
+            self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size,
         )
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
@@ -214,7 +214,7 @@ class PaddleDisWorkerProc:
         )
 
         # init exist_task_signal
-        workers_exist_task = np.zeros([self.parallel_config.expert_parallel_size], dtype=np.int32)
+        workers_exist_task = np.zeros([self.parallel_config.data_parallel_size], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
             array=workers_exist_task,
@@ -224,7 +224,7 @@ class PaddleDisWorkerProc:
         )
 
         # init exist_swapped_task_signal
-        workers_swapped_task = np.zeros(shape=[self.parallel_config.expert_parallel_size], dtype=np.int32)
+        workers_swapped_task = np.zeros(shape=[self.parallel_config.data_parallel_size], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
@@ -242,32 +242,6 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.engine_pid,
             create=False,
         )
-
-    def event_loop_ep(self) -> None:
-        """
-        Tmp loop function for ep utill DP is supported
-        """
-        while True:
-            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
-
-            num_running_requests = 0
-            if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
-                tasks, read_finish = self.task_queue.get_tasks()
-
-                req_dicts = []
-                for req_dict, bsz in tasks:
-                    num_running_requests = int(bsz)
-                    req_dicts.extend(req_dict)
-                logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}"
-                )
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
-
-            # Execute model to generate token. The generated token will be written to the buffer.
-            # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model(num_running_requests)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
@@ -287,9 +261,10 @@ class PaddleDisWorkerProc:
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize before updating weights
-                paddle.distributed.barrier()
+                paddle.distributed.barrier(self.parallel_config.tp_group)
 
             self.insert_step = False
+            req_dicts = None
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
@@ -302,12 +277,11 @@ class PaddleDisWorkerProc:
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
-                            self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
+                            self.exist_task_signal.value[self.fd_config.parallel_config.data_parallel_rank] = 1
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
-                # TODO(@wufeisheng): Split TP group and EP group
-                paddle.distributed.barrier()
+                paddle.distributed.barrier(self.parallel_config.tp_group)
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.exist_task_signal.value[0] == 2:
@@ -322,7 +296,7 @@ class PaddleDisWorkerProc:
                     )
 
             if (
-                self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] == 1
+                self.exist_task_signal.value[self.fd_config.parallel_config.data_parallel_rank] == 1
                 or self.task_queue.read_finish_flag.get() == 1
             ):
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -331,7 +305,7 @@ class PaddleDisWorkerProc:
                 tasks, read_finish = self.task_queue.get_tasks()
                 if read_finish:
                     # Ensure that every worker get the task
-                    self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 0
+                    self.exist_task_signal.value[self.fd_config.parallel_config.data_parallel_rank] = 0
                     self.task_queue.read_finish_flag.set(0)
 
                 req_dicts = []
@@ -348,9 +322,9 @@ class PaddleDisWorkerProc:
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
-            if not self.worker.model_runner.not_need_stop():
+            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
-                    paddle.distributed.barrier()
+                    paddle.distributed.barrier(self.parallel_config.tp_group)
 
                 time.sleep(0.001)
                 continue
@@ -633,23 +607,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
-    parallel_config.tensor_parallel_size = args.tensor_parallel_size
-    parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
-    parallel_config.expert_parallel_size = args.expert_parallel_size
+    parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
+    parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
-    if args.expert_parallel_size > 1:
-        expert_parallel_rank = int(local_rank / args.tensor_parallel_size)
+    if parallel_config.expert_parallel_size > 1:
+        expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
 
-        num_experts_per_rank = num_experts // args.expert_parallel_size
+        num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
+    parallel_config.set_tp_group()
 
     load_config = LoadConfig(vars(args))
 
@@ -770,11 +744,7 @@ def run_worker_proc() -> None:
     worker_proc.init_health_status()
 
     # Start event loop
-    if fd_config.parallel_config.use_ep:
-        # TODO(wufeisheng): Delete this branch
-        worker_proc.event_loop_ep()
-    else:
-        worker_proc.event_loop_normal()
+    worker_proc.event_loop_normal()
 
 
 if __name__ == "__main__":

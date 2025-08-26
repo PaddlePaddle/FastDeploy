@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "helper.h"  // NOLINT
+#include "helper.h"
 
 template <int THREADBLOCK_SIZE>
 __global__ void speculate_update(int *seq_lens_encoder,
-                                 int *seq_lens_decoder,
-                                 bool *not_need_stop,
-                                 int64_t *draft_tokens,
-                                 int *actual_draft_token_nums,
-                                 const int64_t *accept_tokens,
-                                 const int *accept_num,
-                                 const bool *stop_flags,
-                                 const int *seq_lens_this_time,
-                                 const bool *is_block_step,
-                                 const int real_bsz,
-                                 const int max_draft_tokens) {
+                                    int *seq_lens_decoder,
+                                    bool *not_need_stop,
+                                    int64_t *draft_tokens,
+                                    int *actual_draft_token_nums,
+                                    const int64_t *accept_tokens,
+                                    const int *accept_num,
+                                    const bool *stop_flags,
+                                    const int *seq_lens_this_time,
+                                    const bool *is_block_step,
+                                    const int64_t *stop_nums,
+                                    const int real_bsz,
+                                    const int max_bsz,
+                                    const int max_draft_tokens) {
     const int bid = threadIdx.x;
     const int accept_num_now = accept_num[bid];
     int stop_flag_now_int = 0;
@@ -72,6 +74,8 @@ __global__ void speculate_update(int *seq_lens_encoder,
         if (stop_flag_now_int) {
             seq_lens_decoder[bid] = 0;
         }
+    } else if (bid >= real_bsz && bid < max_bsz) {
+        stop_flag_now_int = 1;
     }
     __syncthreads();
     typedef cub::BlockReduce<int64_t, THREADBLOCK_SIZE> BlockReduce;
@@ -82,11 +86,11 @@ __global__ void speculate_update(int *seq_lens_encoder,
 
     if (threadIdx.x == 0) {
         // printf("stop_sum %d \n", stop_sum);
-        not_need_stop[0] = stop_sum < real_bsz;
+        not_need_stop[0] = stop_sum < stop_nums[0];
     }
 }
 
-void SpeculateUpdateV2(const paddle::Tensor &seq_lens_encoder,
+void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
                        const paddle::Tensor &not_need_stop,
                        const paddle::Tensor &draft_tokens,
@@ -95,8 +99,10 @@ void SpeculateUpdateV2(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &accept_num,
                        const paddle::Tensor &stop_flags,
                        const paddle::Tensor &seq_lens_this_time,
-                       const paddle::Tensor &is_block_step) {
-    int real_bsz = seq_lens_this_time.shape()[0];
+                       const paddle::Tensor &is_block_step,
+                       const paddle::Tensor &stop_nums) {
+    const int real_bsz = seq_lens_this_time.shape()[0];
+    const int max_bsz = stop_flags.shape()[0];
     auto max_draft_tokens = draft_tokens.shape()[1];
 
     constexpr int BlockSize = 512;
@@ -113,7 +119,9 @@ void SpeculateUpdateV2(const paddle::Tensor &seq_lens_encoder,
         stop_flags.data<bool>(),
         seq_lens_this_time.data<int>(),
         is_block_step.data<bool>(),
+        stop_nums.data<int64_t>(),
         real_bsz,
+        max_bsz,
         max_draft_tokens);
 
     auto not_need_stop_cpu =
@@ -122,7 +130,7 @@ void SpeculateUpdateV2(const paddle::Tensor &seq_lens_encoder,
     not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
-PD_BUILD_STATIC_OP(speculate_update_v2)
+PD_BUILD_STATIC_OP(speculate_update)
     .Inputs({"seq_lens_encoder",
              "seq_lens_decoder",
              "not_need_stop",
@@ -132,7 +140,8 @@ PD_BUILD_STATIC_OP(speculate_update_v2)
              "accept_num",
              "stop_flags",
              "seq_lens_this_time",
-             "is_block_step"})
+             "is_block_step",
+             "stop_nums"})
     .Outputs({"seq_lens_encoder_out",
               "seq_lens_decoder_out",
               "not_need_stop_out",
@@ -143,4 +152,4 @@ PD_BUILD_STATIC_OP(speculate_update_v2)
                     {"not_need_stop", "not_need_stop_out"},
                     {"draft_tokens", "draft_tokens_out"},
                     {"actual_draft_token_nums", "actual_draft_token_nums_out"}})
-    .SetKernelFn(PD_KERNEL(SpeculateUpdateV2));
+    .SetKernelFn(PD_KERNEL(SpeculateUpdate));

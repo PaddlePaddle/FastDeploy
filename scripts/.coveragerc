@@ -1,4 +1,5 @@
 [run]
+branch = True
 source = fastdeploy
 parallel = True
 concurrency = multiprocessing
@@ -15,3 +16,4 @@ omit =
     */site-packages/*/tests/*
     */site-packages/setuptools/*
     */dist-packages/*
+    */site-packages/*/fastdeploy/model_executor/ops/gpu*

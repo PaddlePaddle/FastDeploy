@@ -23,14 +23,7 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-#define MAX_BSZ 256
-#define MAX_DRAFT_TOKENS 6
-
-struct msgdata {
-    long mtype;
-    int mtext[MAX_BSZ * MAX_DRAFT_TOKENS + MAX_BSZ +
-              2];  // stop_flag, bsz, tokens
-};
+#include "speculate_msg.h"
 
 void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 const paddle::Tensor& accept_num,
@@ -62,7 +55,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
 #endif
         msg_queue_id = inference_msg_queue_id_from_env;
     }
-    static struct msgdata msg_sed;
+    static struct speculate_msgdata msg_sed;
     static key_t key = ftok("./", msg_queue_id);
     static int msgid = msgget(key, IPC_CREAT | 0666);
 
