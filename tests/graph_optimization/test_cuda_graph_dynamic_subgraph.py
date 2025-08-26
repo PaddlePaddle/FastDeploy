@@ -180,7 +180,7 @@ class TestCUDAGrpahSubgraph(unittest.TestCase):
         # Corrent output
         output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        assert sum(output1 - output1_correct) == 0
+        assert (output1 == output1_correct).all()
 
 
 if __name__ == "__main__":
