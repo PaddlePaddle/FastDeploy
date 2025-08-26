@@ -594,9 +594,6 @@ class EngineSevice:
                 if data:
                     request = Request.from_dict(data)
                     start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
-                    if request.sampling_params.bad_words is not None:
-                        request.sampling_params.update_from_tokenizer(self.data_processor.tokenizer)
-
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
