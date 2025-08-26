@@ -99,7 +99,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         deepgemm create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
 
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
@@ -124,7 +124,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             quanted_weight_scale = quanted_weight_scale.transpose([0, 2, 1]).contiguous()
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
@@ -134,9 +134,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = layer.load_experts_weight(
-            state_dict,
-            up_gate_proj_expert_weight_key,
-            down_proj_expert_weight_key,
+            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key, is_rearrange
         )
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
