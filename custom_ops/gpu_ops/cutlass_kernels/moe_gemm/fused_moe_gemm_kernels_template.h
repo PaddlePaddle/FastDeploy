@@ -188,16 +188,10 @@ void generic_moe_gemm_kernelLauncher(const T* A,
   }
   const int threadblock_count = multi_processor_count * occupancy;
 
-  // typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
-  //                                         ElementAccumulator(0.21679688));
-  //                                         // ElementAccumulator(0.f));
-
   typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
                                           
-  // typename EpilogueOp::Params epilogue_op(ElementAccumulator(0.21679688),
-  //                                         ElementAccumulator(0.f));
-  CUTLASS_TRACE_DEVICE(" eplogue output op alpha = %f", epilogue_op.alpha);
+  CUTLASS_TRACE_HOST("eplogue output op alpha = " << epilogue_op.alpha);
 
   const uint8_t* local_scale_B = nullptr;
   const float* code_scale_B = nullptr;
