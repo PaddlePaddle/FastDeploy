@@ -41,7 +41,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             "down_proj_weight_scale",
         ]
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False) -> None:
         """process_prequanted_weights"""
         pass
 
@@ -50,7 +50,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton MoE create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
 
