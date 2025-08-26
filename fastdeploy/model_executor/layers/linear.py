@@ -196,7 +196,14 @@ class LinearBase(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the weights
         """
-        weight_tensor = get_tensor(state_dict.pop(self.weight_key))
+        if "qkv_a_proj_with_mqa" in self.weight_key:
+            self.weight_key_q = self.weight_key.replace("qkv_a_proj_with_mqa", "q_a_proj")
+            self.weight_key_kv = self.weight_key.replace("qkv_a_proj_with_mqa", "kv_a_proj_with_mqa")
+            q_weight_tensor = get_tensor(state_dict.pop(self.weight_key_q))
+            kv_weight_tensor = get_tensor(state_dict.pop(self.weight_key_kv))
+            weight_tensor = paddle.concat([q_weight_tensor, kv_weight_tensor], axis=-1)
+        else:
+            weight_tensor = get_tensor(state_dict.pop(self.weight_key))
         self.quant_method.process_loaded_weights(self, weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
@@ -696,6 +703,7 @@ class RowParallelLinear(LinearBase):
         self.fd_config = fd_config
         self.skip_quant = False
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.tp_group = fd_config.parallel_config.tp_group
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
@@ -744,7 +752,7 @@ class RowParallelLinear(LinearBase):
             out = paddle.matmul(x, self.weight)
 
         if self.reduce_results and self.nranks > 1:
-            tensor_model_parallel_all_reduce(out)
+            tensor_model_parallel_all_reduce(out, self.tp_group)
 
         return out
 
