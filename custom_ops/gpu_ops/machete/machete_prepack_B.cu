@@ -38,9 +38,7 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
   machete::ScalarTypeId b_type_id;
   paddle::DataType a_type, maybe_group_scales_type;
 
-  if (b_type_str == "uint4") {
-    b_type_id = machete::kU4.id();
-  } else if (b_type_str == "uint4b8") {
+  if (b_type_str == "uint4b8") {
     b_type_id = machete::kU4B8.id();
   } else {
     PADDLE_ENFORCE(false, "b_type_str not supported!");
@@ -56,30 +54,13 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
     PADDLE_ENFORCE(false, "a_type_str not supported!");
   }
   auto Bt = paddle::experimental::transpose(B, {1, 0});
-  // printf("MachetePrepackBKernel B.shape: %d, %d\n", Bt.shape()[0], Bt.shape()[1]);
-  // printf("MachetePrepackBKernel B.strides: %d, %d\n", Bt.strides()[0], Bt.strides()[1]);
-
   paddle::Tensor B_prepacked = prepack_B(Bt, a_type, b_type_id, maybe_group_scales_type_str);
   return {B_prepacked};
 
 }
-
-// std::vector<std::vector<int64_t>> MachetePrepackBInferShape(
-//     std::vector<int64_t> const& B_shape, paddle::DataType const& a_type, std::string b_type_str,
-//     std::optional<paddle::DataType> const& maybe_group_scales_type) {
-//   return {B_shape};
-// }
-
-// std::vector<paddle::DataType> MachetePrepackBInferDtype(
-//     paddle::DataType const& B_type, paddle::DataType const& a_type, std::string b_type_str,
-//     std::optional<paddle::DataType> const& maybe_group_scales_type) {
-//   return {B_type};
-// }
 
 PD_BUILD_STATIC_OP(machete_prepack_B)
     .Inputs({"B"})
     .Outputs({"B_prepacked"})
     .Attrs({"a_type_str:std::string", "b_type_str:std::string", "maybe_group_scales_type_str:std::string"})
     .SetKernelFn(PD_KERNEL(MachetePrepackBKernel));
-    // .SetInferShapeFn(PD_INFER_SHAPE(MachetePrepackBInferShape))
-    // .SetInferDtypeFn(PD_INFER_DTYPE(MachetePrepackBInferDtype));

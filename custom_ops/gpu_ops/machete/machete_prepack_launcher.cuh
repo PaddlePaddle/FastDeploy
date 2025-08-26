@@ -31,10 +31,6 @@ paddle::Tensor prepack_impl(paddle::Tensor const B) {
   // match cutlass using (N,K,L) for B), so we transpose B to (N,packed_K,L)
   // auto Bt_packed = B.transpose();
   auto Bt_packed = paddle::experimental::transpose(B, {1, 0});
-  // printf("B.shape: %d, %d\n", B.shape()[0], B.shape()[1]);
-  // printf("B.strides: %d, %d\n", B.strides()[0], B.strides()[1]);
-  // printf("Bt_packed.shape: %d, %d\n", Bt_packed.shape()[0], Bt_packed.shape()[1]);
-  // printf("Bt_packed.strides: %d, %d\n", Bt_packed.strides()[0], Bt_packed.strides()[1]);
 
   PD_CHECK(
       (B.shape()[0] * eles_per_storage) % size<1>(PPBlockShape_NK{}) == 0,
