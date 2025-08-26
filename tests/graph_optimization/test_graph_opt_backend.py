@@ -62,7 +62,7 @@ def numpy_baseline(d_model: int, d_hidden: int, x: np.ndarray):
     return x + (h @ W2 + b2)
 
 
-class TestGrpahOptBackend(unittest.TestCase):
+class TestGraphOptBackend(unittest.TestCase):
     """
     Test graph_opt_backend
     """
