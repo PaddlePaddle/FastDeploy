@@ -588,10 +588,9 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--lm_head_dtype",
-        type=str,
-        default=None,
-        help="The data type of lm_head",
+        "--lm_head_fp32",
+        action="store_true",
+        help="Flag to specify dtype of lm_head as FP32",
     )
 
     args = parser.parse_args()
