@@ -50,7 +50,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         self.image_patch_id = self.ernie_processor.image_patch_id
         self.spatial_conv_size = self.ernie_processor.spatial_conv_size
 
-        self.tool_parsers = dict()
+        self.tool_parser_dict = dict()
         self.decode_status = dict()
         self._load_tokenizer()
 
@@ -207,6 +207,12 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request["stop_token_ids"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
+
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
 
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")

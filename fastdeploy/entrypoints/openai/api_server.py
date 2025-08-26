@@ -40,9 +40,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponse,
     ControlSchedulerRequest,
     ErrorResponse,
+    ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
@@ -128,6 +130,15 @@ async def lifespan(app: FastAPI):
     else:
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
+
+    if args.served_model_name is not None:
+        served_model_names = args.served_model_name
+        verification = True
+    else:
+        served_model_names = args.model
+        verification = False
+    model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
+
     engine_client = EngineClient(
         args.model,
         args.tokenizer,
@@ -144,8 +155,22 @@ async def lifespan(app: FastAPI):
         args.tool_call_parser,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
-    chat_handler = OpenAIServingChat(engine_client, pid, args.ips, args.max_waiting_time, chat_template)
-    completion_handler = OpenAIServingCompletion(engine_client, pid, args.ips, args.max_waiting_time)
+    model_handler = OpenAIServingModels(
+        model_paths,
+        args.max_model_len,
+        args.ips,
+    )
+    app.state.model_handler = model_handler
+    chat_handler = OpenAIServingChat(
+        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
+    )
+    completion_handler = OpenAIServingCompletion(
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
@@ -307,6 +332,23 @@ async def create_completion(request: CompletionRequest):
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+
+
+@app.get("/v1/models")
+async def list_models() -> Response:
+    """
+    List all available models.
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    models = await app.state.model_handler.list_models()
+    if isinstance(models, ErrorResponse):
+        return JSONResponse(content=models.model_dump(), status_code=models.code)
+    elif isinstance(models, ModelList):
+        return JSONResponse(content=models.model_dump())
 
 
 @app.get("/update_model_weight")

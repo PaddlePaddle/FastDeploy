@@ -108,7 +108,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight.copy_(quanted_weight_tensor, False)
         layer.weight_scale.set_value(weight_block_scale_tensor)
 
-    def process_prequanted_weights(self, layer, state_dict):
+    def process_prequanted_weights(self, layer, state_dict, is_rearrange: bool = False):
         """
         process_prequanted_weights
         """

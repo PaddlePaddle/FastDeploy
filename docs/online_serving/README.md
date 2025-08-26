@@ -45,8 +45,9 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
-  ]
+    {"role": "user", "content": "Hello!"}
+  ],
+  "logprobs": true, "top_logprobs": 0,
 }'
 ```
 
@@ -152,6 +153,9 @@ include_stop_str_in_output: Optional[bool] = False
 bad_words: Optional[List[str]] = None
 # List of forbidden words (e.g., sensitive words) that the model should avoid generating (default None means no restriction).
 
+bad_words_token_ids: Optional[List[int]] = None
+# List of forbidden token ids that the model should avoid generating (default None means no restriction).
+
 repetition_penalty: Optional[float] = None
 # Repetition penalty coefficient, reducing the probability of repeating already generated tokens (`>1.0` suppresses repetition, `<1.0` encourages repetition, default None means disabled).
 ```
@@ -193,6 +197,12 @@ max_streaming_response_tokens: Optional[int] = None
 
 disable_chat_template: Optional[bool] = False
 # Whether to disable chat template rendering, using raw input directly (default False means template is enabled).
+
+temp_scaled_logprobs: Optional[bool] = False
+# Whether to divide the logits by the temperature coefficient when calculating logprobs (default is False, meaning the logits are not divided by the temperature coefficient).
+
+top_p_normalized_logprobs: Optional[bool] = False
+# Whether to perform top-p normalization when calculating logprobs (default is False, indicating that top-p normalization is not performed).
 ```
 
 ### Differences in Return Fields
@@ -332,6 +342,9 @@ include_stop_str_in_output: Optional[bool] = False
 
 bad_words: Optional[List[str]] = None
 # List of forbidden words (e.g., sensitive words) that the model should avoid generating (default None means no restriction).
+
+bad_words_token_ids: Optional[List[int]] = None
+# List of forbidden token ids that the model should avoid generating (default None means no restriction).
 
 repetition_penalty: Optional[float] = None
 # Repetition penalty coefficient, reducing the probability of repeating already generated tokens (`>1.0` suppresses repetition, `<1.0` encourages repetition, default None means disabled).

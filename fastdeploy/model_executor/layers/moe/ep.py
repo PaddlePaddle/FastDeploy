@@ -389,7 +389,7 @@ class EPPrefillRunner(EPRunner):
     ):
         (
             num_tokens_per_rank,
-            _,
+            num_tokens_per_rdma_rank,
             num_tokens_per_expert,
             is_token_in_rank,
             _,
@@ -399,6 +399,7 @@ class EPPrefillRunner(EPRunner):
         dispatch_args = {
             "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
             "num_tokens_per_rank": num_tokens_per_rank,
+            "num_tokens_per_rdma_rank": num_tokens_per_rdma_rank,
             "is_token_in_rank": is_token_in_rank,
             "num_tokens_per_expert": num_tokens_per_expert,
             "config": self.ep_engine.ep_config,

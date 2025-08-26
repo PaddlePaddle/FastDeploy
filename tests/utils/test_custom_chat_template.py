@@ -57,7 +57,12 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
     async def test_serving_chat(self):
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "你好"}])
         self.chat_completion_handler = OpenAIServingChat(
-            self.mock_engine, pid=123, ips=None, max_waiting_time=-1, chat_template=self.input_chat_template
+            self.mock_engine,
+            models=None,
+            pid=123,
+            ips=None,
+            max_waiting_time=-1,
+            chat_template=self.input_chat_template,
         )
 
         async def mock_chat_completion_full_generator(
@@ -79,7 +84,12 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
     async def test_serving_chat_cus(self):
         request = ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}], chat_template="hello")
         self.chat_completion_handler = OpenAIServingChat(
-            self.mock_engine, pid=123, ips=None, max_waiting_time=10, chat_template=self.input_chat_template
+            self.mock_engine,
+            models=None,
+            pid=123,
+            ips=None,
+            max_waiting_time=10,
+            chat_template=self.input_chat_template,
         )
 
         async def mock_chat_completion_full_generator(
@@ -160,6 +170,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         ernie_processor.process_request_dict = mock_process_request
         ernie_processor.messages2ids = mock_messages2ids
         ernie_processor.eos_token_ids = [1]
+        ernie_processor.reasoning_parser = MagicMock()
         result = ernie_processor.process_request(mock_request, chat_template="hello")
         self.assertEqual("hello", result.chat_template)
 

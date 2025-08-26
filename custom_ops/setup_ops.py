@@ -591,6 +591,12 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
     sources = [
+        "gpu_ops/update_inputs_v1.cu",
+        "gpu_ops/save_with_output_msg.cc",
+        "gpu_ops/get_output.cc",
+        "gpu_ops/get_output_msg_with_topk.cc",
+        "gpu_ops/save_output_msg_with_topk.cc",
+        "gpu_ops/transfer_output.cc",
         "gpu_ops/save_with_output.cc",
         "gpu_ops/set_mask_value.cu",
         "gpu_ops/set_value_by_flags.cu",

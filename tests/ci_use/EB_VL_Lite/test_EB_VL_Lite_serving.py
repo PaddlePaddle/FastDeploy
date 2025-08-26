@@ -110,6 +110,8 @@ def setup_and_run_server():
         "384",
         "--max-num-seqs",
         "128",
+        "--graph-optimization-config",
+        '\'{"use_cudagraph": true, "graph_opt_level": 0}\'',
         "--limit-mm-per-prompt",
         limit_mm_str,
         "--enable-chunked-prefill",
@@ -524,7 +526,8 @@ def test_chat_with_thinking(openai_client, capsys):
         stream=True,
         max_tokens=10,
     )
-    completion_tokens = reasoning_tokens = 1
+    completion_tokens = 1
+    reasoning_tokens = 0
     total_tokens = 0
     for chunk_id, chunk in enumerate(response):
         if chunk_id == 0:  # the first chunk is an extra chunk
