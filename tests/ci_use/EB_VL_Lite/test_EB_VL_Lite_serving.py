@@ -110,6 +110,7 @@ def setup_and_run_server():
         "384",
         "--max-num-seqs",
         "128",
+        "--use-cudagraph",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
         "--limit-mm-per-prompt",
