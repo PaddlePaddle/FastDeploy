@@ -20,12 +20,14 @@ import numpy as np
 from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.ernie_processor import ErnieProcessor
-from fastdeploy.input.mm_processor import IDS_TYPE_FLAG, DataProcessor
+from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.utils import data_processor_logger
 
+from .process import DataProcessor
 
-class ErnieMoEVLProcessor(ErnieProcessor):
+
+class Ernie4_5_VLProcessor(Ernie4_5Processor):
     """The processor class for ERNIE MoE VL models."""
 
     def __init__(
@@ -41,14 +43,14 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         preprocessor_path = model_name_or_path
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
 
-        self.ernie_processor = DataProcessor(
+        self.ernie4_5_processor = DataProcessor(
             tokenizer_name=tokenizer_path,
             image_preprocessor_name=preprocessor_path,
             **processor_kwargs,
         )
-        self.ernie_processor.eval()
-        self.image_patch_id = self.ernie_processor.image_patch_id
-        self.spatial_conv_size = self.ernie_processor.spatial_conv_size
+        self.ernie4_5_processor.eval()
+        self.image_patch_id = self.ernie4_5_processor.image_patch_id
+        self.spatial_conv_size = self.ernie4_5_processor.spatial_conv_size
 
         self.tool_parser_dict = dict()
         self.decode_status = dict()
@@ -86,7 +88,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         Returns:
             tokenizer (AutoTokenizer)
         """
-        self.tokenizer = self.ernie_processor.tokenizer
+        self.tokenizer = self.ernie4_5_processor.tokenizer
 
     def _apply_default_parameters(self, request):
         """
@@ -222,7 +224,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
             request["text_after_process"] = request.get("prompt")
-            outputs = self.ernie_processor.text2ids(request["prompt"], images, videos)
+            outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos)
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
@@ -235,7 +237,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
             request.setdefault("enable_thinking", True)
-            outputs = self.ernie_processor.request2ids(request)
+            outputs = self.ernie4_5_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
