@@ -74,7 +74,8 @@ struct Params {
     alignas(16) IdType *batch_id_per_token;
 
     alignas(16) IdType *batch_ids;
-    alignas(16) IdType *tile_ids_per_batch;
+    alignas(16) IdType *q_tile_ids_per_batch = nullptr;
+    alignas(16) IdType *tile_ids_per_batch = nullptr;
     alignas(16) IdType *num_blocks_x;
 
 
@@ -112,6 +113,9 @@ struct Params {
     __VA_ARGS__                                              \
   } else if (group_size == 64) {                             \
     constexpr size_t GROUP_SIZE = 64;                        \
+    __VA_ARGS__                                              \
+  } else if (group_size == 128) {                            \
+    constexpr size_t GROUP_SIZE = 128;                       \
     __VA_ARGS__                                              \
   } else {                                                   \
     PD_THROW("not support the group_size: ", group_size);    \
@@ -199,68 +203,28 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
   if (warp_group_idx == 0) {
     // producer
     if constexpr(USE_REG_EALLOC) {
-      cutlass::arch::warpgroup_reg_dealloc<72>();
+      cutlass::arch::warpgroup_reg_dealloc<88>();
     }
     const uint32_t warp_idx_in_warpgroup = __shfl_sync(0xffffffff, warp_idx % 4, 0);
 
     PipelineStateQ smem_pipe_write_q = cutlass::make_producer_start_state<MainloopPipelineQ>();
     PipelineState smem_pipe_write_kv = cutlass::make_producer_start_state<MainloopPipeline>();
-    if constexpr(USE_FIXED_BLOCK) {
-      for (int i = blockIdx.x; i < num_blocks_x; i += SM_COUNT) {
-        const int bid = mainloop_params.batch_ids[i];
-        const int tile_id = mainloop_params.tile_ids_per_batch[i];
-        const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
-        const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
-        const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
-        const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-        cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
-                                          /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
-
-        // load Q
-        collective_mainloop.load_q(
-            mainloop_params,
-            pipeline_q,
-            smem_pipe_write_q,
-            shared_storage,
-            threadIdx.x,
-            bid);
-
-        if constexpr (!use_tma_load_kv) {
-          // load kv
-          collective_mainloop.load_kv(
-              mainloop_params,
-              pipeline_kv,
-              smem_pipe_write_kv,
-              shared_storage,
-              bid,
-              seq_len_decoder_now,
-              tile_id
-          );
-        } else {
-          if (warp_idx_in_warpgroup == 0) {
-            // load kv tma
-            collective_mainloop.load_kv_tma(
-                mainloop_params,
-                pipeline_kv,
-                smem_pipe_write_kv,
-                shared_storage,
-                bid,
-                seq_len_decoder_now,
-                tile_id
-            );
-          }
-        }
-      }
-    } else {
+  
       const int block_id = blockIdx.x;
       const int bid = mainloop_params.batch_ids[block_id];
-      const int tile_id = mainloop_params.tile_ids_per_batch[block_id];
+      // const int tile_id = mainloop_params.tile_ids_per_batch[block_id];
+      const int tile_id = mainloop_params.tile_ids_per_batch
+                              ? mainloop_params.tile_ids_per_batch[block_id]
+                              : 0;
+      const int q_tile_id = mainloop_params.q_tile_ids_per_batch
+                                ? mainloop_params.q_tile_ids_per_batch[block_id]
+                                : 0;
       const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
       const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
       const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
       const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-      cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
-                                        /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
+      // cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
+      //                                   /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
 
       // load Q
       collective_mainloop.load_q(
@@ -269,7 +233,8 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           smem_pipe_write_q,
           shared_storage,
           threadIdx.x,
-          bid);
+          bid,
+          q_tile_id);
 
       if constexpr (!use_tma_load_kv) {
         // load kv
@@ -296,11 +261,10 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           );
         }
       }
-    }
   } else {
     // consumer
     if constexpr(USE_REG_EALLOC) {
-      cutlass::arch::warpgroup_reg_alloc<216>();
+      cutlass::arch::warpgroup_reg_alloc<208>();
     }
     PipelineStateQ smem_pipe_read_q;
     PipelineState smem_pipe_read_kv;
@@ -309,80 +273,19 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
     Tensor tOrO = partition_fragment_C(tiled_mma_pv, select<0, 1>(TileShape_PDV{}));
 
     auto attention_updater = OnlineSoftmax<2 * size<1>(tOrO), /*WITH_SCALE=*/true>(mainloop_params.sm_scale);
-    if constexpr(USE_FIXED_BLOCK) {
-      for (int i = blockIdx.x; i < num_blocks_x; i += SM_COUNT) {
-        clear(tOrO);
-        clear(attention_updater.scores_scale);
-        const int bid = mainloop_params.batch_ids[i];
-        const int tile_id = mainloop_params.tile_ids_per_batch[i];
-        const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
-        const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
-        const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
-        const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-        cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
-                                          /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
-
-        if constexpr (BLOCK_SHAPE_KV == 64) {
-          mma_f16<Ktraits, CAUSAL>(
-            mainloop_params,
-            pipeline_q,
-            smem_pipe_read_q,
-            pipeline_kv,
-            smem_pipe_read_kv,
-            tOrO,
-            attention_updater,
-            threadIdx.x - NUM_COPY_THREADS,
-            bid,
-            seq_len_decoder_now,
-            seq_len_now,
-            tile_id,
-            shared_storage);
-        } else if (BLOCK_SHAPE_KV == 32) {
-          mma_f16_two_stages<Ktraits, CAUSAL>(
-            mainloop_params,
-            pipeline_q,
-            smem_pipe_read_q,
-            pipeline_kv,
-            smem_pipe_read_kv,
-            tOrO,
-            attention_updater,
-            threadIdx.x - NUM_COPY_THREADS,
-            bid,
-            seq_len_decoder_now,
-            seq_len_now,
-            tile_id,
-            shared_storage);
-        }
-
-        collective_epilogue.store(
-            epilogue_params,
-            tOrO,
-            attention_updater.get_lse(),
-            shared_storage,
-            tiled_mma_pv,
-            threadIdx.x - NUM_COPY_THREADS,
-            bid,
-            mainloop_params.bsz,
-            seq_len_now,
-            start_token_idx,
-            tile_id,
-            seq_len_decoder_now,
-            mainloop_params.chunk_size,
-            mainloop_params.max_draft_token_num,
-            mainloop_params.o_stride_bsz);
-      }
-    } else {
       const int block_id = blockIdx.x;
       clear(tOrO);
       clear(attention_updater.scores_scale);
       const int bid = mainloop_params.batch_ids[block_id];
-      const int tile_id = mainloop_params.tile_ids_per_batch[block_id];
+      // const int tile_id = mainloop_params.tile_ids_per_batch[block_id];
+      const int tile_id = mainloop_params.tile_ids_per_batch ? mainloop_params.tile_ids_per_batch[block_id] : 0;
+      const int q_tile_id = mainloop_params.q_tile_ids_per_batch ? mainloop_params.q_tile_ids_per_batch[block_id] : 0;
       const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
       const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
       const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
       const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-      cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
-                                        /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
+      // cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
+      //                                   /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
 
       if constexpr (BLOCK_SHAPE_KV == 64) {
         mma_f16<Ktraits, CAUSAL>(
@@ -398,6 +301,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           seq_len_decoder_now,
           seq_len_now,
           tile_id,
+          q_tile_id,
           shared_storage);
       } else if (BLOCK_SHAPE_KV == 32) {
         mma_f16_two_stages<Ktraits, CAUSAL>(
@@ -413,28 +317,29 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           seq_len_decoder_now,
           seq_len_now,
           tile_id,
+          q_tile_id,
           shared_storage);
       }
 
-      collective_epilogue.store(
-          epilogue_params,
-          tOrO,
-          attention_updater.get_lse(),
-          shared_storage,
-          tiled_mma_pv,
-          threadIdx.x - NUM_COPY_THREADS,
-          bid,
-          mainloop_params.bsz,
-          seq_len_now,
-          start_token_idx,
-          tile_id,
-          seq_len_decoder_now,
-          mainloop_params.chunk_size,
-          mainloop_params.max_draft_token_num,
-          mainloop_params.o_stride_bsz);
+      collective_epilogue.store(epilogue_params,
+                                tOrO,
+                                attention_updater.get_lse(),
+                                shared_storage,
+                                tiled_mma_pv,
+                                threadIdx.x - NUM_COPY_THREADS,
+                                bid,
+                                mainloop_params.bsz,
+                                seq_len_now,
+                                start_token_idx,
+                                tile_id,
+                                q_tile_id,
+                                seq_len_decoder_now,
+                                mainloop_params.chunk_size,
+                                mainloop_params.max_draft_token_num,
+                                mainloop_params.o_stride_head_num);
     }
   }
-}
+
 
 
 template <typename KernelTraits, bool CAUSAL, typename Params, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=false>
@@ -465,6 +370,7 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.cumsum_q_seqlens,
       params.batch_ids,
       params.tile_ids_per_batch,
+      params.q_tile_ids_per_batch,
       params.num_blocks_x,
       params.sm_scale,
       params.bsz,
@@ -500,13 +406,13 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(
       &act_blocks_per_sm, kernel, KernelTraits::NUM_WARPS * 32, smem_size);
 
-  int gridx;
-  if constexpr(USE_FIXED_BLOCK) {
-    gridx = multiprocessor_count;
-  } else {
-    gridx = params.num_blocks_x_int;
-  }
-  dim3 grid_dims = {gridx, 1, 1};
+  // int gridx;
+  // if constexpr(USE_FIXED_BLOCK) {
+  //   gridx = multiprocessor_count;
+  // } else {
+  //   gridx = params.num_blocks_x_int;
+  // }
+  dim3 grid_dims = {params.num_blocks_x_int, 1, 1};
   static constexpr int ctaSize = KernelTraits::NUM_WARPS * 32;
   dim3 block_dims(ctaSize, 1, 1);
   kernel<<<grid_dims, block_dims, smem_size, stream>>>(
@@ -545,24 +451,46 @@ template <uint32_t HEAD_DIM_QK, uint32_t HEAD_DIM_VO, typename NV_TYPE, typename
 cudaError_t BatchMLAWithPagedKVCacheDispatched(Params& params, cudaStream_t stream) {
   constexpr bool CAUSAL = true;
   if constexpr (HEAD_DIM_QK == 576) {
-    DISPATCH_GROUP_SIZE(params.q_num_head, GROUP_SIZE,
-      BatchMLAWithPagedKVCacheKernelTraitsDispatched<
-          AttentionKernelTraits</*USE_TMA_LOAD_KV=*/false,
-                                HEAD_DIM_QK,
-                                HEAD_DIM_VO,
-                                GROUP_SIZE,
-                                /*BLOCK_SHAPE_Q_=*/64,
-                                /*BLOCK_SHAPE_KV_=*/64,
-                                /*NUM_STAGES_=*/2,
-                                typename Params::DTypeQ,
-                                typename Params::DTypeKV,
-                                typename Params::DTypeO,
-                                typename Params::IdType,
-                                NV_TYPE>,
-          CAUSAL,
-          Params,
-          USE_REG_EALLOC,
-          USE_FIXED_BLOCK>(params, stream);)
+    if (params.block_size == 32) {
+      DISPATCH_GROUP_SIZE(params.q_num_head, GROUP_SIZE,
+        BatchMLAWithPagedKVCacheKernelTraitsDispatched<
+            AttentionKernelTraits</*USE_TMA_LOAD_KV=*/true, 
+                                  HEAD_DIM_QK, 
+                                  HEAD_DIM_VO, 
+                                  GROUP_SIZE,
+                                  /*BLOCK_SHAPE_Q_=*/64,
+                                  /*BLOCK_SHAPE_KV_=*/32,
+                                  /*NUM_STAGES_=*/4, 
+                                  typename Params::DTypeQ,
+                                  typename Params::DTypeKV, 
+                                  typename Params::DTypeO,
+                                  typename Params::IdType,
+                                  NV_TYPE>,
+            CAUSAL,
+            Params,
+            USE_REG_EALLOC,
+            USE_FIXED_BLOCK>(params, stream);)
+
+    }else if (params.block_size == 64) {
+      DISPATCH_GROUP_SIZE(params.q_num_head, GROUP_SIZE,
+        BatchMLAWithPagedKVCacheKernelTraitsDispatched<
+            AttentionKernelTraits</*USE_TMA_LOAD_KV=*/true,
+                                  HEAD_DIM_QK,
+                                  HEAD_DIM_VO,
+                                  GROUP_SIZE,
+                                  /*BLOCK_SHAPE_Q_=*/64,
+                                  /*BLOCK_SHAPE_KV_=*/64,
+                                  /*NUM_STAGES_=*/2,
+                                  typename Params::DTypeQ,
+                                  typename Params::DTypeKV,
+                                  typename Params::DTypeO,
+                                  typename Params::IdType,
+                                  NV_TYPE>,
+            CAUSAL,
+            Params,
+            USE_REG_EALLOC,
+            USE_FIXED_BLOCK>(params, stream);)
+    }
   } else {
     return cudaErrorNotSupported;
   }

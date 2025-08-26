@@ -195,7 +195,14 @@ class LinearBase(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the weights
         """
-        weight_tensor = get_tensor(state_dict.pop(self.weight_key))
+        if "qkv_a_proj_with_mqa" in self.weight_key:
+            self.weight_key_q = self.weight_key.replace("qkv_a_proj_with_mqa", "q_a_proj")
+            self.weight_key_kv = self.weight_key.replace("qkv_a_proj_with_mqa", "kv_a_proj_with_mqa")
+            q_weight_tensor = get_tensor(state_dict.pop(self.weight_key_q))
+            kv_weight_tensor = get_tensor(state_dict.pop(self.weight_key_kv))
+            weight_tensor = paddle.concat([q_weight_tensor, kv_weight_tensor], axis=-1)
+        else:
+            weight_tensor = get_tensor(state_dict.pop(self.weight_key))
         self.quant_method.process_loaded_weights(self, weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
@@ -286,6 +293,49 @@ class ReplicatedLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+        )
+
+class MergedReplicatedLinear(ReplicatedLinear):
+    """
+    Replicated linear layer.
+    """
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        prefix: str = "",
+        input_size: int = None,
+        output_size_q: int = None,
+        output_size_kv: int = None,
+        with_bias: bool = False,
+        add_bias: bool = False,
+        skip_quant: bool = False,
+        weight_dtype: str = "",
+        weight_key: str = "",
+    ):
+        """
+        Initializes a replicated linear layer.
+
+        Args:
+            fd_config (FDConfig): Inference-related parameters.
+            prefix (str): Unique name of the layer, used to name internal attributes.
+                Can be arbitrarily named.
+            input_size (int): Number of input features. Defaults to None.
+            output_size_q (int): Number of q_output features. Defaults to None.
+            output_size_kv (int): Number of kv_output features. Defaults to None.
+            with_bias (bool): Whether to include bias or not. Defaults to False.
+            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
+            skip_quant (bool): Whether to skip quantization. Defaults to False.
+        """
+        super().__init__(
+            fd_config=fd_config,
+            prefix=prefix,
+            input_size=input_size,
+            output_size=output_size_q + output_size_kv,
+            with_bias=with_bias,
+            add_bias=add_bias,
+            skip_quant=skip_quant,
+            weight_dtype=weight_dtype,
+            weight_key=weight_key,
         )
 
 

@@ -133,6 +133,7 @@ struct CollectiveMainloop {
     IdType const* cumsum_q_seqlens;
     IdType const* batch_ids;
     IdType const* tile_ids_per_batch;
+    IdType const* q_tile_ids_per_batch;
     IdType const* num_blocks_x;
     float sm_scale;
     int bsz;
@@ -165,6 +166,7 @@ struct CollectiveMainloop {
     IdType* cumsum_q_seqlens;
     IdType* batch_ids;
     IdType* tile_ids_per_batch;
+    IdType* q_tile_ids_per_batch;
     IdType* num_blocks_x;
     float sm_scale;
     int bsz;
@@ -203,6 +205,7 @@ struct CollectiveMainloop {
             const_cast<IdType*>(args.cumsum_q_seqlens),
             const_cast<IdType*>(args.batch_ids),
             const_cast<IdType*>(args.tile_ids_per_batch),
+            const_cast<IdType*>(args.q_tile_ids_per_batch),
             const_cast<IdType*>(args.num_blocks_x),
             args.sm_scale,
             args.bsz,
@@ -234,9 +237,15 @@ struct CollectiveMainloop {
                              PipelineStateQ& smem_pipe_write_q,
                              SharedStorage& shared_storage,
                              const int thread_idx,
-                             const int bid) {
-    int start_q_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-    int offset_Q = mainloop_params.q_stride_bsz * start_q_token_idx;
+                             const int bid,
+                             const int q_tile_idx) {
+    const int q_group_offset = q_tile_idx * BLOCK_SHAPE_Q;
+    // int start_q_token_idx = mainloop_params.cumsum_q_seqlens[bid];
+    int start_q_head_idx =
+        mainloop_params.cumsum_q_seqlens[bid] * Ktraits::GROUP_SIZE +
+        q_group_offset;
+    // int offset_Q = mainloop_params.q_stride_bsz * start_q_token_idx;
+    int offset_Q = mainloop_params.q_stride_head_num * start_q_head_idx;
     Tensor mQ = make_tensor(make_gmem_ptr(mainloop_params.Q_ptr + offset_Q), mainloop_params.layout_Q);
     Tensor gQ =
         local_tile(mQ, select<0, 2>(TileShape_QKD{}), make_coord(_, _0{}))(_, _, _0{});

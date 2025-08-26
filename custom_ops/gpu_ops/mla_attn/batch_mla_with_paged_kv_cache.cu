@@ -79,6 +79,7 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
+    const int chunk_size,
     const int max_seq_len,
     const int max_dec_len,
     const float softmax_scale,
@@ -97,8 +98,12 @@ void BatchMLAWithPagedKVCacheKernel(
   const auto q_head_num = meta_data.q_num_heads;
   const auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
   const auto max_block_num = bsz * max_block_num_per_seq;
-  const uint32_t chunk_size = get_max_partition_size(bsz);
-
+  // const uint32_t chunk_size = get_max_partition_size(bsz);
+#if CUDA_VERSION >= 12080
+  constexpr bool USE_REG_EALLOC = true;
+#else
+  constexpr bool USE_REG_EALLOC = false;
+#endif
 
   int q_head_dim = meta_data.head_dims;
   int k_head_dim = meta_data.head_dims;
@@ -118,7 +123,9 @@ void BatchMLAWithPagedKVCacheKernel(
       sizeof(float) *
       static_cast<size_t>(num_chunks * bsz * draft_token_num * q_head_num));
 
-  Params<CUTLASS_TYPE, CUTLASS_TYPE, CUTLASS_TYPE, int> params = {};
+  // Params<CUTLASS_TYPE, CUTLASS_TYPE, CUTLASS_TYPE, int> params = {};
+  using ParamsType = Params<CUTLASS_TYPE, CUTLASS_TYPE, CUTLASS_TYPE, int>;
+  ParamsType params = {};
   params.Q = reinterpret_cast<CUTLASS_TYPE*>(const_cast<T*>(q.data<T>()));
   params.KV = reinterpret_cast<CUTLASS_TYPE*>(const_cast<T*>(latent_cache.data<T>()));
   params.O = reinterpret_cast<CUTLASS_TYPE*>(const_cast<T*>(out->data<T>()));
@@ -132,7 +139,14 @@ void BatchMLAWithPagedKVCacheKernel(
   params.cumsum_q_seqlens = const_cast<int*>(cu_seqlens_q.data<int>());
   params.batch_id_per_token = const_cast<int*>(batch_id_per_token.data<int>());
   params.batch_ids = const_cast<int*>(batch_ids.data<int>());
-  params.tile_ids_per_batch = const_cast<int*>(tile_ids_per_batch.data<int>());
+  if (q_head_num <= 64) {
+      params.tile_ids_per_batch =
+          const_cast<int*>(tile_ids_per_batch.data<int>());
+  } else {
+      params.q_tile_ids_per_batch =
+          const_cast<int*>(tile_ids_per_batch.data<int>());
+  }
+  // params.tile_ids_per_batch = const_cast<int*>(tile_ids_per_batch.data<int>());
   params.num_blocks_x = const_cast<int*>(num_blocks_x_device.data<int>());
   params.num_blocks_x_int = num_blocks_x;
   params.q_stride_bsz = q_head_num * q_head_dim;
@@ -155,7 +169,7 @@ void BatchMLAWithPagedKVCacheKernel(
   params.chunk_num = num_chunks;
 
   if (q_head_dim == 576) {
-      BatchMLAWithPagedKVCacheDispatched<576, 512, NV_TYPE>(
+      BatchMLAWithPagedKVCacheDispatched<576, 512, NV_TYPE, ParamsType, USE_REG_EALLOC>(
           params, stream
       );
   } else {
@@ -185,6 +199,7 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
+    const int chunk_size,
     const int max_seq_len,
     const int max_dec_len,
     const float softmax_scale,
@@ -219,6 +234,7 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
+    const int chunk_size,
     const int max_seq_len,
     const int max_dec_len,
     const float softmax_scale,

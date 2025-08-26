@@ -23,6 +23,8 @@
 
 // #define DEBUG_MLA
 
+
+
 namespace mla_attn {
 
 template <typename Ktraits, bool CAUSAL, typename Params, typename MainloopPipeline, typename MainloopPipelineQ,
@@ -39,6 +41,7 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
                             const int kv_len,
                             const int qo_len,
                             const int tile_idx,
+                            const int q_tile_idx,
                             SharedStorage& shared_storage) {
   using DTypeQ = typename Ktraits::DTypeQ;
   using DTypeKV = typename Ktraits::DTypeKV;
@@ -61,6 +64,9 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
 
   static constexpr int BLOCK_SHAPE_Q = get<0>(TileShape_QKD{});
   static constexpr int BLOCK_SHAPE_KV = get<1>(TileShape_QKD{});
+
+  const int q_group_offset = q_tile_idx * BLOCK_SHAPE_Q;
+
 
   Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
   Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_kv.data()), SmemLayoutK{});
@@ -119,7 +125,7 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
         Tensor tScS = threadMmaQK.partition_C(cS);
 #pragma unroll
         for (int i = 0; i < size(tSrS); ++i) {
-          int qo_idx = get<0>(tScS(i)) / Ktraits::GROUP_SIZE;
+          int qo_idx = (get<0>(tScS(i)) + q_group_offset) / Ktraits::GROUP_SIZE;
           int kv_idx = get<1>(tScS(i)) + kv_tile_idx * BLOCK_SHAPE_KV;
           if constexpr (!CAUSAL) {  // Just masking based on col
             if (kv_idx >= kv_len) {
@@ -183,13 +189,14 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
       const int warp_idx = thread_idx / 32;
 #pragma unroll
       for (int w_i = 0; w_i < 2; ++w_i) {
-        const int token_group_idx = warp_idx * 16 + (thread_idx % 32) / 4 + 8 * w_i;
+        const int token_group_idx = warp_idx * 16 + (thread_idx % 32) / 4 + 8 * w_i + q_group_offset;
         const int token_idx = token_group_idx / Ktraits::GROUP_SIZE;
 
         if (token_idx < qo_len) {
           const int head_idx = token_group_idx % Ktraits::GROUP_SIZE;
           const int bid_offset = mainloop_params.max_draft_token_num * Ktraits::GROUP_SIZE;
-          const int write_idx = bid * bid_offset + token_idx * Ktraits::GROUP_SIZE + head_idx;
+          // const int write_idx = bid * bid_offset + token_idx * Ktraits::GROUP_SIZE + head_idx;
+          const int write_idx = bid * bid_offset + token_group_idx;
           mM(write_idx) = static_cast<DTypeMD>(attention_updater.row_max(w_i));
           mD(write_idx) = static_cast<DTypeMD>(attention_updater.row_sum(w_i));
         }
@@ -231,8 +238,16 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
   return;
 }
 
-template <typename Ktraits, bool CAUSAL, typename Params, typename MainloopPipeline, typename MainloopPipelineQ,
-          typename PipelineState, typename PipelineStateQ, typename SharedStorage, typename FrgTensorO, typename AttentionUpdater>
+template <typename Ktraits,
+          bool CAUSAL,
+          typename Params,
+          typename MainloopPipeline,
+          typename MainloopPipelineQ,
+          typename PipelineState,
+          typename PipelineStateQ,
+          typename SharedStorage,
+          typename FrgTensorO,
+          typename AttentionUpdater>
 CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
                                        MainloopPipelineQ pipeline_q,
                                        PipelineStateQ& smem_pipe_read_q,
@@ -245,6 +260,7 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
                                        const int kv_len,
                                        const int qo_len,
                                        const int tile_idx,
+                                       const int q_tile_idx,
                                        SharedStorage& shared_storage) {
   using DTypeQ = typename Ktraits::DTypeQ;
   using DTypeKV = typename Ktraits::DTypeKV;
@@ -267,6 +283,11 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
 
   static constexpr int BLOCK_SHAPE_Q = get<0>(TileShape_QKD{});
   static constexpr int BLOCK_SHAPE_KV = get<1>(TileShape_QKD{});
+
+  const int q_group_offset = q_tile_idx * BLOCK_SHAPE_Q;
+
+  cutlass::FastDivmod stage_div(2);
+  int quotient, remainder;
 
   Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
   Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_kv.data()), SmemLayoutK{});
@@ -325,7 +346,7 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
       Tensor tScS = threadMmaQK.partition_C(cS);
 #pragma unroll
       for (int i = 0; i < size(tSrS); ++i) {
-        int qo_idx = get<0>(tScS(i)) / Ktraits::GROUP_SIZE;
+        int qo_idx = (get<0>(tScS(i)) + q_group_offset) / Ktraits::GROUP_SIZE;
         int kv_idx = get<1>(tScS(i)) + kv_tile_idx * BLOCK_SHAPE_KV;
         if constexpr (!CAUSAL) {  // Just masking based on col
           if (kv_idx >= kv_len) {
@@ -342,8 +363,9 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
     Tensor scale_o = attention_updater.update</*init=*/true>(tSrS);
     Tensor tPrP = smem_thr_copy_P.retile_S(convert_type<DTypeKV>(tSrS));
     // gather qk gemm res
-    cute::copy(smem_tiled_copy_P, tPrP, tPsP(_, _, _, smem_pipe_read_kv.index() % 2));
-    cute::copy(scale_o, tScalesScale(_, smem_pipe_read_kv.index() % 2));
+    stage_div.fast_divmod(quotient, remainder, smem_pipe_read_kv.index());
+    cute::copy(smem_tiled_copy_P, tPrP, tPsP(_, _, _, remainder));
+    cute::copy(scale_o, tScalesScale(_, remainder));
     // r2s fence wgmma
     cutlass::arch::fence_view_async_shared();
     cutlass::arch::NamedBarrier::sync(Ktraits::NUM_MMA_THREADS, static_cast<int>(NamedBarriers::kWarpSchedulerWG1));
@@ -383,7 +405,7 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
         Tensor tScS = threadMmaQK.partition_C(cS);
 #pragma unroll
         for (int i = 0; i < size(tSrS); ++i) {
-          int qo_idx = get<0>(tScS(i)) / Ktraits::GROUP_SIZE;
+          int qo_idx = (get<0>(tScS(i)) + q_group_offset) / Ktraits::GROUP_SIZE;
           int kv_idx = get<1>(tScS(i)) + kv_tile_idx * BLOCK_SHAPE_KV;
           if constexpr (!CAUSAL) {  // Just masking based on col
             if (kv_idx >= kv_len) {
@@ -401,8 +423,10 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
       Tensor tPrP = smem_thr_copy_P.retile_S(convert_type<DTypeKV>(tSrS));
 
       // gather qk gemm res
-      cute::copy(smem_tiled_copy_P, tPrP, tPsP(_, _, _, smem_pipe_read_kv.index() % 2));
-      cute::copy(scale_o, tScalesScale(_, smem_pipe_read_kv.index() % 2));
+      stage_div.fast_divmod(quotient, remainder, smem_pipe_read_kv.index());
+
+      cute::copy(smem_tiled_copy_P, tPrP, tPsP(_, _, _, remainder));
+      cute::copy(scale_o, tScalesScale(_, remainder));
       // r2s fence wgmma
       cutlass::arch::fence_view_async_shared();
       // make sure tSrS r2s done
@@ -417,18 +441,28 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
     ++smem_pipe_read_q;
     // compute last pv
     attention_updater.rescale_o(tOrO);
+    stage_div.fast_divmod(quotient, remainder, smem_pipe_read_kv.index());
+
     if (smem_pipe_read_kv.index() == 0) {
-      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                           tOrV1(_, _, _, _0{}), tOrO);
+      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss,
+                                           tOrP_CS2(_, _, _, remainder),
+                                           tOrV1(_, _, _, _0{}),
+                                           tOrO);
     } else if (smem_pipe_read_kv.index() == 1) {
-      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                           tOrV2(_, _, _, _0{}), tOrO);
+      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss,
+                                           tOrP_CS2(_, _, _, remainder),
+                                           tOrV2(_, _, _, _0{}),
+                                           tOrO);
     } else if (smem_pipe_read_kv.index() == 2) {
-      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                           tOrV3(_, _, _, _0{}), tOrO);
+      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss,
+                                           tOrP_CS2(_, _, _, remainder),
+                                           tOrV3(_, _, _, _0{}),
+                                           tOrO);
     } else {
-      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                           tOrV4(_, _, _, _0{}), tOrO);
+      gemm</*init=*/false, /*wg_wait=*/-1>(tiled_mma_pv_ss,
+                                           tOrP_CS2(_, _, _, remainder),
+                                           tOrV4(_, _, _, _0{}),
+                                           tOrO);
     }
     scale_o = attention_updater.finalize(tSrS);
     warpgroup_wait<0>();
@@ -437,7 +471,9 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
     ++smem_pipe_read_kv;
     if (chunk_num_this_seq == 1) {
       // norm
-      cute::copy(scale_o, tScalesScale(_, smem_pipe_read_kv.index() % 2));
+      stage_div.fast_divmod(quotient, remainder, smem_pipe_read_kv.index());
+
+      cute::copy(scale_o, tScalesScale(_, remainder));
 
       cutlass::arch::NamedBarrier::arrive(Ktraits::NUM_MMA_THREADS, static_cast<int>(NamedBarriers::kWG1WG2LastSync));
       attention_updater.rescale_o(tOrO);
@@ -447,13 +483,15 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
       const int warp_idx = thread_idx / 32;
 #pragma unroll
       for (int w_i = 0; w_i < 2; ++w_i) {
-        const int token_group_idx = warp_idx * 16 + (thread_idx % 32) / 4 + 8 * w_i;
+        const int token_group_idx =
+            warp_idx * 16 + (thread_idx % 32) / 4 + 8 * w_i + q_group_offset;
         const int token_idx = token_group_idx / Ktraits::GROUP_SIZE;
 
         if (token_idx < qo_len) {
-          const int head_idx = token_group_idx % Ktraits::GROUP_SIZE;
+          // const int head_idx = token_group_idx % Ktraits::GROUP_SIZE;
           const int bid_offset = mainloop_params.max_draft_token_num * Ktraits::GROUP_SIZE;
-          const int write_idx = bid * bid_offset + token_idx * Ktraits::GROUP_SIZE + head_idx;
+          // const int write_idx = bid * bid_offset + token_idx * Ktraits::GROUP_SIZE + head_idx;
+          const int write_idx = bid * bid_offset + token_group_idx;
           mM(write_idx) = static_cast<DTypeMD>(attention_updater.row_max(w_i));
           mD(write_idx) = static_cast<DTypeMD>(attention_updater.row_sum(w_i));
         }
@@ -466,29 +504,40 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
       consumer_wait(pipeline_kv, smem_pipe_read_kv);
       cutlass::arch::NamedBarrier::sync(Ktraits::NUM_MMA_THREADS, static_cast<int>(NamedBarriers::kWarpSchedulerWG1));
       // A: tPsP
-      cute::copy(tScalesScale(_, smem_pipe_read_kv.index() % 2), scale_o);
+      stage_div.fast_divmod(quotient, remainder, smem_pipe_read_kv.index());
+      cute::copy(tScalesScale(_, remainder), scale_o);
       // rescale
       attention_updater.rescale_o(tOrO, scale_o);
       if (smem_pipe_read_kv.index() == 0) {
-        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                            tOrV1(_, _, _, _0{}), tOrO);
+        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss,
+                                            tOrP_CS2(_, _, _, remainder),
+                                            tOrV1(_, _, _, _0{}),
+                                            tOrO);
       } else if (smem_pipe_read_kv.index() == 1) {
-        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                            tOrV2(_, _, _, _0{}), tOrO);
+        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss,
+                                            tOrP_CS2(_, _, _, remainder),
+                                            tOrV2(_, _, _, _0{}),
+                                            tOrO);
       } else if (smem_pipe_read_kv.index() == 2) {
-        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                            tOrV3(_, _, _, _0{}), tOrO);
+        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss,
+                                            tOrP_CS2(_, _, _, remainder),
+                                            tOrV3(_, _, _, _0{}),
+                                            tOrO);
       } else {
-        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss, tOrP_CS2(_, _, _, smem_pipe_read_kv.index() % 2),
-                                            tOrV4(_, _, _, _0{}), tOrO);
+        gemm</*init=*/false, /*wg_wait=*/0>(tiled_mma_pv_ss,
+                                            tOrP_CS2(_, _, _, remainder),
+                                            tOrV4(_, _, _, _0{}),
+                                            tOrO);
       }
       pipeline_kv.consumer_release(smem_pipe_read_kv);
       ++smem_pipe_read_kv;
     }
     if (chunk_num_this_seq == 1) {
       // norm
+      stage_div.fast_divmod(quotient, remainder, smem_pipe_read_kv.index());
+
       cutlass::arch::NamedBarrier::sync(Ktraits::NUM_MMA_THREADS, static_cast<int>(NamedBarriers::kWG1WG2LastSync));
-      cute::copy(tScalesScale(_, smem_pipe_read_kv.index() % 2), scale_o);
+      cute::copy(tScalesScale(_, remainder), scale_o);
       attention_updater.rescale_o(tOrO, scale_o);
     }
   }
