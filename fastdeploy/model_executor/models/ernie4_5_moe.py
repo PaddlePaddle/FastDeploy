@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import inspect
+import re
 from functools import partial
 from typing import Dict, Union
 
@@ -101,7 +103,7 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        if moe_quant_type == "w4a8":
+        if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -148,15 +150,6 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
             }
 
-        self.experts = FusedMoE(
-            fd_config=fd_config,
-            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
-            num_experts=fd_config.model_config.moe_num_experts,
-            top_k=fd_config.model_config.moe_k,
-            layer_idx=layer_id,
-            weight_key_map=weight_key_map,
-        )
-
         self.gate = ReplicatedLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.gate",
@@ -166,6 +159,25 @@ class Ernie4_5_MoE(nn.Layer):
             skip_quant=True,
             weight_dtype="float32",
         )
+
+        self.experts = FusedMoE(
+            fd_config=fd_config,
+            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
+            num_experts=fd_config.model_config.moe_num_experts,
+            top_k=fd_config.model_config.moe_k,
+            layer_idx=layer_id,
+            gate_correction_bias=None,
+            weight_key_map=weight_key_map,
+        )
+
+        if fd_config.model_config.moe_use_aux_free:
+            self.experts.gate_correction_bias = self.create_parameter(
+                shape=[1, fd_config.model_config.moe_num_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+        else:
+            self.experts.gate_correction_bias = None
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
@@ -179,6 +191,13 @@ class Ernie4_5_MoE(nn.Layer):
     def load_state_dict(self, state_dict):
         self.gate.load_state_dict(state_dict)
         self.experts.load_state_dict(state_dict)
+        if self.experts.gate_correction_bias is not None:
+            gate_correction_bias_tensor = state_dict.pop(self.experts.gate_correction_bias_key)
+            if self.experts.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(
+                    self.experts.gate_correction_bias.shape
+                )
+            self.experts.gate_correction_bias.set_value(gate_correction_bias_tensor)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
@@ -431,6 +450,71 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         else:
             self.lm_head.load_state_dict(state_dict)
 
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        general_params_mapping = [
+            # (param_name, weight_name, expert_id, shard_id)
+            ("embed_tokens.embeddings", "embed_tokens", None, None),
+            ("lm_head.linear", "lm_head", None, None),
+            ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
+        ]
+
+        expert_params_mapping = []
+        if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
+            expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                num_experts=self.fd_config.model_config.moe_num_experts,
+                ckpt_down_proj_name="down_proj",
+                ckpt_gate_up_proj_name="up_gate_proj",
+                param_gate_up_proj_name="experts.up_gate_proj_",
+                param_down_proj_name="experts.down_proj_",
+            )
+        all_param_mapping = general_params_mapping + expert_params_mapping
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        expert_id = None
+        shard_id = None
+
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, exp_id, shard_id in all_param_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                param = params_dict[model_param_name]
+                expert_id = exp_id
+                shard_id = shard_id
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict.keys():
+                    continue
+                param = params_dict[model_param_name]
+
+            # Get weight loader from parameter and set weight
+            weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+            sig = inspect.signature(weight_loader)
+            if "expert_id" in sig.parameters:
+                weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
+            else:
+                weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
@@ -450,7 +534,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.expert(fake_hidden_states)
+            self.ernie.layers[i].mlp.experts(fake_hidden_states, self.ernie.layers[i].mlp.gate)
 
     def forward(
         self,
@@ -460,6 +544,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):

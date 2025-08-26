@@ -314,7 +314,7 @@ std::vector<paddle::Tensor> EPMoeExpertCombine(
 }
 
 
-template <typename T, typename OutT, int NUM_EXPERTS_PER_RANK = 8, int RoundType = 1>
+template <typename T, typename OutT, int NUM_EXPERTS_PER_RANK = 8, int Kthread = 512, int RoundType = 1>
 __global__ void permute_x_kernel(const T *src_x,
                                  const int64_t *topk_idx,
                                  const float *topk_weights,
@@ -330,9 +330,9 @@ __global__ void permute_x_kernel(const T *src_x,
                                  int *dst_indices,
                                  int *cumsum_idx_gpu,
                                  int64_t *token_nums_per_expert_cumsum,
-                                 int64_t *expert_idx_per_token,
+                                 int64_t *expert_idx_per_token, // [num_rows, moe_topk]
                                  float max_bound = 127.0,
-                                 float min_bound = -127.0) { // [num_rows, moe_topk]
+                                 float min_bound = -127.0) {
     const int src_token_idx = blockIdx.x;
     const int tid = threadIdx.x;
     constexpr int vec_size = sizeof(int4) / sizeof(T);
@@ -375,10 +375,17 @@ __global__ void permute_x_kernel(const T *src_x,
             if (up_gate_proj_in_scale) {
               for (int i = 0; i < vec_size; i++) {
                 float quant_value = max_bound * up_gate_proj_in_scale[expert_now] * static_cast<float>(src_vec[i]);
-                if (RoundType == 0) {
-                  res_vec[i] = static_cast<OutT>(ClipFunc<float>(rint(quant_value), min_bound, max_bound));
+                if constexpr (std::is_same<OutT, int8_t>::value) {
+                  // w4aint8
+                  if (RoundType == 0) {
+                    res_vec[i] = static_cast<OutT>(ClipFunc<float>(rint(quant_value), min_bound, max_bound));
+                  } else {
+                    res_vec[i] = static_cast<OutT>(ClipFunc<float>(round(quant_value), min_bound, max_bound));
+                  }
                 } else {
-                  res_vec[i] = static_cast<OutT>(round(quant_value));
+                  // w4afp8
+                  float value = ClipFunc<float>(quant_value, min_bound, max_bound);
+                  res_vec[i] = static_cast<OutT>(value);
                 }
               }
             } else {
@@ -417,6 +424,10 @@ void EPMoeDispatchKernel(const paddle::Tensor& input,
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
+
+  typedef PDTraits<paddle::DataType::FLOAT8_E4M3FN> traits_fp8;
+  typedef typename traits_fp8::DataType DataType_fp8;
+  typedef typename traits_fp8::data_t data_t_fp8;
 
   auto stream = input.stream();
   auto place = input.place();
@@ -463,6 +474,50 @@ void EPMoeDispatchKernel(const paddle::Tensor& input,
         expert_idx_per_token->data<int64_t>(),
         127.0,
         -127.0
+      );
+    }
+  } else if (moe_quant_type == "w4afp8") {
+    if (num_experts_per_rank == 8) {
+      permute_x_kernel<data_t, data_t_fp8, 8, 512><<<gridx, 512, 0, stream>>>(
+        input.data<data_t>(),
+        topk_ids.data<int64_t>(),
+        topk_weights.data<float>(),
+        token_nums_per_expert.data<int>(),
+        up_gate_proj_in_scale ? up_gate_proj_in_scale.get().data<float>() : nullptr,
+        moe_topk,
+        num_rows,
+        token_nums_this_rank,
+        hidden_size,
+        permute_input->data<data_t_fp8>(),
+        permute_indices_per_token->data<int>(),
+        dst_weights->data<float>(),
+        dst_indices->data<int>(),
+        cumsum_idx_gpu->data<int>(),
+        token_nums_per_expert_cumsum->data<int64_t>(),
+        expert_idx_per_token->data<int64_t>(),
+        448.0f,
+        -448.0f
+      );
+    } else if (num_experts_per_rank == 16) {
+      permute_x_kernel<data_t, data_t_fp8, 16, 512><<<gridx, 512, 0, stream>>>(
+        input.data<data_t>(),
+        topk_ids.data<int64_t>(),
+        topk_weights.data<float>(),
+        token_nums_per_expert.data<int>(),
+        up_gate_proj_in_scale ? up_gate_proj_in_scale.get().data<float>() : nullptr,
+        moe_topk,
+        num_rows,
+        token_nums_this_rank,
+        hidden_size,
+        permute_input->data<data_t_fp8>(),
+        permute_indices_per_token->data<int>(),
+        dst_weights->data<float>(),
+        dst_indices->data<int>(),
+        cumsum_idx_gpu->data<int>(),
+        token_nums_per_expert_cumsum->data<int64_t>(),
+        expert_idx_per_token->data<int64_t>(),
+        448.0f,
+        -448.0f
       );
     }
   } else {
@@ -538,7 +593,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
 
   auto permute_input = GetEmptyTensor(
     {token_nums_this_rank, hidden_size},
-    moe_quant_type == "w4a8" ? paddle::DataType::INT8 : input_type,
+    moe_quant_type == "w4a8" ? paddle::DataType::INT8 : moe_quant_type == "w4afp8" ? paddle::DataType::FLOAT8_E4M3FN : input_type,
     place);
   auto num_experts_per_rank_tensor = GetEmptyTensor(
     {num_experts_per_rank},

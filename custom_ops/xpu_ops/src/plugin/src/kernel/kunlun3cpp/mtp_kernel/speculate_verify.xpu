@@ -1,0 +1,335 @@
+#include "xpu/kernel/cluster_debug.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/xtdk.h"
+#include "xpu/kernel/xtdk_math.h"
+#include "xpu/kernel/xtdk_simd.h"
+// #include "xpu/internal/aten/xrand_philox4x32_10.h"
+// #include "xpu/internal/aten/xrand_uniform.h"
+// #include "xpu/internal/aten/xrand_global.h"
+namespace xpu3 {
+namespace plugin {
+static inline __device__ int v_reduce(int32x16_t &v0, int32x16_t &v1) {
+  int res;
+  v1 = vvadd_int32x16(v0, v1);
+  auto v = vsrlp_int32x16(256, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(128, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(64, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(32, v1);
+  v1 = vvadd_int32x16(v, v1);
+  res = vextract_int32x16(v1, 1);
+  return res;
+}
+static inline __device__ int ClusterReduce(
+    const _shared_ptr_ int *stop_flag_now_int_sm, int len) {
+  int sum = 0;
+  if (core_id() == 0) {
+    int32x16_t vec_x_0;
+    int32x16_t vec_x_1;
+    int32x16_t vec_y_0 = vzero<int>();
+    int32x16_t vec_y_1 = vzero<int>();
+    for (int i = 0; i < len; i += 32) {
+      vload2_sm(stop_flag_now_int_sm + i, vec_x_0, vec_x_1);
+      vec_y_0 = vvadd_int32x16(vec_y_0, vec_x_0);
+      vec_y_1 = vvadd_int32x16(vec_y_1, vec_x_1);
+    }
+    sum = v_reduce(vec_y_0, vec_y_1);
+  }
+  return sum;
+}
+__device__ bool is_in_end(const int64_t id,
+                          __global_ptr__ const int64_t *end_ids,
+                          int length) {
+  bool flag = false;
+  for (int i = 0; i < length; i++) {
+    if (id == end_ids[i]) {
+      return true;
+    }
+  }
+  return flag;
+}
+__device__ inline bool is_in(__global_ptr__ const int64_t *candidates,
+                             const int64_t draft,
+                             const int candidate_len) {
+  for (int i = 0; i < candidate_len; i++) {
+    if (draft == candidates[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+// static __device__ inline unsigned int xorwow(unsigned int& state) {
+//     state ^= state >> 7;
+//     state ^= state << 9;
+//     state ^= state >> 13;
+//     return state;
+// }
+static __device__ inline unsigned int xorwow(unsigned int &state) {
+  state ^= state >> 7;
+  state ^= state << 9;
+  state ^= state >> 13;
+  return state;
+}
+typedef uint32_t curandStatePhilox4_32_10_t;
+__device__ int64_t
+topp_sampling_kernel(__global_ptr__ const int64_t *candidate_ids,
+                     __global_ptr__ const float *candidate_scores,
+                     __global_ptr__ const float *dev_curand_states,
+                     const int candidate_len,
+                     const float topp) {
+  const int tid = core_id();
+  float sum_scores = 0.0f;
+  float rand_top_p = *dev_curand_states * topp;
+  // printf("debug rand_top_p:%f\n",rand_top_p);
+  for (int i = 0; i < candidate_len; i++) {
+    sum_scores += candidate_scores[i];
+    if (rand_top_p <= sum_scores) {
+      return candidate_ids[i];
+    }
+  }
+  return candidate_ids[0];
+}
+#define sm_size 1024
+template <bool ENABLE_TOPP, bool USE_TOPK>
+__global__ void speculate_verify(
+    int64_t *accept_tokens,  // out [real_bsz, max_draft_tokens], 输出最终接收的
+                             // token（通过验证或采样）
+    int *accept_num,  // out [real_bsz], 每个序列最终接受的 token
+                      // 数量（只统计通过验证的）
+    int64_t
+        *step_idx,  // out [real_bsz], 记录每个bid序列已经生成或接受的token数
+    bool *stop_flags,  // out [real_bsz], 每个序列的停止标志，遇到 <eos>
+                       // 或长度超限时置 true
+    const int *seq_lens_encoder,  // [real_bsz], 每个样本 encoder
+                                  // 输入长度，用于判断 prefill 阶段
+    const int *seq_lens_decoder,  // [real_bsz], 每个样本 decoder 输出的 token
+                                  // 数（即 draft token 数）
+    const int64_t *
+        draft_tokens,  // [real_bsz, max_draft_tokens], draft model 输出的 token
+    const int *actual_draft_token_nums,  // [real_bsz], draft_tokens
+                                         // 中实际有效的 token 数量
+    const float *dev_curand_states,      // used for random
+    const float *topp,                   // [real_bsz]，TopP 阈值（如
+                        // 0.9），用于控制核采样截断概率和候选数
+    const int *seq_lens_this_time,  // [real_bsz], 本轮 verify
+                                    // 阶段每个样本实际参与验证的 token 数
+    const int64_t
+        *verify_tokens,  // [sum(seq_lens_this_time), max_candidate_len], verify
+                         // decoder 输出的候选 token
+    const float
+        *verify_scores,  // 同上， 每个 verify token 对应的概率分布，用于采样
+    const int64_t *max_dec_len,  // [real_bsz],
+                                 // 每个样本允许生成的最大长度（超过则触发终止）
+    const int64_t
+        *end_tokens,  // [end_length], 终止 token 列表（如 <eos>），命中即终止
+    const bool *is_block_step,  // [real_bsz], 指示是否当前为 block step（为
+                                // true 时跳过 verify）
+    const int
+        *output_cum_offsets,  // [real_bsz], verify_tokens 的起始偏移，用于定位
+                              // token 所在 verify 索引
+    const int *actual_candidate_len,  // [sum(seq_lens_this_time)], 每个 verify
+                                      // token 实际可用候选数（用于 TopP 截断）
+    const int real_bsz,          // batch size
+    const int max_draft_tokens,  // scalar, 每个样本最多允许的 draft token 数
+    const int end_length,
+    const int max_seq_len,  // scalar, 每个序列的最大 token 数（用于偏移计算）
+    const int max_candidate_len,  // scalar, 每个 verify token
+                                  // 的最大候选数（用于验证或采样）
+    const int verify_window,  // scalar, TopK 验证窗口（允许连续 top1 匹配次数）
+    const bool prefill_one_step_stop) {
+  const int cid = core_id();
+  const int64_t tid = cluster_id() * core_num() + core_id();
+  const int64_t nthreads = cluster_num() * core_num();
+  for (int64_t bid = tid; bid < real_bsz; bid += nthreads) {
+    int stop_flag_now_int = 0;
+    int accept_num_now = 1;
+    if (is_block_step[bid]) {
+      continue;
+    }
+    const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
+    if (stop_flags[bid]) {
+      stop_flag_now_int = 1;
+    } else {  // 这里prefill阶段也会进入，但是因为draft
+              // tokens会置零，因此会直接到最后的采样阶段
+      auto *verify_tokens_now =
+          verify_tokens + start_token_id * max_candidate_len;
+      auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
+      auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
+      int i = 0;
+      // printf("seq_lens_this_time[%d]-1: %d \n",bid,
+      // seq_lens_this_time[bid]-1);
+      for (; i < seq_lens_this_time[bid] - 1; i++) {
+        if (seq_lens_encoder[bid] != 0) {
+          break;
+        }
+        if (USE_TOPK) {
+          if (verify_tokens_now[i * max_candidate_len] ==
+              draft_tokens_now[i + 1]) {
+            // accept_num_now++;
+            step_idx[bid]++;
+            auto accept_token = draft_tokens_now[i + 1];
+            // printf("[USE_TOPK] bid %d Top 1 verify write accept
+            // %d is %lld\n", bid, i, accept_token);
+            accept_tokens[bid * max_draft_tokens + i] = accept_token;
+            if (is_in_end(accept_token, end_tokens, end_length) ||
+                step_idx[bid] >= max_dec_len[bid]) {
+              stop_flags[bid] = true;
+              stop_flag_now_int = 1;
+              if (step_idx[bid] >= max_dec_len[bid])
+                accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+              // printf("[USE_TOPK] bid %d Top 1 verify write
+              // accept %d is %lld\n", bid, i, accept_token);
+              break;
+            } else {
+              accept_num_now++;
+            }
+          } else {
+            break;
+          }
+        } else {
+          auto actual_candidate_len_value =
+              actual_candidate_len_now[i] > max_candidate_len
+                  ? max_candidate_len
+                  : actual_candidate_len_now[i];
+          if (is_in(verify_tokens_now + i * max_candidate_len,
+                    draft_tokens_now[i + 1],
+                    actual_candidate_len_value)) {
+            // Top P verify
+            // accept_num_now++;
+            step_idx[bid]++;
+            auto accept_token = draft_tokens_now[i + 1];
+            accept_tokens[bid * max_draft_tokens + i] = accept_token;
+            if (is_in_end(accept_token, end_tokens, end_length) ||
+                step_idx[bid] >= max_dec_len[bid]) {
+              stop_flags[bid] = true;
+              stop_flag_now_int = 1;
+              if (step_idx[bid] >= max_dec_len[bid])
+                accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+              // printf("bid %d Top P verify write accept %d is
+              // %lld\n", bid, i, accept_token);
+              break;
+            } else {
+              accept_num_now++;
+            }
+          } else {
+            // TopK verify
+            int ii = i;
+            if (max_candidate_len >= 2 &&
+                verify_tokens_now[ii * max_candidate_len + 1] ==
+                    draft_tokens_now[ii + 1]) {  // top-2
+              int j = 0;
+              ii += 1;
+              for (; j < verify_window && ii < seq_lens_this_time[bid] - 1;
+                   j++, ii++) {
+                if (verify_tokens_now[ii * max_candidate_len] !=
+                    draft_tokens_now[ii + 1]) {
+                  break;
+                }
+              }
+              if (j >= verify_window) {  // accept all
+                accept_num_now += verify_window + 1;
+                step_idx[bid] += verify_window + 1;
+                for (; i < ii; i++) {
+                  auto accept_token = draft_tokens_now[i + 1];
+                  accept_tokens[bid * max_draft_tokens + i] = accept_token;
+                  // printf(
+                  //     "bid %d TopK verify write accept %d
+                  //     is "
+                  //     "%lld\n",
+                  //     bid,
+                  //     i,
+                  //     accept_token);
+                  if (is_in_end(accept_token, end_tokens, end_length) ||
+                      step_idx[bid] >= max_dec_len[bid]) {
+                    stop_flags[bid] = true;
+                    stop_flag_now_int = 1;
+                    if (step_idx[bid] >= max_dec_len[bid])
+                      accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+                    // printf("bid %d TopK verify write
+                    // accept %d is %lld\n", bid, i,
+                    // end_tokens[0]);
+                    accept_num_now--;
+                    step_idx[bid]--;
+                    break;
+                  }
+                }
+              }
+            }
+            break;
+          }
+        }
+      }
+      // sampling阶段
+      // 第一种，draft_token[i+1]被拒绝，需要从verify_tokens_now[i]中选一个
+      // 第二种，i == seq_lens_this_time[bid]-1,
+      // 也是从verify_tokens_now[i]中选一个 但是停止的情况不算
+      if (!stop_flag_now_int) {
+        int64_t accept_token;
+        __global_ptr__ const float *verify_scores_now =
+            verify_scores + start_token_id * max_candidate_len;
+        step_idx[bid]++;
+        if (ENABLE_TOPP) {
+          auto actual_candidate_len_value =
+              actual_candidate_len_now[i] > max_candidate_len
+                  ? max_candidate_len
+                  : actual_candidate_len_now[i];
+          accept_token =
+              topp_sampling_kernel(verify_tokens_now + i * max_candidate_len,
+                                   verify_scores_now + i * max_candidate_len,
+                                   dev_curand_states,
+                                   actual_candidate_len_value,
+                                   topp[bid]);
+        } else {
+          accept_token = verify_tokens_now[i * max_candidate_len];
+        }
+        accept_tokens[bid * max_draft_tokens + i] = accept_token;
+        if (prefill_one_step_stop) {
+          stop_flags[bid] = true;
+        }
+        if (is_in_end(accept_token, end_tokens, end_length) ||
+            step_idx[bid] >= max_dec_len[bid]) {
+          stop_flags[bid] = true;
+          stop_flag_now_int = 1;
+          if (step_idx[bid] >= max_dec_len[bid])
+            accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+        }
+      }
+      accept_num[bid] = accept_num_now;
+    }
+  }
+}
+#define SPECULATE_VERIFY_INSTANTIATE(ENABLE_TOPP, USE_TOPK)         \
+  template __global__ void speculate_verify<ENABLE_TOPP, USE_TOPK>( \
+      int64_t * accept_tokens,                                      \
+      int *accept_num,                                              \
+      int64_t *step_idx,                                            \
+      bool *stop_flags,                                             \
+      const int *seq_lens_encoder,                                  \
+      const int *seq_lens_decoder,                                  \
+      const int64_t *draft_tokens,                                  \
+      const int *actual_draft_token_nums,                           \
+      const float *dev_curand_states,                               \
+      const float *topp,                                            \
+      const int *seq_lens_this_time,                                \
+      const int64_t *verify_tokens,                                 \
+      const float *verify_scores,                                   \
+      const int64_t *max_dec_len,                                   \
+      const int64_t *end_tokens,                                    \
+      const bool *is_block_step,                                    \
+      const int *output_cum_offsets,                                \
+      const int *actual_candidate_len,                              \
+      int real_bsz,                                                 \
+      int max_draft_tokens,                                         \
+      int end_length,                                               \
+      int max_seq_len,                                              \
+      int max_candidate_len,                                        \
+      int verify_window,                                            \
+      bool prefill_one_step_stop);
+SPECULATE_VERIFY_INSTANTIATE(true, true)
+SPECULATE_VERIFY_INSTANTIATE(true, false)
+SPECULATE_VERIFY_INSTANTIATE(false, true)
+SPECULATE_VERIFY_INSTANTIATE(false, false)
+}  // namespace plugin
+}  // namespace xpu3

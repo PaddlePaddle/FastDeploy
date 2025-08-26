@@ -16,7 +16,8 @@
 
 import uuid
 from copy import deepcopy
-from typing import List, Literal, Union
+from pathlib import Path
+from typing import List, Literal, Optional, Union
 from urllib.parse import urlparse
 
 import requests
@@ -157,6 +158,38 @@ def parse_chat_messages(messages):
 
         conversation.append({"role": role, "content": parsed_content})
     return conversation
+
+
+def load_chat_template(
+    chat_template: Union[Path, str],
+    is_literal: bool = False,
+) -> Optional[str]:
+    if chat_template is None:
+        return None
+    if is_literal:
+        if isinstance(chat_template, Path):
+            raise TypeError("chat_template is expected to be read directly " "from its value")
+
+        return chat_template
+
+    try:
+        with open(chat_template) as f:
+            return f.read()
+    except OSError as e:
+        if isinstance(chat_template, Path):
+            raise
+        JINJA_CHARS = "{}\n"
+        if not any(c in chat_template for c in JINJA_CHARS):
+            msg = (
+                f"The supplied chat template ({chat_template}) "
+                f"looks like a file path, but it failed to be "
+                f"opened. Reason: {e}"
+            )
+            raise ValueError(msg) from e
+
+        # If opening a file fails, set chat template to be args to
+        # ensure we decode so our escape are interpreted correctly
+        return load_chat_template(chat_template, is_literal=True)
 
 
 def random_tool_call_id() -> str:
