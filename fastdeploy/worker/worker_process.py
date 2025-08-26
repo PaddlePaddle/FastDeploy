@@ -38,7 +38,7 @@ from fastdeploy.config import (
     ParallelConfig,
     SpeculativeConfig,
 )
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
@@ -106,7 +106,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
-        tokenizer = ErnieBotTokenizer.from_pretrained(
+        tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
             padding_side="right",

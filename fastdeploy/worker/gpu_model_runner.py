@@ -66,7 +66,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
 from fastdeploy import envs
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
