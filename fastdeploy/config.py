@@ -749,7 +749,6 @@ class LoadChoices(str, Enum):
     """LoadChoices"""
 
     DEFAULT = "default"
-    # only support qwen3-bf16 now
     DEFAULT_V1 = "default_v1"
 
 
