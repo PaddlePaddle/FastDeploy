@@ -26,7 +26,6 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
-    get_input_length_list,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -608,14 +607,48 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
-    def _dummy_prefill_inputs(
-        self, num_tokens: int, batch_size: int, expected_decode_len: int, prefill_only: bool = False
+    def get_input_length_list(
+        self, num_tokens: int, batch_size: int, expected_decode_len: int, capture_prefill: bool = False
     ):
-        """Set dummy prefill inputs to share_inputs"""
+        """
+        Generates some list for _dummy_prefill_inputs, when capture pure prefill or mtp,
+        the list should be carefully constructed.
+
+        This function addresses a specific problem: in the pure prefill stage, variable
+        input lengths (e.g., `prompt[160, 0]` vs. `prompt[80, 80]`) can lead to different
+        CUDA Grid dimensions for kernels like `split_q_block`. This prevents CUDA Graph
+        reuse.
+
+        The `split_q_block` kernel calculates the total number of blocks, which directly
+        determines the `griddim.x` launch parameter for the `multi_query_append_attention_kernel`.
+        The blocks for a single sequence are determined by the formula:
+        `num_blocks = ceil((sequence_length * group_size) / block_shape_q)`
+
+        Due to the `ceil` (ceiling) function, distributing a total number of tokens across
+        a batch of shorter sequences will result in a larger total block count. For example,
+        with a `group_size` of 5 and `block_shape_q` of 64:
+        - A single sequence of 160 tokens requires `ceil((160 * 5) / 64) = 13` blocks.
+        - Two sequences of 80 tokens each require `ceil((80 * 5) / 64) * 2 = 7 * 2 = 14` blocks.
+
+        To ensure graph replayability, this function creates a "dummy" list of sequence
+        lengths that's designed to produce the theoretical maximum `encoder_num_blocks_x_cpu`
+        for the given `num_tokens` and `batch_size`. This strategy ensures the captured
+        CUDA Graph has the largest possible grid dimensions. At runtime, if the actual number
+        of blocks is less than or equal to this maximum, the kernel can safely execute by
+        using an early-exit mechanism.
+
+        Args:
+            num_tokens (int): The total number of tokens across all sequences.
+            batch_size (int): The number of sequences (requests) in the batch.
+
+        Returns:
+            List[int]: A list of integers representing the sequence length for each request.
+                    This list is crafted to maximize the total number of blocks.
+        """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
         input_length = min(
-            num_tokens // (1 if prefill_only else batch_size),
+            num_tokens // (1 if capture_prefill else batch_size),
             self.parallel_config.max_model_len - max_dec_len,
         )
 
@@ -629,13 +662,26 @@ class GPUModelRunner(ModelRunnerBase):
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         input_length_list = [input_length] * batch_size
-        if prefill_only:
-            input_length_list = get_input_length_list(num_tokens=num_tokens, batch_size=batch_size)
-            batch_size = len(input_length_list)
 
+        if capture_prefill:
+            if num_tokens < batch_size:
+                input_length_list = [1] * num_tokens
+            else:
+                input_length_list = [1] * (batch_size - 1)
+                input_length_list.append(num_tokens - batch_size + 1)
+
+        len_of_input_length_list = len(input_length_list)
+        max_dec_len_list = [max_dec_len] * len_of_input_length_list
+
+        return input_length_list, max_dec_len_list, block_num
+
+    def _dummy_prefill_inputs(self, input_length_list: List[int], max_dec_len_list: List[int], block_num: int):
+        """Set dummy prefill inputs to share_inputs"""
+        batch_size = len(input_length_list)
         for i in range(batch_size):
             idx = i
             input_length = input_length_list[i]
+            max_dec_len = max_dec_len_list[i]
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array(
@@ -995,6 +1041,7 @@ class GPUModelRunner(ModelRunnerBase):
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
+        # TODO:Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
             self.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
@@ -1126,7 +1173,7 @@ class GPUModelRunner(ModelRunnerBase):
         batch_size: paddle.Tensor,
         expected_decode_len: int = 1,
         in_capturing: bool = False,
-        prefill_only: bool = False,
+        capture_prefill: bool = False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -1134,13 +1181,19 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens:
             expected_decode_len: Expected number of tokens generated
             in_capturing: Is cuda graph in capturing state
-            prefill_only: Capture pure prefill for cuda graph
+            capture_prefill: Capture pure prefill for cuda graph
         """
-        self._dummy_prefill_inputs(
+
+        input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
             num_tokens=num_tokens,
             batch_size=batch_size,
             expected_decode_len=expected_decode_len,
-            prefill_only=prefill_only,
+            capture_prefill=capture_prefill,
+        )
+        self._dummy_prefill_inputs(
+            input_length_list=input_length_list,
+            max_dec_len_list=max_dec_len_list,
+            block_num=block_num,
         )
         if self.speculative_method in ["mtp"]:
             self.proposer.dummy_prefill_inputs(
@@ -1377,7 +1430,7 @@ class GPUModelRunner(ModelRunnerBase):
                     batch_size=self.parallel_config.max_num_seqs,
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
-                    prefill_only=True,
+                    capture_prefill=True,
                 )
                 logger.info(
                     f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
