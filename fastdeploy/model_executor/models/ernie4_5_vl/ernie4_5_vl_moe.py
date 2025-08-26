@@ -86,8 +86,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
     ) -> None:
         super().__init__()
         moe_quant_type = ""
-        if hasattr(fd_config, "quant_config") and fd_config.quant_config is not None:
-            moe_quant_type = getattr(fd_config.quant_config, "name", lambda: "")()
+        if hasattr(fd_config.quant_config, "moe_quant_type"):
+            moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
             moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
@@ -647,6 +647,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
+            # because we use lazy guard and is not initialized by default
+            if not self.lm_head.linear.weight._is_initialized():
+                self.lm_head.linear.weight.initialize()
             self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()

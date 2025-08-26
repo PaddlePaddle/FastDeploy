@@ -127,7 +127,11 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
             num_local_ffn_keys.append(down_proj_in_scale_key)
 
         # for EP w4a8, we need all expert's activation_scale for up_gate_proj
-        for j in range(fd_config.model_config.moe_num_experts):
+        num_experts = fd_config.model_config.moe_num_experts
+        if isinstance(num_experts, list):
+            num_experts = num_experts[0]
+
+        for j in range(num_experts):
             up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
