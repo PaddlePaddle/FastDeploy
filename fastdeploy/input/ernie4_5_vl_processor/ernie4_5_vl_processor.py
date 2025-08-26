@@ -21,8 +21,10 @@ from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
-from fastdeploy.input.ernie4_5_vl_processor import IDS_TYPE_FLAG, DataProcessor
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.utils import data_processor_logger
+
+from .process import DataProcessor
 
 
 class Ernie4_5_VLProcessor(Ernie4_5Processor):

@@ -1,7 +1,7 @@
 """
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
+# Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -14,10 +14,8 @@
 # limitations under the License.
 """
 
-from .process import DataProcessor
-from .qwen_vl_processor import QwenVLProcessor
-
 __all__ = [
-    "DataProcessor",
-    "QwenVLProcessor",
+    "IDS_TYPE_FLAG",
 ]
+
+IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}

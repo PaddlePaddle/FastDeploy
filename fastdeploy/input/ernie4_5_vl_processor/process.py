@@ -27,13 +27,12 @@ from PIL import Image
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.utils import data_processor_logger
 
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
 from .process_video import read_frames_decord, read_video_decord
 from .utils.render_timestamp import render_frame_timestamp
-
-IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
 
 
 def fancy_print(input_ids, tokenizer, image_patch_id=None):
