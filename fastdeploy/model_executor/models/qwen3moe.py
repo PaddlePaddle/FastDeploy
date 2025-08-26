@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 
 import paddle
@@ -50,6 +51,15 @@ class Qwen3MoeBlock(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
+
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+        self.tp_group = fd_config.parallel_config.tp_group
+
+        self.use_ep = self.expert_parallel_size > 1
+        self.us_tp = self.tensor_parallel_size > 1
+
         weight_key_map = {
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
             "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
@@ -73,8 +83,30 @@ class Qwen3MoeBlock(nn.Layer):
             weight_dtype="float32",
         )
 
+    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
+        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
+        # AllGather will hang when the data shapes on multi-ranks are different!
+        part_hidden_states = paddle.zeros(
+            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
+        )
+        start_offset = self.tensor_parallel_rank * token_num_per_rank
+        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
+        if end_offset > token_num:
+            end_offset = token_num
+        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
+        out = self.experts(part_hidden_states, self.gate)
+        multi_outs = []
+        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
+        out = paddle.concat(multi_outs, axis=0)
+        out = out[:token_num, :]
+        return out
+
     def forward(self, x):
-        out = self.experts(x, self.gate)
+        token_num = x.shape[0]
+        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
+            out = self.split_allgather_out(x, token_num)
+        else:
+            out = self.experts(x, self.gate)
         return out
 
     def load_state_dict(self, state_dict):
@@ -334,7 +366,10 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -348,6 +383,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -374,11 +410,15 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                     weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
                     break
                 else:
-                    if loaded_weight_name not in params_dict:
+                    model_param_name = loaded_weight_name
+                    if model_param_name not in params_dict:
                         continue
-                    param = params_dict[loaded_weight_name]
+                    param = params_dict[model_param_name]
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
@@ -410,6 +450,10 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Qwen3MoePretrainedModel(PretrainedModel):

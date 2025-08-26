@@ -29,6 +29,7 @@ from safetensors import safe_open
 from tqdm import tqdm
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.tp_utils import (
     check_tensor_parallel_prerequisites,
 )
@@ -180,8 +181,9 @@ def fast_weights_iterator(safe_tensor_list: list[str]):
     ):
         with fast_safe_open(st_file, framework="np") as f:
             for name in f.keys():
-                param = f.get_slice(name)
-                yield name, param
+                param_slice = f.get_slice(name)
+                paddle_tensor = get_tensor(param_slice)
+                yield name, paddle_tensor
 
 
 def fastsafetensors_weights_iterator(
@@ -319,33 +321,28 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
-        state_dict = load_ep_checkpoint(model_path, fd_config, return_numpy=True)
+    rank_dirs = [
+        f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
+    ]
+    if len(rank_dirs) > 1:
+        if fd_config.parallel_config.tensor_parallel_size != len(rank_dirs):
+            raise ValueError(f"Your model only supports loading with tp{len(rank_dirs)}")
+        state_dict = load_pre_sharded_checkpoint(
+            model_path,
+            fd_config.parallel_config.tensor_parallel_rank,
+            use_fastsafetensor=False,
+        )
     else:
-        rank_dirs = [
-            f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
-        ]
-        if len(rank_dirs) > 1:
-            if fd_config.parallel_config.tensor_parallel_size != len(rank_dirs):
-                raise ValueError(f"Your model only supports loading with tp{len(rank_dirs)}")
-            state_dict = load_pre_sharded_checkpoint(
-                model_path,
-                fd_config.parallel_config.tensor_parallel_rank,
-                use_fastsafetensor=False,
-            )
+        if fd_config.load_config.use_fastsafetensor and (current_platform.available() and current_platform.is_cuda()):
+            state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
+            deal_state_dict(state_dict)
         else:
-            if fd_config.load_config.use_fastsafetensor and (
-                current_platform.available() and current_platform.is_cuda()
-            ):
-                state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
-                deal_state_dict(state_dict)
-            else:
-                state_dict = load_tp_checkpoint(
-                    model_path,
-                    cls,
-                    fd_config.model_config.pretrained_config,
-                    return_numpy=return_numpy,
-                )
+            state_dict = load_tp_checkpoint(
+                model_path,
+                cls,
+                fd_config.model_config.pretrained_config,
+                return_numpy=return_numpy,
+            )
     if not state_dict:
         raise ValueError("weight not found in state_dict !")
     return state_dict

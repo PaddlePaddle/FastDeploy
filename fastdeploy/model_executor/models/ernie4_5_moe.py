@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 from functools import partial
 from typing import Dict, Union
 
@@ -102,7 +103,15 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        if moe_quant_type == "w4a8":
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+        self.tp_group = fd_config.parallel_config.tp_group
+
+        self.use_ep = self.expert_parallel_size > 1
+        self.us_tp = self.tensor_parallel_size > 1
+
+        if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -149,15 +158,6 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
             }
 
-        self.experts = FusedMoE(
-            fd_config=fd_config,
-            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
-            num_experts=fd_config.model_config.moe_num_experts,
-            top_k=fd_config.model_config.moe_k,
-            layer_idx=layer_id,
-            weight_key_map=weight_key_map,
-        )
-
         self.gate = ReplicatedLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.gate",
@@ -167,6 +167,25 @@ class Ernie4_5_MoE(nn.Layer):
             skip_quant=True,
             weight_dtype="float32",
         )
+
+        self.experts = FusedMoE(
+            fd_config=fd_config,
+            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
+            num_experts=fd_config.model_config.moe_num_experts,
+            top_k=fd_config.model_config.moe_k,
+            layer_idx=layer_id,
+            gate_correction_bias=None,
+            weight_key_map=weight_key_map,
+        )
+
+        if fd_config.model_config.moe_use_aux_free:
+            self.experts.gate_correction_bias = self.create_parameter(
+                shape=[1, fd_config.model_config.moe_num_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+        else:
+            self.experts.gate_correction_bias = None
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
@@ -180,11 +199,40 @@ class Ernie4_5_MoE(nn.Layer):
     def load_state_dict(self, state_dict):
         self.gate.load_state_dict(state_dict)
         self.experts.load_state_dict(state_dict)
+        if self.experts.gate_correction_bias is not None:
+            gate_correction_bias_tensor = state_dict.pop(self.experts.gate_correction_bias_key)
+            if self.experts.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(
+                    self.experts.gate_correction_bias.shape
+                )
+            self.experts.gate_correction_bias.set_value(gate_correction_bias_tensor)
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
+    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
+        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
+        # AllGather will hang when the data shapes on multi-ranks are different!
+        part_hidden_states = paddle.zeros(
+            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
+        )
+        start_offset = self.tensor_parallel_rank * token_num_per_rank
+        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
+        if end_offset > token_num:
+            end_offset = token_num
+        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
+        out = self.experts(part_hidden_states, self.gate)
+        multi_outs = []
+        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
+        out = paddle.concat(multi_outs, axis=0)
+        out = out[:token_num, :]
+        return out
+
     def forward(self, hidden_states: paddle.Tensor):
-        out = self.experts(hidden_states, self.gate)
+        token_num = hidden_states.shape[0]
+        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
+            out = self.split_allgather_out(hidden_states, token_num)
+        else:
+            out = self.experts(hidden_states, self.gate)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -441,12 +489,16 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.models.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         general_params_mapping = [
             # (param_name, weight_name, expert_id, shard_id)
             ("embed_tokens.embeddings", "embed_tokens", None, None),
             ("lm_head.linear", "lm_head", None, None),
+            ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
         ]
 
         expert_params_mapping = []
@@ -458,13 +510,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 param_gate_up_proj_name="experts.up_gate_proj_",
                 param_down_proj_name="experts.down_proj_",
             )
-            expert_params_mapping.append(
-                ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, "gate_bias")
-            )
-            logger.info(f"expert params mapping:{expert_params_mapping}")
         all_param_mapping = general_params_mapping + expert_params_mapping
 
         params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         expert_id = None
         shard_id = None
 
@@ -478,9 +527,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 shard_id = shard_id
                 break
             else:
-                if loaded_weight_name not in params_dict.keys():
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict.keys():
                     continue
-                param = params_dict[loaded_weight_name]
+                param = params_dict[model_param_name]
 
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
@@ -490,6 +540,8 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 weight_loader(param, loaded_weight)
 
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
             self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
@@ -522,6 +574,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):

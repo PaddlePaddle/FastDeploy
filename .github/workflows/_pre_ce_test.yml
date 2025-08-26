@@ -115,7 +115,17 @@ jobs:
 
           echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
 
-          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          echo "========================================================="
+          echo "Ensuring no stale container named ${runner_name} ..."
+          if [ "$(docker ps -a -q -f name=${runner_name})" ]; then
+            echo "Removing stale container: ${runner_name}"
+            docker rm -f ${runner_name} || true
+          fi
+
+          docker run --rm --net=host \
+          --name ${runner_name} \
+          -v $(pwd):/workspace \
+          -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
