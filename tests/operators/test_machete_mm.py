@@ -155,18 +155,12 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
             quant_type="uint4b8",
         )
 
-        # print(self.x)
-        # print(self.float_weight.cuda())
-        # print(w_q)
-        # print(w_s)
-
         out = machete_wint_mm(
             self.x,
             w_prepack=w_q,
             w_g_s=w_s,  # group scales
             weight_dtype="uint4b8",  # weight_dtype
         )
-        # print(out)
         return out.numpy()
 
     def test_weight_only_linear(self):

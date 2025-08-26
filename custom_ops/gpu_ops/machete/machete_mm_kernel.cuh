@@ -1,9 +1,5 @@
 #pragma once
 
-// #include <ATen/cuda/CUDAContext.h>
-// #include <c10/cuda/CUDAGuard.h>
-// #include <torch/all.h>
-
 // clang-format off
 // The cutlass include order matters (annoyingly)
 #include "cutlass/cutlass.h"
@@ -19,10 +15,10 @@
 #include "cutlass/gemm/kernel/gemm_universal.hpp"
 // clang-format on
 
-#include "cutlass_extensions/cute_utils.cuh"
-#include "cutlass_extensions/vllm_numeric_conversion.cuh"
+#include "utils/cute_utils.cuh"
+#include "utils/machete_numeric_conversion.cuh"
 #include "cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp"
-#include "cutlass_extensions/torch_utils.hpp"
+#include "utils/paddle_utils.hpp"
 #include "machete_collective_builder.cuh"
 #include "machete_prepacked_layout.cuh"
 #include "machete_interleaving_utils.cuh"
@@ -153,7 +149,7 @@ struct MacheteKernelTemplate {
           EVTCompute>::CollectiveOp;
 
   using CollectiveMainloop =
-      typename cutlass::gemm::collective::VLLMCollectiveBuilder<
+      typename cutlass::gemm::collective::MacheteCollectiveBuilder<
           cutlass::gemm::collective::MacheteKernelTag, ArchTag, OperatorClass,
           BTypeTuple, PrepackedLayoutB, AlignmentB, ElementA, LayoutA_Transpose,
           AlignmentA, ElementAccumulator, TileShape, ClusterShape,

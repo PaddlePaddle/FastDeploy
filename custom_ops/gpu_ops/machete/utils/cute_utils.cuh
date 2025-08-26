@@ -1,7 +1,8 @@
+// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/cute_utils.cuh
 #pragma once
 
 #include <cute/tensor.hpp>
-// #include <torch/all.h>
+
 namespace cute {
 
 ////////////////////////////////////////////////////////////////////

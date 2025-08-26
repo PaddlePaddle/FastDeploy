@@ -1,3 +1,4 @@
+// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_custom_types.cuh
 #pragma once
 
 #include "cutlass/integer_subbyte.h"
@@ -7,7 +8,7 @@ namespace cutlass {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <int Bits, int Bias, bool Signed = false>
-struct vllm_biased_integer_subbyte : public integer_subbyte<Bits, Signed> {
+struct machete_biased_integer_subbyte : public integer_subbyte<Bits, Signed> {
   using Base = integer_subbyte<Bits, Signed>;
 
   using Storage = typename Base::Storage;
@@ -22,26 +23,26 @@ struct vllm_biased_integer_subbyte : public integer_subbyte<Bits, Signed> {
   //
 
   /// No operation
-  vllm_biased_integer_subbyte() = default;
+  machete_biased_integer_subbyte() = default;
 
   /// Conversion from integer type
-  CUTLASS_HOST_DEVICE explicit vllm_biased_integer_subbyte(int value)
+  CUTLASS_HOST_DEVICE explicit machete_biased_integer_subbyte(int value)
       : Base(value) {}
-  CUTLASS_HOST_DEVICE explicit vllm_biased_integer_subbyte(unsigned value)
+  CUTLASS_HOST_DEVICE explicit machete_biased_integer_subbyte(unsigned value)
       : Base(value) {}
-  CUTLASS_HOST_DEVICE explicit vllm_biased_integer_subbyte(double value)
+  CUTLASS_HOST_DEVICE explicit machete_biased_integer_subbyte(double value)
       : Base(value) {}
 };
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // "GPTQ" types, i.e. symmetric quantization
-using vllm_uint4b8_t = vllm_biased_integer_subbyte<4, 8>;      // u4b8
-using vllm_uint8b128_t = vllm_biased_integer_subbyte<8, 128>;  // u8b128
+using machete_uint4b8_t = machete_biased_integer_subbyte<4, 8>;      // u4b8
+using machete_uint8b128_t = machete_biased_integer_subbyte<8, 128>;  // u8b128
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <int Bits, int Bias, bool Signed>
-struct sizeof_bits<vllm_biased_integer_subbyte<Bits, Bias, Signed>> {
+struct sizeof_bits<machete_biased_integer_subbyte<Bits, Bias, Signed>> {
   static constexpr int value = Bits;
 };
 

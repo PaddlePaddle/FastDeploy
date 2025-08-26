@@ -1,8 +1,9 @@
+// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/vllm_numeric_conversion.cuh
 #include "cutlass/bfloat16.h"
 #include "cutlass/half.h"
 #include "cuda_bf16.h"
 
-#include "cutlass_extensions/vllm_custom_types.cuh"
+#include "machete_custom_types.cuh"
 
 namespace cutlass {
 
@@ -32,10 +33,10 @@ NAMEOF_TYPE(int8_t)
 NAMEOF_TYPE(int32_t)
 NAMEOF_TYPE(int64_t)
 
-NAMEOF_TYPE(vllm_uint4b8_t)
+NAMEOF_TYPE(machete_uint4b8_t)
 NAMEOF_TYPE(uint4b_t)
 NAMEOF_TYPE(uint8_t)
-NAMEOF_TYPE(vllm_uint8b128_t)
+NAMEOF_TYPE(machete_uint8b128_t)
 NAMEOF_TYPE(uint32_t)
 NAMEOF_TYPE(uint64_t)
 

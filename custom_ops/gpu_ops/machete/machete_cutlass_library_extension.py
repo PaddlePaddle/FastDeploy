@@ -27,15 +27,15 @@ MACHETEDataTypeNames: dict[Union[MACHETEDataType, DataType], str] = {
     **{
         MACHETEDataType.u4b8: "u4b8",
         MACHETEDataType.u8b128: "u8b128",
-    }
+    },
 }
 
 MACHETEDataTypeTag: dict[Union[MACHETEDataType, DataType], str] = {
     **DataTypeTag,  # type: ignore
     **{
-        MACHETEDataType.u4b8: "cutlass::vllm_uint4b8_t",
-        MACHETEDataType.u8b128: "cutlass::vllm_uint8b128_t",
-    }
+        MACHETEDataType.u4b8: "cutlass::machete_uint4b8_t",
+        MACHETEDataType.u8b128: "cutlass::machete_uint8b128_t",
+    },
 }
 
 MACHETEDataTypeSize: dict[Union[MACHETEDataType, DataType], int] = {
@@ -43,7 +43,7 @@ MACHETEDataTypeSize: dict[Union[MACHETEDataType, DataType], int] = {
     **{
         MACHETEDataType.u4b8: 4,
         MACHETEDataType.u8b128: 8,
-    }
+    },
 }
 
 MACHETEDataTypeMACHETEScalarTypeTag: dict[Union[MACHETEDataType, DataType], str] = {
@@ -57,7 +57,7 @@ MACHETEDataTypeMACHETEScalarTypeTag: dict[Union[MACHETEDataType, DataType], str]
     DataType.bf16: "machete::kBfloat16",
 }
 
-MACHETEDataTypeTorchDataTypeTag: dict[Union[MACHETEDataType, DataType], str] = {
+MACHETEDataTypePaddleDataTypeTag: dict[Union[MACHETEDataType, DataType], str] = {
     DataType.u8: "paddle::DataType::UINT8",
     DataType.s8: "paddle::DataType::INT8",
     DataType.e4m3: "paddle::DataType::FLOAT8_E4M3FN",
@@ -67,15 +67,11 @@ MACHETEDataTypeTorchDataTypeTag: dict[Union[MACHETEDataType, DataType], str] = {
     DataType.f32: "paddle::DataType::FLOAT32",
 }
 
-MACHETEKernelScheduleTag: dict[Union[
-    MixedInputKernelScheduleType, KernelScheduleType], str] = {
-        **KernelScheduleTag,  # type: ignore
-        **{
-            MixedInputKernelScheduleType.TmaWarpSpecialized:
-            "cutlass::gemm::KernelTmaWarpSpecialized",
-            MixedInputKernelScheduleType.TmaWarpSpecializedPingpong:
-            "cutlass::gemm::KernelTmaWarpSpecializedPingpong",
-            MixedInputKernelScheduleType.TmaWarpSpecializedCooperative:
-            "cutlass::gemm::KernelTmaWarpSpecializedCooperative",
-        }
-    }
+MACHETEKernelScheduleTag: dict[Union[MixedInputKernelScheduleType, KernelScheduleType], str] = {
+    **KernelScheduleTag,  # type: ignore
+    **{
+        MixedInputKernelScheduleType.TmaWarpSpecialized: "cutlass::gemm::KernelTmaWarpSpecialized",
+        MixedInputKernelScheduleType.TmaWarpSpecializedPingpong: "cutlass::gemm::KernelTmaWarpSpecializedPingpong",
+        MixedInputKernelScheduleType.TmaWarpSpecializedCooperative: "cutlass::gemm::KernelTmaWarpSpecializedCooperative",
+    },
+}

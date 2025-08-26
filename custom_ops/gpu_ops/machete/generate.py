@@ -22,9 +22,9 @@ from machete_cutlass_library_extension import (
     MACHETEDataType,
     MACHETEDataTypeMACHETEScalarTypeTag,
     MACHETEDataTypeNames,
+    MACHETEDataTypePaddleDataTypeTag,
     MACHETEDataTypeSize,
     MACHETEDataTypeTag,
-    MACHETEDataTypeTorchDataTypeTag,
     MACHETEKernelScheduleTag,
     MixedInputKernelScheduleType,
     TileSchedulerTag,
@@ -91,19 +91,19 @@ paddle::Tensor mm_dispatch(MMArgs args) {
   {% set t = impl_config.types -%}
   {% set type_sig = gen_type_sig(t) -%}
   if (args.b_type == {{MACHETEScalarTypeTag[t.b]}}
-      && a_type == {{TorchTypeTag[t.a]}}
-      && out_type == {{TorchTypeTag[t.out]}}
+      && a_type == {{PaddleTypeTag[t.a]}}
+      && out_type == {{PaddleTypeTag[t.out]}}
       && {%if t.b_group_scale != void -%}
-      maybe_g_scales_type == {{TorchTypeTag[t.b_group_scale]}}
+      maybe_g_scales_type == {{PaddleTypeTag[t.b_group_scale]}}
       {%- else %}!maybe_g_scales_type{%endif%}
       && {%if t.b_group_zeropoint != void -%}
-      maybe_g_zeros_type == {{TorchTypeTag[t.b_group_zeropoint]}}
+      maybe_g_zeros_type == {{PaddleTypeTag[t.b_group_zeropoint]}}
       {%- else %}!maybe_g_zeros_type{%endif%}
       && {%if t.b_channel_scale != void -%}
-      maybe_ch_scales_type == {{TorchTypeTag[t.b_channel_scale]}}
+      maybe_ch_scales_type == {{PaddleTypeTag[t.b_channel_scale]}}
       {%- else %}!maybe_ch_scales_type{%endif%}
       && {%if t.a_token_scale != void -%}
-      maybe_tok_scales_type == {{TorchTypeTag[t.a_token_scale]}}
+      maybe_tok_scales_type == {{PaddleTypeTag[t.a_token_scale]}}
       {%- else %}!maybe_tok_scales_type{%endif%}
   ) {
       return mm_dispatch_{{type_sig}}(args);
@@ -128,13 +128,13 @@ std::vector<std::string> supported_schedules_dispatch(
     {% set t = impl_config.types -%}
     {% set schs = impl_config.schedules -%}
     if (args.b_type == {{MACHETEScalarTypeTag[t.b]}}
-        && args.a_type == {{TorchTypeTag[t.a]}}
-        && out_type == {{TorchTypeTag[t.out]}}
+        && args.a_type == {{PaddleTypeTag[t.a]}}
+        && out_type == {{PaddleTypeTag[t.out]}}
         && {%if t.b_group_scale != void -%}
-        args.maybe_group_scales_type == {{TorchTypeTag[t.b_group_scale]}}
+        args.maybe_group_scales_type == {{PaddleTypeTag[t.b_group_scale]}}
         {%- else %}!args.maybe_group_scales_type{%endif%}
         && {%if t.b_group_zeropoint != void-%}
-        args.maybe_group_zeros_type == {{TorchTypeTag[t.b_group_zeropoint]}}
+        args.maybe_group_zeros_type == {{PaddleTypeTag[t.b_group_zeropoint]}}
         {%- else %}!args.maybe_group_zeros_type{%endif%}
     ) {
         return {
@@ -210,9 +210,9 @@ paddle::Tensor prepack_B_dispatch(PrepackBArgs args) {
   auto convert_type = args.maybe_group_scales_type.value_or(args.a_type);
   {%- for t in types %}
   {% set b_type = unsigned_type_with_bitwidth(t.b_num_bits) %}
-  if (args.a_type == {{TorchTypeTag[t.a]}}
+  if (args.a_type == {{PaddleTypeTag[t.a]}}
       && args.b_type.size_bits() == {{t.b_num_bits}}
-      && convert_type == {{TorchTypeTag[t.convert]}}) {
+      && convert_type == {{PaddleTypeTag[t.convert]}}) {
     return prepack_impl<
       PrepackedLayoutBTemplate<
         {{DataTypeTag[t.a]}}, // ElementA
@@ -350,7 +350,7 @@ template_globals = {
     "void": DataType.void,
     "DataTypeTag": MACHETEDataTypeTag,
     "MACHETEScalarTypeTag": MACHETEDataTypeMACHETEScalarTypeTag,
-    "TorchTypeTag": MACHETEDataTypeTorchDataTypeTag,
+    "PaddleTypeTag": MACHETEDataTypePaddleDataTypeTag,
     "KernelScheduleTag": MACHETEKernelScheduleTag,
     "EpilogueScheduleTag": EpilogueScheduleTag,
     "TileSchedulerTag": TileSchedulerTag,

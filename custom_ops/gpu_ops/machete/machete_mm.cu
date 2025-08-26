@@ -1,8 +1,5 @@
 #include "machete_mm_launcher.cuh"
 #include "machete_prepack_launcher.cuh"
-// #include "core/scalar_type.hpp"
-
-// #include "core/registration.h"
 
 template <typename T>
 std::optional<T> ConvertToStdOptional(const paddle::optional<T>& paddle_opt) {

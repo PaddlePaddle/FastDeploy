@@ -1,8 +1,8 @@
 #pragma once
 
 #include "machete_mm_kernel.cuh"
-#include "cutlass_extensions/cute_utils.cuh"
-#include "cutlass_extensions/torch_utils.hpp"
+#include "utils/cute_utils.cuh"
+#include "utils/paddle_utils.hpp"
 
 namespace machete {
 

@@ -1,11 +1,10 @@
 #pragma once
 
-// #include <torch/all.h>
 #include <Python.h>
 
 #include "machete_mm_kernel.cuh"
-#include "cutlass_extensions/torch_utils.hpp"
-#include "scalar_type.h"
+#include "utils/paddle_utils.hpp"
+#include "utils/scalar_type.h"
 
 namespace machete {
 

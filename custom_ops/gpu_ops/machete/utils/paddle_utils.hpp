@@ -1,6 +1,6 @@
+// adapted from: https://github.com/vllm-project/vllm/blob/main/csrc/cutlass_extensions/torch_utils.hpp
 #pragma once
 
-// #include <torch/all.h>
 #include "helper.h"
 
 #include "cute/layout.hpp"
@@ -110,7 +110,7 @@ static inline auto maybe_make_cute_layout(
 }
 
 //
-//  Torch Type to Cutlass Type (equivalent_cutlass_type)
+//  Paddle dtype to Cutlass Type (equivalent_cutlass_type)
 //
 
 template <typename T>
