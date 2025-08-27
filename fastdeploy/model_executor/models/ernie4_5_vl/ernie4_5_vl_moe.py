@@ -520,19 +520,29 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = hidden_states + residual
 
         # -----------------------
-        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
-        print(f'Ernie4_5_VLModel max_seq_len: {max_seq_len}, max_seq_len_index: {max_seq_len_index}')
-        print(f'Ernie4_5_VLModel image_token_num: {image_token_num}')
-        print(f'Ernie4_5_VLModel seq_lens_this_time: {forward_meta.seq_lens_this_time}')
-        print(f'Ernie4_5_VLModel cu_seqlens_q: {forward_meta.cu_seqlens_q}')
-        hidden_states = extract_text_token_output(
-            max_seq_len,
-            max_seq_len_index.cast("int32"),
-            image_token_num.cast("int32"),
-            forward_meta.seq_lens_this_time,
-            forward_meta.cu_seqlens_q,
-            hidden_states.cast("float32"),
-        ).cast(self._dtype)
+        # extract_text_token_output operation is not needed for XPU
+        if current_platform.is_xpu():
+            if image_input is not None:
+                forward_meta.token_type_ids = token_type_ids
+        else:
+            hidden_states = hidden_states.cast("float32")
+            score_text = hidden_states
+
+            if image_input is not None:
+                token_type_ids = token_type_ids.reshape([-1])
+                text_pos_shifted = token_type_ids[:token_num] == 0
+                score_text = hidden_states[text_pos_shifted.reshape([-1])]
+
+            max_seq_len, max_seq_len_index = paddle.topk(
+                forward_meta.seq_lens_this_time.squeeze(-1), k=1)
+            hidden_states = extract_text_token_output(
+                max_seq_len,
+                max_seq_len_index.cast("int32"),
+                image_token_num,
+                forward_meta.seq_lens_this_time,
+                forward_meta.cu_seqlens_q,
+                score_text,
+            )[0].cast(self._dtype)
         # -----------------------
         print(f'Ernie4_5_VLModel extract_text_token_output hidden_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
 
