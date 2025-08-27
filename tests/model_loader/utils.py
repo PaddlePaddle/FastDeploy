@@ -17,7 +17,6 @@ import signal
 import socket
 import subprocess
 import traceback
-import warnings
 from multiprocessing import Process, Queue
 
 import pytest
@@ -179,13 +178,34 @@ def check_tokens_id_and_text_close(
                     f"\n{name_0}:\t{output_str_0!r}"
                     f"\n{name_1}:\t{output_str_1!r}"
                 )
-                with warnings.catch_warnings():
-                    warnings.simplefilter("always")
-                    warnings.warn(fail_msg, stacklevel=2)
-                break
+                raise AssertionError(fail_msg)
     else:
         if output_str_0 != output_str_1 and warn_on_mismatch:
             fail_msg = f"Test{prompt_idx}:" f"\n{name_0}:\t{output_str_0!r}" f"\n{name_1}:\t{output_str_1!r}"
-            with warnings.catch_warnings():
-                warnings.simplefilter("always")
-                warnings.warn(fail_msg, stacklevel=2)
+            raise AssertionError(fail_msg)
+
+
+def calculate_diff_rate(text1, text2):
+    """
+    Calculate the difference rate between two strings
+    based on the normalized Levenshtein edit distance.
+    Returns a float in [0,1], where 0 means identical.
+    """
+    if text1 == text2:
+        return 0.0
+
+    len1, len2 = len(text1), len(text2)
+    dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
+
+    for i in range(len1 + 1):
+        for j in range(len2 + 1):
+            if i == 0 or j == 0:
+                dp[i][j] = i + j
+            elif text1[i - 1] == text2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+
+    edit_distance = dp[len1][len2]
+    max_len = max(len1, len2)
+    return edit_distance / max_len if max_len > 0 else 0.0
