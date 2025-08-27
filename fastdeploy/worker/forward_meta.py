@@ -426,3 +426,6 @@ class XPUForwardMeta(ForwardMeta):
 
     #
     pos_emb_type: Optional[str] = 'NORMAL'
+
+    # used in VL model, record the token type, 1 for image, 0 for text
+    token_type_ids: Optional[paddle.Tensor] = None

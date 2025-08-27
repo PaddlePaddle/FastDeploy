@@ -136,8 +136,9 @@ def xpu_process_output(
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.enc_batch,
         xpu_forward_meta.dec_batch,
-        None,  # output_padding_offset
-        -1,  # max_input_length
+        None,                           # output_padding_offset
+        xpu_forward_meta.token_type_ids,# token_type_ids
+        -1,                             # max_input_length
     )
     return hidden_states
 

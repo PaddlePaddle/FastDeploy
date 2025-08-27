@@ -431,33 +431,30 @@ class Ernie4_5_VLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        # extract_text_token_output operation is not needed
-        if current_platform.is_xpu():
-            out = self.norm(hidden_states)
-            return out
-
         # -----------------------
-        hidden_states = hidden_states.cast("float32")
-        score_text = hidden_states
-
-        if image_input is not None:
-            token_type_ids = token_type_ids.reshape([-1])
-            text_pos_shifted = token_type_ids[:token_num] == 0
-            score_text = hidden_states[text_pos_shifted.reshape([-1])]
-        max_seq_len, max_seq_len_index = paddle.topk(
-            forward_meta.seq_lens_this_time.squeeze(-1), k=1)
-        hidden_states = extract_text_token_output(
-            max_seq_len,
-            max_seq_len_index.cast("int32"),
-            image_token_num,
-            forward_meta.seq_lens_this_time,
-            forward_meta.cu_seqlens_q,
-            score_text,
-        )
+        # extract_text_token_output operation is not needed for XPU
         if current_platform.is_xpu():
-            hidden_states = hidden_states.cast(self._dtype)
+            if image_input is not None:
+                forward_meta.token_type_ids = token_type_ids
         else:
-            hidden_states = hidden_states[0].cast(self._dtype)
+            hidden_states = hidden_states.cast("float32")
+            score_text = hidden_states
+
+            if image_input is not None:
+                token_type_ids = token_type_ids.reshape([-1])
+                text_pos_shifted = token_type_ids[:token_num] == 0
+                score_text = hidden_states[text_pos_shifted.reshape([-1])]
+
+            max_seq_len, max_seq_len_index = paddle.topk(
+                forward_meta.seq_lens_this_time.squeeze(-1), k=1)
+            hidden_states = extract_text_token_output(
+                max_seq_len,
+                max_seq_len_index.cast("int32"),
+                image_token_num,
+                forward_meta.seq_lens_this_time,
+                forward_meta.cu_seqlens_q,
+                score_text,
+            )[0].cast(self._dtype)
         # -----------------------
 
         out = self.norm(hidden_states)

@@ -42,6 +42,7 @@ __global__ void eb_gather_next_token(TX* src,
                                      int* encoder_seqs_lods,
                                      int* encoder_batch_map,
                                      int* decoder_batch_map,
+                                     const int* token_type_ids,
                                      int en_batch,
                                      int de_batch,
                                      int64_t copy_size) {
@@ -50,6 +51,7 @@ __global__ void eb_gather_next_token(TX* src,
   __group_shared__ int local_lods_en[MAX_BATCH + 1];
   __group_shared__ int local_map_en[MAX_BATCH];
   __group_shared__ int local_map_de[MAX_BATCH];
+  __group_shared__ int local_token_type_ids[128]; // 128 * 4B = 0.5KB
   GM2GSM_ASYNC(encoder_seqs_lods, local_lods_en, (en_batch + 1) * sizeof(int));
   if (en_batch > 0) {
     GM2GSM_ASYNC(encoder_batch_map, local_map_en, en_batch * sizeof(int));
@@ -66,7 +68,23 @@ __global__ void eb_gather_next_token(TX* src,
   for (int i = start; i < end; i++) {
     if (i < en_batch) {
       // src encode part
-      _global_ptr_ TX* cur_src = src + (local_lods_en[i + 1] - 1) * copy_size;
+      int last_text_token = local_lods_en[i + 1] - 1;
+      if (token_type_ids != nullptr) {
+        int token_type = token_type_ids[last_text_token]; // GM2LM, size = 1
+        // token_type: 0 for text and 1 for image
+        if (__builtin_expect(token_type == 0, 1)) {
+          ; // branch prediction
+        } else {
+          // TODU(lilujia): to be optimized with aligned-gm2lm and vectorization
+          for (int id = local_lods_en[i + 1] - 1; id >= local_lods_en[i]; id--) {
+            if (token_type_ids[id] == 0) {
+              last_text_token = id;
+              break;
+            }
+          }
+        }
+      }
+      _global_ptr_ TX* cur_src = src + last_text_token * copy_size;
       _global_ptr_ TY* cur_dst = dst + local_map_en[i] * copy_size;
       do_memcpy_1d<TX, TY>(cur_src, cur_dst, copy_size);
     } else {
@@ -85,6 +103,7 @@ __global__ void eb_gather_next_token(TX* src,
       int* encoder_seqs_lods,                            \
       int* encoder_batch_map,                            \
       int* decoder_batch_map,                            \
+      const int* token_type_ids,                         \
       int en_batch,                                      \
       int de_batch,                                      \
       int64_t copy_size);
