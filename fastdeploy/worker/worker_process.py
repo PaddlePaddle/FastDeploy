@@ -34,6 +34,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
@@ -542,6 +543,12 @@ def parse_args():
         help="Configation of Graph optimization backend.",
     )
     parser.add_argument(
+        "--moba_attention_config",
+        type=json.loads,
+        default=None,
+        help="Configation of moba attention.",
+    )
+    parser.add_argument(
         "--guided_decoding_backend",
         type=str,
         default="off",
@@ -592,6 +599,12 @@ def parse_args():
         help="The ips of multinode deployment.",
     )
 
+    parser.add_argument(
+        "--lm_head_fp32",
+        action="store_true",
+        help="Flag to specify dtype of lm_head as FP32",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -639,6 +652,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
+
+    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -719,6 +734,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
+        moba_attention_config=moba_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 
