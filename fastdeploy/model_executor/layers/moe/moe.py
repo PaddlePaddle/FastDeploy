@@ -23,7 +23,11 @@ from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.utils import slice_fn
+from fastdeploy.model_executor.utils import (
+    default_weight_loader,
+    set_weight_attrs,
+    slice_fn,
+)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
@@ -167,10 +171,14 @@ class FusedMoE(nn.Layer):
                     and is_supported_moe_backend is not None
                     and is_supported_moe_backend(self.quant_method)
                 ):
-                    self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+                    self.quant_method.create_weights(
+                        self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
+                    )
             else:
                 # w_fp16 a_fp16
-                self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+                self.quant_method.create_weights(
+                    self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
+                )
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
@@ -217,6 +225,9 @@ class FusedMoE(nn.Layer):
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         dim = -1 if shard_dim else 0
         if self.tp_size > 1:
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
@@ -228,7 +239,7 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, shard_dim, shard_offset, shard_size)
 
-        loaded_weight = get_tensor(loaded_weight)
+        # loaded_weight = get_tensor(loaded_weight)
 
         expert_param = param[expert_id - self.expert_id_offset]
         param_shard_size = expert_param.shape[dim] // 2
@@ -249,14 +260,17 @@ class FusedMoE(nn.Layer):
             )
 
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
+        # if expert_param.shape != loaded_weight.shape:
+        #     loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
         expert_param.copy_(loaded_weight, False)
 
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         if self.tp_size > 1 and shard_dim is not None:
             dim = -1 if shard_dim else 0
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
@@ -273,8 +287,8 @@ class FusedMoE(nn.Layer):
             # for dyn quant
             param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
+        # if expert_param.shape != loaded_weight.shape:
+        #     loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
@@ -378,11 +392,25 @@ class FusedMoE(nn.Layer):
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
+        set_weight_attrs(
+            self.up_gate_proj_weight,
+            {
+                "weight_loader": default_weight_loader(self.fd_config),
+                "model_format": self.fd_config.model_config.model_format,
+            },
+        )
         # down_proj parameters
         self.down_proj_weight = self.create_parameter(
             shape=down_proj_weight_shape,
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        set_weight_attrs(
+            self.down_proj_weight,
+            {
+                "weight_loader": default_weight_loader(self.fd_config),
+                "model_format": self.fd_config.model_config.model_format,
+            },
         )
 
     def init_weight_only_scale(self):

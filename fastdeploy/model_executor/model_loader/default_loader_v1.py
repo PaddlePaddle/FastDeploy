@@ -48,7 +48,17 @@ class DefaultModelLoaderV1(BaseModelLoader):
     def load_weights(self, model, fd_config: FDConfig) -> None:
         _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
         weights_iterator = fast_weights_iterator(safetensor_files)
-        model.load_weights(weights_iterator)
+
+        def print_weights_iterator(iterator):
+            for weight_name, weight_tensor in iterator:
+                print(f"Loading weight: {weight_name}")
+                print(f"Weight shape: {weight_tensor.shape}")
+                print(f"Weight dtype: {weight_tensor.dtype}")
+                print(f"Weight data (first 5 elements): {weight_tensor.flatten}")
+                print("---")
+                yield weight_name, weight_tensor
+
+        model.load_weights(print_weights_iterator(weights_iterator))
         self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
@@ -71,4 +81,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             return model
         self.load_weights(model, fd_config)
+        for key, value in enumerate(model.named_parameters()):
+            print("key", key)
+            print("value", value)
         return model

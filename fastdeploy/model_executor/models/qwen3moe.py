@@ -75,7 +75,10 @@ class Qwen3MoeBlock(nn.Layer):
         )
 
     def forward(self, x):
+        print("self.gate", self.gate)
+        print("x", x)
         out = self.experts(x, self.gate)
+        print("out", out)
         return out
 
     def load_state_dict(self, state_dict):
