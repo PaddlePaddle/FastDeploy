@@ -379,7 +379,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
