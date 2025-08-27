@@ -477,6 +477,7 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
+            "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
