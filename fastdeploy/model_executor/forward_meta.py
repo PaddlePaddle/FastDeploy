@@ -197,6 +197,8 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
+    # used in VL model, record the token type, 1 for image, 0 for text
+    token_type_ids: Optional[paddle.Tensor] = None
 
 
 @dataclass
