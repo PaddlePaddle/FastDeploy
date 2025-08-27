@@ -26,6 +26,7 @@ __global__ void process_splitwise_prefill(
     int64_t* step_idx,
     bool* not_need_stop,
     bool* batch_drop,
+    int64_t* pre_ids,
     const int64_t* accept_tokens,
     const int* accept_num,
     const int* base_model_seq_lens_this_time,
@@ -36,11 +37,12 @@ __global__ void process_splitwise_prefill(
     const bool* base_model_is_block_step,
     int64_t* base_model_draft_tokens,
     const int bsz,
-    const int max_draft_token,
+    const int num_model_step,
     const int accept_tokens_len,
     const int draft_tokens_len,
     const int input_ids_len,
-    const int base_model_draft_tokens_len) {
+    const int base_model_draft_tokens_len,
+    const int pre_ids_len) {
   typedef cub::BlockReduce<int64_t, THREADBLOCK_SIZE> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   int64_t not_stop_flag = 0;
@@ -93,6 +95,7 @@ __global__ void draft_model_preprocess_kernel(
     int64_t* step_idx,
     bool* not_need_stop,
     bool* batch_drop,
+    int64_t* pre_ids,
     const int64_t* accept_tokens,
     const int* accept_num,
     const int* base_model_seq_lens_this_time,
@@ -103,11 +106,12 @@ __global__ void draft_model_preprocess_kernel(
     const bool* base_model_is_block_step,
     int64_t* base_model_draft_tokens,
     const int bsz,
-    const int max_draft_token,
+    const int num_model_step,
     const int accept_tokens_len,
     const int draft_tokens_len,
     const int input_ids_len,
-    const int base_model_draft_tokens_len) {
+    const int base_model_draft_tokens_len,
+    const int pre_ids_len) {
   typedef cub::BlockReduce<int64_t, THREADBLOCK_SIZE> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   int64_t not_stop_flag = 0;
@@ -124,6 +128,7 @@ __global__ void draft_model_preprocess_kernel(
         base_model_draft_tokens + tid * base_model_draft_tokens_len;
     auto base_model_seq_len_decoder = base_model_seq_lens_decoder[tid];
     const int32_t base_model_seq_len_this_time = base_model_seq_lens_this_time[tid];
+    auto* pre_ids_now = pre_ids + tid * pre_ids_len;
 #pragma unroll
     for (int i = 1; i < base_model_draft_tokens_len; i++) {
       base_model_draft_tokens_now[i] = -1;
@@ -137,14 +142,12 @@ __global__ void draft_model_preprocess_kernel(
     if (!(base_model_stop_flags[tid] || batch_drop[tid])) {
       not_stop_flag = 1;
       // 1. first token
-      if (base_model_step_idx_now == 0) {
-        seq_lens_this_time[tid] = 0;
-        not_stop_flag = 0;
-      } else if (seq_lens_encoder[tid] > 0) {
+      if (seq_lens_encoder[tid] > 0) {
         // Can be extended to first few tokens
         int seq_len_encoder = seq_lens_encoder[tid];
         stop_flags[tid] = false;
         int64_t base_model_first_token = accept_tokens_now[0];
+        pre_ids_now[0] = base_model_first_token;
         int position = seq_len_encoder;
         if (TRCUNCATE_FIRST_TOKEN) {
           input_ids_now[position - 1] = base_model_first_token;
@@ -161,34 +164,17 @@ __global__ void draft_model_preprocess_kernel(
           step_idx[tid] = base_model_step_idx[tid] - base_model_seq_len_this_time;
         } else {
           // 2: Last base model generated token and first MTP token
-          seq_lens_decoder[tid] -= (base_model_seq_len_this_time - 2);
-          step_idx[tid] -= (base_model_seq_len_this_time - 2);
+          seq_lens_decoder[tid] -= num_model_step - 1;
+          step_idx[tid] -= num_model_step - 1;
         }
         for (int i = 0; i < accept_num_now; i++) {
           draft_tokens_now[i] = accept_tokens_now[i];
+          const int pre_id_pos = base_model_step_idx[tid] - (accept_num_now - i);
+          const int64_t accept_token = accept_tokens_now[i];
+          pre_ids_now[pre_id_pos] = accept_token;
         }
         seq_lens_this_time[tid] = accept_num_now;
       }
-      // (liuzichang): Temperary Reserved for debug
-      // else if (accept_num_now <=
-      //            max_draft_token) /*Accept partial draft tokens*/ {
-      //   // Base Model reject stop
-      //   if (stop_flags[tid]) {
-      //     stop_flags[tid] = false;
-      //     seq_lens_decoder[tid] = base_model_seq_lens_decoder[tid];
-      //     step_idx[tid] = base_model_step_idx[tid];
-      //   } else {
-      //     seq_lens_decoder[tid] -= max_draft_token - accept_num_now;
-      //     step_idx[tid] -= max_draft_token - accept_num_now;
-      //   }
-      //   int64_t modified_token = accept_tokens_now[accept_num_now - 1];
-      //   draft_tokens_now[0] = modified_token;
-      //   seq_lens_this_time[tid] = 1;
-
-      // } else /*Accept all draft tokens*/ {
-      //   draft_tokens_now[1] = accept_tokens_now[max_draft_token];
-      //   seq_lens_this_time[tid] = 2;
-      // }
     } else {
       stop_flags[tid] = true;
       seq_lens_this_time[tid] = 0;
@@ -215,6 +201,7 @@ void DispatchRunner(
     int64_t* step_idx,
     bool* not_need_stop,
     bool* batch_drop,
+    int64_t* pre_ids,
     const int64_t* accept_tokens,
     const int* accept_num,
     const int* base_model_seq_lens_this_time,
@@ -225,11 +212,12 @@ void DispatchRunner(
     const bool* base_model_is_block_step,
     int64_t* base_model_draft_tokens,
     const int bsz,
-    const int max_draft_token,
+    const int num_model_step,
     const int accept_tokens_len,
     const int draft_tokens_len,
     const int input_ids_len,
     const int base_model_draft_tokens_len,
+    const int pre_ids_len,
     const bool splitwise_prefill) {
   constexpr int BlockSize = 512;
   if (splitwise_prefill) {
@@ -244,6 +232,7 @@ void DispatchRunner(
               step_idx,
               not_need_stop,
               batch_drop,
+              pre_ids,
               accept_tokens,
               accept_num,
               base_model_seq_lens_this_time,
@@ -254,11 +243,12 @@ void DispatchRunner(
               base_model_is_block_step,
               base_model_draft_tokens,
               bsz,
-              max_draft_token,
+              num_model_step,
               accept_tokens_len,
               draft_tokens_len,
               input_ids_len,
-              base_model_draft_tokens_len);
+              base_model_draft_tokens_len,
+              pre_ids_len);
   } else {
       draft_model_preprocess_kernel<BlockSize, TRCUNCATE_FIRST_TOKEN>
           <<<1, BlockSize, 0, stream>>>(
@@ -271,6 +261,7 @@ void DispatchRunner(
               step_idx,
               not_need_stop,
               batch_drop,
+              pre_ids,
               accept_tokens,
               accept_num,
               base_model_seq_lens_this_time,
@@ -281,11 +272,12 @@ void DispatchRunner(
               base_model_is_block_step,
               base_model_draft_tokens,
               bsz,
-              max_draft_token,
+              num_model_step,
               accept_tokens_len,
               draft_tokens_len,
               input_ids_len,
-              base_model_draft_tokens_len);
+              base_model_draft_tokens_len,
+              pre_ids_len);
   }
 }
 
@@ -300,6 +292,7 @@ void DispatchTokenMode(
     int64_t* step_idx,
     bool* not_need_stop,
     bool* batch_drop,
+    int64_t* pre_ids,
     const int64_t* accept_tokens,
     const int* accept_num,
     const int* base_model_seq_lens_this_time,
@@ -310,11 +303,12 @@ void DispatchTokenMode(
     const bool* base_model_is_block_step,
     int64_t* base_model_draft_tokens,
     const int bsz,
-    const int max_draft_token,
+    const int num_model_step,
     const int accept_tokens_len,
     const int draft_tokens_len,
     const int input_ids_len,
     const int base_model_draft_tokens_len,
+    const int pre_ids_len,
     const bool truncate_first_token,
     const bool splitwise_prefill) {
   if (truncate_first_token) {
@@ -329,6 +323,7 @@ void DispatchTokenMode(
               step_idx,
               not_need_stop,
               batch_drop,
+              pre_ids,
               accept_tokens,
               accept_num,
               base_model_seq_lens_this_time,
@@ -339,11 +334,12 @@ void DispatchTokenMode(
               base_model_is_block_step,
               base_model_draft_tokens,
               bsz,
-              max_draft_token,
+              num_model_step,
               accept_tokens_len,
               draft_tokens_len,
               input_ids_len,
               base_model_draft_tokens_len,
+              pre_ids_len,
               splitwise_prefill
     );
   } else {
@@ -358,6 +354,7 @@ void DispatchTokenMode(
               step_idx,
               not_need_stop,
               batch_drop,
+              pre_ids,
               accept_tokens,
               accept_num,
               base_model_seq_lens_this_time,
@@ -368,11 +365,12 @@ void DispatchTokenMode(
               base_model_is_block_step,
               base_model_draft_tokens,
               bsz,
-              max_draft_token,
+              num_model_step,
               accept_tokens_len,
               draft_tokens_len,
               input_ids_len,
               base_model_draft_tokens_len,
+              pre_ids_len,
               splitwise_prefill
     );
   }
@@ -390,6 +388,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
                           const paddle::Tensor& batch_drop,
+                          const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -399,13 +398,14 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& base_model_stop_flags,
                           const paddle::Tensor& base_model_is_block_step,
                           const paddle::Tensor& base_model_draft_tokens,
-                          const int max_draft_token,
+                          const int num_model_step,
                           const bool truncate_first_token,
                           const bool splitwise_prefill) {
   int real_bsz = seq_lens_this_time.shape()[0];
   int accept_tokens_len = accept_tokens.shape()[1];
   int input_ids_len = input_ids.shape()[1];
   int draft_tokens_len = draft_tokens.shape()[1];
+  int pre_ids_len = pre_ids.shape()[1];
   auto cu_stream = seq_lens_this_time.stream();
   constexpr int BlockSize = 512;
   int base_model_draft_tokens_len = base_model_draft_tokens.shape()[1];
@@ -423,6 +423,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
               const_cast<int64_t*>(step_idx.data<int64_t>()),
               const_cast<bool*>(not_need_stop_gpu.data<bool>()),
               const_cast<bool*>(batch_drop.data<bool>()),
+              const_cast<int64_t*>(pre_ids.data<int64_t>()),
               accept_tokens.data<int64_t>(),
               accept_num.data<int>(),
               base_model_seq_lens_this_time.data<int>(),
@@ -433,11 +434,12 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
               base_model_is_block_step.data<bool>(),
               const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
               real_bsz,
-              max_draft_token,
+              num_model_step,
               accept_tokens_len,
               draft_tokens_len,
               input_ids_len,
               base_model_draft_tokens_len,
+              pre_ids_len,
               truncate_first_token,
               splitwise_prefill);
 
@@ -458,6 +460,7 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
              "step_idx",
              "not_need_stop",
              "batch_drop",
+             "pre_ids",
              "accept_tokens",
              "accept_num",
              "base_model_seq_lens_this_time",
@@ -475,8 +478,9 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
               "seq_lens_decoder_out",
               "step_idx_out",
               "not_need_stop_out",
-              "batch_drop_out"})
-    .Attrs({"max_draft_token: int", "truncate_first_token: bool", "splitwise_prefill: bool"})
+              "batch_drop_out",
+              "pre_ids_out"})
+    .Attrs({"num_model_step: int", "truncate_first_token: bool", "splitwise_prefill: bool"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
                     {"input_ids", "input_ids_out"},
                     {"stop_flags", "stop_flags_out"},
@@ -485,5 +489,6 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"step_idx", "step_idx_out"},
                     {"not_need_stop", "not_need_stop_out"},
-                    {"batch_drop", "batch_drop_out"}})
+                    {"batch_drop", "batch_drop_out"},
+                    {"pre_ids", "pre_ids_out"}})
     .SetKernelFn(PD_KERNEL(DraftModelPreprocess));

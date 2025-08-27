@@ -153,6 +153,9 @@ include_stop_str_in_output: Optional[bool] = False
 bad_words: Optional[List[str]] = None
 # 禁止生成的词汇列表（例如敏感词），模型会避免输出这些词（默认 None 表示不限制）。
 
+bad_words_token_ids: Optional[List[int]] = None
+# 禁止生成的token id列表，模型会避免输出这些词（默认 None 表示不限制）。
+
 repetition_penalty: Optional[float] = None
 # 重复惩罚系数，降低已生成 token 的重复概率（>1.0 抑制重复，<1.0 鼓励重复，默认 None 表示禁用）。
 ```

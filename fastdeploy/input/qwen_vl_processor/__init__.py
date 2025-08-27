@@ -14,6 +14,10 @@
 # limitations under the License.
 """
 
-from .tokenizer_vl import ErnieVLTokenizer
+from .process import DataProcessor
+from .qwen_vl_processor import QwenVLProcessor
 
-__all__ = ["ErnieVLTokenizer"]
+__all__ = [
+    "DataProcessor",
+    "QwenVLProcessor",
+]

@@ -26,7 +26,7 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
@@ -276,6 +276,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -321,6 +322,16 @@ class MetaxModelRunner(ModelRunnerBase):
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
+
+            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
+                bad_words_len = len(request.get("bad_words_token_ids"))
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                    request.get("bad_words_token_ids"), dtype="int64"
+                )
+            else:
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
