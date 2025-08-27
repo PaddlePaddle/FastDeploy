@@ -111,7 +111,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const int kv_token_num, const int max_seq_len,
-    const std::string &cache_quant_type);
+    const std::string &cache_quant_type,
+    const bool rope_3d);
 
 std::vector<paddle::Tensor>
 PreCacheLenConcat(const paddle::Tensor &seq_lens_decoder,
@@ -783,15 +784,15 @@ void SpeculateStepPaddle(
     const int max_draft_tokens);
 
 void MergePrefillDecodeOutput(
-        const paddle::Tensor &encoder_res,
-        const paddle::Tensor &decoder_res,
-        const paddle::Tensor &seq_lens_encoder,
-        const paddle::Tensor &seq_lens_decoder,
-        const paddle::Tensor &seq_lens_this_time,
-        const paddle::Tensor &cu_seq_q,
-        const int head_num,
-        const int head_dim,
-        const int max_token);
+    const paddle::Tensor &encoder_res,
+    const paddle::Tensor &decoder_res,
+    const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &cu_seq_q,
+    const int head_num,
+    const int head_dim,
+    const int max_token);
 
 std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
                                                const paddle::Tensor &top_p,
