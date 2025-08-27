@@ -294,6 +294,7 @@ class ReplicatedLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            model_format=fd_config.model_config.model_format,
         )
 
 

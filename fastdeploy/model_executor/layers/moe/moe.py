@@ -260,8 +260,9 @@ class FusedMoE(nn.Layer):
             )
 
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        # if expert_param.shape != loaded_weight.shape:
-        #     loaded_weight = loaded_weight.transpose([1, 0])
+        if current_platform.is_xpu() or current_platform.is_gcu():
+            if expert_param.shape != loaded_weight.shape:
+                loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
@@ -287,8 +288,9 @@ class FusedMoE(nn.Layer):
             # for dyn quant
             param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        # if expert_param.shape != loaded_weight.shape:
-        #     loaded_weight = loaded_weight.transpose([1, 0])
+        if current_platform.is_xpu or current_platform.is_gcu():
+            if expert_param.shape != loaded_weight.shape:
+                loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
