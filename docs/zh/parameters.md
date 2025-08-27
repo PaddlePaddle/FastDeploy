@@ -46,6 +46,7 @@
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
 | ```tool_call_parser```       | `str`      | 指定要使用的function call解析器，以便从模型输出中抽取 function call内容|
 | ```tool_parser_plugin```       | `str`      | 指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式|
+| ```lm_head_fp32```       | `bool`      | 指定lm_head层的类型为 FP32 |
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 

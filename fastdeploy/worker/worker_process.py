@@ -624,6 +624,22 @@ def parse_args():
         help="The format of the model weights to load. default/new_loader.",
     )
 
+<<<<<<< HEAD
+=======
+    parser.add_argument(
+        "--ips",
+        type=str,
+        default=None,
+        help="The ips of multinode deployment.",
+    )
+
+    parser.add_argument(
+        "--lm_head_fp32",
+        action="store_true",
+        help="Flag to specify dtype of lm_head as FP32",
+    )
+
+>>>>>>> ce9c0917 ([Precision] Support lm_head layer running in float32 (#3597))
     args = parser.parse_args()
     return args
 
