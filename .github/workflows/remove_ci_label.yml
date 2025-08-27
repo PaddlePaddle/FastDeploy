@@ -2,7 +2,9 @@ name: Remove skip labels on new PR commits
 
 on:
   pull_request:
-    types: [synchronize]   # PR 有新提交时触发
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+permissions: read-all
 
 jobs:
   remove-skip-labels:
