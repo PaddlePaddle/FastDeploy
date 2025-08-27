@@ -22,8 +22,8 @@ jobs:
 
             for (const label of skipLabels) {
               await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
                 issue_number: prNumber,
                 name: label
               });
