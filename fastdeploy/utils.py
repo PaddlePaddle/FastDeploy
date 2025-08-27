@@ -411,7 +411,7 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
         # Get declared parameters
         defined_actions = {action.dest: action for action in self._actions}
         filtered_config = {k: v for k, v in config.items() if k in defined_actions}
-        
+
         # Set parameters
         if namespace is None:
             namespace = argparse.Namespace()
