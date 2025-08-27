@@ -28,11 +28,6 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethod
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
-
-import os
-
-from safetensors import safe_open
-
 from fastdeploy.model_executor.layers.utils import get_tensor
 
 
@@ -117,42 +112,6 @@ class Attention(nn.Layer):
             self.q_norm_key = f"{self.prefix}.q_norm"
             self.k_norm_key = f"{self.prefix}.k_norm"
             self.init_weight()
-
-        if fd_config.moba_attention_config is not None:
-            mlp_weight_path = os.path.join(
-                fd_config.model_config.model, fd_config.moba_attention_config.mlp_weight_name
-            )
-            self.moba_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
-            moba_block_size = fd_config.moba_attention_config.moba_block_size
-            moba_max_seq_length = fd_config.moba_attention_config.moba_max_seq_length
-            if self.moba_use_mlp:
-                mlp_weight = {}
-                with safe_open(mlp_weight_path, framework="np", device="cpu") as f:
-                    for key_name in f.keys():
-                        weight = f.get_tensor(key_name)
-                        weight = paddle.Tensor(weight, zero_copy=True)
-                        weight = weight._copy_to(paddle.framework._current_expected_place(), False)
-                        mlp_weight[key_name] = weight
-
-                if self.layer_id < fd_config.model_config.num_hidden_layers - 1:
-                    self.attn_gate_weight = mlp_weight[
-                        f"ernie.layers.{self.layer_id}.self_attn.attn_gate.weight"
-                    ].astype(paddle.get_default_dtype())[
-                        fd_config.parallel_config.tensor_parallel_rank
-                        * self.kv_num_heads : (fd_config.parallel_config.tensor_parallel_rank + 1)
-                        * self.kv_num_heads
-                    ]
-                    assert self.attn_gate_weight.shape[1] % moba_block_size == 0
-
-            self.cache_k_block_means = paddle.zeros(
-                [
-                    fd_config.parallel_config.max_num_seqs,
-                    moba_max_seq_length // moba_block_size,
-                    self.kv_num_heads,
-                    self.head_dim,
-                ],
-                dtype=paddle.get_default_dtype(),
-            )
 
     def init_weight(self):
         self.q_norm_weight = self.create_parameter(
