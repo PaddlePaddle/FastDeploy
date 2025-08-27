@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import time
 from typing import Tuple
 
@@ -106,6 +107,15 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
+        vocab_file_names = [
+            "tokenizer.model",
+            "spm.model",
+            "ernie_token_100k.model",
+        ]
+        for i in range(len(vocab_file_names)):
+            if os.path.exists(os.path.join(fd_config.model_config.model, vocab_file_names[i])):
+                Ernie4_5Tokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
+                break
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
@@ -726,7 +736,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
     )
-    update_fd_config_for_mm(fd_config)
+    # update_fd_config_for_mm(fd_config)
 
     return fd_config
 
@@ -772,7 +782,4 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
-    from fastdeploy.plugins.model_register import load_model_register_plugins
-
-    load_model_register_plugins()
     run_worker_proc()

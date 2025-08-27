@@ -116,4 +116,9 @@ else:
             print(f"module {__package__} has no attribute {name}")
 
 
+from fastdeploy.plugins.model_register import load_model_register_plugins
+
+load_model_register_plugins()
+
+
 __all__ = ["LLM", "SamplingParams", "ModelRegistry", "version"]

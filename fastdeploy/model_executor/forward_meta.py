@@ -79,6 +79,8 @@ class ForwardMeta:
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask
     attn_mask: Optional[paddle.Tensor] = None
+    # Attention mask offset
+    attn_mask_offsets: Optional[paddle.Tensor] = None
     # Decoder batch id. Used by attention backend.
     decoder_batch_ids: Optional[paddle.Tensor] = None
     # Tile ID for each batch of the decoder. Used by attention backend.
