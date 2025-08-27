@@ -91,3 +91,11 @@ class GraphOptWrapper:
 
     def __call__(self, **kwargs):
         return self.graph_opt_backend(**kwargs)
+
+    def clear_grpah_opt_backend(self, fd_config):
+        """ """
+        # TODO(gongshaotian): Resolve the bug of static graphs not being able to update weights
+        assert (
+            fd_config.graph_opt_config.graph_opt_level < 1
+        ), "Currently unable to update weights in static graph mode."
+        self.graph_opt_backend.clear_cudagraph_piecewise_backend()

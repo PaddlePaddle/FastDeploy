@@ -1,0 +1,189 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_primitive_template.h"
+#include "xpu/kernel/cluster_simd.h"
+#include "xpu/kernel/xtdk_io.h"
+namespace xpu3 {
+namespace plugin {
+
+static inline __device__ int v_reduce(int32x16_t v) {
+  auto v0 = vsrlp_int32x16(256, v);
+  v = vvadd_int32x16(v0, v);
+  v0 = vsrlp_int32x16(128, v);
+  v = vvadd_int32x16(v0, v);
+  v0 = vsrlp_int32x16(64, v);
+  v = vvadd_int32x16(v0, v);
+  v0 = vsrlp_int32x16(32, v);
+  v = vvadd_int32x16(v0, v);
+  int res;
+  res = vextract_int32x16(v);
+  return res;
+}
+
+__device__ int do_calc(int64_t* lmptr, int read_len) {
+  int res = 0;
+  int32x16_t v0;
+  int32x16_t v1;
+  int32x16_t v2 = {0};
+  int* lmptr_i16 = (int*)lmptr;
+  int rounddown_size = rounddown16(read_len * 2);
+  int comp = -1;
+  int i = 0;
+  for (; i < rounddown_size; i += 16) {
+    v0 = vload_lm_int32x16(lmptr_i16 + i);
+    v1 = vload_lm_int32x16(lmptr_i16 + i);
+    unsigned int mask0 =
+        static_cast<unsigned int>(sveq_int32x16_mz(comp, v0, 0xAAAA));
+    unsigned int mask1 =
+        static_cast<unsigned int>(sveq_int32x16_mz(comp, v1, 0x5555));
+    mask1 = mask1 << 1;
+    unsigned int mask2 = (mask0 & 0xFFFFFFFF) & (mask1 & 0xFFFFFFFF);
+    v2 = svadd_int32x16_mh(1, v2, v2, mask2);
+  }
+  res = i / 2 - v_reduce(v2);
+  mfence_lm();
+  for (int j = i / 2; j < read_len; j++) {
+    if (lmptr[j] != -1) {
+      res += 1;
+    }
+  }
+  return res;
+}
+
+__global__ void draft_model_postprocess(const int64_t* base_model_draft_tokens,
+                                        int* base_model_seq_lens_this_time,
+                                        const int* base_model_seq_lens_encoder,
+                                        const bool* base_model_stop_flags,
+                                        int bsz,
+                                        int base_model_draft_token_len) {
+  int cid = core_id();
+  int ncores = core_num();
+  int nclusters = cluster_num();
+  int nthreads = ncores * nclusters;
+  const int max_sm_len = 256 * 1024 / sizeof(int);
+  const int core_limit_row = max_sm_len / ncores;
+  const int clusetr_limit_row = max_sm_len * nclusters;
+  int bsz_start_cluster;
+  int bsz_end_cluster;
+  int bsz_start_core;
+  int bsz_end_core;
+
+  int row_to_partition = min(bsz, clusetr_limit_row);
+  // cluster partition
+  partition(cluster_id(),
+            nclusters,
+            row_to_partition,
+            1,
+            &bsz_start_cluster,
+            &bsz_end_cluster);
+  if (bsz_start_cluster >= bsz_end_cluster) {
+    return;
+  }
+  int rows_cluster =
+      bsz_end_cluster - bsz_start_cluster;  // total rows for a cluster
+  // core partition
+  partition(
+      core_id(), core_num(), rows_cluster, 1, &bsz_start_core, &bsz_end_core);
+  __shared__ int base_model_sm[max_sm_len];
+  const int LM_SIZE = 3072;
+  const int BUFSIZE = LM_SIZE / sizeof(int64_t);
+  __simd__ int64_t output_lm[BUFSIZE * 2];
+  DoublePtr<BUFSIZE, LmPtr<int64_t>> local_base_model(
+      (LmPtr<int64_t>((int64_t*)output_lm)));
+  const int BSZ_BUF = 16;
+  __simd__ bool base_model_stop_lm[BSZ_BUF];
+  __simd__ int base_model_seq_lm[BSZ_BUF];
+
+  bsz_start_core += bsz_start_cluster;
+  bsz_end_core += bsz_start_cluster;
+  int read_len_sm = 0;
+  int offset_loop = 0;
+  int offset_cluster = 0;
+  int cur_row_to_all_clusetr = 0;
+  for (int limit_loop = 0; limit_loop < roundup_div(bsz, clusetr_limit_row);
+       limit_loop += 1) {
+    offset_loop = limit_loop * clusetr_limit_row;
+    if (bsz_start_core + offset_loop >= bsz) {
+      break;
+    }
+    cur_row_to_all_clusetr = min(bsz - offset_loop, clusetr_limit_row);
+    offset_cluster = 0;
+    //计算offset_cluster
+    for (int start_cluster = 0; start_cluster < cluster_id();
+         start_cluster += 1) {
+      offset_cluster += (rounddown_div(cur_row_to_all_clusetr, nclusters) +
+                         (start_cluster < cur_row_to_all_clusetr % nclusters));
+    }
+    if (core_id() == 0) {
+      if (cur_row_to_all_clusetr < nclusters) {
+        // bsz很小， 每个cluster平均分不到一个，读一个长度就好
+        read_len_sm = 1;
+      } else {
+        // bsz足够大， 每个cluster读一部分， 最大个数max_sm_len
+        read_len_sm =
+            min(max_sm_len,
+                rounddown_div(cur_row_to_all_clusetr, nclusters) +
+                    (cluster_id() < (cur_row_to_all_clusetr % nclusters)));
+      }
+      GM2SM(base_model_seq_lens_this_time + offset_loop + offset_cluster,
+            base_model_sm + offset_cluster,
+            sizeof(int) * read_len_sm);
+    }
+    cur_row_to_all_clusetr -= clusetr_limit_row;
+    sync_cluster();
+    for (int bsz_index = bsz_start_core + offset_loop;
+         (bsz_index < bsz_end_core + offset_loop) && (bsz_index < bsz);
+         bsz_index += 1) {
+      int bsz_offset = bsz_index - bsz_start_core;
+      if (bsz_offset % BSZ_BUF == 0) {
+        int64_t readm = min(bsz - bsz_index, BSZ_BUF);
+        GM2LM_ASYNC(base_model_stop_flags + bsz_index,
+                    base_model_stop_lm,
+                    sizeof(bool) * readm);
+        GM2LM(base_model_seq_lens_encoder + bsz_index,
+              base_model_seq_lm,
+              sizeof(int) * readm);
+      }
+      if (!base_model_stop_lm[bsz_offset % BSZ_BUF] &&
+          (base_model_seq_lm[bsz_offset % BSZ_BUF] == 0)) {
+        // 计算有效token数量（非-1的token）
+        int token_num = 0;
+        int j = 0;
+        int read_len = min(base_model_draft_token_len - j, BUFSIZE);
+        local_base_model.gm_load(base_model_draft_tokens +
+                                     bsz_index * base_model_draft_token_len + j,
+                                 read_len);
+        for (; j < base_model_draft_token_len; j += BUFSIZE) {
+          int next_idx = j + BUFSIZE;
+          int read_len_next =
+              min(base_model_draft_token_len - next_idx, BUFSIZE);
+          if (read_len_next > 0) {
+            local_base_model.next().gm_load_async(
+                base_model_draft_tokens +
+                    bsz_index * base_model_draft_token_len + next_idx,
+                read_len_next);
+          }
+
+          token_num += do_calc(local_base_model.ptr, read_len);
+          read_len = read_len_next;
+          local_base_model.toggle();
+          mfence_lm();
+        }
+        base_model_sm[bsz_index % max_sm_len] = token_num;
+      } else if (base_model_stop_lm[bsz_offset % BSZ_BUF]) {
+        int token_num = 0;
+        base_model_sm[bsz_index % max_sm_len] = token_num;
+      }
+    }
+    sync_cluster();
+    if (core_id() == 0) {
+      SM2GM(base_model_sm + offset_cluster,
+            base_model_seq_lens_this_time + offset_loop + offset_cluster,
+            sizeof(int) * read_len_sm);
+    }
+    sync_cluster();
+  }
+}
+}  // namespace plugin
+}  // namespace xpu3

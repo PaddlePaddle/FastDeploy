@@ -102,6 +102,7 @@ class RolloutModelConfig:
         self.graph_optimization_config = graph_optimization_config
         self.local_rank = local_rank
         self.early_stop_config = early_stop_config
+        self.ips = None
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

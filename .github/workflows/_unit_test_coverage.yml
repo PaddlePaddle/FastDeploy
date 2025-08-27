@@ -27,11 +27,23 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      github-token:
+        required: true
 
 jobs:
+  check_cov_skip:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: coverage
+
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
     timeout-minutes: 60
+    needs: check_cov_skip
+    if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
@@ -124,7 +136,15 @@ jobs:
 
           echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
 
+          echo "========================================================="
+          echo "Ensuring no stale container named ${runner_name} ..."
+          if [ "$(docker ps -a -q -f name=${runner_name})" ]; then
+            echo "Removing stale container: ${runner_name}"
+            docker rm -f ${runner_name} || true
+          fi
+
           docker run --rm --net=host \
+          --name ${runner_name} \
           --cap-add=SYS_PTRACE --shm-size=64G \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
@@ -144,12 +164,15 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install coverage
           python -m pip install diff-cover
+          python -m pip install pytest-cov
+          python -m pip install jsonschema aistudio_sdk==0.3.5
           python -m pip install ${fd_wheel_url}
           if [ -d "tests/plugins" ]; then
               cd tests/plugins
@@ -160,11 +183,12 @@ jobs:
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          export COVERAGE_PROCESS_START=/workspace/FastDeploy/scripts/.coveragerc
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
-          coverage combine coveragedata/
+          coverage combine coveragedata/ || echo "No data to combine"
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
           if [[ "$IS_PR" == "true" ]]; then
@@ -265,12 +289,17 @@ jobs:
     needs: run_tests_with_coverage
     if: always()
     runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
     steps:
       - name: coverage diff file download
         shell: bash
         env:
           diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
+          wget ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          cd FastDeploy
           if [ -z "${diff_cov_file_url}" ]; then
             echo "No diff coverage file URL provided."
             exit 0
@@ -280,6 +309,9 @@ jobs:
         if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: ./diff_coverage.xml
+          files: ./FastDeploy/diff_coverage.xml
           name: python diff coverage
           verbose: true
+          disable_search: true
+          commit_parent: false
+          flags: diff

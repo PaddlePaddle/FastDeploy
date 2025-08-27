@@ -103,7 +103,7 @@ struct CollectiveMainloopFwd {
         LayoutT layout_C;
         const float *weight_scale;
         const float *input_row_sum;
-        const int * tokens;
+        const int64_t * tokens;
     };
 
     struct Params {
@@ -114,7 +114,7 @@ struct CollectiveMainloopFwd {
         ElementOutput * ptr_C;
         const float *weight_scale;
         const float *input_row_sum;
-        const int * tokens;
+        const int64_t * tokens;
     };
 
 
@@ -153,8 +153,8 @@ struct CollectiveMainloopFwd {
         TiledMma tiled_mma,
         const float *input_row_sum,
         const float *weight_scale,
-        const int tokens,
-        const int pre_fix_tokens,
+        const int64_t tokens,
+        const int64_t pre_fix_tokens,
         const int bidm,
         const int bidn,
         const int bidb,
