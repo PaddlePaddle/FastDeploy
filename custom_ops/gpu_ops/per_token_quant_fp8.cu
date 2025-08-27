@@ -31,7 +31,7 @@ __global__ void quant_per_token_per_block(const T *input,
     const int num_warp = blockDim.x / 32;
     static constexpr int NUM_PER_THREADS = 128 / 32; // 4
     static constexpr float MAX_VALUE = 448.f;
-    // Note(ZKK) use ceil_div!
+    // Note(ZKK) use ceil_div!!
     const int end_iter = (hidden_size + 127) / 128; // warp_iter_num
     AlignedVector<T, NUM_PER_THREADS> load_vec;
     AlignedVector<float, NUM_PER_THREADS> load_vec_float;
@@ -44,7 +44,7 @@ __global__ void quant_per_token_per_block(const T *input,
         for (int iter = warp_id; iter < end_iter; iter += num_warp) {
             const int start_offset = iter * 128;
 
-            
+
             const bool is_valid_data = start_offset + lane_id * NUM_PER_THREADS < hidden_size;
 
             if (is_valid_data) {
@@ -95,7 +95,7 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
     auto input_dim = input.dims();
     const int token_num = input_dim[0];
     const int hidden_size = input_dim[1];
-    // Note(ZKK) here we use ceil_dive to support 4.5T runing on 8 GPUS 
+    // Note(ZKK) here we use ceil_dive to support 4.5T runing on 8 GPUS
     // where moe_intermediate_size is 448, can not be divided by 128.
     const int hidden_size_scale = (hidden_size + block_size - 1) / block_size;
 
