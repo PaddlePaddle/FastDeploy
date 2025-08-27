@@ -224,7 +224,7 @@ struct CollectiveMainloopFwd {
         const int pre_fix_token,
         const int actual_token,
         const int bidn) const {
-            
+
         auto g_tensor = domain_offset(make_coord(pre_fix_token, _0{}), mB(_, _, 0));
 
         Tensor gB = local_tile(g_tensor, select<1, 2>(TileShape_MNK{}), make_coord(bidn, _));
