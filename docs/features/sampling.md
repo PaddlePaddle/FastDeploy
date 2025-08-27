@@ -183,7 +183,7 @@ Used to prevent the model from generating certain specific words during the infe
 
 ## Usage Instructions
 
-Include the `bad_words` parameter in the request:
+Include the `bad_words` or `bad_words_token_ids` parameter in the request:
 
 * Example request with curl:
 
@@ -192,9 +192,22 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "How old are you"}
+    {"role": "user", "content": "How are you"}
   ],
-  "bad_words": ["age", "I"]
+  "bad_words": [" well", " Today"]
+}'
+```
+
+Equal to
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How are you"}
+  ],
+  "bad_words_token_ids": [1622, 25062]
 }'
 ```
 
@@ -203,15 +216,37 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
 ```python
 import openai
 host = "0.0.0.0"
-port = "8170"
+port = "9222"
 client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
 
 response = client.chat.completions.create(
     model="null",
     messages=[
-        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "Hello, how are you?"},
     ],
-    extra_body={"bad_words": ["you", "me"]},
+    extra_body={"bad_words": [" well", " Today"]},
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
+Equal to
+
+```python
+import openai
+host = "0.0.0.0"
+port = "9222"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "user", "content": "Hello, how are you?"},
+    ],
+    extra_body={"bad_words_token_ids": [1622, 25062]},
     stream=True,
 )
 for chunk in response:
@@ -223,3 +258,5 @@ print('\n')
 ## Parameter Description
 
 `bad_words`: List of forbidden words. Type: list of str. Each word must be a single token.
+
+`bad_words_token_ids`: List of forbidden token ids. Type: list of int.
