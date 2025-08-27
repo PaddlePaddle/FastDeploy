@@ -17,9 +17,10 @@
 import numpy as np
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qwen_mm_processor import DataProcessor
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
+
+from .process import DataProcessor
 
 
 class QwenVLProcessor(TextProcessor):
@@ -211,6 +212,12 @@ class QwenVLProcessor(TextProcessor):
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request["stop_token_ids"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
+
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
 
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")

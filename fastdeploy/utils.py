@@ -38,6 +38,7 @@ import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
 from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
+from uvicorn.config import LOGGING_CONFIG
 
 from fastdeploy import envs
 from fastdeploy.logger.logger import FastDeployLogger
@@ -76,6 +77,35 @@ class ColoredFormatter(logging.Formatter):
         if color_code:
             message = f"{prefix}{message}{suffix}"
         return message
+
+
+def configure_uvicorn_logging():
+    """
+    uvicorn logger config
+    """
+    # add timestamp to log
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+    LOGGING_CONFIG["formatters"]["default"]["fmt"] = log_format
+    LOGGING_CONFIG["formatters"]["default"]["datefmt"] = date_format
+    LOGGING_CONFIG["formatters"]["access"]["fmt"] = log_format
+    LOGGING_CONFIG["formatters"]["access"]["datefmt"] = date_format
+
+    uvicorn_error_logger = logging.getLogger("")
+    uvicorn_access_logger = logging.getLogger("uvicorn.access")
+    for handler in uvicorn_error_logger.handlers[:]:
+        uvicorn_error_logger.removeHandler(handler)
+    for handler in uvicorn_access_logger.handlers[:]:
+        uvicorn_access_logger.removeHandler(handler)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter(log_format, date_format))
+
+    uvicorn_error_logger.addHandler(console_handler)
+    uvicorn_access_logger.addHandler(console_handler)
+    uvicorn_error_logger.setLevel(logging.INFO)
+    uvicorn_access_logger.setLevel(logging.INFO)
+    uvicorn_error_logger.propagate = False
+    uvicorn_access_logger.propagate = False
 
 
 class DailyRotatingFileHandler(BaseRotatingHandler):
@@ -499,11 +529,20 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
     pynvml.nvmlShutdown()
 
+    paddle_max_reserved = paddle.device.cuda.max_memory_reserved(gpu_id)
+    paddle_max_allocated = paddle.device.cuda.max_memory_allocated(gpu_id)
+    paddle_reserved = paddle.device.cuda.memory_reserved(gpu_id)
+    paddle_allocated = paddle.device.cuda.memory_allocated(gpu_id)
+
     print(
         f"\n{title}:",
         f"\n\tDevice Total memory: {meminfo.total}",
         f"\n\tDevice Used memory: {meminfo.used}",
         f"\n\tDevice Free memory: {meminfo.free}",
+        f"\n\tPaddle max memory Reserved: {paddle_max_reserved}",
+        f"\n\tPaddle max memory Allocated: {paddle_max_allocated}",
+        f"\n\tPaddle memory Reserved: {paddle_reserved}",
+        f"\n\tPaddle memory Allocated: {paddle_allocated}",
     )
 
 

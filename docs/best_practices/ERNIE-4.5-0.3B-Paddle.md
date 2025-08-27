@@ -74,7 +74,7 @@ CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achi
 Before version 2.2, it needs to be enabled through `--use-cudagraph`.
 CUDAGraph has been enabled by default in some scenarios at the beginning of version 2.2. CUDAGraph will be automatically closed for functions that are not compatible with CUDAGraph (speculative decoding, RL training, multi-mode model).
 Notes:
-1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
+- Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
 #### 2.2.6 Rejection Sampling
 **Idea:**

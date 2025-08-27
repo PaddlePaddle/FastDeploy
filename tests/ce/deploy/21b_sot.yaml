@@ -4,3 +4,4 @@ tensor_parallel_size: 1
 quantization: wint4
 graph_optimization_config:
   graph_opt_level: 1
+  sot_warmup_sizes: [2,16,32,64]
