@@ -703,6 +703,7 @@ class RowParallelLinear(LinearBase):
         self.fd_config = fd_config
         self.skip_quant = False
         self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.tp_group = fd_config.parallel_config.tp_group
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
@@ -751,7 +752,7 @@ class RowParallelLinear(LinearBase):
             out = paddle.matmul(x, self.weight)
 
         if self.reduce_results and self.nranks > 1:
-            tensor_model_parallel_all_reduce(out)
+            tensor_model_parallel_all_reduce(out, self.tp_group)
 
         return out
 
