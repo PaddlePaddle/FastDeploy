@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   CI_XPU:
-    runs-on: [self-hosted, XPU-P800-8Card]
+    runs-on: [self-hosted, XPU-P800-8Card-release]
     steps:
       - name: Print current runner name
         run: |
