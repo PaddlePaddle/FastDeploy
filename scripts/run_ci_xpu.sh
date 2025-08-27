@@ -92,6 +92,8 @@ if [ ${exit_code} -ne 0 ]; then
     exit 1
 fi
 
+sleep 5
+
 #0731新增kv block集中式管理相关测试，在起服务时启用对应环境变量 export ENABLE_V1_KVCACHE_SCHEDULER=True
 # 起服务
 rm -rf log/*
@@ -152,7 +154,7 @@ ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
-if [ ${exit_code} -ne 0 ]; then
+if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo "kv block相关测试失败，请检查pr代码"
