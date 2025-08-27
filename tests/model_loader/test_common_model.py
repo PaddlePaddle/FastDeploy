@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import os
+import shutil
 import traceback
 import warnings
 from multiprocessing import Process, Queue
 
 import pytest
 
+os.environ["LOAD_STATE_DICT_THREAD_NUM"] = "1"
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
 MAX_WAIT_SECONDS = 60 * 5
 
@@ -44,6 +46,33 @@ def get_model_paths(base_model_name: str) -> tuple[str, str]:
     )
 
     return fd_model_path, torch_model_path
+
+
+def clear_logs():
+    log_path = os.path.join(os.getcwd(), "log")
+    if os.path.exists(log_path):
+        try:
+            shutil.rmtree(log_path)
+            print(f"Deleted log directory: {log_path}")
+        except Exception as e:
+            print(f"Failed to delete log directory {log_path}: {e}")
+    else:
+        print(f"No log directory found at {log_path}")
+
+
+def print_logs():
+    log_dir = os.path.join(os.getcwd(), "log")
+    log_file = os.path.join(log_dir, "workerlog.0")
+
+    if not os.path.exists(log_file):
+        print(f"Log file {log_file} does not exist.")
+        return
+
+    print(f"\n===== {log_file} start =====")
+    with open(log_file, "r") as f:
+        for line in f:
+            print(line, end="")
+    print(f"\n===== {log_file} end =====\n")
 
 
 def check_tokens_id_and_text_close(
@@ -110,16 +139,45 @@ def form_model_get_output(
         pytest.fail(f"Failed to initialize LLM model from {model_path}")
 
 
+def run_with_timeout(target, args, timeout=60 * 5):
+    clear_logs()
+    result_queue = Queue()
+    p = Process(target=target, args=(*args, result_queue))
+    p.start()
+    p.join(timeout)
+    if p.is_alive():
+        p.terminate()
+        print_logs()
+        raise RuntimeError("Worker process hung and was terminated")
+    try:
+        return result_queue.get(timeout=60)
+    except Exception as e:
+        raise RuntimeError(f"Failed to get result from worker: {e}")
+
+
 model_param_map = {
     "Qwen3-0.6B": {
         "quantizations": ["None", "wint4", "wint8"],
     },
     "ernie-4_5-21b-a3b-bf16-paddle": {
         "tensor_parallel_size": 2,
-        "quantizations": ["wint8"],
+        "quantizations": [
+            "wint8",
+        ],
     },
     "Qwen2-7B-Instruct": {
         "quantizations": ["None", "wint8"],
+    },
+    "Qwen3-30B-A3B": {
+        "tensor_parallel_size": 2,
+        "quantizations": [
+            {
+                "quant_type": "block_wise_fp8",
+                "backend": "triton",
+                "env": {"FD_USE_DEEP_GEMM": "0", "DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+            },
+            {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
+        ],
     },
 }
 
@@ -127,20 +185,26 @@ model_param_map = {
 params = []
 for model, cfg in model_param_map.items():
     for q in cfg["quantizations"]:
+        if isinstance(q, dict):
+            quant, backend, env = q["quant_type"], q.get("backend", "default"), q.get("env", {})
+        else:
+            quant, backend, env = q, "default", {}
         params.append(
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 1),
                 cfg.get("max_model_len", 1024),
-                q,
+                quant,
                 cfg.get("max_tokens", 32),
+                env,
                 marks=[pytest.mark.core_model],
+                id=f"{model}.{quant}.{backend}",
             )
         )
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
     params,
 )
 def test_common_model(
@@ -150,46 +214,26 @@ def test_common_model(
     max_model_len: int,
     max_tokens: int,
     quantization: str,
+    env,
+    monkeypatch,
 ) -> None:
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, model_name_or_path)
     else:
         model_path = model_name_or_path
-    result_queue = Queue()
-    p = Process(
-        target=form_model_get_output,
-        args=(
-            fd_runner,
-            model_path,
-            tensor_parallel_size,
-            max_model_len,
-            max_tokens,
-            quantization,
-            "default",
-            result_queue,
-        ),
-    )
-    p.start()
-    p.join()
-    fd_outputs_v0 = result_queue.get(timeout=60)
+    if env:
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
 
-    p = Process(
+    fd_outputs_v0 = run_with_timeout(
         target=form_model_get_output,
-        args=(
-            fd_runner,
-            model_path,
-            tensor_parallel_size,
-            max_model_len,
-            max_tokens,
-            quantization,
-            "default_v1",
-            result_queue,
-        ),
+        args=(fd_runner, model_path, tensor_parallel_size, max_model_len, max_tokens, quantization, "default"),
     )
-    p.start()
-    p.join()
-    fd_outputs_v1 = result_queue.get(timeout=60)
+    fd_outputs_v1 = run_with_timeout(
+        target=form_model_get_output,
+        args=(fd_runner, model_path, tensor_parallel_size, max_model_len, max_tokens, quantization, "default_v1"),
+    )
     check_tokens_id_and_text_close(
         outputs_0_lst=fd_outputs_v0,
         outputs_1_lst=fd_outputs_v1,
@@ -235,26 +279,12 @@ def test_paddle_vs_torch_model(
 
     fd_model_path, torch_model_path = get_model_paths(model_name_or_path)
 
-    result_queue = Queue()
-
-    p_paddle = Process(
+    paddle_outputs = run_with_timeout(
         target=form_model_get_output,
-        args=(
-            fd_runner,
-            fd_model_path,
-            tensor_parallel_size,
-            max_model_len,
-            max_tokens,
-            quantization,
-            "default",
-            result_queue,
-        ),
+        args=(fd_runner, fd_model_path, tensor_parallel_size, max_model_len, max_tokens, quantization, "default"),
     )
-    p_paddle.start()
-    p_paddle.join()
-    paddle_outputs = result_queue.get(timeout=60)
 
-    p_hf = Process(
+    hf_outputs = run_with_timeout(
         target=form_model_get_output,
         args=(
             fd_runner,
@@ -264,12 +294,8 @@ def test_paddle_vs_torch_model(
             max_tokens,
             quantization,
             "default_v1",
-            result_queue,
         ),
     )
-    p_hf.start()
-    p_hf.join()
-    hf_outputs = result_queue.get(timeout=60)
 
     check_tokens_id_and_text_close(
         outputs_0_lst=paddle_outputs,

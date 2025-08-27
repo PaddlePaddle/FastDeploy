@@ -76,8 +76,8 @@ Add the following lines to the startup parameters
 --use-cudagraph
 ```
 Notes:
-1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
-2. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
+
+- Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
 #### 2.2.6 Rejection Sampling
 **Idea:**

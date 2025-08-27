@@ -72,6 +72,7 @@ class TensorSplitMode(Enum):
     """TensorSplitMode"""
 
     GQA = "is_gqa"
+    TP_ROW_BIAS = "is_tp_row_bias"
     TRANSPOSE = "transpose"
     QKV = "is_old_qkv"
     PairFused = "is_naive_2fuse"
@@ -212,7 +213,7 @@ def gqa_qkv_split_func(
     """
 
     def fn(x, is_column=True):
-        """fucn"""
+        """func"""
 
         def get_shape(tensor):
             """get_shape"""
@@ -430,7 +431,15 @@ def split_or_merge_func_v1(
     def fn(x, **kwargs):
         """func"""
         is_gqa = kwargs.pop("is_gqa", False)
-        if is_gqa:
+        is_tp_row_bias = kwargs.pop("is_tp_row_bias", False)
+        if is_tp_row_bias:
+            tensor = x[:, ...]
+            if isinstance(tensor, paddle.Tensor):
+                res = tensor / tensor_parallel_degree
+            else:
+                res = paddle.to_tensor(tensor, paddle.get_default_dtype()) / tensor_parallel_degree
+            return res
+        elif is_gqa:
             func = split_or_merge_qkv_func(
                 is_split=is_split,
                 tensor_parallel_degree=tensor_parallel_degree,

@@ -197,7 +197,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """
         Marlin MoE load weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
         assert up_gate_proj_weights[0].shape == [

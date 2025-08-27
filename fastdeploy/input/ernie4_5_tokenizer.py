@@ -27,7 +27,7 @@ from paddleformers.transformers.tokenizer_utils_base import PaddingStrategy, Tex
 from paddleformers.utils.log import logger
 
 
-class ErnieBotTokenizer(PretrainedTokenizer):
+class Ernie4_5Tokenizer(PretrainedTokenizer):
     """
     一个更好用的 `ErnieBotToknizer`，
     能 encode 目前 sft/ppo 阶段的特殊token，也支持多模态。
@@ -164,7 +164,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         """doc"""
         if "add_special_tokens" in kwargs:
             kwargs.pop("add_special_tokens")
-            # logger.warning(f'ErnieBotTokenizer v2 does not support `add_special_tokens`')
+            # logger.warning(f'Ernie4_5Tokenizer v2 does not support `add_special_tokens`')
         return super().prepare_for_model(*args, **kwargs)
 
     def save_vocabulary(self, save_directory, filename_prefix: Optional[str] = None) -> Tuple[str]:
