@@ -64,9 +64,6 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.FLASH_ATTN:
             logger.info("Using FLASH ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"
-        elif selected_backend == _Backend.MOBA_ATTN:
-            logger.info("Using MOBA ATTN backend.")
-            return "fastdeploy.model_executor.layers.attention.MobaAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
