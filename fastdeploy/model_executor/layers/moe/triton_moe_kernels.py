@@ -17,10 +17,6 @@
 import triton
 import triton.language as tl
 
-from fastdeploy.model_executor.ops.triton_ops.triton_utils_v2 import (
-    paddle_use_triton_v2,
-)
-
 
 @triton.jit()
 def fused_moe_kernel_paddle(
