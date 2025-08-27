@@ -77,7 +77,7 @@ class EngineClient:
         self.max_model_len = max_model_len
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
-        if tensor_parallel_size < max_chips_per_node:
+        if tensor_parallel_size <= max_chips_per_node:
             self.is_master = True
         else:
             self.is_master = False
