@@ -130,7 +130,7 @@ class ResourceManagerV1(ResourceManager):
 
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
-        if True:
+        if False:
             num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
             num_new_tokens = min(num_new_tokens, token_budget)
             pre_end_idx = request.num_computed_tokens

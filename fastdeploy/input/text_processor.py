@@ -72,7 +72,7 @@ class BaseDataProcessor(ABC):
         return request
 
     @abstractmethod
-    def process_request(self, request, **kwargs):
+    async def process_request(self, request, **kwargs):
         """
         Preprocess the request
 
@@ -193,7 +193,7 @@ class DataProcessor(BaseDataProcessor):
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
         self.tokenizer.pad_token_id = self.pad_token_id
 
-    def process_request(self, request, max_model_len=None, **kwargs):
+    async def process_request(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
 
@@ -254,7 +254,7 @@ class DataProcessor(BaseDataProcessor):
         data_processor_logger.info(f"Processed request {request}")
         return request
 
-    def process_request_dict(self, request, max_model_len=None, **kwargs):
+    async def process_request_dict(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
 

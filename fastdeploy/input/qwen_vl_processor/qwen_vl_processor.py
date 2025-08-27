@@ -72,7 +72,7 @@ class QwenVLProcessor(TextProcessor):
 
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
-    def process_request(self, request, max_model_len=None, **kwargs):
+    async def process_request(self, request, max_model_len=None, **kwargs):
         """
         Process incoming request and generate model inputs.
 
@@ -86,7 +86,7 @@ class QwenVLProcessor(TextProcessor):
         """
         task = request.to_dict()
         task["enable_thinking"] = kwargs.get("enable_thinking", False)
-        self.process_request_dict(task, max_model_len)
+        await self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
         request = self._apply_default_parameters(request)
         return request
@@ -188,7 +188,7 @@ class QwenVLProcessor(TextProcessor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_dict(self, request, max_model_len=None):
+    async def process_request_dict(self, request, max_model_len=None):
         """
         Process request dictionary into model inputs.
 
