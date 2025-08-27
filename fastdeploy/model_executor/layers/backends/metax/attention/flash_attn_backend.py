@@ -257,6 +257,7 @@ class FlashAttentionBackend(AttentionBackend):
         out = paddle.add(paddle.multiply(qk, cos), paddle.multiply(rotate_half, sin))
         return paddle.cast(out, qk.dtype)
 
+    @paddle.no_grad()
     def forward_native_backend(
         self,
         q: paddle.Tensor,
@@ -273,7 +274,7 @@ class FlashAttentionBackend(AttentionBackend):
         # 1. 分离 encoder / decoder 的 mask
         seq_lens_encoder = forward_meta.seq_lens_encoder.squeeze(-1)
         seq_lens_decoder = forward_meta.seq_lens_decoder.squeeze(-1)
-        seq_lens_this_time = forward_meta.seq_lens_this_time.squeeze(-1)
+        seq_lens_this_time = forward_meta.seq_lens_this_time
         encoder_indices = []
         decoder_indices = []
 

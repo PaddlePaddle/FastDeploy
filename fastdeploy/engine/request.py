@@ -72,6 +72,7 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
+        chat_template: Optional[str] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -110,6 +111,8 @@ class Request:
 
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier
+
+        self.chat_template = chat_template
 
         # token num
         self.block_tables = []
@@ -152,6 +155,7 @@ class Request:
             guided_json_object=d.get("guided_json_object", None),
             enable_thinking=d.get("enable_thinking", True),
             trace_carrier=d.get("trace_carrier", {}),
+            chat_template=d.get("chat_template", None),
         )
 
     @property
@@ -191,6 +195,7 @@ class Request:
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
             "trace_carrier": self.trace_carrier,
+            "chat_template": self.chat_template,
         }
         add_params = [
             "guided_json",

@@ -77,7 +77,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python test/ci_use/XPU_45T/run_45T.py
+python tests/ci_use/XPU_45T/run_45T.py
 exit_code=$?
 echo exit_code is ${exit_code}
 
@@ -91,6 +91,8 @@ if [ ${exit_code} -ne 0 ]; then
     echo "模型起服务失败，请检查pr代码"
     exit 1
 fi
+
+sleep 5
 
 #0731新增kv block集中式管理相关测试，在起服务时启用对应环境变量 export ENABLE_V1_KVCACHE_SCHEDULER=True
 # 起服务
@@ -143,7 +145,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python test/ci_use/XPU_45T/run_45T.py
+python tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
@@ -152,7 +154,7 @@ ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
-if [ ${exit_code} -ne 0 ]; then
+if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo "kv block相关测试失败，请检查pr代码"

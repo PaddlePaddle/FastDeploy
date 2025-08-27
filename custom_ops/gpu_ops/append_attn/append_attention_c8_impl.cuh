@@ -48,6 +48,7 @@ __global__ void multi_query_append_attention_c8_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ mask_offset,
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -179,6 +180,7 @@ __global__ void multi_query_append_attention_c8_kernel(
   } else {
     o_base_ptr_int8 = out + o_offset;
   }
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -216,7 +218,7 @@ __global__ void multi_query_append_attention_c8_kernel(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : chunk_len) /
+              : mask_offset ? 0 : chunk_len) /
       (num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -300,12 +302,15 @@ __global__ void multi_query_append_attention_c8_kernel(
              NUM_WARPS,
              num_frags_x,
              num_frags_y,
-             num_frags_z>(q_base_seq_id_this_block,
+             num_frags_z>(nullptr,
+                          q_base_seq_id_this_block,
                           kv_idx_base,
                           q_len,
                           kv_len,
                           chunk_end,
-                          s_frag);
+                          -1,
+                          s_frag,
+                          mask_offset_this_seq);
     }
 
     // update m,d
@@ -474,6 +479,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ mask_offset,
+    const bool *__restrict__ attn_mask,   // [bsz, max_q, max_q] for tree-mask
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -487,7 +494,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
-    const int speculate_max_draft_token_num = 5) {
+    const int speculate_max_draft_token_num = 5,
+    const uint32_t attn_mask_len = -1) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   constexpr uint32_t num_vecs_per_head_k =
       HEAD_DIM / num_elems_per_128b<CacheT>();
@@ -601,7 +609,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           tid % 8 * num_elems_per_128b<T>();
     }
   }
-
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -642,7 +650,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : chunk_len) /
+              : mask_offset ? 0 : chunk_len) /
       (NUM_WARP_KV * num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -728,12 +736,16 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
              NUM_WARPS,
              num_frags_x,
              num_frags_y,
-             num_frags_z>(q_base_seq_id_this_block,
+             num_frags_z>(attn_mask ? attn_mask + batch_id * attn_mask_len *attn_mask_len : nullptr,
+                          q_base_seq_id_this_block,
                           kv_idx_base + wid * num_frags_z * 16,
                           q_len,
                           kv_len,
                           chunk_end,
-                          s_frag);
+                          attn_mask_len,
+                          s_frag,
+                          mask_offset_this_seq);
+
     }
 
     // update m,d
@@ -1054,6 +1066,7 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1111,6 +1124,7 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1255,6 +1269,13 @@ void MultiQueryAppendC8Attention(
     }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
+    uint32_t attn_mask_len;
+    if (attn_mask) {
+        attn_mask_len = attn_mask.get().shape()[1];
+    } else {
+        attn_mask_len = -1;
+    }
+
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
     if (num_chunks <= 0) {
@@ -1318,6 +1339,9 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
+          attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
+                        : nullptr,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1330,7 +1354,8 @@ void MultiQueryAppendC8Attention(
           nullptr,
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+          speculate_max_draft_token_num,
+          attn_mask_len);
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       if (is_decoder) {
@@ -1388,6 +1413,9 @@ void MultiQueryAppendC8Attention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          meta_data.mask_offset,
+          attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
+                        : nullptr,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1400,7 +1428,8 @@ void MultiQueryAppendC8Attention(
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+          speculate_max_draft_token_num,
+          attn_mask_len);
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
       if (is_decoder) {

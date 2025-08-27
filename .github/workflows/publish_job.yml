@@ -1,0 +1,319 @@
+name: Publish Job
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * *'   # 2:00 AM China Standard Time (UTC+8)
+  push:
+    # branches:
+    #   - develop
+    tags:
+      - '*'
+
+permissions: read-all
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+
+jobs:
+  publish_pre_check:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.repository.fork == false &&
+      (
+        (github.event_name == 'schedule' && github.ref_name == 'develop') ||
+        (github.event_name == 'push' && github.ref_type == 'tag') ||
+        ((github.event_name == 'workflow_dispatch') &&
+          (github.ref_name == 'develop' || github.ref_type == 'tag'))
+      )
+    env:
+      TAG_VERSION_MAPPINGS: ${{ vars.TAG_VERSION_MAPPINGS }}
+      FD_VERSION_DEV: ${{ vars.FD_VERSION_DEV }}
+      COMPILE_USE_PADDLE_WHL_URL_MAPPINGS: ${{ vars.COMPILE_USE_PADDLE_WHL_URL_MAPPINGS }}
+    outputs:
+      compile_use_paddle_version: ${{ steps.set_output.outputs.compile_use_paddle_version }}
+      compile_continue: ${{ steps.set_output.outputs.compile_continue }}
+      fd_version: ${{ steps.set_output.outputs.fd_version }}
+      with_nightly_build: ${{ steps.set_output.outputs.with_nightly_build }}
+      compile_use_paddle_whl_url: ${{ steps.set_output.outputs.compile_use_paddle_whl_url }}
+
+    steps:
+      - name: Get tag version
+        if: github.ref_type == 'tag'
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"       # 提取 tag 名称，比如 v2.1.0
+          TAG_VERSION="${TAG_NAME#v}"            # 去掉前缀 v
+          echo "FD_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+
+      - name: Check FD version to Paddle version mapping
+        if: github.ref_type == 'tag'
+        env:
+          TARGET_FD: ${{ env.FD_VERSION }}
+        run: |
+          FOUND_PADDLE=""
+          # 遍历映射
+          for pair in $(echo $TAG_VERSION_MAPPINGS | tr ';' ' '); do
+            fd=$(echo "$pair" | cut -d',' -f1)
+            paddle=$(echo "$pair" | cut -d',' -f2)
+            if [[ "$fd" == "$TARGET_FD" ]]; then
+              FOUND_PADDLE="$paddle"
+              break
+            fi
+          done
+
+          if [[ -z "$FOUND_PADDLE" ]]; then
+            echo "No Paddle version found for FD $TARGET_FD"
+          else
+            echo "FD $TARGET_FD maps to Paddle $FOUND_PADDLE"
+            echo "PADDLE_VERSION=$FOUND_PADDLE" >> $GITHUB_ENV
+          fi
+      - name: Set Version
+        id: set_output
+        env:
+          PADDLE_VERSION: ${{ env.PADDLE_VERSION }}
+          FD_VERSION: ${{ env.FD_VERSION }}
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            if [[ -z "$PADDLE_VERSION" ]]; then
+              compile_continue=false
+            else
+              compile_use_paddle_version=$PADDLE_VERSION
+              compile_continue=true
+            fi
+            fd_version=$FD_VERSION
+          fi
+          if [[ "${{ github.ref_name }}" == "develop" ]];then
+            compile_continue=true
+            compile_use_paddle_version=""
+            fd_version=${FD_VERSION_DEV}
+            with_nightly_build=ON
+          fi
+          # Todo
+          # 通过变量COMPILE_USE_PADDLE_WHL_URL_MAPPINGS中的映射关系,决定是否是安装指定版本的Paddle还是直接安装URL
+          for pair in $(echo $COMPILE_USE_PADDLE_WHL_URL_MAPPINGS | tr ';' ' '); do
+            branch=$(echo "$pair" | cut -d',' -f1)
+            paddle_whl_url=$(echo "$pair" | cut -d',' -f2)
+            if [[ "$branch" == "${{ github.ref_name }}" ]]; then
+              FOUND_PADDLE_URL="$paddle_whl_url"
+              echo "compile_use_paddle_whl_url=${FOUND_PADDLE_URL}" >> $GITHUB_OUTPUT
+              compile_continue=true
+              break
+            fi
+          done
+          echo "compile_continue=${compile_continue}" >> $GITHUB_OUTPUT
+          echo "compile_use_paddle_version=${compile_use_paddle_version}" >> $GITHUB_OUTPUT
+          echo "fd_version=${fd_version}" >> $GITHUB_OUTPUT
+          echo "with_nightly_build=${with_nightly_build:-OFF}" >> $GITHUB_OUTPUT
+
+  print_publish_pre_check_outputs:
+    runs-on: ubuntu-latest
+    needs: publish_pre_check
+    steps:
+      - name: Print outputs as JSON
+        run: |
+          echo '${{ toJSON(needs.publish_pre_check.outputs) }}'
+
+  clone:
+    environment: CodeSync
+    name: FD-Clone-Linux
+    runs-on: ubuntu-latest
+    needs: publish_pre_check
+    if: ${{ needs.publish_pre_check.outputs.compile_continue == 'true' }}
+    outputs:
+      repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
+    steps:
+      - name: Clone FastDeploy
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          submodules: 'recursive'
+          fetch-depth: 1000
+
+      - name: Python Setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Code Info Show and Upload
+        id: set_output
+        env:
+          AK: ${{ secrets.BOS_AK }}
+          SK: ${{ secrets.BOS_SK }}
+        run: |
+          git config --unset http.https://github.com/.extraheader
+          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader'"
+          git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+          echo "Current HEAD Log:"
+          git log --oneline -n 5
+          ls
+          cd ..
+          tar -zcf FastDeploy.tar.gz FastDeploy
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            commit_id=${{ github.sha }}
+            tag_name=${{ github.ref_name }}
+            target_path=paddle-qa/TAG/FastDeploy/${tag_name}/${commit_id}
+          else
+            commit_id=${{ github.sha }}
+            branch_name=${{ github.ref_name }}
+            target_path=paddle-qa/BRANCH/FastDeploy/${branch_name}/${commit_id}
+          fi
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} FastDeploy.tar.gz ${target_path}
+          target_path_stripped="${target_path#paddle-qa/}"
+          REPO_ARCHIVE_URL=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/FastDeploy.tar.gz
+          echo "repo_archive_url=${REPO_ARCHIVE_URL}" >> $GITHUB_OUTPUT
+
+  resultshow:
+    name: Show Code Archive Output
+    needs: clone
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print wheel path
+        run: |
+          echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"
+
+  build_sm8090:
+    name: BUILD_SM8090
+    needs: [clone, publish_pre_check]
+    uses: ./.github/workflows/_build_linux.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "80,90"
+      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
+      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
+      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
+      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+
+  build_sm8689:
+    name: BUILD_SM8689
+    needs: [clone, publish_pre_check]
+    uses: ./.github/workflows/_build_linux.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "86,89"
+      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
+      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
+      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
+      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+
+  paddle_pypi_upload_sm8090:
+    environment: PaddleSourceUpload
+    name: PADDLE_PYPI_UPLOAD_8090
+    needs: build_sm8090
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ secrets.BOS_AK }}
+      SK: ${{ secrets.BOS_SK }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      COMPILE_ARCH: "80,90"
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Wheel Info Show and Upload
+        if: github.ref_name == 'develop' || github.ref_type == 'tag'
+        run: |
+          echo "The wheel is located at: ${FASTDEPLOY_WHEEL_URL}"
+          wget -q --no-check-certificate ${FASTDEPLOY_WHEEL_URL}
+          filename=$(basename ${FASTDEPLOY_WHEEL_URL})
+          if [[ "${{ github.ref_name }}" == "develop" ]];then
+            target_path=paddle-whl/nightly/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            target_path=paddle-whl/stable/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+          else
+            echo "Not develop or tag, do nothing"
+          fi
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} ${filename} ${target_path}
+
+  paddle_pypi_upload_sm8689:
+    environment: PaddleSourceUpload
+    name: PADDLE_PYPI_UPLOAD_8689
+    needs: build_sm8689
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ secrets.BOS_AK }}
+      SK: ${{ secrets.BOS_SK }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8689.outputs.wheel_path }}
+      COMPILE_ARCH: "86,89"
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Wheel Info Show and Upload
+        if: github.ref_name == 'develop' || github.ref_type == 'tag'
+        run: |
+          echo "The wheel is located at: ${FASTDEPLOY_WHEEL_URL}"
+          wget -q --no-check-certificate ${FASTDEPLOY_WHEEL_URL}
+          filename=$(basename ${FASTDEPLOY_WHEEL_URL})
+          if [[ "${{ github.ref_name }}" == "develop" ]];then
+            target_path=paddle-whl/nightly/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            target_path=paddle-whl/stable/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+          else
+            echo "Not develop or tag, do nothing"
+          fi
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          ls
+          python ${push_file} ${filename} ${target_path}
+
+  unittest_coverage:
+    name: Run FastDeploy Unit Tests and Coverage
+    needs: [clone,build_sm8090]
+    uses: ./.github/workflows/_unit_test_coverage.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+
+  logprob_test:
+    name: Run FastDeploy LogProb Tests
+    needs: [build_sm8090]
+    uses: ./.github/workflows/_logprob_test_linux.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+
+  pre_ce_test:
+    name: Extracted partial CE model tasks to run in CI.
+    needs: [clone,build_sm8090]
+    uses: ./.github/workflows/_pre_ce_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+
+  base_test:
+    name: Run Base Tests
+    needs: [clone,build_sm8090]
+    uses: ./.github/workflows/_base_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+
+  accuracy_test:
+    name: Run Accuracy Tests
+    needs: [clone,build_sm8090]
+    uses: ./.github/workflows/_accuracy_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
