@@ -2,35 +2,40 @@ name: Remove skip labels on new PR commits
 
 on:
   pull_request:
-    types: [synchronize]
+    types: [synchronize] # 只在 PR 有新提交时触发
     branches: [develop, release/**]
+
 permissions:
   contents: read
   pull-requests: read
   issues: write
 
 jobs:
-  - name: Remove skip labels
-    uses: actions/github-script@v6
-    with:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-      script: |
-        const prNumber = context.payload.pull_request.number;
-        const labels = context.payload.pull_request.labels.map(l => l.name);
+  remove-skip-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove skip* labels
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const labels = context.payload.pull_request.labels.map(l => l.name);
 
-        const skipLabels = labels.filter(l => l.startsWith("skip"));
+            // 找到所有以 "skip" 开头的 label
+            const skipLabels = labels.filter(l => l.startsWith("skip"));
 
-        if (skipLabels.length === 0) {
-          console.log("No skip labels, nothing to remove.");
-        } else {
-          console.log("Skip labels to remove:", skipLabels);
-          for (const label of skipLabels) {
-            await github.rest.issues.removeLabel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              name: label
-            });
-            console.log(`Removed label: ${label}`);
-          }
-        }
+            if (skipLabels.length === 0) {
+              console.log("No skip labels, nothing to remove.");
+            } else {
+              console.log("Skip labels to remove:", skipLabels);
+              for (const label of skipLabels) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: label
+                });
+                console.log(`Removed label: ${label}`);
+              }
+            }
