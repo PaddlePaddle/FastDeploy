@@ -551,7 +551,7 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = False
+        self.use_cudagraph: bool = True
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
@@ -1181,13 +1181,12 @@ class FDConfig:
         # Adjustment GraphOptConfig
         if (
             (self.speculative_config.method is not None)
-            or (self.load_config.dynamic_load_weight is True)
             or (self.model_config.enable_mm is True)
         ):
 
             self.graph_opt_config.use_cudagraph = False
             logger.info(
-                "CUDAGraph does not support to be started together with SpeculativeDecode, RL Training and MultiModel temporarily, but has been automatically closed!"
+                "CUDAGraph does not support to be started together with SpeculativeDecode and MultiModel temporarily, but has been automatically closed!"
             )
         if self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
@@ -1287,10 +1286,6 @@ class FDConfig:
             ), "CUDAGraph does not support the simultaneous use of Speculative Decoding"
             # NOTE(gongshaotian): CUDAGraph cannot be applied to multimodal model temporarily
             assert self.model_config.enable_mm is False, "CUDAGraph cannot be applied to multimodal model temporarily"
-            # NOTE(gongshaotian): CUDAGraph cannot be used in RL training scene temporarily
-            assert (
-                self.load_config.dynamic_load_weight is False
-            ), "CUDAGraph cannot be used in RL training scene temporarily"
         if self.graph_opt_config.graph_opt_level > 0:
             # NOTE(gongshaotian): Static graph cannot be used in RL scene temporarily
             assert self.load_config.dynamic_load_weight is False, "Static graph cannot be used in RL scene temporarily"
