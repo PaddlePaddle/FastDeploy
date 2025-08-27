@@ -20,7 +20,7 @@ from typing import Optional, Union
 import numpy as np
 from PIL import Image
 
-from fastdeploy.input.mm_processor import read_video_decord
+from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 
 
 def read_frames(video_path):

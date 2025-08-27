@@ -23,7 +23,11 @@ import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
-from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.inter_communicator import (
+    EngineWorkerQueue,
+    IPCSignal,
+    shared_memory_exists,
+)
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -159,36 +163,23 @@ class CacheMessager:
         try:
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
-            try:
-                step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
-                    array=prefilled_step_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=True,
-                )
-                layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
-                    array=prefilled_layer_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=True,
-                )
-            except:
-                step_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
-                    array=prefilled_step_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=False,
-                )
-                layer_shm_value = IPCSignal(
-                    name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
-                    array=prefilled_layer_idx_data,
-                    dtype=np.int32,
-                    suffix=self.gpu_id,
-                    create=False,
-                )
+            prefilled_layer_name = f"splitwise_complete_prefilled_step_{self.dp_rank_id}.{self.gpu_id}"
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{self.dp_rank_id}.{self.gpu_id}"
+            step_shm_value = IPCSignal(
+                name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
+                array=prefilled_step_idx_data,
+                dtype=np.int32,
+                suffix=self.gpu_id,
+                create=not shared_memory_exists(prefilled_step_name),
+            )
+            layer_shm_value = IPCSignal(
+                name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
+                array=prefilled_layer_idx_data,
+                dtype=np.int32,
+                suffix=self.gpu_id,
+                create=not shared_memory_exists(prefilled_layer_name),
+            )
+            logger.info(f"splitwise_complete_prefilled_step_{self.dp_rank_id}, gpu_id: {self.gpu_id}")
 
             step_shm_value.value[0] = -1
             layer_shm_value.value[0] = -1
@@ -220,6 +211,7 @@ class CacheMessager:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
                 prefilled_step_idx = step_shm_value.value[0]
+                logger.info(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
                 if prefilled_layer_idx == self.num_layers - 1:
                     time.sleep(0.001)
                     prefilled_layer_idx = layer_shm_value.value[0]
