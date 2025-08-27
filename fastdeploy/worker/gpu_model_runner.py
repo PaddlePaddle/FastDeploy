@@ -1040,7 +1040,7 @@ class GPUModelRunner(ModelRunnerBase):
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
-        # TODO:Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
+        # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
             self.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
@@ -1411,7 +1411,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
 
-    def capture_model(self, prefill_only: bool = False) -> None:
+    def capture_model(self) -> None:
         """
         Trigger CUDA Graph capture for all shapes in cuda graph capture list
         """
@@ -1422,7 +1422,7 @@ class GPUModelRunner(ModelRunnerBase):
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
 
-        if prefill_only:
+        if self.fd_config.graph_opt_config.cudagraph_only_prefill:
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
                     num_tokens=num_tokens,
