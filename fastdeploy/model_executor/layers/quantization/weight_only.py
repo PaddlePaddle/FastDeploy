@@ -26,10 +26,6 @@ from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
 )
-from fastdeploy.model_executor.layers.quantization.ops import (
-    machete_quantize_and_pack,
-    machete_wint_mm,
-)
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
@@ -393,6 +389,10 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         pass
 
     def process_loaded_weights(self, layer, weight) -> None:
+        from fastdeploy.model_executor.layers.quantization.ops import (
+            machete_quantize_and_pack,
+        )
+
         quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
             w=weight,
             atype=layer._dtype,
@@ -404,6 +404,7 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
     def apply(self, layer, x):
         assert layer.bias is None, "Machete weight only linear method does not support bias."
         assert self.quant_config.name() == "wint4", "Machete weight only linear method only supports wint4."
+        from fastdeploy.model_executor.layers.quantization.ops import machete_wint_mm
 
         linear_out = machete_wint_mm(
             x,
