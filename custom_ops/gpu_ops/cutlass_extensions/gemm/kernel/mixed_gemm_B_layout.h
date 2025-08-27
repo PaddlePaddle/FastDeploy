@@ -116,7 +116,7 @@ public:
 template <typename TypeA, typename Arch>
     struct LayoutDetailsB < TypeA,
     uint4b_t, Arch,
-    typename platform::enable_if<(Arch::kMinComputeCapability >= 75) && (Arch::kMinComputeCapability <= 90)>::type>
+    typename platform::enable_if<Arch::kMinComputeCapability >= 75 && Arch::kMinComputeCapability<90>::type>
 {
     static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value;
 
@@ -131,6 +131,23 @@ public:
 };
 
 template <typename TypeA, typename Arch>
+struct LayoutDetailsB<TypeA, uint2b_t, Arch, typename platform::enable_if<Arch::kMinComputeCapability >= 75>::type>
+{
+    static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value; // 64
+
+private:
+    static constexpr int ElementsPerCacheLine = 128 * 8 / sizeof_bits<uint2b_t>::value;
+    static constexpr int ColumnsInterleaved = ElementsPerCacheLine / ThreadblockK; // 8
+
+public:
+    // using Layout = layout::ColumnMajor;
+    // static constexpr int ElementsPerAccess = 16; // at least 4-bytes
+    using Layout = layout::ColumnMajorTileInterleave<ThreadblockK, ColumnsInterleaved>;
+    static constexpr int ElementsPerAccess = 128 / cutlass::sizeof_bits<uint2b_t>::value; // 64
+    using Operator = cutlass::arch::OpMultiplyAddDequantizeInterleavedBToA;
+};
+
+template <typename TypeA, typename Arch>
 struct LayoutDetailsB<TypeA, uint8_t, Arch, typename platform::enable_if<Arch::kMinComputeCapability >= 90>::type>
 {
     static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value;
@@ -140,40 +157,13 @@ struct LayoutDetailsB<TypeA, uint8_t, Arch, typename platform::enable_if<Arch::k
 };
 
 template <typename TypeA, typename Arch>
-struct LayoutDetailsB<TypeA, uint4b_t, Arch, typename platform::enable_if<(Arch::kMinComputeCapability > 90)>::type>
+struct LayoutDetailsB<TypeA, uint4b_t, Arch, typename platform::enable_if<Arch::kMinComputeCapability >= 90>::type>
 {
     static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value;
     using Layout = layout::ColumnMajor;
     static constexpr int ElementsPerAccess = 128 / cutlass::sizeof_bits<half_t>::value;
     using Operator = cutlass::arch::OpMultiplyAdd;
 };
-
-
-// template <typename TypeA, typename Arch>
-//     struct LayoutDetailsB < TypeA,
-//     uint4b_t, Arch,
-//     typename platform::enable_if<Arch::kMinComputeCapability >= 75 && Arch::kMinComputeCapability<90>::type>
-// {
-//     static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value;
-
-// private:
-//     static constexpr int ElementsPerCacheLine = 128 * 8 / sizeof_bits<uint4b_t>::value;
-//     static constexpr int ColumnsInterleaved = ElementsPerCacheLine / ThreadblockK;
-
-// public:
-//     using Layout = layout::ColumnMajorTileInterleave<ThreadblockK, ColumnsInterleaved>;
-//     static constexpr int ElementsPerAccess = 128 / cutlass::sizeof_bits<uint4b_t>::value;
-//     using Operator = cutlass::arch::OpMultiplyAddDequantizeInterleavedBToA;
-// };
-
-// template <typename TypeA, typename Arch>
-// struct LayoutDetailsB<TypeA, uint4b_t, Arch, typename platform::enable_if<Arch::kMinComputeCapability >= 90>::type>
-// {
-//     static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value;
-//     using Layout = layout::ColumnMajor;
-//     static constexpr int ElementsPerAccess = 128 / cutlass::sizeof_bits<half_t>::value;
-//     using Operator = cutlass::arch::OpMultiplyAdd;
-// };
 
 } // namespace kernel
 } // namespace gemm

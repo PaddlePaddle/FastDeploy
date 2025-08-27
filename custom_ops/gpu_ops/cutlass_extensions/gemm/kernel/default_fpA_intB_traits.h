@@ -185,32 +185,6 @@ public:
     using Operator = typename LayoutDetails::Operator;
 };
 
-// FP8 A = fp8, C = bf16
-template <typename TypeA, typename TypeB>
-struct MixedGemmArchTraits<TypeA, TypeB, cutlass::arch::Sm90,
-    typename cutlass::platform::enable_if<cutlass::platform::is_same<TypeA, cutlass::float_e4m3_t>::value
-        || cutlass::platform::is_same<TypeA, cutlass::float_e5m2_t>::value>::type>
-{
-private:
-    using LayoutDetails = LayoutDetailsB<TypeA, TypeB, cutlass::arch::Sm90>;
-
-public:
-    static constexpr int ThreadblockK = LayoutDetails::ThreadblockK;
-
-    using OperatorClass = cutlass::arch::OpClassTensorOp;
-    using AccType = float;
-    // be careful, TypeC should align with HopperGroupedGemmInput::OutputTypeAdaptor_t<TypeA>
-    using TypeC = __nv_bfloat16;
-    using LayoutB = typename LayoutDetails::Layout;
-
-    static constexpr int ElementsPerAccessA = 128 / cutlass::sizeof_bits<TypeA>::value;
-    static constexpr int ElementsPerAccessB = LayoutDetails::ElementsPerAccess;
-    static constexpr int ElementsPerAccessC = 128 / cutlass::sizeof_bits<TypeC>::value;
-    using InstructionShape = cutlass::gemm::GemmShape<16, 8, 256 / cutlass::sizeof_bits<TypeA>::value>;
-
-    using Operator = typename LayoutDetails::Operator;
-};
-
 } // namespace kernel
 } // namespace gemm
 } // namespace cutlass
