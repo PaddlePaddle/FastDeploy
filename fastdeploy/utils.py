@@ -23,6 +23,7 @@ import os
 import random
 import re
 import socket
+import sys
 import tarfile
 import time
 from datetime import datetime
@@ -37,8 +38,10 @@ import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
 from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
+from uvicorn.config import LOGGING_CONFIG
 
 from fastdeploy import envs
+from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
 
@@ -72,6 +75,35 @@ class ColoredFormatter(logging.Formatter):
         if color_code:
             message = f"{prefix}{message}{suffix}"
         return message
+
+
+def configure_uvicorn_logging():
+    """
+    uvicorn logger config
+    """
+    # add timestamp to log
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+    LOGGING_CONFIG["formatters"]["default"]["fmt"] = log_format
+    LOGGING_CONFIG["formatters"]["default"]["datefmt"] = date_format
+    LOGGING_CONFIG["formatters"]["access"]["fmt"] = log_format
+    LOGGING_CONFIG["formatters"]["access"]["datefmt"] = date_format
+
+    uvicorn_error_logger = logging.getLogger("")
+    uvicorn_access_logger = logging.getLogger("uvicorn.access")
+    for handler in uvicorn_error_logger.handlers[:]:
+        uvicorn_error_logger.removeHandler(handler)
+    for handler in uvicorn_access_logger.handlers[:]:
+        uvicorn_access_logger.removeHandler(handler)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter(log_format, date_format))
+
+    uvicorn_error_logger.addHandler(console_handler)
+    uvicorn_access_logger.addHandler(console_handler)
+    uvicorn_error_logger.setLevel(logging.INFO)
+    uvicorn_access_logger.setLevel(logging.INFO)
+    uvicorn_error_logger.propagate = False
+    uvicorn_access_logger.propagate = False
 
 
 class DailyRotatingFileHandler(BaseRotatingHandler):
@@ -190,38 +222,38 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
             os.remove(str(self.base_log_path.with_name(file_name)))
 
 
-def get_logger(name, file_name, without_formater=False, print_to_console=False):
-    """
-    get logger
-    """
-    log_dir = envs.FD_LOG_DIR
-    if not os.path.exists(log_dir):
-        os.mkdir(log_dir)
-    is_debug = int(envs.FD_DEBUG)
-    logger = logging.getLogger(name)
-    if is_debug:
-        logger.setLevel(level=logging.DEBUG)
-    else:
-        logger.setLevel(level=logging.INFO)
+# def get_logger(name, file_name, without_formater=False, print_to_console=False):
+#     """
+#     get logger
+#     """
+#     log_dir = envs.FD_LOG_DIR
+#     if not os.path.exists(log_dir):
+#         os.mkdir(log_dir)
+#     is_debug = int(envs.FD_DEBUG)
+#     logger = logging.getLogger(name)
+#     if is_debug:
+#         logger.setLevel(level=logging.DEBUG)
+#     else:
+#         logger.setLevel(level=logging.INFO)
 
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
+#     for handler in logger.handlers[:]:
+#         logger.removeHandler(handler)
 
-    LOG_FILE = f"{log_dir}/{file_name}"
-    backup_count = int(envs.FD_LOG_BACKUP_COUNT)
-    handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
-    formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
+#     LOG_FILE = f"{log_dir}/{file_name}"
+#     backup_count = int(envs.FD_LOG_BACKUP_COUNT)
+#     handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
+#     formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
 
-    console_handler = logging.StreamHandler()
-    if not without_formater:
-        handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    if print_to_console:
-        logger.addHandler(console_handler)
-    handler.propagate = False
-    console_handler.propagate = False
-    return logger
+#     console_handler = logging.StreamHandler()
+#     if not without_formater:
+#         handler.setFormatter(formatter)
+#         console_handler.setFormatter(formatter)
+#     logger.addHandler(handler)
+#     if print_to_console:
+#         logger.addHandler(console_handler)
+#     handler.propagate = False
+#     console_handler.propagate = False
+#     return logger
 
 
 def str_to_datetime(date_string):
@@ -495,11 +527,20 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
     pynvml.nvmlShutdown()
 
+    paddle_max_reserved = paddle.device.cuda.max_memory_reserved(gpu_id)
+    paddle_max_allocated = paddle.device.cuda.max_memory_allocated(gpu_id)
+    paddle_reserved = paddle.device.cuda.memory_reserved(gpu_id)
+    paddle_allocated = paddle.device.cuda.memory_allocated(gpu_id)
+
     print(
         f"\n{title}:",
         f"\n\tDevice Total memory: {meminfo.total}",
         f"\n\tDevice Used memory: {meminfo.used}",
         f"\n\tDevice Free memory: {meminfo.free}",
+        f"\n\tPaddle max memory Reserved: {paddle_max_reserved}",
+        f"\n\tPaddle max memory Allocated: {paddle_max_allocated}",
+        f"\n\tPaddle memory Reserved: {paddle_reserved}",
+        f"\n\tPaddle memory Allocated: {paddle_allocated}",
     )
 
 
@@ -630,6 +671,22 @@ def is_list_of(
     assert_never(check)
 
 
+def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
+    """
+    Import a Python file according to its file path.
+    """
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None:
+        raise ModuleNotFoundError(f"No module named '{module_name}'")
+
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
@@ -717,6 +774,12 @@ class StatefulSemaphore:
             "max_value": self.max_value,
             "uptime": round(self.uptime, 2),
         }
+
+
+# 日志使用全局访问点（兼容原有使用方式）
+def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
+    """全局函数包装器，保持向后兼容"""
+    return FastDeployLogger().get_logger(name, file_name, without_formater, print_to_console)
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")

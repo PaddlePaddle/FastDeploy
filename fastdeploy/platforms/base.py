@@ -77,6 +77,12 @@ class Platform:
         """
         return paddle.is_compiled_with_custom_device("gcu")
 
+    def is_maca(self) -> bool:
+        """
+        whether platform is metax gpu
+        """
+        return paddle.is_compiled_with_custom_device("metax_gpu")
+
     @classmethod
     def get_attention_backend_cls(self, selected_backend):
         """Get the attention backend"""

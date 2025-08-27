@@ -19,7 +19,7 @@
 std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
                                                const paddle::Tensor &top_p,
                                                const paddle::optional<paddle::Tensor> &top_k,
-                                               int seed) {
+                                               int64_t seed) {
   std::vector<int64_t> probs_shape = probs.shape();
   unsigned int batch_size = probs_shape[0];
   unsigned int vocab_size = probs_shape[1];
@@ -82,7 +82,7 @@ TopPSamplingRejectInferDtype(const paddle::DataType &probs_dtype,
 PD_BUILD_STATIC_OP(rejection_top_p_sampling)
     .Inputs({"probs", "top_p", paddle::Optional("top_k")})
     .Outputs({"samples"})
-    .Attrs({"seed: int"})
+    .Attrs({"seed: int64_t"})
     .SetKernelFn(PD_KERNEL(TopPSamplingReject))
     .SetInferShapeFn(PD_INFER_SHAPE(TopPSamplingRejectInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(TopPSamplingRejectInferDtype));
