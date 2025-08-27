@@ -519,6 +519,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
+            extra_link_args=["-lcuda"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
