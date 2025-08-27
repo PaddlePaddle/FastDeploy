@@ -409,13 +409,24 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
                 config = loaded_config
 
         # Get declared parameters
-        defined_dests = {action.dest for action in self._actions}
-        filtered_config = {k: v for k, v in config.items() if k in defined_dests}
+        defined_actions = {action.dest: action for action in self._actions}
+        filtered_config = {k: v for k, v in config.items() if k in defined_actions}
 
         # Set parameters
         if namespace is None:
             namespace = argparse.Namespace()
         for key, value in filtered_config.items():
+            action = defined_actions[key]
+            if action.type is not None and isinstance(value, (str, int, float)):
+                try:
+                    str_value = str(value).strip()
+                    if str_value == "":
+                        converted = None
+                    else:
+                        converted = action.type(str_value)
+                    value = converted
+                except Exception as e:
+                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}")
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
 
