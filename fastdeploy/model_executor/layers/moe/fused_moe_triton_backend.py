@@ -182,7 +182,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         config = {
             "BLOCK_SIZE_M": 32,
             "BLOCK_SIZE_N": 128,
-            "BLOCK_SIZE_K": 64,
+            "BLOCK_SIZE_K": 128,
             "GROUP_SIZE_M": 1,
         }
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
@@ -617,13 +617,13 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         ]
         self.up_gate_proj_scale_shape = [
             layer.num_local_experts,
-            layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
-            layer.hidden_size // self.quant_config.weight_block_size[1],
+            ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
         ]
         self.down_proj_scale_shape = [
             layer.num_local_experts,
-            layer.hidden_size // self.quant_config.weight_block_size[0],
-            layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+            ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
         ]
         if self.quant_config.is_checkpoint_bf16:
             layer.up_gate_proj_weight = layer.create_parameter(
