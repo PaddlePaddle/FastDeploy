@@ -78,7 +78,8 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 注：
 1. MTP当前暂不支持与Prefix Caching 、Chunked Prefill 、CUDAGraph同时使用。
-2. MTP当前暂不支持服务管理全局 Block， 即`export ENABLE_V1_KVCACHE_SCHEDULER=1`
+2. MTP当前暂不支持服务管理全局 Block， 即不要开启`export ENABLE_V1_KVCACHE_SCHEDULER=1`
+3. MTP当前暂不支持和拒绝采样同时使用，即不要开启`export FD_SAMPLING_CLASS=rejection`
 
 #### 2.2.5 CUDAGraph
 **原理：**

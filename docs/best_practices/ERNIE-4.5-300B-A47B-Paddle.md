@@ -74,7 +74,8 @@ Add the following lines to the startup parameters
 ```
 Notes:
 1. MTP currently does not support simultaneous use with Prefix Caching, Chunked Prefill, and CUDAGraph.
-2. MTP currently does not support service management global blocks, i.e. `export ENABLE_V1_KVCACHE_SCHEDULER=1`
+2. MTP currently does not support service management global blocks, i.e. do not run with `export ENABLE_V1_KVCACHE_SCHEDULER=1`
+3. MTP currently does not support rejection sampling, i.e. do not run with `export FD_SAMPLING_CLASS=rejection`
 
 #### 2.2.5 W4A8C8 Quantization
 **Idea:**
