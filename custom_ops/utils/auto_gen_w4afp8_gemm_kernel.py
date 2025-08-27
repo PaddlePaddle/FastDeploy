@@ -36,8 +36,8 @@ void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
     {cutlass_type} * out,
     const float *weight_scale,
     const float *input_row_sum,
-    const int *tokens,
-    const int max_tokens,
+    const int64_t *tokens,
+    const int64_t max_tokens,
     cudaStream_t stream);
 """
 
@@ -54,8 +54,8 @@ void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
         {cutlass_type} * out,
         const float *weight_scale,
         const float *input_row_sum,
-        const int *tokens,
-        const int max_tokens,
+        const int64_t *tokens,
+        const int64_t max_tokens,
         cudaStream_t stream) {{
 
     constexpr static int M = {M};
