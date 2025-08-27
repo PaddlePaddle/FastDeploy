@@ -385,7 +385,6 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
-
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
     if nvcc_version >= 12.0:
@@ -509,10 +508,6 @@ elif paddle.is_compiled_with_cuda():
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
-        sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
-        sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
-        sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
-        sources += ["gpu_ops/moba_attn/moba_attn.cu"]
         os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
         sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
         os.system("python utils/auto_gen_wfp8afp8_sparse_gemm_kernel.py")
