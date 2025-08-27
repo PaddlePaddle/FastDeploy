@@ -52,8 +52,6 @@ def quantize_weights(
     w: paddle.Tensor,
     group_size: Optional[int],
     quant_type: str = "uint4b8",
-    zero_points: bool = False,
-    ref_zero_points_after_scales: bool = False,
 ):
     """
     Quantize weights in PaddlePaddle, similar to PyTorch implementation.
@@ -69,16 +67,11 @@ def quantize_weights(
         w_ref: Dequantized reference weights.
         w_q: Quantized weights.
         w_s: Scales (None if `group_size` is None).
-        maybe_w_zp: Zero points (None if `zero_points=False`).
     """
     assert paddle.is_floating_point(w), "w must be float type"
     assert quant_type in ["uint4", "uint4b8"], "only support quant_type = uint4, uint4b8"
 
-    if zero_points:
-        assert group_size is not None, "group_size must be provided for zero_points"
-
     orig_device = w.place
-    # orig_type = w.dtype
     size_k, size_n = w.shape
 
     if group_size == -1:
@@ -98,30 +91,18 @@ def quantize_weights(
     min_q_val = float(-8.0)
 
     w_s = paddle.ones([1], dtype=paddle.float32)  # unscaled case
-    maybe_w_zp = None
 
     if group_size is not None:
-        if zero_points:
-            w_s = (max_val - min_val).clip(min=1e-5) / max_q_val
-            maybe_w_zp = paddle.round(paddle.abs(min_val / w_s)).clip(min_q_val, max_q_val).astype(paddle.int32)
-        else:
-            # Avoid division by zero
-            max_scale = paddle.maximum(
-                paddle.abs(max_val / (max_q_val if max_q_val != 0 else float("inf"))),
-                paddle.abs(min_val / (min_q_val if min_q_val != 0 else float("inf"))),
-            )
-            w_s = max_scale
+        # Avoid division by zero
+        max_scale = paddle.maximum(
+            paddle.abs(max_val / (max_q_val if max_q_val != 0 else float("inf"))),
+            paddle.abs(min_val / (min_q_val if min_q_val != 0 else float("inf"))),
+        )
+        w_s = max_scale
 
     # Quantize
-    w_q = paddle.round(w / w_s).astype(paddle.int32) + (maybe_w_zp if zero_points else 0)
+    w_q = paddle.round(w / w_s).astype(paddle.int32)
     w_q = paddle.clip(w_q, min_q_val, max_q_val)
-    # w_q = paddle.clip(w_q, min_q_val, max_q_val).astype(quant_type)
-
-    # Compute ref (dequantized)
-    # if ref_zero_points_after_scales and maybe_w_zp is not None:
-    #     w_ref = w_q.astype(orig_type) * w_s - maybe_w_zp.astype(orig_type) * w_s
-    # else:
-    #     w_ref = (w_q.astype(orig_type) - (maybe_w_zp.astype(orig_type) if zero_points else 0)) * w_s
 
     # if hasattr(quant_type, 'bias'):  # Custom quantization bias (if applicable)
     # w_q += quant_type.bias
@@ -138,20 +119,14 @@ def quantize_weights(
             return w_tensor
 
         w_q = reshape_w(w_q)
-        # w_ref = reshape_w(w_ref)
         w_s = w_s.reshape([-1, size_n])
 
-    if maybe_w_zp is not None:
-        maybe_w_zp = maybe_w_zp.reshape([-1, size_n])
-        maybe_w_zp = maybe_w_zp.cpu() if orig_device.is_cpu_place() else maybe_w_zp.cuda()
-
     # Move tensors back to original device
-    # w_ref = w_ref.to(orig_device)
     w_q = w_q.to(orig_device)
     if w_s is not None:
         w_s = w_s.to(orig_device)
 
-    return w_q, w_s, maybe_w_zp
+    return w_q, w_s
 
 
 def machete_quantize_and_pack(
@@ -160,9 +135,8 @@ def machete_quantize_and_pack(
     quant_type: str = "uint4b8",
     scale_type: str = "",
     group_size: int = -1,
-    zero_points: bool = False,
 ):
-    w_q, w_s, w_zp = quantize_weights(w, group_size, quant_type=quant_type, zero_points=zero_points)
+    w_q, w_s = quantize_weights(w, group_size, quant_type=quant_type)
     w_q = pack_rows(w_q, 4, *w_q.shape)
     w_q_col = w_q.transpose([1, 0]).contiguous()  # convert to col major
     w_q_prepack = machete_prepack_B(
