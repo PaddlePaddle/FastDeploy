@@ -136,11 +136,9 @@ CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achi
 Add the following lines to the startup parameters
 ```
 --use-cudagraph
---enable-custom-all-reduce
 ```
 Notes:
-1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../parameters.md) for related configuration parameter descriptions
-2. When CUDAGraph is enabled, if running with multi-GPUs TP>1, `--enable-custom-all-reduce` must be specified at the same time.
+- Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
 ## FAQ
 If you encounter any problems during use, you can refer to [FAQ](./FAQ.md).

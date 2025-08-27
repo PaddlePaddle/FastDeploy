@@ -16,6 +16,7 @@
 
 import threading
 import time
+import traceback
 from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -131,7 +132,7 @@ class ResourceManagerV1(ResourceManager):
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
 
-        if not self.config.enable_mm:
+        if not self.config.model_config.enable_mm:
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -289,7 +290,7 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if self.config.enable_mm and self.exist_prefill(scheduled_reqs):
+                    if self.config.model_config.enable_mm and self.exist_prefill(scheduled_reqs):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
@@ -389,7 +390,7 @@ class ResourceManagerV1(ResourceManager):
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
-            llm_logger.error(f"prefix match blocks error: {e}, waiting reschedule...")
+            llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
     def add_request(self, request: Request) -> None:
@@ -441,4 +442,4 @@ class ResourceManagerV1(ResourceManager):
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
         except Exception as e:
-            llm_logger.error(e)
+            llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")

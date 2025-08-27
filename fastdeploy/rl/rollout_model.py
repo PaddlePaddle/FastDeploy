@@ -247,9 +247,9 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
             )
 
             if self.fd_config.model_config.moe_use_aux_free:
-                self.infer_to_train_mapping[
-                    f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.experts.gate_correction_bias"
-                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate_correction_bias"] = (
+                    f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                )
 
             # Initialize defaultdict for expert weights
             from collections import defaultdict

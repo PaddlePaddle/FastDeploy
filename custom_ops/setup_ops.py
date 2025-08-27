@@ -385,6 +385,7 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
+
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
     if nvcc_version >= 12.0:
@@ -508,8 +509,14 @@ elif paddle.is_compiled_with_cuda():
         # Hopper optmized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
+        sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
+        sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
+        sources += ["gpu_ops/moba_attn/moba_attn.cu"]
         os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
         sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
+        os.system("python utils/auto_gen_wfp8afp8_sparse_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
 
     setup(
         name="fastdeploy_ops",
@@ -589,6 +596,12 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
     sources = [
+        "gpu_ops/update_inputs_v1.cu",
+        "gpu_ops/save_with_output_msg.cc",
+        "gpu_ops/get_output.cc",
+        "gpu_ops/get_output_msg_with_topk.cc",
+        "gpu_ops/save_output_msg_with_topk.cc",
+        "gpu_ops/transfer_output.cc",
         "gpu_ops/save_with_output.cc",
         "gpu_ops/set_mask_value.cu",
         "gpu_ops/set_value_by_flags.cu",

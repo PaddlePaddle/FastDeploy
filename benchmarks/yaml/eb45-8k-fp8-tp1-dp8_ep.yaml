@@ -1,0 +1,6 @@
+num_gpu_blocks_override: 1024
+max_model_len: 8192
+max_num_seqs: 64
+data_parallel_size: 8
+tensor_parallel_size: 1
+enable_expert_parallel: True

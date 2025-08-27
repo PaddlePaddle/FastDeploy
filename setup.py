@@ -211,7 +211,7 @@ setup(
             "model_executor/ops/iluvatar/*",
             "model_executor/models/*",
             "model_executor/layers/*",
-            "input/mm_processor/utils/*",
+            "input/ernie4_5_vl_processor/utils/*",
             "model_executor/ops/gcu/*",
             "version.txt",
         ]
