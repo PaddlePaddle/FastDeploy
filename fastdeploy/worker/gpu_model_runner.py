@@ -66,7 +66,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
 from fastdeploy import envs
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -153,9 +153,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            self.local_rank + int(self.parallel_config.engine_worker_queue_port)
-        )
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
     def exist_prefill(self):
         """
@@ -290,6 +289,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -1119,7 +1119,11 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = self.sampler(logits, self.sampling_metadata)
                 if self.parallel_config.tensor_parallel_size > 1:
-                    paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
+                    paddle.distributed.broadcast(
+                        sampler_output.sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
             else:
                 self.sampler(
                     logits,
@@ -1129,10 +1133,26 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = None
                 if self.parallel_config.tensor_parallel_size > 1:
-                    paddle.distributed.broadcast(self.share_inputs["accept_tokens"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["accept_num"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["step_idx"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["stop_flags"], 0)
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_tokens"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_num"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["step_idx"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["stop_flags"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
             # 5. post process
             model_output_data = ModelOutputData(
@@ -1151,7 +1171,7 @@ class GPUModelRunner(ModelRunnerBase):
                 is_block_step=self.share_inputs["is_block_step"],
                 full_hidden_states=model_output,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(
@@ -1202,13 +1222,15 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if not self.cache_config.enable_chunked_prefill:
             return
-        for task in tasks:
-            if task.get("prefill_chunk_info", None) is None:
-                continue
 
-            if task.chunk_idx > len(task.prefill_chunk_info):
-                continue
-            self.restore_chunked_prefill_request[task.request_id] = task
+        if tasks is not None:
+            for task in tasks:
+                if task.get("prefill_chunk_info", None) is None:
+                    continue
+
+                if task.chunk_idx > len(task.prefill_chunk_info):
+                    continue
+                self.restore_chunked_prefill_request[task.request_id] = task
 
         for id, task in list(self.restore_chunked_prefill_request.items()):
             idx = task.idx
@@ -1386,7 +1408,11 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_idx_list,
             )
             if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
+                paddle.distributed.broadcast(
+                    sampler_output.sampled_token_ids,
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
 
         else:
             self.sampler(
@@ -1397,10 +1423,26 @@ class GPUModelRunner(ModelRunnerBase):
             )
             sampler_output = None
             if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(self.share_inputs["accept_tokens"], 0)
-                paddle.distributed.broadcast(self.share_inputs["accept_num"], 0)
-                paddle.distributed.broadcast(self.share_inputs["step_idx"], 0)
-                paddle.distributed.broadcast(self.share_inputs["stop_flags"], 0)
+                paddle.distributed.broadcast(
+                    self.share_inputs["accept_tokens"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
+                paddle.distributed.broadcast(
+                    self.share_inputs["accept_num"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
+                paddle.distributed.broadcast(
+                    self.share_inputs["step_idx"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
+                paddle.distributed.broadcast(
+                    self.share_inputs["stop_flags"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
 
         # 5. Post Process
         model_output_data = ModelOutputData(
@@ -1419,7 +1461,7 @@ class GPUModelRunner(ModelRunnerBase):
             is_block_step=self.share_inputs["is_block_step"],
             full_hidden_states=model_output,
             msg_queue_id=self.parallel_config.msg_queue_id,
-            mp_rank=self.local_rank,
+            mp_rank=self.parallel_config.tensor_parallel_rank,
             use_ep=self.parallel_config.use_ep,
             draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             actual_draft_token_num=(
@@ -1456,7 +1498,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
-        # 7. Updata 'infer_seed' and step_cuda()
+        # 7. Update 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 

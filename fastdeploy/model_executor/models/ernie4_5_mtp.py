@@ -370,7 +370,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         compute logits
         """
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits

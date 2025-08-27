@@ -20,6 +20,7 @@ from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
     get_paddle_model_path,
+    get_torch_model_path,
     run_with_timeout,
 )
 
@@ -28,79 +29,46 @@ MAX_WAIT_SECONDS = 60 * 5
 
 prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
-
-model_param_map = {
-    "Qwen3-0.6B": {
-        "quantizations": ["None", "wint8", "wint4"],
-    },
-    "ernie-4_5-21b-a3b-bf16-paddle": {
+hugging_face_model_param_map = {
+    "Qwen2.5-7B-Instruct": {
         "tensor_parallel_size": 2,
-        "quantizations": [
-            "wint8",
-        ],
-    },
-    "Qwen2-7B-Instruct": {
-        "quantizations": ["None", "wint8"],
-    },
-    "Qwen3-30B-A3B": {
-        "tensor_parallel_size": 2,
-        "quantizations": [
-            {
-                "quant_type": "block_wise_fp8",
-                "backend": "triton",
-                "env": {"FD_USE_DEEP_GEMM": "0", "DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
-            },
-            {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
-        ],
+        "quantizations": ["None"],
     },
 }
-
-
-params = []
-for model, cfg in model_param_map.items():
+hf_params = []
+for model, cfg in hugging_face_model_param_map.items():
     for q in cfg["quantizations"]:
-        if isinstance(q, dict):
-            quant, backend, env = q["quant_type"], q.get("backend", "default"), q.get("env", {})
-        else:
-            quant, backend, env = q, "default", {}
-        params.append(
+        hf_params.append(
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 1),
                 cfg.get("max_model_len", 1024),
-                quant,
+                q,
                 cfg.get("max_tokens", 32),
-                env,
                 marks=[pytest.mark.core_model],
-                id=f"{model}.{quant}.{backend}",
             )
         )
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
-    params,
+    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    hf_params,
 )
-def test_common_model(
+def test_paddle_vs_torch_model(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
-    env,
-    monkeypatch,
 ) -> None:
-    model_path = get_paddle_model_path(model_name_or_path)
-    if env:
-        for k, v in env.items():
-            monkeypatch.setenv(k, v)
-
-    fd_outputs_v0 = run_with_timeout(
+    fd_model_path = get_paddle_model_path(model_name_or_path)
+    torch_model_path = get_torch_model_path(model_name_or_path)
+    paddle_outputs = run_with_timeout(
         target=form_model_get_output_topp0,
         args=(
             fd_runner,
-            model_path,
+            fd_model_path,
             tensor_parallel_size,
             max_model_len,
             max_tokens,
@@ -110,11 +78,11 @@ def test_common_model(
             prompts,
         ),
     )
-    fd_outputs_v1 = run_with_timeout(
+    hf_outputs = run_with_timeout(
         target=form_model_get_output_topp0,
         args=(
             fd_runner,
-            model_path,
+            torch_model_path,
             tensor_parallel_size,
             max_model_len,
             max_tokens,
@@ -124,9 +92,10 @@ def test_common_model(
             prompts,
         ),
     )
+
     check_tokens_id_and_text_close(
-        outputs_0_lst=fd_outputs_v0,
-        outputs_1_lst=fd_outputs_v1,
-        name_0="default loader",
-        name_1="default_v1 loader",
+        outputs_0_lst=paddle_outputs,
+        outputs_1_lst=hf_outputs,
+        name_0="Paddle model (default loader)",
+        name_1="HuggingFace model (default_v1 loader)",
     )
