@@ -181,7 +181,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         config = {
             "BLOCK_SIZE_M": 32,
             "BLOCK_SIZE_N": 128,
-            "BLOCK_SIZE_K": 128,
+            "BLOCK_SIZE_K": 64,
             "GROUP_SIZE_M": 1,
         }
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
@@ -656,7 +656,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 shape=[
                     layer.num_local_experts,
                     layer.hidden_size // self.quant_config.weight_block_size[0],
-                    layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+                    (layer.moe_intermediate_size + self.quant_config.weight_block_size[1] - 1 ) // self.quant_config.weight_block_size[1]
                 ],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(0),
