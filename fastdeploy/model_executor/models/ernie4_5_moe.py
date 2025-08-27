@@ -511,10 +511,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            if hasattr(self.lm_head, "linear"):
-                self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
-            else:  # ep
-                self.lm_head.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -581,11 +578,11 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
