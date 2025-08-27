@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import time
 from typing import Tuple
 
@@ -107,6 +108,15 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
+        vocab_file_names = [
+            "tokenizer.model",
+            "spm.model",
+            "ernie_token_100k.model",
+        ]
+        for i in range(len(vocab_file_names)):
+            if os.path.exists(os.path.join(fd_config.model_config.model, vocab_file_names[i])):
+                Ernie4_5Tokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
+                break
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,

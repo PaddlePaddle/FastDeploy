@@ -20,7 +20,10 @@ import subprocess
 import sys
 import time
 
+from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import get_logger, is_port_available
+
+load_model_register_plugins()
 
 logger = get_logger("multi_api_server", "multi_api_server.log")
 
