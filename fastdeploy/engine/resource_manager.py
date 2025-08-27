@@ -223,7 +223,6 @@ class ResourceManager:
         Returns:
             list: processed task list
         """
-        llm_logger.debug(f"Allocating resources for a batch of new tasks: {tasks}")
         allocated_position = 0  # number of tasks that have been allocated, also the position in request slots
         processing_task_index = 0  # current task
         processed_tasks = list()
@@ -320,7 +319,7 @@ class ResourceManager:
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
 
-        self.logger.info(
+        llm_logger.info(
             f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
         )
         llm_logger.info(f"{self.info()}")
