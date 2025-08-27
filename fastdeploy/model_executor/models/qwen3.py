@@ -257,7 +257,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
         else:
             self.lm_head.load_state_dict(state_dict)
 
