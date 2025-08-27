@@ -26,6 +26,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
@@ -336,6 +337,10 @@ class EngineArgs:
     """
     Configuration for graph optimization backend execution.
     """
+    moba_attention_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for moba attention.
+    """
 
     enable_logprob: bool = False
     """
@@ -363,6 +368,11 @@ class EngineArgs:
         Options include:
         - "default": default loader.
         - "default_v1": default_v1 loader.
+    """
+
+    lm_head_fp32: bool = False
+    """
+    Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
     def __post_init__(self):
@@ -530,6 +540,12 @@ class EngineArgs:
             help="",
         )
         model_group.add_argument(
+            "--moba-attention-config",
+            type=json.loads,
+            default=EngineArgs.moba_attention_config,
+            help="",
+        )
+        model_group.add_argument(
             "--guided-decoding-backend",
             type=str,
             default=EngineArgs.guided_decoding_backend,
@@ -564,6 +580,12 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.early_stop_config,
             help="the config for early stop.",
+        )
+        model_group.add_argument(
+            "--lm_head-fp32",
+            action="store_true",
+            default=EngineArgs.lm_head_fp32,
+            help="Specify the dtype of lm_head weight as float32.",
         )
 
         # Parallel processing parameters group
@@ -918,6 +940,18 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
+    def create_moba_attention_config(self) -> MobaAttentionConfig:
+        """
+        Create and retuan a MobaAttentionConfig object based on the current settings.
+        """
+        attention_args = asdict(self)
+        if self.moba_attention_config is not None:
+            for k, v in self.moba_attention_config.items():
+                attention_args[k] = v
+            return MobaAttentionConfig(attention_args)
+        else:
+            return MobaAttentionConfig(None)
+
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
         Create and retuan an EarlyStopConfig object based on the current settings.
@@ -955,6 +989,7 @@ class EngineArgs:
         speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
+        moba_attention_config = self.create_moba_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -992,6 +1027,7 @@ class EngineArgs:
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
+            moba_attention_config=moba_attention_config,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,
