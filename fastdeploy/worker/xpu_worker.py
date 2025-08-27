@@ -65,6 +65,7 @@ class XpuWorker(WorkerBase):
         self.model_runner: XPUModelRunner = XPUModelRunner(
             fd_config=self.fd_config,
             device=self.device,
+            device_id=self.device_ids[self.local_rank % len(self.device_ids)],
             rank=self.rank,
             local_rank=self.local_rank,
         )
@@ -109,7 +110,7 @@ class XpuWorker(WorkerBase):
                     used_memory: {used_memory}, free_memory: {free_memory}"
         )
 
-        self.model_runner.prepare_profile()
+        # self.model_runner.prepare_profile()
         self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
@@ -119,7 +120,7 @@ class XpuWorker(WorkerBase):
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 
-        self.model_runner.clear_block_table()
+        # self.model_runner.clear_block_table()
 
         logger.info(
             f"After warm up, total_available_memory: {total_available_memory}, \
@@ -170,7 +171,7 @@ class XpuWorker(WorkerBase):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
         else:
-            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
 
     def check_health(self) -> bool:
         """ """

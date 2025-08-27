@@ -66,7 +66,7 @@ void SpeculateUpdateV3(const paddle::Tensor &seq_lens_encoder,
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
-PD_BUILD_OP(speculate_update_v3)
+PD_BUILD_OP(speculate_update)
     .Inputs({"seq_lens_encoder",
              "seq_lens_decoder",
              "not_need_stop",

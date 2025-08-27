@@ -31,6 +31,7 @@ unset PADDLE_CUDA_ARCH_LIST
 DIST_DIR="dist"
 BUILD_DIR="build"
 EGG_DIR="fastdeploy.egg-info"
+EGG_XPU_DIR="fastdeploy_xpu.egg-info"
 
 # custom_ops directory config
 OPS_SRC_DIR="custom_ops"
@@ -57,7 +58,7 @@ function python_version_check() {
 
 function init() {
     echo -e "${BLUE}[init]${NONE} removing building directory..."
-    rm -rf $DIST_DIR $BUILD_DIR $EGG_DIR
+    rm -rf $DIST_DIR $BUILD_DIR $EGG_DIR $EGG_XPU_DIR
     ${python} -m pip install setuptools_scm
     echo -e "${BLUE}[init]${NONE} ${GREEN}init success\n"
 }
@@ -90,6 +91,11 @@ function copy_ops(){
     is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
     if [ "$is_xpu" = "True" ]; then
       DEVICE_TYPE="xpu"
+      mkdir -p ${OPS_TMP_DIR}/${WHEEL_NAME}/libs
+      mv libxft_blocks.so ${OPS_TMP_DIR}/${WHEEL_NAME}/libs/
+      mv libapiinfer.so ${OPS_TMP_DIR}/${WHEEL_NAME}/libs/
+      patchelf --set-rpath '$ORIGIN/libs' ${OPS_TMP_DIR}/${WHEEL_NAME}/fastdeploy_ops_pd_.so
+
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/xpu
       echo -e "xpu ops have been copy to fastdeploy"
       return
@@ -140,12 +146,9 @@ function build_and_install_ops() {
   cd $OPS_SRC_DIR
   export no_proxy=bcebos.com,paddlepaddle.org.cn,${no_proxy}
   echo -e "${BLUE}[build]${NONE} build and install fastdeploy_ops..."
-  TMP_DIR_REAL_PATH=`readlink -f ${OPS_TMP_DIR}`
   is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
   if [ "$is_xpu" = "True" ]; then
-    cd xpu_ops/src
-    bash build.sh ${TMP_DIR_REAL_PATH}
-    cd ../..
+    ${python} setup_ops_xpu.py install --install-lib ${OPS_TMP_DIR}
   elif [ "$FD_CPU_USE_BF16" == "true" ]; then
     if [ "$FD_BUILDING_ARCS" == "" ]; then
       FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
@@ -205,7 +208,7 @@ function version_info() {
 }
 
 function cleanup() {
-  rm -rf $BUILD_DIR $EGG_DIR
+  rm -rf $BUILD_DIR $EGG_DIR $EGG_XPU_DIR
   if [ `${python} -m pip list | grep fastdeploy | wc -l` -gt 0  ]; then
     echo -e "${BLUE}[init]${NONE} uninstalling fastdeploy..."
     ${python} -m pip uninstall -y fastdeploy-${DEVICE_TYPE}

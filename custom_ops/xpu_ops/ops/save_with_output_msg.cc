@@ -21,7 +21,7 @@
 
 #define MAX_BSZ 256
 
-// #define SAVE_WITH_OUTPUT_DEBUG
+#define SAVE_WITH_OUTPUT_DEBUG
 struct msgdata {
     long mtype;
     int mtext[MAX_BSZ + 2]; // stop_flag, bsz, tokens

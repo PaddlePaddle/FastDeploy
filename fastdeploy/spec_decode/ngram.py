@@ -17,7 +17,9 @@
 import paddle
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.ops.gpu import ngram_match
+
+if paddle.is_compiled_with_cuda():
+    from fastdeploy.model_executor.ops.gpu import ngram_match
 
 from .base import Proposer
 

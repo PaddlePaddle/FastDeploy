@@ -168,6 +168,8 @@ class XPUForwardMeta(ForwardMeta):
     #
     encoder_seq_lod: Optional[paddle.Tensor] = None
     #
+    decoder_seq_lod: Optional[paddle.Tensor] = None
+    #
     decoder_context_len: Optional[paddle.Tensor] = None
     #
     decoder_context_len_cache: Optional[paddle.Tensor] = None
@@ -183,10 +185,17 @@ class XPUForwardMeta(ForwardMeta):
     #
     encoder_seq_lod_cpu: Optional[paddle.Tensor] = None
     #
+    decoder_seq_lod_cpu: Optional[paddle.Tensor] = None
+    #
     decoder_context_len_cpu: Optional[paddle.Tensor] = None
     #
     decoder_context_len_cache_cpu: Optional[paddle.Tensor] = None
-
+    #
+    len_info_cpu: Optional[paddle.Tensor] = None
+    #
+    valid_bs_cpu: Optional[paddle.Tensor] = None
+    #
+    adjust_input: Optional[paddle.Tensor] = None
     #
     batch_tensor: Optional[paddle.Tensor] = None
     #

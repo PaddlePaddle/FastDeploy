@@ -20,6 +20,7 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
@@ -50,6 +51,23 @@ elif current_platform.is_maca():
         get_padding_offset,
         save_output,
         set_stop_value_multi_ends,
+        step_paddle,
+        update_inputs,
+        update_inputs_v1,
+    )
+elif current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (  # speculate_step_paddle,; speculate_step_system_cache,; step_system_cache,; step_reschedule,
+        get_padding_offset,
+        save_output,
+        save_output_topk,
+        set_stop_value_multi_ends,
+        speculate_clear_accept_nums,
+        speculate_get_output_padding_offset,
+        speculate_get_padding_offset,
+        speculate_get_seq_lens_output,
+        speculate_save_output,
+        speculate_set_value_by_flags_and_idx,
+        speculate_update,
         step_paddle,
         update_inputs,
         update_inputs_v1,
@@ -256,6 +274,7 @@ def post_process_normal(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
+        # import pdb;pdb.set_trace()
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
                 model_output.stop_flags,
@@ -373,8 +392,34 @@ def step_cuda(
     """
     TODO(gongshaotian): normalization name
     """
-
-    if speculative_config.method is not None:
+    if current_platform.is_xpu():
+        step_paddle(
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_this_time"],
+            share_inputs["step_seq_lens_encoder"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs["block_tables"],
+            share_inputs["encoder_block_lens"],
+            share_inputs["is_block_step"],
+            share_inputs["step_block_list"],
+            share_inputs["step_lens"],
+            share_inputs["recover_block_list"],
+            share_inputs["recover_lens"],
+            share_inputs["need_block_list"],
+            share_inputs["need_block_len"],
+            share_inputs["used_list_len"],
+            share_inputs["free_list"],
+            share_inputs["free_list_len"],
+            share_inputs["input_ids"],
+            share_inputs["pre_ids"],
+            share_inputs["step_idx"],
+            share_inputs["next_tokens"],
+            share_inputs["first_token_ids"],
+            block_size,
+            enc_dec_block_num,
+        )
+    elif speculative_config.method is not None:
         if enable_prefix_caching:
             speculate_step_system_cache(
                 share_inputs["stop_flags"],
@@ -527,12 +572,30 @@ def rebuild_padding(
     seq_lens_encoder: paddle.Tensor,
     output_padding_offset: Optional[paddle.Tensor] = None,
     max_input_length: Optional[int] = None,
+    xpu_forward_meta: Optional[ForwardMeta] = None,
 ):
     """
     Args:
     Returns:
     """
-    if current_platform.is_cuda():
+    if current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import gather_next_token
+
+        hidden_states = gather_next_token(
+            tmp_out,
+            xpu_forward_meta.cum_offsets,
+            xpu_forward_meta.encoder_seq_lod,
+            xpu_forward_meta.encoder_batch_map,
+            xpu_forward_meta.decoder_batch_map,
+            xpu_forward_meta.encoder_seq_lod_cpu,
+            xpu_forward_meta.encoder_batch_map_cpu,
+            xpu_forward_meta.decoder_batch_map_cpu,
+            xpu_forward_meta.enc_batch,
+            xpu_forward_meta.dec_batch,
+            None,  # output_padding_offset
+            -1,  # max_input_length
+        )
+    elif current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
 
         hidden_states = rebuild_padding(

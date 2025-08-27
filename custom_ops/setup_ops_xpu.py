@@ -27,7 +27,8 @@ import paddle
 from paddle.utils.cpp_extension import CppExtension, setup
 
 current_file = Path(__file__).resolve()
-base_dir = current_file.parent
+base_dir_parent = current_file.parent
+base_dir = os.path.join(base_dir_parent, "xpu_ops")
 
 
 def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR, XDNN_LIB_DIR):
@@ -50,8 +51,8 @@ def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR, XDNN_LIB_DI
     dirs_to_remove = [
         "dist",
         "fastdeploy_ops.egg-info",
-        "build",
-        "plugin/build",
+        "xpu_ops/build",
+        "xpu_ops/plugin/build",
     ]
     for dir_name in dirs_to_remove:
         if os.path.exists(dir_name):
@@ -133,12 +134,16 @@ def xpu_setup_ops():
     XVLLM_OP_LIB_PATH = os.path.join(XVLLM_PATH, "xft_blocks", "so", "libxft_blocks.so")
     XVLLM_OP_LIB_DIR = os.path.join(XVLLM_PATH, "xft_blocks", "so")
 
+    shutil.copy2(XVLLM_KERNEL_LIB_PATH, base_dir_parent)
+    shutil.copy2(XVLLM_OP_LIB_PATH, base_dir_parent)
+
     # build plugin
     build_plugin(CLANG_PATH, XRE_INC_PATH, XRE_LIB_DIR, XDNN_INC_PATH, XDNN_LIB_DIR)
 
     ops = [
         # custom ops
         "./ops/save_with_output_msg.cc",
+        "./ops/save_output_msg_with_topk.cc",
         "./ops/stop_generation_multi_ends.cc",
         "./ops/set_value_by_flags_and_idx.cc",
         "./ops/get_token_penalty_multi_scores.cc",
@@ -147,6 +152,7 @@ def xpu_setup_ops():
         "./ops/recover_decode_task.cc",
         "./ops/update_inputs_v1.cc",
         "./ops/get_output.cc",
+        "./ops/get_output_msg_with_topk.cc",
         "./ops/step.cc",
         "./ops/get_infer_param.cc",
         "./ops/adjust_batch.cc",
@@ -162,7 +168,7 @@ def xpu_setup_ops():
     ]
     ops = [os.path.join(base_dir, op) for op in ops]
 
-    for root, dirs, files in os.walk(base_dir / "ops/mtp_ops"):
+    for root, dirs, files in os.walk(base_dir + "/ops/mtp_ops"):
         for file in files:
             if file.endswith(".cc"):
                 ops.append(os.path.join(root, file))

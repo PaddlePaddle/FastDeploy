@@ -188,9 +188,9 @@ macro(
       -Wno-int-to-void-pointer-cast -Wno-int-to-pointer-cast -Werror ${MTP_KERNEL_COMPILE_FLAGS}
       -mllvm --xpu-inline-cost -mllvm --xpu-inline-hot-call -I${XDNN_INC_DIR} -I${XRE_INC_DIR}
       -fxpu-launch-return
-      -I${CMAKE_CURRENT_SOURCE_DIR}/include -I${CMAKE_CURRENT_SOURCE_DIR}/src
-      -I${CMAKE_CURRENT_SOURCE_DIR}/src/kernel
-      -I${CMAKE_CURRENT_SOURCE_DIR}/src/kernel/include ${arg_rule}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/include
+      -I${CMAKE_CURRENT_SOURCE_DIR}/kernel
+      -I${CMAKE_CURRENT_SOURCE_DIR}/kernel/include ${arg_rule}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${kernel_path}
     COMMENT ${kernel_name}.device.bin.o ${kernel_name}.o
@@ -257,17 +257,17 @@ macro(search_and_compile_kernel xpu_n)
   if(${xpu_n} STREQUAL "xpu1")
     set(XPU_DEVICE_O_EXTRA_FLAGS " ")
     set(XPU_HOST_O_EXTRA_FLAGS " ")
-    set(XPU_KERNEL_PATH "src/kernel/cpp/*.xpu")
+    set(XPU_KERNEL_PATH "kernel/cpp/*.xpu")
     set(xpu_n_macro "__XPU1__")
   elseif(${xpu_n} STREQUAL "xpu2")
     set(XPU_DEVICE_O_EXTRA_FLAGS "--xpu-arch=xpu2")
     set(XPU_HOST_O_EXTRA_FLAGS "--xpu-arch=xpu2")
-    set(XPU_KERNEL_PATH "src/kernel/kunlun2cpp/*.xpu")
+    set(XPU_KERNEL_PATH "kernel/kunlun2cpp/*.xpu")
     set(xpu_n_macro "__XPU2__")
   elseif(${xpu_n} STREQUAL "xpu3")
     set(XPU_DEVICE_O_EXTRA_FLAGS "--xpu-arch=xpu3")
     set(XPU_HOST_O_EXTRA_FLAGS "--xpu-arch=xpu3")
-    set(XPU_KERNEL_PATH "src/kernel/kunlun3cpp/*.xpu")
+    set(XPU_KERNEL_PATH "kernel/kunlun3cpp/*.xpu")
     set(xpu_n_macro "__XPU3__")
   else()
     message(FATAL_ERROR "Are you sure? ${xpu_n}")
@@ -310,7 +310,7 @@ search_and_compile_kernel("xpu2")
 search_and_compile_kernel("xpu3")
 
 # compile xpu wrappers
-file(GLOB_RECURSE xpu_wrappers src/wrapper/*.cpp)
+file(GLOB_RECURSE xpu_wrappers wrapper/*.cpp)
 list(LENGTH xpu_wrappers xpu_wrappers_num)
 message(STATUS "Found ${xpu_wrappers_num} XPU wrappers")
 
@@ -334,8 +334,8 @@ foreach(xpu_wrapper IN LISTS xpu_wrappers)
       ${XPU_CLANG} -M -MQ wrapper_build/${wrapper_name}.wrapper.o -MF
       wrapper_build/${wrapper_name}.wrapper.d -std=c++11 -x xpu -c
       ${xpu_wrapper} -I${XDNN_INC_DIR} -I${XRE_INC_DIR}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/include -I${CMAKE_CURRENT_SOURCE_DIR}/src
-      -I${CMAKE_CURRENT_SOURCE_DIR}/src/wrapper -D_GNU_SOURCE
+      -I${CMAKE_CURRENT_SOURCE_DIR}/include
+      -I${CMAKE_CURRENT_SOURCE_DIR}/wrapper -D_GNU_SOURCE
       -D__STDC_LIMIT_MACROS -DNDEBUG ${TOOLCHAIN_ARGS} --target=${TARGET_ARCH}
       -fPIC -Werror -Wreorder -fvisibility=hidden --xpu-host-only
       ${XPU_MF_FLAGS}
@@ -356,8 +356,7 @@ foreach(xpu_wrapper IN LISTS xpu_wrappers)
       ${XPU_CLANG} -std=c++11 ${EXTRA_FLAGS} ${OPT_LEVEL} -x xpu -c
       ${xpu_wrapper} -o wrapper_build/${wrapper_name}.wrapper.o
       -I${XDNN_INC_DIR} -I${XRE_INC_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/include
-      -I${CMAKE_CURRENT_SOURCE_DIR}/src
-      -I${CMAKE_CURRENT_SOURCE_DIR}/src/wrapper -D_GNU_SOURCE
+      -I${CMAKE_CURRENT_SOURCE_DIR}/wrapper -D_GNU_SOURCE
       -D__STDC_LIMIT_MACROS -DNDEBUG ${TOOLCHAIN_ARGS} --target=${TARGET_ARCH}
       -fPIC -Wunused-variable -Werror -Wreorder -fvisibility=hidden
       --xpu-host-only ${HOST_XPU_FLAGS}
@@ -398,7 +397,7 @@ add_custom_command(
     \"-\(\" -Wl,--whole-archive ${CMAKE_CURRENT_BINARY_DIR}/libxpuplugin.a
     -Wl,--no-whole-archive -L${XDNN_LIB_DIR} -L${XRE_LIB_DIR} -lxpurt -lxpuapi
     -Wl,--no-undefined -Wl,-soname,libxpuplugin.so ${LIB_CUDART_FLAG} -lstdc++ -ldl -lm -lpthread
-    -specs=${CMAKE_CURRENT_SOURCE_DIR}/src/linker.specs -Xlinker \"-\)\"\;
+    -specs=${CMAKE_CURRENT_SOURCE_DIR}/linker.specs -Xlinker \"-\)\"\;
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libxpuplugin.a
   COMMENT ${CMAKE_CURRENT_BINARY_DIR}/libxpuplugin.so)

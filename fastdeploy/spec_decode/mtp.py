@@ -29,17 +29,31 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
-from fastdeploy.model_executor.ops.gpu import (
-    draft_model_postprocess,
-    draft_model_preprocess,
-    draft_model_update,
-    eagle_get_hidden_states,
-    eagle_get_self_hidden_states,
-    hybrid_mtp_ngram,
-    mtp_save_first_token,
-    mtp_step_paddle,
-    share_external_data,
-)
+
+if paddle.is_compiled_with_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        draft_model_postprocess,
+        draft_model_preprocess,
+        draft_model_update,
+        eagle_get_hidden_states,
+        eagle_get_self_hidden_states,
+        hybrid_mtp_ngram,
+        mtp_save_first_token,
+        mtp_step_paddle,
+        share_external_data,
+    )
+elif paddle.device.is_compiled_with_xpu():
+    from fastdeploy.model_executor.ops.xpu import (
+        draft_model_postprocess,
+        draft_model_preprocess,
+        draft_model_update,
+        eagle_get_hidden_states,
+        eagle_get_self_hidden_states,
+        # hybrid_mtp_ngram,
+        mtp_save_first_token,
+        mtp_step_paddle,
+        # share_external_data,
+    )
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
 from .base import Proposer
@@ -65,7 +79,7 @@ class MTPProposer(Proposer):
         self.role = "mixed"
         self.sampler = MTPSampler(cfg)
         self._init_model_inputs()
-
+        self.forward_meta = None
         self.attn_backends: list[AttentionBackend] = []
         self._initialize_attn_backend()
 
@@ -205,7 +219,7 @@ class MTPProposer(Proposer):
         )
         self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
             self.main_model_inputs["decoder_num_blocks_cpu"]
-        ).pin_memory()
+        ).cpu()
         self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(self.main_model_inputs["max_len_tensor_cpu"]).cpu()
 
         # Get the attention backend
@@ -322,7 +336,8 @@ class MTPProposer(Proposer):
         self.model_inputs["draft_tokens"] = paddle.full(
             shape=[self.max_num_seqs, self.max_draft_token_num + 1], fill_value=-1, dtype="int64"
         )
-
+        self.seq_lens_encoder_record = paddle.full(shape=[self.max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.seq_lens_decoder_record = paddle.full(shape=[self.max_num_seqs, 1], fill_value=0, dtype="int32")
         self.model_inputs["encoder_block_lens"] = paddle.clone(self.main_model_inputs["encoder_block_lens"])
 
         self.free_list = list(
@@ -373,6 +388,7 @@ class MTPProposer(Proposer):
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
                 self.model_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
+                self.seq_lens_encoder_record[idx : idx + 1] = length
                 prefill_token_num = self.max_draft_token_num + 1
                 self.model_inputs["draft_tokens"][idx : idx + 1, 0:1] = paddle.to_tensor(
                     request.draft_token_ids[1:2], dtype="int64"
@@ -455,6 +471,31 @@ class MTPProposer(Proposer):
         """
         Prepare MTP inputs
         """
+        # draft_model_preprocess(
+        #     self.model_inputs["draft_tokens"],
+        #     self.model_inputs["input_ids"],
+        #     self.model_inputs["stop_flags"],
+        #     self.model_inputs["seq_lens_this_time"],
+        #     self.model_inputs["seq_lens_encoder"],
+        #     self.model_inputs["seq_lens_decoder"],
+        #     self.model_inputs["step_idx"],
+        #     self.model_inputs["not_need_stop"],
+        #     self.model_inputs["batch_drop"],
+        #     self.model_inputs["pre_ids"],
+        #     self.main_model_inputs["accept_tokens"],
+        #     self.main_model_inputs["accept_num"],
+        #     self.main_model_inputs["seq_lens_this_time"],
+        #     self.main_model_inputs["seq_lens_encoder"],
+        #     self.main_model_inputs["seq_lens_decoder"],
+        #     self.main_model_inputs["step_idx"],
+        #     self.main_model_inputs["stop_flags"],
+        #     self.main_model_inputs["is_block_step"],
+        #     self.main_model_inputs["draft_tokens"],
+        #     self.num_model_steps,
+        #     self.speculative_method in ["eagle", "mtp"],
+        #     self.role == "prefill",
+        # )
+
         draft_model_preprocess(
             self.model_inputs["draft_tokens"],
             self.model_inputs["input_ids"],
@@ -463,21 +504,21 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_encoder"],
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
+            self.seq_lens_encoder_record,
+            self.seq_lens_decoder_record,
             self.model_inputs["not_need_stop"],
             self.model_inputs["batch_drop"],
-            self.model_inputs["pre_ids"],
             self.main_model_inputs["accept_tokens"],
             self.main_model_inputs["accept_num"],
-            self.main_model_inputs["seq_lens_this_time"],
             self.main_model_inputs["seq_lens_encoder"],
             self.main_model_inputs["seq_lens_decoder"],
             self.main_model_inputs["step_idx"],
             self.main_model_inputs["stop_flags"],
             self.main_model_inputs["is_block_step"],
             self.main_model_inputs["draft_tokens"],
-            self.num_model_steps,
+            self.max_draft_token_num,
             self.speculative_method in ["eagle", "mtp"],
-            self.role == "prefill",
+            splitwise_prefill=True,
         )
 
         target_hidden_states = eagle_get_hidden_states(

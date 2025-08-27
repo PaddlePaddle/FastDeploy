@@ -138,7 +138,12 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output
+            from fastdeploy.model_executor.ops.xpu import (
+                get_output,
+                get_output_ep,
+                get_output_topk,
+                speculate_get_output,
+            )
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
@@ -151,7 +156,6 @@ class TokenProcessor:
                 speculate_get_output,
             )
         rank_id = self.cfg.parallel_config.local_data_parallel_id
-
         while True:
             try:
                 is_blocking = True
