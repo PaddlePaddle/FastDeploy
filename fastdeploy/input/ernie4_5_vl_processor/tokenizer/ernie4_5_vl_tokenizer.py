@@ -14,9 +14,6 @@
 # limitations under the License.
 """
 
-"""
-ErnieVLTokenizer
-"""
 import os
 import re
 from shutil import copyfile
@@ -31,7 +28,7 @@ from paddleformers.transformers.tokenizer_utils_base import PaddingStrategy, Tex
 from fastdeploy.utils import console_logger as logger
 
 
-class ErnieVLTokenizer(PretrainedTokenizer):
+class Ernie4_5_VLTokenizer(PretrainedTokenizer):
     """doc"""
 
     resource_files_names = {
@@ -157,7 +154,7 @@ class ErnieVLTokenizer(PretrainedTokenizer):
         """doc"""
         if "add_special_tokens" in kwargs:
             kwargs.pop("add_special_tokens")
-            # logger.warning(f'ErnieBotTokenizer v2 does not support `add_special_tokens`')
+            # logger.warning(f'Ernie4_5Tokenizer v2 does not support `add_special_tokens`')
         return super().prepare_for_model(*args, **kwargs)
 
     def save_vocabulary(self, save_directory, filename_prefix: Optional[str] = None) -> Tuple[str]:

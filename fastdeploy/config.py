@@ -95,7 +95,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "start_layer_index": 0,
     "moe_num_shared_experts": 0,
     "moe_layer_start_index": 0,
-    "num_max_dispatch_tokens_per_rank": 256,
+    "num_max_dispatch_tokens_per_rank": 128,
     "moe_use_aux_free": False,
     "vocab_size": -1,
     "hidden_dropout_prob": 0.0,
@@ -129,6 +129,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.lm_head_fp32: bool = False
         self.model_format = "auto"
         for key, value in args.items():
             if hasattr(self, key):
@@ -278,7 +279,7 @@ class ParallelConfig:
         # block size
         self.block_size: int = 64
         # Engine worker queue port
-        self.engine_worker_queue_port: int = 9923
+        self.engine_worker_queue_port: str = "9923"
         # Max model len
         self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
@@ -307,7 +308,11 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
+            logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
+        elif isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = [self.engine_worker_queue_port]
         # currently, the expert parallel size is equal data parallel size
         if self.enable_expert_parallel:
             self.expert_parallel_size = self.data_parallel_size * self.tensor_parallel_size
@@ -677,6 +682,67 @@ class GraphOptimizationConfig:
             argument = self.use_cudagraph
 
 
+class MobaAttentionConfig:
+    def __init__(
+        self,
+        args,
+    ):
+        self.moba_encoder_top_k_left: int = None
+        self.moba_encoder_top_k_right: int = None
+        "The sparse topk of encoder attention is located at [moba_encoder_top_k_left, moba_encoder top_k_right]"
+        self.moba_decoder_top_k_left: int = None
+        self.moba_decoder_top_k_right: int = None
+        "The sparse topk of decoder attention is located at [moba_decoder_top_k_left, moba_decoder top_k_right]"
+        self.moba_use_encoder_seq_limit: int = None
+        "When the number of encdoer token is less than moba_use_encoder_seq_limit, it is not sparse"
+        self.moba_use_decoder_seq_limit: int = None
+        "When the number of decdoer token is less than moba_use_decoder_seq_limit, it is not sparse"
+        self.moba_block_size: int = 128
+        self.mlp_weight_name: str = "moba_mlp_weight.safetensors"
+        self.moba_max_seq_length: int = 128 * 1024
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+            if self.moba_use_encoder_seq_limit is None and self.moba_encoder_top_k_left is not None:
+                self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
+            if self.moba_use_decoder_seq_limit is None and self.moba_decoder_top_k_left is not None:
+                self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
+            self.check_legality_parameters()
+
+    def check_legality_parameters(
+        self,
+    ) -> None:
+        if self.moba_encoder_top_k_left is not None:
+            assert self.moba_encoder_top_k_left > 0, "moba_encoder_top_k_left must large than 0"
+
+        if self.moba_encoder_top_k_right is not None:
+            assert self.moba_encoder_top_k_right > 0, "moba_encoder_top_k_right must large than 0"
+            assert (
+                self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
+            ), "moba_encoder_top_k_right must large than moba_encoder_top_k_left"
+
+        if self.moba_decoder_top_k_left is not None:
+            assert self.moba_decoder_top_k_left > 0, "moba_decoder_top_k_left must large than 0"
+
+        if self.moba_decoder_top_k_right is not None:
+            assert self.moba_decoder_top_k_right > 0, "moba_decoder_top_k_right must large than 0"
+            assert (
+                self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
+            ), "moba_decoder_top_k_right must large than moba_decoder_top_k_left"
+
+        if self.moba_use_encoder_seq_limit is not None and self.moba_encoder_top_k_left is not None:
+            assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
+        if self.moba_use_decoder_seq_limit is not None and self.moba_decoder_top_k_left is not None:
+            assert self.moba_use_decoder_seq_limit >= self.moba_decoder_top_k_left * self.moba_block_size
+
+    def to_json_string(self):
+        """
+        Convert moba_attention_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
+
 class EarlyStopConfig:
     def __init__(
         self,
@@ -1031,6 +1097,7 @@ class FDConfig:
         decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
+        moba_attention_config: MobaAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
@@ -1038,7 +1105,7 @@ class FDConfig:
         max_num_batched_tokens: Optional[int] = None,
         ips: str = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: int = 8002,
+        engine_worker_queue_port: str = "8002",
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         splitwise_role: str = "mixed",
@@ -1065,7 +1132,7 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-
+        self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
@@ -1082,11 +1149,10 @@ class FDConfig:
 
         if self.ips is None:
             self.master_ip = "0.0.0.0"
-        elif isinstance(self.ips, list):
-            self.master_ip = self.ips[0]
-        else:
+        elif isinstance(self.ips, str):
             self.ips = self.ips.split(",")
-            self.master_ip = self.ips[0]
+
+        self.host_ip = get_host_ip()
 
         if self.ips is None:
             self.nnode = 1
@@ -1095,7 +1161,7 @@ class FDConfig:
             self.nnode = len(self.ips)
 
             for idx, ip in enumerate(self.ips):
-                if ip == self.master_ip:
+                if ip == self.host_ip:
                     self.node_rank = idx
 
         self.max_model_len = max_model_len
@@ -1111,7 +1177,11 @@ class FDConfig:
         self.reasoning_parser = reasoning_parser
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
+        self.engine_worker_queue_port = engine_worker_queue_port
         self._str_to_list("innode_prefill_ports", int)
+        if isinstance(engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(engine_worker_queue_port)
+        self._str_to_list("engine_worker_queue_port", str)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
@@ -1129,10 +1199,11 @@ class FDConfig:
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
             assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
+
+            # assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
         else:
             self.worker_num_per_node = num_ranks
 
-        self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
@@ -1155,15 +1226,12 @@ class FDConfig:
 
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
-        self.host_ip = get_host_ip()
-
-        if self.ips is None or self.host_ip == self.master_ip:
-            self.is_master = True
-        else:
-            self.is_master = False
-
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
+            self.master_ip = "0.0.0.0"
+        else:
+            self.is_master = False
+            self.master_ip = self.ips[0]
 
         self.paddle_commit_id = paddle.version.commit
 
@@ -1345,10 +1413,12 @@ class FDConfig:
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):
             val = getattr(self, attr_name)
+            if val is None:
+                return
             if type(val) is str:
                 setattr(self, attr_name, [default_type(i) for i in val.split(",")])
             else:
-                setattr(self, attr_name, val)
+                setattr(self, attr_name, [default_type(i) for i in val])
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, indent=4)
