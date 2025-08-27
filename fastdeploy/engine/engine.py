@@ -28,8 +28,7 @@ import time
 import traceback
 import uuid
 import weakref
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from dataclasses import asdict
 
 import numpy as np
 import paddle
@@ -476,6 +475,8 @@ class LLMEngine:
         """
         # TODO 输入输出长度确认
 
+        if sampling_params is not None:
+            task.update(asdict(sampling_params))
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
