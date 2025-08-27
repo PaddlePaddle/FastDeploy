@@ -370,6 +370,11 @@ class EngineArgs:
         - "default_v1": default_v1 loader.
     """
 
+    lm_head_fp32: bool = False
+    """
+    Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -575,6 +580,12 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.early_stop_config,
             help="the config for early stop.",
+        )
+        model_group.add_argument(
+            "--lm_head-fp32",
+            action="store_true",
+            default=EngineArgs.lm_head_fp32,
+            help="Specify the dtype of lm_head weight as float32.",
         )
 
         # Parallel processing parameters group
