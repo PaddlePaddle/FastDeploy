@@ -2,32 +2,35 @@ name: Remove skip labels on new PR commits
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [synchronize]
     branches: [develop, release/**]
-permissions: read-all
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
 
 jobs:
-  remove-skip-labels:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Remove skip* labels
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const prNumber = github.context.payload.pull_request.number;
-            const labels = github.context.payload.pull_request.labels.map(l => l.name);
+  - name: Remove skip labels
+    uses: actions/github-script@v6
+    with:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      script: |
+        const prNumber = context.payload.pull_request.number;
+        const labels = context.payload.pull_request.labels.map(l => l.name);
 
-            // 找到所有以 "skip" 开头的 label
-            const skipLabels = labels.filter(l => l.startsWith("skip"));
-            console.log("Skip labels to remove:", skipLabels);
+        const skipLabels = labels.filter(l => l.startsWith("skip"));
 
-            for (const label of skipLabels) {
-              await github.rest.issues.removeLabel({
-                owner: github.context.repo.owner,
-                repo: github.context.repo.repo,
-                issue_number: prNumber,
-                name: label
-              });
-              console.log(`Removed label: ${label}`);
-            }
+        if (skipLabels.length === 0) {
+          console.log("No skip labels, nothing to remove.");
+        } else {
+          console.log("Skip labels to remove:", skipLabels);
+          for (const label of skipLabels) {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              name: label
+            });
+            console.log(`Removed label: ${label}`);
+          }
+        }
