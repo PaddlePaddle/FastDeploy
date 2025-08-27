@@ -89,18 +89,18 @@ class InputPreprocessor:
                     tool_parser_obj=tool_parser_obj,
                 )
             else:
-                from fastdeploy.input.ernie_processor import ErnieProcessor
+                from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 
-                self.processor = ErnieProcessor(
+                self.processor = Ernie4_5Processor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
                     tool_parser_obj=tool_parser_obj,
                 )
         else:
             if ErnieArchitectures.contains_ernie_arch(architectures):
-                from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
+                from fastdeploy.input.ernie4_5_vl_processor import Ernie4_5_VLProcessor
 
-                self.processor = ErnieMoEVLProcessor(
+                self.processor = Ernie4_5_VLProcessor(
                     model_name_or_path=self.model_name_or_path,
                     limit_mm_per_prompt=self.limit_mm_per_prompt,
                     mm_processor_kwargs=self.mm_processor_kwargs,
