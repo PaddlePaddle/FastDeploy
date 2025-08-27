@@ -647,6 +647,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
+            # because we use lazy guard and is not initialized by default
+            if not self.lm_head.linear.weight._is_initialized():
+                self.lm_head.linear.weight.initialize()
             self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()
