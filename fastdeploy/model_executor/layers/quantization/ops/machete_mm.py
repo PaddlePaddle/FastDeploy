@@ -17,7 +17,17 @@ from typing import Optional
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B
+from fastdeploy.platforms import current_platform
+
+
+def get_sm_version():
+    prop = paddle.device.cuda.get_device_properties()
+    cc = prop.major * 10 + prop.minor
+    return cc
+
+
+if current_platform.is_cuda() and get_sm_version() == 90:
+    from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B
 
 
 def get_pack_factor(num_bits):
