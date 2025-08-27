@@ -323,7 +323,7 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    graph_optimization_config: Optional[Dict[str, Any]] = {"use_cudagraph": True, "graph_opt_level": 0}
+    graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
     """
