@@ -57,7 +57,7 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
-        self.use_logprobs = self.cfg.enable_logprob
+        self.use_logprobs = self.cfg.model_config.enable_logprob
 
         if self.speculative_decoding:
             self.output_tokens = paddle.full(
@@ -201,7 +201,7 @@ class TokenProcessor:
                         self.prefill_time_signal.value[current_index] = 0
                     current_index += 1
             except Exception as e:
-                llm_logger.error(f"Error processing prefill metrics: {e}")
+                llm_logger.error(f"Error processing prefill metrics: {e}, {str(traceback.format_exc())}")
 
         self.executor.submit(process_metrics)
 
@@ -215,7 +215,7 @@ class TokenProcessor:
         try:
             self.cached_generated_tokens.put_results(batch_result)
         except Exception as e:
-            llm_logger.error(f"Error in TokenProcessor's postprocess: {e}")
+            llm_logger.error(f"Error in TokenProcessor's postprocess: {e}, {str(traceback.format_exc())}")
 
     def _recycle_resources(self, task_id, index, task, result=None, is_prefill=False):
         """
@@ -252,12 +252,13 @@ class TokenProcessor:
 
     def _compute_speculative_status(self):
         # TODO(liuzichang): Supplement more statistics
-        interval = 50
+        interval = 10
         if self.speculative_stats_step % interval == 0:
             accept_ratio = 1 - self.total_step * 1.0 / self.number_of_output_tokens
             spec_logger.info(
                 f"Speculate global accept ratio(Accept draft_tokens/Generated tokens): {accept_ratio}"
                 f" total step: {self.total_step}. total output token num: {self.number_of_output_tokens}"
+                f" avarage accept len: {self.number_of_output_tokens / self.total_step}"
             )
 
             if self.cfg.speculative_config.method in ["mtp"]:

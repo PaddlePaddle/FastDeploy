@@ -1,6 +1,6 @@
 # 分离式部署
 
-大模型推理分为两个部分Prefill和Decode阶段，分别为计算密集型（Prefill）和计算密集型（Decode）两部分。将Prefill 和 Decode 分开部署在一定场景下可以提高硬件利用率，有效提高吞吐，降低整句时延，
+大模型推理分为两个部分Prefill和Decode阶段，分别为计算密集型（Prefill）和存储密集型（Decode）两部分。将Prefill 和 Decode 分开部署在一定场景下可以提高硬件利用率，有效提高吞吐，降低整句时延，
 
 * Prefill阶段：处理输入的全部Token（如用户输入的Prompt），完成模型的前向传播（Forward），生成首token。
 * Decode阶段：从生成第首token后，采用自回归一次生成一个token，直到生成到stop token结束；设输出N✖️token，Decode阶段需要执行（N-1）次前向传播，只能串行执行，并且在生成过程中，需要关注的token数越来越多，计算量也逐渐增大。

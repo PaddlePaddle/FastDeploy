@@ -15,7 +15,7 @@
 """
 
 import functools
-from typing import Any, Optional, Tuple, Union
+from typing import Tuple, Union
 
 import numpy as np
 import paddle
@@ -43,14 +43,6 @@ from fastdeploy import envs
 cache_params = envs.FD_CACHE_PARAMS
 if cache_params != "none":
     c8_state_dict = paddle.load(cache_params, return_numpy=True)
-
-
-# TODO(lulinjun): delete it, import from fastdeploy.model_executor.models.utils after supporting all backends
-def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
-    if param_attr_map is None:
-        return
-    for key, value in param_attr_map.items():
-        setattr(param, key, value)
 
 
 def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Tensor, Tensor]:

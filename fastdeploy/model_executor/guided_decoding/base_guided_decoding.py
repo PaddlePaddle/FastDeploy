@@ -15,6 +15,7 @@
 """
 
 import os
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from fastdeploy.config import ErnieArchitectures, FDConfig
@@ -278,7 +279,7 @@ class BackendBase:
                     tokenizer = PreTrainedTokenizerFast(__slow_tokenizer=tokenizer)
             else:
                 from fastdeploy.model_executor.guided_decoding.ernie_tokenizer import (
-                    ErnieBotTokenizer,
+                    Ernie4_5Tokenizer,
                 )
 
                 vocab_file_names = [
@@ -293,14 +294,14 @@ class BackendBase:
                             vocab_file_names[i],
                         )
                     ):
-                        ErnieBotTokenizer.vocab_files_names["vocab_file"] = vocab_file_names[i]
+                        Ernie4_5Tokenizer.vocab_files_names["vocab_file"] = vocab_file_names[i]
                         break
 
-                tokenizer = ErnieBotTokenizer.from_pretrained(self.fd_config.model_config.model)
+                tokenizer = Ernie4_5Tokenizer.from_pretrained(self.fd_config.model_config.model)
 
             return tokenizer
         except Exception as e:
-            raise Exception(f"Fail to initialize hf tokenizer: {e}")
+            raise Exception(f"Fail to initialize hf tokenizer: {e}, {str(traceback.format_exc())}")
 
     def add_cache(self, schemata_key: tuple[str, str], processor: LogitsProcessorBase) -> None:
         """

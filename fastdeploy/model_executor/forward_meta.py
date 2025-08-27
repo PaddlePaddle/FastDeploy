@@ -114,6 +114,39 @@ class ForwardMeta:
         if self.caches:
             del self.caches
 
+    def __str__(self) -> str:
+        """
+        Returns a concise string representation of the ForwardMeta object in a compact format.
+        """
+
+        def format_str(obj):
+            """
+            A helper function to recursively get a concise string representation of objects.
+            """
+            if obj is None:
+                return "None"
+            elif isinstance(obj, paddle.Tensor):
+                tensor_info = {
+                    "data_ptr": obj.data_ptr(),
+                    "shape": obj.shape,
+                    "dtype": str(obj.dtype),
+                    "place": str(obj.place),
+                }
+                return tensor_info
+            elif isinstance(obj, (list, tuple)):
+                return [format_str(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {key: format_str(value) for key, value in obj.items()}
+            elif not isinstance(obj, (int, float, str, bool)) and hasattr(obj, "__dict__"):
+                info = {key: format_str(value) for key, value in obj.__dict__.items() if not key.startswith("_")}
+                return f"<{obj.__class__.__name__} object info: {info}>"
+            else:
+                return str(obj)
+
+        simplified_info = format_str(self.__dict__)
+        lines = [f"  {key}: {value}" for key, value in simplified_info.items()]
+        return "{\n" + ",\n".join(lines) + "\n}"
+
 
 @dataclass
 class XPUForwardMeta(ForwardMeta):

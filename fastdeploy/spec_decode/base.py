@@ -45,6 +45,10 @@ class Proposer(ABC):
         self.max_model_len = self.parallel_config.max_model_len
         self.speculative_method = self.speculative_config.method
         self.max_draft_token_num = self.speculative_config.num_speculative_tokens
+        self.num_model_steps = self.speculative_config.num_model_steps
+
+        self.max_ngram_size = self.speculative_config.max_ngram_size
+        self.min_ngram_size = self.speculative_config.min_ngram_size
 
         spec_logger.info(f"Speculate config: {self.speculative_config}")
 

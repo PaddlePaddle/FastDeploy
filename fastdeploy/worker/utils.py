@@ -15,6 +15,7 @@
 """
 
 import os
+import traceback
 
 
 def check_safetensors_model(model_dir: str):
@@ -45,5 +46,5 @@ def check_safetensors_model(model_dir: str):
             sum(flags) == safetensors_num
         ), f"Number of safetensor files should be {len(model_files)}, but now it's {sum(flags)}"
     except Exception as e:
-        raise Exception(f"Failed to check unified checkpoint, details: {e}.")
+        raise Exception(f"Failed to check unified checkpoint, details: {e}, {str(traceback.format_exc())}.")
     return is_safetensors
