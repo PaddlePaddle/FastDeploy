@@ -571,6 +571,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out, self.tp_group)
+            tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out
