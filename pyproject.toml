@@ -16,7 +16,7 @@ exclude = [
     "custom_ops/third_party",
 ]
 line-length = 119
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.format]
 # Prevent change to double quotes by some users use ruff format
