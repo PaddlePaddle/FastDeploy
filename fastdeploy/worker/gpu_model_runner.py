@@ -263,7 +263,10 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
 
-                input_ids = request.prompt_token_ids + request.output_token_ids
+                if len(request.output_token_ids) == 0:
+                    input_ids = request.prompt_token_ids
+                else:
+                    input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
