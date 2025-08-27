@@ -75,6 +75,7 @@ __global__ void multi_query_append_attention_kernel(
 
   block_table_now = block_table + batch_id * max_block_num_per_seq;
 
+  //When cudagraph capture prefill, may launch more gridDim.x
   if(btid >= static_cast<uint32_t>(num_blocks_x_cpu)){
     return;
   }
