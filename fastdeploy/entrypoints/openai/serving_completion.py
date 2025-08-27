@@ -175,8 +175,8 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
-            aggregated_top_logprobs = [[[], [], []]] * num_choices
-            aggregated_token_ids = [[]] * num_choices
+            aggregated_top_logprobs = [[[], [], []] for _ in range(num_choices)]
+            aggregated_token_ids = [[] for _ in range(num_choices)]
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
@@ -240,7 +240,7 @@ class OpenAIServingCompletion:
                 dealer.close()
                 self.engine_client.semaphore.release()
 
-    def _echo_back_prompt(self, request, res, idx):
+    async def _echo_back_prompt(self, request, res, idx):
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
             if isinstance(request.prompt, list):
                 prompt_text = request.prompt[idx]
@@ -346,7 +346,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
-                    self._echo_back_prompt(request, res, idx)
+                    await self._echo_back_prompt(request, res, idx)
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -446,7 +446,6 @@ class OpenAIServingCompletion:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
-        aggregated_logprobs: Optional[CompletionLogprobs] = None
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -458,15 +457,9 @@ class OpenAIServingCompletion:
             output = final_res["outputs"]
             output_top_logprobs = output["top_logprobs"]
 
+            aggregated_logprobs: Optional[CompletionLogprobs] = None
             if output_top_logprobs is not None:
-                logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
-                if aggregated_logprobs is None:
-                    aggregated_logprobs = logprobs_res
-                else:
-                    aggregated_logprobs.tokens.extend(logprobs_res.tokens)
-                    aggregated_logprobs.token_logprobs.extend(logprobs_res.token_logprobs)
-                    aggregated_logprobs.top_logprobs.extend(logprobs_res.top_logprobs)
-                    aggregated_logprobs.text_offset.extend(logprobs_res.text_offset)
+                aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
             if request.echo:
                 assert prompt_text is not None
@@ -478,7 +471,6 @@ class OpenAIServingCompletion:
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-
             finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
 
             choice_data = CompletionResponseChoice(
