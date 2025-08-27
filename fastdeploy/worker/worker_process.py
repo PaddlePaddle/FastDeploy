@@ -34,7 +34,6 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
@@ -543,12 +542,6 @@ def parse_args():
         help="Configation of Graph optimization backend.",
     )
     parser.add_argument(
-        "--moba_attention_config",
-        type=json.loads,
-        default=None,
-        help="Configation of moba attention.",
-    )
-    parser.add_argument(
         "--guided_decoding_backend",
         type=str,
         default="off",
@@ -653,8 +646,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
-
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
     # Note(tangbinhan): used for load_checkpoint
@@ -734,7 +725,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
-        moba_attention_config=moba_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 
