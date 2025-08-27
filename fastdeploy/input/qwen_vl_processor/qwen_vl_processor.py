@@ -17,9 +17,10 @@
 import numpy as np
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qwen_mm_processor import DataProcessor
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
+
+from .process import DataProcessor
 
 
 class QwenVLProcessor(TextProcessor):

@@ -73,7 +73,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         """
         pass
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
