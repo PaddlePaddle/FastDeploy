@@ -13,40 +13,58 @@
 # limitations under the License.
 
 """UT for get_token_penalty"""
+import unittest
+
 import numpy as np
 import paddle
 
 from fastdeploy.model_executor.ops.gpu import get_token_penalty_once
 
-paddle.seed(2023)
 
-pre_ids = paddle.randint(0, 10000, (8, 1000))
-pre_ids[:, -1] = pre_ids[:, -2]
-print(pre_ids)
-logits = paddle.rand(shape=[8, 10000], dtype="float16")
-penalty_scores = np.array([1.2] * 8).astype(np.float16).reshape(-1, 1)
-penalty_scores = paddle.to_tensor(penalty_scores)
+class TestTokenPenalty(unittest.TestCase):
+    def setUp(self):
+        paddle.seed(2023)
+        self.pre_ids = paddle.randint(0, 10000, (8, 1000))
+        self.pre_ids[:, -1] = self.pre_ids[:, -2]
+        self.logits = paddle.rand(shape=[8, 10000], dtype="float16")
+        self.penalty_scores = np.array([1.2] * 8).astype(np.float16).reshape(-1, 1)
+        self.penalty_scores = paddle.to_tensor(self.penalty_scores)
 
-print("logits[0][pre_ids[0]]: ", logits[0][pre_ids[0]])
-res = get_token_penalty_once(pre_ids, logits, penalty_scores)
-for i in range(8):
-    print(f"res[{i}]:{res[i][pre_ids[i]]}")
+    def test_token_penalty_once(self):
+        res = get_token_penalty_once(self.pre_ids, self.logits, self.penalty_scores)
+
+        # 验证结果形状
+        self.assertEqual(res.shape, self.logits.shape)
+
+        # 验证惩罚逻辑
+        for i in range(8):
+            original_values = self.logits[i][self.pre_ids[i]]
+            penalized_values = res[i][self.pre_ids[i]]
+            # 检查是否应用了惩罚
+            for orig, penal in zip(original_values.numpy(), penalized_values.numpy()):
+                if orig < 0:
+                    self.assertLess(penal, orig, "负值应该乘以惩罚因子")
+                else:
+                    self.assertLess(penal, orig, "正值应该除以惩罚因子")
+
+    def test_compare_with_naive_implementation(self):
+        res = get_token_penalty_once(self.pre_ids, self.logits, self.penalty_scores)
+
+        # 朴素实现
+        score = paddle.index_sample(self.logits, self.pre_ids)
+        score = paddle.where(score < 0, score * self.penalty_scores, score / self.penalty_scores)
+
+        bsz = paddle.shape(self.logits)[0]
+        bsz_range = paddle.arange(start=bsz * 0, end=bsz, step=bsz / bsz, name="bsz_range", dtype="int64").unsqueeze(
+            -1
+        )
+        input_ids = self.pre_ids + bsz_range * self.logits.shape[-1]
+        res2 = paddle.scatter(self.logits.flatten(), input_ids.flatten(), score.flatten()).reshape(self.logits.shape)
+
+        # 比较两种实现的结果差异
+        max_diff = (res - res2).abs().max().item()
+        self.assertLess(max_diff, 1e-5)
 
 
-input_ids = pre_ids
-score = paddle.index_sample(logits, input_ids)
-score = paddle.where(score < 0, score * penalty_scores, score / penalty_scores)
-
-bsz = paddle.shape(logits)[0]  # TODO: Bsz as input for inference with dynamic batch_size
-bsz_range = paddle.arange(start=bsz * 0, end=bsz, step=bsz / bsz, name="bsz_range", dtype="int64").unsqueeze(-1)
-input_ids = input_ids + bsz_range * logits.shape[-1]
-res2 = paddle.scatter(logits.flatten(), input_ids.flatten(), score.flatten()).reshape(logits.shape)
-print("-------------------------------------------")
-for i in range(8):
-    print(res2[i][pre_ids[i]])
-
-print("res_sub:")
-for i in range(8):
-    print(res2[i][pre_ids[i]] - res[i][pre_ids[i]])
-
-print((res.numpy() - res2.numpy()).sum())
+if __name__ == "__main__":
+    unittest.main()
