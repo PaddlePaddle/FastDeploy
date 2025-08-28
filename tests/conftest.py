@@ -15,6 +15,7 @@ import os
 import signal
 import socket
 import subprocess
+import time
 from typing import Any, Union
 
 import pytest
@@ -70,6 +71,7 @@ class FDRunner:
         if "engine_worker_queue_port" in kwargs:
             ports_to_clean.append(kwargs["engine_worker_queue_port"])
         clean_ports(ports_to_clean)
+        time.sleep(5)
         self.llm = LLM(
             model=model_name_or_path,
             tensor_parallel_size=tensor_parallel_size,

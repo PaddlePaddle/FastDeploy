@@ -127,7 +127,11 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
             num_local_ffn_keys.append(down_proj_in_scale_key)
 
         # for EP w4a8, we need all expert's activation_scale for up_gate_proj
-        for j in range(fd_config.model_config.moe_num_experts):
+        num_experts = fd_config.model_config.moe_num_experts
+        if isinstance(num_experts, list):
+            num_experts = num_experts[0]
+
+        for j in range(num_experts):
             up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
@@ -321,7 +325,12 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
+    # (TODO: remove in the future)
+    if (
+        fd_config.parallel_config.use_ep
+        and fd_config.speculative_config.model_type != "mtp"
+        and fd_config.parallel_config.tensor_parallel_size == 1
+    ):
         state_dict = load_ep_checkpoint(model_path, fd_config, return_numpy=True)
     else:
         rank_dirs = [
@@ -342,6 +351,7 @@ def load_composite_checkpoint(
                 state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
                 deal_state_dict(state_dict)
             else:
+                # NOTE: for very big model, cpu will be out of memory
                 state_dict = load_tp_checkpoint(
                     model_path,
                     cls,

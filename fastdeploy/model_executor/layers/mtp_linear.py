@@ -18,6 +18,8 @@ import paddle
 from paddle import nn
 from paddle.distributed import fleet
 
+from fastdeploy.model_executor.utils import set_weight_attrs
+
 from .utils import get_tensor
 
 
@@ -75,6 +77,9 @@ class ParallelEHProjection(nn.Layer):
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_weight_attrs(self.linear.weight, {"output_dim": True})
+                if self.bias_key is not None:
+                    set_weight_attrs(self.linear.bias, {"output_dim": True})
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
@@ -85,6 +90,7 @@ class ParallelEHProjection(nn.Layer):
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
+                set_weight_attrs(self.linear.weight, {"output_dim": False})
 
     def load_state_dict(self, state_dict):
         """
