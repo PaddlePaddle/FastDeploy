@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import time
 import traceback
 import uuid
@@ -21,7 +22,8 @@ import uuid
 import numpy as np
 
 from fastdeploy import envs
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
+from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
@@ -43,6 +45,7 @@ class EngineClient:
         max_model_len,
         tensor_parallel_size,
         pid,
+        port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
         # enable_mm=False,
@@ -73,13 +76,19 @@ class EngineClient:
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        array_size = min(max_chips_per_node, tensor_parallel_size * data_parallel_size)
+
+        if tensor_parallel_size <= max_chips_per_node:
+            self.is_master = True
+        else:
+            self.is_master = False
+
+        array_size = min(max_chips_per_node, tensor_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=self.worker_healthy_live_recorded_time_array,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
@@ -88,9 +97,13 @@ class EngineClient:
             name="model_weights_status",
             array=model_weights_status,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
+        self.connection_manager = DealerConnectionManager(
+            pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
+        )
+        self.connection_initialized = False
 
     def create_zmq_client(self, model, mode):
         """
@@ -203,35 +216,35 @@ class EngineClient:
         Validate stream options
         """
 
-        if data.get("n"):
+        if data.get("n") is not None:
             if data["n"] != 1:
                 raise ValueError("n only support 1.")
 
-        if data.get("max_tokens"):
+        if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
                 raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
 
-        if data.get("reasoning_max_tokens"):
+        if data.get("reasoning_max_tokens") is not None:
             if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
                 raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
 
-        if data.get("top_p"):
+        if data.get("top_p") is not None:
             if data["top_p"] > 1 or data["top_p"] < 0:
                 raise ValueError("top_p value can only be defined [0, 1].")
 
-        if data.get("frequency_penalty"):
+        if data.get("frequency_penalty") is not None:
             if not -2.0 <= data["frequency_penalty"] <= 2.0:
                 raise ValueError("frequency_penalty must be in [-2, 2]")
 
-        if data.get("temperature"):
+        if data.get("temperature") is not None:
             if data["temperature"] < 0:
                 raise ValueError("temperature must be non-negative")
 
-        if data.get("presence_penalty"):
+        if data.get("presence_penalty") is not None:
             if not -2.0 <= data["presence_penalty"] <= 2.0:
                 raise ValueError("presence_penalty must be in [-2, 2]")
 
-        if data.get("seed"):
+        if data.get("seed") is not None:
             if not 0 <= data["seed"] <= 922337203685477580:
                 raise ValueError("seed must be in [0, 922337203685477580]")
 

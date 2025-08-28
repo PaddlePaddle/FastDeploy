@@ -20,6 +20,7 @@ import paddle
 
 import fastdeploy
 
+from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 QUANT_SCALING_FACTOR = 448
@@ -30,24 +31,32 @@ class W4AFP8Config(QuantConfigBase):
     quantization config for weight 4bits and activation fp8
     """
 
-    def __init__(self, weight_scale_dict, act_scale_dict) -> None:
+    def __init__(self, weight_scale_dict, act_scale_dict, is_permuted) -> None:
         super().__init__()
         self.weight_scale_dict = weight_scale_dict
         self.act_scale_dict = act_scale_dict
         self.quant_max_bound = 448
         self.quant_min_bound = -448
         self.quant_round_type = 1
+        self.is_permuted = is_permuted
 
     def name(self) -> str:
         return "w4afp8"
 
     @classmethod
     def from_config(cls, config: dict) -> "W4AFP8Config":
-        weight_scale_dict = config["weight_scale_dict"]
-        act_scale_dict = config["act_scale_dict"]
-        return cls(weight_scale_dict, act_scale_dict)
+        weight_scale_dict = config.get("weight_scale_dict", None)
+        act_scale_dict = config.get("act_scale_dict", None)
+        is_permuted = config.get("is_permuted", True)
+        return cls(weight_scale_dict, act_scale_dict, is_permuted)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
+        if isinstance(layer, FusedMoE):
+            from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+                CutlassW4AFP8MoEMethod,
+            )
+
+            return CutlassW4AFP8MoEMethod(self)
         return W4AFP8LinearMethod(self)
 
 

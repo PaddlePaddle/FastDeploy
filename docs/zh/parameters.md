@@ -35,7 +35,7 @@
 | ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
 | ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False。开启前建议仔细阅读  [graph_optimization.md](./features/graph_optimization.md)，在多卡场景需要同时开启 Custom all-reduce。 |
 | ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
-| ```enable_custom_all_reduce```     | `bool`      | 开启Custom all-reduce，默认False |
+| ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
 | ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、`off`, 默认为 `off` |
@@ -44,7 +44,12 @@
 | ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
+| ```served_model_name```       | `str`      | API 中使用的模型名称，如果未指定，模型名称将与--model参数相同 |
+| ```revision```       | `str`      | 自动下载模型时，用于指定模型的Git版本，分支名或tag |
 | ```chat_template```       | `str`      | 指定模型拼接使用的模板，支持字符串与文件路径，默认为None，如未指定，则使用模型默认模板 |
+| ```tool_call_parser```       | `str`      | 指定要使用的function call解析器，以便从模型输出中抽取 function call内容|
+| ```tool_parser_plugin```       | `str`      | 指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式|
+| ```lm_head_fp32```       | `bool`      | 指定lm_head层的类型为 FP32 |
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 

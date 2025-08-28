@@ -54,6 +54,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
     # Set moe backend."cutlass","marlin" and "triton" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
+    # Whether to use Machete for wint4 dense gemm.
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
     # Set whether to disable recompute the request when the KV cache is full.
     "FD_DISABLED_RECOVER": lambda: os.getenv("FD_DISABLED_RECOVER", "0"),
     # Set triton kernel JIT compilation directory.
@@ -85,7 +87,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # set trace attribute job_id.
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
     # support max connections
-    "FD_SUPPORT_MAX_CONNECTIONS": lambda: 768,
+    "FD_SUPPORT_MAX_CONNECTIONS": lambda: int(os.getenv("FD_SUPPORT_MAX_CONNECTIONS", "1024")),
+    # enable multi api server
+    "FD_ENABLE_MULTI_API_SERVER": lambda: bool(int(os.getenv("FD_ENABLE_MULTI_API_SERVER", "0"))),
+    "FD_FOR_TORCH_MODEL_FORMAT": lambda: bool(int(os.getenv("FD_FOR_TORCH_MODEL_FORMAT", "0"))),
 }
 
 
