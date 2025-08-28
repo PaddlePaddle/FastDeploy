@@ -39,7 +39,7 @@ class ExpertService:
         local_data_parallel_id (int): Local data parallel ID.
     """
 
-    def __init__(self, cfg, local_data_parallel_id):
+    def __init__(self, cfg, local_data_parallel_id, start_queue=True):
         """
         Initializes the LLMEngine with the provided configuration.
 
@@ -64,8 +64,7 @@ class ExpertService:
             else:
                 self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
-
-        self.engine = EngineSevice(self.cfg)
+        self.engine = EngineSevice(self.cfg, start_queue)
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.reset_nodeid(f"{self.engine.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
@@ -149,7 +148,7 @@ def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=N
     """
     Start expert service
     """
-    expert_service = ExpertService(cfg, local_data_parallel_id)
+    expert_service = ExpertService(cfg, local_data_parallel_id, start_queue=False)
 
     try:
         expert_service.start(ipc_signal_suffix, local_data_parallel_id)
@@ -160,6 +159,5 @@ def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=N
 
         t_deamon = threading.Thread(target=deamon_thread, daemon=True)
         t_deamon.start()
-
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
