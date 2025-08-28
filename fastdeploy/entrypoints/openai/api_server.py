@@ -529,7 +529,6 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-    load_model_register_plugins()
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return
