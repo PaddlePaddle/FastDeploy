@@ -1057,7 +1057,7 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight")})
-    .Outputs({"fmha_out", "qkv_out", "key_cache_out", "value_cache_out"})
+    .Outputs({"fmha_out", "key_cache_out", "value_cache_out"})
     .SetInplaceMap({{"key_cache", "key_cache_out"},
                     {"value_cache", "value_cache_out"}})
     .Attrs({"rms_norm_eps: float",
@@ -1123,7 +1123,8 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
     .SetInplaceMap({{"fmha_out", "fmha_out_out"},
                     {"key_cache", "key_cache_out"},
                     {"value_cache", "value_cache_out"}})
-    .Attrs({"compute_type: std::string",
+    .Attrs({"rms_norm_eps: float",
+            "compute_type: std::string",
             "cache_quant_type: std::string",
             "use_neox_rotary_style: bool",
             "rope_3d: bool",
@@ -1138,7 +1139,7 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
             "speculate_max_draft_token_num: int",
             "causal: bool",
             "speculate_decoder: bool",
-            "rms_norm_eps: float"})
+            })
     .SetKernelFn(PD_KERNEL(AppendAttentionWithOutput))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionWithOutputInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(AppendAttentionWithOutputInferDtype));

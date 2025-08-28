@@ -107,7 +107,7 @@ void AppendAttentionWithOutput(
     const paddle::Tensor &decoder_tile_ids_per_batch,
     const paddle::Tensor &decoder_num_blocks,
     const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
-    paddle::Tensor &res,
+    paddle::Tensor &fmha_out,
     const paddle::optional<paddle::Tensor> &rotary_embs,
     const paddle::optional<paddle::Tensor> &attn_mask,
     const paddle::optional<paddle::Tensor> &qkv_bias,
