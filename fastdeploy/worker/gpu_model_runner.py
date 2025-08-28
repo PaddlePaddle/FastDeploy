@@ -264,6 +264,7 @@ class GPUModelRunner(ModelRunnerBase):
                     input_ids = request.prompt_token_ids
                 else:
                     input_ids = request.prompt_token_ids + request.output_token_ids
+
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx} prefill_start_index {prefill_start_index} prefill_end_index {prefill_end_index} need_prefilled_token_num {len(input_ids)}"
                 )
