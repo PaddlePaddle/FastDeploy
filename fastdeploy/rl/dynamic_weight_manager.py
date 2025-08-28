@@ -81,6 +81,7 @@ class DynamicWeightManager:
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
+        logger.info(f"IPC snapshot update parameters completed from {self.meta_src_id}")
         model_path = os.path.join(
             self.fd_config.model_config.model,
             f"model_state.tp0{self.meta_src_id}.pdparams",
@@ -110,7 +111,7 @@ class DynamicWeightManager:
             param._clear_data()
 
         self._verify_parameters("clearance")
-        if self.nranks > 1:
+        if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier()
         paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, -2)
@@ -141,8 +142,8 @@ class DynamicWeightManager:
     def _finalize_update(self, pid: int):
         """Finalize update process with verification."""
         self._verify_parameters("update")
-        if self.nranks > 1:
-            paddle.distributed.barrier()
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
         if not self.first_load:
             self._update_shared_status(pid, 0)
         self.first_load = False
