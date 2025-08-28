@@ -47,6 +47,7 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -58,7 +59,6 @@ from fastdeploy.utils import (
     FlexibleArgumentParser,
     StatefulSemaphore,
     api_server_logger,
-    configure_uvicorn_logging,
     console_logger,
     is_port_available,
     retrive_model_from_server,
@@ -413,6 +413,7 @@ def launch_api_server() -> None:
             host=args.host,
             port=args.port,
             workers=args.workers,
+            log_config=UVICORN_CONFIG,
             log_level="info",
         )  # set log level to error to avoid log
     except Exception as e:
@@ -439,7 +440,7 @@ def run_metrics_server():
     run metrics server
     """
 
-    uvicorn.run(metrics_app, host="0.0.0.0", port=args.metrics_port, log_level="error")
+    uvicorn.run(metrics_app, host="0.0.0.0", port=args.metrics_port, log_config=UVICORN_CONFIG, log_level="error")
 
 
 def launch_metrics_server():
@@ -508,6 +509,7 @@ def run_controller_server():
         controller_app,
         host="0.0.0.0",
         port=args.controller_port,
+        log_config=UVICORN_CONFIG,
         log_level="error",
     )
 
@@ -527,7 +529,7 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-    configure_uvicorn_logging()
+    load_model_register_plugins()
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return

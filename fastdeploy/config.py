@@ -1310,7 +1310,7 @@ class FDConfig:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.engine_worker_queue_port,
+                        "port": self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id],
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":
