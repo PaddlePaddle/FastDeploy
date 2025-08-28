@@ -15,12 +15,20 @@
 """
 
 from .cutlass_scaled_mm import cutlass_scaled_mm
-from .machete_mm import machete_quantize_and_pack, machete_wint_mm
 from .scaled_fp8_quant import scaled_fp8_quant
 
 __all__ = [
     "cutlass_scaled_mm",
     "scaled_fp8_quant",
-    "machete_wint_mm",
-    "machete_quantize_and_pack",
 ]
+
+try:
+    from fastdeploy.model_executor.ops import gpu as _gpu_ops
+    if hasattr(_gpu_ops, "machete_mm") and hasattr(_gpu_ops, "machete_prepack_B"):
+        from .machete_mm import machete_quantize_and_pack, machete_wint_mm
+        __all__.extend([
+            "machete_wint_mm",
+            "machete_quantize_and_pack",
+        ])
+except Exception:
+    pass
