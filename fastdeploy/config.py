@@ -1158,10 +1158,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        assert (
-            self.device_ids.split(",").__len__() == self.worker_num_per_node
-        ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
-
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
