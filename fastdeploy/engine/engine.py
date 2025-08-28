@@ -400,10 +400,10 @@ class LLMEngine:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
-                    err, data = self.zmq_server.receive_json_once(block)
+                if not self.cfg.enable_mm:
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -456,7 +456,7 @@ class LLMEngine:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, [error_result])
+                    self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
