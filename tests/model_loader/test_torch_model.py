@@ -24,9 +24,8 @@ from tests.model_loader.utils import (
 )
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-MAX_WAIT_SECONDS = 60 * 5
 
-prompts = ["Where is Tiananmen Square in Beijing?"]
+prompts = ["北京天安门在哪里?"]
 
 
 def check_result_against_baseline(outputs, baseline_file, threshold=0.05):
@@ -52,35 +51,48 @@ def check_result_against_baseline(outputs, baseline_file, threshold=0.05):
 
         current_content += text_str
 
-    temp_file = "Qwen2.5-7B-Instruct-current"
+    temp_file = f"{os.path.basename(baseline_file)}-current"
     with open(temp_file, "w", encoding="utf-8") as f:
         f.write(current_content)
 
-    # Calculate difference rate
-    diff_rate = calculate_diff_rate(current_content, baseline_content)
+    try:
+        # Calculate difference rate
+        diff_rate = calculate_diff_rate(current_content, baseline_content)
 
-    if diff_rate >= threshold:
-        raise AssertionError(
-            f"Output differs from baseline file by too much ({diff_rate:.4%}):\n"
-            f"Current output: {current_content!r}\n"
-            f"Baseline content: {baseline_content!r}\n"
-            f"Current output saved to: {temp_file}"
-        )
+        if diff_rate >= threshold:
+            raise AssertionError(
+                f"Output differs from baseline file by too much ({diff_rate:.4%}):\n"
+                f"Current output: {current_content!r}\n"
+                f"Baseline content: {baseline_content!r}\n"
+                f"Current output saved to: {temp_file}"
+            )
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+                print(f"Temporary file {temp_file} has been removed")
+            except OSError as e:
+                print(f"Warning: Could not remove temporary file {temp_file}: {e}")
 
 
 hugging_face_model_param_map = {
     "Qwen2.5-7B-Instruct": {
         "tensor_parallel_size": 2,
-        "quantizations": ["None"],
+        "quantizations": ["wint8"],
+    },
+    "Qwen3-30B-A3B": {
+        "tensor_parallel_size": 2,
+        "quantizations": ["wint8"],
     },
 }
+
 hf_params = []
 for model, cfg in hugging_face_model_param_map.items():
     for q in cfg["quantizations"]:
         hf_params.append(
             pytest.param(
                 model,
-                cfg.get("tensor_parallel_size", 1),
+                cfg.get("tensor_parallel_size", 2),
                 cfg.get("max_model_len", 1024),
                 q,
                 cfg.get("max_tokens", 100),
@@ -122,12 +134,18 @@ def test_model_against_baseline(
         ),
     )
 
-    # Determine baseline file path
-    base_path = os.getenv("MODEL_PATH")
+    # Determine baseline file path based on model name
+    base_path = os.getenv("MODEL_PATH", "")
+
+    # Get baseline suffix from config
+    model_config = hugging_face_model_param_map.get(model_name_or_path, {})
+    baseline_suffix = model_config.get("baseline_suffix", "tp2")
+    baseline_filename = f"{model_name_or_path}-{baseline_suffix}"
+
     if base_path:
-        baseline_file = os.path.join(base_path, "Qwen2.5-7B-Instruct-tp2")
+        baseline_file = os.path.join(base_path, baseline_filename)
     else:
-        baseline_file = "Qwen2.5-7B-Instruct-tp2"
+        baseline_file = baseline_filename
 
     # Compare against baseline file
     check_result_against_baseline(hf_outputs, baseline_file, threshold=0.05)

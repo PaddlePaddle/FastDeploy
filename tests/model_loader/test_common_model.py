@@ -24,7 +24,6 @@ from tests.model_loader.utils import (
 )
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-MAX_WAIT_SECONDS = 60 * 5
 
 prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
