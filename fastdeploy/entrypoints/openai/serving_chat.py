@@ -47,13 +47,24 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template, enable_mm_output):
+    def __init__(
+        self,
+        engine_client,
+        models,
+        pid,
+        ips,
+        max_waiting_time,
+        chat_template,
+        enable_mm_output: Optional[bool] = False,
+        tokenizer_base_url: Optional[str] = None,
+    ):
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
         self.max_waiting_time = max_waiting_time
         self.chat_template = chat_template
         self.enable_mm_output = enable_mm_output
+        self.tokenizer_base_url = tokenizer_base_url
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]
@@ -200,7 +211,11 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
-            response_processor = ChatResponseProcessor(self.engine_client.data_processor, self.enable_mm_output)
+            response_processor = ChatResponseProcessor(
+                data_processor=self.engine_client.data_processor,
+                enable_mm_output=self.enable_mm_output,
+                decoder_base_url=self.tokenizer_base_url,
+            )
             while num_choices > 0:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)

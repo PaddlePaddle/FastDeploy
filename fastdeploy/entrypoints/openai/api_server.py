@@ -189,6 +189,7 @@ async def lifespan(app: FastAPI):
         args.max_waiting_time,
         chat_template,
         args.enable_mm_output,
+        args.tokenizer_base_url,
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,

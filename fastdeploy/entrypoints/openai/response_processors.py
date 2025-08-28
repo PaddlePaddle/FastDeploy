@@ -15,7 +15,7 @@ class ChatResponseProcessor:
         self,
         data_processor,
         enable_mm_output: Optional[bool] = False,
-        eoi_token_id: Optional[int] = None,
+        eoi_token_id: Optional[int] = 101032,
         decoder_base_url: Optional[str] = None,
     ):
         self.data_processor = data_processor
