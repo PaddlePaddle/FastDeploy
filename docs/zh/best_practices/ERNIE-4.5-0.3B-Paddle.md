@@ -52,7 +52,7 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 **原理：** Prefix Caching的核心思想是通过缓存输入序列的中间计算结果（KV Cache），避免重复计算，从而加速具有相同前缀的多个请求的响应速度。具体参考[prefix-cache](../features/prefix_caching.md)
 
 **启用方式：**
-在启动参数下增加下列两行，其中`--enable-prefix-caching`表示启用前缀缓存，`--swap-space`表示在GPU缓存的基础上，额外开启CPU缓存，大小为GB，应根据机器实际情况调整。
+在启动参数下增加下列两行，其中`--enable-prefix-caching`表示启用前缀缓存，`--swap-space`表示在GPU缓存的基础上，额外开启CPU缓存，大小为GB，应根据机器实际情况调整。建议取值为`(机器总内存 - 模型大小) * 20%`。如果因为其他程序占用内存等原因导致服务启动失败，可以尝试减小`--swap-space`的值。
 ```
 --enable-prefix-caching
 --swap-space 50
@@ -76,9 +76,7 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 --use-cudagraph
 ```
 注：
-1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
-2. 开启CUDAGraph时，如果是TP>1的多卡推理场景，需要同时指定 `--enable-custom-all-reduce`
-3. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
+- 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
 
 #### 2.2.5 拒绝采样
 **原理：**

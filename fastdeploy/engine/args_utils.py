@@ -188,12 +188,12 @@ class EngineArgs:
     Flag to enable prefix caching.
     """
 
-    enable_custom_all_reduce: bool = False
+    disable_custom_all_reduce: bool = False
     """
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: int = 8002
+    engine_worker_queue_port: str = "8002"
     """
     Port for worker queue communication.
     """
@@ -206,6 +206,11 @@ class EngineArgs:
     data_parallel_size: int = 1
     """
     Number of data parallelism.
+    """
+
+    local_data_parallel_id: int = 0
+    """
+    Local data parallel id.
     """
 
     enable_expert_parallel: bool = False
@@ -357,7 +362,12 @@ class EngineArgs:
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
-        - "new_loader": new  loader.
+        - "default_v1": default_v1 loader.
+    """
+
+    lm_head_fp32: bool = False
+    """
+    Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
     def __post_init__(self):
@@ -498,7 +508,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
-            type=int,
+            type=lambda s: s.split(",") if s else None,
             default=EngineArgs.engine_worker_queue_port,
             help="port for engine worker queue",
         )
@@ -560,6 +570,12 @@ class EngineArgs:
             default=EngineArgs.early_stop_config,
             help="the config for early stop.",
         )
+        model_group.add_argument(
+            "--lm_head-fp32",
+            action="store_true",
+            default=EngineArgs.lm_head_fp32,
+            help="Specify the dtype of lm_head weight as float32.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -571,10 +587,10 @@ class EngineArgs:
             help="Degree of tensor parallelism.",
         )
         parallel_group.add_argument(
-            "--enable-custom-all-reduce",
+            "--disable-custom-all-reduce",
             action="store_true",
-            default=EngineArgs.enable_custom_all_reduce,
-            help="Flag to enable custom all-reduce.",
+            default=EngineArgs.disable_custom_all_reduce,
+            help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -606,6 +622,13 @@ class EngineArgs:
             type=int,
             default=EngineArgs.data_parallel_size,
             help="Degree of data parallelism.",
+        )
+
+        parallel_group.add_argument(
+            "--local-data-parallel-id",
+            type=int,
+            default=EngineArgs.local_data_parallel_id,
+            help="the rank of data parallelism.",
         )
         parallel_group.add_argument(
             "--enable-expert-parallel",
@@ -947,12 +970,13 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
-        assert not (
-            self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
-        ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
         assert is_port_available(
-            "0.0.0.0", self.engine_worker_queue_port
+            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(

@@ -30,7 +30,7 @@ PRETRAINED_VOCAB_FILES_MAP = {
 PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES = {}
 
 
-class ErnieBotTokenizer(PreTrainedTokenizer):
+class Ernie4_5Tokenizer(PreTrainedTokenizer):
     """
     Construct a ErnieBot tokenizer. Based on byte-level Byte-Pair-Encoding.
     Args:

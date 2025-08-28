@@ -403,6 +403,9 @@ class CompletionRequest(BaseModel):
     echo: Optional[bool] = False
     frequency_penalty: Optional[float] = None
     logprobs: Optional[int] = None
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
     max_tokens: Optional[int] = None
     n: int = 1
     presence_penalty: Optional[float] = None
@@ -423,6 +426,7 @@ class CompletionRequest(BaseModel):
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    bad_words_token_ids: Optional[List[int]] = None
     # doc: end-completion-sampling-params
 
     # doc: start-completion-extra-params
@@ -534,6 +538,11 @@ class ChatCompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = None
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
+
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
+
     # remove max_tokens when field is removed from OpenAI API
     max_tokens: Optional[int] = Field(
         default=None,
@@ -558,6 +567,7 @@ class ChatCompletionRequest(BaseModel):
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    bad_words_token_ids: Optional[List[int]] = None
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     # doc: end-chat-completion-sampling-params
@@ -591,6 +601,8 @@ class ChatCompletionRequest(BaseModel):
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
+        req_dict["temp_scaled_logprobs"] = self.temp_scaled_logprobs
+        req_dict["top_p_normalized_logprobs"] = self.top_p_normalized_logprobs
 
         # parse request model into dict, priority: request params > metadata params
         if self.metadata is not None:

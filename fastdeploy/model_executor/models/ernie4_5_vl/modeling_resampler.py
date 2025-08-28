@@ -30,7 +30,7 @@ from fastdeploy.model_executor.models.ernie4_5_vl.dist_utils import (
     reduce_scatter_group,
     scatter_axis,
 )
-from fastdeploy.model_executor.models.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 
 class ScatterOp(PyLayer):

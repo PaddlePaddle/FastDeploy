@@ -1,0 +1,44 @@
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+__global__ void speculate_clear_accept_nums(int* accept_num,
+                                            const int* seq_lens_decoder,
+                                            const int max_bsz) {
+  int cid = core_id();
+  int ncores = core_num();
+
+  int accept_num_lm = 0;
+  int seq_lens_decoder_lm;
+  for (int i = cid; i < max_bsz; i += ncores) {
+    GM2LM(seq_lens_decoder + i, &seq_lens_decoder_lm, sizeof(int));
+    if (seq_lens_decoder_lm == 0) {
+      LM2GM_ASYNC(&accept_num_lm, accept_num + i, sizeof(int));
+    }
+    mfence_lm();
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3
