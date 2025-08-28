@@ -98,7 +98,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            if "ernie" in self.fd_config.model_config.model_type: 
+            if "ernie" in self.fd_config.model_config.model_type:
                 self._init_image_preprocess()
 
             self.amp_black = [
@@ -238,7 +238,8 @@ class GPUModelRunner(ModelRunnerBase):
                             dtype=paddle.int64,
                         )
                         vision_inputs["images"] = paddle.to_tensor(
-                            inputs["images"][request.image_start : request.image_end], dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
+                            inputs["images"][request.image_start : request.image_end],
+                            dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
                         )
                         vision_inputs["grid_thw"] = paddle.to_tensor(
                             inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
@@ -793,9 +794,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
-            if "qwen" in self.model_config.model_type: # neox style = True
+            if "qwen" in self.model_config.model_type:  # neox style = True
                 rope_head_dim = head_dim
-            else: # neox style = False
+            else:  # neox style = False
                 rope_head_dim = head_dim // 2
 
             self.share_inputs["rope_emb"] = paddle.full(
@@ -812,7 +813,9 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["image_features"] = None
             self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=("ernie" in self.model_config.model_type), dtype="bool")
+            self.share_inputs["enable_thinking"] = paddle.full(
+                shape=[1], fill_value=("ernie" in self.model_config.model_type), dtype="bool"
+            )
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:

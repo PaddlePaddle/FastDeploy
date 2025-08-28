@@ -33,16 +33,15 @@ from fastdeploy.model_executor.graph_optimization.decorator import (
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        extract_text_token_output
-    )
+    from fastdeploy.model_executor.ops.gpu import extract_text_token_output
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+
 
 @support_graph_optimization
 class Qwen2_5_VLModel(nn.Layer):
@@ -118,17 +117,17 @@ class Qwen2_5_VLModel(nn.Layer):
         # 将 image_embeds 替换 input_embeds 里的 image video 占位符
         image_mask = ids_remove_padding == self.image_token_id
         image_token_num = image_mask.sum()
-        
+
         video_mask = ids_remove_padding == self.video_token_id
         video_token_num = video_mask.sum()
-        
+
         # 由于框架只有 image_features，所以目前不支持图片和视频混合
         # TODO(wangyafeng) 后续考虑支持传入 video_features
         if image_token_num > 0:
             hidden_states[image_mask] = image_features.cast(self._dtype)
         if video_token_num > 0:
             hidden_states[video_mask] = image_features.cast(self._dtype)
-        
+
         # -----------------------
 
         residual = None
@@ -152,7 +151,7 @@ class Qwen2_5_VLModel(nn.Layer):
             hidden_states.cast("float32"),
         ).cast(self._dtype)
         # -----------------------
-        
+
         out = self.norm(hidden_states)
 
         return out
@@ -275,12 +274,12 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
     from fastdeploy.model_executor.models.utils import WeightMeta
 
     weight_infos = [
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.q_proj.weight",True),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.q_proj.bias",True),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.k_proj.weight",True),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.k_proj.bias",True),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.v_proj.weight",True),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.v_proj.bias",True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.q_proj.weight", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.q_proj.bias", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.k_proj.weight", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.k_proj.bias", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.v_proj.weight", True),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.v_proj.bias", True),
         WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight", False),
         WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.mlp.gate_proj.weight", True),
         WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.mlp.up_proj.weight", True),
@@ -341,7 +340,7 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
             num_key_value_heads=config.vision_config.get("num_heads"),
             head_dim=config.vision_config.get("hidden_size") // config.vision_config.get("num_heads"),
         )
-        
+
         def get_tensor_parallel_split_mappings(
             num_layers: int,
             prefix_name: str,

@@ -33,6 +33,10 @@ from fastdeploy.model_executor.models.qwen2 import (
     Qwen2ForCausalLM,
     Qwen2PretrainedModel,
 )
+from fastdeploy.model_executor.models.qwen2_5_vl.qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+    Qwen2_5_VLPretrainedModel,
+)
 from fastdeploy.model_executor.models.qwen3 import (
     Qwen3ForCausalLM,
     Qwen3PretrainedModel,
@@ -40,10 +44,6 @@ from fastdeploy.model_executor.models.qwen3 import (
 from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3MoeForCausalLM,
     Qwen3MoePretrainedModel,
-)
-from fastdeploy.model_executor.models.qwen2_5_vl.qwen2_5_vl import (
-    Qwen2_5_VLForConditionalGeneration,
-    Qwen2_5_VLPretrainedModel,
 )
 from fastdeploy.rl.rollout_config import RolloutModelConfig
 

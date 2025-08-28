@@ -383,7 +383,6 @@ class ErnieVlRotaryEmbedding3D:
         return rot_emb
 
 
-
 class QwenVlRotaryEmbedding3D:
     def __init__(
         self,
@@ -450,31 +449,31 @@ class QwenVlRotaryEmbedding3D:
         # ]
         # sin_hw = paddle.stack([sin_h, sin_w], axis=-1).reshape(sin_h.shape[:-1] + [sin_h.shape[-1] * 2])
         # sin_thw = paddle.concat([sin_hw, sin_t], axis=-1)
-        
+
         section_t = self.freq_allocation  # 16
         section_h = (self.rotary_dim // 2 - self.freq_allocation) // 2  # 24
         section_w = (self.rotary_dim // 2 - self.freq_allocation) // 2  # 24
-        
+
         sin_bsz = paddle.index_select(sin, index=batch_indices, axis=0)
-        sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0, axis=1)[:, :, :, : section_t]
-        sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1, axis=1)[
-            :, :, :, section_t : section_t + section_h]
+        sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0, axis=1)[:, :, :, :section_t]
+        sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1, axis=1)[:, :, :, section_t : section_t + section_h]
         sin_w = paddle.index_select(sin_bsz, index=tmp_pos_id_2, axis=1)[
-            :, :, :, section_t + section_h : section_t + section_h + section_w]
+            :, :, :, section_t + section_h : section_t + section_h + section_w
+        ]
         sin_thw = paddle.concat([sin_t, sin_h, sin_w], axis=-1)
 
         cos_bsz = paddle.index_select(cos, index=batch_indices, axis=0)
-        
-        cos_t = paddle.index_select(cos_bsz, index=tmp_pos_id_0, axis=1)[:, :, :, : section_t]
-        cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1, axis=1)[
-            :, :, :, section_t : section_t + section_h]
+
+        cos_t = paddle.index_select(cos_bsz, index=tmp_pos_id_0, axis=1)[:, :, :, :section_t]
+        cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1, axis=1)[:, :, :, section_t : section_t + section_h]
         cos_w = paddle.index_select(cos_bsz, index=tmp_pos_id_2, axis=1)[
-            :, :, :, section_t + section_h : section_t + section_h + section_w]
+            :, :, :, section_t + section_h : section_t + section_h + section_w
+        ]
         cos_thw = paddle.concat([cos_t, cos_h, cos_w], axis=-1)
 
         rot_emb[0] = cos_thw
         rot_emb[1] = sin_thw
-        
+
         # neox style need
         rot_emb_neox = paddle.concat([rot_emb, rot_emb], axis=-1)
         return rot_emb_neox
@@ -515,11 +514,10 @@ def get_rope_3d(
         rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
             rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
         )
-    else: # default ernie
+    else:  # default ernie
         rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(
             rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
         )
-        
-    
+
     rotary_emb_3d = rotary_emb3d_layer(position_ids)
     return rotary_emb_3d

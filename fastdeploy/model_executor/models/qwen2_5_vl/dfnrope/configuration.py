@@ -52,6 +52,7 @@ __all__ = [
 # qwen 的 fullatt_block_indexes 是区分vit部分不同attention的layer_index
 # spatial_patch_size 和 tokens_per_second 在vllm里没用到
 
+
 class DFNRopeVisionTransformerConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`~ErnieModel`]. It is used to instantiate an Ernie

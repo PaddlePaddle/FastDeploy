@@ -18,7 +18,6 @@ from functools import partial
 
 import numpy as np
 import paddle
-import paddle.distributed as dist
 import paddle.nn.functional as F
 from paddle import nn
 from paddle.distributed import fleet
@@ -35,70 +34,6 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 
 from .activation import ACT2FN
 from .configuration import DFNRopeVisionTransformerConfig
-
-
-class _AllToAll(paddle.autograd.PyLayer):
-    @staticmethod
-    def forward(
-        ctx,
-        input,
-        group,
-        output_split_sizes=None,
-        input_split_sizes=None,
-    ):
-        """
-        All-to-all communication in the group.
-
-        Args:
-            ctx (Any): Context object.
-            input (Tensor): Input tensor.
-            group (Group): The group object.
-
-        Returns:
-            Tensor: Output tensor.
-        """
-
-        ctx.group = group
-        ctx.input_split_sizes = input_split_sizes
-        ctx.output_split_sizes = output_split_sizes
-        # return input
-        if dist.get_world_size(group) <= 1:
-            return input
-        if input_split_sizes is None and output_split_sizes is None:
-            output = paddle.empty_like(input)
-            task = dist.stream.alltoall_single(output, input, None, None, group, True, True)
-            task.wait()
-        else:
-            out_sizes = [sum(output_split_sizes)]
-            out_sizes.extend(input.shape[1:])
-            output = paddle.empty(out_sizes, dtype=input.dtype)
-            task = dist.stream.alltoall_single(
-                output,
-                input,
-                output_split_sizes,
-                input_split_sizes,
-                group,
-                sync_op=False,
-            )
-            task.wait()
-        return output
-
-    @staticmethod
-    def backward(ctx, *grad_output):
-        """
-        all-to-all backward
-
-        """
-        # return grad_output
-        if ctx.input_split_sizes is None and ctx.output_split_sizes is None:
-            return _AllToAll.apply(*grad_output, ctx.group)
-        else:
-            return _AllToAll.apply(
-                *grad_output,
-                ctx.group,
-                ctx.input_split_sizes,
-                ctx.output_split_sizes,
-            )
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
@@ -244,13 +179,11 @@ class PatchEmbed(nn.Layer):
         self.temporal_patch_size = temporal_patch_size
         self.in_channels = in_channels
         self.hidden_size = hidden_size
-        
+
         kernel_size = (temporal_patch_size, patch_size, patch_size)
-        self.proj = nn.layer.Conv3D(in_channels,
-                                    hidden_size,
-                                    kernel_size=kernel_size,
-                                    stride=kernel_size,
-                                    bias_attr=False)
+        self.proj = nn.layer.Conv3D(
+            in_channels, hidden_size, kernel_size=kernel_size, stride=kernel_size, bias_attr=False
+        )
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         """_summary_
@@ -304,7 +237,7 @@ class VisionMlp(nn.Layer):
                 gather_output=False,
                 has_bias=bias,
             )
-            
+
             self.down_proj = RowParallelLinear(
                 hidden_dim,
                 dim,
@@ -312,7 +245,7 @@ class VisionMlp(nn.Layer):
                 input_is_parallel=True,
                 has_bias=bias,
             )
-            
+
         else:
             self.gate_proj = nn.Linear(dim, hidden_dim, bias_attr=bias)
             self.up_proj = nn.Linear(dim, hidden_dim, bias_attr=bias)
@@ -361,10 +294,8 @@ class VisionRotaryEmbedding(nn.Layer):
         if seqlen > self._seq_len_cached:
             seqlen *= 2
             self._seq_len_cached = seqlen
-            self.inv_freq = 1.0 / (self.theta**(paddle.arange(
-                0, self.dim, 2, dtype="float32") / self.dim))
-            seq = paddle.arange(seqlen,
-                               dtype=self.inv_freq.dtype)
+            self.inv_freq = 1.0 / (self.theta ** (paddle.arange(0, self.dim, 2, dtype="float32") / self.dim))
+            seq = paddle.arange(seqlen, dtype=self.inv_freq.dtype)
             freqs = paddle.outer(seq, self.inv_freq)
             self._freqs_cached = freqs
 
@@ -431,7 +362,7 @@ class DFNRopeVisionBlock(nn.Layer):
             attn_implementation (str, optional): _description_. Defaults to "sdpa".
         """
         super().__init__()
-        
+
         self.norm1 = Qwen2RMSNorm(dim, eps=1e-6)
         self.norm2 = Qwen2RMSNorm(dim, eps=1e-6)
 
@@ -440,7 +371,7 @@ class DFNRopeVisionBlock(nn.Layer):
             num_heads=num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
         )
-        
+
         self.mlp = VisionMlp(
             dim=dim,
             hidden_dim=mlp_hidden_dim,
@@ -460,7 +391,7 @@ class DFNRopeVisionBlock(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        
+
         hidden_states = hidden_states + self.attn(
             self.norm1(hidden_states),
             cu_seqlens=cu_seqlens,
@@ -504,7 +435,7 @@ class PatchMerger(nn.Layer):
             paddle.Tensor: _description_
         """
         x = self.mlp(self.ln_q(x).reshape([-1, self.hidden_size]))
-        
+
         return x
 
 
@@ -524,14 +455,14 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         super().__init__(config.vision_config)
         self.spatial_merge_size = config.vision_config.spatial_merge_size
         self.prefix_name = prefix_name
-        
+
         # args for get_window_index_thw
         self.window_size = config.vision_config.window_size
         self.patch_size = config.vision_config.patch_size
         self.spatial_merge_size = config.vision_config.spatial_merge_size
         self.fullatt_block_indexes = config.vision_config.fullatt_block_indexes
         self.spatial_merge_unit = self.spatial_merge_size**2
-        
+
         self.patch_embed = PatchEmbed(
             patch_size=config.vision_config.patch_size,
             temporal_patch_size=config.vision_config.temporal_patch_size,
@@ -555,7 +486,9 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             ]
         )
 
-        self.merger = PatchMerger(dim=config.vision_config.out_hidden_size, context_dim=config.vision_config.hidden_size)
+        self.merger = PatchMerger(
+            dim=config.vision_config.out_hidden_size, context_dim=config.vision_config.hidden_size
+        )
 
     @property
     def device(self) -> paddle.device:
@@ -634,16 +567,12 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         return rotary_pos_emb
 
     def get_rope_by_thw(self, t, h, w):
-        window_index_thw, cu_seqlens_window_thw = self.get_window_index_thw(
-            t, h, w)
+        window_index_thw, cu_seqlens_window_thw = self.get_window_index_thw(t, h, w)
         rotary_pos_emb_thw = self.rotary_pos_emb_thw(t, h, w)
         rotary_pos_emb_thw = rotary_pos_emb_thw[window_index_thw, :, :]
         rotary_pos_emb_thw = rotary_pos_emb_thw.flatten(start_dim=0, end_dim=1)
-        cu_seqlens_thw = paddle.repeat_interleave(
-            paddle.tensor([h * w], dtype=paddle.int32), t)
-        return (rotary_pos_emb_thw, window_index_thw, cu_seqlens_window_thw,
-                cu_seqlens_thw)
-
+        cu_seqlens_thw = paddle.repeat_interleave(paddle.tensor([h * w], dtype=paddle.int32), t)
+        return (rotary_pos_emb_thw, window_index_thw, cu_seqlens_window_thw, cu_seqlens_thw)
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor, num_pad=0) -> paddle.Tensor:
         """_summary_
@@ -657,7 +586,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         """
 
         hidden_states = self.patch_embed(hidden_states)
-        
+
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
         window_index, cu_window_seqlens = self.get_window_index(grid_thw)
         cu_window_seqlens = paddle.to_tensor(data=cu_window_seqlens, dtype="int32", place=hidden_states.place)
@@ -669,19 +598,18 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         rotary_pos_emb = rotary_pos_emb.reshape([seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1])
         rotary_pos_emb = rotary_pos_emb[window_index, :, :]
         rotary_pos_emb = rotary_pos_emb.reshape([seq_len, -1])
-        
+
         cu_seqlens = paddle.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
             axis=0, dtype="int32"
         )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
-        
 
         for layer_num, blk in enumerate(self.blocks):
             if layer_num in self.fullatt_block_indexes:
                 cu_seqlens_now = cu_seqlens
             else:
                 cu_seqlens_now = cu_window_seqlens
-                
+
             hidden_states = blk(
                 hidden_states,
                 cu_seqlens=cu_seqlens_now,
