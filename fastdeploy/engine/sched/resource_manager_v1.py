@@ -130,20 +130,22 @@ class ResourceManagerV1(ResourceManager):
 
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
-        if False:
-            num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
-            num_new_tokens = min(num_new_tokens, token_budget)
+        num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+        num_new_tokens = min(num_new_tokens, token_budget)
+
+        if not self.config.model_config.enable_mm:
+            return num_new_tokens
+
+        inputs = request.multimodal_inputs
+        if (
+            inputs["image_feature_urls"] is not None
+            and inputs["video_feature_urls"] is not None
+            and inputs["audio_feature_urls"] is not None
+            and inputs["patch_idx"] is not None
+            and inputs["patch_map"] is not None
+        ):
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
-
-            inputs = request.multimodal_inputs
-            if (
-                inputs["image_feature_urls"] is None
-                and inputs["video_feature_urls"] is None
-                and inputs["audio_feature_urls"] is None
-            ):
-                return num_new_tokens
-
             # start
             start_patch_idx = inputs["patch_idx"][pre_end_idx]
             start_patch_map = inputs["patch_map"][start_patch_idx]
@@ -162,19 +164,8 @@ class ResourceManagerV1(ResourceManager):
             request.image_end = end_patch_map["image_num"]
             request.video_end = end_patch_map["video_num"]
             request.audio_end = end_patch_map["audio_num"]
-            return num_new_tokens
-        else:
-            num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
-            num_new_tokens = min(num_new_tokens, token_budget)
-
-            if not self.config.model_config.enable_mm:
-                return num_new_tokens
-
-            inputs = request.multimodal_inputs
+        elif inputs["images"] is not None and inputs["image_patch_id"] is not None and inputs["grid_thw"] is not None:
             request.with_image = False
-            # Compatible with scenarios without images and videos.
-            if inputs["images"] is None:
-                return num_new_tokens
 
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
@@ -244,7 +235,9 @@ class ResourceManagerV1(ResourceManager):
                 request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
-            return num_new_tokens
+
+        # Compatible with scenarios without images and videos.
+        return num_new_tokens
 
     def exist_prefill(self, scheduled_reqs):
         for request in scheduled_reqs:
