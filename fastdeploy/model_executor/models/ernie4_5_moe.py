@@ -575,10 +575,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             if "lm_head" in loaded_weight_name:
                 lm_head_in_ckpt = True
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
-                if weight_name not in loaded_weight_name:
-                    continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                # gate_proj and up_gate_proj have the same param_name
                 if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]
