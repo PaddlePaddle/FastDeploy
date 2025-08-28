@@ -59,6 +59,7 @@ class RolloutModelConfig:
         graph_optimization_config: str = None,
         early_stop_config: str = None,
         local_rank: int = 0,
+        data_parallel_size: int = 1,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -92,8 +93,6 @@ class RolloutModelConfig:
         self.max_num_batched_tokens = max_num_batched_tokens
         self.enable_prefix_caching = enable_prefix_caching
         self.splitwise_role = splitwise_role
-        self.expert_parallel_size = expert_parallel_size
-        self.enable_expert_parallel = enable_expert_parallel
         self.ori_vocab_size = ori_vocab_size
         self.quantization = quantization
         self.guided_decoding_backend = guided_decoding_backend
@@ -103,6 +102,9 @@ class RolloutModelConfig:
         self.local_rank = local_rank
         self.early_stop_config = early_stop_config
         self.ips = None
+        self.enable_expert_parallel = enable_expert_parallel
+        self.data_parallel_size = data_parallel_size
+        self.expert_parallel_size = expert_parallel_size
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

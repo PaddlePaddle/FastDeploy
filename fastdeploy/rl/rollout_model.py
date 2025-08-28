@@ -51,6 +51,7 @@ class RolloutModel(nn.Layer):
         """Initialize with FastDeploy configuration."""
         super(RolloutModel, self).__init__()
         self.fd_config = rollout_model_config.initialize()
+        self.fd_config.print()
         self.rollout_model = self._init_model()
 
     def _init_model(self) -> nn.Layer:
@@ -64,6 +65,9 @@ class RolloutModel(nn.Layer):
             model_cls = ModelRegistry.get_class(architectures)
             model = model_cls(self.fd_config)
         model.eval()
+        for k, v in model.state_dict().items():
+            print(f"key: {k}, shape: {v.shape}")
+            print(v)
         return model
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
