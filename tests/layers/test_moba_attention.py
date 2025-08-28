@@ -343,9 +343,9 @@ class TestMobaAttention(unittest.TestCase):
         os.environ["FD_ATTENTION_BACKEND"] = "MOBA_ATTN"
         base_path = os.getenv("MODEL_PATH")
         if base_path:
-            model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+            model_path = os.path.join(base_path, "./ernie-4_5-21b-a3b-bf16-paddle")
         else:
-            model_path = "/root/paddlejob/workspace/output/yangjianfeng/base_23k_ckpt"
+            model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
 
         moba_attention_config = {
             "moba_encoder_top_k_left": 50,
