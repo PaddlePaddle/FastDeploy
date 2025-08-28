@@ -18,8 +18,11 @@ python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepa
 # python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 echo "build whl"
 bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+# 由于xvllm更新导致起服务报错 暂时锁死版本
+wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250827/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
+export XVLLM_PATH=${PWD}/xvllm
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+#export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
 bash build.sh || exit 1
 echo "pip others"
 python -m pip install openai -U
