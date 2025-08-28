@@ -885,7 +885,6 @@ class GPUModelRunner(ModelRunnerBase):
 
     def load_model(self) -> None:
         """load or download model"""
-        logger.info(f"gaoziyuan !!!!!Starting to load model {self.model_config.architectures[0]}")
         # 1. Load original model
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
@@ -895,10 +894,6 @@ class GPUModelRunner(ModelRunnerBase):
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
 
             self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
-        logger.info("gaoziyuan start >>>>>>>>>>>>>>>")
-        static_donw = self.model.state_dict()
-        path = f"/root/paddlejob/workspace/env_run/output/gaoziyuan/model/ep8_model/model_state.tp0{self.local_rank}.pdparams"
-        logger.info("gaoziyuan end >>>>>>>>>>>>>>>")
 
         # 2. Load lora model
 
