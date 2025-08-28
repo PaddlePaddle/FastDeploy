@@ -117,6 +117,7 @@ class CudaGraphPiecewiseBackend:
             # Capture
             self.cuda_graph_manager.state = CUDAGraphState.CAPTURE
             self.cuda_graph_manager.batch_size = entry.real_shape
+            entry.captured = True
             with self.cuda_graph_manager.run_impl_guard():
                 entry.runnable(**kwargs)
 
