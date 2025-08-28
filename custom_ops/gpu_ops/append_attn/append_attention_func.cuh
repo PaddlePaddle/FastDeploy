@@ -2135,7 +2135,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const int max_seq_len,
     const int max_num_chunks,
     const int num_heads,
-    const int *__restrict__ num_blocks_q_and_chunk_config, // [3]
+    const int *__restrict__ num_blocks_q_and_chunk_config, // {num_blocks_total_q, chunk_size, max_num_chunks_this_kv}
     const int head_dim) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int bid = blockIdx.x, hid = blockIdx.y;
@@ -2266,7 +2266,8 @@ __global__ void merge_multi_chunks_v2_kernel(
     const int max_seq_len,
     const int num_chunks,
     const int num_heads,
-    const int chunk_size,
+    const int min_chunk_size,
+    const int *__restrict__ num_blocks_q_and_chunk_config, // {num_blocks_total_q, chunk_size, max_num_chunks_this_kv}
     const int head_dim,
     const int token_num,
     const int speculate_max_draft_token_num = 5) {
@@ -2274,6 +2275,10 @@ __global__ void merge_multi_chunks_v2_kernel(
   const int hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
   __shared__ float md_smem[bdy * 2];
+  int chunk_size = min_chunk_size;
+  if (num_blocks_q_and_chunk_config){
+    chunk_size = num_blocks_q_and_chunk_config[1];
+  }
   for (int qid = blockIdx.x; qid < token_num; qid += gridDim.x) {
     const uint32_t bid = batch_id_per_token[qid];
     const uint32_t local_seq_id = qid - cu_seqlens_q[bid];

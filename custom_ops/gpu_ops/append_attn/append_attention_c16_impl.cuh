@@ -421,7 +421,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
-    const int *__restrict__ num_blocks_q_and_chunk_config,
+    const int *__restrict__ num_blocks_q_and_chunk_config, // {num_blocks_total_q, chunk_size, max_num_chunks_this_kv}
     const int max_num_chunks,
     T *__restrict__ tmp_workspace,  // split kv [token_num, max_num_chunks,
                                     // num_heads, head_dim]
@@ -433,12 +433,25 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   static_assert(NUM_WARP_Q == 1, "NUM_WARP_Q must be 1");
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
+
+  extern __shared__ uint8_t smem[];
+  float s_frag[num_frags_x][num_frags_z][8];
+  float o_frag[num_frags_x][num_frags_y][8];
+  float m_frag[num_frags_x][2];
+  float d_frag[num_frags_x][2];
+
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const uint32_t kv_num_heads = gridDim.z;
   const uint32_t q_num_heads = kv_num_heads * GROUP_SIZE;
   const uint32_t kv_head_idx = blockIdx.z;
   const uint32_t q_head_idx = kv_head_idx * GROUP_SIZE;
   const uint32_t tid = threadIdx.x, wid = threadIdx.y;
+
+  const uint32_t q_n_stride = q_num_heads * HEAD_DIM;
+  const uint32_t q_ori_n_stride = (q_num_heads + kv_num_heads * 2) * HEAD_DIM;
+  const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
+  const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
+  const uint32_t kv_b_stride = HEAD_DIM;
 
   const uint32_t num_blocks_total_q = static_cast<uint32_t>(num_blocks_q_and_chunk_config[0]);
   const uint32_t chunk_size = static_cast<uint32_t>(num_blocks_q_and_chunk_config[1]);
@@ -462,17 +475,17 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     if (ENABLE_PREFILL) {
       kv_len += q_len;
       if (kv_len <= 0) {
-        return;
+        continue;
       }
     } else {
       if (kv_len <= 0) {
-        return;
+        continue;
       }
       kv_len += q_len;
     }
     const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
     if (chunk_idx >= num_chunks_this_seq) {
-      return;
+      continue;
     }
 
     const uint32_t chunk_start = partition_kv ? chunk_idx * chunk_size : 0;
@@ -480,18 +493,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         partition_kv ? min(kv_len, chunk_start + chunk_size) : kv_len;
     const uint32_t chunk_len = chunk_end - chunk_start;
 
-    extern __shared__ uint8_t smem[];
-    float s_frag[num_frags_x][num_frags_z][8];
-    float o_frag[num_frags_x][num_frags_y][8];
-    float m_frag[num_frags_x][2];
-    float d_frag[num_frags_x][2];
     init_states<T, num_frags_x, num_frags_y>(o_frag, m_frag, d_frag);
 
-    const uint32_t q_n_stride = q_num_heads * HEAD_DIM;
-    const uint32_t q_ori_n_stride = (q_num_heads + kv_num_heads * 2) * HEAD_DIM;
-    const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
-    const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
-    const uint32_t kv_b_stride = HEAD_DIM;
     const uint32_t q_start_seq_id = cu_seqlens_q[batch_id];
     const uint32_t q_base_seq_id_this_block = tile_id * num_frags_x * 16;
     const uint32_t q_offset = q_start_seq_id * q_ori_n_stride +
@@ -637,6 +640,16 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                             mask_offset_this_seq);
       }
 
+      // for(int i_x = 0; i_x < num_frags_x; ++i_x){
+      //   for(int i_z = 0; i_z < num_frags_z; ++i_z){
+      //     for(int i_y = 0; i_y < 8; ++i_y){
+      //       if(isnan(s_frag[i_x][i_z][i_y])){
+      //         printf("split s find nan, at batch_id[%d], chunk_idx[%d], tid[%d], wid[%d]\n", batch_id, chunk_idx, tid, wid);
+      //       }
+      //     }
+      //   }
+      // }
+
       // update m,d
       update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
           s_frag, o_frag, m_frag, d_frag);
@@ -670,6 +683,15 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       compute_sfm_v<num_frags_x, num_frags_y, num_frags_z, T>(
           &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
       __syncthreads();
+      // for(int i_x = 0; i_x < num_frags_x; ++i_x){
+      //   for(int i_z = 0; i_z < num_frags_y; ++i_z){
+      //     for(int i_y = 0; i_y < 8; ++i_y){
+      //       if(isnan(o_frag[i_x][i_z][i_y])){
+      //         printf("split v find nan, at batch_id[%d], chunk_idx[%d], tid[%d], wid[%d]\n", batch_id, chunk_idx, tid, wid);
+      //       }
+      //     }
+      //   }
+      // }
 
       cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
       produce_kv_blockwise<SharedMemFillMode::kFillZero,
@@ -762,6 +784,12 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                             q_num_heads +
                         qo_head_idx;
               }
+              // if (isnan(m_frag[fx][j])){
+              //   printf("split tmp_m find nan, at batch_id[%d], chunk_idx[%d], tid[%d], wid[%d]\n", batch_id, chunk_idx, tid, wid);
+              // }
+              // if (isnan(d_frag[fx][j])){
+              //   printf("split tmp_d find nan, at batch_id[%d], chunk_idx[%d], tid[%d], wid[%d]\n", batch_id, chunk_idx, tid, wid);
+              // }
               tmp_m[offset] = m_frag[fx][j];
               tmp_d[offset] = d_frag[fx][j];
             }
@@ -1045,6 +1073,7 @@ void MultiQueryAppendAttention(
                 num_chunks,
                 num_heads,
                 chunk_size,
+                nullptr,
                 HEAD_DIM,
                 token_num,
                 speculate_max_draft_token_num);
@@ -1081,11 +1110,8 @@ void MultiQueryAppendAttention(
     } else {
         attn_mask_len = -1;
     }
-    uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    const uint32_t min_chunk_size = 512;
-    if (chunk_size < min_chunk_size){
-      chunk_size = min_chunk_size;
-    }
+    uint32_t chunk_size = max(static_cast<uint32_t>(max_partition_size), BLOCK_SIZE);
+
     const int max_num_chunks = div_up(max_seq_len, chunk_size);
     const int dev_id = 0;
     int sm_count;
@@ -1236,6 +1262,7 @@ void MultiQueryAppendAttention(
               max_num_chunks,
               num_heads,
               chunk_size,
+              num_blocks_x.data<int>()[1],
               HEAD_DIM,
               token_num,
               speculate_max_draft_token_num);

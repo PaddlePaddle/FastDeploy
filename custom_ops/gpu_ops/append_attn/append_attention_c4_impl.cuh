@@ -558,7 +558,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
 
     const uint32_t q_len = seq_lens[batch_id];
     if (q_len <= 0) {
-      return;
+      continue;
     }
     const uint32_t q_end =
         min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
@@ -566,17 +566,17 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
     if (ENABLE_PREFILL) {
       kv_len += q_len;
       if (kv_len <= 0) {
-        return;
+        continue;
       }
     } else {
       if (kv_len <= 0) {
-        return;
+        continue;
       }
       kv_len += q_len;
     }
     const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
     if (chunk_idx >= num_chunks_this_seq) {
-      return;
+      continue;
     }
 
     const uint32_t chunk_start = partition_kv ? chunk_idx * chunk_size : 0;
@@ -1256,6 +1256,7 @@ void MultiQueryAppendC4Attention(
                 num_chunks,
                 num_heads,
                 chunk_size,
+                nullptr,
                 HEAD_DIM,
                 token_num,
                 speculate_max_draft_token_num);
@@ -1471,6 +1472,7 @@ void MultiQueryAppendC4Attention(
               max_num_chunks,
               num_heads,
               chunk_size,
+              num_blocks_x.data<int>(),
               HEAD_DIM,
               token_num,
               speculate_max_draft_token_num);

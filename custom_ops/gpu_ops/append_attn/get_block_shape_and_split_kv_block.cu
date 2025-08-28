@@ -183,12 +183,11 @@ __global__ void search_chunk_size_for_decoder(
       num_blocks_x_and_chunk_size[2] = div_up(max_len_kv, set_chunk_size);
     }
   }else{
-    if (conf_id <= config_size) {
+    if (conf_id < config_size) {
       __shared__ int gridx_shared[config_size];
       int total_num_blocks = 0;
       // chunk_size is a multiple of min_chunk_size
       const int chunk_size = min_chunk_size << conf_id;
-      const int max_num_chunks = div_up(max_len_kv, chunk_size);
       int index = 0;
       for (uint32_t bid = 0; bid < bsz; bid++) {
         int seq_len = seq_lens_q[bid];
@@ -212,39 +211,19 @@ __global__ void search_chunk_size_for_decoder(
       gridx_shared[conf_id] = total_num_blocks * kv_num_heads;
       __syncthreads();
       if (threadIdx.x == 0) {
-        uint32_t res_id = config_size;
-        float n_waves = static_cast<float>(gridx_shared[res_id]) / sm_cout;
-        uint32_t last_wave_block = gridx_shared[res_id] % sm_cout;
-        float max_efficiency = n_waves / ceil(n_waves);
-        float max_score = max_efficiency * last_wave_block;
-        const int smem_per_block = 36864;
-        const int regs_per_block = 19200;
-        const int max_waves_per_sm = max(min(shared_mem_per_sm / kv_num_heads / smem_per_block, regs_per_sm / regs_per_block), 1);
-        float min_wave_diff = abs(max_waves_per_sm - (int)n_waves);
-        for (int i = config_size - 1; i >= 0; --i) {
-          last_wave_block = gridx_shared[i] % sm_cout;
-          n_waves = static_cast<float>(gridx_shared[i]) / sm_cout;
-          // if(n_waves > 16) continue;
-          float wave_diff = abs(max_waves_per_sm - (int)n_waves);
-          float efficiency = n_waves / ceil(n_waves);
-          float score = efficiency * last_wave_block;
-          if (wave_diff <= min_wave_diff){
-            if (efficiency > max_efficiency){
-              res_id = i;
-              min_wave_diff = wave_diff;
-              max_efficiency = efficiency;
-            }
+        int res_id = 0;
+        int max_last_wave_block = -1;
+        for (int i = 0; i < config_size; ++i) {
+          int last_wave_block = gridx_shared[i] % sm_cout;
+          if (last_wave_block == 0) {
+            res_id = i;
+            max_last_wave_block = last_wave_block;
           }
-          // if (efficiency >= max_efficiency) {
-          //   res_id = i;
-          //   max_efficiency = efficiency;
-          // }
-          // if (score >= max_score){
-          //   res_id = i;
-          //   max_score = score;
-          // }
+          else if (max_last_wave_block != 0 && last_wave_block >= max_last_wave_block) {
+            res_id = i;
+            max_last_wave_block = last_wave_block;
+          }
         }
-        // if (res_id > 1) res_id = 1; // 0.3b 短输入 48并发 性能最接近1k
         const int res_chunk_size = min_chunk_size << res_id;
         num_blocks_x_and_chunk_size[0] = total_num_blocks_q;
         num_blocks_x_and_chunk_size[1] = res_chunk_size;
@@ -420,13 +399,8 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const uint32_t decoder_batch_shape = bsz * decoder_max_tile_size_per_bs_q;
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_batch_ids.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
     PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-    // PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
 
-    // auto decoder_num_blocks_x =
-    //     GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
-
-    const int config_size = 6;  // search space for chunk size:[512, 1024, 2048, ... 32768]
-    const int min_chunk_size = 512;
+    const int config_size = 12;  // search space for chunk size:[64, 128, 256, ..., 131072]
     search_chunk_size_for_decoder<config_size><<<1, 32, 0, stream>>>(
         seq_lens_this_time.data<int>(),
         seq_lens_encoder.data<int>(),
@@ -440,11 +414,10 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
         max_len_kv_cpu.data<int>()[0],
         group_size,
         kv_num_heads,
-        min_chunk_size,
+        block_size,
         sm_count,
         shared_mem_per_sm,
         regs_per_sm);
-    // decoder_num_blocks_x_cpu.copy_(decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
   }
 
   return {
