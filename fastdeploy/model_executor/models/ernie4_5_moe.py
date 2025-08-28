@@ -535,33 +535,59 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None, None),
             ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
         ]
+        torch_model = self.fd_config.model_config.model_format == "torch"
+        lm_head_in_ckpt = False
+        if torch_model:
+            general_params_mapping += [
+                ("qkv_proj", "q_proj", None, "q"),
+                ("qkv_proj", "k_proj", None, "k"),
+                ("qkv_proj", "v_proj", None, "v"),
+                ("up_gate_proj", "gate_proj", None, "gate"),
+                ("up_gate_proj", "up_proj", None, "up"),
+            ]
 
         expert_params_mapping = []
         if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
-            expert_params_mapping = FusedMoE.make_expert_params_mapping(
-                num_experts=self.fd_config.model_config.moe_num_experts,
-                ckpt_down_proj_name="down_proj",
-                ckpt_gate_up_proj_name="up_gate_proj",
-                param_gate_up_proj_name="experts.up_gate_proj_",
-                param_down_proj_name="experts.down_proj_",
-            )
+            if torch_model:
+                expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                    num_experts=self.fd_config.model_config.moe_num_experts,
+                    ckpt_down_proj_name="down_proj",
+                    ckpt_gate_proj_name="gate_proj",
+                    ckpt_up_proj_name="up_proj",
+                    param_gate_up_proj_name="experts.up_gate_proj_",
+                    param_down_proj_name="experts.down_proj_",
+                )
+            else:
+                expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                    num_experts=self.fd_config.model_config.moe_num_experts,
+                    ckpt_down_proj_name="down_proj",
+                    ckpt_gate_up_proj_name="up_gate_proj",
+                    param_gate_up_proj_name="experts.up_gate_proj_",
+                    param_down_proj_name="experts.down_proj_",
+                )
         all_param_mapping = general_params_mapping + expert_params_mapping
 
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
-        expert_id = None
-        shard_id = None
 
         for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = loaded_weight_name.replace("model", "ernie")
+            if "lm_head" in loaded_weight_name:
+                lm_head_in_ckpt = True
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                # gate_proj and up_gate_proj have the same param_name
+                if model_param_name not in params_dict:
+                    continue
                 param = params_dict[model_param_name]
                 expert_id = exp_id
                 shard_id = shard_id
                 break
             else:
+                expert_id = None
+                shard_id = None
                 model_param_name = loaded_weight_name
                 if model_param_name not in params_dict.keys():
                     continue
@@ -573,10 +599,11 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:
-                weight_loader(param, loaded_weight)
+                weight_loader(param, loaded_weight, shard_id)
 
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
+        self.tie_word_embeddings = not lm_head_in_ckpt
         if self.tie_word_embeddings:
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
 
