@@ -1186,7 +1186,8 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
-            if self.model_config.enable_mm:
+            if current_platform.is_xpu() or self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
@@ -1256,12 +1257,10 @@ class FDConfig:
             ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
 
             if self.guided_decoding_backend != "off":
-                # TODO: mm support guided_decoding
-                assert (
-                    self.model_config.enable_mm is False
-                ), "Multimodal model currently do not support guided_decoding"
-
                 # TODO: speculative decoding support guided_decoding
+                assert (
+                    self.speculative_config.method is None
+                ), "speculative decoding currently do not support guided_decoding"
 
                 # TODO: xpu support guided_decoding
                 assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
@@ -1272,6 +1271,7 @@ class FDConfig:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"
                     )
+
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 
