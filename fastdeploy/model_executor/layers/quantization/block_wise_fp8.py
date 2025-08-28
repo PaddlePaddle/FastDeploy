@@ -19,6 +19,7 @@ from typing import Optional
 import paddle
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
@@ -43,6 +44,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.quant_max_bound = 448
         self.quant_min_bound = -448
         self.quant_round_type = 1
+        self.use_deep_gemm = bool(envs.FD_USE_DEEP_GEMM)
         self.is_checkpoint_bf16 = is_checkpoint_bf16
 
     def name(self) -> str:
@@ -59,7 +61,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         Get quantization method.
         """
         if isinstance(layer, FusedMoE):
-            if layer.ep_size > 1:
+            if layer.ep_size > 1 or self.use_deep_gemm:
                 from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
                     DeepGemmFusedMoeMethod,
                 )
