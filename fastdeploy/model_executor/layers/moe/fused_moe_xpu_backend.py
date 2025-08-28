@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-from typing import Dict
-
 import paddle
 from paddle import nn
 
@@ -114,10 +112,85 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         super().__init__()
         self.quant_config = quant_config
         self.moe_quant_type = self.quant_config.algo
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
+        self.added_scale_attrs = [
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+        ]
 
-    def create_weights(self, layer: nn.Layer, state_dict: Dict[str, paddle.Tensor]):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Paddle cutlass create weight process.
+        """
+        self.default_dtype = "float32"
+        self.weight_dtype = "int8"
+
+        if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size // 2,
+            ]
+        else:
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size,
+            ]
+        if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
+            self.down_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size // 2,
+            ]
+        else:
+            self.down_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size,
+            ]
+
+        setattr(
+            layer,
+            self.added_weight_attrs[0],
+            layer.create_parameter(
+                shape=self.up_gate_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_weight_attrs[1],
+            layer.create_parameter(
+                shape=self.down_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        Paddle xpu load weight process.
         """
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
@@ -131,15 +204,9 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             layer.hidden_size,
         ]
 
-        added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
-        added_scale_attrs = [
-            "up_gate_proj_weight_scale",
-            "down_proj_weight_scale",
-        ]
-
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
-            weight_name = added_weight_attrs[idx]
-            scale_name = added_scale_attrs[idx]
+            weight_name = self.added_weight_attrs[idx]
+            scale_name = self.added_scale_attrs[idx]
 
             weight_list = []
             weight_scale_list = []
@@ -150,26 +217,9 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
                 weight_list.append(quant_weight.transpose([1, 0]))  # transpose weight to [n,k]
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
-            setattr(
-                layer,
-                weight_name,
-                layer.create_parameter(
-                    shape=quanted_weight.shape,
-                    dtype=quanted_weight.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
             getattr(layer, weight_name).set_value(quanted_weight)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
-            setattr(
-                layer,
-                scale_name,
-                layer.create_parameter(
-                    shape=quanted_weight_scale.shape,
-                    dtype=quanted_weight_scale.dtype,
-                ),
-            )
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def apply(

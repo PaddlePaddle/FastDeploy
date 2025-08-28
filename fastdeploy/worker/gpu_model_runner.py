@@ -66,7 +66,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
 from fastdeploy import envs
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -153,9 +153,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            self.local_rank + int(self.parallel_config.engine_worker_queue_port)
-        )
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
     def exist_prefill(self):
         """
@@ -264,7 +263,10 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
 
-                input_ids = request.prompt_token_ids + request.output_token_ids
+                if len(request.output_token_ids) == 0:
+                    input_ids = request.prompt_token_ids
+                else:
+                    input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
@@ -289,6 +291,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -1749,7 +1752,6 @@ class GPUModelRunner(ModelRunnerBase):
         token_type_ids_w_video = token_type_ids
         input_ids = inputs["input_ids"]
         # convert to img patch id
-        # TODO(lulinjun): may need to check model_config and model_cfg
         image_mask = input_ids == self.model_config.im_patch_id
         image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(

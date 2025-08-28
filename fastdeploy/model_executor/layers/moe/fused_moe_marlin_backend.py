@@ -145,12 +145,12 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
-        self.ffn1_weight_shape = [
+        self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size // 16,
             layer.moe_intermediate_size * 4,
         ]
-        self.ffn2_weight_shape = [
+        self.down_proj_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size // 16,
             layer.hidden_size * 2,
@@ -159,7 +159,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             layer,
             up_gate_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn1_weight_shape,
+                shape=self.up_gate_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -168,7 +168,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             layer,
             down_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn2_weight_shape,
+                shape=self.down_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),

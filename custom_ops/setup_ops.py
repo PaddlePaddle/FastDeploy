@@ -512,6 +512,8 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
         os.system("python utils/auto_gen_wfp8afp8_sparse_gemm_kernel.py")
         sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
+        os.system("python gpu_ops/machete/generate.py")
+        sources += find_end_files("gpu_ops/machete", ".cu")
 
     setup(
         name="fastdeploy_ops",
@@ -519,6 +521,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
+            extra_link_args=["-lcuda"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},

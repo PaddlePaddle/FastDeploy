@@ -71,6 +71,7 @@ class ZmqClient:
         self.router.setsockopt(zmq.ROUTER_MANDATORY, 1)
         self.router.setsockopt(zmq.SNDTIMEO, -1)
         self.router.bind(f"ipc://{self.router_path}")
+        llm_logger.info(f"router path: {self.router_path}")
 
     def send_json(self, data):
         """
@@ -126,7 +127,6 @@ class ZmqClient:
                         continue
                 else:
                     break
-
         if self.req_dict[req_id] == -1:
             if data[-1].finished:
                 with self.mutex:
