@@ -24,7 +24,7 @@ jobs:
 
       - name: Code Checkout
         env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
         run: |
           REPO="https://github.com/${{ github.repository }}.git"
           FULL_REPO="${{ github.repository }}"
@@ -55,7 +55,7 @@ jobs:
 
       - name: Run CI unittest
         env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0
         run: |
           runner_name="${{ runner.name }}"
           last_char="${runner_name: -1}"
@@ -77,6 +77,7 @@ jobs:
           -e "MODEL_PATH=/ssd3/model" \
           -e "http_proxy=$(git config --global --get http.proxy)" \
           -e "https_proxy=$(git config --global --get https.proxy)" \
+          -e "no_proxy=bcebos.com" \
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \

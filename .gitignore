@@ -121,7 +121,7 @@ dmypy.json
 FETCH_HEAD
 
 #log
-log*/
+log/
 
 checkpoints/
 checkpoints_origin/

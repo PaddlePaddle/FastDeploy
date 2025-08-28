@@ -36,8 +36,8 @@ void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
     {cutlass_type} * out,
     const float *weight_scale,
     const float *input_row_sum,
-    const int *tokens,
-    const int max_tokens,
+    const int64_t *tokens,
+    const int64_t max_tokens,
     cudaStream_t stream);
 """
 
@@ -54,8 +54,8 @@ void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
         {cutlass_type} * out,
         const float *weight_scale,
         const float *input_row_sum,
-        const int *tokens,
-        const int max_tokens,
+        const int64_t *tokens,
+        const int64_t max_tokens,
         cudaStream_t stream) {{
 
     constexpr static int M = {M};
@@ -83,14 +83,9 @@ void w4afp8_gemm_M{M}_N{N}_TAILN{TAILN}_K{K}_B{BATCH}_P{PADDING}_{TYPE}(
 }}
 """
 
-gemm_case = [
-    [8192, 3584, 8, 0],  # eb45T ffn1
-    [8192, 3584, 8, 2048],  # eb45T ffn1
-    [7168, 8192, 8, 0],  # eb45T ffn2
-    [7168, 8192, 8, 2048],  # eb45T ffn2
-]
+gemm_case = [[256, 256, 1, 0]]
 
-dtype = ["BF16", "FP16"]
+dtype = ["BF16"]
 
 
 def get_cutlass_type(type):

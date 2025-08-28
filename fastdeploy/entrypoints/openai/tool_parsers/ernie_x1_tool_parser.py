@@ -14,7 +14,6 @@
 
 import json
 import re
-import traceback
 import uuid
 from collections.abc import Sequence
 from typing import Union
@@ -58,6 +57,16 @@ class ErnieX1ToolParser(ToolParser):
         self.current_tool_name_sent: bool = False
         self.streamed_args_for_tool: list[str] = []  # map what has been streamed for each tool so far to a list
         self.buffer: str = ""  # buffer for accumulating unprocessed streaming content
+        self.bracket_counts: dict = {"total_l": 0, "total_r": 0}  # track bracket counts in streamed deltas
+        self.tool_call_start_token: str = "<tool_call>"
+        self.tool_call_end_token: str = "</tool_call>"
+
+        self.tool_call_start_token_id = self.vocab.get(self.tool_call_start_token)
+        self.tool_call_end_token_id = self.vocab.get(self.tool_call_end_token)
+        if self.tool_call_start_token_id is None or self.tool_call_end_token_id is None:
+            raise RuntimeError(
+                "Hermes 2 Pro Tool parser could not locate tool call start/end " "tokens in the tokenizer!"
+            )
 
         if not self.model_tokenizer:
             raise ValueError(
@@ -163,12 +172,10 @@ class ErnieX1ToolParser(ToolParser):
                                 }
                             )
                     except Exception as e:
-                        data_processor_logger.error(
-                            f"Failed to parse tool call: {str(e)}, {str(traceback.format_exc())}"
-                        )
+                        data_processor_logger.debug(f"Failed to parse tool call: {str(e)}")
                         continue
                 except Exception as e:
-                    data_processor_logger.error(f"Failed to parse tool call: {str(e)}, {str(traceback.format_exc())}")
+                    data_processor_logger.debug(f"Failed to parse tool call: {str(e)}")
                     continue
 
             if not function_call_arr:
@@ -214,9 +221,7 @@ class ErnieX1ToolParser(ToolParser):
             )
 
         except Exception as e:
-            data_processor_logger.error(
-                f"Error in extracting tool call from response: {str(e)}, {str(traceback.format_exc())}"
-            )
+            data_processor_logger.error(f"Error in extracting tool call from response: {str(e)}")
             return ExtractedToolCallInformation(tools_called=False, tool_calls=None, content=model_output)
 
     def extract_tool_calls_streaming(
@@ -229,6 +234,9 @@ class ErnieX1ToolParser(ToolParser):
         delta_token_ids: Sequence[int],
         request: dict,
     ) -> Union[DeltaMessage, None]:
+
+        if self.tool_call_start_token_id not in current_token_ids:
+            return DeltaMessage(content=delta_text)
         # 忽略空chunk
         if len(delta_text.strip()) == 0:
             return None
@@ -239,7 +247,7 @@ class ErnieX1ToolParser(ToolParser):
             self.buffer += delta_text
 
             # 处理增量中的新tool_call开始
-            if "<tool_call>" in delta_text and "<tool_call>" not in previous_text:
+            if "<tool_call>" in delta_text:
                 self.current_tool_id = (
                     max(self.current_tool_id, 0) if self.current_tool_id == -1 else self.current_tool_id + 1
                 )
@@ -247,8 +255,6 @@ class ErnieX1ToolParser(ToolParser):
                 if len(self.streamed_args_for_tool) <= self.current_tool_id:
                     self.streamed_args_for_tool.append("")
                 data_processor_logger.debug(f"New tool call started with ID: {self.current_tool_id}")
-
-            # 增量解析逻辑
 
             # 1. 尝试解析name字段
             if not self.current_tool_name_sent and '"name"' in self.buffer:
@@ -266,7 +272,6 @@ class ErnieX1ToolParser(ToolParser):
                                 )
                             ]
                         )
-                        print("delta name:", delta)
                         # 删除已处理的name部分
                         self.buffer = self.buffer[name_match.end() :]
                         self.current_tool_name_sent = True
@@ -276,54 +281,67 @@ class ErnieX1ToolParser(ToolParser):
                 args_match = re.search(r'"arguments"\s*:\s*(\{.*)', self.buffer)
                 if args_match:
                     args_content = args_match.group(1)
-                    # 处理多余的大括号
-                    open_braces = args_content.count("{")
-                    close_braces = args_content.count("}")
-                    if close_braces > open_braces:
-                        args_content = args_content[: args_content.rfind("}")]
                     try:
-                        # 增量解析arguments
-                        parsed_args = json.loads(args_content)
-                        if isinstance(parsed_args, dict):
-                            args_json = json.dumps(parsed_args, ensure_ascii=False)
-                            if len(args_json) > len(self.streamed_args_for_tool[self.current_tool_id]):
-                                argument_diff = args_json[len(self.streamed_args_for_tool[self.current_tool_id]) :]
+                        # 检查是否到达arguments结尾(括号完全匹配)
+                        if "}}" in args_content:
+                            # 逐个字符检查括号匹配状态
+                            matched_pos = -1
+                            for i, ch in enumerate(delta_text):
+                                if ch == "{":
+                                    self.bracket_counts["total_l"] += 1
+                                elif ch == "}":
+                                    self.bracket_counts["total_r"] += 1
+
+                                if self.bracket_counts["total_l"] == self.bracket_counts["total_r"]:  # 括号完全匹配
+                                    matched_pos = i
+                                    break
+
+                            if matched_pos >= 0:
+                                # 找到匹配点，清理buffer并返回
+                                truncate_text = delta_text[: matched_pos + 1]
                                 delta = DeltaMessage(
                                     tool_calls=[
                                         DeltaToolCall(
                                             index=self.current_tool_id,
-                                            function=DeltaFunctionCall(arguments=argument_diff).model_dump(
+                                            function=DeltaFunctionCall(arguments=truncate_text).model_dump(
                                                 exclude_none=True
                                             ),
                                         )
                                     ]
                                 )
-                                print("delta argument:", delta)
-                                # 删除已处理部分
-                                processed_pos = args_match.start() + len('"arguments":')
-                                self.buffer = (
-                                    self.buffer[:processed_pos] + self.buffer[processed_pos + len(args_json) :]
-                                )
-                                self.streamed_args_for_tool[self.current_tool_id] = args_json
+                                self.buffer = self.buffer[args_match.end() :]
                                 return delta
+                            else:
+                                # 没有完全匹配，继续累积
+                                return None
+                        else:
+                            # 增量返回当前可解析的部分
+                            for ch in delta_text:
+                                if ch == "{":
+                                    self.bracket_counts["total_l"] += 1
+                                elif ch == "}":
+                                    self.bracket_counts["total_r"] += 1
+                            delta = DeltaMessage(
+                                tool_calls=[
+                                    DeltaToolCall(
+                                        index=self.current_tool_id,
+                                        function=DeltaFunctionCall(arguments=delta_text).model_dump(exclude_none=True),
+                                    )
+                                ]
+                            )
+                            return delta
                     except Exception as e:
-                        data_processor_logger.error(
-                            f"Partial arguments parsing: {str(e)}, {str(traceback.format_exc())}"
-                        )
-
+                        data_processor_logger.error(f"Error in streaming tool call extraction: {str(e)}")
+                        return None
             if "</tool_call>" in self.buffer:
                 end_pos = self.buffer.find("</tool_call>")
                 self.buffer = self.buffer[end_pos + len("</tool_call>") :]
 
                 # 完成当前工具调用处理
-                self.current_tool_id += 1
-                self.current_tool_name_sent = False
                 self.streamed_args_for_tool.append("")
 
             return delta
 
         except Exception as e:
-            data_processor_logger.error(
-                f"Error in streaming tool call extraction: {str(e)}, {str(traceback.format_exc())}"
-            )
+            data_processor_logger.error(f"Error in streaming tool call extraction: {str(e)}")
             return None

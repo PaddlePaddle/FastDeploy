@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
     ModelConfig,
@@ -30,10 +31,13 @@ from fastdeploy.config import (
     SpeculativeConfig,
     TaskOption,
 )
-from fastdeploy.engine.config import Config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
+from fastdeploy.utils import (
+    DeprecatedOptionWarning,
+    FlexibleArgumentParser,
+    is_port_available,
+)
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -49,6 +53,10 @@ class EngineArgs:
     model: str = "baidu/ernie-45-turbo"
     """
     The name or path of the model to be used.
+    """
+    served_model_name: Optional[str] = None
+    """
+    The name of the model being served.
     """
     revision: Optional[str] = "master"
     """
@@ -180,12 +188,12 @@ class EngineArgs:
     Flag to enable prefix caching.
     """
 
-    enable_custom_all_reduce: bool = False
+    disable_custom_all_reduce: bool = False
     """
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: int = 8002
+    engine_worker_queue_port: str = "8002"
     """
     Port for worker queue communication.
     """
@@ -198,6 +206,11 @@ class EngineArgs:
     data_parallel_size: int = 1
     """
     Number of data parallelism.
+    """
+
+    local_data_parallel_id: int = 0
+    """
+    Local data parallel id.
     """
 
     enable_expert_parallel: bool = False
@@ -349,7 +362,12 @@ class EngineArgs:
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
-        - "new_loader": new  loader.
+        - "default_v1": default_v1 loader.
+    """
+
+    lm_head_fp32: bool = False
+    """
+    Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
     def __post_init__(self):
@@ -378,6 +396,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.model,
             help="Model name or path to be used.",
+        )
+        model_group.add_argument(
+            "--served-model-name",
+            type=nullable_str,
+            default=EngineArgs.served_model_name,
+            help="Served model name",
         )
         model_group.add_argument(
             "--revision",
@@ -484,7 +508,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
-            type=int,
+            type=lambda s: s.split(",") if s else None,
             default=EngineArgs.engine_worker_queue_port,
             help="port for engine worker queue",
         )
@@ -546,6 +570,12 @@ class EngineArgs:
             default=EngineArgs.early_stop_config,
             help="the config for early stop.",
         )
+        model_group.add_argument(
+            "--lm_head-fp32",
+            action="store_true",
+            default=EngineArgs.lm_head_fp32,
+            help="Specify the dtype of lm_head weight as float32.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -557,10 +587,10 @@ class EngineArgs:
             help="Degree of tensor parallelism.",
         )
         parallel_group.add_argument(
-            "--enable-custom-all-reduce",
+            "--disable-custom-all-reduce",
             action="store_true",
-            default=EngineArgs.enable_custom_all_reduce,
-            help="Flag to enable custom all-reduce.",
+            default=EngineArgs.disable_custom_all_reduce,
+            help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -592,6 +622,13 @@ class EngineArgs:
             type=int,
             default=EngineArgs.data_parallel_size,
             help="Degree of data parallelism.",
+        )
+
+        parallel_group.add_argument(
+            "--local-data-parallel-id",
+            type=int,
+            default=EngineArgs.local_data_parallel_id,
+            help="the rank of data parallelism.",
         )
         parallel_group.add_argument(
             "--enable-expert-parallel",
@@ -902,7 +939,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> Config:
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -933,12 +970,16 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
-        assert not (
-            self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
-        ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
-        return Config(
-            model_name_or_path=self.model,
+        assert is_port_available(
+            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+
+        return FDConfig(
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
@@ -946,7 +987,6 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            tensor_parallel_size=self.tensor_parallel_size,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
@@ -955,7 +995,6 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
@@ -963,10 +1002,8 @@ class EngineArgs:
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
-            graph_optimization_config=graph_opt_cfg,
+            graph_opt_config=graph_opt_cfg,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_logprob=self.enable_logprob,
             early_stop_config=early_stop_cfg,
-            load_choices=self.load_choices,
         )
