@@ -98,7 +98,9 @@ class AppendAttentionBackend(AttentionBackend):
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
+        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
+            fd_config.model_config, "use_3d_rope", False
+        )
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None
@@ -140,6 +142,7 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.block_tables = forward_meta.block_tables
         metadata.rotary_embs = forward_meta.rotary_embs
         metadata.attn_mask = forward_meta.attn_mask
+        metadata.mask_offset = forward_meta.attn_mask_offsets
         metadata.pre_caches_length = forward_meta.pre_caches_length
         (
             metadata.encoder_batch_ids,

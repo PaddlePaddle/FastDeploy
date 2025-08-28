@@ -73,6 +73,15 @@ class Request:
         enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
         chat_template: Optional[str] = None,
+        image_start: int = 0,
+        video_start: int = 0,
+        audio_start: int = 0,
+        image_end: int = 0,
+        video_end: int = 0,
+        audio_end: int = 0,
+        prefill_start_index: int = 0,
+        prefill_end_index: int = 0,
+        num_computed_tokens: int = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -117,7 +126,16 @@ class Request:
         # token num
         self.block_tables = []
         self.output_token_ids = []
-        self.num_computed_tokens = 0
+        self.num_computed_tokens = num_computed_tokens
+        self.prefill_start_index = prefill_start_index
+        self.prefill_end_index = prefill_end_index
+        self.image_start = image_start
+        self.video_start = video_start
+        self.audio_start = audio_start
+
+        self.image_end = image_end
+        self.video_end = video_end
+        self.audio_end = audio_end
         # status
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
@@ -156,6 +174,15 @@ class Request:
             enable_thinking=d.get("enable_thinking", True),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
+            num_computed_tokens=d.get("num_computed_tokens", 0),
+            prefill_start_index=d.get("prefill_start_index", 0),
+            prefill_end_index=d.get("prefill_end_index", 0),
+            image_start=d.get("image_start", 0),
+            video_start=d.get("video_start", 0),
+            audio_start=d.get("audio_start", 0),
+            image_end=d.get("image_end", 0),
+            video_end=d.get("video_end", 0),
+            audio_end=d.get("audio_end", 0),
         )
 
     @property
@@ -196,6 +223,15 @@ class Request:
             "enable_thinking": self.enable_thinking,
             "trace_carrier": self.trace_carrier,
             "chat_template": self.chat_template,
+            "num_computed_tokens": self.num_computed_tokens,
+            "prefill_start_index": self.prefill_start_index,
+            "prefill_end_index": self.prefill_end_index,
+            "image_start": self.image_start,
+            "video_start": self.video_start,
+            "audio_start": self.audio_start,
+            "image_end": self.image_end,
+            "video_end": self.video_end,
+            "audio_end": self.audio_end,
         }
         add_params = [
             "guided_json",
