@@ -70,7 +70,6 @@ class FDRunner:
 
         topp_params = SamplingParams(temperature=0.1, top_p=0, max_tokens=max_tokens)
         outputs = self.generate(prompts, topp_params, **kwargs)
-        print("outputs", outputs)
         return outputs
 
     def __enter__(self):
