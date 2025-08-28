@@ -84,9 +84,13 @@ class ResourceManagerV1(ResourceManager):
         return len(request.block_tables) * self.config.cache_config.block_size
 
     def get_new_block_nums(self, request: Request, num_new_tokens: int):
-        return (
+        block_num = (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
         ) // self.config.cache_config.block_size - len(request.block_tables)
+
+        if self.config.speculative_config.method is not None:
+            block_num = min(block_num + 1, self.config.cache_config.max_block_num_per_seq)
+        return block_num
 
     def _prepare_prefill_task(self, request, new_token_num):
         request.prefill_start_index = request.num_computed_tokens
