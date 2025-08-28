@@ -502,7 +502,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,
             )
 
-        token_nums_this_rank, _ = count_tokens_per_expert_func(topk_ids, layer.num_local_experts, False)
+        token_nums_this_rank, _ = count_tokens_per_expert_func(topk_ids, layer.num_experts, False)
 
         recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
 
