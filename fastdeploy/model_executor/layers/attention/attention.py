@@ -118,7 +118,13 @@ class Attention(nn.Layer):
             self.k_norm_key = f"{self.prefix}.k_norm"
             self.init_weight()
 
-        if fd_config.moba_attention_config is not None:
+        if (
+            fd_config.moba_attention_config is not None
+            and fd_config.moba_attention_config.moba_encoder_top_k_left is not None
+            and fd_config.moba_attention_config.moba_encoder_top_k_right is not None
+            and fd_config.moba_attention_config.moba_decoder_top_k_left is not None
+            and fd_config.moba_attention_config.moba_decoder_top_k_right is not None
+        ):
             mlp_weight_path = os.path.join(
                 fd_config.model_config.model, fd_config.moba_attention_config.mlp_weight_name
             )
