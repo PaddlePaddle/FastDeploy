@@ -1175,13 +1175,15 @@ class FDConfig:
                 self.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
-        if (self.speculative_config.method is not None) or (self.model_config.enable_mm is True):
+        if (self.speculative_config is not None and self.speculative_config.method is not None) or (
+            self.model_config is not None and self.model_config.enable_mm is True
+        ):
 
             self.graph_opt_config.use_cudagraph = False
             logger.info(
                 "CUDAGraph does not support to be started together with SpeculativeDecode and MultiModel temporarily, but has been automatically closed!"
             )
-        if self.load_config.dynamic_load_weight is True:
+        if self.model_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
@@ -1273,15 +1275,19 @@ class FDConfig:
 
         # Check graph optimization config
         if self.graph_opt_config.use_cudagraph:
-            # NOTE(gongshaotian): CUDAGraph cannot used with Speculative Decoding
-            assert (
-                self.speculative_config.method is None
-            ), "CUDAGraph does not support the simultaneous use of Speculative Decoding"
-            # NOTE(gongshaotian): CUDAGraph cannot be applied to multimodal model temporarily
-            assert self.model_config.enable_mm is False, "CUDAGraph cannot be applied to multimodal model temporarily"
+            if self.speculative_config is not None:
+                assert (
+                    self.speculative_config.method is None
+                ), "CUDAGraph does not support the simultaneous use of Speculative Decoding"
+            if self.model_config is not None:
+                assert (
+                    self.model_config.enable_mm is False
+                ), "CUDAGraph cannot be applied to multimodal model temporarily"
         if self.graph_opt_config.graph_opt_level > 0:
-            # NOTE(gongshaotian): Static graph cannot be used in RL scene temporarily
-            assert self.load_config.dynamic_load_weight is False, "Static graph cannot be used in RL scene temporarily"
+            if self.load_config is not None:
+                assert (
+                    self.load_config.dynamic_load_weight is False
+                ), "Static graph cannot be used in RL scene temporarily"
 
     def print(self):
         """
