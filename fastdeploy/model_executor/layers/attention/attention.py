@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 
 import os
 
+from safetensors import safe_open
+
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 
@@ -118,15 +120,21 @@ class Attention(nn.Layer):
             self.init_weight()
 
         if envs.FD_ATTENTION_BACKEND == "MOBA_ATTN":
-            mlp_weight_path = envs.FD_MOBA_MLP_WEIGHT_PATH
+            mlp_weight_path = os.path.join(fd_config.model_config.model, "moba_mlp_weight.safetensors")
             self.moba_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
             moba_block_size = int(envs.FD_MOBA_BLOCK_SIZE)
             moba_max_seq_length = int(envs.FD_MOBA_MAX_SEQ_LENGTH)
             if self.moba_use_mlp:
-                if self.layer_id < fd_config.model_config.num_hidden_layers - 1:
-                    temp_weight = paddle.load(mlp_weight_path)
+                mlp_weight = {}
+                with safe_open(mlp_weight_path, framework="np", device="cpu") as f:
+                    for key_name in f.keys():
+                        weight = f.get_tensor(key_name)
+                        weight = paddle.Tensor(weight, zero_copy=True)
+                        weight = weight._copy_to(paddle.framework._current_expected_place(), False)
+                        mlp_weight[key_name] = weight
 
-                    self.attn_gate_weight = temp_weight[
+                if self.layer_id < fd_config.model_config.num_hidden_layers - 1:
+                    self.attn_gate_weight = mlp_weight[
                         f"ernie.layers.{self.layer_id}.self_attn.attn_gate.weight"
                     ].astype(paddle.get_default_dtype())[
                         fd_config.parallel_config.tensor_parallel_rank
@@ -134,7 +142,8 @@ class Attention(nn.Layer):
                         * self.kv_num_heads
                     ]
                     assert self.attn_gate_weight.shape[1] % moba_block_size == 0
-
+            else:
+                logger.warning("MOBA MLP weight not found, skip loading attn_gate_weight.")
             self.cache_k_block_means = paddle.zeros(
                 [
                     fd_config.parallel_config.max_num_seqs,
