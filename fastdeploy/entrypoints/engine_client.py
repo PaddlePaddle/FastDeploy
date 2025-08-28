@@ -123,7 +123,7 @@ class EngineClient:
         if "max_tokens" not in prompts:
             prompts["max_tokens"] = self.max_model_len - 1
 
-        await self.add_requests(prompts)
+        self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
     def add_requests(self, task):
