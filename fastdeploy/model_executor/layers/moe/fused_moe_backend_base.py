@@ -203,5 +203,17 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
-        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+        set_weight_attrs(
+            layer.up_gate_proj_weight,
+            {
+                "weight_loader": extra_weight_attrs,
+                "model_format": extra_weight_attrs.get("model_format", ""),
+            },
+        )
+        set_weight_attrs(
+            layer.down_proj_weight,
+            {
+                "weight_loader": extra_weight_attrs,
+                "model_format": extra_weight_attrs.get("model_format", ""),
+            },
+        )
