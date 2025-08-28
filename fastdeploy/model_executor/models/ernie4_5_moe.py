@@ -685,7 +685,16 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
             tsm.GQA,
         ),
         WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight_scale",
+            True,
+            tsm.GQA,
+        ),
+        WeightMeta(
             f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight_scale",
             False,
         ),
         WeightMeta(
@@ -694,7 +703,16 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
             tsm.PairFused,
         ),
         WeightMeta(
+            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight_scale",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
             f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight_scale",
             False,
         ),
         WeightMeta(
@@ -703,7 +721,16 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
             tsm.PairFused,
         ),
         WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight_scale",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.weight_scale",
             False,
         ),
         WeightMeta(
