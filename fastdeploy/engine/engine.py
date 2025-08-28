@@ -27,6 +27,7 @@ import time
 import traceback
 import uuid
 import weakref
+from dataclasses import asdict
 
 import numpy as np
 import paddle
@@ -190,6 +191,8 @@ class LLMEngine:
         """
         # TODO 输入输出长度确认
 
+        if sampling_params is not None:
+            task.update(asdict(sampling_params))
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
@@ -476,6 +479,7 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
+            "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

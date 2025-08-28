@@ -263,7 +263,10 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
 
-                input_ids = request.prompt_token_ids + request.output_token_ids
+                if len(request.output_token_ids) == 0:
+                    input_ids = request.prompt_token_ids
+                else:
+                    input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
@@ -288,6 +291,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -1748,7 +1752,6 @@ class GPUModelRunner(ModelRunnerBase):
         token_type_ids_w_video = token_type_ids
         input_ids = inputs["input_ids"]
         # convert to img patch id
-        # TODO(lulinjun): may need to check model_config and model_cfg
         image_mask = input_ids == self.model_config.im_patch_id
         image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
