@@ -248,6 +248,7 @@ class Ernie4_5_MTPModel(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.embed_tokens = fd_config.speculative_config.sharing_model.ernie.embed_tokens
+        self.norm = fd_config.speculative_config.sharing_model.ernie.norm
 
         self.layers = nn.LayerList(
             [
@@ -318,6 +319,8 @@ class Ernie4_5_MTPModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
+        hidden_states = self.norm(hidden_states)
+
         return hidden_states
 
 
@@ -367,7 +370,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         compute logits
         """
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits

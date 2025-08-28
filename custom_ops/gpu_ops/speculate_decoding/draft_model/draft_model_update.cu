@@ -63,10 +63,9 @@ __global__ void draft_model_update_kernel(const int64_t* inter_next_tokens,
         token_this_time = next_tokens_start[seq_len_this_time - 1];
         draft_token_now[0] = next_tokens_start[seq_len_this_time - 1];
         base_model_draft_tokens_now[substep + 1] = token_this_time;
-        for (int i = 0; i < seq_len_this_time; ++i) {
-          pre_ids_now[step_idx[tid] + 1 + i] = next_tokens_start[i];
-        }
         step_idx[tid] += seq_len_this_time;
+        pre_ids_now[step_idx[tid]] = token_this_time;
+
 
       } else {
         token_this_time = next_tokens_start[0];

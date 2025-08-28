@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import paddle
+import paddle.distributed as dist
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
 import fastdeploy
@@ -94,7 +95,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "start_layer_index": 0,
     "moe_num_shared_experts": 0,
     "moe_layer_start_index": 0,
-    "num_max_dispatch_tokens_per_rank": 256,
+    "num_max_dispatch_tokens_per_rank": 128,
     "moe_use_aux_free": False,
     "vocab_size": -1,
     "hidden_dropout_prob": 0.0,
@@ -128,6 +129,8 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.lm_head_fp32: bool = False
+        self.model_format = "auto"
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -165,6 +168,7 @@ class ModelConfig:
 
         self.override_name_from_config()
         self.read_from_env()
+        self.read_model_config()
 
     def override_name_from_config(self):
         """
@@ -205,6 +209,29 @@ class ModelConfig:
 
         reset_config_value("COMPRESSION_RATIO", 1.0)
         reset_config_value("ROPE_THETA", 10000)
+
+    def read_model_config(self):
+        config_path = os.path.join(self.model, "config.json")
+        if os.path.exists(config_path):
+            self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
+            if "torch_dtype" in self.model_config and "dtype" in self.model_config:
+                raise ValueError(
+                    "Only one of 'torch_dtype' or 'dtype' should be present in config.json. "
+                    "Found both, which indicates an ambiguous model format. "
+                    "Please ensure your config.json contains only one dtype field."
+                )
+            elif "torch_dtype" in self.model_config:
+                self.model_format = "torch"
+                logger.info("The model format is Hugging Face")
+            elif "dtype" in self.model_config:
+                self.model_format = "paddle"
+                logger.info("The model format is Paddle")
+            else:
+                raise ValueError(
+                    "Unknown model format. Please ensure your config.json contains "
+                    "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
+                    f"Config file path: {config_path}"
+                )
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -252,7 +279,7 @@ class ParallelConfig:
         # block size
         self.block_size: int = 64
         # Engine worker queue port
-        self.engine_worker_queue_port: int = 9923
+        self.engine_worker_queue_port: str = "9923"
         # Max model len
         self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
@@ -281,9 +308,16 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
+            logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
+        elif isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = [self.engine_worker_queue_port]
         # currently, the expert parallel size is equal data parallel size
-        self.expert_parallel_size = self.data_parallel_size
+        if self.enable_expert_parallel:
+            self.expert_parallel_size = self.data_parallel_size * self.tensor_parallel_size
+        else:
+            self.expert_parallel_size = 1
         self.use_ep = self.expert_parallel_size > 1
         if self.splitwise_role == "mixed":
             self.moe_phase = MoEPhase(phase="prefill")
@@ -303,6 +337,22 @@ class ParallelConfig:
             self.pd_disaggregation_mode = "per_query"
         else:
             self.pd_disaggregation_mode = "None"
+
+    def set_tp_group(self):
+        # different tp group id
+        # prevent different tp_groups using the same group_id
+        dist.collective._set_custom_gid(self.data_parallel_rank + 100)
+        self.tp_group = dist.new_group(
+            range(
+                self.data_parallel_rank * self.tensor_parallel_size,
+                (self.data_parallel_rank + 1) * self.tensor_parallel_size,
+            )
+        )
+        # same ep group id
+        dist.collective._set_custom_gid(self.data_parallel_size + 100)
+        logger.info(
+            f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
+        )
 
     def print(self):
         """
@@ -324,16 +374,24 @@ class SpeculativeConfig:
         self,
         args,
     ):
-        # speculative method, choose in [None, "ngram_match", "mtp"]
+        self.method_list = ["ngram_match", "mtp"]
+        self.mtp_strategy_list = ["default", "with_ngram"]
+
+        # speculative method, choose in [None, "ngram_match", "mtp", "hybrid_mtp_ngram"]
         self.method: Optional[str] = None
+        # mtp strategy in mtp-method
+        self.mtp_strategy = "default"
         # the max length of speculative tokens
         self.num_speculative_tokens: int = 1
+        # the model runner step of draft model/mtp...
+        self.num_model_steps: int = 1
         # the max length of candidate tokens for speculative method
         self.max_candidate_len: int = 5
         # the max length of verify window for speculative method
         self.verify_window: int = 2
         # ngram match
         self.max_ngram_size: int = 5
+        self.min_ngram_size: int = 2
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
@@ -419,6 +477,33 @@ class SpeculativeConfig:
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
+
+    def check_legality_parameters(
+        self,
+    ) -> None:
+        """Check the legality of parameters passed in from the command line"""
+        if self.method is not None:
+            assert (
+                self.method in self.method_list
+            ), f"speculative method only support {self.method_list} now, but get {self.method}."
+
+            assert (
+                self.num_speculative_tokens >= 1 and self.num_speculative_tokens <= 5
+            ), f"num_speculative_tokens only support in range[1, 5], but get {self.num_speculative_tokens}."
+            assert (
+                self.num_model_steps >= 1 and self.num_model_steps <= 5
+            ), f"num_model_steps only support in range[1, 5], but get {self.num_model_steps}."
+
+            if self.method in ["mtp", "hybrid_mtp_ngram"]:
+                if self.num_speculative_tokens < self.num_model_steps:
+                    logger.warning(
+                        f"Get num_model_steps > num_speculative_tokens. Reset num_speculative_tokens to {self.num_model_steps}"
+                    )
+                    self.num_speculative_tokens = self.num_model_steps
+
+            assert (
+                self.mtp_strategy in self.mtp_strategy_list
+            ), f"mtp_strategy_list only support {self.mtp_strategy_list}, but get {self.mtp_strategy}"
 
     def __str__(self) -> str:
         return self.to_json_string()
@@ -669,7 +754,6 @@ class LoadChoices(str, Enum):
     """LoadChoices"""
 
     DEFAULT = "default"
-    # only support qwen3-bf16 now
     DEFAULT_V1 = "default_v1"
 
 
@@ -959,7 +1043,7 @@ class FDConfig:
         max_num_batched_tokens: Optional[int] = None,
         ips: str = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: int = 8002,
+        engine_worker_queue_port: str = "8002",
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         splitwise_role: str = "mixed",
@@ -1003,11 +1087,10 @@ class FDConfig:
 
         if self.ips is None:
             self.master_ip = "0.0.0.0"
-        elif isinstance(self.ips, list):
-            self.master_ip = self.ips[0]
-        else:
+        elif isinstance(self.ips, str):
             self.ips = self.ips.split(",")
-            self.master_ip = self.ips[0]
+
+        self.host_ip = get_host_ip()
 
         if self.ips is None:
             self.nnode = 1
@@ -1016,7 +1099,7 @@ class FDConfig:
             self.nnode = len(self.ips)
 
             for idx, ip in enumerate(self.ips):
-                if ip == self.master_ip:
+                if ip == self.host_ip:
                     self.node_rank = idx
 
         self.max_model_len = max_model_len
@@ -1032,7 +1115,14 @@ class FDConfig:
         self.reasoning_parser = reasoning_parser
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
+        self.engine_worker_queue_port = engine_worker_queue_port
         self._str_to_list("innode_prefill_ports", int)
+        if isinstance(engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(engine_worker_queue_port)
+        self._str_to_list("engine_worker_queue_port", str)
+
+        if envs.FD_FOR_TORCH_MODEL_FORMAT:
+            self.model_config.model_format = "torch"
 
         # TODO
         self.max_prefill_batch = 3
@@ -1041,16 +1131,17 @@ class FDConfig:
         if self.model_config is not None and self.model_config.enable_mm:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
-        num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.expert_parallel_size
+        num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if num_ranks > self.max_chips_per_node:
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
             assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
+
+            # assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
         else:
             self.worker_num_per_node = num_ranks
 
-        self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
@@ -1073,15 +1164,12 @@ class FDConfig:
 
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
-        self.host_ip = get_host_ip()
-
-        if self.ips is None or self.host_ip == self.master_ip:
-            self.is_master = True
-        else:
-            self.is_master = False
-
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
             self.is_master = True
+            self.master_ip = "0.0.0.0"
+        else:
+            self.is_master = False
+            self.master_ip = self.ips[0]
 
         self.paddle_commit_id = paddle.version.commit
 
@@ -1263,10 +1351,12 @@ class FDConfig:
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):
             val = getattr(self, attr_name)
+            if val is None:
+                return
             if type(val) is str:
                 setattr(self, attr_name, [default_type(i) for i in val.split(",")])
             else:
-                setattr(self, attr_name, val)
+                setattr(self, attr_name, [default_type(i) for i in val])
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, indent=4)
