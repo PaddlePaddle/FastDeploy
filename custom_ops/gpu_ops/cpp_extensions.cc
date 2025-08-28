@@ -91,6 +91,49 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num, const bool causal,
     const bool speculate_decoder);
 
+void AppendAttentionWithOutput(
+    const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
+    const paddle::Tensor &value_cache, const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &batch_id_per_token, const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &block_tables, const paddle::Tensor &encoder_batch_ids,
+    const paddle::Tensor &encoder_tile_ids_per_batch,
+    const paddle::Tensor &encoder_num_blocks,
+    const paddle::Tensor &kv_batch_ids,
+    const paddle::Tensor &kv_tile_ids_per_batch,
+    const paddle::Tensor &kv_num_blocks,
+    const paddle::Tensor &decoder_batch_ids,
+    const paddle::Tensor &decoder_tile_ids_per_batch,
+    const paddle::Tensor &decoder_num_blocks,
+    const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
+    paddle::Tensor &fmha_out,
+    const paddle::optional<paddle::Tensor> &rotary_embs,
+    const paddle::optional<paddle::Tensor> &attn_mask,
+    const paddle::optional<paddle::Tensor> &qkv_bias,
+    const paddle::optional<paddle::Tensor> &qkv_out_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_zp,
+    const paddle::optional<paddle::Tensor> &cache_v_zp,
+    const paddle::optional<paddle::Tensor> &out_linear_shifts,
+    const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
+    const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
+    const std::string &compute_dtype, const std::string &cache_quant_type_str,
+    const bool use_neox_rotary_style, const bool rope_3d,
+    const int max_input_length, const float quant_max_bound,
+    const float quant_min_bound, const float out_linear_in_scale,
+    const int encoder_block_shape_q, const int decoder_block_shape_q,
+    const int max_partition_size, const int encoder_max_partition_size,
+    const int speculate_max_draft_token_num, const bool causal,
+    const bool speculate_decoder);
+
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
     const paddle::Tensor &value_cache, const paddle::Tensor &cu_seqlens_q,
@@ -881,6 +924,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * append_attention
    */
   m.def("append_attention", &AppendAttention, "append attention function");
+  m.def("append_attention_with_output", &AppendAttentionWithOutput, "append attention with output function");
   /**
    * gqa_rope_write_cache.cu
    * gqa_rope_write_cache
