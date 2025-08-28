@@ -68,7 +68,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
 
-    # 是否使用DeepGemm后端的FP8 blockwise MoE.	
+    # 是否使用DeepGemm后端的FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM":	
     lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
 
