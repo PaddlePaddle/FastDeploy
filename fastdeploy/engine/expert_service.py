@@ -153,8 +153,13 @@ def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=N
 
     try:
         expert_service.start(ipc_signal_suffix, local_data_parallel_id)
-        while True:
-            time.sleep(1000)
+
+        def deamon_thread():
+            while True:
+                time.sleep(10)
+
+        t_deamon = threading.Thread(target=deamon_thread, daemon=True)
+        t_deamon.start()
 
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
