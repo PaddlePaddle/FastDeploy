@@ -71,12 +71,12 @@ def setup_logging(log_dir=None, config_file=None):
             },
         },
         "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "level": FASTDEPLOY_LOGGING_LEVEL,
-                "formatter": "colored",
-                "stream": "ext://sys.stdout",
-            },
+            # "console": {
+            #     "class": "logging.StreamHandler",
+            #     "level": FASTDEPLOY_LOGGING_LEVEL,
+            #     "formatter": "colored",
+            #     "stream": "ext://sys.stdout",
+            # },
             # 默认错误日志，保留最新1个小时的日志，位置在log/error.log
             "error_file": {
                 "class": "logging.handlers.TimedRotatingFileHandler",

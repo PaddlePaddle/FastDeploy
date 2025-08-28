@@ -56,7 +56,7 @@ class AsyncTokenizerClient:
     async def encode_video(self, request: VideoEncodeRequest):
         return await self._async_encode_request("video", request.__dict__)
 
-    async def decode_image(self, request: ImageEncodeRequest):
+    async def decode_image(self, request: ImageDecodeRequest):
         return await self._async_decode_request("image", request.__dict__)
 
     async def log_request(self, request):

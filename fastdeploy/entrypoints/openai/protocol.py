@@ -226,6 +226,7 @@ class DeltaMessage(BaseModel):
 
     role: Optional[str] = None
     content: Optional[str] = None
+    multimodal_content: Optional[List[Any]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
