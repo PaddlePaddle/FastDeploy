@@ -1,21 +1,22 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from fastdeploy.input.ernie_processor import ErnieProcessor
+from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 
 
-class TestErnieProcessorProcessResponseDictStreaming(unittest.TestCase):
+class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
-        # 创建 ErnieProcessor 实例的模拟对象
-        with patch.object(ErnieProcessor, "__init__", return_value=None) as mock_init:
-            self.processor = ErnieProcessor("model_path")
+        # 创建 Ernie4_5Processor 实例的模拟对象
+        with patch.object(Ernie4_5Processor, "__init__", return_value=None) as mock_init:
+            self.processor = Ernie4_5Processor("model_path")
             mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
 
         # 设置必要的属性
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
         self.processor.decode_status = {}
-        self.processor.tool_parsers = {}
+        self.processor.reasoning_end_dict = {}
+        self.processor.tool_parser_dict = {}
 
         # 模拟 ids2tokens 方法
         def mock_ids2tokens(token_ids, task_id):
@@ -31,7 +32,7 @@ class TestErnieProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         # 模拟工具解析器
         self.mock_tool_parser = MagicMock()
-        self.mock_tool_parser.extract_tool_calls_streaming.return_value = "tool_call"
+        self.mock_tool_parser.extract_tool_calls_streaming.return_value = None
         self.mock_tool_parser_obj = MagicMock()
         self.mock_tool_parser_obj.return_value = self.mock_tool_parser
         self.processor.tool_parser_obj = self.mock_tool_parser_obj

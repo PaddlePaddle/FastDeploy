@@ -66,7 +66,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
 from fastdeploy import envs
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -153,9 +153,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            self.local_rank + int(self.parallel_config.engine_worker_queue_port)
-        )
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
     def exist_prefill(self):
         """
@@ -264,7 +263,10 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
 
-                input_ids = request.prompt_token_ids + request.output_token_ids
+                if len(request.output_token_ids) == 0:
+                    input_ids = request.prompt_token_ids
+                else:
+                    input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
@@ -289,6 +291,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -323,6 +326,10 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
             self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
+            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = request.get("temp_scaled_logprobs", False)
+            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = request.get(
+                "top_p_normalized_logprobs", False
+            )
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -334,6 +341,16 @@ class GPUModelRunner(ModelRunnerBase):
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
+
+            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
+                bad_words_len = len(request.get("bad_words_token_ids"))
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                    request.get("bad_words_token_ids"), dtype="int64"
+                )
+            else:
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
@@ -496,6 +513,12 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["presence_score"][idx : idx + 1] = get_attr_from_request(
                 request, "presence_penalty", 0.0
             )
+            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
+                request, "temp_scaled_logprobs", False
+            )
+            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
+                request, "top_p_normalized_logprobs", False
+            )
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -634,6 +657,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["presence_score"] = paddle.full(
             [max_num_seqs, 1], self.model_config.presence_score, dtype="float32"
         )
+        self.share_inputs["temp_scaled_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype="bool")
+        self.share_inputs["top_p_normalized_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype="bool")
 
         self.share_inputs["min_dec_len"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
         self.share_inputs["max_dec_len"] = paddle.full(
@@ -853,6 +878,9 @@ class GPUModelRunner(ModelRunnerBase):
             max_num_logprobs=20 if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
+            temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
+            top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
+            share_inputs=self.share_inputs,
         )
 
     def load_model(self) -> None:
@@ -861,6 +889,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Load original model
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
+
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
@@ -1091,7 +1120,11 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = self.sampler(logits, self.sampling_metadata)
                 if self.parallel_config.tensor_parallel_size > 1:
-                    paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
+                    paddle.distributed.broadcast(
+                        sampler_output.sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
             else:
                 self.sampler(
                     logits,
@@ -1101,10 +1134,26 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = None
                 if self.parallel_config.tensor_parallel_size > 1:
-                    paddle.distributed.broadcast(self.share_inputs["accept_tokens"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["accept_num"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["step_idx"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["stop_flags"], 0)
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_tokens"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_num"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["step_idx"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["stop_flags"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
             # 5. post process
             model_output_data = ModelOutputData(
@@ -1123,7 +1172,7 @@ class GPUModelRunner(ModelRunnerBase):
                 is_block_step=self.share_inputs["is_block_step"],
                 full_hidden_states=model_output,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(
@@ -1174,13 +1223,15 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if not self.cache_config.enable_chunked_prefill:
             return
-        for task in tasks:
-            if task.get("prefill_chunk_info", None) is None:
-                continue
 
-            if task.chunk_idx > len(task.prefill_chunk_info):
-                continue
-            self.restore_chunked_prefill_request[task.request_id] = task
+        if tasks is not None:
+            for task in tasks:
+                if task.get("prefill_chunk_info", None) is None:
+                    continue
+
+                if task.chunk_idx > len(task.prefill_chunk_info):
+                    continue
+                self.restore_chunked_prefill_request[task.request_id] = task
 
         for id, task in list(self.restore_chunked_prefill_request.items()):
             idx = task.idx
@@ -1358,7 +1409,11 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_idx_list,
             )
             if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
+                paddle.distributed.broadcast(
+                    sampler_output.sampled_token_ids,
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
 
         else:
             self.sampler(
@@ -1369,10 +1424,26 @@ class GPUModelRunner(ModelRunnerBase):
             )
             sampler_output = None
             if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(self.share_inputs["accept_tokens"], 0)
-                paddle.distributed.broadcast(self.share_inputs["accept_num"], 0)
-                paddle.distributed.broadcast(self.share_inputs["step_idx"], 0)
-                paddle.distributed.broadcast(self.share_inputs["stop_flags"], 0)
+                paddle.distributed.broadcast(
+                    self.share_inputs["accept_tokens"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
+                paddle.distributed.broadcast(
+                    self.share_inputs["accept_num"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
+                paddle.distributed.broadcast(
+                    self.share_inputs["step_idx"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
+                paddle.distributed.broadcast(
+                    self.share_inputs["stop_flags"],
+                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                    group=self.parallel_config.tp_group,
+                )
 
         # 5. Post Process
         model_output_data = ModelOutputData(
@@ -1391,7 +1462,7 @@ class GPUModelRunner(ModelRunnerBase):
             is_block_step=self.share_inputs["is_block_step"],
             full_hidden_states=model_output,
             msg_queue_id=self.parallel_config.msg_queue_id,
-            mp_rank=self.local_rank,
+            mp_rank=self.parallel_config.tensor_parallel_rank,
             use_ep=self.parallel_config.use_ep,
             draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             actual_draft_token_num=(
@@ -1428,7 +1499,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
-        # 7. Updata 'infer_seed' and step_cuda()
+        # 7. Update 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 
@@ -1580,12 +1651,22 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
         paddle.device.cuda.empty_cache()
+
+        # Clear CudaGraph
+        if self.use_cudagraph:
+            self.model.clear_grpah_opt_backend()
+
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
         """ " Dynamic model loader use to update parameters use for RL"""
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
+
+        # Recapture CudaGraph
+        if self.use_cudagraph:
+            self.capture_model()
+
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def padding_cudagraph_inputs(self) -> None:
@@ -1671,7 +1752,6 @@ class GPUModelRunner(ModelRunnerBase):
         token_type_ids_w_video = token_type_ids
         input_ids = inputs["input_ids"]
         # convert to img patch id
-        # TODO(lulinjun): may need to check model_config and model_cfg
         image_mask = input_ids == self.model_config.im_patch_id
         image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(

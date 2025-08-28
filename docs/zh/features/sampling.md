@@ -183,7 +183,7 @@ print('\n')
 
 ## 使用说明
 
-请求中加入bad_words参数：
+可以在请求中加入bad_words参数，也可以加入bad_words_token_ids参数
 
 * 使用 curl 命令发送用户请求示例如下：
 
@@ -192,9 +192,22 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "How old are you"}
+    {"role": "user", "content": "How are you"}
   ],
-  "bad_words": ["age", "I"]
+  "bad_words": [" well", " Today"]
+}'
+```
+
+等价于
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How are you"}
+  ],
+  "bad_words_token_ids": [1622, 25062]
 }'
 ```
 
@@ -203,15 +216,37 @@ curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
 ```python
 import openai
 host = "0.0.0.0"
-port = "8170"
+port = "9222"
 client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
 
 response = client.chat.completions.create(
     model="null",
     messages=[
-        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "Hello, how are you?"},
     ],
-    extra_body={"bad_words": ["you", "me"]},
+    extra_body={"bad_words": [" well", " Today"]},
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
+等价于
+
+```python
+import openai
+host = "0.0.0.0"
+port = "9222"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "user", "content": "Hello, how are you?"},
+    ],
+    extra_body={"bad_words_token_ids": [1622, 25062]},
     stream=True,
 )
 for chunk in response:
@@ -223,3 +258,4 @@ print('\n')
 ## 参数说明
 
 * `bad_words`: 禁止生成的词列表。list类型，每个元素为str类型。仅支持每个元素为单个token。
+* `bad_words_token_ids`: 禁止生成的token id列表。list类型，每个元素为int类型。
