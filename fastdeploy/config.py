@@ -341,7 +341,8 @@ class ParallelConfig:
     def set_tp_group(self):
         # different tp group id
         # prevent different tp_groups using the same group_id
-        dist.collective._set_custom_gid(self.data_parallel_rank + 100)
+        tp_gid_offset = envs.FD_TP_GROUP_GID_OFFSET
+        dist.collective._set_custom_gid(self.data_parallel_rank + tp_gid_offset)
         self.tp_group = dist.new_group(
             range(
                 self.data_parallel_rank * self.tensor_parallel_size,
@@ -349,7 +350,8 @@ class ParallelConfig:
             )
         )
         # same ep group id
-        dist.collective._set_custom_gid(self.data_parallel_size + 100)
+        # (TODO:gaoziyuan move this gid config to ep.py)
+        dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
