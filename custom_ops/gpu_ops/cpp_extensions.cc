@@ -151,7 +151,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor &input, const paddle::Tensor &gating_output,
     const paddle::optional<paddle::Tensor> &gating_correction_bias,
     const paddle::optional<paddle::Tensor> &w4a8_in_scale, const int moe_topk,
-    const bool group_moe, const bool topk_only_mode);
+    const bool group_moe, const std::string &moe_quant_type, const bool topk_only_mode);
 
 std::vector<paddle::Tensor>
 MoETopKSelectKernel(const paddle::Tensor &gating_logits,
@@ -912,7 +912,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_dispatch", &MoeExpertDispatch, py::arg("input"),
         py::arg("gating_output"), py::arg("gating_correction_bias"),
         py::arg("w4a8_in_scale"), py::arg("moe_topk"), py::arg("group_moe"),
-        py::arg("topk_only_mode"), "moe export dispatch function");
+        py::arg("moe_quant_type"), py::arg("topk_only_mode"), "moe export dispatch function");
 
   /**
    * moe/fused_moe/ep_moe_prefill_func.cu

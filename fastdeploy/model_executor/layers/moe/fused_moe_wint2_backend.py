@@ -284,6 +284,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             ),  # if set, permute_input will be int8_t
             layer.top_k,
             False,
+            self.moe_quant_type,
             topk_only_mode=False,
         )
 

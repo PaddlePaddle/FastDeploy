@@ -225,20 +225,9 @@ struct CollectiveMainloopFwd {
         const int actual_token,
         const int bidn) const {
 
-        auto g_offset = local_tile(
-            mB(_, _, 0),
-            cute::make_shape(1, size<1>(mB)),
-            make_coord(pre_fix_token, _0{}));
-
-        auto g_tensor = make_tensor(
-            g_offset.data(),
-            make_layout(
-                cute::make_shape(actual_token, size<2>(mB)),
-                g_offset.stride()
-            ));
+        auto g_tensor = domain_offset(make_coord(pre_fix_token, _0{}), mB(_, _, 0));
 
         Tensor gB = local_tile(g_tensor, select<1, 2>(TileShape_MNK{}), make_coord(bidn, _));
-
         return gB;
     }
 
