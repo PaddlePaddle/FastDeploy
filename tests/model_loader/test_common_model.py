@@ -14,6 +14,7 @@
 
 import os
 import shutil
+import time
 import traceback
 import warnings
 from multiprocessing import Process, Queue
@@ -137,6 +138,8 @@ def form_model_get_output(
         print(f"Failed using {load_choices} laoder to load model from {model_path}.")
         traceback.print_exc()
         pytest.fail(f"Failed to initialize LLM model from {model_path}")
+    finally:
+        time.sleep(2)
 
 
 def run_with_timeout(target, args, timeout=60 * 5):
