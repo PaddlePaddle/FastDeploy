@@ -139,10 +139,8 @@ class ResourceManagerV1(ResourceManager):
         inputs = request.multimodal_inputs
         if (
             inputs["image_feature_urls"] is not None
-            and inputs["video_feature_urls"] is not None
-            and inputs["audio_feature_urls"] is not None
-            and inputs["patch_idx"] is not None
-            and inputs["patch_map"] is not None
+            or inputs["video_feature_urls"] is not None
+            or inputs["audio_feature_urls"] is not None
         ):
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
