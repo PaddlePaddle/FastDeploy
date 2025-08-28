@@ -1749,9 +1749,8 @@ class GPUModelRunner(ModelRunnerBase):
     def extract_vision_features_ernie(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
-        images = inputs["images"]
         # ernie-vl has images norm
-        images = images.cast("float32")
+        images = inputs["images"].cast("float32")
         images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
         images = images / self.image_preprocess.image_std_tensor
         images = images.cast("bfloat16")
