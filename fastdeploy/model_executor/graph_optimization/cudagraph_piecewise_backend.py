@@ -106,7 +106,7 @@ class CudaGraphPiecewiseBackend:
                 entry.num_finished_warmup += 1
                 entry.runnable(**kwargs)
                 logger.debug(
-                    f"[CUDA GRAPH] Warm up for batch size {entry.runtime_bs}, "
+                    f"[CUDA GRAPH] Warm up for batch size {entry.real_shape}, "
                     f"finished ({n + 1}/{entry.num_finished_warmup}) times"
                 )
 
@@ -116,13 +116,13 @@ class CudaGraphPiecewiseBackend:
 
             # Capture
             self.cuda_graph_manager.state = CUDAGraphState.CAPTURE
-            self.cuda_graph_manager.batch_size = entry.runtime_bs
+            self.cuda_graph_manager.batch_size = entry.real_shape
             with self.cuda_graph_manager.run_impl_guard():
                 entry.runnable(**kwargs)
 
         # Replay
         self.cuda_graph_manager.state = CUDAGraphState.REPLAY
-        self.cuda_graph_manager.batch_size = entry.runtime_bs
+        self.cuda_graph_manager.batch_size = entry.real_shape
         with self.cuda_graph_manager.run_impl_guard():
             return entry.runnable(**kwargs)
 
