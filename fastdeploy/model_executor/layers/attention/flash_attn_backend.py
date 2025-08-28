@@ -378,7 +378,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.speculate_max_draft_token_num + 1,
             self.causal,
             self.speculative_method is not None,
-        )[0]
+        )
 
         if metadata.max_len_tensor_cpu[1] > 0:
             merge_prefill_decode_output(

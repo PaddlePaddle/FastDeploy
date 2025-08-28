@@ -1160,10 +1160,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        assert (
-            self.device_ids.split(",").__len__() == self.worker_num_per_node
-        ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
-
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
@@ -1316,7 +1312,7 @@ class FDConfig:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.engine_worker_queue_port,
+                        "port": self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id],
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":
