@@ -111,7 +111,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const int kv_token_num, const int max_seq_len,
-    const std::string &cache_quant_type);
+    const std::string &cache_quant_type,
+    const bool rope_3d);
 
 std::vector<paddle::Tensor>
 PreCacheLenConcat(const paddle::Tensor &seq_lens_decoder,
@@ -128,11 +129,29 @@ paddle::Tensor FusedExpertMoeFunc(
     const std::string &quant_method, const int moe_topk,
     const bool norm_topk_prob, const bool group_moe);
 
+std::vector<paddle::Tensor> MacheteMMKernel(
+    paddle::Tensor const& A, paddle::Tensor const& B,
+    paddle::optional<paddle::Tensor> const& maybe_group_scales,
+    paddle::optional<paddle::Tensor> const& maybe_group_zeros,
+    paddle::optional<paddle::Tensor> const& maybe_channel_scales,
+    paddle::optional<paddle::Tensor> const& maybe_token_scales,
+    std::string const& b_type_str,
+    std::string const& maybe_out_type_str,
+    int64_t const& maybe_group_size,
+    std::string const& maybe_schedule);
+
+std::vector<paddle::Tensor> MachetePrepackBKernel(
+    paddle::Tensor const& B, std::string const& a_type_str, std::string const& b_type_str,
+    std::string const& maybe_group_scales_type_str);
+
+std::vector<std::string> MacheteSupportedSchedules(
+    std::string const& a_type_str, std::string const& b_type_str);
+
 std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor &input, const paddle::Tensor &gating_output,
     const paddle::optional<paddle::Tensor> &gating_correction_bias,
     const paddle::optional<paddle::Tensor> &w4a8_in_scale, const int moe_topk,
-    const bool group_moe, const bool topk_only_mode);
+    const bool group_moe, const std::string &moe_quant_type, const bool topk_only_mode);
 
 std::vector<paddle::Tensor>
 MoETopKSelectKernel(const paddle::Tensor &gating_logits,
@@ -614,7 +633,7 @@ void SpeculateVerify(
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
     int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode);
 
-void SpeculateUpdateV3(const paddle::Tensor &seq_lens_encoder,
+void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
                        const paddle::Tensor &not_need_stop,
                        const paddle::Tensor &draft_tokens,
@@ -659,6 +678,20 @@ void NgramMatch(const paddle::Tensor &input_ids,
         const int max_draft_tokens);
 
 
+void HybridMtpNgram(const paddle::Tensor &input_ids,
+        const paddle::Tensor &input_ids_len,
+        const paddle::Tensor &pre_ids,
+        const paddle::Tensor &step_idx,
+        const paddle::Tensor &draft_token_num,
+        const paddle::Tensor &draft_tokens,
+        const paddle::Tensor &seq_lens_this_time,
+        const paddle::Tensor &seq_lens_decoder,
+        const paddle::Tensor &max_dec_len,
+        const int max_ngram_size,
+        const int min_ngram_size,
+        const int max_draft_tokens);
+
+
 // MTP
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
@@ -675,6 +708,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
                           const paddle::Tensor& batch_drop,
+                          const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -878,7 +912,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_dispatch", &MoeExpertDispatch, py::arg("input"),
         py::arg("gating_output"), py::arg("gating_correction_bias"),
         py::arg("w4a8_in_scale"), py::arg("moe_topk"), py::arg("group_moe"),
-        py::arg("topk_only_mode"), "moe export dispatch function");
+        py::arg("moe_quant_type"), py::arg("topk_only_mode"), "moe export dispatch function");
 
   /**
    * moe/fused_moe/ep_moe_prefill_func.cu
@@ -907,6 +941,25 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("masked_per_token_quant", &MaskedPerTokenQuant, py::arg("input"),
         py::arg("recv_expert_count"), py::arg("block_size"),
         "per token per block quant");
+
+  /*machete/machete_mm.cu
+   * machete_mm
+   */
+  m.def("machete_mm", &MacheteMMKernel, py::arg("A"), py::arg("B"), py::arg("maybe_group_scale"),
+        py::arg("maybe_group_zeros"), py::arg("maybe_channel_scales"), py::arg("maybe_token_scales"),
+        py::arg("b_type_str"), py::arg("maybe_out_type_str"), py::arg("maybe_group_size"),
+        py::arg("maybe_schedule"),
+        "machete mm function");
+
+  /*machete/machete_prepack_B.cu
+   * machete_prepack_B
+   */
+  m.def("machete_prepack_B", &MachetePrepackBKernel, "machete prepacked B function");
+
+  /*machete/machete_supported_schedules.cu
+   * machete_supported_schedules
+   */
+  m.def("machete_supported_schedules", &MacheteSupportedSchedules, "machete supported schedules function");
 
   /**
    * moe/fused_moe/moe_topk_select.cu
@@ -1121,7 +1174,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",&SpeculateVerify, "speculate_verify function");
 
-  m.def("speculate_update_v3",&SpeculateUpdateV3, "noaux_tc for Deepseekv3 MoE compute function");
+  m.def("speculate_update",&SpeculateUpdate, "Speculate Update Kernel");
 
   m.def("speculate_set_value_by_flags_and_idx",&SpeculateSetValueByFlagsAndIdx, "speculate_set_value_by_flags_and_idx function");
 
@@ -1130,6 +1183,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_clear_accept_nums",&SpeculateClearAcceptNums, "speculate_clear_accept_nums function");
 
   m.def("ngram_match", &NgramMatch, "ngram_match function");
+
+  m.def("hybird_mtp_ngram", &HybridMtpNgram, "ngram_match_mixed function");
 
   m.def("draft_model_postprocess",&DraftModelPostprocess, "draft_model_postprocess function");
 

@@ -98,33 +98,50 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         )
 
         # Run Test Case1
-        test_model1 = TestModel1(fd_config=fd_config)
-        input_tensor1 = paddle.ones([32768])
+        self.test_model1 = TestModel1(fd_config=fd_config)
+        input_tensor1 = paddle.ones([1, 32768])
         forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
+        # Corrent output
+        self.output_correct = self.test_model1.forward_correct(
+            ids_remove_padding=input_tensor1, forward_meta=forward_meta1
+        )
+
+        # Capture and Destory
+        self.capture_and_replay(input_tensor1, forward_meta1)
+        self.recapture_and_replay(input_tensor1, forward_meta1)
+
+    def capture_and_replay(self, input_tensor1, forward_meta1):
+        """ """
         # Triger Capture
         print_gpu_memory_use(0, "before capture")
-        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        output1 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         print_gpu_memory_use(0, "after capture")
+
         # Reaplay
-        output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        output1 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        assert (output1 == self.output_correct).all()
+
         # Destory
         print_gpu_memory_use(0, "before destory")
-        test_model1.clear_grpah_opt_backend()
+        self.test_model1.clear_grpah_opt_backend()
         print_gpu_memory_use(0, "after destory")
 
+    def recapture_and_replay(self, input_tensor1, forward_meta1):
+        """ """
         # Triger Capture
         print_gpu_memory_use(0, "before recapture")
-        _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        output2 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         print_gpu_memory_use(0, "after recapture")
+
         # Reaplay
-        output2 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        output2 = self.test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
+        assert (output2 == self.output_correct).all()
 
-        # Corrent output
-        output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
-
-        assert sum(output1 - output2) == 0
-        assert sum(output1_correct - output1) == 0
+        # Destory
+        print_gpu_memory_use(0, "before destory")
+        self.test_model1.clear_grpah_opt_backend()
+        print_gpu_memory_use(0, "after destory")
 
 
 if __name__ == "__main__":

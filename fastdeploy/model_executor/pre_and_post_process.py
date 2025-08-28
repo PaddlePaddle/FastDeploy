@@ -68,7 +68,7 @@ else:
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_system_cache,
-        speculate_update_v3,
+        speculate_update,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -308,7 +308,7 @@ def post_process_normal(
 
 def post_process_specualate(model_output, save_each_rank: bool = False, skip_save_output: bool = False):
     """"""
-    speculate_update_v3(
+    speculate_update(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
         model_output.not_need_stop,

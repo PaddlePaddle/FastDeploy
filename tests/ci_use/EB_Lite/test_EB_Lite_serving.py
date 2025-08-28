@@ -738,8 +738,8 @@ def test_non_streaming_chat_with_disable_chat_template(openai_client, capsys):
     assert hasattr(enabled_response, "choices")
     assert len(enabled_response.choices) > 0
 
-    # from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
-    # tokenizer = ErnieBotTokenizer.from_pretrained("PaddlePaddle/ERNIE-4.5-0.3B-Paddle", trust_remote_code=True)
+    # from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+    # tokenizer = Ernie4_5Tokenizer.from_pretrained("PaddlePaddle/ERNIE-4.5-0.3B-Paddle", trust_remote_code=True)
     # prompt = tokenizer.apply_chat_template([{"role": "user", "content": "Hello, how are you?"}], tokenize=False)
     prompt = "<|begin_of_sentence|>User: Hello, how are you?\nAssistant: "
     disabled_response = openai_client.chat.completions.create(
@@ -821,9 +821,9 @@ def test_non_streaming_chat_with_bad_words(openai_client, capsys):
     assert hasattr(response_0.choices[0].message, "completion_token_ids")
     assert isinstance(response_0.choices[0].message.completion_token_ids, list)
 
-    from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+    from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 
-    tokenizer = ErnieBotTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tokenizer = Ernie4_5Tokenizer.from_pretrained(model_path, trust_remote_code=True)
     output_tokens_0 = []
     output_ids_0 = []
     for ids in response_0.choices[0].message.completion_token_ids:
@@ -977,9 +977,9 @@ def test_non_streaming_completion_with_bad_words(openai_client, capsys):
     assert hasattr(response_0.choices[0], "completion_token_ids")
     assert isinstance(response_0.choices[0].completion_token_ids, list)
 
-    from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+    from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 
-    tokenizer = ErnieBotTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tokenizer = Ernie4_5Tokenizer.from_pretrained(model_path, trust_remote_code=True)
     output_tokens_0 = []
     output_ids_0 = []
     for ids in response_0.choices[0].completion_token_ids:

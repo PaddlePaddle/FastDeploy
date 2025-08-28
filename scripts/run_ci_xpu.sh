@@ -8,16 +8,21 @@ ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || t
 lsof -t -i :8188 | xargs kill -9 || true
 
 export model_path=${MODEL_PATH}/data/eb45t_4_layer
-export CLANG_PATH=${MODEL_PATH}/data/xtdk
-export XVLLM_PATH=${MODEL_PATH}/data/xvllm
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
 echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.0.0.dev20250817-cp310-cp310-linux_x86_64.whl
+# python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 echo "build whl"
+bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+# 由于xvllm更新导致起服务报错 暂时锁死版本
+wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250827/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
+export XVLLM_PATH=${PWD}/xvllm
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
+#export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
 bash build.sh || exit 1
 echo "pip others"
 python -m pip install openai -U
@@ -91,6 +96,8 @@ if [ ${exit_code} -ne 0 ]; then
     echo "模型起服务失败，请检查pr代码"
     exit 1
 fi
+
+sleep 5
 
 #0731新增kv block集中式管理相关测试，在起服务时启用对应环境变量 export ENABLE_V1_KVCACHE_SCHEDULER=True
 # 起服务

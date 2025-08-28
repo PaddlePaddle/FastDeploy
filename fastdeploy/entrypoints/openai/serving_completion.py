@@ -33,7 +33,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
     UsageInfo,
 )
-from fastdeploy.utils import api_server_logger, get_host_ip
+from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -42,14 +42,14 @@ class OpenAIServingCompletion:
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
-        self.master_ip = ips
-        self.host_ip = get_host_ip()
         self.max_waiting_time = max_waiting_time
-        if self.master_ip is not None:
-            if isinstance(self.master_ip, list):
-                self.master_ip = self.master_ip[0]
+        if ips is not None:
+            if isinstance(ips, list):
+                self.master_ip = ips[0]
             else:
-                self.master_ip = self.master_ip.split(",")[0]
+                self.master_ip = ips.split(",")[0]
+        else:
+            self.master_ip = "0.0.0.0"
 
     async def _ensure_connection_manager(self):
         """ensure connection manager initialized"""
@@ -58,18 +58,16 @@ class OpenAIServingCompletion:
             self.engine_client.connection_initialized = True
 
     def _check_master(self):
-        if self.master_ip is None:
-            return True
-        if self.host_ip == self.master_ip:
-            return True
-        return False
+        return self.engine_client.is_master
 
     async def create_completion(self, request: CompletionRequest):
         """
         Create a completion for the given prompt.
         """
         if not self._check_master():
-            err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
+            err_msg = (
+                f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
+            )
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
         if self.models:
@@ -220,8 +218,8 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
-            aggregated_top_logprobs = [[[], [], []]] * num_choices
-            aggregated_token_ids = [[]] * num_choices
+            aggregated_top_logprobs = [[[], [], []] for _ in range(num_choices)]
+            aggregated_token_ids = [[] for _ in range(num_choices)]
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
@@ -492,7 +490,6 @@ class OpenAIServingCompletion:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
-        aggregated_logprobs: Optional[CompletionLogprobs] = None
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -504,15 +501,9 @@ class OpenAIServingCompletion:
             output = final_res["outputs"]
             output_top_logprobs = output["top_logprobs"]
 
+            aggregated_logprobs: Optional[CompletionLogprobs] = None
             if output_top_logprobs is not None:
-                logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
-                if aggregated_logprobs is None:
-                    aggregated_logprobs = logprobs_res
-                else:
-                    aggregated_logprobs.tokens.extend(logprobs_res.tokens)
-                    aggregated_logprobs.token_logprobs.extend(logprobs_res.token_logprobs)
-                    aggregated_logprobs.top_logprobs.extend(logprobs_res.top_logprobs)
-                    aggregated_logprobs.text_offset.extend(logprobs_res.text_offset)
+                aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
             if request.echo:
                 assert prompt_text is not None
