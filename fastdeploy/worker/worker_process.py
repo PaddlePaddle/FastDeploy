@@ -106,7 +106,8 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
-    if fd_config.model_config.enable_mm:
+    architectures = fd_config.model_config.architectures
+    if fd_config.model_config.enable_mm and not ErnieArchitectures.contains_ernie_arch(architectures):
         vocab_file_names = [
             "tokenizer.model",
             "spm.model",
@@ -736,7 +737,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
     )
-    # update_fd_config_for_mm(fd_config)
+    update_fd_config_for_mm(fd_config)
 
     return fd_config
 
