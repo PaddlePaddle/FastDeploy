@@ -773,7 +773,6 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
-
     from fastdeploy.plugins.model_register import load_model_register_plugins
 
     load_model_register_plugins()
