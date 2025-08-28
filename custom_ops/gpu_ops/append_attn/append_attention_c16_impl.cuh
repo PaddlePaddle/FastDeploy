@@ -1262,7 +1262,7 @@ void MultiQueryAppendAttention(
               max_num_chunks,
               num_heads,
               chunk_size,
-              num_blocks_x.data<int>()[1],
+              num_blocks_x.data<int>(),
               HEAD_DIM,
               token_num,
               speculate_max_draft_token_num);
