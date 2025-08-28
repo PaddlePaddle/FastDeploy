@@ -1057,9 +1057,7 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight")})
-    .Outputs({"fmha_out", "key_cache_out", "value_cache_out"})
-    .SetInplaceMap({{"key_cache", "key_cache_out"},
-                    {"value_cache", "value_cache_out"}})
+    .Outputs({"fmha_out"})
     .Attrs({"rms_norm_eps: float",
             "compute_type: std::string",
             "cache_quant_type: std::string",
@@ -1119,10 +1117,8 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight")})
-    .Outputs({"fmha_out_out", "qkv_out", "key_cache_out", "value_cache_out"})
-    .SetInplaceMap({{"fmha_out", "fmha_out_out"},
-                    {"key_cache", "key_cache_out"},
-                    {"value_cache", "value_cache_out"}})
+    .Outputs({"fmha_out_out"})
+    .SetInplaceMap({{"fmha_out", "fmha_out_out"}})
     .Attrs({"rms_norm_eps: float",
             "compute_type: std::string",
             "cache_quant_type: std::string",
