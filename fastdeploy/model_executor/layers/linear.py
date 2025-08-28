@@ -297,6 +297,49 @@ class ReplicatedLinear(LinearBase):
         )
 
 
+class MergedReplicatedLinear(ReplicatedLinear):
+    """
+    Replicated linear layer.
+    """
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        prefix: str = "",
+        input_size: int = None,
+        output_sizes: list[int] = None,
+        with_bias: bool = False,
+        add_bias: bool = False,
+        skip_quant: bool = False,
+        weight_dtype: str = "",
+        weight_key: str = "",
+    ):
+        """
+        Initializes a replicated linear layer.
+
+        Args:
+            fd_config (FDConfig): Inference-related parameters.
+            prefix (str): Unique name of the layer, used to name internal attributes.
+                Can be arbitrarily named.
+            input_size (int): Number of input features. Defaults to None.
+            output_sizes (list[int]): Number of output features list. Defaults to None.
+            with_bias (bool): Whether to include bias or not. Defaults to False.
+            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
+            skip_quant (bool): Whether to skip quantization. Defaults to False.
+        """
+        super().__init__(
+            fd_config=fd_config,
+            prefix=prefix,
+            input_size=input_size,
+            output_size=sum(output_sizes),
+            with_bias=with_bias,
+            add_bias=add_bias,
+            skip_quant=skip_quant,
+            weight_dtype=weight_dtype,
+            weight_key=weight_key,
+        )
+
+
 class ColumnParallelLinear(LinearBase):
     """
     ColumnParallelLinear Layer.

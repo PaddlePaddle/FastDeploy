@@ -38,6 +38,7 @@ from fastdeploy.model_executor.layers.linear import (
     ColumnParallelLinear,
     KVBatchLinear,
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     ReplicatedLinear,
     RowParallelLinear,
 )
@@ -211,11 +212,11 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         if self.q_lora_rank is not None:
             # NOTE: (changwenbin) qkv_a_proj horizontal fusion
-            self.qkv_a_proj_with_mqa = ReplicatedLinear(
+            self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
                 fd_config=fd_config,
                 prefix=f"{prefix}.qkv_a_proj_with_mqa",
                 input_size=self.hidden_size,
-                output_size=self.q_lora_rank + self.kv_lora_rank + self.qk_rope_head_dim,
+                output_sizes=[self.q_lora_rank, self.kv_lora_rank + self.qk_rope_head_dim],
                 with_bias=False,
             )
 
