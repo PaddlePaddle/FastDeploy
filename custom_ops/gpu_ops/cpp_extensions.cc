@@ -413,8 +413,9 @@ void TextImageGatherScatter(paddle::Tensor &input, paddle::Tensor &text_input,
                             paddle::Tensor &text_index,
                             paddle::Tensor &image_index, const bool is_scatter);
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
-                                            int64_t num_experts);
+std::vector<paddle::Tensor> count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
+                                                         int64_t num_experts,
+                                                         bool compute_token_padded_sum);
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,

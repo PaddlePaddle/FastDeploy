@@ -322,8 +322,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             logger.info(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
 
-            token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
+            token_nums_this_rank, token_nums_this_rank_padded_tensor = count_tokens_per_expert_func(
+                recv_topk_idx, layer.num_local_experts, True
+            )
+            token_nums_this_rank_padded = token_nums_this_rank_padded_tensor.item()
 
             (
                 permute_input,
@@ -500,7 +502,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,
             )
 
-        tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
+        token_nums_this_rank, _ = count_tokens_per_expert_func(topk_ids, layer.num_local_experts, False)
 
         recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
 
@@ -519,8 +521,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_x_scale,
             topk_ids,
             topk_weights,
-            tmp[0],
-            tmp[1],
+            token_nums_this_rank[0],
+            token_nums_this_rank[1],
             False,  # use_in_ep
             -1,
         )
