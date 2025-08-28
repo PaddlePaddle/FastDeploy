@@ -400,10 +400,10 @@ class LLMEngine:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
-                    err, data = self.zmq_server.receive_json_once(block)
+                if not self.cfg.enable_mm:
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -411,23 +411,19 @@ class LLMEngine:
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
+                    request = Request.from_dict(data)
+                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+
+                    llm_logger.debug(f"Receive request: {request}")
+
                     err_msg = None
-                    try:
-                        request = Request.from_dict(data)
-                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
-                        llm_logger.debug(f"Receive request: {request}")
-                    except Exception as e:
-                        llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
-                        err_msg = str(e)
-                        results.append((data["request_id"], err_msg))
-
-                    if self.guided_decoding_checker is not None and err_msg is None:
+                    if self.guided_decoding_checker is not None:
                         request, err_msg = self.guided_decoding_checker.schema_format(request)
-                        if err_msg is not None:
-                            llm_logger.error(f"Receive request error: {err_msg}")
-                            results.append((request.request_id, err_msg))
 
-                    if err_msg is None:
+                    if err_msg is not None:
+                        llm_logger.error(err_msg)
+                        results.append((request.request_id, err_msg))
+                    else:
                         insert_task.append(request)
 
                 response = self.scheduler.put_requests(insert_task)
@@ -439,10 +435,9 @@ class LLMEngine:
                     added_requests[request.request_id] += 1
 
                 for request_id, failed in results:
-                    if request_id in added_requests:
-                        added_requests[request_id] -= 1
-                        if added_requests[request_id] == 0:
-                            added_requests.pop(request_id)
+                    added_requests[request_id] -= 1
+                    if added_requests[request_id] == 0:
+                        added_requests.pop(request_id)
 
                     if failed is None:
                         main_process_metrics.num_requests_waiting.inc(1)
@@ -456,7 +451,7 @@ class LLMEngine:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, [error_result])
+                    self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "

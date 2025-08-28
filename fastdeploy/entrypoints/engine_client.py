@@ -190,35 +190,35 @@ class EngineClient:
         Validate stream options
         """
 
-        if data.get("n") is not None:
+        if data.get("n"):
             if data["n"] != 1:
                 raise ValueError("n only support 1.")
 
-        if data.get("max_tokens") is not None:
+        if data.get("max_tokens"):
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
                 raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
 
-        if data.get("reasoning_max_tokens") is not None:
+        if data.get("reasoning_max_tokens"):
             if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
                 raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
 
-        if data.get("top_p") is not None:
+        if data.get("top_p"):
             if data["top_p"] > 1 or data["top_p"] < 0:
                 raise ValueError("top_p value can only be defined [0, 1].")
 
-        if data.get("frequency_penalty") is not None:
+        if data.get("frequency_penalty"):
             if not -2.0 <= data["frequency_penalty"] <= 2.0:
                 raise ValueError("frequency_penalty must be in [-2, 2]")
 
-        if data.get("temperature") is not None:
+        if data.get("temperature"):
             if data["temperature"] < 0:
                 raise ValueError("temperature must be non-negative")
 
-        if data.get("presence_penalty") is not None:
+        if data.get("presence_penalty"):
             if not -2.0 <= data["presence_penalty"] <= 2.0:
                 raise ValueError("presence_penalty must be in [-2, 2]")
 
-        if data.get("seed") is not None:
+        if data.get("seed"):
             if not 0 <= data["seed"] <= 922337203685477580:
                 raise ValueError("seed must be in [0, 922337203685477580]")
 
