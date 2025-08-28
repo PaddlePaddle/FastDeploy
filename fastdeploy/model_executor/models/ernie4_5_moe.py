@@ -534,46 +534,35 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None, None),
             ("lm_head.linear", "lm_head", None, None),
             ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
+            ("qkv_proj", "q_proj", None, "q"),
+            ("qkv_proj", "k_proj", None, "k"),
+            ("qkv_proj", "v_proj", None, "v"),
+            ("up_gate_proj", "gate_proj", None, "gate"),
+            ("up_gate_proj", "up_proj", None, "up"),
         ]
-        torch_model = self.fd_config.model_config.model_format == "torch"
+        # No 'tie_word_embeddings' in torch 0.3B and 21B-A3B config.json
         lm_head_in_ckpt = False
-        if torch_model:
-            general_params_mapping += [
-                ("qkv_proj", "q_proj", None, "q"),
-                ("qkv_proj", "k_proj", None, "k"),
-                ("qkv_proj", "v_proj", None, "v"),
-                ("up_gate_proj", "gate_proj", None, "gate"),
-                ("up_gate_proj", "up_proj", None, "up"),
-            ]
 
         expert_params_mapping = []
         if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
-            if torch_model:
-                expert_params_mapping = FusedMoE.make_expert_params_mapping(
-                    num_experts=self.fd_config.model_config.moe_num_experts,
-                    ckpt_down_proj_name="down_proj",
-                    ckpt_gate_proj_name="gate_proj",
-                    ckpt_up_proj_name="up_proj",
-                    param_gate_up_proj_name="experts.up_gate_proj_",
-                    param_down_proj_name="experts.down_proj_",
-                )
-            else:
-                expert_params_mapping = FusedMoE.make_expert_params_mapping(
-                    num_experts=self.fd_config.model_config.moe_num_experts,
-                    ckpt_down_proj_name="down_proj",
-                    ckpt_gate_up_proj_name="up_gate_proj",
-                    param_gate_up_proj_name="experts.up_gate_proj_",
-                    param_down_proj_name="experts.down_proj_",
-                )
+            expert_params_mapping = FusedMoE.make_expert_params_mapping(
+                num_experts=self.fd_config.model_config.moe_num_experts,
+                ckpt_down_proj_name="down_proj",
+                ckpt_gate_up_proj_name="up_gate_proj",
+                ckpt_gate_proj_name="gate_proj",
+                ckpt_up_proj_name="up_proj",
+                param_gate_up_proj_name="experts.up_gate_proj_",
+                param_down_proj_name="experts.down_proj_",
+            )
         all_param_mapping = general_params_mapping + expert_params_mapping
 
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
-            loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             if "lm_head" in loaded_weight_name:
                 lm_head_in_ckpt = True
+            loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
@@ -600,6 +589,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
+
         self.tie_word_embeddings = not lm_head_in_ckpt
         if self.tie_word_embeddings:
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
