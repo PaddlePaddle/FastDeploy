@@ -129,6 +129,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.lm_head_fp32: bool = False
         self.model_format = "auto"
         for key, value in args.items():
             if hasattr(self, key):
@@ -1219,10 +1220,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        assert (
-            self.device_ids.split(",").__len__() == self.worker_num_per_node
-        ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
-
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:

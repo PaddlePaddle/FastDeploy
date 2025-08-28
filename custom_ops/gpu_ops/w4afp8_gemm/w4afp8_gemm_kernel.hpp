@@ -222,7 +222,7 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
             static_cast<Element const*>(A),
             get_gmem_layout<Batch>(M, K / 2),
             static_cast<Element const*>(B),
-            get_gmem_layout<Batch>(TokenPackSize == 0 ? max_tokens * Batch : TokenPackSize, K),
+            get_gmem_layout<Batch>(TokenPackSize == 0 ? max_tokens: TokenPackSize, K),
             static_cast<ElementOutput*>(C),
             get_gmem_layout<Batch>(M, TokenPackSize == 0 ? max_tokens : TokenPackSize),
             weight_scale,
