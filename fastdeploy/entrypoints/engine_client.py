@@ -112,7 +112,7 @@ class EngineClient:
         self.zmq_client = ZmqClient(model, mode)
         self.zmq_client.connect()
 
-    async def format_and_add_data(self, prompts: dict):
+    def format_and_add_data(self, prompts: dict):
         """
         Format the request data and send the request to the server.
         """
@@ -126,7 +126,7 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
-    async def add_requests(self, task):
+    def add_requests(self, task):
         """
         Add a new request to the queue.
 
@@ -140,7 +140,7 @@ class EngineClient:
 
         task["preprocess_start_time"] = time.time()
         try:
-            await self.data_processor.process_request_dict(task, self.max_model_len)
+            self.data_processor.process_request_dict(task, self.max_model_len)
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]

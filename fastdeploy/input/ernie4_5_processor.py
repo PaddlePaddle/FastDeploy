@@ -76,7 +76,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
-    async def process_request(self, request, max_model_len=None, **kwargs):
+    def process_request(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
 
@@ -144,7 +144,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         data_processor_logger.info(f"Processed request {request}")
         return request
 
-    async def process_request_dict(self, request, max_model_len=None):
+    def process_request_dict(self, request, max_model_len=None):
         """
         Preprocess the request
 

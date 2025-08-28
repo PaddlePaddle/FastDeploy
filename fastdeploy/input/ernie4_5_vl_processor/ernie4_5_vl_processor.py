@@ -111,12 +111,12 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         set_value(request, "presence_penalty", 0.0)
         return request
 
-    async def process_request(self, request, max_model_len=None, **kwargs):
+    def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
         request.chat_template = kwargs.get("chat_template")
         task = request.to_dict()
         task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
-        await self.process_request_dict(task, max_model_len)
+        self.process_request_dict(task, max_model_len)
         request = Request.from_dict(task)
         request = self._apply_default_parameters(request)
 
@@ -197,7 +197,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    async def process_request_dict(self, request, max_model_len=None):
+    def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
 
         request = self._apply_default_parameters(request)
