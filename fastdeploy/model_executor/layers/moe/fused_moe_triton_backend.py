@@ -61,12 +61,12 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         self.default_dtype = layer._helper.get_default_dtype()
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
-        self.ffn1_weight_shape = [
+        self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size,
             layer.moe_intermediate_size * 2,
         ]
-        self.ffn2_weight_shape = [
+        self.down_proj_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size,
             layer.hidden_size,
@@ -75,7 +75,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             layer,
             up_gate_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn1_weight_shape,
+                shape=self.up_gate_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -84,7 +84,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             layer,
             down_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn2_weight_shape,
+                shape=self.down_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -364,12 +364,12 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         self.default_dtype = layer._helper.get_default_dtype()
         up_gate_proj_weight_name = self.added_wfp8afp8_attrs[0]
         down_proj_weight_name = self.added_wfp8afp8_attrs[1]
-        self.ffn1_weight_shape = [
+        self.up_gate_proj_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size * 2,
             layer.hidden_size,
         ]
-        self.ffn2_weight_shape = [
+        self.down_proj_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size,
             layer.moe_intermediate_size,
@@ -378,7 +378,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             layer,
             up_gate_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn1_weight_shape,
+                shape=self.up_gate_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -387,7 +387,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             layer,
             down_proj_weight_name,
             layer.create_parameter(
-                shape=self.ffn2_weight_shape,
+                shape=self.down_proj_weight_shape,
                 dtype=self.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),

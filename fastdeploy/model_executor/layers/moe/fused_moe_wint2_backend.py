@@ -22,7 +22,7 @@ from fastdeploy.distributed.communication import tensor_model_parallel_all_reduc
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
-from ..utils import create_and_set_parameter, get_tensor
+from ..utils import get_tensor
 
 
 class Wint2MoeMethod(QuantMethodBase):
@@ -33,6 +33,11 @@ class Wint2MoeMethod(QuantMethodBase):
     def __init__(self, quant_config):
         super().__init__()
         self.moe_quant_type = quant_config.moe_quant_type
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
+        self.added_scale_attrs = [
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+        ]
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
@@ -51,11 +56,102 @@ class Wint2MoeMethod(QuantMethodBase):
             len(down_proj_weights) == layer.num_local_experts
         ), "down_proj_weights length should be equal to num_local_experts."
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Paddle cutlass create weight process.
         """
-        pass
+        self.weight_dtype = "uint8"
+        self.default_dtype = layer._helper.get_default_dtype()
+        setattr(
+            layer,
+            "up_gate_proj_weight",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size // 4, layer.moe_intermediate_size * 2],
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "down_proj_weight",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size // 4, layer.hidden_size],
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "up_gate_proj_weight_scale",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size // 128, layer.moe_intermediate_size * 2],
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "down_proj_weight_scale",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size // 128, layer.hidden_size],
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "up_gate_proj_super_scales",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "down_proj_super_scales",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "up_gate_proj_code_scale",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "down_proj_code_scale",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "up_gate_proj_code_zp",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "down_proj_code_zp",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
 
 
 class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
@@ -65,7 +161,6 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
 
     def __init__(self, quant_config):
         super().__init__(quant_config)
-        self.moe_quant_type = quant_config.moe_quant_type
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
@@ -159,13 +254,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             "down_proj_code_zp": down_proj_code_zp,
         }
         for name, tensor in name_tensor_map.items():
-            create_and_set_parameter(layer, name, tensor)
-
-    def create_weights(self, layer: nn.Layer, state_dict):
-        """
-        Paddle cutlass create weight process.
-        """
-        pass
+            getattr(layer, name).set_value(tensor)
 
     def apply(
         self,
