@@ -29,4 +29,3 @@
    - Test cases should read ports from environment variables instead of hardcoding them, ensuring reusability in CI multi-instance concurrency and easier local debugging.
 
 <img width="500" height="240" alt="Image" src="https://github.com/user-attachments/assets/2b447cdf-b709-4f30-98f6-e680aef02c6f" />
-
