@@ -207,12 +207,6 @@ class Ernie4_5Tokenizer(PretrainedTokenizer):
         Returns:
             `List[str]`: The list of tokens.
         """
-        # Simple mapping string => AddedToken for special tokens with specific tokenization behaviors
-        # all_special_tokens_extended = dict(
-        #     (str(t), t)
-        #     for t in self.all_special_tokens_extended
-        #     if isinstance(t, AddedToken)
-        # )
 
         self.spec_init()
         text, kwargs = self.prepare_for_tokenization(text, **kwargs)
@@ -227,28 +221,6 @@ class Ernie4_5Tokenizer(PretrainedTokenizer):
         no_split_token = set(self.unique_no_split_tokens)
         tokens = self.tokens_trie.split(text)
 
-        # ["This is something", "<special_token_1>", "  else"]
-        # for i, token in enumerate(tokens):
-        #     if token in no_split_token:
-        #         tok_extended = all_special_tokens_extended.get(token, None)
-        #         print(f'>>>{token}|{tok_extended}|{all_special_tokens_extended}<<<')
-        #         left = tokens[i - 1] if i > 0 else None
-        #         right = tokens[i + 1] if i < len(tokens) - 1 else None
-        #         if isinstance(tok_extended, AddedToken):
-        #             if tok_extended.rstrip and right:
-        #                 # A bit counter-intuitive but we strip the left of the string
-        #                 # since tok_extended.rstrip means the special token is eating all white spaces on its right
-        #                 tokens[i + 1] = right.lstrip()
-        #             # Strip white spaces on the left
-        #             if tok_extended.lstrip and left:
-        #                 tokens[i - 1] = left.rstrip()  # Opposite here
-        #         else:
-        #             We strip left and right by default
-        #             if right:
-        #                 tokens[i + 1] = right.lstrip()
-        #             if left:
-        #                 tokens[i - 1] = left.rstrip()
-        # ["This is something", "<special_token_1>", "else"]
         tokenized_text = []
         for token in tokens:
             # Need to skip eventual empty (fully stripped) tokens
@@ -336,57 +308,3 @@ class Ernie4_5Tokenizer(PretrainedTokenizer):
         if return_attention_mask:
             encoded_inputs["attention_mask"] = attention_mask.tolist()
         return encoded_inputs
-
-
-def add_special_tokens(
-    tokenizer,
-    special_tokens_info,
-    use_ocr_specialtoken=False,
-    use_crop_specialtoken=False,
-    special_token_ids_start=254208,
-    special_token_ids_end=256256,
-):
-    """
-    增加 special token
-
-    placeholder [<|IMAGE_PLACEHOLDER|>, <|AUDIO_PLACEHOLDER|>, <|VIDEO_PLACEHOLDER|>] 共3个
-
-    模态起始截止 special tokens [<|BOI|> <|EOI|> <|BOA|> <|EOA|> <|BOV|> <|EOV|>]
-
-    ocr special tokens [<|LOC_0|> <|LOC_1|> ... <|LOC_1000|>] 共1001个
-
-    crop special tokens [<|CROP_COL_SEP|>, <|CROP_ROW_SEP|>, <|CROP_IMAGE_SEP|>] 共3个
-        <|CROP_COL_SEP|> for col 维度切 图片width（替换原明文逗号）
-        <|CROP_ROW_SEP|> for row 维度切 图片height（替换原明文回车）
-        <|CROP_IMAGE_SEP|> for 区分原图和crop图 图片width（替换原明文两个回车）
-
-    共2048个 unsed token
-
-    Args:
-        tokenizer (ErnieTokenizer): tokenizer
-        special_token_ids_start (int, optional): special token 起点 ids. Defaults to 254208.
-        special_token_ids_end (int, optional): 词表最多支持大小. Defaults to 256256.
-    """
-    special_tokens = [
-        special_tokens_info["image_placeholder"],
-        special_tokens_info["audio_placeholder"],
-    ]
-
-    if use_ocr_specialtoken:
-        special_tokens.extend(special_tokens_info["ocr_coor"])
-        special_tokens.extend(special_tokens_info["ocr_begin_end"])
-
-    if use_crop_specialtoken:
-        special_tokens.extend(special_tokens_info["crop"])
-
-    # add special_tokens
-    additional_special_tokens = {"additional_special_tokens": special_tokens}
-    tokenizer.add_special_tokens(additional_special_tokens)
-
-    # check
-    first_special_tokens = tokenizer.encode(special_tokens[0])["input_ids"]
-
-    assert first_special_tokens[0] == special_token_ids_start, f"[ERROR] first_special_tokens={first_special_tokens}"
-    assert (
-        len(tokenizer.get_vocab()) < special_token_ids_end
-    ), f"[ERROR] vocab_size = {len(tokenizer.get_vocab())} >= {special_token_ids_end} 增加过多special token了!"
