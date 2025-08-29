@@ -197,7 +197,7 @@ def naive_attention_impl(
 
 
 def get_padding_offset(bsz, max_seq_len, seq_lens_this_time):
-    cum_offsets_now = paddle.cumsum(max_seq_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_seq_len - seq_lens_this_time, dtype="int32")
     cum_offsets = paddle.zeros(shape=(bsz + 1), dtype="int32")
     cum_offsets[1:] = cum_offsets_now
     token_num = paddle.sum(seq_lens_this_time)
@@ -532,7 +532,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
-            )[0]
+            )
         paddle.device.synchronize()
         end_time = time.time()
         print(f"[append-attn ut]  cost_time:{(end_time - start_time) / RUN_TIME * 1000}ms")

@@ -30,10 +30,10 @@ class TestW4AFP8GEMM(unittest.TestCase):
         self.TokenPadding = 0
 
         tokens = [self.tokens_per_group] * self.BATCH
-        self.tokens_perfix_sum = np.cumsum(tokens)
+        self.tokens_prefix_sum = np.cumsum(tokens)
 
         self.tokens = paddle.to_tensor(tokens, dtype="int64")
-        self.tokens_perfix_sum = paddle.to_tensor(self.tokens_perfix_sum, dtype="int64")
+        self.tokens_prefix_sum = paddle.to_tensor(self.tokens_prefix_sum, dtype="int64")
         self.all_tokens = int(self.tokens.sum())
 
         self.input_fp8 = paddle.randn([self.all_tokens, self.K], dtype="bfloat16").astype(paddle.float8_e4m3fn)
@@ -81,7 +81,7 @@ class TestW4AFP8GEMM(unittest.TestCase):
             out_cuda = w4afp8_gemm(
                 self.input_fp8,
                 weight_int4.cuda(),
-                self.tokens_perfix_sum,
+                self.tokens_prefix_sum,
                 self.input_row_sum.astype("float32"),
                 weight_dequant_scale.astype("float32"),
                 int(self.TokenPadding),

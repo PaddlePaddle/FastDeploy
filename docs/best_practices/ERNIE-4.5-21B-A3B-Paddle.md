@@ -115,7 +115,6 @@ export FD_ATTENTION_BACKEND=FLASH_ATTN
 export FD_LOG_DIR="prefill_log"
 
 quant_type=block_wise_fp8
-export FD_USE_DEEP_GEMM=0
 
 python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
     --max-model-len 131072 \
@@ -135,7 +134,6 @@ export FLAGS_max_partition_size=2048
 export FD_LOG_DIR="decode_log"
 
 quant_type=block_wise_fp8
-export FD_USE_DEEP_GEMM=0
 
 python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
     --max-model-len 131072 \

@@ -39,7 +39,7 @@ model_param_map = {
         ],
     },
     "Qwen2-7B-Instruct": {
-        "quantizations": ["None", "wint8"],
+        "quantizations": ["wint4"],
     },
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
@@ -47,7 +47,7 @@ model_param_map = {
             {
                 "quant_type": "block_wise_fp8",
                 "backend": "triton",
-                "env": {"FD_USE_DEEP_GEMM": "0", "DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
             {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
         ],
