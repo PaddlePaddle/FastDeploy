@@ -11,8 +11,37 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .base import Platform
+from .base import Platform, _Backend
+import paddle
 
 
 class NPUPlatform(Platform):
     device_name = "npu"
+
+    @classmethod
+    def available(self):
+        """
+        Check whether CUDA is available.
+        """
+        """
+        Check whether XPU is available.
+        """
+        try:
+            assert paddle.is_compiled_with_xpu()
+            assert len(paddle.static.xpu_places()) > 0
+            return True
+        except Exception as e:
+            return False
+    @classmethod
+    def get_attention_backend_cls(
+        cls,
+        selected_backend
+    ):
+        """
+        get_attention_backend_cls
+        """
+        if selected_backend == _Backend.NATIVE_ATTN:
+            return ("fastdeploy.model_executor.layers.attention.NpuFaPaAttentionBackend")
+        elif selected_backend == _Backend.APPEND_ATTN:
+            return ("fastdeploy.model_executor.layers.attention.NpuFaPaAttentionBackend")
+        

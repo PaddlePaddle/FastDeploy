@@ -136,6 +136,20 @@ def apply_penalty_multi_scores(
             min_dec_lens,
             eos_token_ids,
         )
+    elif current_platform.is_npu():
+        from fastdeploy.model_executor.ops.npu import get_token_penalty_multi_scores_npu
+        logits = get_token_penalty_multi_scores_npu(
+            pre_token_ids,
+            logits,
+            repetition_penalties,
+            frequency_penalties,
+            presence_penalties,
+            temperature,
+            bad_words_token_ids,
+            step_idx,
+            min_dec_lens,
+            eos_token_ids,
+        )
     else:
         raise NotImplementedError
 

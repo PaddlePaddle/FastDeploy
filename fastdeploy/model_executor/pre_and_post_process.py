@@ -54,6 +54,14 @@ elif current_platform.is_maca():
         update_inputs,
         update_inputs_v1,
     )
+elif current_platform.is_npu():
+    from fastdeploy.model_executor.ops.npu import (
+        get_padding_offset,
+        save_output,
+        set_stop_value_multi_ends,
+        step_paddle_npu as step_paddle,
+        update_inputs_npu as update_inputs,
+    )
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
@@ -243,6 +251,14 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
             False,
+        )  # multi ends
+    elif current_platform.is_npu():
+        set_stop_value_multi_ends(
+            sampler_output.sampled_token_ids,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.eos_token_id,
+            model_output.next_tokens,
         )  # multi ends
     else:
         set_stop_value_multi_ends(
@@ -598,6 +614,18 @@ def rebuild_padding(
         hidden_states = rebuild_padding(
             tmp_out,
             cu_seqlens_q,
+            seq_len_this_time,
+            seq_lens_decoder,
+            seq_lens_encoder,
+            output_padding_offset,
+            max_input_length,
+        )
+    elif current_platform.is_npu():
+        from fastdeploy.model_executor.ops.npu import rebuild_padding
+
+        hidden_states = rebuild_padding(
+            tmp_out,
+            cum_offsets,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
