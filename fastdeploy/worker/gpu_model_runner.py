@@ -710,12 +710,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
 
-        # Initialize input embeddings buffer
-        self.share_inputs["input_embeds"] = paddle.zeros(
-            [self.parallel_config.max_model_len, self.model_config.hidden_size],
-            dtype=self.model_config.dtype,
-        )
-
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None

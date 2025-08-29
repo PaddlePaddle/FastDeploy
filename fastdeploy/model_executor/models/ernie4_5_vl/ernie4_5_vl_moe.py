@@ -734,14 +734,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
-    def init_mm_data(
-        self,
-        input_embeddings: paddle.Tensor,
-        ids_remove_padding: paddle.Tensor,
-    ):
-        vl_moe_meta = self.ernie._prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
-        return {"vl_moe_meta": vl_moe_meta}
-
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -752,7 +744,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ids_remove_padding=ids_remove_padding, image_features=image_features
         )
         self._input_embeddings.copy_(input_embeddings, False)
-        del input_embeddings
         vl_moe_meta = self.ernie._prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
 
         hidden_states = self.ernie(
