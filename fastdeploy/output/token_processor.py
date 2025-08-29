@@ -63,7 +63,6 @@ class TokenProcessor:
             self.zmq_server = ZmqClient(name=f"get_save_output_rank{self.cfg.local_device_ids[0]}", mode=zmq.PULL)
             self.zmq_server.start_server()
             self.zmq_server.create_router()
-            time.sleep(3)
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
@@ -174,6 +173,9 @@ class TokenProcessor:
                                     receive_data.data.not_need_stop, dtype="int64"
                                 )
                                 self.output_tokens[1, 0] = paddle.to_tensor(receive_data.data.batch, dtype="int64")
+                                print("bsz: ", self.output_tokens[1, 0])
+                                print("receive_data.shape: ", receive_data.shape)
+
                                 self.output_tokens[2 : 2 + receive_data.data.batch, 0] = paddle.to_tensor(
                                     receive_data.data.tokens[:, 0], dtype="int64"
                                 )

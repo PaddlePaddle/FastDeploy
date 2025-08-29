@@ -165,9 +165,11 @@ class GPUModelRunner(ModelRunnerBase):
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
-        self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
-        self.zmq_client.connect()
-        self.zmq_client.socket.SNDTIMEO = 3000
+        self.zmq_client = None
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            self.zmq_client.connect()
+            self.zmq_client.socket.SNDTIMEO = 3000
 
     def exist_prefill(self):
         """
@@ -1210,13 +1212,13 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             post_process(
-                self,
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
                 block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
+                zmq_client=self.zmq_client,
             )
 
             if self.speculative_decoding:
@@ -1505,7 +1507,6 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             skip_save_output = False
         post_process(
-            self,
             sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
@@ -1513,6 +1514,7 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
+            zmq_client=self.zmq_client,
         )
 
         # 6. Speculative decode
