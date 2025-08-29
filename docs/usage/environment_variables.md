@@ -70,7 +70,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM":
-    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
+    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
 
 }
 ```
