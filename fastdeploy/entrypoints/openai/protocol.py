@@ -438,7 +438,7 @@ class CompletionRequest(BaseModel):
 
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
-    prompt_token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -463,11 +463,11 @@ class CompletionRequest(BaseModel):
         if prompt is not None:
             req_dict["prompt"] = prompt
 
-        if "prompt_token_ids" in req_dict:
-            if "prompt" in req_dict:
-                del req_dict["prompt"]
-        else:
-            assert len(prompt) > 0
+        # if "prompt_token_ids" in req_dict:
+        #     if "prompt" in req_dict:
+        #         del req_dict["prompt"]
+        # else:
+        #     assert len(prompt) > 0
 
         guided_json_object = None
         if self.response_format is not None:
@@ -572,7 +572,7 @@ class ChatCompletionRequest(BaseModel):
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     # doc: end-chat-completion-sampling-params
 
-    # doc: start-completion-extra-params
+    # doc: start-chat-completion-extra-params
     chat_template_kwargs: Optional[dict] = None
     chat_template: Optional[str] = None
     reasoning_max_tokens: Optional[int] = None
