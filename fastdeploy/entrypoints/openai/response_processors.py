@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 
-from fastdeploy.input.tokenzier_client import AsyncTokenizerClient
+from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
 
 
 class ChatResponseProcessor:
@@ -77,7 +77,7 @@ class ChatResponseProcessor:
                             if self.decoder_client:
                                 req_id = request_output["request_id"]
                                 image_ret = await self.decoder_client.decode_image(
-                                    request={"req_id": req_id, "data": all_tokens}
+                                    request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
                                 image["url"] = image_ret["http_url"]
                             image_output = self._end_image_code_request_output
@@ -117,8 +117,9 @@ class ChatResponseProcessor:
                             image = {"type": "image"}
                             if self.decoder_client:
                                 req_id = part["request_output"]["request_id"]
+                                all_tokens = part["request_output"]["outputs"]["token_ids"]
                                 image_ret = await self.decoder_client.decode_image(
-                                    request={"req_id": req_id, "data": part["request_output"]["outputs"]["token_ids"]}
+                                    request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
                                 image["url"] = image_ret["http_url"]
                             multipart.append(image)
