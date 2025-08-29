@@ -14,8 +14,14 @@
 # limitations under the License.
 """
 
-from .input_processor import load_input_processor_plugins
-from .model_register import load_model_register_plugins
-from .model_runner import load_model_runner_plugins
+from fastdeploy.plugins.utils import load_plugins_by_group
 
-__all__ = ["load_model_register_plugins", "load_model_runner_plugins", "load_input_processor_plugins"]
+# make sure one process only loads plugins once
+PLUGINS_GROUP = "fastdeploy.input_processor_plugins"
+
+
+def load_input_processor_plugins():
+    """load_input_processor_plugins"""
+    plugins = load_plugins_by_group(group=PLUGINS_GROUP)
+    assert len(plugins) <= 1, "Most one plugin is allowed to be loaded."
+    return next(iter(plugins.values()))()
