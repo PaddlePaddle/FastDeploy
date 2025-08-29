@@ -12,7 +12,7 @@ echo "Clean up processes..."
 stop_processes
 echo "Clean up completed."
 
-export model_path=${MODEL_PATH}/paddle/ERNIE-4.5-21B-A3B-Paddle
+export model_path=${MODEL_PATH}/ERNIE-4.5-21B-A3B-Paddle
 
 python -m pip install paddlepaddle_dcu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/dcu/
 python -m pip install https://paddle-whl.bj.bcebos.com/stable/dcu/triton/triton-3.0.0%2Bdas.opt4.0da70a2.dtk2504-cp310-cp310-manylinux_2_28_x86_64.whl

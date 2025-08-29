@@ -76,6 +76,7 @@ jobs:
           --ulimit stack=-1:-1 --ulimit memlock=-1:-1 -v /opt/hyhal:/opt/hyhal:ro \
           --security-opt seccomp=unconfined \
           -v $(pwd):/workspace -w /workspace \
+          -e "MODEL_PATH=/ssd2/model_data" \
           -v "/ssd2:/ssd2" \
           -e "http_proxy=$(git config --global --get http.proxy)" \
           -e "https_proxy=$(git config --global --get https.proxy)" \
