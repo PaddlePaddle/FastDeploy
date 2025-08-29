@@ -727,6 +727,9 @@ class PrefixCacheManager:
                 logger.error(f"release_block_ids: error: {type(e)} {e}")
                 raise e
     def free_nodes_directly(self, node):
+        """
+        Recycle nodes by a query directly.
+        """
         with self.request_release_lock:
             try:
                 total_gpu_free_count = 0
