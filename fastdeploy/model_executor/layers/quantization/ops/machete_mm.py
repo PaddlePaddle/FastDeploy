@@ -17,21 +17,25 @@ from typing import Optional
 import numpy as np
 import paddle
 
-from fastdeploy.platforms import current_platform
 from fastdeploy import envs
+from fastdeploy.platforms import current_platform
+
 
 def get_sm_version():
     prop = paddle.device.cuda.get_device_properties()
     cc = prop.major * 10 + prop.minor
     return cc
 
+
 _ENABLE_MACHETE = False
 if int(envs.FD_USE_MACHETE) == 1 and current_platform.is_cuda() and get_sm_version() == 90:
     try:
         from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B
+
         _ENABLE_MACHETE = True
     except Exception:
         pass
+
 
 def get_pack_factor(num_bits):
     assert 32 % num_bits == 0, f"Unsupported num_bits = {num_bits}"

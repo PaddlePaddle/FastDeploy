@@ -21,7 +21,6 @@ from typing import Optional
 import paddle
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
-from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
@@ -133,7 +132,10 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
-                from fastdeploy.model_executor.layers.quantization.ops.machete_mm import _ENABLE_MACHETE
+                from fastdeploy.model_executor.layers.quantization.ops.machete_mm import (
+                    _ENABLE_MACHETE,
+                )
+
                 if (
                     self.name() == "wint4"
                     and _ENABLE_MACHETE
