@@ -166,7 +166,7 @@ model_param_map = {
         ],
     },
     "Qwen2-7B-Instruct": {
-        "quantizations": ["None", "wint8"],
+        "quantizations": ["wint4"],
     },
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
