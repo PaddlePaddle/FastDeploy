@@ -28,6 +28,16 @@
 
 #define DISPATCH_NUM_EXPERTS_PER_RANK(num_experts_per_rank, NUM_EXPERTS_PER_RANK, ...)  \
   switch (num_experts_per_rank) {                                                       \
+    case 2: {                                                                           \
+            constexpr size_t NUM_EXPERTS_PER_RANK = 2;                                  \
+            __VA_ARGS__                                                                 \
+            break;                                                                      \
+        }                                                                               \
+    case 6: {                                                                           \
+            constexpr size_t NUM_EXPERTS_PER_RANK = 6;                                  \
+            __VA_ARGS__                                                                 \
+            break;                                                                      \
+        }                                                                               \
     case 8: {                                                                           \
       constexpr size_t NUM_EXPERTS_PER_RANK = 8;                                        \
       __VA_ARGS__                                                                       \

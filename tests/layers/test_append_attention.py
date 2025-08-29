@@ -532,7 +532,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
-            )[0]
+            )
         paddle.device.synchronize()
         end_time = time.time()
         print(f"[append-attn ut]  cost_time:{(end_time - start_time) / RUN_TIME * 1000}ms")
