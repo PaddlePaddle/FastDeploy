@@ -67,7 +67,7 @@ from fastdeploy.utils import (
 parser = FlexibleArgumentParser()
 parser.add_argument("--port", default=8000, type=int, help="port to the http server")
 parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=1, type=int, help="number of workers")
+parser.add_argument("--workers", default=None, type=int, help="number of workers")
 parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
 parser.add_argument(
@@ -79,6 +79,11 @@ parser.add_argument(
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
+
+if args.workers is None:
+    args.workers = min(int(args.max_num_seqs // 32), 8)
+console_logger.info(f"Number of api-server workers: {args.workers}.")
+
 args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template)
 if args.tool_parser_plugin:
