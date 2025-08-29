@@ -13,8 +13,14 @@
 # limitations under the License.
 
 import os
+import sys
 
 import pytest
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from tests.model_loader.utils import (
     calculate_diff_rate,
@@ -55,24 +61,15 @@ def check_result_against_baseline(outputs, baseline_file, threshold=0.05):
     with open(temp_file, "w", encoding="utf-8") as f:
         f.write(current_content)
 
-    try:
-        # Calculate difference rate
-        diff_rate = calculate_diff_rate(current_content, baseline_content)
+    diff_rate = calculate_diff_rate(current_content, baseline_content)
 
-        if diff_rate >= threshold:
-            raise AssertionError(
-                f"Output differs from baseline file by too much ({diff_rate:.4%}):\n"
-                f"Current output: {current_content!r}\n"
-                f"Baseline content: {baseline_content!r}\n"
-                f"Current output saved to: {temp_file}"
-            )
-    finally:
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.remove(temp_file)
-                print(f"Temporary file {temp_file} has been removed")
-            except OSError as e:
-                print(f"Warning: Could not remove temporary file {temp_file}: {e}")
+    if diff_rate >= threshold:
+        raise AssertionError(
+            f"Output differs from baseline file by too much ({diff_rate:.4%}):\n"
+            f"Current output: {current_content!r}\n"
+            f"Baseline content: {baseline_content!r}\n"
+            f"Current output saved to: {temp_file}"
+        )
 
 
 hugging_face_model_param_map = {
