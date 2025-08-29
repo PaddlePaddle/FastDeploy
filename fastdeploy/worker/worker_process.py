@@ -106,7 +106,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm:
-        if "ernie" in fd_config.model_config.model_type: 
+        if "ernie" in fd_config.model_config.model_type:
             tokenizer = Ernie4_5Tokenizer.from_pretrained(
                 fd_config.model_config.model,
                 model_max_length=fd_config.parallel_config.max_model_len,
