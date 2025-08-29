@@ -197,3 +197,13 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
+
+
+@dataclass
+class DCUForwardMeta(ForwardMeta):
+    """
+    DCUForwardMeta is used to store the global meta information of the forward, and some DCU specific meta info.
+    """
+
+    # Accumulated offset
+    cum_offsets: Optional[paddle.Tensor] = None
