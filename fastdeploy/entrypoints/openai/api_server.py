@@ -81,7 +81,7 @@ parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 
 if args.workers is None:
-    args.workers = min(int(args.max_num_seqs // 32), 8)
+    args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
 console_logger.info(f"Number of api-server workers: {args.workers}.")
 
 args.model = retrive_model_from_server(args.model, args.revision)
