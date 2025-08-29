@@ -217,7 +217,7 @@ std::vector<paddle::DataType> Fp8Int4WeightQuantizeInferDtype(
 
 
 PD_BUILD_STATIC_OP(scaled_gemm_f8_i4_f16_weight_quantize)
-    .Inputs({"intput"})
+    .Inputs({"input"})
     .Attrs({"groupsize: int",
             "scale_dtype: std::string"})
     .Outputs({"output", "scale"})
