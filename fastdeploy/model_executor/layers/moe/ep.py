@@ -54,8 +54,8 @@ def get_moe_scores(
     scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,
-        n_group,
-        topk_group,
+        n_group if n_group > 0 else 1,
+        topk_group if topk_group > 0 else 1,
         top_k,
         routed_scaling_factor,
     )
