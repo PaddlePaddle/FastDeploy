@@ -174,7 +174,7 @@ model_param_map = {
             {
                 "quant_type": "block_wise_fp8",
                 "backend": "triton",
-                "env": {"FD_USE_DEEP_GEMM": "0", "DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
             {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
         ],
