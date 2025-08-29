@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import uuid
 from copy import deepcopy
 from pathlib import Path
@@ -162,9 +163,15 @@ def parse_chat_messages(messages):
 
 def load_chat_template(
     chat_template: Union[Path, str],
+    model_path: Path = None,
     is_literal: bool = False,
 ) -> Optional[str]:
     if chat_template is None:
+        if model_path:
+            chat_template_file = os.path.join(model_path, "chat_template.jinja")
+            if os.path.exists(chat_template_file):
+                with open(chat_template_file) as f:
+                    return f.read()
         return None
     if is_literal:
         if isinstance(chat_template, Path):

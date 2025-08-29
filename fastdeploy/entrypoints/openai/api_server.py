@@ -82,7 +82,7 @@ args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template)
 if args.tool_parser_plugin:
-    ToolParserManager.import_tool_parser(args.tool_parser_plugin)
+    ToolParserManager.import_tool_parser(args.tool_parser_plugin, args.model)
 llm_engine = None
 
 
