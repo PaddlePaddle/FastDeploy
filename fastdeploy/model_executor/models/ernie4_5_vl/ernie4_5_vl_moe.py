@@ -557,6 +557,12 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         # ernie
         self.ernie = Ernie4_5_VLModel(fd_config=fd_config)
 
+        # Persistent buffers for CUDA graphs.
+        self._input_embeddings = paddle.zeros(
+            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            dtype=fd_config.model_config.dtype,
+        )
+
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = ParallelLMHead(
@@ -724,9 +730,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
-        image_mask = ids_remove_padding == self.ernie.im_patch_id
-        if image_mask.sum() > 0:
-            input_embeddings[image_mask] = image_features.cast(self.ernie._dtype)
+        if image_features is not None and len(image_features) > 0:
+            input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
     def init_mm_data(
@@ -739,16 +744,22 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
     def forward(
         self,
-        input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
+        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
-        mm_args,
     ):
+        input_embeddings = self.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, image_features=image_features
+        )
+        self._input_embeddings.copy_(input_embeddings, False)
+        del input_embeddings
+        vl_moe_meta = self.ernie._prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
+
         hidden_states = self.ernie(
-            input_embeddings=input_embeddings,
+            input_embeddings=self._input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
-            vl_moe_meta=mm_args["vl_moe_meta"],
+            vl_moe_meta=vl_moe_meta,
         )
 
         return hidden_states

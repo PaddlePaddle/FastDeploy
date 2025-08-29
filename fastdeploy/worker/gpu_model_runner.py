@@ -1087,22 +1087,10 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 3. Run model
             if self.enable_mm:
-                input_embeddings = self.model.get_input_embeddings(
-                    self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"]
-                )
-                self.share_inputs["input_embeds"].copy_(input_embeddings, False)
-                del input_embeddings
-                input_embeddings = self.share_inputs["input_embeds"]
-
-                mm_args = self.model.init_mm_data(
-                    input_embeddings,
-                    self.share_inputs["ids_remove_padding"],
-                )
                 model_output = self.model(
-                    input_embeddings=input_embeddings,
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    image_features=self.share_inputs["image_features"],
                     forward_meta=self.forward_meta,
-                    mm_args=mm_args,
                 )
                 hidden_states = model_output
             else:
@@ -1387,22 +1375,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
-            input_embeddings = self.model.get_input_embeddings(
-                self.share_inputs["ids_remove_padding"],
-                self.share_inputs["image_features"],
-            )
-            self.share_inputs["input_embeds"].copy_(input_embeddings, False)
-            del input_embeddings
-            input_embeddings = self.share_inputs["input_embeds"]
-            mm_args = self.model.init_mm_data(
-                input_embeddings,
-                self.share_inputs["ids_remove_padding"],
-            )
             model_output = self.model(
-                input_embeddings=input_embeddings,
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                image_features=self.share_inputs["image_features"],
                 forward_meta=self.forward_meta,
-                mm_args=mm_args,
             )
             hidden_states = model_output
         else:
