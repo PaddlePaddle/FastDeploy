@@ -309,6 +309,7 @@ class OpenAIServingChat:
                         reasoning_content="",
                         prompt_token_ids=None,
                         tool_calls=None,
+                        completion_token_ids=None,
                     )
 
                     if response_processor.enable_multimodal_content():
