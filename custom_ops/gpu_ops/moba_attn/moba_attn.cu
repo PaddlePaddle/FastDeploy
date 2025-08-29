@@ -218,7 +218,7 @@ std::vector<paddle::Tensor> MobaAttention(
 
         auto qk_gate_weight = MobaQKGemm(
             q_input,
-            k_block_means,
+            *k_gate_weight,
             seq_len_encoder,
             seq_len_decoder,
             cu_seq_q,
@@ -246,7 +246,7 @@ std::vector<paddle::Tensor> MobaAttention(
             kv_head_num,
             moba_encoder_top_k_left,
             moba_encoder_top_k_right,
-            moba_use_encoder_seq_limit)[0];
+            moba_use_mlp && !attn_gate_weight ? max_seq_len : moba_use_encoder_seq_limit)[0];
 
         MobaEncoderAttn(
             q_input,
