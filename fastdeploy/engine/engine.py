@@ -29,7 +29,6 @@ import traceback
 import uuid
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -480,8 +479,6 @@ class LLMEngine:
         """
         # TODO 输入输出长度确认
 
-        if sampling_params is not None:
-            task.update(asdict(sampling_params))
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
