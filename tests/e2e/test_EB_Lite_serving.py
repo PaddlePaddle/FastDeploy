@@ -679,6 +679,7 @@ def test_non_streaming_completion_with_prompt_token_ids(openai_client, capsys):
     """
     Test prompt_token_ids option in streaming completion functionality with the local service
     """
+    # Test case for passing a token id list in `prompt_token_ids`
     response = openai_client.completions.create(
         model="default",
         prompt="",
@@ -687,17 +688,49 @@ def test_non_streaming_completion_with_prompt_token_ids(openai_client, capsys):
         extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
         stream=False,
     )
-    assert hasattr(response, "choices")
-    assert len(response.choices) > 0
-    assert hasattr(response, "usage")
-    assert hasattr(response.usage, "prompt_tokens")
+    assert len(response.choices) == 1
     assert response.usage.prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]]},
+        stream=False,
+    )
+    assert len(response.choices) == 2
+    assert response.usage.prompt_tokens == 9 + 3
+
+    # Test case for passing a token id list in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+    assert len(response.choices) == 1
+    assert response.usage.prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+    assert len(response.choices) == 2
+    assert response.usage.prompt_tokens == 9 + 3
 
 
 def test_streaming_completion_with_prompt_token_ids(openai_client, capsys):
     """
     Test prompt_token_ids option in non-streaming completion functionality with the local service
     """
+    # Test case for passing a token id list in `prompt_token_ids`
     response = openai_client.completions.create(
         model="default",
         prompt="",
@@ -707,14 +740,65 @@ def test_streaming_completion_with_prompt_token_ids(openai_client, capsys):
         stream=True,
         stream_options={"include_usage": True},
     )
+    sum_prompt_tokens = 0
     for chunk in response:
-        assert hasattr(chunk, "choices")
-        assert hasattr(chunk, "usage")
         if len(chunk.choices) > 0:
             assert chunk.usage is None
         else:
-            assert hasattr(chunk.usage, "prompt_tokens")
-            assert chunk.usage.prompt_tokens == 9
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]]},
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9 + 3
+
+    # Test case for passing a token id list in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9 + 3
 
 
 def test_non_streaming_chat_completion_disable_chat_template(openai_client, capsys):
