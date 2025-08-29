@@ -54,6 +54,7 @@ class DefaultModelLoader(BaseModelLoader):
     @measure_time
     def load_weights(self, model, fd_config: FDConfig, architectures: str) -> None:
         model_class = ModelRegistry.get_pretrain_cls(architectures)
+
         state_dict = load_composite_checkpoint(
             fd_config.model_config.model,
             model_class,
