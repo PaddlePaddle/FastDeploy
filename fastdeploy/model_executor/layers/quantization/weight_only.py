@@ -21,6 +21,7 @@ from typing import Optional
 import paddle
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
@@ -139,6 +140,7 @@ class WeightOnlyConfig(QuantConfigBase):
                 if (
                     self.name() == "wint4"
                     and _ENABLE_MACHETE
+                    and envs.FD_USE_MACHETE == "1"
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
                 ):

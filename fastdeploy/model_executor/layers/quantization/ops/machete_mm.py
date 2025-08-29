@@ -17,7 +17,6 @@ from typing import Optional
 import numpy as np
 import paddle
 
-from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 
@@ -28,7 +27,7 @@ def get_sm_version():
 
 
 _ENABLE_MACHETE = False
-if int(envs.FD_USE_MACHETE) == 1 and current_platform.is_cuda() and get_sm_version() == 90:
+if current_platform.is_cuda() and get_sm_version() == 90:
     try:
         from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B
 
