@@ -413,20 +413,24 @@ class LLMEngine:
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
-                    request = Request.from_dict(data)
-                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
-
-                    main_process_metrics.requests_number.inc()
-                    llm_logger.debug(f"Receive request: {request}")
-
                     err_msg = None
-                    if self.guided_decoding_checker is not None:
-                        request, err_msg = self.guided_decoding_checker.schema_format(request)
+                    try:
+                        request = Request.from_dict(data)
+                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        main_process_metrics.requests_number.inc()
+                        llm_logger.debug(f"Receive request: {request}")
+                    except Exception as e:
+                        llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
+                        err_msg = str(e)
+                        results.append((data["request_id"], err_msg))
 
-                    if err_msg is not None:
-                        llm_logger.error(err_msg)
-                        results.append((request.request_id, err_msg))
-                    else:
+                    if self.guided_decoding_checker is not None and err_msg is None:
+                        request, err_msg = self.guided_decoding_checker.schema_format(request)
+                        if err_msg is not None:
+                            llm_logger.error(f"Receive request error: {err_msg}")
+                            results.append((request.request_id, err_msg))
+
+                    if err_msg is None:
                         insert_task.append(request)
 
                 response = self.scheduler.put_requests(insert_task)
@@ -438,9 +442,10 @@ class LLMEngine:
                     added_requests[request.request_id] += 1
 
                 for request_id, failed in results:
-                    added_requests[request_id] -= 1
-                    if added_requests[request_id] == 0:
-                        added_requests.pop(request_id)
+                    if request_id in added_requests:
+                        added_requests[request_id] -= 1
+                        if added_requests[request_id] == 0:
+                            added_requests.pop(request_id)
 
                     if failed is None:
                         main_process_metrics.num_requests_waiting.inc(1)
