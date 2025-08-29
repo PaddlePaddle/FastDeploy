@@ -131,7 +131,7 @@ class LinearBase(nn.Layer):
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
-        elif fd_config.model_config.is_quantized and not skip_quant:
+        elif False:
             self.weight_key = f"{prefix}.quant_weight"
             self.weight_scale_key = f"{prefix}.weight_scale"
             self.act_scale_key = f"{prefix}.activation_scale"
@@ -216,7 +216,7 @@ class LinearBase(nn.Layer):
         # weight
         self.state_dict = state_dict
         assert self.weight_key is not None, "weight_key should not be None."
-        if self.fd_config.model_config.is_quantized:
+        if self.fd_config.model_config.is_quantized and False:
             self.load_prequant_weight(state_dict)
         else:
             self.load_weight(state_dict)
@@ -647,7 +647,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         assert self.weight_key is not None, "weight_key should not be None."
         # qkv fused in disk
 
-        if self.fd_config.model_config.is_quantized:
+        if self.fd_config.model_config.is_quantized and False:
             self.load_prequant_weight(state_dict)
         else:
             self.load_weight(state_dict)
