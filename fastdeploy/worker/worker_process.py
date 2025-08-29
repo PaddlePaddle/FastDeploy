@@ -105,7 +105,8 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
-    if fd_config.model_config.enable_mm:
+    architectures = fd_config.model_config.architectures
+    if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
@@ -771,7 +772,4 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
-    from fastdeploy.plugins.model_register import load_model_register_plugins
-
-    load_model_register_plugins()
     run_worker_proc()
