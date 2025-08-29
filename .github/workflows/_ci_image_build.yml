@@ -18,6 +18,7 @@ on:
         description: "Output path of the generated wheel"
         value: ${{ jobs.docker_build.outputs.docker_name_precheck }}
 
+jobs:
   docker_build:
     runs-on: [self-hosted, Docker-Build]
     outputs:
