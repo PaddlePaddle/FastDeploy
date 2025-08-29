@@ -169,6 +169,11 @@ class OpenAIServingChat:
             if request.max_streaming_response_tokens is not None
             else (request.metadata or {}).get("max_streaming_response_tokens", 1)
         )  # dierctly passed & passed in metadata
+        request.return_token_ids = (
+            request.return_token_ids
+            if request.return_token_ids is not None
+            else (request.metadata or {}).get("return_token_ids", False)
+        )  # dierctly passed & passed in metadata
 
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
@@ -384,6 +389,11 @@ class OpenAIServingChat:
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        request.return_token_ids = (
+            request.return_token_ids
+            if request.return_token_ids is not None
+            else (request.metadata or {}).get("return_token_ids", False)
+        )  # dierctly passed & passed in metadata
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
