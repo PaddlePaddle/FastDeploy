@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import paddle
 import unittest
 
+import numpy as np
+import paddle
+
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
+
 
 class TestGetPaddingOffset(unittest.TestCase):
     def setUp(self):
@@ -63,6 +65,7 @@ class TestGetPaddingOffset(unittest.TestCase):
         np.testing.assert_allclose(batch_id_per_token.numpy(), ref_batch_id_per_token)
         np.testing.assert_allclose(cu_seqlens_q.numpy(), ref_cu_seqlens_q)
         np.testing.assert_allclose(cu_seqlens_k.numpy(), ref_cu_seqlens_k)
+
 
 if __name__ == "__main__":
     unittest.main()
