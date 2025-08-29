@@ -325,8 +325,6 @@ class ErnieVlRotaryEmbedding3D:
 
         position_ids_3d[:, : position_ids.shape[1], :] = position_ids
 
-        # import pdb;pdb.set_trace()
-
         # position_ids: [bsz, seq_len]
         position_ids = paddle.arange(0, self.max_position, 1, dtype="float32").reshape((1, -1))
 
@@ -408,8 +406,6 @@ class QwenVlRotaryEmbedding3D:
         )
 
         position_ids_3d[:, : position_ids.shape[1], :] = position_ids
-
-        # import pdb;pdb.set_trace()
 
         # position_ids: [bsz, seq_len]
         position_ids = paddle.arange(0, self.max_position, 1, dtype="float32").reshape((1, -1))

@@ -46,13 +46,13 @@ __all__ = [
   },
 """
 
-# qwen 的 hidden_size 对应 embed_dim
-# qwen 的 out_hidden_size 对应 hidden_size
-# qwen 的 intermediate_size 是 qwen_vision_block 里 mlp 的 mlp_hidden_dim
-# qwen 的 fullatt_block_indexes 是区分vit部分不同attention的layer_index
-# spatial_patch_size 和 tokens_per_second 在vllm里没用到
 
-
+# qwen:
+#   hidden_size -> embed_dim
+#   out_hidden_size -> hidden_size
+#   intermediate_size -> qwen_vision_block 中 mlp/mlp_hidden_dim
+#   fullatt_block_indexes 区分vit部分不同attention的layer_index
+#   spatial_patch_size 和 tokens_per_second 在vllm中没用到
 class DFNRopeVisionTransformerConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`~ErnieModel`]. It is used to instantiate an Ernie
