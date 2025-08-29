@@ -248,32 +248,6 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
-    def event_loop_ep(self) -> None:
-        """
-        Tmp loop function for ep utill DP is supported
-        """
-        while True:
-            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
-
-            num_running_requests = 0
-            if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks() > 0:
-                tasks, read_finish = self.task_queue.get_tasks()
-
-                req_dicts = []
-                for req_dict, bsz in tasks:
-                    num_running_requests = int(bsz)
-                    req_dicts.extend(req_dict)
-                logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}"
-                )
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
-
-            # Execute model to generate token. The generated token will be written to the buffer.
-            # These generated tokens can be obtained through get_output op.
-            self.worker.execute_model(num_running_requests)
-
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
