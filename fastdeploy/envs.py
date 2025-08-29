@@ -65,7 +65,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use fastsafetensor load weight (0 or 1)
     "FD_USE_FASTSAFETENSOR": lambda: bool(int(os.getenv("FD_USE_FASTSAFETENSOR", "0"))),
     # Whether to use DeepGemm for FP8 blockwise MoE.
-    "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
+    "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
     # Whether to use aggregate send.
     "FD_USE_AGGREGATE_SEND": lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
     # Whether to open Trace.
@@ -88,6 +88,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_JOB_ID": lambda: os.getenv("FD_JOB_ID"),
     # support max connections
     "FD_SUPPORT_MAX_CONNECTIONS": lambda: int(os.getenv("FD_SUPPORT_MAX_CONNECTIONS", "1024")),
+    # Offset for Tensor Parallelism group GID.
+    "FD_TP_GROUP_GID_OFFSET": lambda: int(os.getenv("FD_TP_GROUP_GID_OFFSET", "1000")),
     # enable multi api server
     "FD_ENABLE_MULTI_API_SERVER": lambda: bool(int(os.getenv("FD_ENABLE_MULTI_API_SERVER", "0"))),
     "FD_FOR_TORCH_MODEL_FORMAT": lambda: bool(int(os.getenv("FD_FOR_TORCH_MODEL_FORMAT", "0"))),

@@ -13,8 +13,14 @@
 # limitations under the License.
 
 import os
+import sys
 
 import pytest
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
@@ -39,7 +45,7 @@ model_param_map = {
         ],
     },
     "Qwen2-7B-Instruct": {
-        "quantizations": ["None", "wint8"],
+        "quantizations": ["wint4"],
     },
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
@@ -47,7 +53,7 @@ model_param_map = {
             {
                 "quant_type": "block_wise_fp8",
                 "backend": "triton",
-                "env": {"FD_USE_DEEP_GEMM": "0", "DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
             {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
         ],

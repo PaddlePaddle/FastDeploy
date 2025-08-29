@@ -30,7 +30,7 @@ def test_speculate_get_output_padding_offset():
 
     seq_lens_output = paddle.to_tensor(seq_lens_output, dtype="int32")
     out_token_num = paddle.sum(seq_lens_output)
-    output_cum_offsets_tmp = paddle.cumsum(max_seq_len - seq_lens_output)
+    output_cum_offsets_tmp = paddle.cumsum(max_seq_len - seq_lens_output, dtype="int32")
 
     output_padding_offset_xpu, output_cum_offsets_xpu = speculate_get_output_padding_offset(
         output_cum_offsets_tmp, out_token_num, seq_lens_output, max_seq_len
