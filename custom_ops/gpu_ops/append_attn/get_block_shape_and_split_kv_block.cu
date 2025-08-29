@@ -215,7 +215,6 @@ __global__ void search_chunk_size_for_decoder(
         int max_last_wave_block = -1;
         for (int i = 0; i < config_size; ++i) {
           float n_waves = static_cast<float>(gridx_shared[i]) / sm_cout;
-          if (n_waves > 8) continue;
           int last_wave_block = gridx_shared[i] % sm_cout;
           if (last_wave_block == 0) {
             res_id = i;
