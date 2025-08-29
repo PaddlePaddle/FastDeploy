@@ -1,8 +1,9 @@
 [run]
 branch = True
 source = fastdeploy
-parallel = True
 concurrency = multiprocessing
+patch = subprocess
+parallel = True
 
 [paths]
 source =
