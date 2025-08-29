@@ -397,7 +397,7 @@ class EngineSevice:
             image_type_ids = paddle.to_tensor(inputs["image_type_ids"], dtype="int32")
             image_mask = input_ids == self.data_processor.image_patch_id
             image_token_sum = paddle.full(shape=[len(input_ids) + 1], fill_value=0, dtype="int32")
-            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"))
+            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"), dtype="int32")
             grid_thw = []
             for one in inputs["grid_thw"]:
                 if one[0] == 1:
