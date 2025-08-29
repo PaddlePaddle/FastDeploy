@@ -163,8 +163,9 @@ class ChatMessage(BaseModel):
     Chat message.
     """
 
-    role: str
-    content: str
+    role: Optional[str] = None
+    content: Optional[str] = None
+    multimodal_content: Optional[List[Any]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None

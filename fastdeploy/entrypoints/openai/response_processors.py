@@ -16,18 +16,37 @@ class ChatResponseProcessor:
         data_processor,
         enable_mm_output: Optional[bool] = False,
         eoi_token_id: Optional[int] = 101032,
+        eos_token_id: Optional[int] = 2,
         decoder_base_url: Optional[str] = None,
     ):
         self.data_processor = data_processor
         self.enable_mm_output = enable_mm_output
         self.eoi_token_id = eoi_token_id
+        self.eos_token_id = eos_token_id
         if decoder_base_url is not None:
             self.decoder_client = AsyncTokenizerClient(base_url=decoder_base_url)
         self._mm_buffer: List[Any] = []  # Buffer for accumulating image token_ids
         self._end_image_code_request_output: Optional[Any] = None
+        self._multipart_buffer = []
 
     def enable_multimodal_content(self):
         return self.enable_mm_output
+
+    def accumulate_token_ids(self, request_output):
+        decode_type = request_output["outputs"].get("decode_type", 0)
+
+        if not self._multipart_buffer:
+            self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
+        else:
+            last_part = self._multipart_buffer[-1]
+
+            if last_part["decode_type"] == decode_type:
+                last_token_ids = last_part["request_output"]["outputs"]["token_ids"]
+                last_token_ids.extend(request_output["outputs"]["token_ids"])
+                request_output["outputs"]["token_ids"] = last_token_ids
+                last_part["request_output"] = request_output
+            else:
+                self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
 
     async def process_response_chat(self, request_outputs, stream, enable_thinking, include_stop_str_in_output):
         """
@@ -46,7 +65,7 @@ class ChatResponseProcessor:
                     enable_thinking=enable_thinking,
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
-            else:
+            elif stream:
                 decode_type = request_output["outputs"].get("decode_type", 0)
                 token_ids = request_output["outputs"]["token_ids"]
                 if decode_type == 0:
@@ -79,3 +98,31 @@ class ChatResponseProcessor:
                 elif decode_type == 1:
                     self._mm_buffer.extend(token_ids)
                     self._end_image_code_request_output = request_output
+            else:
+                self.accumulate_token_ids(request_output)
+                token_ids = request_output["outputs"]["token_ids"]
+                if token_ids[-1] == self.eos_token_id:
+                    multipart = []
+                    for part in self._multipart_buffer:
+                        if part["decode_type"] == 0:
+                            self.data_processor.process_response_dict(
+                                response_dict=part["request_output"],
+                                stream=False,
+                                enable_thinking=enable_thinking,
+                                include_stop_str_in_output=include_stop_str_in_output,
+                            )
+                            text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
+                            multipart.append(text)
+                        elif part["decode_type"] == 1:
+                            image = {"type": "image"}
+                            if self.decoder_client:
+                                req_id = part["request_output"]["request_id"]
+                                image_ret = await self.decoder_client.decode_image(
+                                    request={"req_id": req_id, "data": part["request_output"]["outputs"]["token_ids"]}
+                                )
+                                image["url"] = image_ret["http_url"]
+                            multipart.append(image)
+
+                    lasrt_request_output = self._multipart_buffer[-1]["request_output"]
+                    lasrt_request_output["outputs"]["multipart"] = multipart
+                    yield lasrt_request_output

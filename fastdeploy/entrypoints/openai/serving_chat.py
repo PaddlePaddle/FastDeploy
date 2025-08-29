@@ -429,6 +429,11 @@ class OpenAIServingChat:
             current_waiting_time = 0
             logprob_contents = []
             completion_token_ids = []
+            response_processor = ChatResponseProcessor(
+                data_processor=self.engine_client.data_processor,
+                enable_mm_output=self.enable_mm_output,
+                decoder_base_url=self.tokenizer_base_url,
+            )
             while True:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
@@ -445,15 +450,16 @@ class OpenAIServingChat:
                     continue
 
                 task_is_finished = False
-                for data in response:
+
+                generator = response_processor.process_response_chat(
+                    response,
+                    stream=False,
+                    enable_thinking=enable_thinking,
+                    include_stop_str_in_output=include_stop_str_in_output,
+                )
+                async for data in generator:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
-                    data = self.engine_client.data_processor.process_response_dict(
-                        data,
-                        stream=False,
-                        enable_thinking=enable_thinking,
-                        include_stop_str_in_output=include_stop_str_in_output,
-                    )
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens += len(data["outputs"]["token_ids"])
                     completion_token_ids.extend(data["outputs"]["token_ids"])
@@ -481,7 +487,6 @@ class OpenAIServingChat:
         output = final_res["outputs"]
         message = ChatMessage(
             role="assistant",
-            content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
@@ -491,6 +496,12 @@ class OpenAIServingChat:
             raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
             completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
         )
+
+        if response_processor.enable_multimodal_content():
+            message.multimodal_content = output.get("multipart")
+        else:
+            message.content = output["text"]
+
         logprobs_full_res = None
         if logprob_contents:
             logprobs_full_res = LogProbs(content=logprob_contents)
