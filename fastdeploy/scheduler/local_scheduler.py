@@ -209,7 +209,7 @@ class LocalScheduler:
         return (token_num + block_size - 1) // block_size
 
     def get_unhandled_request_num(self):
-        return len(self.requests)
+        return len(self.ids) - self.ids_read_cursor
 
     def get_requests(
         self,
