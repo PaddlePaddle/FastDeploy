@@ -361,8 +361,7 @@ class ResourceManager:
             f"ResourceManager info, "
             f"total_block_number: {total_block_number}, total_batch_number: {total_batch_number}, "
             f"available_block_num: {available_block_num}, available_batch: {available_batch_num}\n"
-            f"running_reqs: {used_batch_num}, "
-            f"block_usage: {block_usage:.2f}%, batch_usage: {batch_usage:.2f}%"
+            f"running_reqs: {used_batch_num}, block_usage: {block_usage:.2f}%, batch_usage: {batch_usage:.2f}%"
         )
         return info
 
