@@ -30,7 +30,6 @@ from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -80,7 +79,6 @@ class LLM:
     ):
         deprecated_kwargs_warning(**kwargs)
 
-        load_model_register_plugins()
         model = retrive_model_from_server(model, revision)
         tool_parser_plugin = kwargs.get("tool_parser_plugin")
         if tool_parser_plugin:

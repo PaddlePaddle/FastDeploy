@@ -445,7 +445,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         out_ = remove_padding(self.seq_lens_this_time, self.cu_seqlens_q, out_, self.token_num)
         speculate_max_draft_token_num = 1
         from fastdeploy.model_executor.layers.attention.ops import (
-            append_attention,
+            append_attention_with_output,
             get_block_shape_and_split_kv_block,
         )
 
@@ -475,11 +475,12 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         # Warm up
         WARM_UP = 1
         RUN_TIME = 2
+        out = paddle.zeros((qkv.shape[0], self.q_hid_dim), dtype=q.dtype).to(q.place)
         for i in range(WARM_UP + RUN_TIME):
             if i == WARM_UP:
                 paddle.device.synchronize()
                 start_time = time.time()
-            out = append_attention(
+            append_attention_with_output(
                 qkv,
                 self.cache_k,
                 self.cache_v,
@@ -500,6 +501,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.decoder_num_blocks_cpu,
                 self.max_len_tensor_cpu,
                 max_len_kv,
+                out,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask
                 None,  # qkv_bias
