@@ -373,7 +373,6 @@ def post_process_specualate(model_output, save_each_rank: bool = False, skip_sav
 
 
 def post_process(
-    cls,
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],

@@ -173,9 +173,6 @@ class TokenProcessor:
                                     receive_data.data.not_need_stop, dtype="int64"
                                 )
                                 self.output_tokens[1, 0] = paddle.to_tensor(receive_data.data.batch, dtype="int64")
-                                print("bsz: ", self.output_tokens[1, 0])
-                                print("receive_data.shape: ", receive_data.shape)
-
                                 self.output_tokens[2 : 2 + receive_data.data.batch, 0] = paddle.to_tensor(
                                     receive_data.data.tokens[:, 0], dtype="int64"
                                 )
