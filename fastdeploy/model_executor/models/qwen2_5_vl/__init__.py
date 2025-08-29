@@ -13,22 +13,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-
-
-class MultimodalRegistry:
-    """
-    A registry for multimodal models
-    """
-
-    mm_models: set[str] = {
-        "Ernie4_5_VLMoeForConditionalGeneration",
-        "Ernie5MoeForCausalLM",
-        "Qwen2_5_VLForConditionalGeneration",
-    }
-
-    @classmethod
-    def contains_model(cls, name: str) -> bool:
-        """
-        Check if the given name exists in registry.
-        """
-        return name in cls.mm_models
