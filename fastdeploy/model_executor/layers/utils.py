@@ -38,6 +38,15 @@ if current_platform.is_cuda() and current_platform.available():
         )
 
 
+import sys
+
+sys.path.append("/root/paddlejob/workspace/env_run/output/")
+from test_hadamard import get_orthogonal_matrix
+
+Q_ffn2, moe_block_size = get_orthogonal_matrix(1536, "hadamard_ffn2")
+Q_ffn2 = Q_ffn2.cast("bfloat16")
+
+
 from fastdeploy import envs
 
 cache_params = envs.FD_CACHE_PARAMS
@@ -186,7 +195,7 @@ def create_hadamard_matrix(hidden_size: int) -> paddle.Tensor:
         paddle.Tensor: The generated Hadamard matrix.
 
     """
-    hadamard_block_size = 32
+    hadamard_block_size = 512
     h = random_hadamard_matrix(hadamard_block_size, "float32")
     block_num = hidden_size // hadamard_block_size
     hadamard_matrix = paddle.to_tensor(block_diag(*[h for i in range(block_num)]))
@@ -380,3 +389,85 @@ def create_empty_tensor(shape: Tuple[int, ...], dtype: Union[paddle.dtype, str])
         paddle.Tensor: An empty tensor with the specified shape and data type.
     """
     return paddle.empty(list(shape), dtype=dtype)
+
+def unpack_8bit(weight):
+    """
+    Note(ZKK)
+    the original 4-bit weight matrix is packed into an 8-bit matrix
+    here we unpack it!
+    """
+    weight = weight.numpy()
+    num_experts, k, n = weight.shape
+    res = paddle.zeros([num_experts, 2*k,n], dtype="int8")
+    res0 = (weight & 0x0f).astype("int8")
+    res1 = ((weight >> 4) & 0x0f).astype("int8")
+    res0 = paddle.to_tensor(res0)
+    res1 = paddle.to_tensor(res1)
+    
+    res[:,0::2,:] = res0
+    res[:,1::2,:] = res1
+    
+    flag = paddle.zeros_like(res)
+    flag[res>=8] = 0xf0
+    res = paddle.bitwise_or(res, flag)
+
+    return res
+
+def compute_moe_baseline(layer, permute_input, token_nums_per_expert):
+    """
+    Note(ZKK)
+    I hate writing code frequently to verify the correctness of W4A8, so I wrote a function here.
+    """
+
+    assert len(permute_input.shape) == 2
+    assert len(token_nums_per_expert.shape) == 1
+
+    if hasattr(layer, "already") == False:
+        weight0 = unpack_8bit(layer.up_gate_proj_weight)
+        weight1 = unpack_8bit(layer.down_proj_weight) 
+
+        layer.up_gate_proj_weight1 = weight0
+        layer.down_proj_weight1 = weight1
+
+        layer.already = True
+
+    weight0 = layer.up_gate_proj_weight1
+    weight1 = layer.down_proj_weight1
+
+
+    hadamard = create_hadamard_matrix_map[1536].cast("bfloat16")
+
+    ffn_out = paddle.zeros(permute_input.shape, dtype="bfloat16")
+
+    for i in range(layer.num_experts):
+
+        start_idx = 0
+        if i > 0:
+            start_idx = token_nums_per_expert[i-1]
+
+        end_idx =  token_nums_per_expert[i]
+
+        if end_idx == start_idx:
+            continue
+
+        xx = permute_input[start_idx:end_idx]
+
+        ffn1 = paddle.matmul(xx, weight0[i])
+        ffn1 = ffn1.cast("bfloat16")
+        ffn1 = ffn1 * layer.up_gate_proj_weight_scale[i]
+        
+        ffn1 = paddle.incubate.nn.functional.swiglu(ffn1)
+
+        ffn1 = paddle.matmul(ffn1, hadamard)
+        ffn1 = ffn1 * layer.down_proj_in_scale[i] * 127
+        ffn1 = paddle.clip(ffn1, min=-127, max=127)
+        ffn1 = paddle.round(ffn1)
+        ffn1 = ffn1.astype("int8")
+
+        ffn2 = paddle.matmul(ffn1, weight1[i])
+        ffn2 = ffn2.cast("bfloat16")
+        ffn2 = ffn2 * layer.down_proj_weight_scale[i]
+
+        ffn_out[start_idx:end_idx] = ffn2
+        
+    return ffn_out
