@@ -90,10 +90,6 @@ class TestGraphOptBackend(unittest.TestCase):
 
         baseline_cache_config = CacheConfig({})
 
-        # Initialize cuda graph capture list for baseline
-        baseline_graph_opt_config._set_cudagraph_sizes(max_num_seqs=baseline_parallel_config.max_num_seqs)
-        baseline_graph_opt_config.init_with_cudagrpah_size(max_num_seqs=baseline_parallel_config.max_num_seqs)
-
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
             parallel_config=baseline_parallel_config,
@@ -139,10 +135,6 @@ class TestGraphOptBackend(unittest.TestCase):
         # Setup cache config
         cache_config = CacheConfig({})
 
-        # Initialize cuda graph capture list
-        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
-
         # Create FD config
         return FDConfig(
             graph_opt_config=graph_opt_config,
@@ -182,6 +174,7 @@ class TestGraphOptBackend(unittest.TestCase):
 
     def test_cinn_graph(self):
         """Test CINN optimization mode"""
+        # Note: CINN is not opened yet
         fd_config = self._setup_test_config(graph_opt_level=2, use_cudagraph=False)
         self._run_model_test(fd_config, "cinn_graph")
 
@@ -197,6 +190,7 @@ class TestGraphOptBackend(unittest.TestCase):
 
     def test_cinn_graph_with_cudagraph(self):
         """Test CINN + CudaGraph mode"""
+        # Note: CINN is not opened yet
         fd_config = self._setup_test_config(graph_opt_level=2, use_cudagraph=True)
         self._run_model_test(fd_config, "cinn_graph_cudagraph")
 
