@@ -371,7 +371,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 0)),
             "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
             "FLAGS_hardamard_use_diagonal_block_matrix": int(
                 os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
@@ -400,9 +400,6 @@ class LLMEngine:
             # TODO dynamic load environment variable
             if self.cfg.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
-
-        if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
         for k, v in variables.items():
