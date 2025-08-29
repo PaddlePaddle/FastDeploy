@@ -116,6 +116,7 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
         tokenizer.ignored_index = -100
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.unk_token
+
         fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         vision_config = fd_config.model_config.vision_config
