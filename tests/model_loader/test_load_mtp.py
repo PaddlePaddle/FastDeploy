@@ -23,8 +23,7 @@ import paddle.distributed.fleet as fleet
 
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.models.ernie4_5_mtp import Ernie4_5_MTPForCausalLM
-
-from ..utils import get_default_test_fd_config
+from tests.utils import get_default_test_fd_config
 
 strategy = fleet.DistributedStrategy()
 fleet.init(strategy=strategy)
@@ -36,6 +35,7 @@ class TestErnie4_5_MTPLoadWeights(unittest.TestCase):
         self.fd_config.speculative_config = Mock()
         self.fd_config.speculative_config.sharing_model = Mock()
         self.fd_config.speculative_config.sharing_model.ernie = Mock()
+        self.fd_config.parallel_config.tp_group = None
         self.fd_config.speculative_config.sharing_model.ernie.embed_tokens = VocabParallelEmbedding(
             fd_config=self.fd_config,
             num_embeddings=self.fd_config.model_config.vocab_size,

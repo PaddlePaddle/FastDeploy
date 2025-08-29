@@ -45,12 +45,14 @@ class FakeModelConfig:
         self.initializer_range = 0.02
         self.max_position_embeddings = 512
         self.tie_word_embeddings = True
+        self.model_format = "auto"
 
 
 def get_default_test_fd_config():
     graph_opt_config = GraphOptimizationConfig(args={})
     parallel_config = ParallelConfig(args={})
     parallel_config.max_num_seqs = 1
+    parallel_config.data_parallel_rank = 1
     cache_config = CacheConfig({})
     fd_config = FDConfig(
         graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config, test_mode=True
