@@ -1296,6 +1296,18 @@ __global__ void initialize_moe_routing_kernel(
           dest_vec[j] = static_cast<int8_t>(round(quant_value));
         }
         Store<OutT, VecSize>(dest_vec, &dest_row_ptr[tid]);
+      } else if constexpr (std::is_same<OutT, phi::dtype::float8_e4m3fn>::value) {
+        using StoreT = AlignedVector<OutT, VecSize>;
+        StoreT dest_vec;
+        const float max_bound = 448.f;
+        const float min_bound = -448.f;
+        for (int j = 0; j < VecSize; j++) {
+          float quant_value = max_bound * scale * static_cast<float>(src_vec[j]);
+          quant_value = quant_value > max_bound ? max_bound : quant_value;
+          quant_value = quant_value < min_bound ? min_bound : quant_value;
+          dest_vec[j] = static_cast<phi::dtype::float8_e4m3fn>(quant_value);
+        }
+        Store<phi::dtype::float8_e4m3fn, VecSize>(dest_vec, &dest_row_ptr[tid]);
       } else {
         Store<T, VecSize>(src_vec, &dest_row_ptr[tid]);
       }

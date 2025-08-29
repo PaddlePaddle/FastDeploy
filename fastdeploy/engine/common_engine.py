@@ -655,7 +655,6 @@ class EngineSevice:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    llm_logger.info(f"Send results: {request_id} {contents}")
                     self.zmq_server.send_multipart(request_id, contents)
 
             except Exception as e:
