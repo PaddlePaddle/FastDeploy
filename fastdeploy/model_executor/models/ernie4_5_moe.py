@@ -540,8 +540,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
         ]
-        # No 'tie_word_embeddings' in torch 0.3B and 21B-A3B config.json
-        lm_head_in_ckpt = False
 
         expert_params_mapping = []
         if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
@@ -560,8 +558,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
-            if "lm_head" in loaded_weight_name:
-                lm_head_in_ckpt = True
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
@@ -590,7 +586,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 
-        self.tie_word_embeddings = not lm_head_in_ckpt
         if self.tie_word_embeddings:
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
 
