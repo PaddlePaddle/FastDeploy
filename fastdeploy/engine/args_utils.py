@@ -32,6 +32,7 @@ from fastdeploy.config import (
     SpeculativeConfig,
     TaskOption,
 )
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import (
@@ -388,6 +389,15 @@ class EngineArgs:
                 raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
+        if self.speculative_config is not None:
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.splitwise_role != 'mixed':
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if (not current_platform.is_cuda()) and (not current_platform.is_xpu()):
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+        
+        
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -975,7 +985,7 @@ class EngineArgs:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
