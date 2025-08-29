@@ -67,8 +67,8 @@ class Test(unittest.TestCase):
             baseline = paddle.add(baseline, bias)
         out_type = a.dtype
         c = cutlass_scaled_mm(a_q, b_q, a_scales, b_scales, out_type, bias)
-        euqal = np.allclose(baseline.numpy(), c.numpy(), rtol=1e-2, atol=1e-2)
-        print(euqal)  #
+        equal = np.allclose(baseline.numpy(), c.numpy(), rtol=1e-2, atol=1e-2)
+        print(equal)  #
 
     def test_cutlass_scaled_mm_int8(self):
         """
@@ -90,8 +90,8 @@ class Test(unittest.TestCase):
             baseline = paddle.add(baseline, bias)
         out_type = a.dtype
         c = cutlass_scaled_mm(a_q, b_q, a_scales, b_scales, out_type, bias)
-        euqal = np.allclose(baseline.numpy(), c.numpy(), rtol=1e-2, atol=1e-2)
-        print(euqal)  #
+        equal = np.allclose(baseline.numpy(), c.numpy(), rtol=1e-2, atol=1e-2)
+        print(equal)  #
 
 
 if __name__ == "__main__":

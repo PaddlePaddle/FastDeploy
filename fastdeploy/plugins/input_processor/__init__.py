@@ -14,17 +14,14 @@
 # limitations under the License.
 """
 
+from fastdeploy.plugins.utils import load_plugins_by_group
 
-class MultimodalRegistry:
-    """
-    A registry for multimodal models
-    """
+# make sure one process only loads plugins once
+PLUGINS_GROUP = "fastdeploy.input_processor_plugins"
 
-    mm_models: set[str] = {"Ernie4_5_VLMoeForConditionalGeneration", "Ernie5MoeForCausalLM"}
 
-    @classmethod
-    def contains_model(cls, name: str) -> bool:
-        """
-        Check if the given name exists in registry.
-        """
-        return name in cls.mm_models
+def load_input_processor_plugins():
+    """load_input_processor_plugins"""
+    plugins = load_plugins_by_group(group=PLUGINS_GROUP)
+    assert len(plugins) <= 1, "Most one plugin is allowed to be loaded."
+    return next(iter(plugins.values()))()
