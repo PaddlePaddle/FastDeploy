@@ -474,7 +474,7 @@ class Ernie4_5_VLModel(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
-    def _prepare_vl_moe_meta(
+    def prepare_vl_moe_meta(
         self,
         ids_remove_padding: paddle.Tensor,
     ) -> VLMoEMeta:
@@ -744,7 +744,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ids_remove_padding=ids_remove_padding, image_features=image_features
         )
         self._input_embeddings.copy_(input_embeddings, False)
-        vl_moe_meta = self.ernie._prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
+        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
