@@ -154,7 +154,7 @@ class PrefixCacheManager:
             kv_num_head = int(cache_config.model_cfg.num_key_value_heads) // tensor_parallel_size
         else:
             kv_num_head = cache_config.model_cfg.num_attention_heads // tensor_parallel_size
-
+        kv_num_head = max(1, kv_num_head)
         cache_ready_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
         self.cache_ready_signal = IPCSignal(
             name="cache_ready_signal",
