@@ -1,4 +1,4 @@
-name: Publish Job
+name: CI Images Build
 
 on:
   workflow_dispatch:
