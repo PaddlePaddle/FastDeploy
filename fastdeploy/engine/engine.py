@@ -484,7 +484,6 @@ class LLMEngine:
         for worker_flag, value in worker_append_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
-        llm_logger.info(f"gaoziyuan test ips :{self.cfg.ips}")
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"

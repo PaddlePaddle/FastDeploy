@@ -87,12 +87,26 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         super().__init__()
         moe_quant_type = ""
         if hasattr(fd_config.quant_config, "moe_quant_type"):
-            moe_quant_type = fd_config.quant_config.moe_quant_type
+            if moe_tag == "Image" and hasattr(fd_config.quant_config, "image_moe_quant_type"):
+                moe_quant_type = fd_config.quant_config.image_moe_quant_type
+            else:
+                moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
             moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
         ):
             weight_key_map = {
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        elif moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
                 "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
@@ -778,6 +792,52 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         ),
         WeightMeta(".embed_tokens.weight", False),
         WeightMeta("lm_head.weight", True),
+        # quant tensorwise
+        WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.quant_weight",
+            True,
+            tsm.GQA,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.quant_weight",
+            False,
+        ),
     ]
 
     weight_vison = [
