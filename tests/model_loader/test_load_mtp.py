@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import sys
 import unittest
 from unittest.mock import Mock
 
@@ -23,7 +24,9 @@ import paddle.distributed.fleet as fleet
 
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.models.ernie4_5_mtp import Ernie4_5_MTPForCausalLM
-from tests.utils import get_default_test_fd_config
+
+sys.path.append("../")
+from utils import get_default_test_fd_config
 
 strategy = fleet.DistributedStrategy()
 fleet.init(strategy=strategy)
