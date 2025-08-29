@@ -165,8 +165,22 @@ class PaddleDisWorkerProc:
             exist_swapped_task_signal:
             model_weights_status:
         """
-        # init worker_ready_signal
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
+            launched_expert_service_signal_data = np.zeros(
+                shape=[min(self.parallel_config.data_parallel_size, self.max_chips_per_node)], dtype=np.int32
+            )
+            self.launched_expert_service_signal = IPCSignal(
+                name="launched_expert_service_signal",
+                array=launched_expert_service_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_pid,
+                create=False,
+            )
+            while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
+                pass
+
+        # init worker_ready_signal
         array_size = min(
             self.max_chips_per_node,
             self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size,
@@ -242,6 +256,7 @@ class PaddleDisWorkerProc:
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         num_running_requests = 0
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -255,7 +270,6 @@ class PaddleDisWorkerProc:
 
             self.insert_step = False
             req_dicts = None
-            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue

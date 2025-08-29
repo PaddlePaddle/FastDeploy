@@ -428,9 +428,9 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         down_proj_weight = paddle.stack(down_proj_weights, axis=0)
         up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).cast(paddle.get_default_dtype())
         down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).cast(paddle.get_default_dtype())
-        up_gate_proj_in_scale_all_experts = paddle.stack(up_gate_proj_in_scale_all_experts, axis=0).unsqueeze()
-        up_gate_proj_in_scale = paddle.stack(up_gate_proj_in_scale, axis=0).unsqueeze()
-        down_proj_in_scale = paddle.stack(down_proj_in_scale, axis=0).unsqueeze()
+        up_gate_proj_in_scale_all_experts = paddle.stack(up_gate_proj_in_scale_all_experts, axis=0).squeeze()
+        up_gate_proj_in_scale = paddle.stack(up_gate_proj_in_scale, axis=0).squeeze()
+        down_proj_in_scale = paddle.stack(down_proj_in_scale, axis=0).squeeze()
 
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
