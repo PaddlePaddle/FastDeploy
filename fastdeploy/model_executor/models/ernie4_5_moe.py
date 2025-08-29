@@ -112,7 +112,7 @@ class Ernie4_5_MoE(nn.Layer):
         self.tp_group = fd_config.parallel_config.tp_group
 
         self.use_ep = self.expert_parallel_size > 1
-        self.us_tp = self.tensor_parallel_size > 1
+        self.use_tp = self.tensor_parallel_size > 1
 
         if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
