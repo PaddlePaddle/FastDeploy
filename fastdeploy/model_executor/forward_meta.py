@@ -79,6 +79,8 @@ class ForwardMeta:
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask
     attn_mask: Optional[paddle.Tensor] = None
+    # Attention mask offset
+    attn_mask_offsets: Optional[paddle.Tensor] = None
     # Decoder batch id. Used by attention backend.
     decoder_batch_ids: Optional[paddle.Tensor] = None
     # Tile ID for each batch of the decoder. Used by attention backend.
@@ -113,6 +115,39 @@ class ForwardMeta:
         """Safely clean up the caches"""
         if self.caches:
             del self.caches
+
+    def __str__(self) -> str:
+        """
+        Returns a concise string representation of the ForwardMeta object in a compact format.
+        """
+
+        def format_str(obj):
+            """
+            A helper function to recursively get a concise string representation of objects.
+            """
+            if obj is None:
+                return "None"
+            elif isinstance(obj, paddle.Tensor):
+                tensor_info = {
+                    "data_ptr": obj.data_ptr(),
+                    "shape": obj.shape,
+                    "dtype": str(obj.dtype),
+                    "place": str(obj.place),
+                }
+                return tensor_info
+            elif isinstance(obj, (list, tuple)):
+                return [format_str(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {key: format_str(value) for key, value in obj.items()}
+            elif not isinstance(obj, (int, float, str, bool)) and hasattr(obj, "__dict__"):
+                info = {key: format_str(value) for key, value in obj.__dict__.items() if not key.startswith("_")}
+                return f"<{obj.__class__.__name__} object info: {info}>"
+            else:
+                return str(obj)
+
+        simplified_info = format_str(self.__dict__)
+        lines = [f"  {key}: {value}" for key, value in simplified_info.items()]
+        return "{\n" + ",\n".join(lines) + "\n}"
 
 
 @dataclass
@@ -162,3 +197,13 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
+
+
+@dataclass
+class DCUForwardMeta(ForwardMeta):
+    """
+    DCUForwardMeta is used to store the global meta information of the forward, and some DCU specific meta info.
+    """
+
+    # Accumulated offset
+    cum_offsets: Optional[paddle.Tensor] = None

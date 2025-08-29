@@ -27,10 +27,23 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      github-token:
+        required: true
 
 jobs:
+  check_cov_skip:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: coverage
+
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
+    timeout-minutes: 60
+    needs: check_cov_skip
+    if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
@@ -73,82 +86,122 @@ jobs:
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
-            set -x
-            runner_name="${{ runner.name }}"
-            CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
-            DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
-            DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
+          if [[ "$IS_PR" == "true" ]]; then
+            echo "Running on PR"
+          else
+            echo "Not a PR"
+          fi
+          runner_name="${{ runner.name }}"
+          CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
+          DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-            FLASK_PORT=$((42068 + DEVICE_PORT * 100))
-            FD_API_PORT=$((42088 + DEVICE_PORT * 100))
-            FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
-            FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
-            echo "Test ENV Parameter:"
-            echo "========================================================="
-            echo "FLASK_PORT=${FLASK_PORT}"
-            echo "FD_API_PORT=${FD_API_PORT}"
-            echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
-            echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
-            echo "DEVICES=${DEVICES}"
-            echo "========================================================="
+          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+          echo "Test ENV Parameter:"
+          echo "========================================================="
+          echo "FLASK_PORT=${FLASK_PORT}"
+          echo "FD_API_PORT=${FD_API_PORT}"
+          echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+          echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "DEVICES=${DEVICES}"
+          echo "========================================================="
 
-            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
-            echo "CACHE_DIR is set to ${CACHE_DIR}"
-            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
-              touch "${CACHE_DIR}/gitconfig"
-            fi
-            PARENT_DIR=$(dirname "$WORKSPACE")
-            echo "PARENT_DIR:$PARENT_DIR"
-            docker run --rm --net=host \
-            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
-            -v $(pwd):/workspace -w /workspace \
-            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
-            -v "${CACHE_DIR}/.cache:/root/.cache" \
-            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
-            -v "${MODEL_CACHE_DIR}:/ModelData:ro" \
-            -e "MODEL_PATH=/ModelData" \
-            -e "FD_API_PORT=${FD_API_PORT}" \
-            -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
-            -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
-            -e "FLASK_PORT=${FLASK_PORT}" \
-            -e TZ="Asia/Shanghai" \
-            -e "fd_wheel_url=${fd_wheel_url}" \
-            -e "BASE_REF=${BASE_REF}" \
-            --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
+          CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+          echo "CACHE_DIR is set to ${CACHE_DIR}"
+          if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+            touch "${CACHE_DIR}/gitconfig"
+          fi
 
-            git config --global --add safe.directory /workspace/FastDeploy
-            cd FastDeploy
-            python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
 
-            pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+          echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
 
-            python -m pip install coverage
-            python -m pip install diff-cover
-            python -m pip install ${fd_wheel_url}
-            if [ -d "test/plugins" ]; then
-                cd test/plugins
-                python setup.py install
-                cd ../..
-            else
-                echo "Warning: test/plugins directory not found, skipping setup.py install"
-            fi
-            export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
-            export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
-            TEST_EXIT_CODE=0
-            bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
-            git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-            echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
-            coverage combine coveragedata/
-            coverage xml -o python_coverage_all.xml
-            COVERAGE_EXIT_CODE=0
+          for port in "${PORTS[@]}"; do
+              PIDS=$(lsof -t -i :$port || true)
+              if [ -n "$PIDS" ]; then
+                  echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
+                  echo "$PIDS" | xargs -r kill -9
+                  echo "Port $port cleared" | tee -a $LOG_FILE
+              else
+                  echo "Port $port is free" | tee -a $LOG_FILE
+              fi
+          done
+
+          echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
+
+          echo "========================================================="
+          echo "Ensuring no stale container named ${runner_name} ..."
+          if [ "$(docker ps -a -q -f name=${runner_name})" ]; then
+            echo "Removing stale container: ${runner_name}"
+            docker rm -f ${runner_name} || true
+          fi
+
+          docker run --rm --net=host \
+          --name ${runner_name} \
+          --cap-add=SYS_PTRACE --shm-size=64G \
+          -v $(pwd):/workspace -w /workspace \
+          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+          -v "${CACHE_DIR}/.cache:/root/.cache" \
+          -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+          -v "${MODEL_CACHE_DIR}:/ModelData:ro" \
+          -e "MODEL_PATH=/ModelData" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "FLASK_PORT=${FLASK_PORT}" \
+          -e TZ="Asia/Shanghai" \
+          -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "BASE_REF=${BASE_REF}" \
+          -e "IS_PR=${IS_PR}" \
+          --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
+
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+
+          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+          python -m pip install coverage
+          python -m pip install diff-cover
+          python -m pip install pytest-cov
+          python -m pip install jsonschema aistudio_sdk==0.3.5
+          python -m pip install ${fd_wheel_url}
+          if [ -d "tests/plugins" ]; then
+              cd tests/plugins
+              python setup.py install
+              cd ../..
+          else
+              echo "Warning: tests/plugins directory not found, skipping setup.py install"
+          fi
+          export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
+          export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          export COVERAGE_PROCESS_START=/workspace/FastDeploy/scripts/.coveragerc
+          TEST_EXIT_CODE=0
+          bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
+          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
+          coverage combine coveragedata/ || echo "No data to combine"
+          coverage xml -o python_coverage_all.xml
+          COVERAGE_EXIT_CODE=0
+          if [[ "$IS_PR" == "true" ]]; then
             diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
-            echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
             python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
-            '
-            if [ -f FastDeploy/exit_code.env ]; then
-              cat FastDeploy/exit_code.env >> $GITHUB_ENV
-            fi
+          else
+            echo "Not a PR, skipping diff-cover"
+          fi
+          echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
+          '
+          if [ -f FastDeploy/exit_code.env ]; then
+            cat FastDeploy/exit_code.env >> $GITHUB_ENV
+          fi
       - name: Upload unit resule and diff coverage to bos
         id: cov_upload
         shell: bash
@@ -176,7 +229,7 @@ jobs:
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
           fi
-          unittest_result="test/failed_tests.log"
+          unittest_result="tests/failed_tests.log"
           if [ -s ${unittest_result} ];then
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
             target_path_stripped="${target_path#paddle-github-action/}"
@@ -187,6 +240,7 @@ jobs:
       - name: Check Unit Test Success
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$TEST_EXIT_CODE" -eq 8 ]; then
             filename=$(basename "$unittest_failed_url")
             if [ -z "${unittest_failed_url}" ]; then
@@ -205,8 +259,10 @@ jobs:
           echo "All tests passed"
 
       - name: Verify Code Coverage Threshold (80%)
+        if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
+          cd FastDeploy
           if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
             echo "Coverage generation failed (exit code 9)"
             filename=$(basename "$diff_cov_result_json_url")
@@ -233,12 +289,17 @@ jobs:
     needs: run_tests_with_coverage
     if: always()
     runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
     steps:
       - name: coverage diff file download
         shell: bash
         env:
           diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
+          wget ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          cd FastDeploy
           if [ -z "${diff_cov_file_url}" ]; then
             echo "No diff coverage file URL provided."
             exit 0
@@ -248,6 +309,9 @@ jobs:
         if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
         uses: codecov/codecov-action@v5
         with:
-          files: ./diff_coverage.xml
+          files: ./FastDeploy/diff_coverage.xml
           name: python diff coverage
           verbose: true
+          disable_search: true
+          commit_parent: false
+          flags: diff

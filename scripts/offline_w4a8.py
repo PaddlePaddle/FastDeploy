@@ -12,7 +12,7 @@ from paddleformers.utils.env import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from paddleformers.utils.log import logger
 from safetensors.numpy import save_file as safe_save_file
 
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.load_weight_utils import (
     get_all_safetensors,
@@ -140,9 +140,9 @@ def main():
     ]
     for i in range(len(vocab_file_names)):
         if os.path.exists(os.path.join(args.model_name_or_path, vocab_file_names[i])):
-            ErnieBotTokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
+            Ernie4_5Tokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
             break
-    tokenizer = ErnieBotTokenizer.from_pretrained(args.model_name_or_path)
+    tokenizer = Ernie4_5Tokenizer.from_pretrained(args.model_name_or_path)
     _, safetensor_files = get_all_safetensors(args.model_name_or_path)
     weights_iterator = safetensors_weights_iterator(safetensor_files)
     state_dict = {}

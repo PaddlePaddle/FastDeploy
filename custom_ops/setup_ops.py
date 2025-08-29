@@ -199,6 +199,11 @@ if paddle.is_compiled_with_rocm():
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
     sources = [
+        "gpu_ops/save_with_output_msg.cc",
+        "gpu_ops/get_output.cc",
+        "gpu_ops/get_output_msg_with_topk.cc",
+        "gpu_ops/save_output_msg_with_topk.cc",
+        "gpu_ops/transfer_output.cc",
         "gpu_ops/set_value_by_flags.cu",
         "gpu_ops/token_penalty_multi_scores.cu",
         "gpu_ops/stop_generation.cu",
@@ -250,6 +255,11 @@ if paddle.is_compiled_with_rocm():
     )
 elif paddle.is_compiled_with_cuda():
     sources = [
+        "gpu_ops/save_with_output_msg.cc",
+        "gpu_ops/get_output.cc",
+        "gpu_ops/get_output_msg_with_topk.cc",
+        "gpu_ops/save_output_msg_with_topk.cc",
+        "gpu_ops/transfer_output.cc",
         "gpu_ops/set_mask_value.cu",
         "gpu_ops/set_value_by_flags.cu",
         "gpu_ops/ngram_mask.cu",
@@ -500,6 +510,10 @@ elif paddle.is_compiled_with_cuda():
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
         os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
         sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
+        os.system("python utils/auto_gen_wfp8afp8_sparse_gemm_kernel.py")
+        sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
+        os.system("python gpu_ops/machete/generate.py")
+        sources += find_end_files("gpu_ops/machete", ".cu")
 
     setup(
         name="fastdeploy_ops",
@@ -507,6 +521,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
+            extra_link_args=["-lcuda"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
@@ -532,6 +547,11 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 ]
             },
             sources=[
+                "gpu_ops/save_with_output_msg.cc",
+                "gpu_ops/get_output.cc",
+                "gpu_ops/get_output_msg_with_topk.cc",
+                "gpu_ops/save_output_msg_with_topk.cc",
+                "gpu_ops/transfer_output.cc",
                 "gpu_ops/get_padding_offset.cu",
                 "gpu_ops/set_value_by_flags.cu",
                 "gpu_ops/rebuild_padding.cu",
@@ -574,6 +594,12 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
     sources = [
+        "gpu_ops/update_inputs_v1.cu",
+        "gpu_ops/save_with_output_msg.cc",
+        "gpu_ops/get_output.cc",
+        "gpu_ops/get_output_msg_with_topk.cc",
+        "gpu_ops/save_output_msg_with_topk.cc",
+        "gpu_ops/transfer_output.cc",
         "gpu_ops/save_with_output.cc",
         "gpu_ops/set_mask_value.cu",
         "gpu_ops/set_value_by_flags.cu",
@@ -653,6 +679,12 @@ else:
         name="fastdeploy_cpu_ops",
         ext_modules=CppExtension(
             sources=[
+                "gpu_ops/save_with_output_msg.cc",
+                "gpu_ops/get_output.cc",
+                "gpu_ops/get_output_msg_with_topk.cc",
+                "gpu_ops/save_output_msg_with_topk.cc",
+                "gpu_ops/transfer_output.cc",
+                "cpu_ops/rebuild_padding.cc",
                 "cpu_ops/simd_sort.cc",
                 "cpu_ops/set_value_by_flags.cc",
                 "cpu_ops/token_penalty_multi_scores.cc",
