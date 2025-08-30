@@ -44,7 +44,7 @@ def set_value_by_flags_and_idx_numpy(
     return result
 
 
-class Test(unittest.TestCase):
+class TestSetValueByFlagsAndIdx(unittest.TestCase):
     def setUp(self):
         paddle.seed(2024)
         np.random.seed(42)
