@@ -151,7 +151,9 @@ class FusedMoE(nn.Layer):
             self.gate_correction_bias = gate_correction_bias
         else:
             self.gate_correction_bias = None
-        self.quant_method.create_weights(self, weight_loader=self.weight_loader)
+        self.quant_method.create_weights(
+            self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
+        )
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
@@ -197,6 +199,9 @@ class FusedMoE(nn.Layer):
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         dim = -1 if shard_dim else 0
         if self.tp_size > 1:
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
@@ -207,8 +212,6 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, shard_dim, shard_offset, shard_size)
-
-        loaded_weight = get_tensor(loaded_weight)
 
         expert_param = param[expert_id - self.expert_id_offset]
         param_shard_size = expert_param.shape[dim] // 2
@@ -229,14 +232,18 @@ class FusedMoE(nn.Layer):
             )
 
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
+        if current_platform.is_xpu() or current_platform.is_gcu():
+            if expert_param.shape != loaded_weight.shape:
+                loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
         expert_param.copy_(loaded_weight, False)
 
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         if self.tp_size > 1 and shard_dim is not None:
             dim = -1 if shard_dim else 0
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
@@ -247,14 +254,14 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, shard_dim, shard_offset, shard_size)
-        loaded_weight = get_tensor(loaded_weight)
         expert_param = param[expert_id - self.expert_id_offset]
         if hasattr(param, "tensor_track"):
             # for dyn quant
             param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
-        if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
+        if current_platform.is_xpu or current_platform.is_gcu():
+            if expert_param.shape != loaded_weight.shape:
+                loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )

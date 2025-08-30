@@ -1,12 +1,12 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-run_path="$DIR/../tests/"
+tests_path="$DIR/../tests/"
 export PYTEST_INI="$DIR/../tests/cov_pytest.ini"
+run_path=$( realpath "$DIR/../")
 
 export COVERAGE_FILE=${COVERAGE_FILE:-$DIR/../coveragedata/.coverage}
 export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
-export COVERAGE_PROCESS_START=${COVERAGE_PROCESS_START:-$DIR/../scripts/.coveragerc}
-cd "$run_path" || exit 1
+
 
 failed_tests_file="failed_tests.log"
 > "$failed_tests_file"
@@ -16,7 +16,7 @@ failed_tests_file="failed_tests.log"
 # 执行 pytest，每个文件单独跑
 ##################################
 # 收集 pytest 文件
-TEST_FILES=$(python -m pytest --collect-only -q -c ${PYTEST_INI} --disable-warnings | grep -Eo '^.*test_.*\.py' | sort | uniq)
+TEST_FILES=$(python -m pytest --collect-only -q -c ${PYTEST_INI} ${tests_path} --rootdir=${run_path} --disable-warnings | grep -Eo '^.*test_.*\.py' | sort | uniq)
 
 
 failed_pytest=0
@@ -24,7 +24,7 @@ success_pytest=0
 
 for file in $TEST_FILES; do
     echo "Running pytest file: $file"
-    python -m pytest -c ${PYTEST_INI} --cov-config=${COVERAGE_RCFILE} "$file" -vv -s
+    python -m coverage run -m pytest -c ${PYTEST_INI} "$file" -vv -s
     status=$?
     if [ "$status" -ne 0 ]; then
         echo "$file" >> "$failed_tests_file"
