@@ -86,13 +86,27 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
     ) -> None:
         super().__init__()
         moe_quant_type = ""
-        if hasattr(fd_config, "quant_config") and fd_config.quant_config is not None:
-            moe_quant_type = getattr(fd_config.quant_config, "name", lambda: "")()
+        if hasattr(fd_config.quant_config, "moe_quant_type"):
+            if moe_tag == "Image" and hasattr(fd_config.quant_config, "image_moe_quant_type"):
+                moe_quant_type = fd_config.quant_config.image_moe_quant_type
+            else:
+                moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
             moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
         ):
             weight_key_map = {
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        elif moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
                 "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
@@ -647,7 +661,10 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            # because we use lazy guard and is not initialized by default
+            if not self.lm_head.linear.weight._is_initialized():
+                self.lm_head.linear.weight.initialize()
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
@@ -663,13 +680,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.vision_model.load_state_dict(state_dict)
         self.resampler_model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
         else:
             self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
@@ -702,6 +719,10 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         )
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
@@ -771,6 +792,52 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         ),
         WeightMeta(".embed_tokens.weight", False),
         WeightMeta("lm_head.weight", True),
+        # quant tensorwise
+        WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.quant_weight",
+            True,
+            tsm.GQA,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.down_proj.quant_weight",
+            False,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.quant_weight",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.quant_weight",
+            False,
+        ),
     ]
 
     weight_vison = [

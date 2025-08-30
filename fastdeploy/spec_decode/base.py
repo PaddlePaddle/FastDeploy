@@ -18,6 +18,9 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any
 
+import paddle.distributed as dist
+
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.utils import spec_logger
 
@@ -34,7 +37,14 @@ class Proposer(ABC):
         """
         Init Speculative proposer
         """
+        cfg.parallel_config.tp_group = None
         self.cfg = deepcopy(cfg)
+        cfg.parallel_config.tp_group = dist.get_group(
+            cfg.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+        )
+        self.cfg.parallel_config.tp_group = dist.get_group(
+            cfg.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+        )
         self.parallel_config = self.cfg.parallel_config
         self.model_config = self.cfg.model_config
         self.speculative_config = self.cfg.speculative_config
@@ -45,6 +55,10 @@ class Proposer(ABC):
         self.max_model_len = self.parallel_config.max_model_len
         self.speculative_method = self.speculative_config.method
         self.max_draft_token_num = self.speculative_config.num_speculative_tokens
+        self.num_model_steps = self.speculative_config.num_model_steps
+
+        self.max_ngram_size = self.speculative_config.max_ngram_size
+        self.min_ngram_size = self.speculative_config.min_ngram_size
 
         spec_logger.info(f"Speculate config: {self.speculative_config}")
 
