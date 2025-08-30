@@ -102,7 +102,7 @@ class LLM:
         self.master_node_ip = self.llm_engine.cfg.master_ip
         self._receive_output_thread = threading.Thread(target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
-        self.chat_template = load_chat_template(chat_template)
+        self.chat_template = load_chat_template(chat_template, model)
 
     def _check_master(self):
         """
