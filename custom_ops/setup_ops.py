@@ -377,6 +377,8 @@ elif paddle.is_compiled_with_cuda():
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
     nvcc_compile_args += ["-DPy_LIMITED_API=0x03090000"]
+
+    cc_compile_args = []
     nvcc_compile_args += [
         "-Igpu_ops/cutlass_kernels",
         "-Ithird_party/cutlass/include",
@@ -514,13 +516,13 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
         os.system("python gpu_ops/machete/generate.py")
         sources += find_end_files("gpu_ops/machete", ".cu")
-        nvcc_compile_args += ["-DENABLE_MACHETE"]
+        cc_compile_args += ["-DENABLE_MACHETE"]
 
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
-            extra_compile_args={"nvcc": nvcc_compile_args},
+            extra_compile_args={"nvcc": nvcc_compile_args, "cxx": cc_compile_args},
             libraries=["cublasLt"],
             extra_link_args=["-lcuda"],
         ),
