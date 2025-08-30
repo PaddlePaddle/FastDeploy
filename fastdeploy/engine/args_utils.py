@@ -15,11 +15,11 @@
 """
 
 import json
-import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
@@ -32,7 +32,6 @@ from fastdeploy.config import (
     SpeculativeConfig,
     TaskOption,
 )
-from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import (
@@ -391,13 +390,10 @@ class EngineArgs:
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-        if self.splitwise_role != 'mixed':
+        if self.splitwise_role != "mixed":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if (not current_platform.is_cuda()) and (not current_platform.is_xpu()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-
-        
-        
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:

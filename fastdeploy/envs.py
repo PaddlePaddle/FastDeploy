@@ -102,6 +102,7 @@ def __getattr__(name: str):
         return environment_variables[name]()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 def __setattr__(name: str, value: Any):
     assert name in environment_variables
     environment_variables[name] = lambda: value
