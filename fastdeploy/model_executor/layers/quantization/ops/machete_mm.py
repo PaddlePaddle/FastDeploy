@@ -26,8 +26,14 @@ def get_sm_version():
     return cc
 
 
+_ENABLE_MACHETE = False
 if current_platform.is_cuda() and get_sm_version() == 90:
-    from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B
+    try:
+        from fastdeploy.model_executor.ops.gpu import machete_mm, machete_prepack_B
+
+        _ENABLE_MACHETE = True
+    except Exception:
+        pass
 
 
 def get_pack_factor(num_bits):
