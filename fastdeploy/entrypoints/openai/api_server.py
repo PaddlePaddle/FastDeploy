@@ -80,7 +80,7 @@ parser.add_argument("--max-concurrency", default=512, type=int, help="max concur
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
-chat_template = load_chat_template(args.chat_template)
+chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
