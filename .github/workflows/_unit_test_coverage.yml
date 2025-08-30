@@ -164,8 +164,8 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
+          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
           python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install coverage
@@ -173,6 +173,10 @@ jobs:
           python -m pip install pytest-cov
           python -m pip install jsonschema aistudio_sdk==0.3.5
           python -m pip install ${fd_wheel_url}
+          rm -rf fastdeploy
+          # coverage subprocess use
+          python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
+          export PYTHONPATH=/workspace/FastDeploy/
           if [ -d "tests/plugins" ]; then
               cd tests/plugins
               python setup.py install
@@ -182,12 +186,11 @@ jobs:
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
-          export COVERAGE_PROCESS_START=/workspace/FastDeploy/scripts/.coveragerc
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
-          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
           coverage combine coveragedata/ || echo "No data to combine"
+          coverage report
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
           if [[ "$IS_PR" == "true" ]]; then
@@ -228,7 +231,7 @@ jobs:
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
             echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
           fi
-          unittest_result="tests/failed_tests.log"
+          unittest_result="failed_tests.log"
           if [ -s ${unittest_result} ];then
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
             target_path_stripped="${target_path#paddle-github-action/}"
