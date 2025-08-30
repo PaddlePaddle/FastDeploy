@@ -56,7 +56,6 @@ class FDRunner:
         sample_output_ids: list[list[int]] = []
         sample_output_strs: list[str] = []
         for output in req_outputs:
-            print("output", output)
             sample_output_ids.append(output.outputs.token_ids)
             sample_output_strs.append(output.outputs.text)
             outputs.append((sample_output_ids, sample_output_strs))
