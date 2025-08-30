@@ -38,7 +38,7 @@ from fastdeploy.model_executor.utils import set_weight_attrs
 
 from .activation import ACT2FN
 from .configuration import DFNRopeVisionTransformerConfig
-
+from fastdeploy import envs
 
 def get_hcg():
     """
@@ -179,10 +179,12 @@ class VisionFlashAttention2(nn.Layer):
                 input_is_parallel=True,
                 has_bias=True,
             )
-            set_weight_attrs(self.qkv.weight, {"weight_loader": self.weight_loader})
-            set_weight_attrs(self.qkv.bias, {"weight_loader": self.weight_loader, "load_bias": True})
+            # Set model_format attribute for torch format support
+            model_format = "torch" if envs.FD_FOR_TORCH_MODEL_FORMAT else ""
+            set_weight_attrs(self.qkv.weight, {"weight_loader": self.weight_loader, "model_format": model_format})
+            set_weight_attrs(self.qkv.bias, {"weight_loader": self.weight_loader, "load_bias": True, "model_format": model_format})
             set_weight_attrs(self.qkv.bias, {"output_dim": True})
-            set_weight_attrs(self.proj.weight, {"output_dim": False})
+            set_weight_attrs(self.proj.weight, {"output_dim": False, "model_format": model_format})
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
             self.proj = nn.Linear(dim, dim)
@@ -193,6 +195,9 @@ class VisionFlashAttention2(nn.Layer):
         self.num_heads_per_rank = divide(self.num_heads, self.tensor_parallel_degree)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         load_bias = getattr(param, "load_bias", None)
         if load_bias:
             head_dim = self.hidden_size // self.num_heads
@@ -339,9 +344,10 @@ class VisionMlp(nn.Layer):
                 input_is_parallel=True,
                 has_bias=True,
             )
-            set_weight_attrs(self.fc1.weight, {"output_dim": True})
-            set_weight_attrs(self.fc1.bias, {"output_dim": True})
-            set_weight_attrs(self.fc2.weight, {"output_dim": False})
+            model_format = "torch" if envs.FD_FOR_TORCH_MODEL_FORMAT else ""
+            set_weight_attrs(self.fc1.weight, {"output_dim": True, "model_format": model_format})
+            set_weight_attrs(self.fc1.bias, {"output_dim": True, "model_format": model_format})
+            set_weight_attrs(self.fc2.weight, {"output_dim": False, "model_format": model_format})
         else:
             self.fc1 = nn.Linear(dim, hidden_dim)
             self.fc2 = nn.Linear(hidden_dim, dim)
@@ -701,6 +707,13 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             if state_dict_key not in state_dict:
                 raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
             tensor = get_tensor(state_dict.pop(state_dict_key))
+            
+            # Support for torch format weights - transpose linear layer weights
+            if self.config.model_format == "torch" and "weight" in param_name and "norm" not in param_name.lower():
+                # Only transpose weight parameters for linear layers (not bias or norm layers)
+                if len(tensor.shape) == 2:
+                    tensor = tensor.transpose([1, 0])
+            
             if param.shape != tensor.shape:
                 raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:

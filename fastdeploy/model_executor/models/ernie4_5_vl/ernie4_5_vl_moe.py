@@ -621,7 +621,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         expert_id = None
         shard_id = None
+        model_format = self.fd_config.model_config.model_format
         for loaded_weight_name, loaded_weight in weights_iterator:
+            # Support for Hugging Face torch format weights
+            if model_format == "torch":
+                loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
