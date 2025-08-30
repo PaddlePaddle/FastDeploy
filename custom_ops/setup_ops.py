@@ -373,6 +373,7 @@ elif paddle.is_compiled_with_cuda():
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
 
+    cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
@@ -519,12 +520,13 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
         os.system("python gpu_ops/machete/generate.py")
         sources += find_end_files("gpu_ops/machete", ".cu")
+        cc_compile_args += ["-DENABLE_MACHETE"]
 
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
-            extra_compile_args={"nvcc": nvcc_compile_args},
+            extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
             extra_link_args=["-lcuda"],
         ),
