@@ -1235,8 +1235,9 @@ class FDConfig:
 
         if not self.cache_config.enable_chunked_prefill:
             # default enable chunked prefill when the method is not mtp
-            if self.speculative_config.method not in ["mtp"]:
-                self.cache_config.enable_chunked_prefill = True
+            self.cache_config.enable_chunked_prefill = True
+            if self.speculative_config.method in ["mtp"]:
+                self.cache_config.enable_chunked_prefill = False
 
         if self.max_num_batched_tokens is None:
             if self.cache_config.enable_chunked_prefill:
