@@ -226,8 +226,8 @@ __global__ void permute_scale_kernel(
 }
 
 void W4AFp8GemmScalePermute(const paddle::Tensor& scale) {
-    const int row = scale.dims()[0];
-    const int col = scale.dims()[1];
+    const int row = scale.dims().size() == 2 ? scale.dims()[0] : 1;
+    const int col = scale.dims().size() == 2 ? scale.dims()[1] : scale.dims()[0];
     if (col % 16 != 0) {
         PD_THROW("Only supported when col is divisible by 16.");
     }
