@@ -112,6 +112,8 @@ class FlashAttentionBackend(AttentionBackend):
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 32768))
+        if self.max_partition_size <= 0:
+            self.max_partition_size = 32768
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 

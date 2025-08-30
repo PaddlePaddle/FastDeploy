@@ -162,6 +162,8 @@ class FlashAttentionBackend(AttentionBackend):
                 )
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
+        if self.max_partition_size <= 0:
+            self.max_partition_size = 32768
         self.zero_seq_enc_lens_for_decode = paddle.zeros(
             shape=[fd_config.parallel_config.max_num_seqs, 1], dtype=paddle.int32
         )

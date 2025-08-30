@@ -127,7 +127,7 @@ void AppendAttentionKernel(
   auto dispatch_CascadeAppendAttentionKernel = [&](auto temp_args,
         const paddle::Tensor& lambda_batch_ids,
         const paddle::Tensor& lambda_tile_ids_per_batch,
-        const int lambda_num_blocks_data,
+        const paddle::Tensor& lambda_num_blocks,
         const int lambda_block_shape_q,
         const int lambda_max_dec_len,
         const bool lambda_is_decoder,
@@ -155,7 +155,7 @@ void AppendAttentionKernel(
           lambda_batch_ids,
           lambda_tile_ids_per_batch,
           cache_quant_type_str,
-          lambda_num_blocks_data,
+          lambda_num_blocks,
           lambda_block_shape_q,
           max_input_length,
           lambda_max_dec_len,
@@ -176,7 +176,6 @@ void AppendAttentionKernel(
     if (max_just_dec_len_this_time > 0) {
       cudaEventRecord(main_event, main_stream);
     }
-    int encoder_num_blocks_data = encoder_num_blocks.data<int>()[0];
     int kv_num_blocks_data = kv_num_blocks.data<int>()[0];
 
     auto dispatch_EncoderWriteCacheWithRopeKernel = [&](auto temp_args) -> void  {
@@ -224,12 +223,12 @@ void AppendAttentionKernel(
       switch (fmha_out.dtype()) {
         case paddle::DataType::INT8:{
           int8_t tmp;
-          dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks_data, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
+          dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
           break;
         }
         case paddle::DataType::FLOAT8_E4M3FN:{
           phi::dtype::float8_e4m3fn tmp;
-          dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks_data, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
+          dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
           break;
         }
         default:{
@@ -239,12 +238,11 @@ void AppendAttentionKernel(
       }
     } else {
       data_t tmp;
-      dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks_data, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
+      dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
     }
   }
 
   if (max_just_dec_len_this_time > 0) {
-    int decoder_num_blocks_data = decoder_num_blocks.data<int>()[0];
     int max_len_kv_data = max_len_kv.data<int>()[0];
 
     cudaStream_t exec_stream;
@@ -364,20 +362,20 @@ void AppendAttentionKernel(
       switch (fmha_out.dtype()) {
         case paddle::DataType::INT8:{
         int8_t tmp;
-        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks_data,
+        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks,
         decoder_block_shape_q, max_len_kv_data, !speculate_decoder, !speculate_decoder, exec_stream);
           break;
         }
         case paddle::DataType::FLOAT8_E4M3FN:{
         phi::dtype::float8_e4m3fn tmp;
-        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks_data,
+        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks,
         decoder_block_shape_q, max_len_kv_data, !speculate_decoder, !speculate_decoder, exec_stream);
           break;
         }
       }
     } else {
         data_t tmp;
-        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks_data,
+        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks,
         decoder_block_shape_q, max_len_kv_data, !speculate_decoder, !speculate_decoder, exec_stream);
     }
     if (max_enc_len_this_time > 0) {
