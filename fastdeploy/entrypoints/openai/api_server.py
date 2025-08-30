@@ -77,6 +77,9 @@ parser.add_argument(
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+parser.add_argument(
+    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
+)
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
@@ -176,7 +179,14 @@ async def lifespan(app: FastAPI):
     )
     app.state.model_handler = model_handler
     chat_handler = OpenAIServingChat(
-        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+        chat_template,
+        args.enable_mm_output,
+        args.tokenizer_base_url,
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,

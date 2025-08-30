@@ -71,6 +71,10 @@ class EngineArgs:
     """
     The name or path of the tokenizer (defaults to model path if not provided).
     """
+    tokenizer_base_url: str = None
+    """
+    The base URL of the remote tokenizer service (used instead of local tokenizer if provided).
+    """
     max_model_len: int = 2048
     """
     Maximum context length supported by the model.
@@ -425,6 +429,12 @@ class EngineArgs:
             type=nullable_str,
             default=EngineArgs.tokenizer,
             help="Tokenizer name or path (defaults to model path if not specified).",
+        )
+        model_group.add_argument(
+            "--tokenizer-base-url",
+            type=nullable_str,
+            default=EngineArgs.tokenizer_base_url,
+            help="The base URL of the remote tokenizer service (used instead of local tokenizer if provided).",
         )
         model_group.add_argument(
             "--max-model-len",
