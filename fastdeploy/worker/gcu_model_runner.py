@@ -71,6 +71,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -78,7 +79,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         #  Sampler
         if not self.speculative_decoding:
-            self.sampler = Sampler()
+            self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
@@ -145,10 +146,7 @@ class GCUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        return (
-            self.guided_backend.get_logits_processor(schemata_key=schemata_key),
-            schemata_key,
-        )
+        return self.guided_backend.get_logits_processor(schemata_key=schemata_key), schemata_key
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -234,6 +232,7 @@ class GCUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
+            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
@@ -283,19 +282,24 @@ class GCUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method in ["mtp"]:
-            self.proposer.insert_prefill_inputs(req_dicts)
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+
+        if self.speculative_method in ["mtp"]:
+            self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
@@ -304,6 +308,8 @@ class GCUModelRunner(ModelRunnerBase):
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            full_length = min(full_length, 32)
         input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -326,7 +332,6 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["min_dec_len"][idx : idx + 1] = max_dec_len
             self.share_inputs["stop_flags"][idx : idx + 1] = False
             self.share_inputs["temperature"][idx : idx + 1] = 1
-
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
             self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = input_length
 
@@ -387,7 +392,9 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -421,10 +428,12 @@ class GCUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
+        self.share_inputs["batch_id_per_token"] = paddle.full(
+            [max_num_seqs * self.parallel_config.max_model_len, 1], 0, dtype="int32"
+        )
+        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
 
-        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
@@ -466,14 +475,17 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
 
         # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full([self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.share_inputs["stop_seqs_len"] = paddle.full(
+            [max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32"
+        )
         self.share_inputs["stop_seqs"] = paddle.full(
             [
+                max_num_seqs,
                 self.model_config.max_stop_seqs_num,
                 self.model_config.stop_seqs_max_len,
             ],
             -1,
-            dtype="int32",
+            dtype="int64",
         )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
@@ -511,7 +523,6 @@ class GCUModelRunner(ModelRunnerBase):
         # Remove padding
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
@@ -562,10 +573,13 @@ class GCUModelRunner(ModelRunnerBase):
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=20 if self.enable_logprob else None,
+            enable_early_stop=self.enable_early_stop,
+            stop_flags=self.share_inputs["stop_flags"],
         )
 
     def load_model(self) -> None:
         """load or download model"""
+        logger.info(f"Starting to load model {self.model_config.architectures[0]}")
         # 1. Load original model
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
@@ -618,8 +632,20 @@ class GCUModelRunner(ModelRunnerBase):
         )
 
         # Update Batch type for cuda graph
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and (
-            not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
+        only_decode_batch = True
+        prefill_exists = None
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+
+        self.forward_meta.step_use_cudagraph = (
+            self.use_cudagraph
+            and only_decode_batch
+            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
         )
 
         # Initialzie attention meta data
@@ -655,7 +681,6 @@ class GCUModelRunner(ModelRunnerBase):
             raise NotImplementedError("prefix_caching is not support by GCUModelRunner.")
         else:
             for i in range(self.model_config.num_hidden_layers):
-
                 cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
@@ -839,13 +864,15 @@ class GCUModelRunner(ModelRunnerBase):
                 think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
 
             post_process(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
-                block_size=self.parallel_config.block_size,
+                block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
             )
@@ -970,20 +997,20 @@ class GCUModelRunner(ModelRunnerBase):
             model_forward_batch: 'Request' contains information related to prompt and is an abstract
             class at the server level, which is too granular for ModelRunner.
             We plan to replace it with 'ModelForwardBatch'.
-            num_running_requests: batch_size
             intermediate_tensors:
+            num_running_requests: batch_size
         """
+        # 1. Prepare inputs of model and sampler.
+        skip_idx_list = self._get_skip_idx(model_forward_batch)
+        self._prepare_inputs()
+        self.sampler.pre_process(skip_idx_list)
+
         # If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
         if not self.not_need_stop():
             self._execute_empty_input()
             return None
-
-        # 1. Prepare inputs of model and sampler.
-        skip_idx_list = self._get_skip_idx(model_forward_batch)
-        self._prepare_inputs()
-        self.sampler.pre_process(skip_idx_list)
 
         # 2. Padding inputs for cuda graph
 
@@ -1065,8 +1092,10 @@ class GCUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+            need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
+            reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
@@ -1077,7 +1106,7 @@ class GCUModelRunner(ModelRunnerBase):
             sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
@@ -1242,4 +1271,8 @@ class GCUModelRunner(ModelRunnerBase):
         In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
         """
         # In init_attention_metadata, the decode buffer has already been cleared
+
+        # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
+        if self.use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
         return
