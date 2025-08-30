@@ -530,7 +530,9 @@ class PrefixCacheManager:
                                 cpu_recv_block_ids=[],
                             )
                 else:
-                    raise Exception("request_match_blocks: Not enough GPU memory to allocate cache for matched CPU Cache")
+                    raise Exception(
+                        "request_match_blocks: Not enough GPU memory to allocate cache for matched CPU Cache"
+                    )
 
                 #  record request cache info
                 self.cache_info[req_id] = (match_block_node, input_ids)
@@ -715,6 +717,7 @@ class PrefixCacheManager:
             except Exception as e:
                 logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
+
     def free_nodes_directly(self, node):
         with self.request_release_lock:
             try:
@@ -1092,7 +1095,7 @@ class PrefixCacheManager:
             node.last_used_time = current_time
             node.req_id_set.add(req_id)
             node = node.parent
-        
+
     def decrease_request_share_count(self, req_id):
         """
         Decrease node shared count

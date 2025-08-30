@@ -446,8 +446,8 @@ class ResourceManagerV1(ResourceManager):
                 leaf_node = self.cache_manager.req_leaf_map[request.request_id]
                 self.cache_manager.decrease_request_share_count(request.request_id)
                 self.cache_manager.free_nodes_directly(leaf_node)
-                self.cache_manager.recycle_gpu_blocks(request.block_tables[request.cache_info[0]:])
-                
+                self.cache_manager.recycle_gpu_blocks(request.block_tables[request.cache_info[0] :])
+
             else:
                 self.cache_manager.release_block_ids_async(request)
                 self.cache_manager.recycle_gpu_blocks(request.block_tables[request.prefill_block_num :])
