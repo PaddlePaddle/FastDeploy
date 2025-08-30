@@ -1233,10 +1233,9 @@ class FDConfig:
 
         self.paddle_commit_id = paddle.version.commit
 
-        if not self.cache_config.enable_chunked_prefill:
-            # default enable chunked prefill when the method is not mtp
-            self.cache_config.enable_chunked_prefill = True
-            if self.speculative_config.method in ["mtp"]:
+        if self.cache_config.enable_chunked_prefill:
+            self.force_chunked_prefill = int(envs.FD_FORCE_CHUNKED_PREFILL)
+            if self.speculative_config.method in ["mtp"] and not self.force_chunked_prefill:
                 self.cache_config.enable_chunked_prefill = False
 
         if self.max_num_batched_tokens is None:
