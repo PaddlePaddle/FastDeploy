@@ -20,6 +20,8 @@ from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 
 
 class DummyInnerCacheConfig:
+    """Dummy inner cache configuration for testing."""
+
     def __init__(self):
         self.prefill_kvcache_block_num = 4
         self.max_cache_size = 1024
@@ -30,18 +32,24 @@ class DummyInnerCacheConfig:
 
 
 class DummySpeculativeConfig:
+    """Dummy speculative config for testing."""
+
     def __init__(self):
         self.enable_speculation = False
         self.some_other_field = 0
 
 
 class DummyCacheConfig:
+    """Combine inner cache and speculative config."""
+
     def __init__(self):
         self.cache_config = DummyInnerCacheConfig()
         self.speculative_config = DummySpeculativeConfig()
 
 
 class DummyTask:
+    """Simulate a task with token IDs and request ID."""
+
     def __init__(self, token_ids, request_id):
         self.prompt_token_ids = token_ids
         self.request_id = request_id
@@ -51,7 +59,7 @@ class TestPrefixCacheManagerSwapWithCPUHit(unittest.TestCase):
     """Test GPU–CPU cache swapping behavior with CPU hits."""
 
     def setUp(self):
-        """Initialize cache manager and patch request_block_ids to simulate CPU/GPU allocation."""
+        """Initialize cache manager and patch request_block_ids for CPU/GPU allocation."""
         config = DummyCacheConfig()
         self.cache_manager = PrefixCacheManager(config, tensor_parallel_size=1)
         self.cpu_cache = [None] * self.cache_manager.cache_config.num_cpu_blocks
@@ -59,6 +67,7 @@ class TestPrefixCacheManagerSwapWithCPUHit(unittest.TestCase):
         orig_request_block_ids = self.cache_manager.request_block_ids
 
         def patched_request_block_ids(task, block_size, dec_token_num):
+            """Patch to simulate CPU fallback when GPU blocks are full."""
             total_blocks_needed = len(task.prompt_token_ids) // block_size
 
             gpu_avail = min(total_blocks_needed, self.cache_manager.cache_config.num_gpu_blocks)
@@ -86,7 +95,7 @@ class TestPrefixCacheManagerSwapWithCPUHit(unittest.TestCase):
         self.cache_manager.request_block_ids = patched_request_block_ids
 
     def request_and_report(self, task, block_size, dec_token_num):
-        """Helper to request cache blocks and print hit/alloc status."""
+        """Request cache blocks, report hit/alloc status, return metrics."""
         common, unique, _ = self.cache_manager.request_block_ids(task, block_size, dec_token_num)
         total_blocks = len(task.prompt_token_ids) // block_size
 
@@ -96,8 +105,6 @@ class TestPrefixCacheManagerSwapWithCPUHit(unittest.TestCase):
         gpu_unique = [idx for idx in unique if isinstance(idx, int)]
         cpu_unique = [idx for idx in unique if isinstance(idx, str) and idx.startswith("CPU")]
 
-        hit_rate_gpu = len(gpu_hits) / total_blocks if total_blocks > 0 else 1.0
-        hit_rate_cpu = len(cpu_hits) / total_blocks if total_blocks > 0 else 0.0
         total_hit_rate = (len(gpu_hits) + len(cpu_hits)) / total_blocks if total_blocks > 0 else 1.0
 
         gpu_status = ["." for _ in range(self.cache_manager.cache_config.num_gpu_blocks)]
@@ -109,26 +116,15 @@ class TestPrefixCacheManagerSwapWithCPUHit(unittest.TestCase):
             if val is not None:
                 cpu_status[idx] = str(val)
 
-        print("\n" + "=" * 60)
-        print(f"Task {task.request_id} request (total blocks={total_blocks}):")
-        print("-" * 60)
-        print(f"GPU Hits      : {gpu_hits}")
-        print(f"CPU Hits      : {cpu_hits}")
-        print(f"GPU Allocated : {gpu_unique}")
-        print(f"CPU Allocated : {cpu_unique}")
-        print("-" * 60)
-        print(f"Hit Rate (GPU) : {hit_rate_gpu:.2f}")
-        print(f"Hit Rate (CPU) : {hit_rate_cpu:.2f}")
-        print(f"Total Hit Rate : {total_hit_rate:.2f}")
-        print("-" * 60)
-        print(f"GPU Blocks : {''.join(gpu_status)}   (numbers=request_id, .=free)")
-        print(f"CPU Blocks : {''.join(cpu_status)}   (numbers=request_id, .=free)")
-        print("=" * 60)
+        # Ensure coverage for hit rate assertions
+        self.assertIsInstance(total_hit_rate, float)
+        self.assertGreaterEqual(total_hit_rate, 0.0)
+        self.assertLessEqual(total_hit_rate, 1.0)
 
         return gpu_hits, cpu_hits, gpu_unique, cpu_unique, total_hit_rate
 
     def test_gpu_cpu_swap_with_cpu_hit(self):
-        """Task 1 uses GPU, Task 2 triggers CPU fallback, then Task 1 hits GPU/CPU."""
+        """Simulate multiple tasks to test GPU/CPU cache hit and fallback."""
         block_size = 4
         dec_token_num = 0
 
