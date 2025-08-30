@@ -11,48 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-import signal
-import socket
-import subprocess
 import time
 from typing import Any, Union
 
 import pytest
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
-    """
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports(ports_to_clean: list[int]):
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    for port in ports_to_clean:
-        kill_process_on_port(port)
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
+from model_loader.utils import clean_ports
 
 
 class FDRunner:
@@ -93,6 +56,7 @@ class FDRunner:
         sample_output_ids: list[list[int]] = []
         sample_output_strs: list[str] = []
         for output in req_outputs:
+            print("output", output)
             sample_output_ids.append(output.outputs.token_ids)
             sample_output_strs.append(output.outputs.text)
             outputs.append((sample_output_ids, sample_output_strs))
