@@ -46,6 +46,38 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
+  diff_coverage_report:
+    needs: unittest_coverage
+    needs: [clone,unittest_coverage]
+    runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ needs.clone.outputs.repo_archive_url }}
+    steps:
+      - name: coverage diff file download
+        shell: bash
+        env:
+          diff_cov_file_url: ${{ needs.unittest_coverage.outputs.diff_cov_file_url }}
+        run: |
+          wget ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          cd FastDeploy
+          if [ -z "${diff_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+            exit 0
+          fi
+          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+      - name: Upload diff coverage report
+        if: ${{ needs.unittest_coverage.outputs.diff_cov_file_url != null && needs.unittest_coverage.outputs.diff_cov_file_url != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          directory: ./FastDeploy
+          codecov_yml_path: ./FastDeploy/.github/codecov.yml
+          name: python diff coverage
+          verbose: true
+          # disable_search: true
+          # commit_parent: false
+          flags: diff
+
   logprob_test:
     name: Run FastDeploy LogProb Tests
     needs: [build]

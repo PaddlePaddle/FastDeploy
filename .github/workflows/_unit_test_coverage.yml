@@ -30,6 +30,10 @@ on:
     secrets:
       github-token:
         required: true
+    outputs:
+      diff_cov_file_url:
+        description: "Output path of diff coverage file."
+        value: ${{ jobs.run_tests_with_coverage.outputs.diff_cov_file_url }}
 
 jobs:
   check_cov_skip:
@@ -286,34 +290,3 @@ jobs:
           fi
           echo "coverage passed"
           exit 0
-
-  diff_coverage_report:
-    needs: run_tests_with_coverage
-    if: always()
-    runs-on: ubuntu-latest
-    env:
-      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
-    steps:
-      - name: coverage diff file download
-        shell: bash
-        env:
-          diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
-        run: |
-          wget ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
-          cd FastDeploy
-          if [ -z "${diff_cov_file_url}" ]; then
-            echo "No diff coverage file URL provided."
-            exit 0
-          fi
-          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
-      - name: Upload diff coverage report
-        if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./FastDeploy/diff_coverage.xml
-          name: python diff coverage
-          verbose: true
-          disable_search: true
-          commit_parent: false
-          flags: diff
