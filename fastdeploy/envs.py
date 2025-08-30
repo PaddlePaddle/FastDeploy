@@ -44,7 +44,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use HuggingFace tokenizer.
     "FD_USE_HF_TOKENIZER": lambda: bool(int(os.getenv("FD_USE_HF_TOKENIZER", "0"))),
     # Set the high watermark (HWM) for receiving data during ZMQ initialization
-    "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 10000),
+    "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 64000),
     # cache kv quant params directory
     "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"

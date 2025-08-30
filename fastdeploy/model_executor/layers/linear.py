@@ -294,6 +294,7 @@ class ReplicatedLinear(LinearBase):
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
+            model_format=fd_config.model_config.model_format,
         )
 
 
@@ -446,7 +447,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_size)
 
-            loaded_weight = get_tensor(loaded_weight)
             if not param._is_initialized():
                 param.initialize()
             param_shard_size = output_size // 2
@@ -574,7 +574,6 @@ class QKVParallelLinear(ColumnParallelLinear):
                 shard_size = (shard_id + 1) * block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_size)
 
-            loaded_weight = get_tensor(loaded_weight)
             if not param._is_initialized():
                 param.initialize()
 
