@@ -26,6 +26,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
@@ -69,6 +70,10 @@ class EngineArgs:
     tokenizer: str = None
     """
     The name or path of the tokenizer (defaults to model path if not provided).
+    """
+    tokenizer_base_url: str = None
+    """
+    The base URL of the remote tokenizer service (used instead of local tokenizer if provided).
     """
     max_model_len: int = 2048
     """
@@ -332,6 +337,10 @@ class EngineArgs:
     """
     Configuration for graph optimization backend execution.
     """
+    moba_attention_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for moba attention.
+    """
 
     enable_logprob: bool = False
     """
@@ -416,6 +425,12 @@ class EngineArgs:
             type=nullable_str,
             default=EngineArgs.tokenizer,
             help="Tokenizer name or path (defaults to model path if not specified).",
+        )
+        model_group.add_argument(
+            "--tokenizer-base-url",
+            type=nullable_str,
+            default=EngineArgs.tokenizer_base_url,
+            help="The base URL of the remote tokenizer service (used instead of local tokenizer if provided).",
         )
         model_group.add_argument(
             "--max-model-len",
@@ -523,6 +538,12 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.graph_optimization_config,
             help="Configuration for graph optimization",
+        )
+        model_group.add_argument(
+            "--moba-attention-config",
+            type=json.loads,
+            default=EngineArgs.moba_attention_config,
+            help="",
         )
         model_group.add_argument(
             "--guided-decoding-backend",
@@ -919,6 +940,18 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
+    def create_moba_attention_config(self) -> MobaAttentionConfig:
+        """
+        Create and retuan a MobaAttentionConfig object based on the current settings.
+        """
+        attention_args = asdict(self)
+        if self.moba_attention_config is not None:
+            for k, v in self.moba_attention_config.items():
+                attention_args[k] = v
+            return MobaAttentionConfig(attention_args)
+        else:
+            return MobaAttentionConfig(None)
+
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
         Create and retuan an EarlyStopConfig object based on the current settings.
@@ -955,6 +988,7 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
         speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
+        moba_attention_config = self.create_moba_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -992,6 +1026,7 @@ class EngineArgs:
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
+            moba_attention_config=moba_attention_config,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,

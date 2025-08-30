@@ -36,6 +36,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     PromptTokenUsageInfo,
     UsageInfo,
 )
+from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
@@ -46,12 +47,24 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
+    def __init__(
+        self,
+        engine_client,
+        models,
+        pid,
+        ips,
+        max_waiting_time,
+        chat_template,
+        enable_mm_output: Optional[bool] = False,
+        tokenizer_base_url: Optional[str] = None,
+    ):
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
         self.max_waiting_time = max_waiting_time
         self.chat_template = chat_template
+        self.enable_mm_output = enable_mm_output
+        self.tokenizer_base_url = tokenizer_base_url
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]
@@ -198,6 +211,11 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
+            response_processor = ChatResponseProcessor(
+                data_processor=self.engine_client.data_processor,
+                enable_mm_output=self.enable_mm_output,
+                decoder_base_url=self.tokenizer_base_url,
+            )
             while num_choices > 0:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
@@ -215,16 +233,17 @@ class OpenAIServingChat:
                             current_waiting_time = 0
                     await asyncio.sleep(0.01)
                     continue
-                for res in response:
+
+                generator = response_processor.process_response_chat(
+                    response,
+                    stream=True,
+                    enable_thinking=enable_thinking,
+                    include_stop_str_in_output=include_stop_str_in_output,
+                )
+
+                async for res in generator:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
-
-                    self.engine_client.data_processor.process_response_dict(
-                        res,
-                        stream=True,
-                        enable_thinking=enable_thinking,
-                        include_stop_str_in_output=include_stop_str_in_output,
-                    )
 
                     if res["metrics"]["first_token_time"] is not None:
                         arrival_time = res["metrics"]["first_token_time"]
@@ -239,13 +258,22 @@ class OpenAIServingChat:
                                 index=i,
                                 delta=DeltaMessage(
                                     role="assistant",
-                                    content="",
                                     reasoning_content="",
                                     tool_calls=None,
                                     prompt_token_ids=None,
                                     completion_token_ids=None,
                                 ),
                             )
+                            if response_processor.enable_multimodal_content():
+                                choice.delta.multimodal_content = [
+                                    {
+                                        "type": "text",
+                                        "text": "",
+                                    }
+                                ]
+                            else:
+                                choice.delta.content = ""
+
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
                                 choice.delta.text_after_process = text_after_process
@@ -269,7 +297,6 @@ class OpenAIServingChat:
                         first_iteration = False
 
                     output = res["outputs"]
-                    delta_text = output["text"]
                     output_top_logprobs = output["top_logprobs"]
                     previous_num_tokens += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
@@ -279,12 +306,17 @@ class OpenAIServingChat:
                         )
 
                     delta_message = DeltaMessage(
-                        content=delta_text,
                         reasoning_content="",
                         prompt_token_ids=None,
-                        completion_token_ids=None,
                         tool_calls=None,
+                        completion_token_ids=None,
                     )
+
+                    if response_processor.enable_multimodal_content():
+                        delta_message.multimodal_content = output["multipart"]
+                    else:
+                        delta_message.content = output["text"]
+
                     if not res["finished"] and "delta_message" in output:
                         delta_message_output = output["delta_message"]
                         if delta_message_output is None:
@@ -317,7 +349,10 @@ class OpenAIServingChat:
                             choice.finish_reason = "recover_stop"
 
                     if request.return_token_ids:
-                        choice.delta.completion_token_ids = list(output["token_ids"])
+                        if response_processor.enable_multimodal_content():
+                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(output["token_ids"])
+                        else:
+                            choice.delta.completion_token_ids = list(output["token_ids"])
                         choice.delta.raw_prediction = output.get("raw_prediction")
                         choice.delta.completion_tokens = output.get("raw_prediction")
                     if include_continuous_usage:
@@ -395,6 +430,11 @@ class OpenAIServingChat:
             current_waiting_time = 0
             logprob_contents = []
             completion_token_ids = []
+            response_processor = ChatResponseProcessor(
+                data_processor=self.engine_client.data_processor,
+                enable_mm_output=self.enable_mm_output,
+                decoder_base_url=self.tokenizer_base_url,
+            )
             while True:
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
@@ -411,15 +451,16 @@ class OpenAIServingChat:
                     continue
 
                 task_is_finished = False
-                for data in response:
+
+                generator = response_processor.process_response_chat(
+                    response,
+                    stream=False,
+                    enable_thinking=enable_thinking,
+                    include_stop_str_in_output=include_stop_str_in_output,
+                )
+                async for data in generator:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
-                    data = self.engine_client.data_processor.process_response_dict(
-                        data,
-                        stream=False,
-                        enable_thinking=enable_thinking,
-                        include_stop_str_in_output=include_stop_str_in_output,
-                    )
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens += len(data["outputs"]["token_ids"])
                     completion_token_ids.extend(data["outputs"]["token_ids"])
@@ -447,7 +488,6 @@ class OpenAIServingChat:
         output = final_res["outputs"]
         message = ChatMessage(
             role="assistant",
-            content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
@@ -457,6 +497,12 @@ class OpenAIServingChat:
             raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
             completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
         )
+
+        if response_processor.enable_multimodal_content():
+            message.multimodal_content = output.get("multipart")
+        else:
+            message.content = output["text"]
+
         logprobs_full_res = None
         if logprob_contents:
             logprobs_full_res = LogProbs(content=logprob_contents)

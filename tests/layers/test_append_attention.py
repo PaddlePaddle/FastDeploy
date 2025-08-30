@@ -197,7 +197,7 @@ def naive_attention_impl(
 
 
 def get_padding_offset(bsz, max_seq_len, seq_lens_this_time):
-    cum_offsets_now = paddle.cumsum(max_seq_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_seq_len - seq_lens_this_time, dtype="int32")
     cum_offsets = paddle.zeros(shape=(bsz + 1), dtype="int32")
     cum_offsets[1:] = cum_offsets_now
     token_num = paddle.sum(seq_lens_this_time)
