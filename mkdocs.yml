@@ -138,3 +138,4 @@ nav:
       - 'Log Description': usage/log.md
       - 'Code Overview': usage/code_overview.md
       - 'Environment Variables': usage/environment_variables.md
+      - 'FastDeploy Unit Test Guide': usage/fastdeploy_unit_test_guide.md

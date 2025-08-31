@@ -49,12 +49,13 @@ def get_moe_scores(
     compute moe scores using e_score_correction_bias.
     """
     scores = paddle.nn.functional.sigmoid(gating_output)
+    assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
     scores_with_bias = scores + e_score_correction_bias
     scores, topk_values, topk_idx = noaux_tc(
         scores,
         scores_with_bias,
-        n_group,
-        topk_group,
+        n_group if n_group > 0 else 1,
+        topk_group if topk_group > 0 else 1,
         top_k,
         routed_scaling_factor,
     )
@@ -104,11 +105,12 @@ class DeepEPEngine:
 
         # In mixed EP mode on a single node, we dynamically switch between
         # high throughput and low latency modes.
+
         if splitwise_role == "mixed":
             self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 int(2e9),
-                int(5e9),
+                int(6e9),
                 low_latency_mode=True,
                 num_qps_per_rank=24,
             )
@@ -387,9 +389,10 @@ class EPPrefillRunner(EPRunner):
         *args,
         **kwargs,
     ):
+
         (
             num_tokens_per_rank,
-            _,
+            num_tokens_per_rdma_rank,
             num_tokens_per_expert,
             is_token_in_rank,
             _,
@@ -399,6 +402,7 @@ class EPPrefillRunner(EPRunner):
         dispatch_args = {
             "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
             "num_tokens_per_rank": num_tokens_per_rank,
+            "num_tokens_per_rdma_rank": num_tokens_per_rdma_rank,
             "is_token_in_rank": is_token_in_rank,
             "num_tokens_per_expert": num_tokens_per_expert,
             "config": self.ep_engine.ep_config,

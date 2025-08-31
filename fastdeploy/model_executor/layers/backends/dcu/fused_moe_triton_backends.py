@@ -38,7 +38,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             "down_proj_weight_scale",
         ]
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False) -> None:
         """process_prequanted_weights"""
         pass
 
@@ -46,7 +46,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton MoE create weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
         assert self.quant_method.name() == "wint8"
@@ -101,11 +101,12 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
-        gate_out: paddle.Tensor,
+        gate: nn.Layer,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -113,7 +114,6 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        gate_out = paddle.matmul(x.cast("float32"), layer.gate_weight)
         scores = paddle.nn.functional.softmax(gate_out, axis=-1)
         scores += layer.gate_correction_bias
         topk_weights, topk_ids = paddle.topk(scores, k=top_k, axis=-1, sorted=False)
