@@ -12,7 +12,8 @@ coverage:
       default:
         target: 80% # lines adjusted  Coverage < 80%  CI will fail
   fixes:
-    - "fastdeploy/::FastDeploy/fastdeploy/"
+    - "/workspace/FastDeploy/::FastDeploy/"
+    - "/home/runner/work/FastDeploy/FastDeploy/::FastDeploy/"
 
 comment:
   behavior: new

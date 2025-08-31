@@ -103,7 +103,6 @@ jobs:
       - name: Upload diff coverage to Coveralls
         if: ${{ needs.unittest_coverage.outputs.diff_cov_file_url != null && needs.unittest_coverage.outputs.diff_cov_file_url != '' }}
         run: |
-          cd FastDeploy
           # Convert XML if needed; Coveralls Python lib supports cobertura XML
           COVERALLS_REPO_TOKEN=${{ secrets.COVERALLS_REPO_TOKEN }} coveralls --input-file ./diff_coverage.xml --verbose
 
