@@ -22,7 +22,7 @@ from fastdeploy.model_executor.ops.gpu import speculate_set_value_by_flags_and_i
 
 class TestSpeculateSetValueByFlagsAndIdx(unittest.TestCase):
 
-    def test_speculate_set_value_by_flags_and_idx():
+    def test_speculate_set_value_by_flags_and_idx(self):
         bs = 256
         length = 8192
         max_draft_tokens = 4
