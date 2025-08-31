@@ -510,7 +510,7 @@ class PrefixCacheManager:
                 self.metrics.req_count += 1
                 input_ids = task.prompt_token_ids
                 req_id = task.request_id
-                logger.info(f"request_block_ids: start to allocate blocks for req_id {req_id}")
+                logger.info(f"request_match_blocks: start to allocate blocks for req_id {req_id}")
                 input_token_num = len(input_ids)
                 common_block_ids = []
                 # 1. match block
@@ -542,7 +542,9 @@ class PrefixCacheManager:
                                 cpu_recv_block_ids=[],
                             )
                 else:
-                    raise Exception("Not enough GPU memory to allocate cache for matched CPU Cache")
+                    raise Exception(
+                        "request_match_blocks: Not enough GPU memory to allocate cache for matched CPU Cache"
+                    )
 
                 #  record request cache info
                 self.cache_info[req_id] = (match_block_node, input_ids)
@@ -564,11 +566,14 @@ class PrefixCacheManager:
                 if self.metrics.req_count % 10000 == 0:
                     self.metrics.reset_metrics()
                 logger.info(
-                    f"request_block_ids: request block for req_id {req_id}: common_block_ids {common_block_ids}"
+                    f"request_match_blocks: request block for req_id {req_id}: common_block_ids {common_block_ids}"
                 )
+                # set leaf node temporarily, then update it in update_cache_blocks
+                self.req_leaf_map[req_id] = match_block_node
+                self.leaf_req_map[match_block_node].add(req_id)
                 return common_block_ids, matched_token_num, hit_info
             except Exception as e:
-                logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
                 raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
@@ -723,6 +728,41 @@ class PrefixCacheManager:
                 return
             except Exception as e:
                 logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                raise e
+
+    def free_nodes_directly(self, node):
+        with self.request_release_lock:
+            try:
+                total_gpu_free_count = 0
+                while True:
+                    if node in self.gpu_lru_leaf_heap:
+                        self.gpu_lru_leaf_heap.remove(node)
+                        self.gpu_lru_leaf_set.remove(node)
+                    if node.shared_count == 0 and node.is_gpu_leaf_node:  # 直接回收
+                        self._handle_free_gpu_node_without_cpu(node)
+                        logger.info(f"free_nodes_directly: node {node}")
+                        total_gpu_free_count += 1
+                        cur_node = node
+                        node = node.parent
+                        if cur_node.hash_value in node.children:
+                            del node.children[cur_node.hash_value]
+                        if not node.children:
+                            if node in self.gpu_lru_leaf_set:
+                                continue
+                            if (
+                                node != self.radix_tree_root
+                                and node.shared_count == 0
+                                and node.is_gpu_leaf_node
+                                and node.is_persistent is False
+                            ):
+                                heapq.heappush(self.gpu_lru_leaf_heap, node)
+                                self.gpu_lru_leaf_set.add(node)
+                        else:
+                            break
+                    else:
+                        break
+            except Exception as e:
+                logger.error(f"free_nodes_directly: error: {type(e)} {e}")
                 raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):
@@ -1066,6 +1106,15 @@ class PrefixCacheManager:
             node.increment_shared_count()
             node.last_used_time = current_time
             node.req_id_set.add(req_id)
+            node = node.parent
+
+    def decrease_request_share_count(self, req_id):
+        """
+        Decrease node shared count
+        """
+        node, input_ids = self.cache_info[req_id]
+        while node != self.radix_tree_root:
+            node.decrement_shared_count()
             node = node.parent
 
     def build_path(
