@@ -141,7 +141,7 @@ PD_BUILD_STATIC_OP(speculate_get_padding_offset)
              "draft_tokens",
              "token_num",
              "seq_len",
-             "seq_lens_encoder"})
+             "seq_lens_encoder", "cum_offsets"})
     .Outputs({"x_remove_padding",
               "batch_id_per_token",
               "cu_seqlens_q",
