@@ -132,6 +132,7 @@ class Request:
         self.image_start = image_start
         self.video_start = video_start
         self.audio_start = audio_start
+        self.with_image = False
 
         self.image_end = image_end
         self.video_end = video_end
