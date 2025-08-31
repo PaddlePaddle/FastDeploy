@@ -73,7 +73,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
 import zmq
 
 from fastdeploy import envs
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import ZmqClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
