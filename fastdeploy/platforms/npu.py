@@ -27,8 +27,8 @@ class NPUPlatform(Platform):
         Check whether XPU is available.
         """
         try:
-            assert paddle.is_compiled_with_xpu()
-            assert len(paddle.static.xpu_places()) > 0
+            assert paddle.is_compiled_with_custom_device("npu")
+            assert len(paddle.static.custom_device_places("npu")) > 0
             return True
         except Exception as e:
             return False

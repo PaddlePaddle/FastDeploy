@@ -31,18 +31,76 @@ class NPUMoEMethod(UnquantizedFusedMoEMethod):
     """
     NPU MOE
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.moe_quant_type = "wint8"
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
+        self.added_scale_attrs = [
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+        ]
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
 
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
-        for weights in [up_gate_proj_weights, down_proj_weights]:
-            for idx, weight in enumerate(weights):
-                weights[idx] = weight.transpose([1, 0])
-        stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
-        stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
+        assert len(up_gate_proj_weights) == layer.num_local_experts
+        assert len(down_proj_weights) == layer.num_local_experts
+        assert up_gate_proj_weights[0].shape == [
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
+        ]
+        assert down_proj_weights[0].shape == [
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+        ]
 
-        layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
-        layer.down_proj_weight.set_value(stacked_down_proj_weights)
+        up_gate_proj_tensor = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_tensor = paddle.stack(down_proj_weights, axis=0)
+
+        if self.moe_quant_type == "wint8":
+            max_bound = 127
+        elif self.moe_quant_type == "wint4":
+            max_bound = 7
+
+        for idx, weight_tensor in enumerate([up_gate_proj_tensor, down_proj_tensor]):
+            print("<><><><><>run quant moe")
+            weight_name = self.added_weight_attrs[idx]
+            scale_name = self.added_scale_attrs[idx]
+
+            quanted_weight_scale = weight_tensor.abs().max(axis=1)
+            quanted_weight = weight_tensor / quanted_weight_scale[:,
+                                                                  None, :] * max_bound
+            """
+            RuntimeError: (NotFound) The kernel with key (npu, Undefined(AnyLayout), bfloat16) of kernel `round` is not registered and fail to fallback to CPU one. Selected wrong DataType `bfloat16`. Paddle support following DataTypes: float32, float64, float16.
+            """
+            quanted_weight = paddle.cast(quanted_weight, paddle.float16)
+            quanted_weight = paddle.round(quanted_weight).astype("int8")
+            quanted_weight_scale = quanted_weight_scale / max_bound
+
+            # quanted_weight, quanted_weight_scale = npu_quant_weight(weight_tensor) # FIXME: 这个地方应该看看这个函数和的功能是不是重复的
+
+            
+            setattr(
+                layer,
+                weight_name,
+                layer.create_parameter(
+                    shape=quanted_weight.shape,
+                    dtype=quanted_weight.dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            getattr(layer, weight_name).set_value(quanted_weight)
+
+            setattr(
+                layer,
+                scale_name,
+                layer.create_parameter(
+                    shape=quanted_weight_scale.shape,
+                    dtype="bfloat16",
+                ),
+            )
+
+            getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def apply_tp(
         self,

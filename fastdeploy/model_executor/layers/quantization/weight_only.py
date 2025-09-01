@@ -106,7 +106,7 @@ class WeightOnlyConfig(QuantConfigBase):
                 return GPUWeightOnlyLinearMethod(self)
         elif current_platform.is_npu():
             from fastdeploy.model_executor.layers.backends import (NPUWeightOnlyLinearMethod, NPUWeightOnlyMoEMethod)
-            if isinstance(layer, FusedMoe):
+            if isinstance(layer, FusedMoE):
                 return NPUWeightOnlyMoEMethod(self)
             else:
                 return NPUWeightOnlyLinearMethod(self)

@@ -28,10 +28,10 @@ def fused_sparse_moe(
 
     gate_weight = paddle.cast(gate_weight, paddle.bfloat16)
 
-    # ffn1_weight = paddle.cast(ffn1_weight, paddle.bfloat16)
-    ffn1_weight = paddle.transpose(ffn1_weight, [0, 2, 1])
-    # ffn2_weight = paddle.cast(ffn2_weight, paddle.bfloat16)
-    ffn2_weight = paddle.transpose(ffn2_weight, [0, 2, 1])
+    ffn1_weight = paddle.cast(ffn1_weight, paddle.bfloat16)
+    # ffn1_weight = paddle.transpose(ffn1_weight, [0, 2, 1])
+    ffn2_weight = paddle.cast(ffn2_weight, paddle.bfloat16)
+    # ffn2_weight = paddle.transpose(ffn2_weight, [0, 2, 1])
 
 
     temp = paddle.zeros([1]).astype(input.dtype)
@@ -42,12 +42,10 @@ def fused_sparse_moe(
     one_hot = paddle.ones([1]).astype("int32")
     zero_hot = paddle.zeros([1]).astype("int32")
 
-    if quant_method == "weight_int4_only":
+    if quant_method == "wint4":
         quanttype = 11
-    elif quant_method == "weight_int8_only":
+    elif quant_method == "wint8":
         quanttype = 6
-    else:
-        quanttype = 1
         
     y = sparse_moe(
         input,
