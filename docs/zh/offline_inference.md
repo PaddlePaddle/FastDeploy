@@ -35,7 +35,7 @@ for output in outputs:
 
 上述示例中 ``LLM``配置方式， `SamplingParams` ，`LLM.generate` ，`LLM.chat`以及输出output对应的结构体 `RequestOutput` 接口说明见如下文档说明。
 
-> 注： 若为思考模型, 加载模型时需要指定 `resoning_parser` 参数，并在请求时, 可以通过配置 `chat_template_kwargs` 中 `enable_thinking`参数, 进行开关思考。
+> 注： 若为思考模型, 加载模型时需要指定 `reasoning_parser` 参数，并在请求时, 可以通过配置 `chat_template_kwargs` 中 `enable_thinking`参数, 进行开关思考。
 
 ```python
 from fastdeploy.entrypoints.llm import LLM
