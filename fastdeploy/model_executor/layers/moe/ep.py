@@ -114,7 +114,7 @@ class DeepEPEngine:
                 low_latency_mode=True,
                 num_qps_per_rank=24,
             )
-        # In disaggregated mode on mutiple nodes, we either use
+        # In disaggregated mode on multiple nodes, we either use
         # high throughput mode or low latency mode.
         else:
             if moe_phase.phase == "decode":
