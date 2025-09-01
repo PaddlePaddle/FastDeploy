@@ -20,7 +20,11 @@ class MultimodalRegistry:
     A registry for multimodal models
     """
 
-    mm_models: set[str] = {"Ernie4_5_VLMoeForConditionalGeneration", "Ernie5MoeForCausalLM"}
+    mm_models: set[str] = {
+        "Ernie4_5_VLMoeForConditionalGeneration",
+        "Ernie5MoeForCausalLM",
+        "Qwen2_5_VLForConditionalGeneration",
+    }
 
     @classmethod
     def contains_model(cls, name: str) -> bool:
