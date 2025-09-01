@@ -23,7 +23,7 @@ import msgpack
 import zmq
 
 from fastdeploy import envs
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import zmq_client_logger
 
 
 class ZmqClient:
@@ -71,7 +71,7 @@ class ZmqClient:
         self.router.setsockopt(zmq.ROUTER_MANDATORY, 1)
         self.router.setsockopt(zmq.SNDTIMEO, -1)
         self.router.bind(f"ipc://{self.router_path}")
-        llm_logger.info(f"router path: {self.router_path}")
+        zmq_client_logger.info(f"router path: {self.router_path}")
 
     def send_json(self, data):
         """
@@ -139,17 +139,17 @@ class ZmqClient:
             else:
                 result = msgpack.packb([response.to_dict() for response in data])
             self.router.send_multipart([self.req_dict[req_id], b"", result])
-            llm_logger.debug(f"send_multipart result: {req_id} len {len(data)} elapse: {time.time()-start_send}")
+            zmq_client_logger.info(f"send_multipart result: {req_id} len {len(data)} elapse: {time.time()-start_send}")
         except zmq.ZMQError as e:
-            llm_logger.error(f"[{req_id}] zmq error: {e}")
+            zmq_client_logger.error(f"[{req_id}] zmq error: {e}")
             self.req_dict[req_id] = -1
         except Exception as e:
-            llm_logger.error(f"Send result to zmq client failed: {e}, {str(traceback.format_exc())}")
+            zmq_client_logger.error(f"Send result to zmq client failed: {e}, {str(traceback.format_exc())}")
 
         if data[-1].finished:
             with self.mutex:
                 self.req_dict.pop(req_id, None)
-            llm_logger.info(f"send_multipart finished, req_id: {req_id}")
+            zmq_client_logger.info(f"send_multipart finished, req_id: {req_id}")
 
     def receive_json_once(self, block=False):
         """
@@ -164,7 +164,7 @@ class ZmqClient:
             return None, None
         except Exception as e:
             self.close()
-            llm_logger.warning(f"{e}, {str(traceback.format_exc())}")
+            zmq_client_logger.warning(f"{e}, {str(traceback.format_exc())}")
             return str(e), None
 
     def receive_pyobj_once(self, block=False):
@@ -180,7 +180,7 @@ class ZmqClient:
             return None, None
         except Exception as e:
             self.close()
-            llm_logger.warning(f"{e}, {str(traceback.format_exc())}")
+            zmq_client_logger.warning(f"{e}, {str(traceback.format_exc())}")
             return str(e), None
 
     def _clear_ipc(self, name):
@@ -191,7 +191,7 @@ class ZmqClient:
             try:
                 os.remove(name)
             except OSError as e:
-                llm_logger.warning(f"Failed to remove IPC file {name} - {e}")
+                zmq_client_logger.warning(f"Failed to remove IPC file {name} - {e}")
 
     def close(self):
         """
@@ -201,7 +201,7 @@ class ZmqClient:
             return
 
         self.running = False
-        llm_logger.info("Closing ZMQ connection...")
+        zmq_client_logger.info("Closing ZMQ connection...")
         try:
             if hasattr(self, "socket") and not self.socket.closed:
                 self.socket.close()
@@ -215,7 +215,7 @@ class ZmqClient:
             self._clear_ipc(self.file_name)
             self._clear_ipc(self.router_path)
         except Exception as e:
-            llm_logger.warning(f"Failed to close ZMQ connection - {e}, {str(traceback.format_exc())}")
+            zmq_client_logger.warning(f"Failed to close ZMQ connection - {e}, {str(traceback.format_exc())}")
             return
 
     def __exit__(self, exc_type, exc_val, exc_tb):

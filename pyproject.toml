@@ -5,7 +5,7 @@ known_third_party = ["paddle"]
 
 [tool.black]
 line-length = 119
-target_version = ['py35', 'py36', 'py37', 'py38', 'py39', 'py310']
+target_version = ['py310', 'py311', 'py312']
 exclude = '.flake8'
 
 
@@ -16,7 +16,7 @@ exclude = [
     "custom_ops/third_party",
 ]
 line-length = 119
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.format]
 # Prevent change to double quotes by some users use ruff format

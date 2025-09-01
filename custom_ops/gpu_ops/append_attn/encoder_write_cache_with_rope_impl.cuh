@@ -431,16 +431,19 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
     const int seq_len,
     const int last_dim,
     const bool rope_3d,
-    const T* q_norm_weight,
-    const T* k_norm_weight,
+    const float* q_norm_weight,
+    const float* k_norm_weight,
     const float rms_norm_eps
 ) {
   using LoadT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
   using LoadEmbT = AlignedVector<float, HalfVecSize>;
+  using LoadFloat = AlignedVector<float, VecSize>;
   LoadT src_vec;
   LoadEmbT cos_emb_vec;
   LoadEmbT sin_emb_vec;
+  LoadFloat tmp_vec;
+  LoadFloat q_norm_vec, k_norm_vec;
   int64_t global_warp_idx = blockDim.y * blockIdx.x + threadIdx.y;
   int64_t all_warp_num = gridDim.x * blockDim.y;
   const int half_lastdim = last_dim / 2;
@@ -477,25 +480,25 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
       const float sin_tmp = sin_emb_vec[i];
       float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
       float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
-      src_vec[2 * i] = static_cast<T>(tmp1);
-      src_vec[2 * i + 1] = static_cast<T>(tmp2);
+      tmp_vec[2 * i] = tmp1;
+      tmp_vec[2 * i + 1] = tmp2;
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
     }
     WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
     float row_variance =
         max(warp_m2 / last_dim, 0.0f);
     float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
-    LoadT q_norm_vec, k_norm_vec;
+
     if (hi < q_num_head) {
-      Load<T, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
+      Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
       #pragma unroll
       for (int i = 0; i < VecSize; i++) {
-        src_vec[i] = static_cast<T>(static_cast<float>(src_vec[i]) * row_inv_var * static_cast<float>(q_norm_vec[i]));
+        src_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
       }
     } else {
-      Load<T, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
+      Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
       for (int i = 0; i < VecSize; i++) {
-        src_vec[i] = static_cast<T>(static_cast<float>(src_vec[i]) * row_inv_var * static_cast<float>(k_norm_vec[i]));
+        src_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
       }
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
@@ -1695,8 +1698,8 @@ void gqa_rotary_qk_norm_variable(
     const cudaStream_t &stream,
     bool use_neox_style = false,
     bool rope_3d = false,
-    const T *q_norm_weight = nullptr,
-    const T *k_norm_weight = nullptr,
+    const float *q_norm_weight = nullptr,
+    const float *k_norm_weight = nullptr,
     const float rms_norm_eps = 1e-6) {
   int64_t elem_nums =
       qkv_out_scales

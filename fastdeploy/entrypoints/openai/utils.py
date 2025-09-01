@@ -24,6 +24,50 @@ import zmq
 
 from fastdeploy.utils import api_server_logger
 
+UVICORN_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "custom": {
+            "()": "colorlog.ColoredFormatter",
+            "format": "[%(log_color)s%(asctime)s] [%(levelname)+8s] %(reset)s - %(message)s%(reset)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",  # 时间戳格式
+            "log_colors": {
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
+        }
+    },
+    "handlers": {
+        "default": {
+            "class": "colorlog.StreamHandler",
+            "stream": "ext://sys.stderr",
+            "formatter": "custom",
+        },
+    },
+    "loggers": {
+        "uvicorn": {
+            "level": "INFO",
+            "handlers": ["default"],
+            "propagate": False,
+        },
+        "uvicorn.error": {
+            "level": "INFO",
+            "handlers": ["default"],
+            "propagate": False,
+        },
+        "uvicorn.access": {
+            "level": "INFO",
+            "handlers": ["default"],
+            "propagate": False,
+            "formatter": "custom",
+        },
+    },
+}
+
 
 class DealerConnectionManager:
     """

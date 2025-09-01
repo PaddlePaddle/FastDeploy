@@ -52,7 +52,7 @@ class EngineSevice:
     Base class containing common engine functionality
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, start_queue=True):
         """
         Initializes the LLMEngine with the provided configuration.
 
@@ -84,7 +84,7 @@ class EngineSevice:
                 cfg.parallel_config.local_data_parallel_id,
             )
 
-        self.start_worker_queue_service()
+        self.start_worker_queue_service(start_queue)
 
         os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[
             self.cfg.parallel_config.local_data_parallel_id
@@ -181,7 +181,7 @@ class EngineSevice:
             create=True,
         )
 
-    def start_worker_queue_service(self):
+    def start_worker_queue_service(self, start_queue):
         """
         start queue service for engine worker communication
         """
@@ -189,7 +189,8 @@ class EngineSevice:
             self.cfg.master_ip,
             int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
         )
-        if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
+
+        if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             llm_logger.info(f"Starting engine worker queue server service at {address}")
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
@@ -397,7 +398,7 @@ class EngineSevice:
             image_type_ids = paddle.to_tensor(inputs["image_type_ids"], dtype="int32")
             image_mask = input_ids == self.data_processor.image_patch_id
             image_token_sum = paddle.full(shape=[len(input_ids) + 1], fill_value=0, dtype="int32")
-            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"))
+            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"), dtype="int32")
             grid_thw = []
             for one in inputs["grid_thw"]:
                 if one[0] == 1:
@@ -551,6 +552,8 @@ class EngineSevice:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
+                main_process_metrics.num_requests_waiting.dec(len(tasks))
+                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
@@ -592,18 +595,24 @@ class EngineSevice:
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
-                    request = Request.from_dict(data)
-                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
-                    llm_logger.debug(f"Receive request: {request}")
-
                     err_msg = None
-                    if self.guided_decoding_checker is not None:
-                        request, err_msg = self.guided_decoding_checker.schema_format(request)
+                    try:
+                        request = Request.from_dict(data)
+                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        main_process_metrics.requests_number.inc()
+                        llm_logger.debug(f"Receive request: {request}")
+                    except Exception as e:
+                        llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
+                        err_msg = str(e)
+                        results.append((data["request_id"], err_msg))
 
-                    if err_msg is not None:
-                        llm_logger.error(err_msg)
-                        results.append((request.request_id, err_msg))
-                    else:
+                    if self.guided_decoding_checker is not None and err_msg is None:
+                        request, err_msg = self.guided_decoding_checker.schema_format(request)
+                        if err_msg is not None:
+                            llm_logger.error(f"Receive request error: {err_msg}")
+                            results.append((request.request_id, err_msg))
+
+                    if err_msg is None:
                         insert_task.append(request)
 
                 response = self.scheduler.put_requests(insert_task)
@@ -615,9 +624,10 @@ class EngineSevice:
                     added_requests[request.request_id] += 1
 
                 for request_id, failed in results:
-                    added_requests[request_id] -= 1
-                    if added_requests[request_id] == 0:
-                        added_requests.pop(request_id)
+                    if request_id in added_requests:
+                        added_requests[request_id] -= 1
+                        if added_requests[request_id] == 0:
+                            added_requests.pop(request_id)
 
                     if failed is None:
                         main_process_metrics.num_requests_waiting.inc(1)
@@ -631,7 +641,7 @@ class EngineSevice:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, error_result)
+                    self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
@@ -649,7 +659,6 @@ class EngineSevice:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    llm_logger.info(f"Send results: {request_id} {contents}")
                     self.zmq_server.send_multipart(request_id, contents)
 
             except Exception as e:

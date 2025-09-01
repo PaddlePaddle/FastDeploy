@@ -48,6 +48,11 @@ if current_platform.is_iluvatar():
 
     recover_decode_task = None
     share_external_data = None
+elif current_platform.is_dcu():
+    from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
+
+    recover_decode_task = None
+    share_external_data = None
 else:
     from fastdeploy.model_executor.ops.gpu import (
         recover_decode_task,
@@ -98,7 +103,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            self._init_image_preprocess()
+            if "ernie" in self.fd_config.model_config.model_type:
+                self._init_image_preprocess()
 
             self.amp_black = [
                 "reduce_sum",
@@ -237,7 +243,8 @@ class GPUModelRunner(ModelRunnerBase):
                             dtype=paddle.int64,
                         )
                         vision_inputs["images"] = paddle.to_tensor(
-                            inputs["images"][request.image_start : request.image_end], dtype="uint8"
+                            inputs["images"][request.image_start : request.image_end],
+                            dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
                         )
                         vision_inputs["grid_thw"] = paddle.to_tensor(
                             inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
@@ -799,6 +806,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
+            if "qwen" in self.model_config.model_type:  # neox style = True
+                rope_head_dim = head_dim
+            else:  # neox style = False
+                rope_head_dim = head_dim // 2
+
             self.share_inputs["rope_emb"] = paddle.full(
                 shape=[
                     max_num_seqs,
@@ -806,14 +818,16 @@ class GPUModelRunner(ModelRunnerBase):
                     1,
                     self.parallel_config.max_model_len,
                     1,
-                    head_dim // 2,
+                    rope_head_dim,
                 ],
                 fill_value=0,
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
             self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
+            self.share_inputs["enable_thinking"] = paddle.full(
+                shape=[1], fill_value=("ernie" in self.model_config.model_type), dtype="bool"
+            )
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:
@@ -1209,7 +1223,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-                think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
+                think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
                 need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
                 reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
@@ -1499,7 +1513,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
+            think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
             need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
@@ -1743,7 +1757,7 @@ class GPUModelRunner(ModelRunnerBase):
             image_type_ids = one["image_type_ids"][np.newaxis, :]
             images = one["images"]
             image_type_ids = paddle.to_tensor(image_type_ids, dtype=paddle.int64)
-            images = paddle.to_tensor(images, dtype="uint8")
+            images = paddle.to_tensor(images, dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16")
             grid_thw = paddle.to_tensor(one["grid_thw"], dtype="int64")
         else:
             image_type_ids = None
@@ -1765,12 +1779,10 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return result
 
-    @paddle.no_grad()
-    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        """extract_vision_features"""
+    def extract_vision_features_ernie(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
-
+        # ernie-vl has images norm
         images = inputs["images"].cast("float32")
         images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
         images = images / self.image_preprocess.image_std_tensor
@@ -1780,7 +1792,6 @@ class GPUModelRunner(ModelRunnerBase):
         token_type_ids_w_video = token_type_ids
         input_ids = inputs["input_ids"]
         # convert to img patch id
-        # TODO(lulinjun): may need to check model_config and model_cfg
         image_mask = input_ids == self.model_config.im_patch_id
         image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
@@ -1796,6 +1807,7 @@ class GPUModelRunner(ModelRunnerBase):
                 image_features = image_features.reshape([-1, C * self.model_config.spatial_conv_size**2])
                 image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
+            # ernie-vl has resampler_model
             image_features = self.model.resampler_model(
                 image_features,
                 image_mask,
@@ -1804,6 +1816,31 @@ class GPUModelRunner(ModelRunnerBase):
                 grid_thw,
             )
         return image_features
+
+    def extract_vision_features_qwen(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        assert inputs["images"] is not None
+        grid_thw = inputs["grid_thw"]
+        images = inputs["images"]
+        with paddle.amp.auto_cast(
+            True,
+            custom_black_list=self.amp_black,
+            custom_white_list=self.amp_white,
+            level="O2",
+            dtype=self.parallel_config.dtype,
+        ):
+            image_features = self.model.visual.extract_feature(images, grid_thw)
+
+        return image_features
+
+    @paddle.no_grad()
+    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        """extract_vision_features"""
+        if "ernie" in self.model_config.model_type:
+            return self.extract_vision_features_ernie(inputs)
+        elif "qwen" in self.model_config.model_type:
+            return self.extract_vision_features_qwen(inputs)
+        else:
+            raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 
     @paddle.no_grad()
     def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
@@ -1824,5 +1861,6 @@ class GPUModelRunner(ModelRunnerBase):
             base=self.model_config.rope_theta,
             max_position=self.parallel_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            model_type=self.model_config.model_type,
         )
         return rope_emb
