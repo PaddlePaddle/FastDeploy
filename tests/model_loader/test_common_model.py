@@ -64,7 +64,7 @@ model_param_map = {
             {
                 "quant_type": "wint4",
                 "env": {
-                    "FD_ATTENTION_BACKEN": "MLA_ATTN",
+                    "FD_ATTENTION_BACKEND": "MLA_ATTN",
                     "FLAGS_mla_use_tensorcore": "1",
                     "FLAGS_flash_attn_version": "3",
                 },
