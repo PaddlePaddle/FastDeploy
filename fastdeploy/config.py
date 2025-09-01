@@ -1238,8 +1238,8 @@ class FDConfig:
                 self.cache_config.enable_chunked_prefill = True
 
             self.disenable_chunked_prefill = int(envs.FD_DISENABLE_CHUNKED_PREFILL)
-            if not self.disenable_chunked_prefill:
-                self.cache_config.enable_chunked_prefill = True
+            if self.disenable_chunked_prefill:
+                self.cache_config.enable_chunked_prefill = False
 
         if self.max_num_batched_tokens is None:
             if self.cache_config.enable_chunked_prefill:
