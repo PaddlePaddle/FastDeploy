@@ -998,13 +998,13 @@ class EngineArgs:
                 self.enable_chunked_prefill = False
 
         if self.max_num_batched_tokens is None:
-            if self.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
+            if int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
-                    self.max_num_batched_tokens = self.max_model_len
+                if self.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = self.max_model_len
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
