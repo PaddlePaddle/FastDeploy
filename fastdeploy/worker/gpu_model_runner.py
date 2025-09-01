@@ -490,9 +490,18 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
-                    )
+                    if "ppocr" in self.model_config.model_type:
+                        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
+                        self.share_inputs["rope_emb"] = get_rope(
+                            rotary_dim=self.model_config.head_dim,
+                            position_ids=tmp_position_ids,
+                            base=self.model_config.rope_theta,
+                            model_config=self.model_config,
+                        )
+                    else:
+                        self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                            position_ids, request.get("max_tokens", 2048)
+                        )
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -1804,6 +1813,41 @@ class GPUModelRunner(ModelRunnerBase):
 
         return image_features
 
+    def extract_vision_features_ppocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        assert inputs["images"] is not None
+        grid_thw = inputs["grid_thw"]
+        images = inputs["images"]
+        position_ids = inputs["position_ids"]
+
+        cu_seqlens = [0]
+        numel = np.prod(np.array(grid_thw))
+        cu_seqlens.append(numel)
+
+        cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32)
+        sample_indices = paddle.full((numel,), 0, dtype=paddle.int64)
+
+        with paddle.amp.auto_cast(
+            True,
+            custom_black_list=self.amp_black,
+            custom_white_list=self.amp_white,
+            level="O2",
+            dtype=self.parallel_config.dtype,
+        ):
+            image_features = self.model.visual(
+                pixel_values=images,
+                image_grid_thw=grid_thw,
+                position_ids=position_ids,
+                interpolate_pos_encoding=True,
+                sample_indices=sample_indices,
+                cu_seqlens=cu_seqlens,
+                use_rope=True,
+                window_size=-1,
+            )
+            image_features = self.model.projector(image_features, grid_thw)
+            image_features = paddle.concat(image_features, axis=0)
+
+        return image_features
+
     @paddle.no_grad()
     def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         """extract_vision_features"""
@@ -1811,6 +1855,8 @@ class GPUModelRunner(ModelRunnerBase):
             return self.extract_vision_features_ernie(inputs)
         elif "qwen" in self.model_config.model_type:
             return self.extract_vision_features_qwen(inputs)
+        elif "ppocr" in self.model_config.model_type:
+            return self.extract_vision_features_ppocr(inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 
