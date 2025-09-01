@@ -72,7 +72,7 @@ class Proposer(ABC):
     @abstractmethod
     def _run_impl(self, *args, **kwargs) -> Any:
         """
-        Implemention for different method
+        Implementation for different method
         """
         raise NotImplementedError
 

@@ -191,9 +191,6 @@ return_token_ids: Optional[bool] = None
 prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
-max_streaming_response_tokens: Optional[int] = None
-# 流式输出时每次返回的最大 token 数（默认 None 表示不限制）。
-
 disable_chat_template: Optional[bool] = False
 # 是否禁用聊天模板渲染，直接使用原始输入（默认 False 表示启用模板）。
 
@@ -365,8 +362,6 @@ return_token_ids: Optional[bool] = None
 prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
-max_streaming_response_tokens: Optional[int] = None
-# 流式输出时每次返回的最大 token 数（默认 None 表示不限制）。
 ```
 
 ### 返回参数总览
