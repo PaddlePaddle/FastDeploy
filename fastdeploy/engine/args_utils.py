@@ -243,7 +243,7 @@ class EngineArgs:
     Ports for rdma communication.
     """
 
-    enable_chunked_prefill: bool = True
+    enable_chunked_prefill: bool = False
     """
     Flag to enable chunked prefilling.
     """
