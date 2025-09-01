@@ -169,7 +169,15 @@ class MetricsManager:
     send_cache_failed_num: "Counter"
     first_token_latency: "Gauge"
     infer_latency: "Gauge"
-
+    cache_config_info: "Gauge"
+    real_batch_size: "Gauge"
+    max_num_seqs: "Gauge"
+    available_block_num: "Gauge"
+    available_batch: "Gauge"
+    hit_req_rate: "Gauge"
+    hit_token_rate: "Gauge"
+    cpu_hit_token_rate: "Gauge"
+    gpu_hit_token_rate: "Gauge"
     # 定义所有指标配置
     METRICS = {
         "num_requests_running": {
@@ -359,6 +367,54 @@ class MetricsManager:
             "description": "Latest time to generate one token in seconds",
             "kwargs": {},
         },
+        "real_batch_size": {
+            "type": Gauge,
+            "name": "fastdeploy:real_batch_size",
+            "description": "Number of real batch size of engine",
+            "kwargs": {},
+        },
+        "max_num_seqs": {
+            "type": Gauge,
+            "name": "fastdeploy:max_num_seqs",
+            "description": "Number of maximum concurrent request",
+            "kwargs": {},
+        },
+        "available_block_num": {
+            "type": Gauge,
+            "name": "fastdeploy:available_block_num",
+            "description": "Number of available GPU cache blocks",
+            "kwargs": {},
+        },
+        "available_batch": {
+            "type": Gauge,
+            "name": "fastdeploy:available_batch",
+            "description": "Number of how many new requests the system can still accept.",
+            "kwargs": {},
+        },
+        "hit_req_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:hit_req_rate",
+            "description": "Request-level prefix cache hit rate",
+            "kwargs": {},
+        },
+        "hit_token_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:hit_token_rate",
+            "description": "Token-level prefix cache hit rate",
+            "kwargs": {},
+        },
+        "cpu_hit_token_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:cpu_hit_token_rate",
+            "description": "Token-level CPU prefix cache hit rate",
+            "kwargs": {},
+        },
+        "gpu_hit_token_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:gpu_hit_token_rate",
+            "description": "Token-level GPU prefix cache hit rate",
+            "kwargs": {},
+        },
     }
     SPECULATIVE_METRICS = {}
 
@@ -434,6 +490,20 @@ class MetricsManager:
                     ),
                 )
 
+    def set_cache_config_info(self, obj) -> None:
+        metrics_info = obj.metrics_info()
+        if not metrics_info:
+            return
+
+        self.cache_config_info = Gauge(
+            name="fastdeploy:cache_config_info",
+            documentation="Information of the engine's CacheConfig",
+            labelnames=list(metrics_info.keys()),
+            multiprocess_mode="mostrecent",
+        )
+
+        self.cache_config_info.labels(**metrics_info).set(1)
+
     def register_speculative_metrics(self, registry: CollectorRegistry):
         """Register all speculative metrics to the specified registry"""
         for metric_name in self.SPECULATIVE_METRICS:
@@ -447,6 +517,8 @@ class MetricsManager:
         """Register all metrics to the specified registry"""
         for metric_name in self.METRICS:
             registry.register(getattr(self, metric_name))
+        if self.cache_config_info is not None:
+            registry.register(self.cache_config_info)
         if workers == 1:
             registry.register(work_process_metrics.e2e_request_latency)
             registry.register(work_process_metrics.request_params_max_tokens)

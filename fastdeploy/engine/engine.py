@@ -101,6 +101,9 @@ class LLMEngine:
             self.do_profile = 0
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
+        main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
+        main_process_metrics.max_num_seqs.set(self.cfg.max_num_seqs)
+
     def start(self, api_server_pid=None):
         """
         Initializes the engine and starts its sub-services.
