@@ -38,7 +38,6 @@ import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
 from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
-from uvicorn.config import LOGGING_CONFIG
 
 from fastdeploy import envs
 from fastdeploy.logger.logger import FastDeployLogger
@@ -75,35 +74,6 @@ class ColoredFormatter(logging.Formatter):
         if color_code:
             message = f"{prefix}{message}{suffix}"
         return message
-
-
-def configure_uvicorn_logging():
-    """
-    uvicorn logger config
-    """
-    # add timestamp to log
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    date_format = "%Y-%m-%d %H:%M:%S"
-    LOGGING_CONFIG["formatters"]["default"]["fmt"] = log_format
-    LOGGING_CONFIG["formatters"]["default"]["datefmt"] = date_format
-    LOGGING_CONFIG["formatters"]["access"]["fmt"] = log_format
-    LOGGING_CONFIG["formatters"]["access"]["datefmt"] = date_format
-
-    uvicorn_error_logger = logging.getLogger("")
-    uvicorn_access_logger = logging.getLogger("uvicorn.access")
-    for handler in uvicorn_error_logger.handlers[:]:
-        uvicorn_error_logger.removeHandler(handler)
-    for handler in uvicorn_access_logger.handlers[:]:
-        uvicorn_access_logger.removeHandler(handler)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format, date_format))
-
-    uvicorn_error_logger.addHandler(console_handler)
-    uvicorn_access_logger.addHandler(console_handler)
-    uvicorn_error_logger.setLevel(logging.INFO)
-    uvicorn_access_logger.setLevel(logging.INFO)
-    uvicorn_error_logger.propagate = False
-    uvicorn_access_logger.propagate = False
 
 
 class DailyRotatingFileHandler(BaseRotatingHandler):
@@ -409,13 +379,24 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
                 config = loaded_config
 
         # Get declared parameters
-        defined_dests = {action.dest for action in self._actions}
-        filtered_config = {k: v for k, v in config.items() if k in defined_dests}
+        defined_actions = {action.dest: action for action in self._actions}
+        filtered_config = {k: v for k, v in config.items() if k in defined_actions}
 
         # Set parameters
         if namespace is None:
             namespace = argparse.Namespace()
         for key, value in filtered_config.items():
+            action = defined_actions[key]
+            if action.type is not None and isinstance(value, (str, int, float)):
+                try:
+                    str_value = str(value).strip()
+                    if str_value == "":
+                        converted = None
+                    else:
+                        converted = action.type(str_value)
+                    value = converted
+                except Exception as e:
+                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}")
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
 
@@ -788,3 +769,4 @@ scheduler_logger = get_logger("scheduler", "scheduler.log")
 api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
+zmq_client_logger = get_logger("zmq_client", "zmq_client.log")

@@ -63,7 +63,7 @@ def xpu_pre_process(
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
 
     (
@@ -411,6 +411,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")

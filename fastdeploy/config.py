@@ -129,6 +129,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.lm_head_fp32: bool = False
         self.model_format = "auto"
         for key, value in args.items():
             if hasattr(self, key):
@@ -340,7 +341,8 @@ class ParallelConfig:
     def set_tp_group(self):
         # different tp group id
         # prevent different tp_groups using the same group_id
-        dist.collective._set_custom_gid(self.data_parallel_rank + 100)
+        tp_gid_offset = envs.FD_TP_GROUP_GID_OFFSET
+        dist.collective._set_custom_gid(self.data_parallel_rank + tp_gid_offset)
         self.tp_group = dist.new_group(
             range(
                 self.data_parallel_rank * self.tensor_parallel_size,
@@ -348,7 +350,8 @@ class ParallelConfig:
             )
         )
         # same ep group id
-        dist.collective._set_custom_gid(self.data_parallel_size + 100)
+        # (TODO:gaoziyuan move this gid config to ep.py)
+        dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -683,6 +686,67 @@ class GraphOptimizationConfig:
                     "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
                 )
             argument = self.use_cudagraph
+
+
+class MobaAttentionConfig:
+    def __init__(
+        self,
+        args,
+    ):
+        self.moba_encoder_top_k_left: int = None
+        self.moba_encoder_top_k_right: int = None
+        "The sparse topk of encoder attention is located at [moba_encoder_top_k_left, moba_encoder top_k_right]"
+        self.moba_decoder_top_k_left: int = None
+        self.moba_decoder_top_k_right: int = None
+        "The sparse topk of decoder attention is located at [moba_decoder_top_k_left, moba_decoder top_k_right]"
+        self.moba_use_encoder_seq_limit: int = None
+        "When the number of encdoer token is less than moba_use_encoder_seq_limit, it is not sparse"
+        self.moba_use_decoder_seq_limit: int = None
+        "When the number of decdoer token is less than moba_use_decoder_seq_limit, it is not sparse"
+        self.moba_block_size: int = 128
+        self.mlp_weight_name: str = "moba_mlp_weight.safetensors"
+        self.moba_max_seq_length: int = 128 * 1024
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+            if self.moba_use_encoder_seq_limit is None and self.moba_encoder_top_k_left is not None:
+                self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
+            if self.moba_use_decoder_seq_limit is None and self.moba_decoder_top_k_left is not None:
+                self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
+            self.check_legality_parameters()
+
+    def check_legality_parameters(
+        self,
+    ) -> None:
+        if self.moba_encoder_top_k_left is not None:
+            assert self.moba_encoder_top_k_left > 0, "moba_encoder_top_k_left must large than 0"
+
+        if self.moba_encoder_top_k_right is not None:
+            assert self.moba_encoder_top_k_right > 0, "moba_encoder_top_k_right must large than 0"
+            assert (
+                self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
+            ), "moba_encoder_top_k_right must large than moba_encoder_top_k_left"
+
+        if self.moba_decoder_top_k_left is not None:
+            assert self.moba_decoder_top_k_left > 0, "moba_decoder_top_k_left must large than 0"
+
+        if self.moba_decoder_top_k_right is not None:
+            assert self.moba_decoder_top_k_right > 0, "moba_decoder_top_k_right must large than 0"
+            assert (
+                self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
+            ), "moba_decoder_top_k_right must large than moba_decoder_top_k_left"
+
+        if self.moba_use_encoder_seq_limit is not None and self.moba_encoder_top_k_left is not None:
+            assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
+        if self.moba_use_decoder_seq_limit is not None and self.moba_decoder_top_k_left is not None:
+            assert self.moba_use_decoder_seq_limit >= self.moba_decoder_top_k_left * self.moba_block_size
+
+    def to_json_string(self):
+        """
+        Convert moba_attention_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
 
 class EarlyStopConfig:
@@ -1039,6 +1103,7 @@ class FDConfig:
         decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
+        moba_attention_config: MobaAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
@@ -1073,7 +1138,7 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-
+        self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
@@ -1165,10 +1230,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        assert (
-            self.device_ids.split(",").__len__() == self.worker_num_per_node
-        ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
-
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
@@ -1179,6 +1240,15 @@ class FDConfig:
             self.master_ip = self.ips[0]
 
         self.paddle_commit_id = paddle.version.commit
+
+        if self.cache_config.enable_chunked_prefill:
+            self.force_chunked_prefill = int(envs.FD_FORCE_CHUNKED_PREFILL)
+            if (
+                self.speculative_config is not None
+                and self.speculative_config.method in ["mtp"]
+                and not self.force_chunked_prefill
+            ):
+                self.cache_config.enable_chunked_prefill = False
 
         if self.max_num_batched_tokens is None:
             if self.cache_config.enable_chunked_prefill:
@@ -1321,7 +1391,7 @@ class FDConfig:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.engine_worker_queue_port,
+                        "port": self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id],
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":

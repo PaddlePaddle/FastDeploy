@@ -112,7 +112,7 @@ class Ernie4_5_MoE(nn.Layer):
         self.tp_group = fd_config.parallel_config.tp_group
 
         self.use_ep = self.expert_parallel_size > 1
-        self.us_tp = self.tensor_parallel_size > 1
+        self.use_tp = self.tensor_parallel_size > 1
 
         if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
@@ -511,10 +511,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            if hasattr(self.lm_head, "linear"):
-                self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
-            else:  # ep
-                self.lm_head.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -537,6 +534,11 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None, None),
             ("lm_head.linear", "lm_head", None, None),
             ("experts.gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
+            ("qkv_proj", "q_proj", None, "q"),
+            ("qkv_proj", "k_proj", None, "k"),
+            ("qkv_proj", "v_proj", None, "v"),
+            ("up_gate_proj", "gate_proj", None, "gate"),
+            ("up_gate_proj", "up_proj", None, "up"),
         ]
 
         expert_params_mapping = []
@@ -545,6 +547,8 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 num_experts=self.fd_config.model_config.moe_num_experts,
                 ckpt_down_proj_name="down_proj",
                 ckpt_gate_up_proj_name="up_gate_proj",
+                ckpt_gate_proj_name="gate_proj",
+                ckpt_up_proj_name="up_proj",
                 param_gate_up_proj_name="experts.up_gate_proj_",
                 param_down_proj_name="experts.down_proj_",
             )
@@ -552,19 +556,20 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
-        expert_id = None
-        shard_id = None
 
         for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
-                if weight_name not in loaded_weight_name:
-                    continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
                 param = params_dict[model_param_name]
                 expert_id = exp_id
                 shard_id = shard_id
                 break
             else:
+                expert_id = None
+                shard_id = None
                 model_param_name = loaded_weight_name
                 if model_param_name not in params_dict.keys():
                     continue
@@ -576,16 +581,17 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:
-                weight_loader(param, loaded_weight)
+                weight_loader(param, loaded_weight, shard_id)
 
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
+
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits

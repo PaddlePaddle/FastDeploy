@@ -79,6 +79,8 @@ class ForwardMeta:
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask
     attn_mask: Optional[paddle.Tensor] = None
+    # Attention mask offset
+    attn_mask_offsets: Optional[paddle.Tensor] = None
 
     # A common pattern for launching CUDA kernels is to set the kernel's grids.x dimension
     # using a `num_blocks` variable, and then map each thread block to a specific batch and
@@ -93,6 +95,7 @@ class ForwardMeta:
     #   `tile_id`  = `tile_ids[blockIdx.x]`
 
     # Maps the thread block index (blockIdx.x) to the corresponding batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
+    # Decoder batch id. Used by attention backend.
     decoder_batch_ids: Optional[paddle.Tensor] = None
     # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
@@ -223,3 +226,13 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
+
+
+@dataclass
+class DCUForwardMeta(ForwardMeta):
+    """
+    DCUForwardMeta is used to store the global meta information of the forward, and some DCU specific meta info.
+    """
+
+    # Accumulated offset
+    cum_offsets: Optional[paddle.Tensor] = None

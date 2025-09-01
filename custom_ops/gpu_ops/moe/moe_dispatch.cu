@@ -113,11 +113,20 @@ void MoeDispatchKernel(
               permuted_rows_, moe_topk * num_rows, false, stream);
 
   if (w4a8_in_scale) {
-    initialize_moe_routing_kernelLauncher<data_t, int8_t>::run(
+    if (permute_input->dtype() == paddle::DataType::INT8) {
+      initialize_moe_routing_kernelLauncher<data_t, int8_t>::run(
         input.data<data_t>(), permute_input->data<int8_t>(), permuted_rows_,
         expert_idx_per_token->data<int32_t>(), w4a8_in_scale->data<float>(),
         permute_indices_per_token->data<int32_t>(), num_rows, num_rows,
         hidden_size, moe_topk, stream);
+    } else if (permute_input->dtype() == paddle::DataType::FLOAT8_E4M3FN) {
+      initialize_moe_routing_kernelLauncher<data_t, float8_e4m3fn>::run(
+        input.data<data_t>(), permute_input->data<float8_e4m3fn>(),
+        permuted_rows_, expert_idx_per_token->data<int32_t>(),
+        w4a8_in_scale->data<float>(),
+        permute_indices_per_token->data<int32_t>(), num_rows, num_rows,
+        hidden_size, moe_topk, stream);
+    }
   } else {
     initialize_moe_routing_kernelLauncher<data_t>::run(
         input.data<data_t>(), permute_input->data<data_t>(), permuted_rows_,
@@ -135,7 +144,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor &input, const paddle::Tensor &gating_output,
     const paddle::optional<paddle::Tensor> &gating_correction_bias,
     const paddle::optional<paddle::Tensor> &w4a8_in_scale, const int moe_topk,
-    const bool group_moe, const bool topk_only_mode) {
+    const bool group_moe, const std::string &moe_quant_type, const bool topk_only_mode) {
   const auto input_type = input.dtype();
   auto place = input.place();
   int token_rows = 0;
@@ -151,8 +160,14 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
   const int num_rows = token_rows;
   const int hidden_size = input.dims()[input_dims.size() - 1];
 
-  auto permute_input_dtype =
-      w4a8_in_scale ? paddle::DataType::INT8 : input_type;
+  auto permute_input_dtype = input_type;
+  if (w4a8_in_scale) {
+    if (moe_quant_type == "w4a8") {
+      permute_input_dtype = paddle::DataType::INT8;
+    } else if (moe_quant_type == "w4afp8") {
+      permute_input_dtype = paddle::DataType::FLOAT8_E4M3FN;
+    }
+  }
 
   auto permute_input = GetEmptyTensor({moe_topk * num_rows, hidden_size},
                                       permute_input_dtype, place);
@@ -285,7 +300,7 @@ PD_BUILD_STATIC_OP(moe_expert_dispatch)
     .Outputs({"permute_input", "tokens_expert_prefix_sum",
               "permute_indices_per_token", "topk_weight", "topk_idx",
               "expert_idx_per_token"})
-    .Attrs({"moe_topk:int", "group_moe:bool", "topk_only_mode:bool"})
+     .Attrs({"moe_topk:int", "group_moe:bool", "moe_quant_type:std::string", "topk_only_mode:bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertDispatch))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertDispatchInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertDispatchInferDtype));

@@ -106,7 +106,7 @@ def pre_process(
     """
     # Remove padding
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
     output_padding_offset = None
     output_cum_offsets = None
@@ -132,7 +132,7 @@ def pre_process(
         if isinstance(seq_lens_output, list):
             seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output)
+        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
         output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
             output_cum_offsets_tmp,
             output_token_num,
@@ -218,7 +218,7 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar():
+    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
