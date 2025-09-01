@@ -77,8 +77,6 @@ class DynamicWeightManager:
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
 
-        self._finalize_update(pid)
-
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
@@ -113,6 +111,7 @@ class DynamicWeightManager:
         if self.nranks > 1:
             paddle.distributed.barrier()
         paddle.distributed.shutdown_process_group()
+
         self._update_shared_status(pid, -2)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
@@ -138,7 +137,7 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def _finalize_update(self, pid: int):
+    def finalize_update(self, pid: int):
         """Finalize update process with verification."""
         self._verify_parameters("update")
         if self.nranks > 1:
