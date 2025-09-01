@@ -14,6 +14,10 @@
 # limitations under the License.
 """
 
-from .ernie4_5_vl_tokenizer import Ernie4_5_VLTokenizer
+from .configuration import DFNRopeVisionTransformerConfig
+from .modeling import DFNRopeVisionTransformerPretrainedModel
 
-__all__ = ["Ernie4_5_VLTokenizer"]
+__all__ = [
+    "DFNRopeVisionTransformerConfig",
+    "DFNRopeVisionTransformerPretrainedModel",
+]
