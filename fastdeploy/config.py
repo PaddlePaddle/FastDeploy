@@ -1233,27 +1233,14 @@ class FDConfig:
 
         self.paddle_commit_id = paddle.version.commit
 
-        if not self.cache_config.enable_chunked_prefill:
-            if (
-                current_platform.is_cuda()
-                and self.splitwise_role == "mixed"
-                and (self.speculative_config is None or self.speculative_config.method not in ["mtp"])
-            ):
-                # default enable chunked prefill
-                self.cache_config.enable_chunked_prefill = True
-
-            self.disenable_chunked_prefill = int(envs.FD_DISENABLE_CHUNKED_PREFILL)
-            if self.disenable_chunked_prefill:
-                self.cache_config.enable_chunked_prefill = False
-
         if self.max_num_batched_tokens is None:
-            if self.cache_config.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
+            if int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
-                    self.max_num_batched_tokens = self.max_model_len
+                if self.cache_config.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = self.max_model_len
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
