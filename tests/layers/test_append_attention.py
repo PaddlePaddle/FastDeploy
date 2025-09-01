@@ -250,8 +250,8 @@ def get_qkv_and_qkv_concat_tensor(bs, q_num_head, kv_num_head, seq_len, dim_head
 def apply_qk_norm(head_dim, dtype, q, k):
     q_norm_weight = np.random.random([head_dim]) / 10
     k_norm_weight = np.random.random([head_dim]) / 10
-    q_norm_weight_tensor = paddle.to_tensor(q_norm_weight, dtype=dtype)
-    k_norm_weight_tensor = paddle.to_tensor(k_norm_weight, dtype=dtype)
+    q_norm_weight_tensor = paddle.to_tensor(q_norm_weight, dtype="float32")
+    k_norm_weight_tensor = paddle.to_tensor(k_norm_weight, dtype="float32")
     print("q:", q.shape)
     print("k:", k.shape)
     bs, q_num_head, seq_len, dim_head = q.shape
@@ -260,9 +260,9 @@ def apply_qk_norm(head_dim, dtype, q, k):
     q = q.reshape([-1, head_dim])
     k = k.reshape([-1, head_dim])
     print("q:", q)
-    q = fused_rms_norm(q, q_norm_weight_tensor, None, 1e-5)[0]
+    q = fused_rms_norm(q.astype("float32"), q_norm_weight_tensor, None, 1e-5)[0].astype(dtype)
     print("q after norm:", q)
-    k = fused_rms_norm(k, k_norm_weight_tensor, None, 1e-5)[0]
+    k = fused_rms_norm(k.astype("float32"), k_norm_weight_tensor, None, 1e-5)[0].astype(dtype)
     q = q.reshape([-1, q_num_head, seq_len, dim_head])
     k = k.reshape([-1, kv_num_head, seq_len, dim_head])
     return q, k, q_norm_weight_tensor, k_norm_weight_tensor

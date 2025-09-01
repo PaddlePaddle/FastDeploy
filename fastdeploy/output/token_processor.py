@@ -247,6 +247,15 @@ class TokenProcessor:
                 self.resource_manager.stop_flags[index] = True
                 self.resource_manager.tasks_list[index] = None
                 self.resource_manager._recycle_block_tables(task)
+
+        task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list])
+        main_process_metrics.available_gpu_block_num.set(
+            self.resource_manager.total_block_number() - task_used_block_num
+        )
+        main_process_metrics.batch_size.set(
+            self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
+        )
+
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
 
@@ -437,6 +446,7 @@ class TokenProcessor:
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         task.first_token_time = current_time
+        main_process_metrics.first_token_latency.set(current_time - task.inference_start_time)
         main_process_metrics.time_to_first_token.observe(current_time - task.inference_start_time)
         main_process_metrics.request_queue_time.observe(task.schedule_start_time - task.preprocess_end_time)
 
@@ -448,6 +458,7 @@ class TokenProcessor:
 
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
+        main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
         main_process_metrics.request_inference_time.observe(current_time - task.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
 
