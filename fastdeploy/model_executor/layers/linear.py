@@ -300,7 +300,7 @@ class ReplicatedLinear(LinearBase):
 
 class MergedReplicatedLinear(ReplicatedLinear):
     """
-    Replicated linear layer.
+    MergedReplicatedLinear linear layer.
     """
 
     def __init__(
@@ -316,7 +316,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
         weight_key: str = "",
     ):
         """
-        Initializes a replicated linear layer.
+        Initializes a mergedreplicated linear layer.
 
         Args:
             fd_config (FDConfig): Inference-related parameters.
@@ -353,8 +353,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
         if not param._is_initialized():
             param.initialize()
 
-        param_shard_offset = 0
-        param_shard_size = self.output_sizes[0]
         if loaded_shard_id == "q_a":
             param_shard_offset = 0
             param_shard_size = self.output_sizes[0]
