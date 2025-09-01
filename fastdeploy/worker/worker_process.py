@@ -290,7 +290,7 @@ class PaddleDisWorkerProc:
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.barrier(group=self.parallel_config.ep_group)
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
                 if self.model_weights_signal[0] != 0:
@@ -307,7 +307,6 @@ class PaddleDisWorkerProc:
                         self.parallel_config.engine_worker_queue_port,
                     )
                     self.model_weights_signal[0] = 0
-                paddle.distributed.broadcast(self.model_weights_signal, src=0)
 
             if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
