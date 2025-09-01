@@ -39,8 +39,8 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                               const cudaStream_t& stream,
                               const bool use_neox_style,
                               const bool rope_3d,
-                              const T* q_norm_weight,
-                              const T* k_norm_weight,
+                              const float* q_norm_weight,
+                              const float* k_norm_weight,
                               const float rms_norm_eps) {
   const uint32_t elem_nums =
       use_neox_style ? bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2
@@ -569,8 +569,8 @@ void DecoderWriteCacheWithRoPEKernel(
           stream,
           use_neox_rotary_style,
           rope_3d,
-          reinterpret_cast<const DataType_*>(q_norm_weight.get().data<T>()),
-          reinterpret_cast<const DataType_*>(k_norm_weight.get().data<T>()),
+          q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+          k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
           rms_norm_eps);
     } else {
       PD_THROW(
