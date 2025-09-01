@@ -104,6 +104,8 @@ class CudaGraphPiecewiseBackend:
             self.cuda_graph_manager = Dy2StCudaGraphManager()
 
     def run_static_model(self, entry: ConcreteSizeEntry, **kwargs):
+        from paddle.jit.dy2static.utils import CUDAGraphState
+
         if not entry.captured:
             # Warmup the model
             for n in range(entry.num_finished_warmup, self.warm_up_size):
