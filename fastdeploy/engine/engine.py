@@ -39,6 +39,7 @@ from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -102,7 +103,6 @@ class LLMEngine:
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
         main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
-        main_process_metrics.max_num_seqs.set(self.cfg.max_num_seqs)
 
     def start(self, api_server_pid=None):
         """

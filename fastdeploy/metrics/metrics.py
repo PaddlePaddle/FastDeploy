@@ -170,10 +170,7 @@ class MetricsManager:
     first_token_latency: "Gauge"
     infer_latency: "Gauge"
     cache_config_info: "Gauge"
-    real_batch_size: "Gauge"
-    max_num_seqs: "Gauge"
-    available_block_num: "Gauge"
-    available_batch: "Gauge"
+    available_batch_size: "Gauge"
     hit_req_rate: "Gauge"
     hit_token_rate: "Gauge"
     cpu_hit_token_rate: "Gauge"
@@ -367,27 +364,9 @@ class MetricsManager:
             "description": "Latest time to generate one token in seconds",
             "kwargs": {},
         },
-        "real_batch_size": {
+        "available_batch_size": {
             "type": Gauge,
-            "name": "fastdeploy:real_batch_size",
-            "description": "Number of real batch size of engine",
-            "kwargs": {},
-        },
-        "max_num_seqs": {
-            "type": Gauge,
-            "name": "fastdeploy:max_num_seqs",
-            "description": "Number of maximum concurrent request",
-            "kwargs": {},
-        },
-        "available_block_num": {
-            "type": Gauge,
-            "name": "fastdeploy:available_block_num",
-            "description": "Number of available GPU cache blocks",
-            "kwargs": {},
-        },
-        "available_batch": {
-            "type": Gauge,
-            "name": "fastdeploy:available_batch",
+            "name": "fastdeploy:available_batch_size",
             "description": "Number of how many new requests the system can still accept.",
             "kwargs": {},
         },

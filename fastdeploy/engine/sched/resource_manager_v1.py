@@ -394,6 +394,7 @@ class ResourceManagerV1(ResourceManager):
                 main_process_metrics.available_gpu_block_num.set(self.total_block_number() - task_used_block_num)
                 main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
                 main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+                main_process_metrics.available_batch_size.set(self.available_batch())
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
             return scheduled_reqs
 

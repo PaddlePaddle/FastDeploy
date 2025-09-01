@@ -179,9 +179,7 @@ class ResourceManager:
         Returns:
             int: available batch size
         """
-        res = np.sum(self.stop_flags)
-        main_process_metrics.available_batch.set(res)
-        return res
+        return np.sum(self.stop_flags)
 
     def available_block_num(self):
         """
@@ -190,9 +188,7 @@ class ResourceManager:
         Returns:
             int: available block size
         """
-        res = len(self.cache_manager.gpu_free_block_list)
-        main_process_metrics.available_block_num.set(res)
-        return res
+        return len(self.cache_manager.gpu_free_block_list)
 
     def is_resource_sufficient(self, input_token_num):
         """
@@ -319,9 +315,7 @@ class ResourceManager:
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - task_used_block_num)
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-
-        main_process_metrics.real_batch_size.set(self.real_bsz)
-
+        main_process_metrics.available_batch_size.set(self.available_batch())
         llm_logger.info(
             f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
         )
