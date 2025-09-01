@@ -377,7 +377,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
             "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
             "FLAGS_hardamard_use_diagonal_block_matrix": int(
                 os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
@@ -470,6 +470,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
         )
 

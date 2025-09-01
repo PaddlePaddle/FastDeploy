@@ -19,7 +19,7 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import default_weight_loader, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
@@ -205,5 +205,17 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
-        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+        set_weight_attrs(
+            layer.up_gate_proj_weight,
+            {
+                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "model_format": extra_weight_attrs.get("model_format", ""),
+            },
+        )
+        set_weight_attrs(
+            layer.down_proj_weight,
+            {
+                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "model_format": extra_weight_attrs.get("model_format", ""),
+            },
+        )
