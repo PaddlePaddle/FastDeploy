@@ -50,7 +50,7 @@ class XpuWorker(WorkerBase):
     def init_device(self):
         """Initialize device and Construct model runner"""
         if paddle.is_compiled_with_xpu():
-            # Set evironment variable
+            # Set environment variable
             self.device = f"xpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)

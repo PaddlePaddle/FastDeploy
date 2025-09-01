@@ -531,7 +531,7 @@ class EngineArgs:
             "--quantization",
             type=str,
             default=EngineArgs.quantization,
-            help="Quantization name for the model, currentlly support "
+            help="Quantization name for the model, currently support "
             "'wint8', 'wint4',"
             "default is None. The priority of this configuration "
             "is lower than that of the config file. "
@@ -829,7 +829,7 @@ class EngineArgs:
         scheduler_group.add_argument(
             "--scheduler-topic",
             default=EngineArgs.scheduler_topic,
-            help=f"Topic of scheduler. Defaule is {EngineArgs.scheduler_topic}. (global)",
+            help=f"Topic of scheduler. Default is {EngineArgs.scheduler_topic}. (global)",
         )
         scheduler_group.add_argument(
             "--scheduler-min-load-score",
