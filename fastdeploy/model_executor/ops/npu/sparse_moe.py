@@ -1,16 +1,19 @@
 import inspect
 
 import paddle
-import paddlenlp_ops
 from paddle.base import core
+import inspect
+from paddlenlp_ops import sparse_moe
+
+
 
 
 # npu interface refer to gpu interface
 def fused_sparse_moe(
     input,
     gate_weight,
-    ffn1_weight,
-    ffn2_weight,
+    ffn1_weight, 
+    ffn2_weight, 
     ffn1_bias,
     ffn1_scale,
     ffn2_bias,
@@ -22,27 +25,31 @@ def fused_sparse_moe(
     """
     call npu func to implement this function
     """
-    ffn1_weight = paddle.cast(ffn1_weight, paddle.bfloat16)
-    ffn2_weight = paddle.cast(ffn2_weight, paddle.bfloat16)
 
+    gate_weight = paddle.cast(gate_weight, paddle.bfloat16)
 
-    gate_weight = gate_weight.transpose([1, 0]).astype(input.dtype)
+    # ffn1_weight = paddle.cast(ffn1_weight, paddle.bfloat16)
+    ffn1_weight = paddle.transpose(ffn1_weight, [0, 2, 1])
+    # ffn2_weight = paddle.cast(ffn2_weight, paddle.bfloat16)
+    ffn2_weight = paddle.transpose(ffn2_weight, [0, 2, 1])
+
 
     temp = paddle.zeros([1]).astype(input.dtype)
+
 
     expert_array = paddle.arange(moe_topk * input.shape[0]).astype("int32")
     expert_group = paddle.ones([1]).astype("int32")
     one_hot = paddle.ones([1]).astype("int32")
     zero_hot = paddle.zeros([1]).astype("int32")
 
-    # define quant mapping: may modify
     if quant_method == "weight_int4_only":
         quanttype = 11
     elif quant_method == "weight_int8_only":
         quanttype = 6
     else:
         quanttype = 1
-    y = paddlenlp_ops.sparse_moe(
+        
+    y = sparse_moe(
         input,
         gate_weight,
         temp,
@@ -51,16 +58,16 @@ def fused_sparse_moe(
         temp,
         temp,
         ffn1_weight,
-        ffn1_bias if ffn1_bias else temp,
+        ffn1_bias if ffn1_bias is not None else temp,
         temp,
         temp,
-        ffn1_scale,
+        ffn1_scale if ffn1_scale is not None else temp,
         temp,
         ffn2_weight,
-        ffn2_bias if ffn2_bias else temp,
+        ffn2_bias if ffn2_bias is not None else temp,
         temp,
         temp,
-        ffn2_scale,
+        ffn2_scale if ffn2_scale is not None else temp,
         temp,
         expert_array,
         expert_group,
@@ -68,7 +75,7 @@ def fused_sparse_moe(
         zero_hot,
         moe_topk,
         input.dtype == paddle.bfloat16,
-        tp_size,  
+        tp_size,
         quanttype,
     )
     return y

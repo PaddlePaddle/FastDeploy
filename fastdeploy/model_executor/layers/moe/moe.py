@@ -55,6 +55,10 @@ def get_moe_method():
         )
 
         return MetaxTritonWeightOnlyMoEMethod(None)
+    elif current_platform.is_npu():
+        from .fused_moe_npu_backend import NPUMoEMethod
+
+        return NPUMoEMethod(None)
     raise NotImplementedError
 
 

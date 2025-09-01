@@ -28,6 +28,7 @@ from .weight_only_linear import fused_linear_op
 from .get_token_penalty_multi_scores import get_token_penalty_multi_scores_npu
 from .top_p_sampling import top_p_sampling_npu
 from .weight_quantize import npu_quant_weight
+from .sparse_moe import fused_sparse_moe
 
 PACKAGE = "fastdeploy.model_executor.ops.npu"
 
