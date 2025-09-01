@@ -47,6 +47,7 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -54,14 +55,10 @@ from fastdeploy.metrics.metrics import (
     main_process_metrics,
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
-from fastdeploy.plugins.model_register import load_model_register_plugins
-
-load_model_register_plugins()
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     StatefulSemaphore,
     api_server_logger,
-    configure_uvicorn_logging,
     console_logger,
     is_port_available,
     retrive_model_from_server,
@@ -80,10 +77,13 @@ parser.add_argument(
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+parser.add_argument(
+    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
+)
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 args.model = retrive_model_from_server(args.model, args.revision)
-chat_template = load_chat_template(args.chat_template)
+chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
@@ -179,7 +179,14 @@ async def lifespan(app: FastAPI):
     )
     app.state.model_handler = model_handler
     chat_handler = OpenAIServingChat(
-        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+        chat_template,
+        args.enable_mm_output,
+        args.tokenizer_base_url,
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,
@@ -416,6 +423,7 @@ def launch_api_server() -> None:
             host=args.host,
             port=args.port,
             workers=args.workers,
+            log_config=UVICORN_CONFIG,
             log_level="info",
         )  # set log level to error to avoid log
     except Exception as e:
@@ -442,7 +450,7 @@ def run_metrics_server():
     run metrics server
     """
 
-    uvicorn.run(metrics_app, host="0.0.0.0", port=args.metrics_port, log_level="error")
+    uvicorn.run(metrics_app, host="0.0.0.0", port=args.metrics_port, log_config=UVICORN_CONFIG, log_level="error")
 
 
 def launch_metrics_server():
@@ -511,6 +519,7 @@ def run_controller_server():
         controller_app,
         host="0.0.0.0",
         port=args.controller_port,
+        log_config=UVICORN_CONFIG,
         log_level="error",
     )
 
@@ -530,8 +539,6 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-    configure_uvicorn_logging()
-    load_model_register_plugins()
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return

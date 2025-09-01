@@ -63,7 +63,7 @@ def xpu_pre_process(
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
 
     (

@@ -134,14 +134,14 @@ jobs:
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
+          -e "FD_FORCE_CHUNKED_PREFILL=1" \
           -v "${MODEL_CACHE_DIR}:/MODELDATA" \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-          python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -189,6 +189,18 @@ jobs:
             -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
           check_service 90
           python -m pytest -sv test_repetition_early_stop.py || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5, \"--max-waiting-time\": 1 }"
+          check_service 90
+          python -m pytest -sv test_max_concurrency.py || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5000, \"--max-waiting-time\": 1 }"
+          check_service 90
+          python -m pytest -sv test_max_waiting_time.py || TEST_EXIT_CODE=1
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
