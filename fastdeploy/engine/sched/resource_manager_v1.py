@@ -458,7 +458,7 @@ class ResourceManagerV1(ResourceManager):
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
-            # TODO(chengyanfu): support cache ouput blocks for prefix caching
+            # TODO(chengyanfu): support cache output blocks for prefix caching
             if request.get("prefill_block_num", None) is None:
                 leaf_node = self.cache_manager.req_leaf_map[request.request_id]
                 self.cache_manager.decrease_request_share_count(request.request_id)
