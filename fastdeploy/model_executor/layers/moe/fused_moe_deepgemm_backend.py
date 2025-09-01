@@ -283,8 +283,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
             "down_proj_weight": down_proj_weight,
-            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
-            "down_proj_weight_scale": down_proj_weight_scale,
+            "up_gate_proj_weight_scale_inv": up_gate_proj_weight_scale,
+            "down_proj_weight_scale_inv": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
             getattr(layer, name).set_value(tensor)

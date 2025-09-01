@@ -52,7 +52,7 @@ class EngineSevice:
     Base class containing common engine functionality
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, start_queue=True):
         """
         Initializes the LLMEngine with the provided configuration.
 
@@ -84,7 +84,7 @@ class EngineSevice:
                 cfg.parallel_config.local_data_parallel_id,
             )
 
-        self.start_worker_queue_service()
+        self.start_worker_queue_service(start_queue)
 
         os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[
             self.cfg.parallel_config.local_data_parallel_id
@@ -181,7 +181,7 @@ class EngineSevice:
             create=True,
         )
 
-    def start_worker_queue_service(self):
+    def start_worker_queue_service(self, start_queue):
         """
         start queue service for engine worker communication
         """
@@ -189,7 +189,8 @@ class EngineSevice:
             self.cfg.master_ip,
             int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
         )
-        if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
+
+        if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             llm_logger.info(f"Starting engine worker queue server service at {address}")
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
@@ -551,6 +552,8 @@ class EngineSevice:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
+                main_process_metrics.num_requests_waiting.dec(len(tasks))
+                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
@@ -596,6 +599,7 @@ class EngineSevice:
                     try:
                         request = Request.from_dict(data)
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        main_process_metrics.requests_number.inc()
                         llm_logger.debug(f"Receive request: {request}")
                     except Exception as e:
                         llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")

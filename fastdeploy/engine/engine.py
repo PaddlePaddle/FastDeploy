@@ -38,7 +38,7 @@ from fastdeploy.engine.common_engine import EngineSevice
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -362,7 +362,10 @@ class LLMEngine:
             self.zmq_server.close()
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
+                console_logger.info(f"Waiting for worker {p.pid} to exit")
                 p.join()
+            for p in self.dp_engine_worker_queue_server:
+                p.cleanup()
 
     def _setting_environ_variables(self):
         """
@@ -374,7 +377,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
             "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
             "FLAGS_hardamard_use_diagonal_block_matrix": int(
                 os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
@@ -467,6 +470,7 @@ class LLMEngine:
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
         )
 
@@ -610,11 +614,26 @@ class LLMEngine:
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
             if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+                self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
+                self.dp_engine_worker_queue_server = []
                 for i in range(
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
+                    address = (
+                        self.cfg.master_ip,
+                        int(self.cfg.engine_worker_queue_port[i]),
+                    )
+                    llm_logger.info(f"dp start queue service {address}")
+                    self.dp_engine_worker_queue_server.append(
+                        EngineWorkerQueue(
+                            address=address,
+                            is_server=True,
+                            num_client=self.cfg.parallel_config.tensor_parallel_size,
+                            local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                        )
+                    )
                     self.dp_processed.append(
                         multiprocessing.Process(
                             target=start_data_parallel_service,
@@ -625,7 +644,7 @@ class LLMEngine:
                         )
                     )
                     llm_logger.info(
-                        f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                        f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()
