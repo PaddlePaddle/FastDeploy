@@ -58,7 +58,7 @@ model_param_map = {
             {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
         ],
     },
-    "DeepSeekV3-0324-5layers": {
+    "DeepSeek-V3-0324": {
         "tensor_parallel_size": 2,
         "quantizations": [
             {
