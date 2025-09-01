@@ -24,7 +24,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy import envs
-from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
@@ -68,7 +68,7 @@ def xpu_pre_process(
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype=paddle.int32)
     token_num = paddle.sum(seq_lens_this_time)
 
     (
@@ -1060,30 +1060,29 @@ class XPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, ids_remove_padding 1: {self.share_inputs["ids_remove_padding"]}')
-        # print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, image_features: {self.share_inputs["image_features"]}')
         if self.enable_mm:
             model_output = self.model(self.share_inputs["ids_remove_padding"],
                                                         self.share_inputs["image_features"],
                                                         self.forward_meta)
-            hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta)
 
-            hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta)
+        hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta)
 
-        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, hidddn_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, hidden_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}, {hidden_states}')
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
         print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, logits, max: {paddle.max(logits)}, min: {paddle.min(logits)}, mean: {paddle.mean(logits)}')
-
         sampler_output = self.sampler(logits, self.sampling_metadata)
+
+        
 
         # 5. Speculative decode
 
-        # 6. Post Process
         print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, next_tokens 1: {self.share_inputs["next_tokens"][0]}')
+        # 6. Post Process
         model_output_data = ModelOutputData(
             next_tokens=self.share_inputs["next_tokens"],
             stop_flags=self.share_inputs["stop_flags"],
@@ -1098,11 +1097,12 @@ class XPUModelRunner(ModelRunnerBase):
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_block_step=self.share_inputs["is_block_step"],
+            # 投机解码
+            full_hidden_states=None,
             msg_queue_id=self.parallel_config.msg_queue_id,
             mp_rank=self.local_rank,
             use_ep=self.parallel_config.use_ep,
-            # 投机解码
-            full_hidden_states=None,
+
             draft_tokens=None,
             actual_draft_token_num=None,
             accept_tokens=None,
@@ -1112,7 +1112,7 @@ class XPUModelRunner(ModelRunnerBase):
             need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
-            stop_seqs_len=self.share_inputs["stop_seqs_len"]
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
         xpu_post_process(
             sampled_token_ids=sampler_output.sampled_token_ids,

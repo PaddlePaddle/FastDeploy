@@ -1,8 +1,8 @@
 port=${1:-8080}
 
 timestamp=$(date +%Y%m%d%H%M%S)
-mv /host/FastDeploy/log /host/FastDeploy/log_history/log_$timestamp
-export PYTHONPATH=/host/FastDeploy
+mv $(pwd)/log $(pwd)/log_history/log_$timestamp
+export PYTHONPATH=$(pwd)
 python -m fastdeploy.entrypoints.openai.api_server \
        --model /host/EB4.5T-VL-4layer \
        --port $port --engine-worker-queue-port $((port+1)) \

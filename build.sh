@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export CLANG_PATH=$(pwd)/xtdk
+export XVLLM_PATH=$(pwd)/xvllm
+
 BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
@@ -23,10 +26,6 @@ FD_CPU_USE_BF16=${3:-"false"}
 # These will be translated to 90a / 100a in setup_ops.py for specific features.
 FD_BUILDING_ARCS=${4:-""}
 
-export CLANG_PATH=/host/FastDeploy/xtdk
-export XVLLM_PATH=/host/baidu/xpu/vllm/output
-export http_proxy=agent.baidu.com:8891
-export https_proxy=agent.baidu.com:8891
 
 # paddle distributed use to set archs
 unset PADDLE_CUDA_ARCH_LIST

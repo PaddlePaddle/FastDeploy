@@ -154,7 +154,6 @@ def xpu_setup_ops():
         "./ops/block_attn.cc",
         "./ops/moe_layer.cc",
         "./ops/weight_quantize_xpu.cc",
-        "./ops/extract_text_token_output.cc",
         "./ops/text_image_gather_scatter.cc",
         "./ops/text_image_index_out.cc",
         # device manage ops

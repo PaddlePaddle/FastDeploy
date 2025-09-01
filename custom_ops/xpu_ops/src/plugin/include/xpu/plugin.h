@@ -161,18 +161,6 @@ DLL_EXPORT int text_image_gather_scatter(api::Context* ctx,
                                          int64_t hidden_size,
                                          bool is_scatter);
 
-template <typename T>
-DLL_EXPORT int extract_text_token_output(Context* ctx,
-                                         int* max_seq_len,
-                                         int* max_seq_len_index,
-                                         int* mm_token_num_len,
-                                         int* seq_lens_this_time,
-                                         int* cu_seqlens_q,
-                                         T* score_text,
-                                         T* output,
-                                         const int bsz,
-                                         const int hidden_size);
-
 /*--------------------------------------- MTP being --------------------------------------------*/
 
 template <typename T>

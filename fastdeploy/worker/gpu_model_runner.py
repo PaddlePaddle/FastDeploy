@@ -1375,6 +1375,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, ids_remove_padding 1: {self.share_inputs["ids_remove_padding"]}')
+        hidden_states = None
         if self.enable_mm:
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"],
@@ -1397,7 +1398,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.parallel_config.max_model_len,
             )
 
-        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, hidddn_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}')
+        print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, hidden_states, max: {paddle.max(hidden_states)}, min: {paddle.min(hidden_states)}, mean: {paddle.mean(hidden_states)}, {hidden_states}')
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
         print(f'self.XPUModelRunner_cnt: {self.XPUModelRunner_cnt}, logits, max: {paddle.max(logits)}, min: {paddle.min(logits)}, mean: {paddle.mean(logits)}')
@@ -1532,6 +1533,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
+        self.XPUModelRunner_cnt += 1
         return None
 
     def _add_cache(self, model_forward_batch) -> None:
