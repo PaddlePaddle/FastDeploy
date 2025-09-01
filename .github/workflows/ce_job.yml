@@ -154,7 +154,6 @@ jobs:
       COMPILE_ARCH: "80,90"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
-      PADDLEVERSION: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
 
   build_sm8689:
@@ -168,7 +167,6 @@ jobs:
       COMPILE_ARCH: "86,89"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
-      PADDLEVERSION: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
 
   ce_upload_sm8090:
