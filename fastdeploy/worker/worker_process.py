@@ -262,7 +262,10 @@ class PaddleDisWorkerProc:
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                paddle.distributed.broadcast(self.model_weights_signal, src=0)
+                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
+                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
+            if self.fd_config.load_config.dynamic_load_weight:
+                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize before updating weights
@@ -297,8 +300,6 @@ class PaddleDisWorkerProc:
                     )
 
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
-                    paddle.distributed.barrier(self.parallel_config.ep_group)
-
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
                         # model_weights_signal
