@@ -119,6 +119,7 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.quantization = None
         self.think_end_id = None
+        self.lm_head_fp32 = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
