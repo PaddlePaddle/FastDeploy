@@ -637,6 +637,8 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
             ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
+            ("qkv_a_proj_with_mqa", "q_a_proj", "q_a"),
+            ("qkv_a_proj_with_mqa", "kv_a_proj_with_mqa", "kv_a"),
         ]
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(
