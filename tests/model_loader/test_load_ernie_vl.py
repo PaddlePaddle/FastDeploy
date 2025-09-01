@@ -23,6 +23,11 @@ import time
 import openai
 import pytest
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))

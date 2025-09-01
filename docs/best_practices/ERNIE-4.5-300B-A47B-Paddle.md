@@ -49,7 +49,7 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 **Idea:** The core idea of Prefix Caching is to avoid repeated calculations by caching the intermediate calculation results of the input sequence (KV Cache), thereby speeding up the response speed of multiple requests with the same prefix. For details, refer to [prefix-cache](../features/prefix_caching.md)
 
 **How to enable:**
-Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine.
+Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine. The recommended value is `(total machine memory - model size) * 20%`. If the service fails to start because other programs are occupying memory, try reducing the `--swap-space` value.
 ```
 --enable-prefix-caching
 --swap-space 50
@@ -72,6 +72,10 @@ Add the following lines to the startup parameters
 ```
 --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
 ```
+Notes:
+1. MTP currently does not support simultaneous use with Prefix Caching, Chunked Prefill, and CUDAGraph.
+2. MTP currently does not support service management global blocks, i.e. do not run with `export ENABLE_V1_KVCACHE_SCHEDULER=1`
+3. MTP currently does not support rejection sampling, i.e. do not run with `export FD_SAMPLING_CLASS=rejection`
 
 #### 2.2.5 W4A8C8 Quantization
 **Idea:**
@@ -134,8 +138,7 @@ Add the following lines to the startup parameters
 --use-cudagraph
 ```
 Notes:
-1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
-2. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
+- Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
 ## FAQ
 If you encounter any problems during use, you can refer to [FAQ](./FAQ.md).
