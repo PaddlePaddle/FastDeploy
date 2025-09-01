@@ -267,10 +267,6 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
 
-            if self.parallel_config.tensor_parallel_size > 1:
-                # Synchronize before updating weights
-                paddle.distributed.barrier(self.parallel_config.tp_group)
-
             self.insert_step = False
             req_dicts = None
             local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -287,6 +283,10 @@ class PaddleDisWorkerProc:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = 1
+
+            if self.parallel_config.tensor_parallel_size > 1:
+                # Synchronize the signal for other workers
+                paddle.distributed.barrier(self.parallel_config.tp_group)
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
