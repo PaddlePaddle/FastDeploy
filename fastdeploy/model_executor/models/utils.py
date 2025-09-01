@@ -23,6 +23,7 @@ import os
 import random
 import re
 import struct
+from contextlib import contextmanager
 from functools import partial
 from typing import Any, NamedTuple, Optional, Union
 
@@ -533,3 +534,15 @@ def parser_quant_type(quant_type):
             quant_type_list.append(default_type)
 
         return quant_type_list[0], quant_type_list[1], quant_type_list[2]
+
+
+@contextmanager
+def temporary_dtype(dtype: str):
+    """Temporarily set Paddle default dtype"""
+    orig_dtype = paddle.get_default_dtype()
+    try:
+        if dtype is not None and dtype == "float32":
+            paddle.set_default_dtype(dtype)
+        yield
+    finally:
+        paddle.set_default_dtype(orig_dtype)
