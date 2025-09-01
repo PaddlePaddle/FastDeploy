@@ -177,19 +177,19 @@ class FusedMoE(nn.Layer):
         if shard_id is None:
             # 1.gate up fused in disk
             model_format = getattr(param, "model_format", "")
-            is_opensource_weight = model_format == "torch"
+            is_torch_model = model_format == "torch"
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             per_rank = output_size // 2
             start = self.tp_rank * per_rank
             loaded_weight_shard_gate = slice_fn(
-                loaded_weight, is_opensource_weight ^ SHARD_ID_TO_SHARDED_DIM["gate"], start, start + per_rank
+                loaded_weight, is_torch_model ^ SHARD_ID_TO_SHARDED_DIM["gate"], start, start + per_rank
             )
             self._load_gate_up_weight(
                 param, expert_id, loaded_weight_shard_gate, "gate", SHARD_ID_TO_SHARDED_DIM["gate"], is_sharded=True
             )
             start_up = output_size // 2 * self.tp_size + self.tp_rank * per_rank
             loaded_weight_shard_up = slice_fn(
-                loaded_weight, is_opensource_weight ^ SHARD_ID_TO_SHARDED_DIM["up"], start_up, start_up + per_rank
+                loaded_weight, is_torch_model ^ SHARD_ID_TO_SHARDED_DIM["up"], start_up, start_up + per_rank
             )
             self._load_gate_up_weight(
                 param, expert_id, loaded_weight_shard_up, "up", SHARD_ID_TO_SHARDED_DIM["up"], is_sharded=True
@@ -207,10 +207,10 @@ class FusedMoE(nn.Layer):
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
         model_format = getattr(param, "model_format", "")
-        is_opensource_weight = model_format == "torch"
+        is_torch_model = model_format == "torch"
         if self.tp_size > 1 and not is_sharded:
-            weight_shard_dim = is_opensource_weight ^ shard_dim
-            weight_dim = -1 if weight_shard_dim else 0
+            tp_shard_dim = is_torch_model ^ shard_dim
+            weight_dim = -1 if tp_shard_dim else 0
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[weight_dim]
             else:
@@ -218,7 +218,7 @@ class FusedMoE(nn.Layer):
             block_size = size // self.tp_size
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
-            loaded_weight = slice_fn(loaded_weight, weight_shard_dim, shard_offset, shard_size)
+            loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         loaded_weight = get_tensor(loaded_weight)
         expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
@@ -249,10 +249,10 @@ class FusedMoE(nn.Layer):
 
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
         model_format = getattr(param, "model_format", "")
-        is_opensource_weight = model_format == "torch"
+        is_torch_model = model_format == "torch"
         if self.tp_size > 1 and shard_dim is not None:
-            weight_shard_dim = is_opensource_weight ^ shard_dim
-            dim = -1 if weight_shard_dim else 0
+            tp_shard_dim = is_torch_model ^ shard_dim
+            dim = -1 if tp_shard_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
             else:
@@ -260,7 +260,7 @@ class FusedMoE(nn.Layer):
             block_size = size // self.tp_size
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
-            loaded_weight = slice_fn(loaded_weight, weight_shard_dim, shard_offset, shard_size)
+            loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         loaded_weight = get_tensor(loaded_weight)
         expert_param = param[expert_id - self.expert_id_offset]
         if hasattr(param, "tensor_track"):
