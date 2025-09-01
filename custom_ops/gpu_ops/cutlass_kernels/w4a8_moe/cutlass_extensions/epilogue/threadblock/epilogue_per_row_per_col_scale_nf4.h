@@ -219,7 +219,7 @@ class EpilogueVisitorPerRowPerColNf4 {
       iterator_C_.clear_mask();
     }
     // NOTE(wangbojun) Currently, this kernel don't hanve implantention for
-    // adding elementwise beta, we keep this here for future useage beta_ =
+    // adding elementwise beta, we keep this here for future usage beta_ =
     // (params.elementwise.beta_ptr ? *params.elementwise.beta_ptr :
     // params.elementwise.beta); if (beta_ == ElementAccumulator()) {
     //     iterator_C_.clear_mask();
