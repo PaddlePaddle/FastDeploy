@@ -17,12 +17,12 @@
 import numpy as np
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.ppocr_vl_processor import DataProcessor
+from fastdeploy.input.qf_vl_processor import DataProcessor
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
 
-class PPOCRVLProcessor(TextProcessor):
+class QFVLProcessor(TextProcessor):
     """
     PaddleOCR Vision-Language processor for handling multimodal inputs.
 

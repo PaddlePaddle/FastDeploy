@@ -490,7 +490,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
-                    if "ppocr" in self.model_config.model_type:
+                    if "qf" in self.model_config.model_type:
                         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
                         self.share_inputs["rope_emb"] = get_rope(
                             rotary_dim=self.model_config.head_dim,
@@ -1813,7 +1813,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         return image_features
 
-    def extract_vision_features_ppocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+    def extract_vision_features_qf(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
         images = inputs["images"]
@@ -1855,8 +1855,8 @@ class GPUModelRunner(ModelRunnerBase):
             return self.extract_vision_features_ernie(inputs)
         elif "qwen" in self.model_config.model_type:
             return self.extract_vision_features_qwen(inputs)
-        elif "ppocr" in self.model_config.model_type:
-            return self.extract_vision_features_ppocr(inputs)
+        elif "qf" in self.model_config.model_type:
+            return self.extract_vision_features_qf(inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 

@@ -48,7 +48,7 @@ from .siglip import SiglipVisionModel
 
 
 @support_graph_optimization
-class PPOCRVLModel(nn.Layer):
+class QFVLModel(nn.Layer):
     def __init__(
         self,
         fd_config: FDConfig = None,
@@ -139,7 +139,7 @@ class PPOCRVLModel(nn.Layer):
         return out
 
 
-class PPOCRVLForConditionalGeneration(ModelForCasualLM):
+class QFVLForConditionalGeneration(ModelForCasualLM):
     def __init__(self, fd_config):
         super().__init__(fd_config)
 
@@ -147,7 +147,7 @@ class PPOCRVLForConditionalGeneration(ModelForCasualLM):
         self.config = config
         self.mlp_AR = Projector(config, config.vision_config, prefix="mlp_AR")
         self.visual = SiglipVisionModel(config.vision_config, prefix="visual")
-        self.model = PPOCRVLModel(fd_config)
+        self.model = QFVLModel(fd_config)
         self.vocab_size = config.vocab_size
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
@@ -177,7 +177,7 @@ class PPOCRVLForConditionalGeneration(ModelForCasualLM):
 
     @classmethod
     def name(self):
-        return "PPOCRVLForConditionalGeneration"
+        return "QFVLForConditionalGeneration"
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
@@ -201,7 +201,7 @@ class PPOCRVLForConditionalGeneration(ModelForCasualLM):
         return hidden_states
 
 
-class PPOCRVLPretrainedModel(PretrainedModel):
+class QFVLPretrainedModel(PretrainedModel):
 
     config_class = FDConfig
 
@@ -213,7 +213,7 @@ class PPOCRVLPretrainedModel(PretrainedModel):
 
     @classmethod
     def arch_name(self):
-        return "PPOCRVLForConditionalGeneration"
+        return "QFVLForConditionalGeneration"
 
     from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
     from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid

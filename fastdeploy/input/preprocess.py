@@ -117,10 +117,10 @@ class InputPreprocessor:
                         reasoning_parser_obj=reasoning_parser_obj,
                         tool_parser_obj=tool_parser_obj,
                     )
-                elif "PPOCRVL" in architectures:
-                    from fastdeploy.input.ppocr_vl_processor import PPOCRVLProcessor
+                elif "QFVL" in architectures:
+                    from fastdeploy.input.qf_vl_processor import QFVLProcessor
 
-                    self.processor = PPOCRVLProcessor(
+                    self.processor = QFVLProcessor(
                         config=config,
                         model_name_or_path=self.model_name_or_path,
                         limit_mm_per_prompt=self.limit_mm_per_prompt,
