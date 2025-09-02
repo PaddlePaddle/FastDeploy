@@ -93,8 +93,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # enable multi api server
     "FD_ENABLE_MULTI_API_SERVER": lambda: bool(int(os.getenv("FD_ENABLE_MULTI_API_SERVER", "0"))),
     "FD_FOR_TORCH_MODEL_FORMAT": lambda: bool(int(os.getenv("FD_FOR_TORCH_MODEL_FORMAT", "0"))),
-    # force enable chunked prefill
-    "FD_FORCE_CHUNKED_PREFILL": lambda: bool(int(os.getenv("FD_FORCE_CHUNKED_PREFILL", "0"))),
+    # force disable default chunked prefill
+    "FD_DISABLE_CHUNKED_PREFILL": lambda: bool(int(os.getenv("FD_DISABLE_CHUNKED_PREFILL", "0"))),
 }
 
 
