@@ -1661,7 +1661,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.clear_caches()
 
     def clear_parameters(self, pid):
-        """ " Dynamic model loader use to clear parameters use for RL"""
+        """Dynamic model loader use to clear parameters use for RL"""
         # Clear CUDAGraph
         if self.use_cudagraph:
             self.model.clear_grpah_opt_backend()
@@ -1673,7 +1673,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
-        """ " Dynamic model loader use to update parameters use for RL"""
+        """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
