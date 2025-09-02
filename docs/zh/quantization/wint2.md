@@ -39,6 +39,60 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 256
 ```
 
+## 用户发起服务请求
+
+执行启动服务指令后，当终端打印如下信息，说明服务已经启动成功。
+
+```
+api_server.py[line:91] Launching metrics service at http://0.0.0.0:8181/metrics
+api_server.py[line:94] Launching chat completion service at http://0.0.0.0:8180/v1/chat/completions
+api_server.py[line:97] Launching completion service at http://0.0.0.0:8180/v1/completions
+INFO:     Started server process [13909]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8180 (Press CTRL+C to quit)
+```
+
+FastDeploy提供服务探活接口，用以判断服务的启动状态，执行如下命令返回 ```HTTP/1.1 200 OK``` 即表示服务启动成功。
+
+```shell
+curl -i http://0.0.0.0:8180/health
+```
+
+通过如下命令发起服务请求
+
+```shell
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "把李白的静夜思改写为现代诗"}
+  ]
+}'
+```
+
+FastDeploy服务接口兼容OpenAI协议，可以通过如下Python代码发起服务请求。
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8180"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "把李白的静夜思改写为现代诗"},
+    ],
+    stream=True,
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
 通过指定 `--model baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle` 可自动从AIStudio下载已离线量化好的WINT2模型，在该模型的config.json文件中，会有WINT2量化相关的配置信息，不用再在启动推理服务时设置 `--quantization`.
 
 模型的config.json文件中的量化配置示例如下：
