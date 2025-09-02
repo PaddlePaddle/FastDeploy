@@ -183,14 +183,16 @@ class MoEMethodBase(QuantMethodBase):
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
-
+        num_experts = extra_weight_attrs.get("num_experts")
+        hidden_size = extra_weight_attrs.get("hidden_size")
+        moe_intermediate_size = extra_weight_attrs.get("moe_intermediate_size")
         if current_platform.is_cuda():
-            self.up_gate_proj_weight_shape = [layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2]
-            self.down_proj_weight_shape = [layer.num_experts, layer.moe_intermediate_size, layer.hidden_size]
+            self.up_gate_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size * 2]
+            self.down_proj_weight_shape = [num_experts, moe_intermediate_size, hidden_size]
             extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1}}
         else:
-            self.up_gate_proj_weight_shape = [layer.num_experts, layer.moe_intermediate_size * 2, layer.hidden_size]
-            self.down_proj_weight_shape = [layer.num_experts, layer.hidden_size, layer.moe_intermediate_size]
+            self.up_gate_proj_weight_shape = [num_experts, moe_intermediate_size * 2, hidden_size]
+            self.down_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size]
             extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
 
         layer.up_gate_proj_weight = layer.create_parameter(
