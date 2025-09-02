@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import os
 import re
 import shutil
@@ -110,6 +111,8 @@ def setup_and_run_server():
         "--use-cudagraph",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
+        "--guided-decoding-backend",
+        "auto",
     ]
 
     # Start subprocess in new process group
@@ -1142,3 +1145,336 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def streaming_chat_base(openai_client, chat_param):
+    """
+    Test streaming chat base functionality with the local service
+    """
+    assert isinstance(chat_param, dict), f"{chat_param} should be a dict"
+    assert "messages" in chat_param, f"{chat_param} should contain messages"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        stream=True,
+        **chat_param,
+    )
+
+    output = []
+    for chunk in response:
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
+            output.append(chunk.choices[0].delta.content)
+    assert len(output) > 2
+    return "".join(output)
+
+
+def non_streaming_chat_base(openai_client, chat_param):
+    """
+    Test non streaming chat base functionality with the local service
+    """
+    assert isinstance(chat_param, dict), f"{chat_param} should be a dict"
+    assert "messages" in chat_param, f"{chat_param} should contain messages"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        stream=False,
+        **chat_param,
+    )
+
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+    return response.choices[0].message.content
+
+
+def test_structured_outputs_json_schema(openai_client):
+    """
+    Test structured outputs json_schema functionality with the local service
+    """
+    chat_param = {
+        "temperature": 1,
+        "max_tokens": 1024,
+    }
+
+    # json_object
+    json_chat_param = {
+        "messages": [
+            {
+                "role": "user",
+                "content": "Generate a JSON object containing: names of China's Four Great Inventions, their dynasties of origin, and brief descriptions (each under 50 characters)",
+            }
+        ],
+        "response_format": {"type": "json_object"},
+    }
+    json_chat_param.update(chat_param)
+
+    response = streaming_chat_base(openai_client, json_chat_param)
+    try:
+        json.loads(response)
+        is_valid = True
+    except ValueError:
+        is_valid = False
+
+    assert is_valid, f"json_schema streaming response: {response} is not a valid json"
+
+    response = non_streaming_chat_base(openai_client, json_chat_param)
+    try:
+        json.loads(response)
+        is_valid = True
+    except ValueError:
+        is_valid = False
+
+    assert is_valid, f"json_schema non_streaming response: {response} is not a valid json"
+
+    # json_schema
+    from enum import Enum
+
+    from pydantic import BaseModel
+
+    class BookType(str, Enum):
+        romance = "Romance"
+        historical = "Historical"
+        adventure = "Adventure"
+        mystery = "Mystery"
+        dystopian = "Dystopian"
+
+    class BookDescription(BaseModel):
+        author: str
+        title: str
+        genre: BookType
+
+    json_schema_param = {
+        "messages": [
+            {
+                "role": "user",
+                "content": "Generate a JSON describing a literary work, including author, title and book type.",
+            }
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "book-description", "schema": BookDescription.model_json_schema()},
+        },
+    }
+    json_schema_param.update(chat_param)
+    response = streaming_chat_base(openai_client, json_schema_param)
+    try:
+        json_schema_response = json.loads(response)
+        is_valid = True
+    except ValueError:
+        is_valid = False
+
+    assert is_valid, f"json_schema streaming response: {response} is not a valid json"
+    assert (
+        "author" in json_schema_response and "title" in json_schema_response and "genre" in json_schema_response
+    ), f"json_schema streaming response: {response} is not a valid book-description"
+    assert json_schema_response["genre"] in {
+        genre.value for genre in BookType
+    }, f"json_schema streaming response: {json_schema_response['genre']} is not a valid book-type"
+
+    response = non_streaming_chat_base(openai_client, json_schema_param)
+    try:
+        json_schema_response = json.loads(response)
+        is_valid = True
+    except ValueError:
+        is_valid = False
+
+    assert is_valid, f"json_schema non_streaming response: {response} is not a valid json"
+    assert (
+        "author" in json_schema_response and "title" in json_schema_response and "genre" in json_schema_response
+    ), f"json_schema non_streaming response: {response} is not a valid book-description"
+    assert json_schema_response["genre"] in {
+        genre.value for genre in BookType
+    }, f"json_schema non_streaming response: {json_schema_response['genre']} is not a valid book-type"
+
+
+def test_structured_outputs_structural_tag(openai_client):
+    """
+    Test structured outputs structural_tag functionality with the local service
+    """
+    content_str = """
+        You have the following function available:
+
+        {
+            "name": "get_current_date",
+            "description": "Get current date and time for given timezone",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone to get current date/time, e.g.: Asia/Shanghai",
+                    }
+                },
+                "required": ["timezone"],
+            }
+        }
+
+        If you choose to call only this function, reply in this format:
+        <{start_tag}={function_name}>{parameters}{end_tag}
+        where:
+
+        start_tag => `<function`
+        parameters => JSON dictionary with parameter names as keys
+        end_tag => `</function>`
+
+        Example:
+        <function=example_function>{"param": "value"}</function>
+
+        Note:
+        - Function call must follow specified format
+        - Required parameters must be specified
+        - Only one function can be called at a time
+        - Place entire function call response on a single line
+
+        You are an AI assistant. Answer the following question.
+    """
+
+    structural_tag_param = {
+        "temperature": 1,
+        "max_tokens": 1024,
+        "messages": [
+            {
+                "role": "system",
+                "content": content_str,
+            },
+            {
+                "role": "user",
+                "content": "You're traveling to Shanghai today",
+            },
+        ],
+        "response_format": {
+            "type": "structural_tag",
+            "structures": [
+                {
+                    "begin": "<function=get_current_date>",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "timezone": {
+                                "type": "string",
+                                "description": "Timezone to get current date/time, e.g.: Asia/Shanghai",
+                            }
+                        },
+                        "required": ["timezone"],
+                    },
+                    "end": "</function>",
+                }
+            ],
+            "triggers": ["<function="],
+        },
+    }
+
+    expect_str1 = "get_current_date"
+    expect_str2 = "Asia/Shanghai"
+    response = streaming_chat_base(openai_client, structural_tag_param)
+    assert expect_str1 in response, f"structural_tag streaming response: {response} is not as expected"
+    assert expect_str2 in response, f"structural_tag streaming response: {response} is not as expected"
+
+    response = non_streaming_chat_base(openai_client, structural_tag_param)
+    assert expect_str1 in response, f"structural_tag non_streaming response: {response} is not as expected"
+    assert expect_str2 in response, f"structural_tag non_streaming response: {response} is not as expected"
+
+
+def test_structured_outputs_choice(openai_client):
+    """
+    Test structured outputs choice functionality with the local service
+    """
+    choice_param = {
+        "temperature": 1,
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": "What is the landmark building in Shenzhen?"}],
+        "extra_body": {
+            "guided_choice": ["Ping An Finance Centre", "China Resources Headquarters", "KK100", "Diwang Mansion"]
+        },
+    }
+
+    response = streaming_chat_base(openai_client, choice_param)
+    assert response in [
+        "Ping An Finance Centre",
+        "China Resources Headquarters",
+        "KK100",
+        "Diwang Mansion",
+    ], f"choice streaming response: {response} is not as expected"
+    response = non_streaming_chat_base(openai_client, choice_param)
+    assert response in [
+        "Ping An Finance Centre",
+        "China Resources Headquarters",
+        "KK100",
+        "Diwang Mansion",
+    ], f"choice non_streaming response: {response} is not as expected"
+
+
+def test_structured_outputs_regex(openai_client):
+    """
+    Test structured outputs regex functionality with the local service
+    """
+    regex_param = {
+        "temperature": 1,
+        "max_tokens": 1024,
+        "messages": [
+            {
+                "role": "user",
+                "content": "Generate a standard format web address including protocol and domain.\n",
+            }
+        ],
+        "extra_body": {"guided_regex": r"^https:\/\/www\.[a-zA-Z]+\.com\/?$\n"},
+    }
+
+    import re
+
+    response = streaming_chat_base(openai_client, regex_param)
+    assert re.fullmatch(
+        r"^https:\/\/www\.[a-zA-Z]+\.com\/?$\n", response
+    ), f"regex streaming response: {response} is not as expected"
+    response = non_streaming_chat_base(openai_client, regex_param)
+    assert re.fullmatch(
+        r"^https:\/\/www\.[a-zA-Z]+\.com\/?$\n", response
+    ), f"regex non_streaming response: {response} is not as expected"
+
+
+def test_structured_outputs_grammar(openai_client):
+    """
+    Test structured outputs grammar functionality with the local service
+    """
+    html_h1_grammar = """
+        root ::= html_statement
+
+        html_statement ::= "<h1" style_attribute? ">" text "</h1>"
+
+        style_attribute ::= " style=" dq style_value dq
+
+        style_value ::= (font_style ("; " font_weight)?) | (font_weight ("; " font_style)?)
+
+        font_style ::= "font-family: '" font_name "'"
+
+        font_weight ::= "font-weight: " weight_value
+
+        font_name ::= "Arial" | "Times New Roman" | "Courier New"
+
+        weight_value ::= "normal" | "bold"
+
+        text ::= [A-Za-z0-9 ]+
+
+        dq ::= ["]
+    """
+
+    grammar_param = {
+        "temperature": 1,
+        "max_tokens": 1024,
+        "messages": [
+            {
+                "role": "user",
+                "content": "Generate HTML code for this heading in bold Times New Roman font: ERNIE Bot",
+            }
+        ],
+        "extra_body": {"guided_grammar": html_h1_grammar},
+    }
+
+    import re
+
+    pattern = r'^<h1( style="[^"]*")?>[A-Za-z0-9 ]+</h1>$'
+    response = streaming_chat_base(openai_client, grammar_param)
+    assert re.fullmatch(pattern, response), f"grammar streaming response: {response} is not as expected"
+    response = non_streaming_chat_base(openai_client, grammar_param)
+    assert re.fullmatch(pattern, response), f"grammar non_streaming response: {response} is not as expected"
