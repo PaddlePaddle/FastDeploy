@@ -67,7 +67,7 @@ std::vector<paddle::Tensor> MoeLayerKernel(
     const auto xtype = x.dtype();
     auto x_dims = x.shape();
     auto up_gate_proj_dims = up_gate_proj_weight.shape();
-    PD_CHECK(x_dims.size() == 2, "x_dims.size() shoud be 2.");
+    PD_CHECK(x_dims.size() == 2, "x_dims.size() should be 2.");
     PD_CHECK(up_gate_proj_dims.size() == 3, "up_gate_proj_dims.size() should be 3.");
     PD_CHECK(down_proj_in_scale.get_ptr() == nullptr, "down_proj_in_scale not support.");
     if (quant_method == "weight_only_int4") {
