@@ -509,7 +509,7 @@ public:
                     this->warp_tile_iterator_B_.load(warp_frag_B[(warp_tileB_k_load_offset + 1) % 2]);
                     ++this->warp_tile_iterator_B_;
                 }
-                // TOOD(wangbojun) lds_converter can be remove for int8 B input
+                // TODO(wangbojun) lds_converter can be remove for int8 B input
                 typename TransformBAfterLDS::result_type converted_frag_B =
                     lds_converter(warp_frag_B[warp_tileB_k_load_offset % 2]);
 

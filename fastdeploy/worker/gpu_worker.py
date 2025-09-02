@@ -60,7 +60,7 @@ class GpuWorker(WorkerBase):
         """
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda():
-            # Set evironment variable
+            # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
@@ -169,7 +169,7 @@ class GpuWorker(WorkerBase):
             )
         )
 
-        return available_kv_cache_memory  # return to caculate the block num in this device
+        return available_kv_cache_memory  # return to calculate the block num in this device
 
     def load_model(self) -> None:
         """Load model"""
@@ -209,7 +209,7 @@ class GpuWorker(WorkerBase):
         """
         if self.model_runner.graph_opt_level >= 1:
             self.model_runner.sot_warmup()
-        # Triger cuda grpah capture
+        # Trigger cuda graph capture
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:

@@ -644,13 +644,13 @@ class EngineSevice:
                     self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receving new request from zmq, details={e}, "
+                    f"Error happend while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:
