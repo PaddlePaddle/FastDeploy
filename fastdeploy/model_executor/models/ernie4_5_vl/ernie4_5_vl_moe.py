@@ -156,7 +156,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             weight_key="weight" if moe_tag == "Text" else "weight_1",
         )
 
-        # for torch model
+        # For torch model, ReplicatedLinear don't need to transpose weight
         setattr(
             self.gate.weight,
             "model_format",

@@ -363,13 +363,6 @@ class VariableResolutionResamplerModel(nn.Layer):
                 if state_dict_key not in state_dict:
                     raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
             tensor = get_tensor(state_dict.pop(state_dict_key))
-
-            # Support for torch format weights - transpose linear layer weights
-            if self.config.model_format == "torch" and "weight" in param_name and "norm" not in param_name.lower():
-                # Only transpose weight parameters for linear layers (not bias or norm layers)
-                if len(tensor.shape) == 2:  # Only transpose 2D weight matrices
-                    tensor = tensor.transpose([1, 0])
-
             if param.shape != tensor.shape:
                 raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
