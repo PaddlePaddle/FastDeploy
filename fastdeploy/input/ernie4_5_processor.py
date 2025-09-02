@@ -398,7 +398,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
             chat_template=request_or_messages.get("chat_template", None),
-            add_generation_prompt=True
+            add_generation_prompt=True,
         )
         request_or_messages["text_after_process"] = spliced_message
         req_id = None
