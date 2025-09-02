@@ -267,7 +267,7 @@ class TokenProcessor:
             spec_logger.info(
                 f"Speculate global accept ratio(Accept draft_tokens/Generated tokens): {accept_ratio}"
                 f" total step: {self.total_step}. total output token num: {self.number_of_output_tokens}"
-                f" avarage accept len: {self.number_of_output_tokens / self.total_step}"
+                f" average accept len: {self.number_of_output_tokens / self.total_step}"
             )
 
             if self.cfg.speculative_config.method in ["mtp"]:

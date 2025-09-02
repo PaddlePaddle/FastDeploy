@@ -257,7 +257,7 @@ class ParallelConfig:
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
         self.moe_phase = MoEPhase("prefill")  # Generation phase
-        self.msg_queue_id = 1  # mesage queue id
+        self.msg_queue_id = 1  # message queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
         self.tensor_parallel_size = 1  # TP degree
@@ -549,7 +549,7 @@ class GraphOptimizationConfig:
             It requires that all input buffers have fixed addresses, and all
             splitting ops write their outputs to input buffers.
             - With dyncmic graph backend: ...
-            - With static grpah backend: WIP
+            - With static graph backend: WIP
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
@@ -1233,23 +1233,14 @@ class FDConfig:
 
         self.paddle_commit_id = paddle.version.commit
 
-        if self.cache_config.enable_chunked_prefill:
-            self.force_chunked_prefill = int(envs.FD_FORCE_CHUNKED_PREFILL)
-            if (
-                self.speculative_config is not None
-                and self.speculative_config.method in ["mtp"]
-                and not self.force_chunked_prefill
-            ):
-                self.cache_config.enable_chunked_prefill = False
-
         if self.max_num_batched_tokens is None:
-            if self.cache_config.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
-                    self.max_num_batched_tokens = self.max_model_len
+                if self.cache_config.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = self.max_model_len
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)

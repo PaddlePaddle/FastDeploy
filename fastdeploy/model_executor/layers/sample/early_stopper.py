@@ -35,7 +35,7 @@ class EarlyStopper:
     @abstractmethod
     def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         """
-        processs the stopper and set the stop_flags corresponding to the batch that triggers early stop to True
+        process the stopper and set the stop_flags corresponding to the batch that triggers early stop to True
         args:
             - probs: [batch_size, vocab_size], the probs of every sample
             - next_tokens: [batch_size, 1], the token index of every chosen sample

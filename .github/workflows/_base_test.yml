@@ -44,7 +44,7 @@ jobs:
             FULL_REPO="${{ github.repository }}"
             REPO_NAME="${FULL_REPO##*/}"
             BASE_BRANCH="${{ github.base_ref }}"
-
+            docker pull ${docker_image}
             # Clean the repository directory before starting
             docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
             -e "REPO_NAME=${REPO_NAME}" \
@@ -134,7 +134,6 @@ jobs:
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
-          -e "FD_FORCE_CHUNKED_PREFILL=1" \
           -v "${MODEL_CACHE_DIR}:/MODELDATA" \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
