@@ -461,10 +461,6 @@ class OpenAIServingCompletion:
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
 
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
