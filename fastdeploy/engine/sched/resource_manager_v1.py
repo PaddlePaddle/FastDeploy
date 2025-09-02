@@ -147,7 +147,7 @@ class ResourceManagerV1(ResourceManager):
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
-            assert prompt_token_ids_len == len(inputs["patch_idx"])
+            assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
 
             # start
             if pre_end_idx >= prompt_token_ids_len:
@@ -165,9 +165,9 @@ class ResourceManagerV1(ResourceManager):
             else:
                 end_patch_idx = inputs["patch_idx"][new_end_idx]
                 if request.prompt_token_ids[new_end_idx] in [
-                    inputs.image_end_id,
-                    inputs.video_end_id,
-                    inputs.audio_end_id,
+                    inputs["image_end_id"],
+                    inputs["video_end_id"],
+                    inputs["audio_end_id"],
                 ]:
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
