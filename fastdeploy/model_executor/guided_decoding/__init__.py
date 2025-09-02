@@ -15,8 +15,13 @@
 """
 
 # from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
+    BackendBase,
+    BaseChecker,
+    LogitsProcessorBase,
+)
 
-__all__ = ["get_guided_backend", "schema_checker"]
+__all__ = ["get_guided_backend", "schema_checker", "LogitsProcessorBase", "BackendBase", "BaseChecker"]
 
 
 def get_guided_backend(

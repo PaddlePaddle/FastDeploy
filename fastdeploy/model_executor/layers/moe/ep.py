@@ -18,7 +18,6 @@ from abc import abstractmethod
 
 import paddle
 from paddle import nn
-from paddle.base.core import Config
 from paddleformers.utils.log import logger
 
 try:
@@ -78,6 +77,7 @@ class DeepEPEngine:
         splitwise_role: str,
         moe_phase: MoEPhase,
         async_finish: bool = False,
+        group=None,
     ):
         """
         Initialize the DeepEP engine.
@@ -90,7 +90,9 @@ class DeepEPEngine:
             num_experts: The number of experts.
         """
         # TODO(@wufeisheng): Support configurable EP size​
-        self.group = paddle.distributed.new_group(range(ep_size))
+        if group is None:
+            group = paddle.distributed.new_group(range(ep_size))
+        self.group = group
         self.ep_size = ep_size
         self.rank_id = ep_rank
         self.hidden = hidden
@@ -99,6 +101,8 @@ class DeepEPEngine:
         self.async_finish = async_finish
 
         self.deepep_engine = None
+
+        from paddle.base.core import Config
 
         self.ep_config = Config(24, 6, 256)
         self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
@@ -114,7 +118,7 @@ class DeepEPEngine:
                 low_latency_mode=True,
                 num_qps_per_rank=24,
             )
-        # In disaggregated mode on mutiple nodes, we either use
+        # In disaggregated mode on multiple nodes, we either use
         # high throughput mode or low latency mode.
         else:
             if moe_phase.phase == "decode":
@@ -277,6 +281,7 @@ class EPRunner:
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
+        ep_group=None,
     ):
         self.top_k = top_k
         self.num_experts = num_experts
@@ -289,6 +294,7 @@ class EPRunner:
             ep_rank=ep_rank,
             splitwise_role=splitwise_role,
             moe_phase=moe_phase,
+            group=ep_group,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
@@ -367,6 +373,7 @@ class EPPrefillRunner(EPRunner):
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
+        ep_group=None,
         moe_phase: MoEPhase = MoEPhase("prefill"),
     ):
         super().__init__(
@@ -379,6 +386,7 @@ class EPPrefillRunner(EPRunner):
             ep_size=ep_size,
             ep_rank=ep_rank,
             redundant_experts_num=redundant_experts_num,
+            ep_group=ep_group,
         )
 
     def dispatch(
@@ -445,6 +453,7 @@ class EPDecoderRunner(EPRunner):
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
+        ep_group=None,
         moe_phase: MoEPhase = MoEPhase("decode"),
     ):
         super().__init__(
@@ -457,6 +466,7 @@ class EPDecoderRunner(EPRunner):
             ep_size=ep_size,
             ep_rank=ep_rank,
             redundant_experts_num=redundant_experts_num,
+            ep_group=ep_group,
         )
 
     def dispatch(

@@ -646,7 +646,7 @@ public:
                     //             );
                     // }
                 }
-                // TOOD(wangbojun) lds_converter can be remove for int8 B input
+                // TODO(wangbojun) lds_converter can be remove for int8 B input
                 // int4
                 // typename TransformBAfterLDS::result_type converted_frag_B =
                 //     lds_converter(warp_frag_B[warp_tileB_k_load_offset % 2]);
