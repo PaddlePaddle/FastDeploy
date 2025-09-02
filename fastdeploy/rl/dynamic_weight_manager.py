@@ -117,6 +117,7 @@ class DynamicWeightManager:
         paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
         self._update_shared_status(pid, -2)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
