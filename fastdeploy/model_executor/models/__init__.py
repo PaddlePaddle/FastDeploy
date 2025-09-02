@@ -23,10 +23,12 @@ from paddleformers.transformers import PretrainedModel
 
 from fastdeploy.plugins.model_register import load_model_register_plugins
 
-from .model_base import ModelForCasualLM, ModelRegistry
+from .model_base import ModelForCasualLM
+from .registry import model_registry
 
 
 def _find_py_files(root_dir):
+    """查找Python文件"""
     root_path = Path(root_dir)
     py_files = []
     for py_file in root_path.rglob("*.py"):
@@ -39,27 +41,47 @@ def _find_py_files(root_dir):
 
 
 def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.models"):
-    """
-    auto registry all models in this folder
-    """
+    """自动注册模型"""
     for module_file in _find_py_files(dir_path):
         try:
             module = importlib.import_module(f"{register_path}.{module_file}")
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
+
+                # 注册模型类
                 if inspect.isclass(attr) and issubclass(attr, ModelForCasualLM) and attr is not ModelForCasualLM:
-                    ModelRegistry.register_model_class(attr)
+                    model_registry.register_model_class(attr)
+
+                # 注册预训练模型
                 if (
                     inspect.isclass(attr)
                     and issubclass(attr, PretrainedModel)
                     and attr is not PretrainedModel
                     and hasattr(attr, "arch_name")
                 ):
-                    ModelRegistry.register_pretrained_model(attr)
-        except ImportError:
-            raise ImportError(f"{module_file=} import error")
+                    model_registry.register_pretrained_model(attr)
+
+        except ImportError as e:
+            print(f"导入 {module_file} 失败: {e}")
 
 
+# 自动注册
 auto_models_registry(os.path.dirname(__file__))
 
+# 加载插件
 load_model_register_plugins()
+
+# 为了兼容性，保留旧接口
+ModelRegistry = type(
+    "ModelRegistry",
+    (),
+    {
+        "register_model_class": model_registry.register_model_class,
+        "register_pretrained_model": model_registry.register_pretrained_model,
+        "get_pretrain_cls": model_registry.get_pretrain_cls,
+        "get_class": model_registry.get_class,
+        "get_supported_archs": model_registry.get_supported_archs,
+    },
+)
+
+__all__ = ["model_registry", "ModelForCasualLM", "ModelRegistry"]

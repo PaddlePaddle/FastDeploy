@@ -25,7 +25,7 @@ from fastdeploy.model_executor.load_weight_utils import (
     measure_time,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
-from fastdeploy.model_executor.models.model_base import ModelRegistry
+from fastdeploy.model_executor.models.registry import model_registry
 from fastdeploy.platforms import current_platform
 
 
@@ -62,7 +62,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
             architectures = architectures + "RL"
 
         with context:
-            model_cls = ModelRegistry.get_class(architectures)
+            model_cls = model_registry.get_class(architectures)
             model = model_cls(fd_config)
 
         model.eval()

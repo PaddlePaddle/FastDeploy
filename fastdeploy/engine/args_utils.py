@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from fastdeploy.config import (
     CacheConfig,
+    ConvertOption,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
@@ -29,6 +30,7 @@ from fastdeploy.config import (
     MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    RunnerOption,
     SpeculativeConfig,
     TaskOption,
 )
@@ -90,6 +92,16 @@ class EngineArgs:
     task: TaskOption = "generate"
     """
     The task to be executed by the model.
+    """
+    runner: RunnerOption = "auto"
+    """
+    The type of model runner to use.Each FD instance only supports one model runner.
+    even if the same model can be used for multiple types.
+    """
+    convert: ConvertOption = "auto"
+    """
+    Convert the model using adapters. The most common use case is to
+    adapt a text generation model to be used for pooling tasks.
     """
     max_num_seqs: int = 8
     """
@@ -453,6 +465,15 @@ class EngineArgs:
             type=str,
             default=EngineArgs.task,
             help="Task to be executed by the model.",
+        )
+        model_group.add_argument(
+            "--runner",
+            type=str,
+            default=EngineArgs.runner,
+            help="The type of model runner to use",
+        )
+        model_group.add_argument(
+            "--convert", type=str, default=EngineArgs.convert, help="Convert the model using adapters"
         )
         model_group.add_argument(
             "--use-warmup",
@@ -976,8 +997,11 @@ class EngineArgs:
         """
         Create and return a Config object based on the current settings.
         """
+        print("create_engine_config")
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
+
+        # if model_cfg.
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

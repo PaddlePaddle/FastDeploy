@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import enum
 import json
 import os
 from enum import Enum
@@ -31,11 +32,73 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.transformer_utils.config import get_pooling_config
 from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
 
 logger = get_logger("config", "config.log")
 
-TaskOption = Literal["generate"]
+TaskOption = Literal["auto", "generate", "embedding", "embed"]
+
+RunnerType = Literal["generate", "pooling"]
+
+RunnerOption = Literal["auto", "generate", "pooling"]
+
+ConvertOption = Literal["auto", "none", "embed"]
+
+ConvertType = Literal["none", "embed"]
+
+_RUNNER_TASKS: dict[RunnerType, list[TaskOption]] = {
+    "generate": ["generate", "transcription"],
+    "pooling": ["embedding", "embed"],
+}
+
+_RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
+    "generate": [],
+    "pooling": ["embed"],
+}
+
+_SUFFIX_TO_DEFAULTS: list[tuple[str, tuple[RunnerType, ConvertType]]] = [
+    ("ForCausalLM", ("generate", "none")),
+    ("ForConditionalGeneration", ("generate", "none")),
+    ("ChatModel", ("generate", "none")),
+    ("LMHeadModel", ("generate", "none")),
+    ("ForTextEncoding", ("pooling", "embed")),
+    ("EmbeddingModel", ("pooling", "embed")),
+    ("ForSequenceClassification", ("pooling", "classify")),
+    ("ForAudioClassification", ("pooling", "classify")),
+    ("ForImageClassification", ("pooling", "classify")),
+    ("ForVideoClassification", ("pooling", "classify")),
+    ("ClassificationModel", ("pooling", "classify")),
+    ("ForRewardModeling", ("pooling", "reward")),
+    ("RewardModel", ("pooling", "reward")),
+    # Let other `*Model`s take priority
+    ("Model", ("pooling", "embed")),
+]
+
+
+def iter_architecture_defaults():
+    yield from _SUFFIX_TO_DEFAULTS
+
+
+def try_match_architecture_defaults(
+    architecture: str,
+    *,
+    runner_type: Optional[RunnerType] = None,
+    convert_type: Optional[ConvertType] = None,
+):
+    for suffix, (default_runner_type, default_convert_type) in iter_architecture_defaults():
+        if (
+            (runner_type is None or runner_type == default_runner_type)
+            and (convert_type is None or convert_type == default_convert_type)
+            and architecture.endswith(suffix)
+        ):
+            return suffix, (default_runner_type, default_convert_type)
+    return None
+
+
+class ModelImpl(str, enum.Enum):
+    AUTO = "auto"
+    TRANSFORMERS = "transformers"
 
 
 class MoEPhase:
@@ -131,6 +194,9 @@ class ModelConfig:
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
+        self.runner = "auto"
+        self.convert = "auto"
+        self.model_impl: Union[str, ModelImpl] = ModelImpl.AUTO.value
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -159,6 +225,7 @@ class ModelConfig:
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
 
         architectures = self.architectures[0]
+
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
         else:
@@ -169,6 +236,14 @@ class ModelConfig:
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
+        self.runner_type = self._get_runner_type(architectures=architectures, runner=self.runner)
+        print("self.runner_type", self.runner_type)
+
+    @property
+    def registry(self):
+        from fastdeploy.model_executor.models.registry import model_registry
+
+        return model_registry
 
     def override_name_from_config(self):
         """
@@ -232,6 +307,42 @@ class ModelConfig:
                     "either 'torch_dtype' (for Hugging Face models) or 'dtype' (for Paddle models) field. "
                     f"Config file path: {config_path}"
                 )
+
+    def _get_default_runner_type(
+        self,
+        architectures: list[str],
+    ) -> RunnerType:
+        registry = self.registry
+        if get_pooling_config(self.model):
+            return "pooling"
+        for arch in architectures:
+            if arch in registry.get_supported_archs():
+                if registry.is_pooling_model(architectures, self):
+                    return "pooling"
+                if registry.is_text_generation_model(architectures, self):
+                    return "generate"
+            match = try_match_architecture_defaults(arch)
+            if match:
+                _, (runner_type, _) = match
+                return runner_type
+        return "generate"
+
+    def _get_runner_type(
+        self,
+        architectures: list[str],
+        runner: RunnerOption,
+    ) -> RunnerType:
+        if runner != "auto":
+            return runner
+
+        runner_type = self._get_default_runner_type(architectures)
+        if runner_type != "generate":
+            logger.info(
+                "Resolved `--runner auto` to `--runner %s`. " "Pass the value explicitly to silence this message.",
+                runner_type,
+            )
+
+        return runner_type
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -843,6 +954,14 @@ class LoadConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+
+class PoolerConfig:
+    """Controls the behavior of output pooling in pooling models."""
+
+    pooling_type: Optional[str] = None
+
+    normalize: Optional[bool] = None
 
 
 class LoRAConfig:
