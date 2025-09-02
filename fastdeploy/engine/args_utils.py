@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
@@ -188,7 +189,7 @@ class EngineArgs:
     """
     Flag to indicate whether to use warm-up before inference.
     """
-    enable_prefix_caching: bool = False
+    enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
     """
@@ -715,7 +716,7 @@ class EngineArgs:
         perf_group = parser.add_argument_group("Performance Tuning")
         perf_group.add_argument(
             "--enable-prefix-caching",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
         )
