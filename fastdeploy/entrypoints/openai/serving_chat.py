@@ -298,11 +298,6 @@ class OpenAIServingChat:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
-
             if include_usage:
                 completion_tokens = previous_num_tokens
                 usage = UsageInfo(
