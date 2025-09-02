@@ -112,7 +112,7 @@ class LLM:
 
     def _receive_output(self):
         """
-        Recieve output from token processor and store them in cache
+        Receive output from token processor and store them in cache
         """
         while True:
             try:
