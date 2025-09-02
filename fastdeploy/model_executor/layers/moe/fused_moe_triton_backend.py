@@ -829,13 +829,25 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
         N2 = getattr(layer, self.added_weight_attrs[1]).shape[1]
 
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight
-            False,
-        )
+        if layer.topk_method == "noaux_tc":
+            from .ep import get_moe_scores
+
+            _, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+            )
+        else:
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                layer.top_k,
+                True,  # apply_norm_weight
+                False,
+            )
 
         config = {
             "BLOCK_SIZE_M": 64,
