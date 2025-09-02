@@ -297,6 +297,7 @@ class PaddleDisWorkerProc:
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
+
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
