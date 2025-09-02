@@ -249,7 +249,7 @@ class PaddleDisWorkerProc:
         )
 
     def event_loop_normal(self) -> None:
-        """Main event loop for Paddle Distrubuted Workers.
+        """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
         # Currently, only support single node
@@ -493,7 +493,7 @@ def parse_args():
         "--speculative_config",
         type=json.loads,
         default=None,
-        help="Configation of SpeculativeConfig.",
+        help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -542,7 +542,7 @@ def parse_args():
         "--quantization",
         type=str,
         default="None",
-        help="Quantization name for the model, currentlly support "
+        help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
         "is lower than that of the config file. "
@@ -552,7 +552,7 @@ def parse_args():
         "--graph_optimization_config",
         type=json.loads,
         default=None,
-        help="Configation of Graph optimization backend.",
+        help="Configuration of Graph optimization backend.",
     )
     parser.add_argument(
         "--moba_attention_config",

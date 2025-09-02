@@ -40,7 +40,7 @@ class ConcreteSizeEntry:
     # Has runtime-bs been captured before
     captured: bool = False
 
-    # Need to be captured callable object（dynamic graph or static grpah backend）
+    # Need to be captured callable object（dynamic graph or static graph backend）
     runnable: Callable = None  # type: ignore
     # Number of completed warmups
     num_finished_warmup: int = 0
