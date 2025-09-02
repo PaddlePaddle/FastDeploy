@@ -1,21 +1,45 @@
 # WINT2 Quantization
 
-Weights are compressed offline using the CCQ (Convolutional Coding Quantization) method. The actual stored numerical type of weights is INT8, with 4 weights packed into each INT8 value, equivalent to 2 bits per weight. Activations are not quantized. During inference, weights are dequantized and decoded in real-time to BF16 numerical type, and calculations are performed using BF16 numerical type.
+Weights are compressed offline using the [CCQ (Convolutional Coding Quantization)](https://arxiv.org/pdf/2507.07145) method. The actual stored numerical type of weights is INT8, with 4 weights packed into each INT8 value, equivalent to 2 bits per weight. Activations are not quantized. During inference, weights are dequantized and decoded in real-time to BF16 numerical type, and calculations are performed using BF16 numerical type.
 - **Supported Hardware**: GPU
 - **Supported Architecture**: MoE architecture
+This method relies on the convolution algorithm to use overlapping bits to map 2-bit values ​​to a larger numerical representation space, so that the model weight quantization retains more information of the original data while compressing the true value to an extremely low 2-bit size. The general principle can be seen in the figure below:
+[卷积编码量化示意图](./wint2.png)
+
+
 
 CCQ WINT2 is generally used in resource-constrained and low-threshold scenarios. Taking ERNIE-4.5-300B-A47B as an example, weights are compressed to 89GB, supporting single-card deployment on 141GB H20.
 
-## Run WINT2 Inference Service
+
+## Executing WINT2 Offline Inference
+- When executing TP2/TP4 models, you can change the `model_name_or_path` and `tensor_parallel_size` parameters.
+```
+model_name_or_path = "baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle"
+prompts = ["解析三首李白的诗"]
+from fastdeploy import LLM, SamplingParams
+sampling_params = SamplingParams(temperature=0.7, top_p=0, max_tokens=128)
+llm = LLM(model=model_name_or_path, tensor_parallel_size=1, use_cudagraph=True,)
+outputs = llm.generate(prompts, sampling_params)
+print(outputs)
 
 ```
+
+
+## Run WINT2 Inference Service
+- When executing TP2/TP4 models, you can change the `--model` and `tensor-parallel-size` parameters.
+```
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle \
-       --port 8180 --engine-worker-queue-port 8181 \
-       --cache-queue-port 8182 --metrics-port 8182 \
-       --tensor-parallel-size 1 \
-       --max-model-len 32768 \
-       --max-num-seqs 32
+    --model baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle \
+    --port 8180 \
+    --metrics-port 8181 \
+    --engine-worker-queue-port 8182 \
+    --cache-queue-port 8183 \
+    --tensor-parallel-size 1 \
+    --max-model-len  32768 \
+    --use-cudagraph \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --max-num-seqs 256
 ```
 
 By specifying `--model baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle`, the offline quantized WINT2 model can be automatically downloaded from AIStudio. In the config.json file of this model, there will be WINT2 quantization-related configuration information, so there's no need to set `--quantization` when starting the inference service.
@@ -54,9 +78,7 @@ On the ERNIE-4.5-300B-A47B model, comparison of WINT2 vs WINT4 performance:
 
 | Test Set | Dataset Size | WINT4 | WINT2 |
 |---------|---------|---------|---------|
-| IFEval |500|88.17 | 85.40 |
-|BBH|6511|94.43|92.02|
-|DROP|9536|91.17|89.97|
-|GSM8K|1319|96.21|95.98|
-|CMath|600|96.50|96.00|
-|CMMLU|11477|89.92|86.22|
+| IFEval |500|88.17 | 85.95 |
+|BBH|6511|94.43|90.06|
+|DROP|9536|91.17|89.32|
+|CMMLU|11477|89.92|86.55|
