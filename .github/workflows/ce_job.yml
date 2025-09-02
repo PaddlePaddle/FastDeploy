@@ -199,12 +199,12 @@ jobs:
           ls
           python ${push_file} ${filename} ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"
-          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
           target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
-          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
           echo "commit wheel url is ${WHEEL_PATH}"
           echo "latest wheel url is ${WHEEL_PATH_LATEST}"
 
@@ -238,11 +238,11 @@ jobs:
           ls
           python ${push_file} ${filename} ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"
-          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
           target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
-          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
           echo "commit wheel url is ${WHEEL_PATH}"
           echo "latest wheel url is ${WHEEL_PATH_LATEST}"
