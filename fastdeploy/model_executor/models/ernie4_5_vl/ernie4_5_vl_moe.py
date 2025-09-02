@@ -156,6 +156,13 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             weight_key="weight" if moe_tag == "Text" else "weight_1",
         )
 
+        # for torch model
+        setattr(
+            self.gate.weight,
+            "model_format",
+            "",
+        )
+
     def forward(self, hidden_states: paddle.Tensor):
         out = self.experts(hidden_states, self.gate)
         return out
@@ -607,9 +614,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ("mlp.image_fused_moe.gate.weight", "mlp.gate.weight_1", None, "gate"),
             ("mlp.text_fused_moe.gate.weight", "mlp.gate.weight", None, "gate"),
             (
-                ("resampler_model", "ernie.resampler_model", None, None)
+                ("resampler_model", "model.resampler_model", None, None)
                 if self.fd_config.model_config.model_format == "torch"
-                else ("resampler_model", "model.resampler_model", None, None)
+                else ("resampler_model", "ernie.resampler_model", None, None)
             ),
             ("vision_model", "ernie.vision_model", None, None),
             ("gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
@@ -646,8 +653,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         all_param_mapping = general_params_mapping + text_expert_params_mapping + image_expert_params_mapping
 
         params_dict = dict(self.named_parameters())
-        for name in params_dict.keys():
-            logger.info(f"{name }")
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
@@ -664,8 +669,10 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             else:
                 expert_id = None
                 shard_id = None
-                if loaded_weight_name not in params_dict.keys():
-                    logger.info(f"{loaded_weight_name} does not match any of the supported mapping")
+                if loaded_weight_name not in params_dict:
+                    logger.info(
+                        f"{loaded_weight_name} does not match any of the supported mapping, model param name {loaded_weight_name.replace(weight_name, param_name)}, weight name {weight_name}, param name {param_name}"
+                    )
                     continue
                 model_param_name = loaded_weight_name
                 param = params_dict[model_param_name]

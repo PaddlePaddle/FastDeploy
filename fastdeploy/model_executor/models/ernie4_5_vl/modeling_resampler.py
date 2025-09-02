@@ -212,6 +212,16 @@ class VariableResolutionResamplerModel(nn.Layer):
                 mark_as_sequence_parallel_parameter(self.after_norm.weight)
                 set_weight_attrs(self.spatial_linear[0].weight, {"output_dim": False})
 
+        model_format = getattr(config, "model_format", None)
+        self._set_model_format_attrs(model_format)
+
+    def _set_model_format_attrs(self, model_format):
+        if model_format is None:
+            return
+        for name, param in self.named_parameters():
+            if "weight" in name and len(param.shape) == 2:
+                set_weight_attrs(param, {"model_format": model_format})
+
     def spatial_conv_reshape(self, x, spatial_conv_size):
         """
         Linear 前的 reshape，为了让 Linear 能模仿 conv 的感受野
@@ -353,13 +363,13 @@ class VariableResolutionResamplerModel(nn.Layer):
                 if state_dict_key not in state_dict:
                     raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
             tensor = get_tensor(state_dict.pop(state_dict_key))
-            
+
             # Support for torch format weights - transpose linear layer weights
             if self.config.model_format == "torch" and "weight" in param_name and "norm" not in param_name.lower():
                 # Only transpose weight parameters for linear layers (not bias or norm layers)
                 if len(tensor.shape) == 2:  # Only transpose 2D weight matrices
                     tensor = tensor.transpose([1, 0])
-            
+
             if param.shape != tensor.shape:
                 raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
