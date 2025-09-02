@@ -543,14 +543,22 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
         expert_params_mapping = []
         if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
+            if self.fd_config.parallel_config.expert_parallel_size > 1:
+                num_experts = self.fd_config.parallel_config.num_experts_per_rank
+                num_experts_start_offset = self.fd_config.parallel_config.num_experts_start_offset
+            else:
+                num_experts = self.fd_config.model_config.moe_num_experts
+                num_experts_start_offset = 0
+
             expert_params_mapping = FusedMoE.make_expert_params_mapping(
-                num_experts=self.fd_config.model_config.moe_num_experts,
+                num_experts=num_experts,
                 ckpt_down_proj_name="down_proj",
                 ckpt_gate_up_proj_name="up_gate_proj",
                 ckpt_gate_proj_name="gate_proj",
                 ckpt_up_proj_name="up_proj",
                 param_gate_up_proj_name="experts.up_gate_proj_",
                 param_down_proj_name="experts.down_proj_",
+                num_experts_start_offset=num_experts_start_offset,
             )
         all_param_mapping = general_params_mapping + expert_params_mapping
 
