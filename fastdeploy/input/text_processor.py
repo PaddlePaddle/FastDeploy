@@ -545,6 +545,7 @@ class DataProcessor(BaseDataProcessor):
             add_special_tokens=False,
             return_tensors="pd",
             chat_template=request.get("chat_template", None),
+            add_generation_prompt=True,
         )
         request["text_after_process"] = spliced_message
         req_id = None
