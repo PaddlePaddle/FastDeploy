@@ -24,72 +24,77 @@
 
 namespace phi {
 
-template <typename T, /*The type used for activations/scales/compute*/
+template <typename InType,
+          typename OutType,
           typename WeightQuantTraits /* The quant traits for the MoE weights */>
-class MoeGemmRunner {
+class MixedMoeGemmRunner {
  public:
   using WeightType = typename WeightQuantTraits::WeightType;
   using Arguments = typename WeightQuantTraits::Arguments;
 
-  MoeGemmRunner();
+  MixedMoeGemmRunner();
 
-  void moe_gemm_bias_act(const T* A,
+  void moe_gemm_bias_act(const InType* A,
                          const WeightType* B,
-                         const T* weight_scales,
-                         const T* biases,
-                         T* C,
+                         const OutType* weight_scales,
+                         const OutType* biases,
+                         OutType* C,
                          int64_t* total_rows_before_expert,
                          int64_t total_rows,
                          int64_t tune_total_rows,
                          int64_t gemm_n,
                          int64_t gemm_k,
                          int num_experts,
+                         const float out_scale,
                          const Arguments& quant_args_B,
                          std::string activation_type,
                          cudaStream_t stream);
 
-  void moe_gemm(const T* A,
+  void moe_gemm(const InType* A,
                 const WeightType* B,
-                const T* weight_scales,
-                T* C,
+                const OutType* weight_scales,
+                OutType* C,
                 int64_t* total_rows_before_expert,
                 int64_t total_rows,
                 int64_t tune_total_rows,
                 int64_t gemm_n,
                 int64_t gemm_k,
                 int num_experts,
+                const float out_scale,
                 const Arguments& quant_args_B,
                 cudaStream_t stream);
 
  private:
   template <typename EpilogueTag>
-  void dispatch_to_arch(const T* A,
+  void dispatch_to_arch(const InType* A,
                         const WeightType* B,
-                        const T* weight_scales,
-                        const T* biases,
-                        T* C,
+                        const OutType* weight_scales,
+                        const OutType* biases,
+                        OutType* C,
                         int64_t* total_rows_before_expert,
                         int64_t total_rows,
                         int64_t gemm_n,
                         int64_t gemm_k,
                         int num_experts,
+                        const float out_scale,
                         const Arguments& quant_args_B,
                         CutlassGemmConfig gemm_config,
                         cudaStream_t stream,
                         int* occupancy = nullptr);
 
   template <typename EpilogueTag>
-  void run_gemm(const T* A,
+  void run_gemm(const InType* A,
                 const WeightType* B,
-                const T* weight_scales,
-                const T* biases,
-                T* C,
+                const OutType* weight_scales,
+                const OutType* biases,
+                OutType* C,
                 int64_t* total_rows_before_expert,
                 int64_t total_rows,
                 int64_t tune_total_rows,
                 int64_t gemm_n,
                 int64_t gemm_k,
                 int num_experts,
+                const float out_scale,
                 const Arguments& quant_args_B,
                 cudaStream_t stream);
 

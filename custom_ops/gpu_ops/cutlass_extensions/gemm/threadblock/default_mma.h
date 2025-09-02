@@ -377,7 +377,7 @@ struct DefaultMma<cutlass::half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAli
     layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, 2, Operator>
 {
 private:
-    using Mma = DefaultWint2xMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB,
+    using Mma = DefaultWint2xMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, half_t,
         ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
         WarpShape, InstructionShape, 2, Operator>;
 
@@ -425,7 +425,7 @@ struct DefaultMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, 
     false, SharedMemoryClear>
 {
 private:
-    using Mma = DefaultWint2xMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB,
+    using Mma = DefaultWint2xMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, half_t,
         ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
         WarpShape, InstructionShape, kStages, Operator, SharedMemoryClear>;
 
@@ -442,6 +442,99 @@ public:
     // Define the threadblock-scoped multistage matrix multiply
     using ThreadblockMma = typename Mma::ThreadblockMma;
 };
+
+#ifdef ENABLE_FP8
+template <
+    /// Layout type for A matrix operand
+    typename LayoutA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Layout type for B matrix operand
+    typename LayoutB,
+    /// Access granularity of B matrix in units of elements
+    int kAlignmentB,
+    /// Element type for internal accumulation
+    typename ElementAccumulator,
+    /// Tag indicating architecture to tune for
+    typename ArchTag,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Instruction-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Operation performed by GEMM
+    typename Operator>
+struct DefaultMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, ElementAccumulator,
+    layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, 2, Operator>
+{
+private:
+    using Mma = DefaultWint2xMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, bfloat16_t,
+        ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
+        WarpShape, InstructionShape, 2, Operator>;
+
+public:
+    // Define the MmaCore components
+    using MmaCore = typename Mma::MmaCore;
+
+    // Define iterators over tiles from the A operand
+    using IteratorA = typename Mma::IteratorA;
+
+    // Define iterators over tiles from the B operand
+    using IteratorB = typename Mma::IteratorB;
+
+    // Define the threadblock-scoped multistage matrix multiply
+    using ThreadblockMma = typename Mma::ThreadblockMma;
+};
+
+template <
+    /// Layout type for A matrix operand
+    typename LayoutA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Layout type for B matrix operand
+    typename LayoutB,
+    /// Access granularity of B matrix in units of elements
+    int kAlignmentB,
+    /// Element type for internal accumulation
+    typename ElementAccumulator,
+    /// Tag indicating architecture to tune for
+    typename ArchTag,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Instruction-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Operation performed by GEMM
+    typename Operator,
+    /// Number of stages used in the multistage mainloop
+    int kStages,
+    /// Shared memory clear option
+    SharedMemoryClearOption SharedMemoryClear>
+struct DefaultMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, ElementAccumulator,
+    layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, kStages, Operator,
+    false, SharedMemoryClear>
+{
+private:
+    using Mma = DefaultWint2xMma<float_e4m3_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, bfloat16_t,
+        ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape,
+        WarpShape, InstructionShape, kStages, Operator, SharedMemoryClear>;
+
+public:
+    // Define the MmaCore components
+    using MmaCore = typename Mma::MmaCore;
+
+    // Define iterators over tiles from the A operand
+    using IteratorA = typename Mma::IteratorA;
+
+    // Define iterators over tiles from the B operand
+    using IteratorB = typename Mma::IteratorB;
+
+    // Define the threadblock-scoped multistage matrix multiply
+    using ThreadblockMma = typename Mma::ThreadblockMma;
+};
+#endif
 
 } // namespace threadblock
 } // namespace gemm

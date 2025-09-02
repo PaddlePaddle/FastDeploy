@@ -278,6 +278,13 @@ public:
     // We need 1 fp16 per matrix iteration in the N dimension
     static constexpr int kWarpIterationsAlongN = MmaOperator::MmaIterations::kColumn;
 
+    // This is the ratio of the load instruction vs the compute instruction.
+    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
+
+    static constexpr int kNumPacks = sizeof_bits<uint8_t>::value / sizeof_bits<ElementB>::value;
+    static constexpr int kUnpackFactor = MmaOperator::FragmentB::kElements / (kWarpIterationsAlongN * kNumPacks);
+    static constexpr int kUnpackInterval = kUnpackFactor / kExpansionFactor;
+
     // use uint8_t to save 2 4-bits local scales
     using FragmentLocalScale = Array<uint8_t, kWarpIterationsAlongN>;
     using FragmentSuperScale = Array<ElementSuperScale, kWarpIterationsAlongN>;
@@ -286,16 +293,9 @@ public:
     /// Fragment to hold B data before Mma
     using FragmentInput = Array<ElementB, MmaOperator::FragmentB::kElements>;
 
-    // This is the ratio of the load instruction vs the compute instruction.
-    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
-
-    static constexpr int kNumPacks = sizeof_bits<uint8_t>::value / sizeof_bits<ElementB>::value;
-    static constexpr int kUnpackFactor = MmaOperator::FragmentB::kElements / (kWarpIterationsAlongN * kNumPacks);
-    static constexpr int kUnpackInterval = kExpansionFactor / kUnpackFactor;
-
     /// Unpack 4 uint2b_t values compreseed in a uint8_t to floating points.
     using Uint2Converter = FastInterleavedAndBiasedNumericArrayConverter<
-        ElementOperand, ElementB, MmaOperator::FragmentB::kElements / kUnpackFactor>;
+        ElementOperand, ElementB, kWarpIterationsAlongN * kNumPacks>;
     using FragmentInputUnpack = typename Uint2Converter::result_type;
 
     /// Fragment to hold internal scales before Mma
@@ -319,7 +319,7 @@ private:
     ElementCodeScaleZp* pointer_code_zp_;
     ElementSuperScale* pointer_super_scale_;
 
-    //FragmentInputUnpack unpacked_frag_;
+    FragmentInputUnpack unpacked_frag_;
     FragmentScale scale_frag_;
 
 public:
@@ -345,7 +345,7 @@ public:
               FragmentCodeScaleZp& code_zp_frag,
               FragmentSuperScale& super_scale_frag) {
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < FragmentLocalScale::kElements; ++mma_n_iter) {
             super_scale_frag[mma_n_iter] = pointer_super_scale_[mma_n_iter * InstructionShape::kN]; // bank conflict
             code_scale_frag[mma_n_iter] = pointer_code_scale_[mma_n_iter * InstructionShape::kN];
             code_zp_frag[mma_n_iter] = pointer_code_zp_[mma_n_iter * InstructionShape::kN];
@@ -356,7 +356,7 @@ public:
     CUTLASS_DEVICE
     void load(FragmentLocalScale& local_scale_frag) {
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < FragmentLocalScale::kElements; ++mma_n_iter) {
             local_scale_frag[mma_n_iter] = pointer_local_scale_[mma_n_iter * InstructionShape::kN]; // bank conflict
         }
     }
@@ -370,25 +370,7 @@ public:
                     FragmentOutput& output_frag,
                     int tb_offset_k,
                     int warp_k_compute_offset) {
-        if constexpr (kUnpackInterval != 1) {
-            // unsupport now
-            arch::device_breakpoint();
-        }
 
-        typename Uint2Converter::source_type source_frag;
-
-        int in_offset = warp_k_compute_offset * kUnpackInterval;
-
-        uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
-        uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
-
-        CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
-            ptr_source[mma_n_iter] = ptr_input[mma_n_iter * kUnpackFactor + in_offset];
-        }
-        FragmentInputUnpack unpacked_frag = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
-
-        // dequantize local_scale
         if (warp_k_compute_offset == 0) {
             using LocalScaleConverter = detail::LocalScaleConverter<ElementOperand, FragmentLocalScale::kElements>;
 
@@ -397,30 +379,41 @@ public:
             LocalScaleConverter::Apply(local_scale_frag, super_scale_frag, scale_frag_, local_scale_shift);
         }
 
-        // unscale
-        // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
-        // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
-        const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN;
+        typename Uint2Converter::source_type source_frag;
+        uint8_t const* ptr_input = reinterpret_cast<uint8_t const*>(&input_frag);
+        uint8_t* ptr_source = reinterpret_cast<uint8_t *>(&source_frag);
+
+        const int kWarpIterationsAlongK = FragmentOutput::kElements / kWarpIterationsAlongN / kUnpackInterval;
 
         using Type = typename detail::DataTypeTraits<ElementOperand>::Type;
         using DualType = typename detail::DataTypeTraits<ElementOperand>::DualType;
-
         Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
-        DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag);
         DualType const* scale_ptr = reinterpret_cast<DualType const*>(&scale_frag_);
 
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
-            int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
+        for (int loop_k = 0; loop_k < kUnpackInterval; ++loop_k) {
+            CUTLASS_PRAGMA_UNROLL
+            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
+                int base_idx = mma_n_iter * kUnpackFactor + warp_k_compute_offset * kUnpackInterval;
+                    ptr_source[mma_n_iter] = ptr_input[base_idx + loop_k];
+            }
+            unpacked_frag_ = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
 
-            DualType scalex2 = scale_ptr[mma_n_iter / 2];
+            DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag_);
 
             CUTLASS_PRAGMA_UNROLL
-            for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
-                DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
-                DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
-                output_ptr[mma_n_iter * kWarpIterationsAlongK + mma_k_iter] = scaled_value.x;
-                output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK + mma_k_iter] = scaled_value.y;
+            for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
+                int mapped_idx_base = (mma_n_iter / 2) * kWarpIterationsAlongK;
+
+                DualType scalex2 = scale_ptr[mma_n_iter / 2];
+
+                CUTLASS_PRAGMA_UNROLL
+                for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
+                    DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
+                    DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
+                    output_ptr[mma_n_iter * kWarpIterationsAlongK * kUnpackInterval + mma_k_iter + loop_k * kWarpIterationsAlongK] = scaled_value.x;
+                    output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK * kUnpackInterval + mma_k_iter + loop_k * kWarpIterationsAlongK] = scaled_value.y;
+                }
             }
         }
     }

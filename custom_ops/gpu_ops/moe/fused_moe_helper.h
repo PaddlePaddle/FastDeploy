@@ -17,6 +17,8 @@ limitations under the License. */
 
 #include "cutlass_extensions/wint_type_traits.h"
 #include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels.h"
+#include "cutlass_kernels/moe_gemm/fused_moe_gemm_mixed_io_kernels.h"
+
 #include "moe/fused_moe_op.h"
 
 namespace phi {

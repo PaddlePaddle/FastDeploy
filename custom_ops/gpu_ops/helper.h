@@ -42,6 +42,7 @@ namespace cub = hipcub;
 #endif
 #include <fstream>
 #include <iostream>
+#include <cutlass/numeric_types.h>
 
 #include "env.h"
 #include "paddle/extension.h"
@@ -195,9 +196,15 @@ public:
 
 template <> class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
 public:
-  typedef __nv_fp8_e4m3 DataType;
-  typedef paddle::float8_e4m3fn data_t;
+  using DataType = cutlass::float_e4m3_t;             
+  using data_t = paddle::float8_e4m3fn;       
 };
+
+// template <> class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
+// public:
+//   typedef __nv_fp8_e4m3 DataType;
+//   typedef paddle::float8_e4m3fn data_t;
+// };
 
 template <typename T, int Size> struct alignas(sizeof(T) * Size) AlignedVector {
   T val[Size];

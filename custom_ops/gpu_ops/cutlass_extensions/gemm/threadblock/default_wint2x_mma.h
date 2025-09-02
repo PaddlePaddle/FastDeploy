@@ -87,6 +87,8 @@ template <
     typename LayoutB_,
     /// Access granularity of B matrix in units of elements
     int kAlignmentB,
+    /// Element type for the input scale
+    typename ElementScale,
     /// Element type for internal accumulation
     typename ElementAccumulator_,
     /// Layout type for C and D matrix operands
@@ -124,6 +126,8 @@ template <
     typename LayoutB,
     /// Access granularity of B matrix in units of elements
     int kAlignmentB,
+    /// Element type for the input scale
+    typename ElementScale,
     /// Element type for internal accumulation
     typename ElementAccumulator,
     /// Operator class tag
@@ -142,13 +146,14 @@ template <
     typename Operator,
     /// Use zfill or predicate for out-of-bound cp.async
     SharedMemoryClearOption SharedMemoryClear>
-struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementAccumulator,
+struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementScale, ElementAccumulator,
     layout::RowMajor, OperatorClass, ArchTag, ThreadblockShape, WarpShape, InstructionShape,
     kStages, Operator, SharedMemoryClear>
 {
 public:
-    static_assert(platform::is_same<ElementA, half_t>::value || platform::is_same<ElementA, bfloat16_t>::value,
-        "Element A must be fp16 or bf16");
+    static_assert(platform::is_same<ElementA, half_t>::value || platform::is_same<ElementA, bfloat16_t>::value
+            || platform::is_same<ElementA, float_e4m3_t>::value,
+        "Element A must be fp8, fp16 or bf16");
 
     static_assert(platform::is_same<ElementB, uint2b_t>::value,
         "Element B must be uint2b_t");
@@ -156,7 +161,8 @@ public:
     static_assert(platform::is_same<Operator, arch::OpMultiplyAddDequantizeInterleavedBToA>::value,
         "Mma multistage must dequantize after ldsm");
 
-    using ElementSuperScale = ElementA;
+    using ElementSuperScale = ElementScale;
+
     using ElementLocalScale = uint4b_t;
     using ElementCodeScaleZp = float;
 
@@ -186,6 +192,7 @@ public:
 private:
     static constexpr int kColumnsInterleaved = LayoutB::kColumnsInterleaved;
     static constexpr int kRowsPerTile = LayoutB::kRowsPerTile;
+
     static_assert(!(MmaCore::Shape::kN % kColumnsInterleaved), "ThreadblockShape must be disivle by kColumnsInterleaved");
     static_assert(kRowsPerTile == MmaCore::Shape::kK, "");
 
@@ -195,6 +202,7 @@ private:
 
     using IteratorShapeB = MatrixShape<
         MmaCore::Shape::kK * kColumnsInterleaved, MmaCore::Shape::kN / kColumnsInterleaved>;
+
     using InterleavedThreadMapB = transform::PitchLinearWarpRakedThreadMap<
         layout::PitchLinearShape<IteratorShapeB::kRow, IteratorShapeB::kColumn>,
         ThreadMapB::kThreads,

@@ -630,7 +630,7 @@ struct MoeFCGemm {
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
 #elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 910)
     static constexpr bool compile_needed =
-        platform::is_same<KernelArch, arch::Sm80>::value;
+        platform::is_same<KernelArch, arch::Sm89>::value;
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
 #else
     CUTLASS_NOT_IMPLEMENTED();
@@ -784,14 +784,23 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
       cutlass::MatrixCoord tb_offset_local_scale{0, threadblock_offset.n() * 2};
 
+      // static_assert(platform::is_same<ElementScale, cutlass::float_e4m3_t>::value,
+      //     "ElementScale must be float_e4m3_t");
+
+      using ElementSuperScale = typename Mma::QuantParamsAccessor::ElementSuperScale;
+
+      // static_assert(platform::is_same<ElementSuperScale, cutlass::bfloat16_t>::value,
+      //     "ElementSuperScale must be bfloat16_t");
+
+      // TODO（"baoqiwen"）, reinterpret_cast
       ElementScale* weight_scale_ptr = params.weight_scales + problem_idx * gemm_n;
       typename Mma::QuantParamsAccessor::IteratorSuperScale iterator_super_scale(
           Mma::QuantParamsAccessor::LayoutSuperScale(gemm_n),
-          weight_scale_ptr,
+          reinterpret_cast<ElementSuperScale*>(weight_scale_ptr),
           {1, gemm_n},
           thread_idx,
           tb_offset_scale);
-
+          
       int local_scale_pointer_offset = ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
       int64_t offset_in_bytes = problem_idx * gemm_k * gemm_n / 128;
       uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + offset_in_bytes);
@@ -831,7 +840,8 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       // These types shadow the type-level definitions and support the ability
       // to implement a 'transposed' GEMM that computes the transposed problems.
       //
-
+      CUTLASS_TRACE_DEVICE(" Now in run_kernel");
+      CUTLASS_TRACE_DEVICE(" eplogue output op alpha = %f", params.output_op.alpha);
       using ElementA = typename Mma::IteratorA::Element;
       using LayoutA = typename Mma::IteratorA::Layout;
       using ElementB = typename Mma::IteratorB::Element;
@@ -951,6 +961,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         // previous tile.
         __syncthreads();
 
+        CUTLASS_TRACE_DEVICE(" Now in run_kernel mma");
         // Compute threadblock-scoped matrix multiply-add
         mma(gemm_k_iterations,
             accumulators,
