@@ -27,6 +27,7 @@ import sys
 import tarfile
 import time
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
@@ -666,6 +667,14 @@ def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def is_package_installed(package_name):
+    try:
+        distribution(package_name)
+        return True
+    except PackageNotFoundError:
+        return False
 
 
 def version():
