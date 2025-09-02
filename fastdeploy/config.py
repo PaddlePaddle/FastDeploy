@@ -1244,7 +1244,6 @@ class FDConfig:
             or (self.model_config is not None and self.model_config.enable_mm is True)
             or (self.model_config is not None and self.load_config.dynamic_load_weight is True)
         ):
-
             self.graph_opt_config.use_cudagraph = False
             logger.info(
                 "CUDAGraph does not support to be started together with SpeculativeDecode and MultiModel temporarily, but has been automatically closed!"
@@ -1254,6 +1253,9 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
+        if self.device_config is not None and self.device_config.device_type != "cuda":
+            self.graph_opt_config.use_cudagraph = False
+            logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
 
     def check(self):
         """
