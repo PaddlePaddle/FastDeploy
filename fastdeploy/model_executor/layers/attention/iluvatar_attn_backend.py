@@ -210,7 +210,7 @@ class IluvatarAttnBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         return (
             max_num_blocks,
