@@ -73,7 +73,7 @@ def llm(model_path):
         start = time.time()
         llm = LLM(
             model=model_path,
-            tensor_parallel_size=4,
+            tensor_parallel_size=2,
             num_gpu_blocks_override=1024,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
             max_model_len=8192,
