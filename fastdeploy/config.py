@@ -1234,7 +1234,7 @@ class FDConfig:
         self.paddle_commit_id = paddle.version.commit
 
         if self.max_num_batched_tokens is None:
-            if int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
                 self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
