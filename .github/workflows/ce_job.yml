@@ -177,14 +177,13 @@ jobs:
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       COMPILE_ARCH: "80,90"
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
-        if: github.ref_name == 'develop' || github.ref_type == 'tag'
         run: |
           echo "The wheel is located at: ${{ needs.build_sm8090.outputs.wheel_path }}"
           wget -q --no-check-certificate ${{ needs.build_sm8090.outputs.wheel_path }}
@@ -206,6 +205,8 @@ jobs:
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
           WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+          echo "commit wheel url is ${WHEEL_PATH}"
+          echo "latest wheel url is ${WHEEL_PATH_LATEST}"
 
   ce_upload_sm8689:
     environment: CodeSync
@@ -215,18 +216,17 @@ jobs:
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8689.outputs.wheel_path }}
       COMPILE_ARCH: "86,89"
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
-        if: github.ref_name == 'develop' || github.ref_type == 'tag'
         run: |
-          echo "The wheel is located at: ${{ needs.build_sm8090.outputs.wheel_path }}"
-          wget -q --no-check-certificate ${{ needs.build_sm8090.outputs.wheel_path }}
-          filename=$(basename ${{ needs.build_sm8090.outputs.wheel_path }})
+          echo "The wheel is located at: ${{ needs.build_sm8689.outputs.wheel_path }}"
+          wget -q --no-check-certificate ${{ needs.build_sm8689.outputs.wheel_path }}
+          filename=$(basename ${{ needs.build_sm8689.outputs.wheel_path }})
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
@@ -244,3 +244,5 @@ jobs:
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
           WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+          echo "commit wheel url is ${WHEEL_PATH}"
+          echo "latest wheel url is ${WHEEL_PATH_LATEST}"
