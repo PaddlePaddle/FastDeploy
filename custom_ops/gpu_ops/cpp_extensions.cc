@@ -980,12 +980,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("per_token_quant_padding", &PerTokenQuantPadding, py::arg("input"),
         py::arg("block_size"),
-        "per token per block quant and padding tranpose scale");
+        "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant", &MaskedPerTokenQuant, py::arg("input"),
         py::arg("recv_expert_count"), py::arg("block_size"),
         "per token per block quant");
 
+#ifdef ENABLE_MACHETE
   /*machete/machete_mm.cu
    * machete_mm
    */
@@ -1004,6 +1005,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * machete_supported_schedules
    */
   m.def("machete_supported_schedules", &MacheteSupportedSchedules, "machete supported schedules function");
+#endif
 
   /**
    * moe/fused_moe/moe_topk_select.cu

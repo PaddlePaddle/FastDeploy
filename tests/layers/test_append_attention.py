@@ -250,8 +250,8 @@ def get_qkv_and_qkv_concat_tensor(bs, q_num_head, kv_num_head, seq_len, dim_head
 def apply_qk_norm(head_dim, dtype, q, k):
     q_norm_weight = np.random.random([head_dim]) / 10
     k_norm_weight = np.random.random([head_dim]) / 10
-    q_norm_weight_tensor = paddle.to_tensor(q_norm_weight, dtype=dtype)
-    k_norm_weight_tensor = paddle.to_tensor(k_norm_weight, dtype=dtype)
+    q_norm_weight_tensor = paddle.to_tensor(q_norm_weight, dtype="float32")
+    k_norm_weight_tensor = paddle.to_tensor(k_norm_weight, dtype="float32")
     print("q:", q.shape)
     print("k:", k.shape)
     bs, q_num_head, seq_len, dim_head = q.shape
@@ -260,9 +260,9 @@ def apply_qk_norm(head_dim, dtype, q, k):
     q = q.reshape([-1, head_dim])
     k = k.reshape([-1, head_dim])
     print("q:", q)
-    q = fused_rms_norm(q, q_norm_weight_tensor, None, 1e-5)[0]
+    q = fused_rms_norm(q.astype("float32"), q_norm_weight_tensor, None, 1e-5)[0].astype(dtype)
     print("q after norm:", q)
-    k = fused_rms_norm(k, k_norm_weight_tensor, None, 1e-5)[0]
+    k = fused_rms_norm(k.astype("float32"), k_norm_weight_tensor, None, 1e-5)[0].astype(dtype)
     q = q.reshape([-1, q_num_head, seq_len, dim_head])
     k = k.reshape([-1, kv_num_head, seq_len, dim_head])
     return q, k, q_norm_weight_tensor, k_norm_weight_tensor
@@ -407,10 +407,11 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.token_num = self.padding_offset.shape[0]
         self.mask_offset = None
         if self.use_mask_offset:
-            self.mask_offset = paddle.full(self.seq_len * self.batch_size, 0, "int32")
+            self.mask_offset = paddle.full(self.batch_size * self.seq_len * 2, 0, "int32")
             for i in range(self.batch_size):
                 for j in range(self.seq_len):
-                    self.mask_offset[i * self.seq_len + j] = j
+                    self.mask_offset[i * self.seq_len * 2 + j * 2] = 0
+                    self.mask_offset[i * self.seq_len * 2 + j * 2 + 1] = j + 1
 
     def cmp_append_attention(self, naive_cache_k=None, naive_cache_v=None, attn_mask=None):
         paddle.disable_static()
@@ -601,9 +602,10 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             self.cu_seqlens_k,
         ) = get_padding_offset(self.batch_size, 1, self.seq_lens_this_time)
         if self.use_mask_offset:
-            self.mask_offset = paddle.full(self.batch_size, 0, "int32")
+            self.mask_offset = paddle.full(self.batch_size * 2, 0, "int32")
             for i in range(self.batch_size):
-                self.mask_offset[i] = self.seq_lens_dec[i]
+                self.mask_offset[i * 2] = 0
+                self.mask_offset[i * 2 + 1] = self.seq_lens_dec[i] + 1
             print("decoder mask_offset: ", self.mask_offset)
         self.cmp_append_attention(naive_cache_k, naive_cache_v, None)
 

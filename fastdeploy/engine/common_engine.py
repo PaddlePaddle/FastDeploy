@@ -552,6 +552,8 @@ class EngineSevice:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
+                main_process_metrics.num_requests_waiting.dec(len(tasks))
+                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
@@ -587,7 +589,7 @@ class EngineSevice:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
+                    llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
@@ -597,6 +599,7 @@ class EngineSevice:
                     try:
                         request = Request.from_dict(data)
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        main_process_metrics.requests_number.inc()
                         llm_logger.debug(f"Receive request: {request}")
                     except Exception as e:
                         llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
@@ -641,13 +644,13 @@ class EngineSevice:
                     self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receving new request from zmq, details={e}, "
+                    f"Error happend while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:
