@@ -26,6 +26,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
+import paddle.device.cuda.graphs as graphs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -629,6 +630,10 @@ class Ernie4_5_Model(nn.Layer):
             dispatch_wait(0)
             zkk_barrier()
 
+
+            cuda_graph = graphs.CUDAGraph()
+            cuda_graph.capture_begin()
+
             compute_atten(3, 1)
             
             for layer_id in range(3, self.num_layers):
@@ -653,6 +658,10 @@ class Ernie4_5_Model(nn.Layer):
             combine_wait(1)
             combine_receive(2)
             combine_wait(2)
+
+
+            cuda_graph.capture_end()
+            cuda_graph.replay()
 
         else:
             # 搞一个大槽子放东西！
