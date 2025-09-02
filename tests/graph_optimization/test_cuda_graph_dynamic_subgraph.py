@@ -107,7 +107,7 @@ class TestModel1(paddle.nn.Layer):
         sub_meta1 = forward_meta
         sublayer1_output = self.sublayer1(ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1)
 
-        # sublayer2 not use cuda garph
+        # sublayer2 not use cuda graph
         sub_meta2 = ForwardMeta(input_ids=sublayer1_output, ids_remove_padding=sublayer1_output)
         sublayer2_output = self.sublayer2(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
         self.sublayer2_output_buffer.copy_(sublayer2_output, False)
@@ -131,7 +131,7 @@ class TestModel1(paddle.nn.Layer):
             ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1
         )
 
-        # sublayer2 not use cuda garph
+        # sublayer2 not use cuda graph
         sub_meta2 = ForwardMeta(input_ids=sublayer1_output, ids_remove_padding=sublayer1_output)
         sublayer2_output = self.sublayer2.forward_correct(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
 
