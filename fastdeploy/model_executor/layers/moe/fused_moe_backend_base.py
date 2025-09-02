@@ -183,9 +183,9 @@ class MoEMethodBase(QuantMethodBase):
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
-        num_experts = extra_weight_attrs.get("num_experts")
-        hidden_size = extra_weight_attrs.get("hidden_size")
-        moe_intermediate_size = extra_weight_attrs.get("moe_intermediate_size")
+        num_experts = extra_weight_attrs.pop("num_experts")
+        hidden_size = extra_weight_attrs.pop("hidden_size")
+        moe_intermediate_size = extra_weight_attrs.pop("moe_intermediate_size")
         if current_platform.is_cuda():
             self.up_gate_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size * 2]
             self.down_proj_weight_shape = [num_experts, moe_intermediate_size, hidden_size]
