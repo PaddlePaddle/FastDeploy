@@ -51,7 +51,7 @@ class IluvatarWorker(GpuWorker):
         Initialize device and construct model runner
         """
         if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
-            # Set evironment variable
+            # Set environment variable
             self.device = f"iluvatar_gpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
