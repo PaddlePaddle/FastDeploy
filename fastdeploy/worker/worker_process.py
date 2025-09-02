@@ -591,6 +591,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--reasoning_parser",
+        type=str,
+        default=None,
+        help="Flag specifies the reasoning parser to use for extracting reasoning content from the model output",
+    )
+    parser.add_argument(
         "--early_stop_config",
         type=json.loads,
         default=None,
