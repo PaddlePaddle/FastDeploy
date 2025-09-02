@@ -509,8 +509,10 @@ def control_scheduler(request: ControlSchedulerRequest):
         llm_engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
-        if hasattr(llm_engine.scheduler, "update_config") and callable(llm_engine.scheduler.update_config):
-            llm_engine.scheduler.update_config(
+        if hasattr(llm_engine.engine.scheduler, "update_config") and callable(
+            llm_engine.engine.scheduler.update_config
+        ):
+            llm_engine.engine.scheduler.update_config(
                 load_shards_num=request.load_shards_num,
                 reallocate=request.reallocate_shard,
             )
