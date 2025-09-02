@@ -58,6 +58,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.ep_size,
                     layer.ep_rank,
                     layer.fd_config.model_config.redundant_experts_num,
+                    ep_group=layer.fd_config.parallel_config.ep_group,
                 )
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k,
@@ -68,6 +69,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.ep_size,
                     layer.ep_rank,
                     layer.fd_config.model_config.redundant_experts_num,
+                    ep_group=layer.fd_config.parallel_config.ep_group,
                 )
             else:
                 if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
@@ -82,6 +84,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.ep_size,
                         layer.ep_rank,
                         layer.fd_config.model_config.redundant_experts_num,
+                        ep_group=layer.fd_config.parallel_config.ep_group,
                     )
                 else:
                     from .ep import EPDecoderRunner
@@ -95,6 +98,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.ep_size,
                         layer.ep_rank,
                         layer.fd_config.model_config.redundant_experts_num,
+                        ep_group=layer.fd_config.parallel_config.ep_group,
                     )
 
     def process_loaded_weights(self, layer, weights) -> None:
