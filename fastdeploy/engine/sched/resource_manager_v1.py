@@ -77,6 +77,9 @@ class ResourceManagerV1(ResourceManager):
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
+        self.scheduler_dynamic_max_num_seqs = max_num_seqs
+        self.scheduler_history_seq_lens = deque()
+        self.scheduler_history_window_size = 10
         main_process_metrics.max_batch_size.set(max_num_seqs)
 
     def allocated_slots(self, request: Request):
@@ -107,6 +110,32 @@ class ResourceManagerV1(ResourceManager):
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
+    def adjust_scheduler_dynamic_max_num_seqs(self, req):
+        """
+        Estimate max concurrency from historical request length to throttle scheduler enqueue rate.
+        """
+
+        # Maintain a queue of newly scheduled requests
+        self.scheduler_history_seq_lens.append(req.num_total_tokens)
+        if len(self.scheduler_history_seq_lens) > self.scheduler_history_window_size:
+            self.scheduler_history_seq_lens.popleft()
+
+        old_value = self.scheduler_dynamic_max_num_seqs
+        # batch_total_tokens = 0
+        # for req in self.running:
+        #     batch_total_tokens += req.num_total_tokens
+        n = self.config.cache_config.total_block_num
+        b = self.config.cache_config.block_size
+        l = sum(self.scheduler_history_seq_lens) / len(
+            self.scheduler_history_seq_lens
+        )  # (batch_total_tokens / len(self.running))
+        self.scheduler_dynamic_max_num_seqs = min(int(n * b / l), self.max_num_seqs)
+        llm_logger.info(
+            f"Adjust scheduler_dynamic_max_num_seqs: {old_value} -> {self.scheduler_dynamic_max_num_seqs}, "
+            f"average sequence length: {l}"
+        )
+        return
+
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         """
         If the request cannot be scheduled, preempt the running request one by one until it can be scheduled. Last in, first out.
@@ -130,6 +159,7 @@ class ResourceManagerV1(ResourceManager):
                 # The request can be scheduled.
                 can_schedule = True
                 break
+        llm_logger.info(f"Preemption is triggered! preempted req ids: {[r.request_id for r in preempted_reqs]}")
         return can_schedule
 
     def _get_num_new_tokens(self, request, token_budget):
@@ -249,7 +279,9 @@ class ResourceManagerV1(ResourceManager):
                         # Allocation for next decoding blocks
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
                             llm_logger.debug(
-                                f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
+                                f"Enough blocks when scheduling decoding task: {request.request_id}, "
+                                f"num_total_tokens={request.num_total_tokens}, num_computed_tokens={request.num_computed_tokens}, "
+                                f"block_tables={request.block_tables}"
                             )
                             request.block_tables.extend(
                                 self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
@@ -257,6 +289,11 @@ class ResourceManagerV1(ResourceManager):
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
+                            llm_logger.debug(
+                                f"Not enough blocks when scheduling decoding task: {request.request_id}, "
+                                f"num_total_tokens={request.num_total_tokens}, num_computed_tokens={request.num_computed_tokens}, "
+                                f"block_tables={request.block_tables}"
+                            )
                             # Not enough blocks to allocate, trigger preemption
                             can_schedule = self._trigger_preempt(
                                 request, self.config.cache_config.enc_dec_block_num, preempted_reqs, scheduled_reqs
@@ -272,17 +309,25 @@ class ResourceManagerV1(ResourceManager):
                         num_decoding_req_nums += 1
                         token_budget -= 1
                 else:  # need to prefill
-                    llm_logger.debug(
-                        f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
-                    )
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                        llm_logger.debug(
+                            f"Enough blocks when scheduling prefill task: {request.request_id}, "
+                            f"need_prefill_tokens={request.need_prefill_tokens}, num_computed_tokens={request.num_computed_tokens}, "
+                            f"block_tables={request.block_tables}"
+                        )
                         request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     else:  # Not enough blocks to allocate, trigger preemption
+                        llm_logger.debug(
+                            f"Not enough blocks when scheduling prefill task: {request.request_id}, "
+                            f"need_prefill_tokens={request.need_prefill_tokens}, num_computed_tokens={request.num_computed_tokens}, "
+                            f"block_tables={request.block_tables}"
+                        )
                         can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
                         if not can_schedule:
                             break
@@ -295,11 +340,12 @@ class ResourceManagerV1(ResourceManager):
             # schedule the WAITING requests.
             if not preempted_reqs:
                 while self.waiting and token_budget > 0:
-                    if len(self.running) == self.max_num_seqs:
+                    if len(self.running) >= self.scheduler_dynamic_max_num_seqs:
                         break
                     if (self.config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(scheduled_reqs):
                         break
                     request = self.waiting[0]
+
                     if request.status == RequestStatus.WAITING:
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
@@ -312,6 +358,11 @@ class ResourceManagerV1(ResourceManager):
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                            llm_logger.debug(
+                                f"Enough blocks when scheduling waiting task: {request.request_id}, "
+                                f"need_prefill_tokens={request.need_prefill_tokens}, "
+                                f"block_tables={request.block_tables}"
+                            )
                             if not request.get("skip_allocate", False):
                                 request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
@@ -327,7 +378,17 @@ class ResourceManagerV1(ResourceManager):
                             self.tasks_list[allocated_position] = request
                             self.stop_flags[allocated_position] = False
                             self.req_dict[request.request_id] = allocated_position
+
+                            # When a new request is scheduled from waiting list to running list,
+                            # adjust max_num_seqs to limit the speed of scheduler
+                            self.adjust_scheduler_dynamic_max_num_seqs(request)
+
                         else:
+                            llm_logger.debug(
+                                f"Not enough blocks when scheduling waiting task: {request.request_id}, "
+                                f"need_prefill_tokens={request.need_prefill_tokens}, "
+                                f"block_tables={request.block_tables}"
+                            )
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
@@ -344,6 +405,10 @@ class ResourceManagerV1(ResourceManager):
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                            llm_logger.debug(
+                                f"Enough blocks when scheduling preempted task: {request.request_id}, "
+                                f"block_tables={request.block_tables}"
+                            )
                             if not request.get("skip_allocate", False):
                                 request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
@@ -352,18 +417,29 @@ class ResourceManagerV1(ResourceManager):
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             request.status = RequestStatus.RUNNING
+
+                            # When a preempted request is scheduled from waiting list to running list,
+                            # adjust max_num_seqs to limit the speed of scheduler
+                            self.adjust_scheduler_dynamic_max_num_seqs(request)
+
                         else:
+                            llm_logger.debug(
+                                f"Not enough blocks when scheduling preempted task: {request.request_id}, "
+                                f"block_tables={request.block_tables}"
+                            )
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
                     else:
                         llm_logger.error("Unknown request status type")
+
             if scheduled_reqs:
                 task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
                 main_process_metrics.available_gpu_block_num.set(self.total_block_number() - task_used_block_num)
                 main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
                 main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-                llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+                llm_logger.debug(f"Scheduled requests: {[req.request_id for req in scheduled_reqs]}")
+
             return scheduled_reqs
 
     def get_available_position(self) -> int:
@@ -432,8 +508,8 @@ class ResourceManagerV1(ResourceManager):
                 leaf_node = self.cache_manager.req_leaf_map[request.request_id]
                 self.cache_manager.decrease_request_share_count(request.request_id)
                 self.cache_manager.free_nodes_directly(leaf_node)
-                self.cache_manager.recycle_gpu_blocks(request.block_tables[request.cache_info[0]:])
-                
+                self.cache_manager.recycle_gpu_blocks(request.block_tables[request.cache_info[0] :])
+
             else:
                 self.cache_manager.release_block_ids_async(request)
                 self.cache_manager.recycle_gpu_blocks(request.block_tables[request.prefill_block_num :])
@@ -445,7 +521,7 @@ class ResourceManagerV1(ResourceManager):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
-        llm_logger.info(f"recycle resources for requests: {request_ids}")
+        llm_logger.info(f"Recycle resources for requests: {request_ids}")
         try:
             with self.lock:
                 if isinstance(request_ids, str):
