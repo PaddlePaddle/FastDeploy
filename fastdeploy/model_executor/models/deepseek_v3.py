@@ -215,7 +215,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 fd_config=fd_config,
                 prefix=f"{prefix}.qkv_a_proj_with_mqa",
                 input_size=self.hidden_size,
-                output_size=[self.q_lora_rank + self.kv_lora_rank + self.qk_rope_head_dim],
+                output_size=self.q_lora_rank + self.kv_lora_rank + self.qk_rope_head_dim,
                 with_bias=False,
             )
 
