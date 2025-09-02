@@ -58,7 +58,7 @@ class TokenTransfer {
     }
 
     // once copy: cpu --> cpu
-    // arrary length should be (1 + MAX_BATCH)
+    // array length should be (1 + MAX_BATCH)
     bool GetBatchToken(int64_t *array) {
         if (Empty()) {
             return false;

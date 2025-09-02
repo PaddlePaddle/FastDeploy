@@ -89,11 +89,11 @@ public:
       GemmShape<Shape::kM / WarpGemm::kM, Shape::kN / WarpGemm::kN,
                 Shape::kK / WarpGemm::kK>;
 
-  /// Number of warp-level GEMM oeprations
+  /// Number of warp-level GEMM operations
   static int const kWarpGemmIterations =
       (WarpGemm::kK / Operator::Policy::MmaShape::kK);
 
-  /// Number of warp-level GEMM oeprations per load for B
+  /// Number of warp-level GEMM operations per load for B
   static constexpr int kWarpGemmIterationsPerLoadForB =
       Operator::IteratorB::InstructionShape::kRow / Operator::InstructionShape::kK;
   static_assert(!(kWarpGemmIterations % kWarpGemmIterationsPerLoadForB), "");

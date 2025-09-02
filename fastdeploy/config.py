@@ -257,7 +257,7 @@ class ParallelConfig:
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
         self.moe_phase = MoEPhase("prefill")  # Generation phase
-        self.msg_queue_id = 1  # mesage queue id
+        self.msg_queue_id = 1  # message queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
         self.tensor_parallel_size = 1  # TP degree
@@ -549,7 +549,7 @@ class GraphOptimizationConfig:
             It requires that all input buffers have fixed addresses, and all
             splitting ops write their outputs to input buffers.
             - With dyncmic graph backend: ...
-            - With static grpah backend: WIP
+            - With static graph backend: WIP
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """

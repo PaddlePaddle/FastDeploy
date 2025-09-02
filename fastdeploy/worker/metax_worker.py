@@ -54,7 +54,7 @@ class MetaxWorker(WorkerBase):
         """
         self.max_chips_per_node = 8
         if paddle.is_compiled_with_custom_device("metax_gpu"):
-            # Set evironment variable
+            # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"metax_gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
@@ -202,7 +202,7 @@ class MetaxWorker(WorkerBase):
         """
         if self.model_runner.graph_opt_level >= 1:
             self.model_runner.sot_warmup()
-        # Todo Triger cuda grpah capture.
+        # Todo Trigger cuda graph capture.
 
     def check_health(self) -> bool:
         """ """
