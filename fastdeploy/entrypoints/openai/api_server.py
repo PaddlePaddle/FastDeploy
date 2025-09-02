@@ -506,7 +506,7 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
-        llm_engine.scheduler.reset()
+        llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
         if hasattr(llm_engine.engine.scheduler, "update_config") and callable(
