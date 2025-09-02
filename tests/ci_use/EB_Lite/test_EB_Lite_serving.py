@@ -15,6 +15,7 @@
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -115,6 +116,9 @@ def setup_and_run_server():
     ]
 
     # Start subprocess in new process group
+    # 清除log目录
+    if os.path.exists("log"):
+        shutil.rmtree("log")
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
             cmd,

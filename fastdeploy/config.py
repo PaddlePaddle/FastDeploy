@@ -258,7 +258,7 @@ class ParallelConfig:
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
         self.moe_phase = MoEPhase("prefill")  # Generation phase
-        self.msg_queue_id = 1  # mesage queue id
+        self.msg_queue_id = 1  # message queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
         self.tensor_parallel_size = 1  # TP degree
@@ -550,7 +550,7 @@ class GraphOptimizationConfig:
             It requires that all input buffers have fixed addresses, and all
             splitting ops write their outputs to input buffers.
             - With dyncmic graph backend: ...
-            - With static grpah backend: WIP
+            - With static graph backend: WIP
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
@@ -683,6 +683,67 @@ class GraphOptimizationConfig:
                     "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
                 )
             argument = self.use_cudagraph
+
+
+class MobaAttentionConfig:
+    def __init__(
+        self,
+        args,
+    ):
+        self.moba_encoder_top_k_left: int = None
+        self.moba_encoder_top_k_right: int = None
+        "The sparse topk of encoder attention is located at [moba_encoder_top_k_left, moba_encoder top_k_right]"
+        self.moba_decoder_top_k_left: int = None
+        self.moba_decoder_top_k_right: int = None
+        "The sparse topk of decoder attention is located at [moba_decoder_top_k_left, moba_decoder top_k_right]"
+        self.moba_use_encoder_seq_limit: int = None
+        "When the number of encdoer token is less than moba_use_encoder_seq_limit, it is not sparse"
+        self.moba_use_decoder_seq_limit: int = None
+        "When the number of decdoer token is less than moba_use_decoder_seq_limit, it is not sparse"
+        self.moba_block_size: int = 128
+        self.mlp_weight_name: str = "moba_mlp_weight.safetensors"
+        self.moba_max_seq_length: int = 128 * 1024
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+            if self.moba_use_encoder_seq_limit is None and self.moba_encoder_top_k_left is not None:
+                self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
+            if self.moba_use_decoder_seq_limit is None and self.moba_decoder_top_k_left is not None:
+                self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
+            self.check_legality_parameters()
+
+    def check_legality_parameters(
+        self,
+    ) -> None:
+        if self.moba_encoder_top_k_left is not None:
+            assert self.moba_encoder_top_k_left > 0, "moba_encoder_top_k_left must large than 0"
+
+        if self.moba_encoder_top_k_right is not None:
+            assert self.moba_encoder_top_k_right > 0, "moba_encoder_top_k_right must large than 0"
+            assert (
+                self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
+            ), "moba_encoder_top_k_right must large than moba_encoder_top_k_left"
+
+        if self.moba_decoder_top_k_left is not None:
+            assert self.moba_decoder_top_k_left > 0, "moba_decoder_top_k_left must large than 0"
+
+        if self.moba_decoder_top_k_right is not None:
+            assert self.moba_decoder_top_k_right > 0, "moba_decoder_top_k_right must large than 0"
+            assert (
+                self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
+            ), "moba_decoder_top_k_right must large than moba_decoder_top_k_left"
+
+        if self.moba_use_encoder_seq_limit is not None and self.moba_encoder_top_k_left is not None:
+            assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
+        if self.moba_use_decoder_seq_limit is not None and self.moba_decoder_top_k_left is not None:
+            assert self.moba_use_decoder_seq_limit >= self.moba_decoder_top_k_left * self.moba_block_size
+
+    def to_json_string(self):
+        """
+        Convert moba_attention_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
 
 class EarlyStopConfig:
@@ -1039,6 +1100,7 @@ class FDConfig:
         decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
+        moba_attention_config: MobaAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
@@ -1073,7 +1135,7 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-
+        self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
@@ -1173,13 +1235,13 @@ class FDConfig:
         self.paddle_commit_id = paddle.version.commit
 
         if self.max_num_batched_tokens is None:
-            if self.cache_config.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
-                    self.max_num_batched_tokens = self.max_model_len
+                if self.cache_config.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = self.max_model_len
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)

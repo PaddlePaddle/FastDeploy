@@ -34,6 +34,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
@@ -165,8 +166,22 @@ class PaddleDisWorkerProc:
             exist_swapped_task_signal:
             model_weights_status:
         """
-        # init worker_ready_signal
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
+            launched_expert_service_signal_data = np.zeros(
+                shape=[min(self.parallel_config.data_parallel_size, self.max_chips_per_node)], dtype=np.int32
+            )
+            self.launched_expert_service_signal = IPCSignal(
+                name="launched_expert_service_signal",
+                array=launched_expert_service_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_pid,
+                create=False,
+            )
+            while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
+                pass
+
+        # init worker_ready_signal
         array_size = min(
             self.max_chips_per_node,
             self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size,
@@ -234,7 +249,7 @@ class PaddleDisWorkerProc:
         )
 
     def event_loop_normal(self) -> None:
-        """Main event loop for Paddle Distrubuted Workers.
+        """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
         # Currently, only support single node
@@ -242,6 +257,7 @@ class PaddleDisWorkerProc:
         mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         num_running_requests = 0
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         while True:
             if self.local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -255,7 +271,6 @@ class PaddleDisWorkerProc:
 
             self.insert_step = False
             req_dicts = None
-            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
@@ -478,7 +493,7 @@ def parse_args():
         "--speculative_config",
         type=json.loads,
         default=None,
-        help="Configation of SpeculativeConfig.",
+        help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -527,7 +542,7 @@ def parse_args():
         "--quantization",
         type=str,
         default="None",
-        help="Quantization name for the model, currentlly support "
+        help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
         "is lower than that of the config file. "
@@ -537,7 +552,13 @@ def parse_args():
         "--graph_optimization_config",
         type=json.loads,
         default=None,
-        help="Configation of Graph optimization backend.",
+        help="Configuration of Graph optimization backend.",
+    )
+    parser.add_argument(
+        "--moba_attention_config",
+        type=json.loads,
+        default=None,
+        help="Configation of moba attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -650,6 +671,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
+    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
+
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
     # Note(tangbinhan): used for load_checkpoint
@@ -731,6 +754,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
+        moba_attention_config=moba_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 
