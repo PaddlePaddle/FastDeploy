@@ -271,7 +271,7 @@ class TestTreeMask(unittest.TestCase):
             paddle.device.synchronize()
         e_time = time.time()
         print(f"mean infer time: {np.mean((e_time - s_time) * 1000 / self.run_time):.2f}")
-        return out[0].reshape([token_num, self.num_q_head, self.head_dim])
+        return out.reshape([token_num, self.num_q_head, self.head_dim])
 
     def test_naive_speculative_decoding(self):
         prefill_len = 8192
