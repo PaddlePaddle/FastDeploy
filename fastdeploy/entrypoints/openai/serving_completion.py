@@ -331,6 +331,7 @@ class OpenAIServingCompletion:
                 if request.max_streaming_response_tokens is not None
                 else (request.suffix or {}).get("max_streaming_response_tokens", 1)
             )  # dierctly passed & passed in suffix
+            max_streaming_response_tokens = max(max_streaming_response_tokens, 1)
             choices = []
             chunk = CompletionStreamResponse(
                 id=request_id,
