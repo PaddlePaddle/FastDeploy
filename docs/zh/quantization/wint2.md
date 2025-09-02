@@ -83,4 +83,3 @@ python -m fastdeploy.entrypoints.openai.api_server \
 |BBH|6511|94.43|90.06|
 |DROP|9536|91.17|89.32|
 |CMMLU|11477|89.92|86.55|
-
