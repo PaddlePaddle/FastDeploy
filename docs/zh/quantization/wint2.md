@@ -7,10 +7,7 @@
 该方法依托卷积算法利用重叠的Bit位将2Bit的数值映射到更大的数值表示空间，使得模型权重量化后既保留原始数据更多的信息，同时将真实数值压缩到极低的2Bit大小，大致原理可参考下图：
 [卷积编码量化示意图](./wint2.png)
 
-
 CCQ WINT2一般用于资源受限的低门槛场景，以ERNIE-4.5-300B-A47B为例，将权重压缩到89GB，可支持141GB H20单卡部署。
-
-
 
 ## 执行WINT2离线推理
 - 执行TP2/TP4模型时，可更换`model_name_or_path`以及`tensor_parallel_size`参数。
@@ -25,9 +22,8 @@ print(outputs)
 
 ```
 
-
 ## 启动WINT2推理服务
-- 执行TP2/TP4模型时，可更换`--model`以及`tensor-parallel-size`参数；  
+- 执行TP2/TP4模型时，可更换`--model`以及`tensor-parallel-size`参数；
 ```
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle \
