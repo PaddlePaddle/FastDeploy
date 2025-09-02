@@ -15,7 +15,6 @@
 """
 
 import json
-import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
@@ -993,12 +992,12 @@ class EngineArgs:
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
-            self.disenable_chunked_prefill = int(envs.FD_DISENABLE_CHUNKED_PREFILL)
-            if self.disenable_chunked_prefill:
+            self.disable_chunked_prefill = int(envs.FD_DISABLE_CHUNKED_PREFILL)
+            if self.disable_chunked_prefill:
                 self.enable_chunked_prefill = False
 
         if self.max_num_batched_tokens is None:
-            if int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
                 self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
