@@ -53,7 +53,6 @@ class TestNgramMatchOp(unittest.TestCase):
         # Maximum decoding length
         max_dec_len = paddle.to_tensor([10], dtype="int64")
 
-        # Call the OP (in-place modification)
         ngram_match(
             input_ids,
             input_ids_len,
@@ -65,16 +64,20 @@ class TestNgramMatchOp(unittest.TestCase):
             seq_lens_encoder,
             seq_lens_decoder,
             max_dec_len,
-            3,  # Maximum n-gram size
-            4,  # Maximum draft tokens
+            3,
+            4,
         )
 
-        print("draft_tokens_out:", draft_tokens.numpy())
-        print("seq_lens_this_time_out:", seq_lens_this_time.numpy())
+        # print("step_idx:", step_idx.numpy())
+        # print("draft_tokens_out:", draft_tokens.numpy())
+        # print("seq_lens_this_time_out:", seq_lens_this_time.numpy())
 
-        # Check if draft tokens are correctly extracted
-        self.assertIn(50, draft_tokens.numpy()[0])
-        self.assertIn(60, draft_tokens.numpy()[0])
+        # Extract non-zero tokens and assert the results.
+        nonzero_tokens = draft_tokens.numpy()[0][draft_tokens.numpy()[0] != 0]
+        expected_tokens = [50, 60]
+        self.assertTrue((nonzero_tokens == expected_tokens).all())
+
+        # Check length
         self.assertEqual(seq_lens_this_time.numpy()[0], 3)
 
     def test_no_match(self):
