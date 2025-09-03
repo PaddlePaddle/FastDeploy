@@ -58,6 +58,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.ep_size,
                     layer.ep_rank,
                     layer.fd_config.model_config.redundant_experts_num,
+                    ep_group=layer.fd_config.parallel_config.ep_group,
                 )
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k,
@@ -68,6 +69,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.ep_size,
                     layer.ep_rank,
                     layer.fd_config.model_config.redundant_experts_num,
+                    ep_group=layer.fd_config.parallel_config.ep_group,
                 )
             else:
                 if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
@@ -82,6 +84,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.ep_size,
                         layer.ep_rank,
                         layer.fd_config.model_config.redundant_experts_num,
+                        ep_group=layer.fd_config.parallel_config.ep_group,
                     )
                 else:
                     from .ep import EPDecoderRunner
@@ -95,6 +98,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.ep_size,
                         layer.ep_rank,
                         layer.fd_config.model_config.redundant_experts_num,
+                        ep_group=layer.fd_config.parallel_config.ep_group,
                     )
 
     def process_loaded_weights(self, layer, weights) -> None:
@@ -185,12 +189,20 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
 
         if current_platform.is_cuda():
-            self.up_gate_proj_weight_shape = [layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2]
-            self.down_proj_weight_shape = [layer.num_experts, layer.moe_intermediate_size, layer.hidden_size]
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size * 2,
+            ]
+            self.down_proj_weight_shape = [layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size]
             extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1}}
         else:
-            self.up_gate_proj_weight_shape = [layer.num_experts, layer.moe_intermediate_size * 2, layer.hidden_size]
-            self.down_proj_weight_shape = [layer.num_experts, layer.hidden_size, layer.moe_intermediate_size]
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size,
+            ]
+            self.down_proj_weight_shape = [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size]
             extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
 
         layer.up_gate_proj_weight = layer.create_parameter(
