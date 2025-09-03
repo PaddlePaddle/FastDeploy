@@ -130,7 +130,7 @@ class XPUAttentionBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ) -> Tuple[int, int, int, int]:
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         return (
             max_num_blocks,

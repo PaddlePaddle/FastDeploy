@@ -27,7 +27,7 @@ from fastdeploy.worker.output import ModelRunnerOutput
 class WorkerBase(ABC):
     """
     Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
-    Worker interface that allows inference framwork to cleanly separate implementations for different harware.
+    Worker interface that allows inference framework to cleanly separate implementations for different hardware.
     """
 
     def __init__(
@@ -89,7 +89,7 @@ class WorkerBase(ABC):
 
     @abstractmethod
     def graph_optimize_and_warm_up_model(self) -> None:
-        """Prepare model for execution through grpah optimizaiton(CudaGrpah/CINN) or warmup."""
+        """Prepare model for execution through graph optimizaiton(CudaGrpah/CINN) or warmup."""
         raise NotImplementedError
 
     @abstractmethod
