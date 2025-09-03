@@ -367,7 +367,7 @@ class MetricsManager:
         "available_batch_size": {
             "type": Gauge,
             "name": "fastdeploy:available_batch_size",
-            "description": "Number of how many new requests the system can still accept.",
+            "description": "Number of requests that can still be inserted during the Decode phase",
             "kwargs": {},
         },
         "hit_req_rate": {
