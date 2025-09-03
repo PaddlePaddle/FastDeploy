@@ -141,19 +141,36 @@ class ResourceManagerV1(ResourceManager):
         if not self.config.model_config.enable_mm:
             return num_new_tokens
 
+        request.with_image = False
         inputs = request.multimodal_inputs
         if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
+
+            prompt_token_ids_len = len(request.prompt_token_ids)
+            assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
+
             # start
-            start_patch_idx = inputs["patch_idx"][pre_end_idx]
+            if pre_end_idx >= prompt_token_ids_len:
+                start_patch_idx = inputs["patch_idx"][-1]
+            else:
+                start_patch_idx = inputs["patch_idx"][pre_end_idx]
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
             request.audio_start = start_patch_map["audio_num"]
 
             # end
-            end_patch_idx = inputs["patch_idx"][new_end_idx]
+            if new_end_idx >= prompt_token_ids_len:
+                end_patch_idx = inputs["patch_idx"][-1]
+            else:
+                end_patch_idx = inputs["patch_idx"][new_end_idx]
+                if request.prompt_token_ids[new_end_idx] in [
+                    inputs["image_end_id"],
+                    inputs["video_end_id"],
+                    inputs["audio_end_id"],
+                ]:
+                    end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
             if end_modal_id > 0:
@@ -168,8 +185,6 @@ class ResourceManagerV1(ResourceManager):
             and inputs.get("image_patch_id", None) is not None
             and inputs.get("grid_thw", None) is not None
         ):
-            request.with_image = False
-
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
