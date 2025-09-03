@@ -183,6 +183,8 @@ class OpenAIServingChat:
             else (request.metadata or {}).get("max_streaming_response_tokens", 1)
         )  # dierctly passed & passed in metadata
 
+        max_streaming_response_tokens = max(1, max_streaming_response_tokens)
+
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
@@ -369,11 +371,6 @@ class OpenAIServingChat:
                         if res["finished"]:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
-
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
 
             if include_usage:
                 completion_tokens = previous_num_tokens
