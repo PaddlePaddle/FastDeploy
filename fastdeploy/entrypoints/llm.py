@@ -30,7 +30,6 @@ from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.plugins.model_register import load_model_register_plugins
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -80,7 +79,6 @@ class LLM:
     ):
         deprecated_kwargs_warning(**kwargs)
 
-        load_model_register_plugins()
         model = retrive_model_from_server(model, revision)
         tool_parser_plugin = kwargs.get("tool_parser_plugin")
         if tool_parser_plugin:
@@ -104,7 +102,7 @@ class LLM:
         self.master_node_ip = self.llm_engine.cfg.master_ip
         self._receive_output_thread = threading.Thread(target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
-        self.chat_template = load_chat_template(chat_template)
+        self.chat_template = load_chat_template(chat_template, model)
 
     def _check_master(self):
         """
@@ -114,7 +112,7 @@ class LLM:
 
     def _receive_output(self):
         """
-        Recieve output from token processor and store them in cache
+        Receive output from token processor and store them in cache
         """
         while True:
             try:
@@ -297,6 +295,9 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
+            if current_sampling_params.guided_decoding is not None:
+                guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
+                tasks.update(guided_decoding_dict)
             self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 

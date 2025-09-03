@@ -27,6 +27,7 @@ import sys
 import tarfile
 import time
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
@@ -668,6 +669,14 @@ def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
     return module
 
 
+def is_package_installed(package_name):
+    try:
+        distribution(package_name)
+        return True
+    except PackageNotFoundError:
+        return False
+
+
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
@@ -769,3 +778,4 @@ scheduler_logger = get_logger("scheduler", "scheduler.log")
 api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
+zmq_client_logger = get_logger("zmq_client", "zmq_client.log")

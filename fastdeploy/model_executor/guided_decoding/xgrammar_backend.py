@@ -24,7 +24,7 @@ import torch
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
+from fastdeploy.model_executor.guided_decoding import (
     BackendBase,
     BaseChecker,
     LogitsProcessorBase,
@@ -57,7 +57,6 @@ class XGrammarProcessor(LogitsProcessorBase):
         max_rollback_tokens (int): Maximum number of tokens to rollback on mismatch
         vocab_size (int): Size of the vocabulary
         batch_size (int): Batch size for processing
-        splitwise_role (str): Role for splitwise processing
         compiled_grammar (CompiledGrammar): Compiled grammar rules
         terminate_without_stop_token (bool): Whether to terminate without stop token
         override_stop_tokens (Optional[List[int]]): Custom stop tokens
@@ -71,13 +70,12 @@ class XGrammarProcessor(LogitsProcessorBase):
         override_stop_tokens: Optional[List[int]] = None,
         vocab_size: Optional[int] = None,
         batch_size: Optional[int] = None,
-        splitwise_role: str = "mixed",
+        enable_thinking: bool = False,
     ):
-        super().__init__()
+        super().__init__(enable_reasoning=enable_thinking)
         self.max_rollback_tokens = 200
         self.vocab_size = vocab_size
         self.batch_size = batch_size
-        self.splitwise_role = splitwise_role
         self.compiled_grammar = compiled_grammar
         self.terminate_without_stop_token = terminate_without_stop_token
         self.override_stop_tokens = override_stop_tokens
@@ -188,7 +186,6 @@ class XGrammarProcessor(LogitsProcessorBase):
             override_stop_tokens=self.override_stop_tokens,
             vocab_size=self.vocab_size,
             batch_size=self.batch_size,
-            splitwise_role=self.splitwise_role,
         )
 
 
@@ -203,7 +200,6 @@ class XGrammarBackend(BackendBase):
         vocab_size (int): Size of the vocabulary from config
         batch_size (int): Maximum batch size from config
         any_whitespace (bool): Whether to allow any whitespace in JSON
-        splitwise_role (str): Role for splitwise processing
         grammar_compiler (GrammarCompiler): Grammar compilation engine
     """
 
@@ -217,7 +213,6 @@ class XGrammarBackend(BackendBase):
         self.batch_size = fd_config.parallel_config.max_num_seqs
 
         self.any_whitespace = not fd_config.parallel_config.disable_any_whitespace
-        self.splitwise_role = fd_config.parallel_config.splitwise_role
 
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(self.hf_tokenizer, vocab_size=self.vocab_size)
@@ -230,6 +225,7 @@ class XGrammarBackend(BackendBase):
         compiled_grammar: CompiledGrammar,
         terminate_without_stop_token: bool = False,
         override_stop_tokens: Optional[List[int]] = None,
+        enable_thinking: bool = False,
     ) -> XGrammarProcessor:
         """
         Create a logits processor instance for the given compiled grammar.
@@ -238,6 +234,7 @@ class XGrammarBackend(BackendBase):
             compiled_grammar (CompiledGrammar): Compiled grammar rules
             terminate_without_stop_token (bool): Whether to terminate without stop token
             override_stop_tokens (Optional[List[int]]): Custom stop tokens to override defaults
+            enable_thinking (bool): Whether to enable thinking mode
 
         Returns:
             XGrammarProcessor: Configured grammar processor instance
@@ -248,15 +245,16 @@ class XGrammarBackend(BackendBase):
             override_stop_tokens=override_stop_tokens,
             vocab_size=self.vocab_size,
             batch_size=self.batch_size,
-            splitwise_role=self.splitwise_role,
+            enable_thinking=enable_thinking,
         )
 
-    def _json_processor(self, schemata: str) -> Optional[XGrammarProcessor]:
+    def _json_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile JSON schema into a grammar processor.
 
         Args:
             schemata (str): JSON schema string to compile
+            enable_thinking (bool): Whether to enable thinking mode
 
         Returns:
             Optional[XGrammarProcessor]: Configured processor if successful, None on failure
@@ -266,14 +264,15 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile json schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar)
+        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
-    def _regex_processor(self, schemata: str) -> Optional[XGrammarProcessor]:
+    def _regex_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile regex pattern into a grammar processor.
 
         Args:
             schemata (str): Regex pattern string to compile
+            enable_thinking (bool): Whether to enable thinking mode
 
         Returns:
             Optional[XGrammarProcessor]: Configured processor if successful, None on failure
@@ -283,14 +282,15 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile regex schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar)
+        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
-    def _grammar_processor(self, schemata: str) -> Optional[XGrammarProcessor]:
+    def _grammar_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile grammar (EBNF) into a grammar processor.
 
         Args:
             schemata (str): Grammar string in EBNF format
+            enable_thinking (bool): Whether to enable thinking mode
 
         Returns:
             Optional[XGrammarProcessor]: Configured processor if successful, None on failure
@@ -300,9 +300,9 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile ebnf schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar)
+        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
-    def _structural_tag_processor(self, schemata: str) -> Optional[XGrammarProcessor]:
+    def _structural_tag_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
         """
         Compile structural tags into a grammar processor.
 
@@ -327,7 +327,7 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile structural tags schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar)
+        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
 
 
 class XGrammarChecker(BaseChecker):
