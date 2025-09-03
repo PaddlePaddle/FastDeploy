@@ -58,7 +58,7 @@ class Qwen3MoeBlock(nn.Layer):
         self.tp_group = fd_config.parallel_config.tp_group
 
         self.use_ep = self.expert_parallel_size > 1
-        self.us_tp = self.tensor_parallel_size > 1
+        self.use_tp = self.tensor_parallel_size > 1
 
         weight_key_map = {
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",

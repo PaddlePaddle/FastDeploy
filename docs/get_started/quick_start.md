@@ -60,12 +60,13 @@ curl -i http://0.0.0.0:8180/health
 Send requests to the service with the following command:
 
 ```shell
-curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+curl -X POST "http://0.0.0.0:1822/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
     {"role": "user", "content": "Write me a poem about large language model."}
-  ]
+  ],
+  "stream": true
 }'
 ```
 
