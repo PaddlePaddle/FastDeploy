@@ -32,14 +32,15 @@ template <typename T,
           typename OutT = T,
           bool ENABLE_PREFILL = true,
           bool is_scale_channel_wise = false,
-          bool IsFP8=false>
+          bool IsFP8 = false,
+          bool IsDynamicC8 = false>
 __global__ void multi_query_append_attention_c8_kernel(
     T *__restrict__ q,             // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     CacheT *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
                                    // head_dim]
     CacheT *__restrict__ cache_v,
-    const T *__restrict__ cache_k_scale,  // [num_kv_heads]
-    const T *__restrict__ cache_v_scale,  // [num_kv_heads]
+    const T *__restrict__ cache_k_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
+    const T *__restrict__ cache_v_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
     const int *__restrict__ seq_lens,
@@ -91,28 +92,30 @@ __global__ void multi_query_append_attention_c8_kernel(
     return;
   }
 
-  T cache_k_scale_reg[num_frags_y * 4];
-  T cache_v_scale_reg[num_frags_y * 2];
-  if (is_scale_channel_wise) {
-    int scale_col_base = threadIdx.x % 4 * 2 + kv_head_idx * HEAD_DIM;
-    const T *cache_k_scale_cur_head = cache_k_scale + scale_col_base;
-    for (int i = 0; i < num_frags_y; ++i) {
-      const int scale_idx = i * 16;
-      cache_k_scale_reg[i * 4] = cache_k_scale_cur_head[scale_idx];
-      cache_k_scale_reg[i * 4 + 1] = cache_k_scale_cur_head[scale_idx + 1];
-      cache_k_scale_reg[i * 4 + 2] = cache_k_scale_cur_head[scale_idx + 8];
-      cache_k_scale_reg[i * 4 + 3] = cache_k_scale_cur_head[scale_idx + 9];
+  T cache_k_scale_reg[IsDynamicC8 ? num_frags_z * 2 : num_frags_y * 4];
+  T cache_v_scale_reg[IsDynamicC8 ? num_frags_z * 4 : num_frags_y * 2];
+  if constexpr (!IsDynamicC8) {
+    if constexpr (is_scale_channel_wise) {
+      int scale_col_base = threadIdx.x % 4 * 2 + kv_head_idx * HEAD_DIM;
+      const T *cache_k_scale_cur_head = cache_k_scale + scale_col_base;
+      for (int i = 0; i < num_frags_y; ++i) {
+        const int scale_idx = i * 16;
+        cache_k_scale_reg[i * 4] = cache_k_scale_cur_head[scale_idx];
+        cache_k_scale_reg[i * 4 + 1] = cache_k_scale_cur_head[scale_idx + 1];
+        cache_k_scale_reg[i * 4 + 2] = cache_k_scale_cur_head[scale_idx + 8];
+        cache_k_scale_reg[i * 4 + 3] = cache_k_scale_cur_head[scale_idx + 9];
+      }
+      scale_col_base = threadIdx.x / 4 + kv_head_idx * HEAD_DIM;
+      const T *cache_v_scale_cur_head = cache_v_scale + scale_col_base;
+      for (int i = 0; i < num_frags_y; ++i) {
+        const int scale_idx = i * 16;
+        cache_v_scale_reg[i * 2] = cache_v_scale_cur_head[scale_idx];
+        cache_v_scale_reg[i * 2 + 1] = cache_v_scale_cur_head[scale_idx + 8];
+      }
+    } else {
+      cache_k_scale_reg[0] = cache_k_scale[kv_head_idx];
+      cache_v_scale_reg[0] = cache_v_scale[kv_head_idx];
     }
-    scale_col_base = threadIdx.x / 4 + kv_head_idx * HEAD_DIM;
-    const T *cache_v_scale_cur_head = cache_v_scale + scale_col_base;
-    for (int i = 0; i < num_frags_y; ++i) {
-      const int scale_idx = i * 16;
-      cache_v_scale_reg[i * 2] = cache_v_scale_cur_head[scale_idx];
-      cache_v_scale_reg[i * 2 + 1] = cache_v_scale_cur_head[scale_idx + 8];
-    }
-  } else {
-    cache_k_scale_reg[0] = cache_k_scale[kv_head_idx];
-    cache_v_scale_reg[0] = cache_v_scale[kv_head_idx];
   }
 
   const uint32_t q_end =
@@ -201,6 +204,13 @@ __global__ void multi_query_append_attention_c8_kernel(
   smem_t k_smem(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T)),
       v_smem(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
              num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
+  T* k_smem_scale = nullptr;
+  T* v_smem_scale = nullptr;
+  if constexpr (IsDynamicC8) {
+    k_smem_scale = reinterpret_cast<T*>(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+                                         num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
+    v_smem_scale = k_smem_scale + num_frags_z * 16;
+  }
 
 
   const uint32_t num_iterations = div_up(
@@ -282,10 +292,22 @@ __global__ void multi_query_append_attention_c8_kernel(
 
 #pragma unroll 1
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
+    if constexpr (IsDynamicC8) {
+      produce_k_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        k_smem_scale,
+        cache_k_scale_reg,
+        block_table_now,
+        cache_k_scale,
+        kv_idx_base,
+        kv_num_heads,
+        kv_head_idx,
+        chunk_end
+      );
+    }
     wait_group<1>();
     __syncthreads();
     // s = qk
-    compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8>(
+    compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8, IsDynamicC8>(
         &qo_smem,
         &q_smem_offset_r,
         &k_smem,
@@ -318,6 +340,7 @@ __global__ void multi_query_append_attention_c8_kernel(
         s_frag, o_frag, m_frag, d_frag);
     __syncthreads();
 
+    const int ori_kv_idx_base = kv_idx_base;
     kv_idx_base += num_frags_z * 16;
     produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
                            NUM_WARPS,
@@ -336,6 +359,18 @@ __global__ void multi_query_append_attention_c8_kernel(
                                        chunk_end,
                                        const_k_offset);
     commit_group();
+    if constexpr (IsDynamicC8) {
+      produce_v_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        v_smem_scale,
+        cache_v_scale_reg,
+        block_table_now,
+        cache_v_scale,
+        ori_kv_idx_base,
+        kv_num_heads,
+        kv_head_idx,
+        chunk_end
+      );
+    }
     wait_group<1>();
     __syncthreads();
 
@@ -346,7 +381,9 @@ __global__ void multi_query_append_attention_c8_kernel(
                      BLOCK_SIZE,
                      T,
                      CacheT,
-                     is_scale_channel_wise, IsFP8>(
+                     is_scale_channel_wise,
+                     IsFP8,
+                     IsDynamicC8>(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag, cache_v_scale_reg);
     __syncthreads();
 
@@ -463,14 +500,15 @@ template <typename T,
           typename OutT = T,
           bool ENABLE_PREFILL = true,
           bool is_scale_channel_wise=false,
-          bool IsFP8=false>
+          bool IsFP8 = false,
+          bool IsDynamicC8 = false>
 __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     T *__restrict__ q,             // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     CacheT *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
                                    // head_dim]
     CacheT *__restrict__ cache_v,
-    const T *__restrict__ cache_k_scale,  // [num_kv_heads, head_dim]
-    const T *__restrict__ cache_v_scale,  // [num_kv_heads, head_dim]
+    const T *__restrict__ cache_k_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
+    const T *__restrict__ cache_v_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
     const int *__restrict__ seq_lens,
@@ -522,28 +560,30 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   if (q_len <= 0) {
     return;
   }
-  T cache_k_scale_reg[num_frags_y * 4];
-  T cache_v_scale_reg[num_frags_y * 2];
-  if (is_scale_channel_wise) {
-    int scale_col_base = threadIdx.x % 4 * 2 + kv_head_idx * HEAD_DIM;
-    const T *cache_k_scale_cur_head = cache_k_scale + scale_col_base;
-    for (int i = 0; i < num_frags_y; ++i) {
-      const int scale_idx = i * 16;
-      cache_k_scale_reg[i * 4] = cache_k_scale_cur_head[scale_idx];
-      cache_k_scale_reg[i * 4 + 1] = cache_k_scale_cur_head[scale_idx + 1];
-      cache_k_scale_reg[i * 4 + 2] = cache_k_scale_cur_head[scale_idx + 8];
-      cache_k_scale_reg[i * 4 + 3] = cache_k_scale_cur_head[scale_idx + 9];
+  T cache_k_scale_reg[IsDynamicC8 ? num_frags_z * 2 : num_frags_y * 4];
+  T cache_v_scale_reg[IsDynamicC8 ? num_frags_z * 4 : num_frags_y * 2];
+  if constexpr (!IsDynamicC8) {
+    if constexpr (is_scale_channel_wise) {
+      int scale_col_base = threadIdx.x % 4 * 2 + kv_head_idx * HEAD_DIM;
+      const T *cache_k_scale_cur_head = cache_k_scale + scale_col_base;
+      for (int i = 0; i < num_frags_y; ++i) {
+        const int scale_idx = i * 16;
+        cache_k_scale_reg[i * 4] = cache_k_scale_cur_head[scale_idx];
+        cache_k_scale_reg[i * 4 + 1] = cache_k_scale_cur_head[scale_idx + 1];
+        cache_k_scale_reg[i * 4 + 2] = cache_k_scale_cur_head[scale_idx + 8];
+        cache_k_scale_reg[i * 4 + 3] = cache_k_scale_cur_head[scale_idx + 9];
+      }
+      scale_col_base = threadIdx.x / 4 + kv_head_idx * HEAD_DIM;
+      const T *cache_v_scale_cur_head = cache_v_scale + scale_col_base;
+      for (int i = 0; i < num_frags_y; ++i) {
+        const int scale_idx = i * 16;
+        cache_v_scale_reg[i * 2] = cache_v_scale_cur_head[scale_idx];
+        cache_v_scale_reg[i * 2 + 1] = cache_v_scale_cur_head[scale_idx + 8];
+      }
+    } else {
+      cache_k_scale_reg[0] = cache_k_scale[kv_head_idx];
+      cache_v_scale_reg[0] = cache_v_scale[kv_head_idx];
     }
-    scale_col_base = threadIdx.x / 4 + kv_head_idx * HEAD_DIM;
-    const T *cache_v_scale_cur_head = cache_v_scale + scale_col_base;
-    for (int i = 0; i < num_frags_y; ++i) {
-      const int scale_idx = i * 16;
-      cache_v_scale_reg[i * 2] = cache_v_scale_cur_head[scale_idx];
-      cache_v_scale_reg[i * 2 + 1] = cache_v_scale_cur_head[scale_idx + 8];
-    }
-  } else {
-    cache_k_scale_reg[0] = cache_k_scale[kv_head_idx];
-    cache_v_scale_reg[0] = cache_v_scale[kv_head_idx];
   }
   const uint32_t q_end =
       min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
@@ -634,6 +674,13 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
       v_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
              NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
+  T* k_smem_scale = nullptr;
+  T* v_smem_scale = nullptr;
+  if constexpr (IsDynamicC8) {
+    k_smem_scale = reinterpret_cast<T*>(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+                                        NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
+    v_smem_scale = k_smem_scale + NUM_WARP_KV * num_frags_z * 16;
+  }
 
   const uint32_t num_iterations = div_up(
       CAUSAL
@@ -716,11 +763,23 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   commit_group();
 #pragma unroll 1
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
+    if constexpr (IsDynamicC8) {
+      produce_k_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        k_smem_scale,
+        cache_k_scale_reg,
+        block_table_now,
+        cache_k_scale,
+        kv_idx_base,
+        kv_num_heads,
+        kv_head_idx,
+        chunk_end
+      );
+    }
     wait_group<1>();
     __syncthreads();
 
     // s = qk
-    compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8>(
+    compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8, IsDynamicC8>(
         &qo_smem,
         &q_smem_offset_r,
         &k_smem,
@@ -753,6 +812,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
         s_frag, o_frag, m_frag, d_frag);
     __syncthreads();
 
+    const uint32_t ori_kv_idx_base = kv_idx_base;
     kv_idx_base += NUM_WARP_KV * num_frags_z * 16;
     produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
                            NUM_WARPS,
@@ -771,6 +831,18 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                        chunk_end,
                                        const_k_offset);
     commit_group();
+    if constexpr (IsDynamicC8) {
+      produce_v_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        v_smem_scale,
+        cache_v_scale_reg,
+        block_table_now,
+        cache_v_scale,
+        ori_kv_idx_base,
+        kv_num_heads,
+        kv_head_idx,
+        chunk_end
+      );
+    }
     wait_group<1>();
     __syncthreads();
 
@@ -781,7 +853,9 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                   BLOCK_SIZE,
                                   T,
                                   CacheT,
-                                  is_scale_channel_wise, IsFP8>(
+                                  is_scale_channel_wise,
+                                  IsFP8,
+                                  IsDynamicC8>(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag, cache_v_scale_reg);
     __syncthreads();
 
@@ -895,7 +969,8 @@ template <typename T,
           uint32_t NUM_WARP_Q,
           typename OutT = T,
           bool ENABLE_PREFILL = true,
-          bool IsFP8=false>
+          bool IsFP8 = false,
+          bool IsDynamicC8 = false>
 void MultiQueryAppendC8Attention(
     const AppendAttnMetaData &meta_data,
     const paddle::Tensor &qkv,
@@ -953,7 +1028,8 @@ void MultiQueryAppendC8Attention(
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16;
     constexpr uint32_t smem_size =
         num_warps * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
-        num_frags_z * 16 * HEAD_DIM * sizeof(uint8_t) * 2;
+        num_frags_z * 16 * HEAD_DIM * sizeof(uint8_t) * 2 +
+        num_frags_z * 16 * sizeof(T) * 2;
     auto split_kv_kernel =
         multi_query_append_attention_c8_kernel<NV_TYPE,
                                                uint8_t,
@@ -970,7 +1046,9 @@ void MultiQueryAppendC8Attention(
                                                num_frags_y,
                                                OUT_NV_TYPE,
                                                ENABLE_PREFILL,
-                                               false, IsFP8>;
+                                               false,
+                                               IsFP8,
+                                               IsDynamicC8>;
     if (is_scale_channel_wise) {
       split_kv_kernel =
         multi_query_append_attention_c8_kernel<NV_TYPE,
@@ -988,7 +1066,9 @@ void MultiQueryAppendC8Attention(
                                                num_frags_y,
                                                OUT_NV_TYPE,
                                                ENABLE_PREFILL,
-                                               true, IsFP8>;
+                                               true,
+                                               IsFP8,
+                                               IsDynamicC8>;
     }
     if (smem_size >= 48 * 1024) {
       cudaFuncSetAttribute(split_kv_kernel,
@@ -1022,7 +1102,9 @@ void MultiQueryAppendC8Attention(
                                                  num_frags_y,
                                                  OUT_NV_TYPE,
                                                  ENABLE_PREFILL,
-                                                 false, IsFP8>;
+                                                 false,
+                                                 IsFP8,
+                                                 IsDynamicC8>;
       if (is_scale_channel_wise) {
         nosplit_kv_kernel =
           multi_query_append_attention_c8_kernel<NV_TYPE,
@@ -1040,7 +1122,9 @@ void MultiQueryAppendC8Attention(
                                                  num_frags_y,
                                                  OUT_NV_TYPE,
                                                  ENABLE_PREFILL,
-                                                 true, IsFP8>;
+                                                 true,
+                                                 IsFP8,
+                                                 IsDynamicC8>;
       }
       if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(nosplit_kv_kernel,
@@ -1218,7 +1302,8 @@ void MultiQueryAppendC8Attention(
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16 / NUM_WARP_KV * 2;
     constexpr uint32_t smem_size =
         num_frags_x * 16 * HEAD_DIM * sizeof(T) +
-        NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(uint8_t) * 2;
+        NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(uint8_t) * 2 +
+        NUM_WARP_KV * num_frags_z * 16 * sizeof(T) * 2;
     auto split_kv_kernel =
         multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
                                                        uint8_t,
@@ -1235,7 +1320,9 @@ void MultiQueryAppendC8Attention(
                                                        num_frags_y,
                                                        OUT_NV_TYPE,
                                                        ENABLE_PREFILL,
-                                                       false, IsFP8>;
+                                                       false,
+                                                       IsFP8,
+                                                       IsDynamicC8>;
     if (is_scale_channel_wise) {
       split_kv_kernel =
         multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
@@ -1253,7 +1340,9 @@ void MultiQueryAppendC8Attention(
                                                        num_frags_y,
                                                        OUT_NV_TYPE,
                                                        ENABLE_PREFILL,
-                                                       true, IsFP8>;
+                                                       true,
+                                                       IsFP8,
+                                                       IsDynamicC8>;
     }
     if (smem_size >= 48 * 1024) {
       cudaFuncSetAttribute(split_kv_kernel,
@@ -1295,7 +1384,9 @@ void MultiQueryAppendC8Attention(
                                                          num_frags_y,
                                                          OUT_NV_TYPE,
                                                          ENABLE_PREFILL,
-                                                         false, IsFP8>;
+                                                         false,
+                                                         IsFP8,
+                                                         IsDynamicC8>;
       if (is_scale_channel_wise) {
         nosplit_kv_kernel =
           multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
@@ -1313,7 +1404,9 @@ void MultiQueryAppendC8Attention(
                                                          num_frags_y,
                                                          OUT_NV_TYPE,
                                                          ENABLE_PREFILL,
-                                                         true, IsFP8>;
+                                                         true,
+                                                         IsFP8,
+                                                         IsDynamicC8>;
       }
       if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(nosplit_kv_kernel,
@@ -1546,6 +1639,7 @@ void CascadeAppendAttentionC8Kernel(
     const bool causal,
     const bool is_decoder,
     const bool enable_prefill,
+    const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out) {
   const auto token_num = meta_data.token_nums;
@@ -1554,6 +1648,7 @@ void CascadeAppendAttentionC8Kernel(
   const auto num_heads = meta_data.q_num_heads;
   const auto group_size = meta_data.q_num_heads / meta_data.kv_num_heads;
   const auto head_dim = meta_data.head_dims;
+  bool is_dynamic_cfp8 = cache_quant_type_str == "block_wise_fp8";
 
   DISPATCH_CAUSAL(
       causal,
@@ -1572,43 +1667,46 @@ void CascadeAppendAttentionC8Kernel(
                       BLOCK_SIZE,
                       {DISPATCH_BLOCKSHAPE_Q(
                           block_shape_q, BLOCK_SHAPE_Q, NUM_WARP_Q, {
-                            MultiQueryAppendC8Attention<T,
-                                                        GROUP_SIZE,
-                                                        HEAD_DIM,
-                                                        BLOCK_SIZE,
-                                                        CAUSAL,
-                                                        BLOCK_SHAPE_Q,
-                                                        NUM_WARP_Q,
-                                                        OutT,
-                                                        ENABLE_PREFILL, IsFP8>(
-                                meta_data,
-                                qkv,
-                                cache_k,
-                                cache_v,
-                                attn_mask,
-                                cache_k_scale.get(),
-                                cache_v_scale.get(),
-                                shift_bias,
-                                smooth_weight,
-                                seq_lens_q,
-                                seq_lens_kv,
-                                seq_lens_encoder,
-                                batch_id_per_token,
-                                cu_seqlens_q,
-                                block_table,
-                                batch_ids,
-                                tile_ids_per_batch,
-                                num_blocks,
-                                max_seq_len,
-                                max_dec_len,
-                                quant_max_bound,
-                                quant_min_bound,
-                                in_scale,
-                                max_partition_size,
-                                encoder_max_partition_size,
-                                speculate_max_draft_token_num,
-                                is_decoder,
-                                stream,
-                                out);
-                          })})})})})})
+                            DISPATCH_DyCfp8(is_dynamic_cfp8, IsDynamicC8, {
+                              MultiQueryAppendC8Attention<T,
+                                                          GROUP_SIZE,
+                                                          HEAD_DIM,
+                                                          BLOCK_SIZE,
+                                                          CAUSAL,
+                                                          BLOCK_SHAPE_Q,
+                                                          NUM_WARP_Q,
+                                                          OutT,
+                                                          ENABLE_PREFILL,
+                                                          IsFP8,
+                                                          IsDynamicC8>(
+                                  meta_data,
+                                  qkv,
+                                  cache_k,
+                                  cache_v,
+                                  attn_mask,
+                                  cache_k_scale.get(),
+                                  cache_v_scale.get(),
+                                  shift_bias,
+                                  smooth_weight,
+                                  seq_lens_q,
+                                  seq_lens_kv,
+                                  seq_lens_encoder,
+                                  batch_id_per_token,
+                                  cu_seqlens_q,
+                                  block_table,
+                                  batch_ids,
+                                  tile_ids_per_batch,
+                                  num_blocks,
+                                  max_seq_len,
+                                  max_dec_len,
+                                  quant_max_bound,
+                                  quant_min_bound,
+                                  in_scale,
+                                  max_partition_size,
+                                  encoder_max_partition_size,
+                                  speculate_max_draft_token_num,
+                                  is_decoder,
+                                  stream,
+                                  out);
+      })})})})})})})
 }
