@@ -29,12 +29,9 @@ class TestGetPaddingOffset(unittest.TestCase):
         seq_lens = np.array([4, 3, 6], "int32").reshape(-1, 1)
         cum_offset = np.cumsum((max_len - seq_lens).flatten(), -1, "int32")
         token_num = np.sum(seq_lens)
-        bs = seq_lens.shape[0]
-        input_ids = np.zeros([bs, max_len], "int64")
-        for i in range(bs):
-            ids_len = seq_lens[i, 0]
-            input_ids[i, 0:ids_len] = np.random.randint(1, 10, seq_lens[i, 0], "int64")
-
+        input_ids = np.array(
+            [[8, 7, 8, 2, 0, 0, 0, 0, 0, 0], [4, 5, 5, 0, 0, 0, 0, 0, 0, 0], [7, 6, 1, 7, 2, 6, 0, 0, 0, 0]], "int64"
+        )
         (
             x_remove_padding,
             batch_id_per_token,
@@ -46,15 +43,6 @@ class TestGetPaddingOffset(unittest.TestCase):
             paddle.to_tensor(token_num),
             paddle.to_tensor(seq_lens),
         )
-
-        print("input_ids:\n", input_ids)
-        print("cum_offset:\n", cum_offset)
-        print("token_num:\n", token_num)
-        print("seq_lens:\n", seq_lens)
-        print("x_remove_padding:\n", x_remove_padding)
-        print("batch_id_per_token:\n", batch_id_per_token)
-        print("cu_seqlens_q:\n", cu_seqlens_q)
-        print("cu_seqlens_k:\n", cu_seqlens_k)
 
         ref_x_remove_padding = np.array([8, 7, 8, 2, 4, 5, 5, 7, 6, 1, 7, 2, 6], "int64")
         ref_batch_id_per_token = np.array([0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2], "int32")
