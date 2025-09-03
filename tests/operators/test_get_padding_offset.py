@@ -21,9 +21,6 @@ from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
 
 class TestGetPaddingOffset(unittest.TestCase):
-    def setUp(self):
-        np.random.seed(2023)
-
     def test_get_padding_offset(self):
         max_len = 10
         seq_lens = np.array([4, 3, 6], "int32").reshape(-1, 1)
