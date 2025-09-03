@@ -18,7 +18,6 @@ from abc import abstractmethod
 
 import paddle
 from paddle import nn
-from paddle.base.core import Config
 from paddleformers.utils.log import logger
 
 try:
@@ -102,6 +101,8 @@ class DeepEPEngine:
         self.async_finish = async_finish
 
         self.deepep_engine = None
+
+        from paddle.base.core import Config
 
         self.ep_config = Config(24, 6, 256)
         self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
