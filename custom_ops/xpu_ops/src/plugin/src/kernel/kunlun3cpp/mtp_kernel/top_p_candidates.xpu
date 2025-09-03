@@ -1,0 +1,349 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_primitive_template.h"
+
+namespace xpu3 {
+namespace plugin {
+
+template <typename T, int MaxLength, int TopPBeamTopK>
+__device__ void top_p_candidates_big_n(
+    char* lm,
+    __global_ptr__ const T* src,
+    __global_ptr__ const T* top_ps,
+    __global_ptr__ const int* output_padding_offset,
+    __global_ptr__ int64_t* out_id,
+    __global_ptr__ T* out_val,
+    __global_ptr__ int* actual_candidates_lens,
+    int vocab_size,
+    int token_num,
+    int max_cadidate_len,
+    int max_seq_len) {
+  int ncores = core_num();
+  int cid = core_id();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = cluster_num() * ncores;
+
+  int64_t buf_size = 6 * 1024 / sizeof(T);
+  T* lm_src = (T*)lm;
+  int64_t lm_out_id[TopPBeamTopK];
+  T lm_out_val[TopPBeamTopK];
+
+  __shared__ int64_t sm_out_id[64 * TopPBeamTopK];
+  __shared__ T sm_out_val[64 * TopPBeamTopK];
+
+  // only used in core 0
+  int lm_output_padding_offset;
+
+  for (int64_t i = cluster_id(); i < token_num; i += cluster_num()) {
+    if (cid == 0) {
+      GM2LM(output_padding_offset + i, &lm_output_padding_offset, sizeof(int));
+    }
+    for (int64_t j = 0; j < TopPBeamTopK; j++) {
+      lm_out_id[j] = -1;
+    }
+    for (int j = cid * buf_size; j < vocab_size; j += ncores * buf_size) {
+      int64_t read_size = min(buf_size, static_cast<int64_t>(vocab_size - j));
+      GM2LM(src + i * vocab_size + j, lm_src, read_size * sizeof(T));
+      for (int k = 0; k < read_size; k++) {
+        if (lm_out_id[TopPBeamTopK - 1] == -1 ||
+            lm_src[k] > lm_out_val[TopPBeamTopK - 1] ||
+            lm_src[k] == lm_out_val[TopPBeamTopK - 1] &&
+                k < lm_out_id[TopPBeamTopK - 1]) {
+          int l = TopPBeamTopK - 2;
+          for (; l >= 0; l--) {
+            if (lm_out_id[l] == -1 || lm_src[k] > lm_out_val[l] ||
+                lm_src[k] == lm_out_val[l] && (j + k) < lm_out_id[l]) {
+              lm_out_id[l + 1] = lm_out_id[l];
+              lm_out_val[l + 1] = lm_out_val[l];
+            } else {
+              break;
+            }
+          }
+          lm_out_id[l + 1] = j + k;
+          lm_out_val[l + 1] = lm_src[k];
+        }
+      }
+      mfence_lm();
+    }
+
+    if (cid % 16 != 0) {
+      for (int64_t j = 0; j < TopPBeamTopK; j++) {
+        sm_out_id[cid * TopPBeamTopK + j] = lm_out_id[j];
+        sm_out_val[cid * TopPBeamTopK + j] = lm_out_val[j];
+      }
+    }
+    mfence_sm();
+    sync_all();
+
+    if (cid % 16 == 0) {
+      int64_t local_sm_out_id;
+      T local_sm_out_val;
+      for (int j = cid + 1; j < cid + 16; j += 1) {
+        for (int offset = 0; offset < TopPBeamTopK; offset++) {
+          local_sm_out_id = sm_out_id[j * TopPBeamTopK + offset];
+          local_sm_out_val = sm_out_val[j * TopPBeamTopK + offset];
+          if (local_sm_out_val > lm_out_val[TopPBeamTopK - 1] ||
+              local_sm_out_val == lm_out_val[TopPBeamTopK - 1] &&
+                  local_sm_out_id < lm_out_id[TopPBeamTopK - 1]) {
+            int k = TopPBeamTopK - 2;
+            for (; k >= 0; k--) {
+              if (local_sm_out_val > lm_out_val[k] ||
+                  local_sm_out_val == lm_out_val[k] &&
+                      local_sm_out_id < lm_out_id[k]) {
+                lm_out_id[k + 1] = lm_out_id[k];
+                lm_out_val[k + 1] = lm_out_val[k];
+              } else {
+                break;
+              }
+            }
+            lm_out_id[k + 1] = local_sm_out_id;
+            lm_out_val[k + 1] = local_sm_out_val;
+          } else {
+            break;
+          }
+        }
+      }
+      if (cid != 0) {
+        for (int64_t j = 0; j < TopPBeamTopK; j++) {
+          sm_out_id[cid * TopPBeamTopK + j] = lm_out_id[j];
+          sm_out_val[cid * TopPBeamTopK + j] = lm_out_val[j];
+        }
+      }
+    }
+    mfence_sm();
+    sync_all();
+
+    if (cid == 0) {
+      int64_t local_sm_out_id;
+      T local_sm_out_val;
+      for (int j = cid + 16; j < ncores; j += 16) {
+        for (int offset = 0; offset < TopPBeamTopK; offset++) {
+          local_sm_out_id = sm_out_id[j * TopPBeamTopK + offset];
+          local_sm_out_val = sm_out_val[j * TopPBeamTopK + offset];
+          if (local_sm_out_val > lm_out_val[TopPBeamTopK - 1] ||
+              local_sm_out_val == lm_out_val[TopPBeamTopK - 1] &&
+                  local_sm_out_id < lm_out_id[TopPBeamTopK - 1]) {
+            int k = TopPBeamTopK - 2;
+            for (; k >= 0; k--) {
+              if (local_sm_out_val > lm_out_val[k] ||
+                  local_sm_out_val == lm_out_val[k] &&
+                      local_sm_out_id < lm_out_id[k]) {
+                lm_out_id[k + 1] = lm_out_id[k];
+                lm_out_val[k + 1] = lm_out_val[k];
+              } else {
+                break;
+              }
+            }
+            lm_out_id[k + 1] = local_sm_out_id;
+            lm_out_val[k + 1] = local_sm_out_val;
+          } else {
+            break;
+          }
+        }
+      }
+
+      int ori_token_id = i + lm_output_padding_offset;
+      int bid = ori_token_id / max_seq_len;
+      T lm_top_p;
+      GM2LM(top_ps + bid, &lm_top_p, sizeof(T));
+      float top_p_value = static_cast<float>(lm_top_p);
+      T default_val = static_cast<T>(0.f);
+      int lm_actual_candidates_len = 0;
+
+      float sum_prob = static_cast<float>(lm_out_val[0]);
+      for (int j = 0; j < TopPBeamTopK; j++) {
+        if (sum_prob >= top_p_value) {
+          for (int k = j + 1; k < TopPBeamTopK; k++) {
+            lm_out_id[k] = 0;
+            lm_out_val[k] = default_val;
+          }
+          lm_actual_candidates_len = j + 1;
+          break;
+        } else {
+          sum_prob += static_cast<float>(lm_out_val[j]);
+        }
+      }
+      mfence_lm();
+      LM2GM_ASYNC(
+          &lm_actual_candidates_len, actual_candidates_lens + i, sizeof(int));
+      LM2GM_ASYNC(lm_out_id,
+                  out_id + i * max_cadidate_len,
+                  TopPBeamTopK * sizeof(int64_t));
+      LM2GM_ASYNC(
+          lm_out_val, out_val + i * max_cadidate_len, TopPBeamTopK * sizeof(T));
+    }
+    mfence();
+    sync_all();
+  }
+}
+
+template <typename T, int MaxLength, int TopPBeamTopK>
+__device__ void top_p_candidates_normal(
+    char* lm,
+    __global_ptr__ const T* src,
+    __global_ptr__ const T* top_ps,
+    __global_ptr__ const int* output_padding_offset,
+    __global_ptr__ int64_t* out_id,
+    __global_ptr__ T* out_val,
+    __global_ptr__ int* actual_candidates_lens,
+    int vocab_size,
+    int token_num,
+    int max_cadidate_len,
+    int max_seq_len) {
+  int ncores = core_num();
+  int cid = core_id();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = cluster_num() * ncores;
+
+  int64_t buf_size = 6 * 1024 / sizeof(T);
+  T* lm_src = (T*)lm;
+  int64_t lm_out_id[TopPBeamTopK];
+  T lm_out_val[TopPBeamTopK];
+
+  int lm_output_padding_offset;
+  T lm_top_p;
+  int64_t default_id = 0;
+  T default_val = static_cast<T>(0.f);
+
+  for (int64_t i = tid; i < token_num; i += nthreads) {
+    float sum_prob = 0.0f;
+    for (int64_t j = 0; j < TopPBeamTopK; j++) {
+      lm_out_id[j] = -1;
+    }
+    for (int j = 0; j < vocab_size; j += buf_size) {
+      int64_t read_size = min(buf_size, static_cast<int64_t>(vocab_size - j));
+      GM2LM(src + i * vocab_size + j, lm_src, read_size * sizeof(T));
+      for (int k = 0; k < read_size; k++) {
+        if (lm_out_id[TopPBeamTopK - 1] == -1 ||
+            lm_src[k] > lm_out_val[TopPBeamTopK - 1] ||
+            lm_src[k] == lm_out_val[TopPBeamTopK - 1] &&
+                k < lm_out_id[TopPBeamTopK - 1]) {
+          lm_out_id[TopPBeamTopK - 1] = j + k;
+          lm_out_val[TopPBeamTopK - 1] = lm_src[k];
+          for (int l = TopPBeamTopK - 2; l >= 0; l--) {
+            if (lm_out_id[l] == -1 || lm_out_val[l + 1] > lm_out_val[l] ||
+                lm_out_val[l + 1] == lm_out_val[l] &&
+                    lm_out_id[l + 1] < lm_out_id[l]) {
+              int64_t swap_id = lm_out_id[l];
+              T swap_val = lm_out_val[l];
+              lm_out_id[l] = lm_out_id[l + 1];
+              lm_out_val[l] = lm_out_val[l + 1];
+              lm_out_id[l + 1] = swap_id;
+              lm_out_val[l + 1] = swap_val;
+            }
+          }
+        }
+      }
+      mfence_lm();
+    }
+    GM2LM(output_padding_offset + i, &lm_output_padding_offset, sizeof(int));
+    int ori_token_id = i + lm_output_padding_offset;
+    int bid = ori_token_id / max_seq_len;
+    GM2LM(top_ps + bid, &lm_top_p, sizeof(T));
+    float top_p_value = static_cast<float>(lm_top_p);
+    bool set_to_default_val = false;
+    int lm_actual_candidates_len = 0;
+    for (int j = 0; j < TopPBeamTopK; j++) {
+      if (set_to_default_val) {
+        LM2GM_ASYNC(
+            &default_id, out_id + i * max_cadidate_len + j, sizeof(int64_t));
+        LM2GM_ASYNC(
+            &default_val, out_val + i * max_cadidate_len + j, sizeof(T));
+      } else {
+        LM2GM_ASYNC(
+            lm_out_id + j, out_id + i * max_cadidate_len + j, sizeof(int64_t));
+        LM2GM_ASYNC(
+            lm_out_val + j, out_val + i * max_cadidate_len + j, sizeof(T));
+        sum_prob += static_cast<float>(lm_out_val[j]);
+        if (sum_prob >= top_p_value) {
+          lm_actual_candidates_len = j + 1;
+          mfence_lm();
+          LM2GM_ASYNC(&lm_actual_candidates_len,
+                      actual_candidates_lens + i,
+                      sizeof(int));
+          set_to_default_val = true;
+        }
+      }
+    }
+    mfence_lm();
+  }
+}
+
+template <typename T, int MaxLength, int TopPBeamTopK>
+__global__ void top_p_candidates(const T* src,
+                                 const T* top_ps,
+                                 const int* output_padding_offset,
+                                 int64_t* out_id,
+                                 T* out_val,
+                                 int* actual_candidates_lens,
+                                 int vocab_size,
+                                 int token_num,
+                                 int max_cadidate_len,
+                                 int max_seq_len) {
+  char lm[6 * 1024];
+  if (token_num % (core_num() * cluster_num()) != 0 &&
+      vocab_size >= core_num() * (6 * 1024 / sizeof(T)) &&
+      vocab_size >= core_num() * TopPBeamTopK) {
+    top_p_candidates_big_n<T, MaxLength, TopPBeamTopK>(lm,
+                                                       src,
+                                                       top_ps,
+                                                       output_padding_offset,
+                                                       out_id,
+                                                       out_val,
+                                                       actual_candidates_lens,
+                                                       vocab_size,
+                                                       token_num,
+                                                       max_cadidate_len,
+                                                       max_seq_len);
+  } else {
+    top_p_candidates_normal<T, MaxLength, TopPBeamTopK>(lm,
+                                                        src,
+                                                        top_ps,
+                                                        output_padding_offset,
+                                                        out_id,
+                                                        out_val,
+                                                        actual_candidates_lens,
+                                                        vocab_size,
+                                                        token_num,
+                                                        max_cadidate_len,
+                                                        max_seq_len);
+  }
+}
+
+#define _XPU_DEF_TOP_P_CANDIDATES_KERNEL(T, MaxLength, TopPBeamTopK)     \
+  template __global__ void top_p_candidates<T, MaxLength, TopPBeamTopK>( \
+      const T* src,                                                      \
+      const T* top_ps,                                                   \
+      const int* output_padding_offset,                                  \
+      int64_t* out_id,                                                   \
+      T* out_val,                                                        \
+      int* actual_candidates_lens,                                       \
+      int vocab_size,                                                    \
+      int token_num,                                                     \
+      int max_cadidate_len,                                              \
+      int max_seq_len);
+
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(bfloat16, 2, 2);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(bfloat16, 2, 3);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(bfloat16, 2, 4);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(bfloat16, 2, 5);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(bfloat16, 2, 8);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(bfloat16, 2, 10);
+
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float16, 2, 2);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float16, 2, 3);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float16, 2, 4);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float16, 2, 5);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float16, 2, 8);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float16, 2, 10);
+
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 2);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 3);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 4);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 5);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 8);
+_XPU_DEF_TOP_P_CANDIDATES_KERNEL(float, 2, 10);
+
+}  // namespace plugin
+}  // namespace xpu3

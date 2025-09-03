@@ -45,8 +45,9 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
-  ]
+    {"role": "user", "content": "Hello!"}
+  ],
+  "logprobs": true, "top_logprobs": 0,
 }'
 ```
 
@@ -152,6 +153,9 @@ include_stop_str_in_output: Optional[bool] = False
 bad_words: Optional[List[str]] = None
 # 禁止生成的词汇列表（例如敏感词），模型会避免输出这些词（默认 None 表示不限制）。
 
+bad_words_token_ids: Optional[List[int]] = None
+# 禁止生成的token id列表，模型会避免输出这些词（默认 None 表示不限制）。
+
 repetition_penalty: Optional[float] = None
 # 重复惩罚系数，降低已生成 token 的重复概率（>1.0 抑制重复，<1.0 鼓励重复，默认 None 表示禁用）。
 ```
@@ -187,11 +191,14 @@ return_token_ids: Optional[bool] = None
 prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
-max_streaming_response_tokens: Optional[int] = None
-# 流式输出时每次返回的最大 token 数（默认 None 表示不限制）。
-
 disable_chat_template: Optional[bool] = False
 # 是否禁用聊天模板渲染，直接使用原始输入（默认 False 表示启用模板）。
+
+temp_scaled_logprobs: Optional[bool] = False
+# 计算logprob时是否对logits除以温度系数（默认 False 表示不除以温度系数）。
+
+top_p_normalized_logprobs: Optional[bool] = False
+# 计算logprob时是否进行 top_p 归一化（默认 False 表示不进行top_p归一化）。
 ```
 
 ### 返回字段差异
@@ -355,8 +362,6 @@ return_token_ids: Optional[bool] = None
 prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
-max_streaming_response_tokens: Optional[int] = None
-# 流式输出时每次返回的最大 token 数（默认 None 表示不限制）。
 ```
 
 ### 返回参数总览

@@ -34,7 +34,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```max_long_partial_prefills``` | `int` | When Chunked Prefill is enabled, maximum number of long requests in concurrent partial prefill batches, default: 1 |
 | ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
 | ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
-| ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
+| ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output, refer [reasoning output](features/reasoning_output.md) for more details |
 | ```use_cudagraph```                | `bool`      | Whether to use cuda graph, default False. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. Custom all-reduce needs to be enabled at the same time in multi-card scenarios. |
 | ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce``` | `bool` | Disable Custom all-reduce, default: False |
@@ -51,6 +51,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```chat_template``` | `str` | Specify the template used for model concatenation, It supports both string input and file path input. The default value is None. If not specified, the model's default template will be used. |
 | ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
 | ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
+| ```lm_head_fp32```       | `bool`      | Specify the dtype of the lm_head layer as FP32. |
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 

@@ -30,7 +30,7 @@ if ! [[ $(python -V 2>&1 | awk '{print $2}' | awk -F '.' '{print $1$2}') -ge 36 
 fi
 
 # Exclude any files under the 'test/ce/server/' directory from code style checks.
-diff_files=$(git diff --name-only --diff-filter=ACMR ${BRANCH} | grep -v '^test/ce/server/')
+diff_files=$(git diff --name-only --diff-filter=ACMR ${BRANCH} | grep -v '^tests/ce/server/')
 num_diff_files=$(echo "$diff_files" | wc -l)
 echo -e "diff files between pr and ${BRANCH}:\n${diff_files}"
 
