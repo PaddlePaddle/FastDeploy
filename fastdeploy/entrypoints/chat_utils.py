@@ -93,7 +93,7 @@ class MultiModalPartParser:
         return self.load_from_url(video_url, self.video_io)
 
     def http_get_with_retry(self, url, max_retries=3, retry_delay=1, backoff_factor=2):
-        """HTTP retry"""
+        """HTTP GET retry"""
 
         retry_cnt = 0
         delay = retry_delay
