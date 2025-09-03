@@ -156,6 +156,13 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             weight_key="weight" if moe_tag == "Text" else "weight_1",
         )
 
+        # TODO(hehongyu): remove this after fix model network
+        setattr(
+            self.gate.weight,
+            "model_format",
+            "",
+        )
+
     def forward(self, hidden_states: paddle.Tensor):
         out = self.experts(hidden_states, self.gate)
         return out
@@ -609,6 +616,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ("resampler_model", "ernie.resampler_model", None, None),
             ("vision_model", "ernie.vision_model", None, None),
             ("gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
+            # for torch model
+            ("resampler_model", "model.resampler_model", None, None),
+            ("qkv_proj", "q_proj", None, "q"),
+            ("qkv_proj", "k_proj", None, "k"),
+            ("qkv_proj", "v_proj", None, "v"),
+            ("up_gate_proj", "gate_proj", None, "gate"),
+            ("up_gate_proj", "up_proj", None, "up"),
         ]
 
         text_expert_params_mapping = []
@@ -617,6 +631,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
                 num_experts=self.fd_config.model_config.moe_num_experts[0],
                 ckpt_down_proj_name="down_proj",
                 ckpt_gate_up_proj_name="up_gate_proj",
+                ckpt_gate_proj_name="gate_proj",
+                ckpt_up_proj_name="up_proj",
                 param_gate_up_proj_name="text_fused_moe.experts.up_gate_proj_",
                 param_down_proj_name="text_fused_moe.experts.down_proj_",
             )
@@ -624,6 +640,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
                 num_experts=self.fd_config.model_config.moe_num_experts[1],
                 ckpt_down_proj_name="down_proj",
                 ckpt_gate_up_proj_name="up_gate_proj",
+                ckpt_gate_proj_name="gate_proj",
+                ckpt_up_proj_name="up_proj",
                 param_gate_up_proj_name="image_fused_moe.experts.up_gate_proj_",
                 param_down_proj_name="image_fused_moe.experts.down_proj_",
                 experts_offset=self.fd_config.model_config.moe_num_experts[0],
@@ -637,9 +655,12 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
-                if weight_name not in loaded_weight_name:
-                    continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name.startswith("model.") and self.fd_config.model_config.model_format == "torch":
+                    model_param_name = model_param_name.replace("model.", "ernie.")
+
+                if model_param_name not in params_dict:
+                    continue
                 param = params_dict[model_param_name]
                 expert_id = exp_id
                 shard_id = shard_id
@@ -657,7 +678,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             if "expert_id" in sig.parameters:
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:
-                weight_loader(param, loaded_weight)
+                weight_loader(param, loaded_weight, shard_id)
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
