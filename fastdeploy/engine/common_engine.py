@@ -552,8 +552,6 @@ class EngineSevice:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
-                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
