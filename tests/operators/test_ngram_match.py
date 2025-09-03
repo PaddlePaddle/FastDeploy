@@ -68,10 +68,6 @@ class TestNgramMatchOp(unittest.TestCase):
             4,
         )
 
-        # print("step_idx:", step_idx.numpy())
-        # print("draft_tokens_out:", draft_tokens.numpy())
-        # print("seq_lens_this_time_out:", seq_lens_this_time.numpy())
-
         # Extract non-zero tokens and assert the results.
         nonzero_tokens = draft_tokens.numpy()[0][draft_tokens.numpy()[0] != 0]
         expected_tokens = [50, 60]
