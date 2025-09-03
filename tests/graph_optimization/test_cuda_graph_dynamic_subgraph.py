@@ -170,14 +170,14 @@ class TestCUDAGrpahSubgraph(unittest.TestCase):
         input_tensor1 = paddle.ones([8])
         forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
-        # Triger Capture
+        # Trigger Capture
         _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        # Reaplay
+        # Replay
         _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        # Corrent output
+        # Correct output
         output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
         assert (output1 == output1_correct).all()
