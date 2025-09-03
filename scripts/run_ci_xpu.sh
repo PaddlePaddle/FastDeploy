@@ -17,6 +17,7 @@ python -m pip uninstall fastdeploy-xpu -y
 python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 echo "build whl"
 bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+# debug
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
 bash build.sh || exit 1
