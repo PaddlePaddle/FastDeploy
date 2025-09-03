@@ -178,6 +178,22 @@ class LLMEngine:
 
     # _insert_task_to_worker moved to CommonEngine
 
+    def _has_guided_input(self, request):
+        """
+        Check if the request has any guided input.
+        """
+        return any(
+            x is not None
+            for x in (
+                request.guided_json,
+                request.guided_regex,
+                request.guided_choice,
+                request.structural_tag,
+                request.guided_grammar,
+                request.guided_json_object,
+            )
+        )
+
     def add_requests(self, task, sampling_params=None, **kwargs):
         """
         Add a new request to the queue.
@@ -249,8 +265,15 @@ class LLMEngine:
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        if self.engine.guided_decoding_checker is not None:
-            request, err_msg = self.engine.guided_decoding_checker.schema_format(request)
+        if self._has_guided_input(request):
+            err_msg = None
+            if self.guided_decoding_checker is None:
+                err_msg = (
+                    "guided_backend is None, use --guided-decoding-backend to specify the backend at server startup."
+                )
+            else:
+                request, err_msg = self.guided_decoding_checker.schema_format(request)
+
             if err_msg is not None:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
@@ -469,6 +492,7 @@ class LLMEngine:
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --reasoning_parser {self.cfg.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
