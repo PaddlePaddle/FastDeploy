@@ -299,6 +299,7 @@ class FusedMoE(nn.Layer):
         param_down_proj_name: Optional[str] = None,
         ckpt_expert_key_name: str = "experts",
         experts_offset: int = 0,
+        num_experts_start_offset: int = 0,
     ) -> list[tuple[str, str, int, str]]:
         param_name_maping = []
 
@@ -323,7 +324,9 @@ class FusedMoE(nn.Layer):
                 expert_id,
                 shard_id,
             )
-            for expert_id in range(experts_offset, experts_offset + num_experts)
+            for expert_id in range(
+                experts_offset + num_experts_start_offset, experts_offset + num_experts_start_offset + num_experts
+            )
             for shard_id, weight_name in param_name_maping
         ]
 
