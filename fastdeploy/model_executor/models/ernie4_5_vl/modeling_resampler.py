@@ -181,6 +181,8 @@ class VariableResolutionResamplerModel(nn.Layer):
                 nn.Linear(self.spatial_dim, self.spatial_dim),
                 nn.LayerNorm(self.spatial_dim, epsilon=1e-6),
             )
+            set_weight_attrs(self.spatial_linear[0].weight, {"model_format": config.model_format})
+            set_weight_attrs(self.spatial_linear[2].weight, {"model_format": config.model_format})
 
             if self.use_temporal_conv:
                 self.temporal_linear = nn.Sequential(
@@ -189,8 +191,12 @@ class VariableResolutionResamplerModel(nn.Layer):
                     nn.Linear(self.spatial_dim, self.spatial_dim),
                     nn.LayerNorm(self.spatial_dim, epsilon=1e-6),
                 )
+                set_weight_attrs(self.temporal_linear[0].weight, {"model_format": config.model_format})
+                set_weight_attrs(self.temporal_linear[2].weight, {"model_format": config.model_format})
 
             self.mlp = nn.Linear(self.spatial_dim, self.out_dim)
+
+            set_weight_attrs(self.mlp.weight, {"model_format": config.model_format})
 
             out_config = deepcopy(config)
             out_config.hidden_size = out_dim
@@ -211,16 +217,6 @@ class VariableResolutionResamplerModel(nn.Layer):
                 mark_as_sequence_parallel_parameter(self.mlp.bias)
                 mark_as_sequence_parallel_parameter(self.after_norm.weight)
                 set_weight_attrs(self.spatial_linear[0].weight, {"output_dim": False})
-
-        model_format = getattr(config, "model_format", None)
-        self._set_model_format_attrs(model_format)
-
-    def _set_model_format_attrs(self, model_format):
-        if model_format is None:
-            return
-        for name, param in self.named_parameters():
-            if "weight" in name and len(param.shape) == 2:
-                set_weight_attrs(param, {"model_format": model_format})
 
     def spatial_conv_reshape(self, x, spatial_conv_size):
         """

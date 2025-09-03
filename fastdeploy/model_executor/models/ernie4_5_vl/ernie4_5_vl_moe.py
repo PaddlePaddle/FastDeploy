@@ -651,6 +651,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        expert_id = None
+        shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
@@ -664,12 +666,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
                 shard_id = shard_id
                 break
             else:
-                expert_id = None
-                shard_id = None
-                if loaded_weight_name not in params_dict:
-                    logger.info(
-                        f"{loaded_weight_name} does not match any of the supported mapping, model param name {loaded_weight_name.replace(weight_name, param_name)}, weight name {weight_name}, param name {param_name}"
-                    )
+                if loaded_weight_name not in params_dict.keys():
                     continue
                 model_param_name = loaded_weight_name
                 param = params_dict[model_param_name]

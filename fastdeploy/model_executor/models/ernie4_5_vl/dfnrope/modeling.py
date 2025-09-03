@@ -156,7 +156,12 @@ class VisionFlashAttention2(nn.Layer):
     """
 
     def __init__(
-        self, dim: int, num_heads: int = 16, tensor_parallel_degree: int = 1, tensor_parallel_rank: int = 0
+        self,
+        dim: int,
+        num_heads: int = 16,
+        tensor_parallel_degree: int = 1,
+        tensor_parallel_rank: int = 0,
+        model_format: str = "",
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
@@ -188,6 +193,8 @@ class VisionFlashAttention2(nn.Layer):
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
             self.proj = nn.Linear(dim, dim)
 
+        set_weight_attrs(self.qkv.weight, {"model_format": model_format})
+        set_weight_attrs(self.proj.weight, {"model_format": model_format})
         self.head_dim = dim // num_heads  # must added
         self.num_heads = num_heads
         self.hidden_size = dim
@@ -324,6 +331,7 @@ class VisionMlp(nn.Layer):
         hidden_dim: int,
         hidden_act: str,
         tensor_parallel_degree: int = 1,
+        model_format: str = "",
     ) -> None:
         super().__init__()
         self.tensor_parallel_degree = tensor_parallel_degree
@@ -349,6 +357,10 @@ class VisionMlp(nn.Layer):
         else:
             self.fc1 = nn.Linear(dim, hidden_dim)
             self.fc2 = nn.Linear(hidden_dim, dim)
+
+        set_weight_attrs(self.fc1.weight, {"model_format": model_format})
+        set_weight_attrs(self.fc2.weight, {"model_format": model_format})
+
         self.act = ACT2FN[hidden_act]
 
     def forward(self, x) -> paddle.Tensor:
@@ -407,6 +419,7 @@ class DFNRopeVisionBlock(nn.Layer):
         tensor_parallel_degree: int,
         tensor_parallel_rank: int,
         attn_implementation: str = "sdpa",
+        model_format: str = "",
     ) -> None:
         """_summary_
 
@@ -424,12 +437,14 @@ class DFNRopeVisionBlock(nn.Layer):
             num_heads=config.num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
             tensor_parallel_rank=tensor_parallel_rank,
+            model_format=model_format,
         )
         self.mlp = VisionMlp(
             dim=config.embed_dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=config.hidden_act,
             tensor_parallel_degree=tensor_parallel_degree,
+            model_format=model_format,
         )
         self.config = config
 
@@ -513,6 +528,8 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             in_channels=config.vision_config.in_channels,
             embed_dim=config.vision_config.embed_dim,
         )
+        model_format = getattr(config, "model_format", "")
+        set_weight_attrs(self.patch_embed.proj.weight, {"model_format": model_format})
 
         head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
@@ -523,6 +540,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
                     config.vision_config,
                     config.pretrained_config.tensor_parallel_degree,
                     config.pretrained_config.tensor_parallel_rank,
+                    model_format=model_format,
                 )
                 for _ in range(config.vision_config.depth)
             ]
@@ -533,16 +551,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         ), "in DFNRope, vit's config.hidden must be equal to config.embed_dim"
         # self.merger = PatchMerger(dim=config.hidden_size, context_dim=config.embed_dim)
         self.ln = nn.LayerNorm(config.vision_config.hidden_size, epsilon=1e-6)
-
-        model_format = getattr(config, "model_format", None)
-        self._set_model_format_attrs(model_format)
-
-    def _set_model_format_attrs(self, model_format):
-        if model_format is None:
-            return
-        for name, param in self.named_parameters():
-            if "weight" in name and len(param.shape) == 2:
-                set_weight_attrs(param, {"model_format": model_format})
 
     def get_dtype(self) -> paddle.dtype:
         """_summary_
