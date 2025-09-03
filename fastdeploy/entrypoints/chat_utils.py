@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import time
 from copy import deepcopy
 from typing import List, Literal, Union
 from urllib.parse import urlparse
@@ -29,6 +30,7 @@ from typing_extensions import Required, TypeAlias, TypedDict
 
 from fastdeploy.input.multimodal.image import ImageMediaIO
 from fastdeploy.input.multimodal.video import VideoMediaIO
+from fastdeploy.utils import api_server_logger
 
 
 class VideoURL(TypedDict, total=False):
@@ -87,12 +89,32 @@ class MultiModalPartParser:
         """Parse Video"""
         return self.load_from_url(video_url, self.video_io)
 
+    def http_get_with_retry(self, url, max_retries=3, retry_delay=1, backoff_factor=2):
+        """HTTP retry"""
+
+        retry_cnt = 0
+        delay = retry_delay
+
+        while retry_cnt < max_retries:
+            try:
+                response = requests.get(url)
+                response.raise_for_status()
+                return response.content
+            except Exception as e:
+                retry_cnt += 1
+                if retry_cnt >= max_retries:
+                    api_server_logger.error(f"HTTP GET failed: {e}. Max retries reached")
+                    raise
+                api_server_logger.info(f"HTTP GET failed: {e}. Start retry {retry_cnt}")
+                time.sleep(delay)
+                delay *= backoff_factor
+
     def load_from_url(self, url, media_io):
         """Load media from URL"""
 
         parsed = urlparse(url)
         if parsed.scheme.startswith("http"):
-            media_bytes = requests.get(url).content
+            media_bytes = self.http_get_with_retry(url)
             return media_io.load_bytes(media_bytes)
 
         if parsed.scheme.startswith("data"):
