@@ -75,7 +75,7 @@ class MTPProposer(Proposer):
         """
         Update config for MTP from global config
         """
-        self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
+        self.model_config.architectures[0] = self.model_config.architectures[0].replace("Moe", "MTP")
         self.speculative_config.sharing_model = main_model
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model

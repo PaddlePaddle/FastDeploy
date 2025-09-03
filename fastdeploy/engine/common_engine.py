@@ -62,7 +62,7 @@ class EngineSevice:
         self.cfg = cfg
 
         self.scheduler = cfg.scheduler_config.scheduler()
-
+        llm_logger.info(f"ENABLE_V1_KVCACHE_SCHEDULER: {envs.ENABLE_V1_KVCACHE_SCHEDULER}")
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
                 cfg.max_num_seqs,

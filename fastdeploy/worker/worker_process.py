@@ -742,13 +742,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if (
-        args.speculative_config is not None
-        and ("method" in args.speculative_config)
-        and (args.speculative_config["method"] is not None)
-    ):
-        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if args.splitwise_role != "mixed":
         logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
