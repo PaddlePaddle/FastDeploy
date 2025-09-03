@@ -156,7 +156,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             weight_key="weight" if moe_tag == "Text" else "weight_1",
         )
 
-        # For torch model, ReplicatedLinear don't need to transpose weight
+        # TODO(hehongyu): remove this after fix model network
         setattr(
             self.gate.weight,
             "model_format",
@@ -613,14 +613,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None, None),
             ("mlp.image_fused_moe.gate.weight", "mlp.gate.weight_1", None, "gate"),
             ("mlp.text_fused_moe.gate.weight", "mlp.gate.weight", None, "gate"),
-            (
-                ("resampler_model", "model.resampler_model", None, None)
-                if self.fd_config.model_config.model_format == "torch"
-                else ("resampler_model", "ernie.resampler_model", None, None)
-            ),
+            ("resampler_model", "ernie.resampler_model", None, None),
             ("vision_model", "ernie.vision_model", None, None),
             ("gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
             # for torch model
+            ("resampler_model", "model.resampler_model", None, None),
             ("qkv_proj", "q_proj", None, "q"),
             ("qkv_proj", "k_proj", None, "k"),
             ("qkv_proj", "v_proj", None, "v"),
