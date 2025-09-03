@@ -16,11 +16,11 @@ python -m pip install -r requirements.txt
 echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
-# 由于主框架更新存在问题，暂时锁死版本
 #python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
-python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.0.0.dev20250901-cp310-cp310-linux_x86_64.whl
+#改为使用relase分支的paddle框架安装包
+python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Xpu-P800-SelfBuiltPypiUse/latest/paddlepaddle_xpu-0.0.0-cp310-cp310-linux_x86_64.whl
 echo "build whl"
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+bash custom_ops/xpu_ops/src/download_dependencies.sh stable
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
 bash build.sh || exit 1
