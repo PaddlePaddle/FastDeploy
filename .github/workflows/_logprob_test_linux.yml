@@ -39,6 +39,7 @@ jobs:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           paddletest_archive_url: ${{ inputs.PADDLETEST_ARCHIVE_URL }}
         run: |
+            docker pull ${docker_image}
             # Clean the repository directory before starting
             docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
             -e "REPO_NAME=${REPO_NAME}" \
@@ -114,7 +115,6 @@ jobs:
             echo "Removing stale container: ${runner_name}"
             docker rm -f ${runner_name} || true
           fi
-
           docker run --rm --ipc=host --pid=host --net=host \
           --name ${runner_name} \
           -v $(pwd):/workspace \

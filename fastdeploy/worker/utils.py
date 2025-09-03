@@ -21,7 +21,7 @@ import traceback
 def check_safetensors_model(model_dir: str):
     """
     model_dir : the directory of the model
-    Check whther the model is safetensors format
+    Check whether the model is safetensors format
     """
     model_files = list()
     all_files = os.listdir(model_dir)
