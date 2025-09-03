@@ -1161,6 +1161,30 @@ static void run(const T* input,
         input, gating_correction_bias, output, indices, source_row, num_experts, k, num_rows);
     return;
   }
+  if (group_moe) {
+    static constexpr int TPB = 256;
+    const int group_experts = num_experts / k;
+    const int softmax_num_rows = num_rows * k;
+    const auto config_softmax = Get1DBlocksAnd2DGridsMoe(softmax_num_rows);
+    group_moe_softmax<T, TPB>
+        <<<config_softmax.block_per_grid, TPB, 0, stream>>>(
+            input,
+            softmax,
+            softmax_max_prob,
+            group_experts,
+            softmax_num_rows);
+    const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
+    group_moe_top_k<T, TPB>
+        <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
+                                                          output,
+                                                          indices,
+                                                          source_row,
+                                                          softmax_max_prob,
+                                                          num_experts,
+                                                          k,
+                                                          num_rows);
+    return;
+  }
   static constexpr int WARPS_PER_TB = 4;
 
   #define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
@@ -1169,9 +1193,7 @@ static void run(const T* input,
         input, gating_correction_bias, output, indices, source_row, num_rows, num_experts, k, stream); \
     break;                                                                     \
   }
-  int64_t tem_num_experts = num_experts;
-  if(gating_correction_bias != nullptr)  tem_num_experts = 0;
-  switch (tem_num_experts) {
+  switch (num_experts) {
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(2)
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(4)
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(8)
@@ -1183,41 +1205,18 @@ static void run(const T* input,
 
     default: {
       static constexpr int TPB = 256;
-      if (group_moe) {
-        const int group_experts = num_experts / k;
-        const int softmax_num_rows = num_rows * k;
-        const auto config_softmax = Get1DBlocksAnd2DGridsMoe(softmax_num_rows);
-        group_moe_softmax<T, TPB>
-            <<<config_softmax.block_per_grid, TPB, 0, stream>>>(
-                input,
-                softmax,
-                softmax_max_prob,
-                group_experts,
-                softmax_num_rows);
-        const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
-        group_moe_top_k<T, TPB>
-            <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
-                                                             output,
-                                                             indices,
-                                                             source_row,
-                                                             softmax_max_prob,
-                                                             num_experts,
-                                                             k,
-                                                             num_rows);
-      } else {
-        const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
-        moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
-            input, softmax, num_experts, num_rows);
-        moe_top_k<T, TPB>
-            <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
-                                                             gating_correction_bias,
-                                                             output,
-                                                             indices,
-                                                             source_row,
-                                                             num_experts,
-                                                             k,
-                                                             num_rows);
-      }
+      const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
+      moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
+          input, softmax, num_experts, num_rows);
+      moe_top_k<T, TPB>
+          <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
+                                                            gating_correction_bias,
+                                                            output,
+                                                            indices,
+                                                            source_row,
+                                                            num_experts,
+                                                            k,
+                                                            num_rows);
     }
   }
 }
