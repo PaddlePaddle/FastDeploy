@@ -52,7 +52,7 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 **Idea:** The core idea of Prefix Caching is to avoid repeated calculations by caching the intermediate calculation results of the input sequence (KV Cache), thereby speeding up the response speed of multiple requests with the same prefix. For details, refer to [prefix-cache](../features/prefix_caching.md)
 
 **How to enable:**
-Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine.
+Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine. The recommended value is `(total machine memory - model size) * 20%`. If the service fails to start because other programs are occupying memory, try reducing the `--swap-space` value.
 ```
 --enable-prefix-caching
 --swap-space 50
@@ -75,6 +75,10 @@ Add the following lines to the startup parameters
 ```
 --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
 ```
+Notes:
+1. MTP currently does not support simultaneous use with Prefix Caching, Chunked Prefill, and CUDAGraph.
+2. MTP currently does not support service management global blocks, i.e. do not run with `export ENABLE_V1_KVCACHE_SCHEDULER=1`
+3. MTP currently does not support rejection sampling, i.e. do not run with `export FD_SAMPLING_CLASS=rejection`
 
 #### 2.2.5 CUDAGraph
 **Idea:**
@@ -86,9 +90,7 @@ Add the following lines to the startup parameters
 --use-cudagraph
 ```
 Notes:
-1. Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
-2. When CUDAGraph is enabled, if running with multi-GPUs TP>1, `--enable-custom-all-reduce` must be specified at the same time.
-3. When CUDAGraph is enabled, the scenario of `max-model-len > 32768` is not currently supported.
+- Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
 #### 2.2.6 Rejection Sampling
 **Idea:**
@@ -113,7 +115,6 @@ export FD_ATTENTION_BACKEND=FLASH_ATTN
 export FD_LOG_DIR="prefill_log"
 
 quant_type=block_wise_fp8
-export FD_USE_DEEP_GEMM=0
 
 python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
     --max-model-len 131072 \
@@ -133,7 +134,6 @@ export FLAGS_max_partition_size=2048
 export FD_LOG_DIR="decode_log"
 
 quant_type=block_wise_fp8
-export FD_USE_DEEP_GEMM=0
 
 python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-21B-A3B-Paddle \
     --max-model-len 131072 \

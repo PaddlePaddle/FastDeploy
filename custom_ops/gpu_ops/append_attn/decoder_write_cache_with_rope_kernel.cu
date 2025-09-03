@@ -39,8 +39,8 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                               const cudaStream_t& stream,
                               const bool use_neox_style,
                               const bool rope_3d,
-                              const T* q_norm_weight,
-                              const T* k_norm_weight,
+                              const float* q_norm_weight,
+                              const float* k_norm_weight,
                               const float rms_norm_eps) {
   const uint32_t elem_nums =
       use_neox_style ? bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2
@@ -134,7 +134,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               dim_head,
               block_size,
               elem_nums,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_T_neox_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
@@ -154,7 +155,8 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                                 dim_head,
                                                 block_size,
                                                 elem_nums,
-                                                kv_num_heads);
+                                                kv_num_heads,
+                                                rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -261,7 +263,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_neox_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -284,7 +287,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -311,7 +315,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_rope_kernel<T, 4, 0, 128, is_scale_channel_wise, IsFP8>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -334,7 +339,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   }
 }
@@ -398,7 +404,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int4_neox_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -423,7 +430,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -452,7 +460,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int4_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -477,7 +486,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   }
 }
@@ -559,8 +569,8 @@ void DecoderWriteCacheWithRoPEKernel(
           stream,
           use_neox_rotary_style,
           rope_3d,
-          reinterpret_cast<const DataType_*>(q_norm_weight.get().data<T>()),
-          reinterpret_cast<const DataType_*>(k_norm_weight.get().data<T>()),
+          q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+          k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
           rms_norm_eps);
     } else {
       PD_THROW(

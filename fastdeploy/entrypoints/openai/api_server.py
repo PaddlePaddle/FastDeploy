@@ -31,6 +31,7 @@ from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.engine.expert_service import ExpertService
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
@@ -46,6 +47,7 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -53,14 +55,12 @@ from fastdeploy.metrics.metrics import (
     main_process_metrics,
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
-from fastdeploy.plugins.model_register import load_model_register_plugins
-
-load_model_register_plugins()
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     StatefulSemaphore,
     api_server_logger,
     console_logger,
+    is_package_installed,
     is_port_available,
     retrive_model_from_server,
 )
@@ -68,7 +68,7 @@ from fastdeploy.utils import (
 parser = FlexibleArgumentParser()
 parser.add_argument("--port", default=8000, type=int, help="port to the http server")
 parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=1, type=int, help="number of workers")
+parser.add_argument("--workers", default=None, type=int, help="number of workers")
 parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
 parser.add_argument(
@@ -78,10 +78,22 @@ parser.add_argument(
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+parser.add_argument(
+    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
+)
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
+
+if args.workers is None:
+    # In GPU, the workers of uvicorn will be set according to the parameter `max-num-seqs`
+    if is_package_installed("paddlepaddle-gpu"):
+        args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
+    else:
+        args.workers = 1
+console_logger.info(f"Number of api-server workers: {args.workers}.")
+
 args.model = retrive_model_from_server(args.model, args.revision)
-chat_template = load_chat_template(args.chat_template)
+chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
@@ -98,15 +110,10 @@ def load_engine():
     api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
     engine_args = EngineArgs.from_cli_args(args)
     engine = LLMEngine.from_engine_args(engine_args)
-
     if not engine.start(api_server_pid=os.getpid()):
         api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
         return None
 
-    api_server_logger.info("FastDeploy LLM engine initialized!\n")
-    console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
-    console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
-    console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
     llm_engine = engine
     return engine
 
@@ -115,6 +122,25 @@ app = FastAPI()
 
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+
+def load_data_service():
+    """
+    load data service
+    """
+    global llm_engine
+    if llm_engine is not None:
+        return llm_engine
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    engine_args = EngineArgs.from_cli_args(args)
+    config = engine_args.create_engine_config()
+    api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
+    expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
+    if not expert_service.start(os.getpid(), config.parallel_config.local_data_parallel_id):
+        api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
+        return None
+    llm_engine = expert_service
+    return expert_service
 
 
 @asynccontextmanager
@@ -140,19 +166,20 @@ async def lifespan(app: FastAPI):
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
     engine_client = EngineClient(
-        args.model,
-        args.tokenizer,
-        args.max_model_len,
-        args.tensor_parallel_size,
-        pid,
-        args.limit_mm_per_prompt,
-        args.mm_processor_kwargs,
+        model_name_or_path=args.model,
+        tokenizer=args.tokenizer,
+        max_model_len=args.max_model_len,
+        tensor_parallel_size=args.tensor_parallel_size,
+        pid=pid,
+        port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
+        limit_mm_per_prompt=args.limit_mm_per_prompt,
+        mm_processor_kwargs=args.mm_processor_kwargs,
         # args.enable_mm,
-        args.reasoning_parser,
-        args.data_parallel_size,
-        args.enable_logprob,
-        args.workers,
-        args.tool_call_parser,
+        reasoning_parser=args.reasoning_parser,
+        data_parallel_size=args.data_parallel_size,
+        enable_logprob=args.enable_logprob,
+        workers=args.workers,
+        tool_parser=args.tool_call_parser,
     )
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
@@ -162,7 +189,14 @@ async def lifespan(app: FastAPI):
     )
     app.state.model_handler = model_handler
     chat_handler = OpenAIServingChat(
-        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+        chat_template,
+        args.enable_mm_output,
+        args.tokenizer_base_url,
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,
@@ -176,9 +210,13 @@ async def lifespan(app: FastAPI):
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
+    global llm_engine
+    if llm_engine is not None:
+        llm_engine.engine.data_processor = engine_client.data_processor
     yield
     # close zmq
     try:
+        await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
 
@@ -395,6 +433,7 @@ def launch_api_server() -> None:
             host=args.host,
             port=args.port,
             workers=args.workers,
+            log_config=UVICORN_CONFIG,
             log_level="info",
         )  # set log level to error to avoid log
     except Exception as e:
@@ -421,7 +460,7 @@ def run_metrics_server():
     run metrics server
     """
 
-    uvicorn.run(metrics_app, host="0.0.0.0", port=args.metrics_port, log_level="error")
+    uvicorn.run(metrics_app, host="0.0.0.0", port=args.metrics_port, log_config=UVICORN_CONFIG, log_level="error")
 
 
 def launch_metrics_server():
@@ -448,7 +487,7 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
-    llm_engine.scheduler.reset()
+    llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
@@ -466,11 +505,13 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
-        llm_engine.scheduler.reset()
+        llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
-        if hasattr(llm_engine.scheduler, "update_config") and callable(llm_engine.scheduler.update_config):
-            llm_engine.scheduler.update_config(
+        if hasattr(llm_engine.engine.scheduler, "update_config") and callable(
+            llm_engine.engine.scheduler.update_config
+        ):
+            llm_engine.engine.scheduler.update_config(
                 load_shards_num=request.load_shards_num,
                 reallocate=request.reallocate_shard,
             )
@@ -490,6 +531,7 @@ def run_controller_server():
         controller_app,
         host="0.0.0.0",
         port=args.controller_port,
+        log_config=UVICORN_CONFIG,
         log_level="error",
     )
 
@@ -509,8 +551,16 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-    if load_engine() is None:
-        return
+    if args.local_data_parallel_id == 0:
+        if not load_engine():
+            return
+    else:
+        if not load_data_service():
+            return
+    api_server_logger.info("FastDeploy LLM engine initialized!\n")
+    console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
+    console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
     launch_controller_server()
     launch_metrics_server()
