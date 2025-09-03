@@ -572,9 +572,40 @@ void DecoderWriteCacheWithRoPEKernel(
           q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
           k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
           rms_norm_eps);
+    } else if (cache_quant_type_str == "block_wise_fp8") {
+      constexpr int num_warps = 4;
+      const int all_warps =
+          ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
+      dim3 grids(bsz, all_warps / num_warps);
+      append_decode_cache_int8_rope_qk_norm_kernel<DataType_, 4, 0, 128, false, true>
+          <<<grids, num_warps * 32, 0, stream>>>(
+              reinterpret_cast<const DataType_*>(qkv_ptr),
+              key_cache_out->data<uint8_t>(),
+              value_cache_out->data<uint8_t>(),
+              reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+              block_tables.data<int>(),
+              batch_id_per_token.data<int>(),
+              cu_seqlens_q.data<int>(),
+              seq_lens.data<int>(),
+              seq_lens_encoder.data<int>(),
+              cos_emb,
+              sin_emb,
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>((cache_v_scale.get().data<T>()))),
+              q_norm_weight.get().data<float>(),
+              k_norm_weight.get().data<float>(),
+              max_seq_len,
+              max_blocks_per_seq,
+              num_heads,
+              block_size,
+              127.0f,
+              -127.0f,
+              kv_num_heads,
+              rope_3d,
+              rms_norm_eps);
     } else {
       PD_THROW(
-          "append_decode_cache_rope_qk_norm not support cachekv quant yet");
+          "append_decode_cache_rope_qk_norm just supports cache_quant_type none/block_wise_fp8");
     }
   } else {
     if (cache_quant_type_str == "none") {
@@ -709,6 +740,37 @@ void DecoderWriteCacheWithRoPEKernel(
             stream,
             use_neox_rotary_style,
             rope_3d);
+    } else if (cache_quant_type_str == "block_wise_fp8") {
+      constexpr int num_warps = 4;
+      const int all_warps =
+          ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
+      dim3 grids(bsz, all_warps / num_warps);
+      append_decode_cache_int8_rope_qk_norm_kernel<DataType_, 4, 0, 128, false, true>
+          <<<grids, num_warps * 32, 0, stream>>>(
+              reinterpret_cast<const DataType_*>(qkv_ptr),
+              key_cache_out->data<uint8_t>(),
+              value_cache_out->data<uint8_t>(),
+              reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+              block_tables.data<int>(),
+              batch_id_per_token.data<int>(),
+              cu_seqlens_q.data<int>(),
+              seq_lens.data<int>(),
+              seq_lens_encoder.data<int>(),
+              cos_emb,
+              sin_emb,
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>((cache_v_scale.get().data<T>()))),
+              nullptr,
+              nullptr,
+              max_seq_len,
+              max_blocks_per_seq,
+              num_heads,
+              block_size,
+              127.0f,
+              -127.0f,
+              kv_num_heads,
+              rope_3d,
+              rms_norm_eps);
     } else if (cache_quant_type_str == "cache_int4_zp") {
       append_decode_cache_int4_rope(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
