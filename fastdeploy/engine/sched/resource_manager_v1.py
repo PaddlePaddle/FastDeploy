@@ -141,6 +141,7 @@ class ResourceManagerV1(ResourceManager):
         if not self.config.model_config.enable_mm:
             return num_new_tokens
 
+        request.with_image = False
         inputs = request.multimodal_inputs
         if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
             pre_end_idx = request.num_computed_tokens
@@ -184,8 +185,6 @@ class ResourceManagerV1(ResourceManager):
             and inputs.get("image_patch_id", None) is not None
             and inputs.get("grid_thw", None) is not None
         ):
-            request.with_image = False
-
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
