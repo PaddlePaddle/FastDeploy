@@ -34,7 +34,7 @@ import paddle
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineSevice
+from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
@@ -93,7 +93,7 @@ class LLMEngine:
             cfg.model_config.enable_mm,
             cfg.tool_parser,
         )
-        self.engine = EngineSevice(cfg)
+        self.engine = EngineService(cfg)
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = 1
