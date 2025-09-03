@@ -310,13 +310,6 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
     return wrapped_generator
 
 
-import yappi
-
-yappi.set_clock_type("cpu")  # CPU 时间模式，可改 wall 时间
-yappi.start()
-yappi_req_id = 0
-
-
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """
@@ -329,7 +322,6 @@ async def create_chat_completion(request: ChatCompletionRequest):
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            yappi.clear_stats()
             inject_to_metadata(request)
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
@@ -347,13 +339,6 @@ async def create_chat_completion(request: ChatCompletionRequest):
     except HTTPException as e:
         api_server_logger.error(f"Error in chat completion: {str(e)}")
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
-    finally:
-        # 获取函数统计
-        global yappi_req_id
-        yappi_req_id = yappi_req_id + 1
-        func_stats = yappi.get_func_stats()
-        func_stats.sort("ttot")  # 按总耗时排序
-        func_stats.save(f"profile_{yappi_req_id}.callgrind", type="callgrind")
 
 
 @app.post("/v1/completions")
