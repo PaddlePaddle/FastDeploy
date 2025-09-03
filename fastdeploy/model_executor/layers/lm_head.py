@@ -140,5 +140,4 @@ class ParallelLMHead(nn.Layer):
             logits = paddle.matmul(logits.astype(self.weight.dtype), self.weight)
         else:
             logits = self.linear(logits.astype(self.linear.weight.dtype))
-            print(self.linear.weight.dtype)
         return logits
