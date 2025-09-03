@@ -108,9 +108,6 @@ class TestNgramMatchOp(unittest.TestCase):
             3,
         )
 
-        print("draft_tokens_out:", draft_tokens.numpy())
-        print("seq_lens_this_time_out:", seq_lens_this_time.numpy())
-
         # No match → should only keep 1 token
         self.assertEqual(seq_lens_this_time.numpy()[0], 1)
 
