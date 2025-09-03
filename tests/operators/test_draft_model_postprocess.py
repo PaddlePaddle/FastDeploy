@@ -13,9 +13,33 @@
 # limitations under the License.
 import unittest
 
+import numpy as np
 import paddle
 
 from fastdeploy.model_executor.ops.gpu import draft_model_postprocess
+
+
+def draft_model_postprocess_cpu(
+    base_model_draft_tokens,
+    base_model_seq_lens_encoder,
+    base_model_stop_flags,
+):
+    bsz = base_model_draft_tokens.shape[0]
+    base_model_draft_token_len = base_model_draft_tokens.shape[1]
+    base_model_seq_lens_this_time = paddle.ones((bsz), dtype=paddle.int32)
+    for tid in range(bsz):
+        if (not base_model_stop_flags[tid]) and (base_model_seq_lens_encoder[tid] == 0):
+            base_model_draft_tokens_now = base_model_draft_tokens[tid]
+            token_num = 0
+            for i in range(base_model_draft_token_len):
+                if base_model_draft_tokens_now[i] != -1:
+                    token_num += 1
+
+            base_model_seq_lens_this_time[tid] = token_num
+        elif base_model_stop_flags[tid]:
+            base_model_seq_lens_this_time[tid] = 0
+
+    return base_model_seq_lens_this_time
 
 
 class TestDraftModelPostProcess(unittest.TestCase):
@@ -31,13 +55,19 @@ class TestDraftModelPostProcess(unittest.TestCase):
         random_floats = paddle.rand(shape=[batch_size])
         base_model_stop_flags = random_floats >= 0.5
 
-        base_model_seq_lens_this_time_gpu = paddle.ones((batch_size), dtype=paddle.int32)  # noqa: F841
+        base_model_seq_lens_this_time = draft_model_postprocess_cpu(
+            base_model_draft_tokens,
+            base_model_seq_lens_encoder,
+            base_model_stop_flags,
+        )
+        base_model_seq_lens_this_time_gpu = paddle.ones((batch_size), dtype=paddle.int32)
         draft_model_postprocess(
             base_model_draft_tokens,
             base_model_seq_lens_this_time_gpu,
             base_model_seq_lens_encoder,
             base_model_stop_flags,
         )
+        np.testing.assert_allclose(base_model_seq_lens_this_time.numpy(), base_model_seq_lens_this_time_gpu.numpy())
 
     def test_enough_cases(self):
         self._test_draft_model_postprocess(1, 11)
