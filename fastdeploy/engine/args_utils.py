@@ -392,6 +392,8 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if self.enable_mm:
             self.enable_prefix_caching = False
+        if not current_platform.is_cuda():
+            self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
