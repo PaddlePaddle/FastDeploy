@@ -1054,13 +1054,13 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
         if layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
@@ -1167,7 +1167,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
         # 3.quantize weight
 
-        for expert_id in range(layer.num_experts):
+        for expert_id in range(layer.num_local_experts):
             weight[expert_id], scale[expert_id] = weight_quantize(
                 getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
             )
