@@ -60,7 +60,6 @@ from fastdeploy.utils import (
     StatefulSemaphore,
     api_server_logger,
     console_logger,
-    is_package_installed,
     is_port_available,
     retrive_model_from_server,
 )
