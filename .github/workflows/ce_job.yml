@@ -154,6 +154,7 @@ jobs:
       COMPILE_ARCH: "80,90"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
+      PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
 
   build_sm8689:
     name: BUILD_SM8689
@@ -166,6 +167,7 @@ jobs:
       COMPILE_ARCH: "86,89"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
+      PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
 
   ce_upload_sm8090:
     environment: CodeSync
@@ -175,14 +177,13 @@ jobs:
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       COMPILE_ARCH: "80,90"
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
-        if: github.ref_name == 'develop' || github.ref_type == 'tag'
         run: |
           echo "The wheel is located at: ${{ needs.build_sm8090.outputs.wheel_path }}"
           wget -q --no-check-certificate ${{ needs.build_sm8090.outputs.wheel_path }}
@@ -190,7 +191,7 @@ jobs:
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
+          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
 
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
@@ -198,12 +199,14 @@ jobs:
           ls
           python ${push_file} ${filename} ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"
-          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
-          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/latest
+          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
-          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
+          echo "commit wheel url is ${WHEEL_PATH}"
+          echo "latest wheel url is ${WHEEL_PATH_LATEST}"
 
   ce_upload_sm8689:
     environment: CodeSync
@@ -213,22 +216,21 @@ jobs:
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8689.outputs.wheel_path }}
       COMPILE_ARCH: "86,89"
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
-        if: github.ref_name == 'develop' || github.ref_type == 'tag'
         run: |
-          echo "The wheel is located at: ${{ needs.build_sm8090.outputs.wheel_path }}"
-          wget -q --no-check-certificate ${{ needs.build_sm8090.outputs.wheel_path }}
-          filename=$(basename ${{ needs.build_sm8090.outputs.wheel_path }})
+          echo "The wheel is located at: ${{ needs.build_sm8689.outputs.wheel_path }}"
+          wget -q --no-check-certificate ${{ needs.build_sm8689.outputs.wheel_path }}
+          filename=$(basename ${{ needs.build_sm8689.outputs.wheel_path }})
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
+          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
 
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
@@ -236,9 +238,11 @@ jobs:
           ls
           python ${push_file} ${filename} ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"
-          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
-          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE${COMPILE_ARCH//,/_}/${branch_name}/latest
+          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
-          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${fd_wheel_name}
+          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
+          echo "commit wheel url is ${WHEEL_PATH}"
+          echo "latest wheel url is ${WHEEL_PATH_LATEST}"
