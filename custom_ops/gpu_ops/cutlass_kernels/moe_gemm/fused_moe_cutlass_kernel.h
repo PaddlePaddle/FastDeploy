@@ -214,6 +214,9 @@ struct MoeFCGemm {
     float* code_scale;
     float* code_zp;
 
+    // Out dequant scale
+    float* out_dq_scale;
+
     // Only used by device-level operator
     GemmCoord* host_problem_sizes;
 
@@ -239,6 +242,7 @@ struct MoeFCGemm {
           local_scale(nullptr),
           code_scale(nullptr),
           code_zp(nullptr),
+          out_dq_scale(nullptr),
           host_problem_sizes(nullptr) {}
 
     /// Ctor
@@ -259,6 +263,7 @@ struct MoeFCGemm {
               const uint8_t* local_scale,
               const float* code_scale,
               const float* code_zp,
+              const float* out_dq_scale,
               GemmCoord* host_problem_sizes = nullptr)
         : problem_count(problem_count),
           threadblock_count(threadblock_count),
@@ -276,6 +281,7 @@ struct MoeFCGemm {
           local_scale(const_cast<uint8_t*>(local_scale)),
           code_scale(const_cast<float*>(code_scale)),
           code_zp(const_cast<float*>(code_zp)),
+          out_dq_scale(const_cast<float*>(out_dq_scale)),
           host_problem_sizes(nullptr) {
       if (quant_method != WintQuantMethod::kNone || platform::is_same<uint8_t, ElementB>::value ||
           platform::is_same<uint4b_t, ElementB>::value) {
@@ -706,12 +712,15 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
     float* code_scale;
     float* code_zp;
 
+    // out dequant scale
+    float* out_dq_scale;
+
     //
     // Methods
     //
 
     CUTLASS_HOST_DEVICE
-    Params() : Base::Params(), local_scale(nullptr), code_scale(nullptr), code_zp(nullptr) {}
+    Params() : Base::Params(), local_scale(nullptr), code_scale(nullptr), code_zp(nullptr), out_dq_scale(nullptr) {}
 
     CUTLASS_HOST_DEVICE
     Params(Arguments const& args,
@@ -720,7 +729,8 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         : Base::Params(args, workspace, tile_count),
           local_scale(args.local_scale),
           code_scale(args.code_scale),
-          code_zp(args.code_zp) {}
+          code_zp(args.code_zp),
+          out_dq_scale(args.out_dq_scale) {}
 
     CUTLASS_HOST_DEVICE
     void update(Arguments const& args,
@@ -731,6 +741,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       local_scale = args.local_scale;
       code_scale = args.code_scale;
       code_zp = args.code_zp;
+      out_dq_scale = args.out_dq_scale;
     }
   };
 
@@ -841,7 +852,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       // to implement a 'transposed' GEMM that computes the transposed problems.
       //
       CUTLASS_TRACE_DEVICE(" Now in run_kernel");
-      CUTLASS_TRACE_DEVICE(" eplogue output op alpha = %f", params.output_op.alpha);
       using ElementA = typename Mma::IteratorA::Element;
       using LayoutA = typename Mma::IteratorA::Layout;
       using ElementB = typename Mma::IteratorB::Element;
@@ -909,6 +919,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         char* byte_ptr_B = ((char*)params.ptr_B) +                 // NOLINT
                            problem_idx * bytes_per_expert_matrix;  // NOLINT
         ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
+
         typename LayoutB::LongIndex ldm_B =
             platform::is_same<layout::RowMajor, LayoutB>::value
                 ? gemm_n
@@ -974,7 +985,12 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         // Epilogue
         //
 
-        EpilogueOutputOp output_op(params.output_op);
+        // params.output_op.alpha = params.out_dq_scale[problem_idx];
+        // CUTLASS_TRACE_DEVICE_TID(" eplogue output op alpha = %f", params.output_op.alpha);
+        
+        // EpilogueOutputOp output_op(params.output_op);
+        EpilogueOutputOp output_op(params.out_dq_scale[problem_idx], params.output_op.beta);
+        CUTLASS_TRACE_DEVICE_TID(" eplogue output op alpha = %f", params.out_dq_scale[problem_idx]);
 
         ElementC* ptr_C =
             params.ptr_C ? reinterpret_cast<ElementC*>(params.ptr_C) + problem_idx * gemm_n : nullptr;

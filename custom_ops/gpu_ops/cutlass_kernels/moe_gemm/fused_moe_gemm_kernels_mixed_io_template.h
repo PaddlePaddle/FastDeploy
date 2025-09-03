@@ -99,13 +99,13 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
                                      const typename WeightQuantTraits::WeightType* B,
                                      const OutType* weight_scales,
                                      const OutType* biases,
+                                     const float* out_scale,
                                      OutType* C,
                                      int64_t* total_rows_before_expert,
                                      int64_t total_rows,
                                      int64_t gemm_n,
                                      int64_t gemm_k,
                                      int num_experts,
-                                     const float out_scale,
                                      const typename WeightQuantTraits::Arguments& quant_args_B,
                                      CutlassGemmConfig gemm_config,
                                      const int multi_processor_count,
@@ -214,7 +214,7 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
   }
   const int threadblock_count = multi_processor_count * occupancy;
 
-  typename EpilogueOp::Params epilogue_op(ElementAccumulator(out_scale),
+  typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
   // CUTLASS_TRACE_HOST(" eplogue output op alpha = %f", epilogue_op.alpha);
   CUTLASS_TRACE_HOST("eplogue output op alpha = " << epilogue_op.alpha);
@@ -244,7 +244,8 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
       WeightQuantTraits::kQuantMethod,
       local_scale_B,
       code_scale_B,
-      code_zp_B);
+      code_zp_B,
+      out_scale);
 
   GemmGrouped gemm;
 
@@ -286,13 +287,13 @@ struct dispatch_stages {
                        const typename WeightQuantTraits::WeightType* B,
                        const OutType* weight_scales,
                        const OutType* biases,
+                       const float* out_scale,
                        OutType* C,
                        int64_t* total_rows_before_expert,
                        int64_t total_rows,
                        int64_t gemm_n,
                        int64_t gemm_k,
                        int num_experts,
-                       const float out_scale,
                        const typename WeightQuantTraits::Arguments& quant_args_B,
                        CutlassGemmConfig gemm_config,
                        int multi_processor_count,
@@ -325,13 +326,13 @@ struct dispatch_stages<InType,
                        const typename WeightQuantTraits::WeightType* B,
                        const OutType* weight_scales,
                        const OutType* biases,
+                       const float* out_scale,
                        OutType* C,
                        int64_t* total_rows_before_expert,
                        int64_t total_rows,
                        int64_t gemm_n,
                        int64_t gemm_k,
                        int num_experts,
-                       const float out_scale,
                        const typename WeightQuantTraits::Arguments& quant_args_B,
                        CutlassGemmConfig gemm_config,
                        int multi_processor_count,
@@ -348,13 +349,13 @@ struct dispatch_stages<InType,
                                        B,
                                        weight_scales,
                                        biases,
+                                       out_scale,
                                        C,
                                        total_rows_before_expert,
                                        total_rows,
                                        gemm_n,
                                        gemm_k,
                                        num_experts,
-                                       out_scale,
                                        quant_args_B,
                                        gemm_config,
                                        multi_processor_count,
@@ -383,13 +384,13 @@ struct dispatch_stages<InType,
                        const typename WeightQuantTraits::WeightType* B,
                        const OutType* weight_scales,
                        const OutType* biases,
+                       const float* out_scale,
                        OutType* C,
                        int64_t* total_rows_before_expert,
                        int64_t total_rows,
                        int64_t gemm_n,
                        int64_t gemm_k,
                        int num_experts,
-                       const float out_scale,
                        const typename WeightQuantTraits::Arguments& quant_args_B,
                        CutlassGemmConfig gemm_config,
                        int multi_processor_count,
@@ -406,13 +407,13 @@ struct dispatch_stages<InType,
                                             B,
                                             weight_scales,
                                             biases,
+                                            out_scale,
                                             C,
                                             total_rows_before_expert,
                                             total_rows,
                                             gemm_n,
                                             gemm_k,
                                             num_experts,
-                                            out_scale,
                                             quant_args_B,
                                             gemm_config,
                                             multi_processor_count,
@@ -432,13 +433,13 @@ void dispatch_gemm_config(const InType* A,
                           const typename WeightQuantTraits::WeightType* B,
                           const OutType* weight_scales,
                           const OutType* biases,
+                          const float* out_scale,
                           OutType* C,
                           int64_t* total_rows_before_expert,
                           int64_t total_rows,
                           int64_t gemm_n,
                           int64_t gemm_k,
                           int num_experts,
-                          const float out_scale,
                           const typename WeightQuantTraits::Arguments& quant_args_B,
                           CutlassGemmConfig gemm_config,
                           int multi_processor_count,
@@ -457,13 +458,13 @@ void dispatch_gemm_config(const InType* A,
                                      B,                        \
                                      weight_scales,            \
                                      biases,                   \
+                                     out_scale,                \
                                      C,                        \
                                      total_rows_before_expert, \
                                      total_rows,               \
                                      gemm_n,                   \
                                      gemm_k,                   \
                                      num_experts,              \
-                                     out_scale,                \
                                      quant_args_B,             \
                                      gemm_config,              \
                                      multi_processor_count,    \
@@ -498,13 +499,13 @@ void dispatch_gemm_config(const InType* A,
         B,                                                      \
         weight_scales,                                          \
         biases,                                                 \
+        out_scale,                                              \
         C,                                                      \
         total_rows_before_expert,                               \
         total_rows,                                             \
         gemm_n,                                                 \
         gemm_k,                                                 \
         num_experts,                                            \
-        out_scale,                                              \
         quant_args_B,                                           \
         gemm_config,                                            \
         multi_processor_count,                                  \
@@ -526,13 +527,13 @@ void dispatch_gemm_config(const InType* A,
         B,                                                             \
         weight_scales,                                                 \
         biases,                                                        \
+        out_scale,                                                     \
         C,                                                             \
         total_rows_before_expert,                                      \
         total_rows,                                                    \
         gemm_n,                                                        \
         gemm_k,                                                        \
         num_experts,                                                   \
-        out_scale,                                                     \
         quant_args_B,                                                  \
         gemm_config,                                                   \
         multi_processor_count,                                         \
@@ -554,13 +555,13 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
                                   const typename WeightQuantTraits::WeightType* B,
                                   const OutType* weight_scales,
                                   const OutType* biases,
+                                  const float* out_scale,
                                   OutType* C,
                                   int64_t* total_rows_before_expert,
                                   int64_t total_rows,
                                   int64_t gemm_n,
                                   int64_t gemm_k,
                                   int num_experts,
-                                  const float out_scale,
                                   const typename WeightQuantTraits::Arguments& quant_args_B,
                                   CutlassGemmConfig gemm_config,
                                   int sm_version,
@@ -602,13 +603,13 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
                                   const typename WeightQuantTraits::WeightType* B,
                                   const OutType* weight_scales,
                                   const OutType* biases,
+                                  const float* out_scale,
                                   OutType* C,
                                   int64_t* total_rows_before_expert,
                                   int64_t total_rows,
                                   int64_t gemm_n,
                                   int64_t gemm_k,
                                   int num_experts,
-                                  const float out_scale,
                                   const typename WeightQuantTraits::Arguments& quant_args_B,
                                   CutlassGemmConfig gemm_config,
                                   int sm_version,
@@ -688,13 +689,13 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
                                   const typename WeightQuantTraits::WeightType* B,
                                   const OutType* weight_scales,
                                   const OutType* biases,
+                                  const float* out_scale,
                                   OutType* C,
                                   int64_t* total_rows_before_expert,
                                   int64_t total_rows,
                                   int64_t gemm_n,
                                   int64_t gemm_k,
                                   int num_experts,
-                                  const float out_scale,
                                   const typename WeightQuantTraits::Arguments& quant_args_B,
                                   CutlassGemmConfig gemm_config,
                                   int sm_version,
@@ -741,13 +742,13 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::dispatch_to_arch<Ep
     const typename WeightQuantTraits::WeightType* B,
     const OutType* weight_scales,
     const OutType* biases,
+    const float* out_scale,
     OutType* C,
     int64_t* total_rows_before_expert,
     int64_t total_rows,
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
-    const float out_scale,
     const typename WeightQuantTraits::Arguments& quant_args_B,
     CutlassGemmConfig gemm_config,
     cudaStream_t stream,
@@ -758,13 +759,13 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::dispatch_to_arch<Ep
       B,                                                          \
       weight_scales,                                              \
       biases,                                                     \
+      out_scale,                                                  \
       C,                                                          \
       total_rows_before_expert,                                   \
       total_rows,                                                 \
       gemm_n,                                                     \
       gemm_k,                                                     \
       num_experts,                                                \
-      out_scale,                                                  \
       quant_args_B,                                               \
       gemm_config,                                                \
       sm_,                                                        \
@@ -792,6 +793,7 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::run_gemm<EpilogueTa
     const typename WeightQuantTraits::WeightType* B,
     const OutType* weight_scales,
     const OutType* biases,
+    const float* out_scale,
     OutType* C,
     int64_t* total_rows_before_expert,
     int64_t total_rows,
@@ -799,7 +801,6 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::run_gemm<EpilogueTa
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
-    const float out_scale,
     const typename WeightQuantTraits::Arguments& quant_args_B,
     cudaStream_t stream) {
   static constexpr bool is_weight_only = !std::is_same<InType, typename WeightQuantTraits::WeightType>::value;
@@ -905,13 +906,13 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::run_gemm<EpilogueTa
                                 B,
                                 weight_scales,
                                 biases,
+                                out_scale,
                                 C,
                                 total_rows_before_expert,
                                 total_rows,
                                 gemm_n,
                                 gemm_k,
                                 num_experts,
-                                out_scale,
                                 quant_args_B,
                                 chosen_config,
                                 stream);
@@ -923,6 +924,7 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm_bias_act(
     const typename WeightQuantTraits::WeightType* B,
     const OutType* weight_scales,
     const OutType* biases,
+    const float* out_scale,
     OutType* C,
     int64_t* total_rows_before_expert,
     int64_t total_rows,
@@ -930,7 +932,6 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm_bias_act(
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
-    const float out_scale,
     const typename WeightQuantTraits::Arguments& quant_args_B,
     std::string activation_type,
     cudaStream_t stream) {
@@ -940,6 +941,7 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm_bias_act(
                                B,
                                weight_scales,
                                biases,
+                               out_scale,
                                C,
                                total_rows_before_expert,
                                total_rows,
@@ -947,7 +949,6 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm_bias_act(
                                gemm_n,
                                gemm_k,
                                num_experts,
-                               out_scale,
                                quant_args_B,
                                stream);
     } else {
@@ -955,6 +956,7 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm_bias_act(
                                  B,
                                  weight_scales,
                                  nullptr,
+                                 out_scale,
                                  C,
                                  total_rows_before_expert,
                                  total_rows,
@@ -962,7 +964,6 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm_bias_act(
                                  gemm_n,
                                  gemm_k,
                                  num_experts,
-                                 out_scale,
                                  quant_args_B,
                                  stream);
     }
@@ -974,6 +975,7 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm(
     const InType* A,
     const typename WeightQuantTraits::WeightType* B,
     const OutType* weight_scales,
+    const float* out_scale,
     OutType* C,
     int64_t* total_rows_before_expert,
     int64_t total_rows,
@@ -981,13 +983,13 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm(
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
-    const float out_scale,
     const typename WeightQuantTraits::Arguments& quant_args_B,
     cudaStream_t stream) {
   run_gemm<EpilogueOpNoBias>(A,
                              B,
                              weight_scales,
                              nullptr,
+                             out_scale,
                              C,
                              total_rows_before_expert,
                              total_rows,
@@ -995,7 +997,6 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::moe_gemm(
                              gemm_n,
                              gemm_k,
                              num_experts,
-                             out_scale,
                              quant_args_B,
                              stream);
 }

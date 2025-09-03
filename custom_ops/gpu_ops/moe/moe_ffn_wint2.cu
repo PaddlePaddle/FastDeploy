@@ -20,7 +20,7 @@
 #include "moe/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
 
-#define _GROUP_GEMM_ONLY 1
+#define _GROUP_GEMM_ONLY 0
 
 template <paddle::DataType IN_DTYPE, paddle::DataType OUT_DTYPE, typename WeightSavedT, cutlass::WintQuantMethod QuantMethod>
 void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
@@ -36,15 +36,18 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
                             const paddle::Tensor* down_proj_local_scale,
                             const paddle::Tensor* down_proj_code_scale,
                             const paddle::Tensor* down_proj_code_zp,
+                            const paddle::Tensor* down_in_quant_scale,
+                            const paddle::Tensor* expert_idx_per_token,
+                            const paddle::Tensor* up_out_scale,
+                            const paddle::Tensor* down_out_scale,
                             paddle::Tensor fc1_out,
                             paddle::Tensor ffn_out,
+                            const int64_t num_max_tokens_per_expert,
                             const int64_t total_rows_in_ll_else_minus1,
                             const int64_t actual_total_rows,
                             const int64_t inter_size,
                             const int64_t hidden_size,
                             const int num_experts,
-                            const float up_out_scale,
-                            const float down_out_scale,
                             const bool used_in_ep_low_latency) {
     using namespace phi;
     using in_data_t = typename PDTraits<IN_DTYPE>::data_t;
@@ -67,114 +70,157 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         down_proj_quant_args.code_zp_ptr = const_cast<float*>(down_proj_code_zp->data<float>());
     }
 
+    auto stream = permute_input.stream();
+    // MoeGemmRunner<InNvType, WeightOnlyTraits> moe_gemm_runner;
+    MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits> mixed_moe_gemm_runner;
     if constexpr (std::is_same<InNvType, OutNvType>::value) {
-        auto moe_gemm_runner = MoeGemmRunner<InNvType, WeightOnlyTraits>();
-        auto stream = permute_input.stream();
-
-        moe_gemm_runner.moe_gemm_bias_act(
-            reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
-            reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
-            reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
-            reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
-            reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
-            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            total_rows_in_ll_else_minus1,
-            actual_total_rows,
-            inter_size,
-            hidden_size,
-            num_experts,
-            up_gate_proj_quant_args,
-            "none",
-            stream);
-
+//         moe_gemm_runner = MoeGemmRunner<InNvType, WeightOnlyTraits>();
+//         moe_gemm_runner.moe_gemm_bias_act(
+//             reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
+//             reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
+//             reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
+//             reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
+// #if _GROUP_GEMM_ONLY
+//             reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+// #else
+//             reinterpret_cast<OutNvType*>(fc1_out.data<out_data_t>()),
+// #endif
+//             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+//             total_rows_in_ll_else_minus1,
+//             actual_total_rows,
+//             inter_size,
+//             hidden_size,
+//             num_experts,
+//             up_gate_proj_quant_args,
+//             "none",
+//             stream);
     } else {
+        mixed_moe_gemm_runner = MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
 
-        auto moe_gemm_runner = MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
-        auto stream = permute_input.stream();
-
-        moe_gemm_runner.moe_gemm_bias_act(
+        mixed_moe_gemm_runner.moe_gemm_bias_act(
             reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
             reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
             reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
             reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
+            reinterpret_cast<const float*>(up_out_scale ? up_out_scale->data<float>() : nullptr),
+#if _GROUP_GEMM_ONLY
             reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+#else
+            reinterpret_cast<OutNvType*>(fc1_out.data<out_data_t>()),
+#endif
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
             total_rows_in_ll_else_minus1,
             actual_total_rows,
             inter_size,
             hidden_size,
             num_experts,
-            up_out_scale,
+            // 1.0,
+            // up_out_scale,
             up_gate_proj_quant_args,
             "none",
             stream);
-
     }
 
-    // auto moe_gemm_runner = MoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
-    // auto stream = permute_input.stream();
+#if _GROUP_GEMM_ONLY
+    // do nothing
+#else
+    paddle::Tensor act_out;
+    if (used_in_ep_low_latency) {
+        act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
+    } else {
+        act_out = paddle::experimental::swiglu(fc1_out, nullptr);
+    }
 
-    // moe_gemm_runner.moe_gemm_bias_act(
-    //     reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
-    //     reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
-    //     reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
-    //     reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
-    //     reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
-    //     const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-    //     total_rows_in_ll_else_minus1,
-    //     actual_total_rows,
-    //     inter_size,
-    //     hidden_size,
-    //     num_experts,
-    //     up_gate_proj_quant_args,
-    //     "none",
-    //     stream);
+    if constexpr (std::is_same<InNvType, OutNvType>::value) {
+        // moe_gemm_runner.moe_gemm(
+        //     reinterpret_cast<const InNvType*>(act_out.data<in_data_t>()),
+        //     reinterpret_cast<const WeightType*>(down_proj_weight.data<WeightSavedT>()),
+        //     reinterpret_cast<const OutNvType*>(down_proj_super_scale ? down_proj_super_scale->data<out_data_t>() : nullptr),
+        //     reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+        //     const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+        //     total_rows_in_ll_else_minus1,
+        //     actual_total_rows,
+        //     hidden_size,
+        //     inter_size / 2,
+        //     num_experts,
+        //     down_proj_quant_args,
+        //     stream);
+    } else {
+        auto place = permute_input.place();
+        Allocator* allocator = paddle::GetAllocator(place);
 
-//     moe_gemm_runner.moe_gemm_bias_act(
-//         reinterpret_cast<const NvType*>(permute_input.data<DataT>()),
-//         reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
-//         reinterpret_cast<const NvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<DataT>() : nullptr),
-//         reinterpret_cast<const NvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<DataT>() : nullptr),
-// #if _GROUP_GEMM_ONLY
-//         reinterpret_cast<NvType*>(ffn_out.data<DataT>()),
-// #else
-// 	reinterpret_cast<NvType*>(fc1_out.data<DataT>()),
-// #endif
-// 	const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-//         total_rows_in_ll_else_minus1,
-//         actual_total_rows,
-//         inter_size,
-//         hidden_size,
-//         num_experts,
-//         down_out_scale,
-//         up_gate_proj_quant_args,
-//         "none",
-//         stream);
+        Allocator::AllocationPtr fp8_act_out;
+        fp8_act_out = allocator->Allocate(SizeOf(paddle::DataType::INT8) * act_out.numel());
+                
+        Allocator::AllocationPtr ffn2_input_row_sum;
+        ffn2_input_row_sum = allocator->Allocate(sizeof(float) * actual_total_rows);
 
-// #if _GROUP_GEMM_ONLY
-//     // do nothing
-// #else
-//     paddle::Tensor act_out;
-//     if (used_in_ep_low_latency) {
-//         act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
-//     } else {
-//         act_out = paddle::experimental::swiglu(fc1_out, nullptr);
-//     }
+        std::cout << " act_out Tensor shape: ";
+        for (auto dim : act_out.shape()) {
+            std::cout << dim << " ";
+        }
+        std::cout << "\n";
+        std::cout << " act_out Tensor dtype: " << act_out.dtype() << "\n";
+        std::cout << " act_out Tensor place: " << act_out.place() << "\n";
 
-//     moe_gemm_runner.moe_gemm(
-//         reinterpret_cast<const NvType*>(act_out.data<DataT>()),
-//         reinterpret_cast<const WeightType*>(down_proj_weight.data<WeightSavedT>()),
-//         reinterpret_cast<const NvType*>(down_proj_super_scale ? down_proj_super_scale->data<DataT>() : nullptr),
-//         reinterpret_cast<NvType*>(ffn_out.data<DataT>()),
-//         const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-//         total_rows_in_ll_else_minus1,
-//         actual_total_rows,
-//         hidden_size,
-//         inter_size / 2,
-//         num_experts,
-//         down_proj_quant_args,
-//         stream);
-// #endif
+        auto cpu_tensor = act_out.copy_to(paddle::CPUPlace(), true);  // 先拷贝到 CPU
+        auto* data = cpu_tensor.data<out_data_t>();  // 假设是 float 类型（需根据 dtype 调整）
+        for (int i = 0; i < 30; ++i) {
+            std::cout << data[i] << " ";
+            if ((i + 1) % 10 == 0) std::cout << "\n";  // 每 10 个数据换行
+        }
+        std::cout << "\n";
+
+        std::cout << "fp8_act_out \n";
+        quantize_moe_input<out_data_t, in_data_t>(
+            act_out.data<out_data_t>(),
+            // expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
+            expert_idx_per_token ? const_cast<paddle::Tensor*>(expert_idx_per_token)->data<int64_t>() : nullptr,
+            down_in_quant_scale ? const_cast<paddle::Tensor*>(down_in_quant_scale)->data<float>() : nullptr,
+            // reinterpret_cast<const paddle::Tensor*>(down_in_quant_scale ? down_in_quant_scale->data<float>() : nullptr),
+            // down_in_quant_scale ? reinterpret_cast<const float*>(down_in_quant_scale.data<float>() : nullptr),
+            // down_in_quant_scale ? const_cast<paddle::Tensor*>(`.get_ptr())->data<float>() : nullptr,
+            448.0f,
+            -448.0f,
+            actual_total_rows,
+            inter_size / 2,
+            reinterpret_cast<float*>(ffn2_input_row_sum->ptr()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            num_max_tokens_per_expert,
+            used_in_ep_low_latency,
+            reinterpret_cast<in_data_t *>(fp8_act_out->ptr()),
+            stream);
+
+
+        in_data_t* host_buffer = new in_data_t[30];
+        in_data_t* dev_ptr = static_cast<in_data_t*>(fp8_act_out->ptr());
+        cudaMemcpy(host_buffer, dev_ptr, 30, cudaMemcpyDeviceToHost);
+
+
+        for (int i = 0; i < 30; ++i) {
+            std::cout << host_buffer[i] << " ";
+            if ((i + 1) % 10 == 0) std::cout << "\n";  // 每 10 个数据换行
+        }
+        std::cout << "\n";
+
+        mixed_moe_gemm_runner.moe_gemm(
+            reinterpret_cast<const InNvType*>(fp8_act_out->ptr()),
+            reinterpret_cast<const WeightType*>(down_proj_weight.data<WeightSavedT>()),
+            reinterpret_cast<const OutNvType*>(down_proj_super_scale ? down_proj_super_scale->data<out_data_t>() : nullptr),
+            reinterpret_cast<const float*>(down_out_scale ? down_out_scale->data<float>() : nullptr),
+            reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            total_rows_in_ll_else_minus1,
+            actual_total_rows,
+            hidden_size,
+            inter_size / 2,
+            num_experts,
+            // 1.0,
+            // down_out_scale,
+            down_proj_quant_args,
+            stream);    
+    }
+#endif
 }
 
 template <paddle::DataType IN_DTYPE, paddle::DataType OUT_DTYPE>
@@ -191,8 +237,10 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
                        const paddle::optional<paddle::Tensor>& down_proj_local_scale,
                        const paddle::optional<paddle::Tensor>& down_proj_code_scale,
                        const paddle::optional<paddle::Tensor>& down_proj_code_zp,
-                       const float up_out_scale,
-                       const float down_out_scale,
+                       const paddle::optional<paddle::Tensor>& down_in_quant_scale,
+                       const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+                       const paddle::optional<paddle::Tensor>& up_out_scale,
+                       const paddle::optional<paddle::Tensor>& down_out_scale,
                        const bool used_in_ep_low_latency,
                        paddle::Tensor ffn_out) {
     // using namespace phi;
@@ -252,15 +300,18 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
         const_cast<paddle::Tensor*>(down_proj_local_scale.get_ptr()),
         const_cast<paddle::Tensor*>(down_proj_code_scale.get_ptr()),
         const_cast<paddle::Tensor*>(down_proj_code_zp.get_ptr()),
+        const_cast<paddle::Tensor*>(down_in_quant_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(expert_idx_per_token.get_ptr()),
+        const_cast<paddle::Tensor*>(up_out_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(down_out_scale.get_ptr()),
         fc1_out_tensor,
         ffn_out,
+        num_max_tokens_per_expert,
         total_rows_in_ll_else_minus1,
         actual_total_rows,
         inter_size,
         hidden_size,
         num_experts,
-        up_out_scale,
-        down_out_scale,
         used_in_ep_low_latency);
 }
 
@@ -278,8 +329,10 @@ paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::optional<paddle::Tensor>& down_proj_local_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_zp,
-    const float up_out_scale,
-    const float down_out_scale,
+    const paddle::optional<paddle::Tensor>& down_in_quant_scale,
+    const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& up_out_scale,
+    const paddle::optional<paddle::Tensor>& down_out_scale,
     const bool used_in_ep_low_latency) {
 #define dispatch_out_dtype_macro(IN_DTYPE, OUT_DTYPE)                       \
     case OUT_DTYPE:                                                        \
@@ -296,6 +349,8 @@ paddle::Tensor MoeExpertFFNWint2Func(
                                                down_proj_local_scale,      \
                                                down_proj_code_scale,       \
                                                down_proj_code_zp,          \
+                                               down_in_quant_scale,        \
+                                               expert_idx_per_token,       \
                                                up_out_scale,               \
                                                down_out_scale,             \
                                                used_in_ep_low_latency,      \
@@ -350,8 +405,10 @@ std::vector<paddle::Tensor> MoeExpertFFNWint2(
     const paddle::optional<paddle::Tensor>& down_proj_local_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_scale,
     const paddle::optional<paddle::Tensor>& down_proj_code_zp,
-    const float up_out_scale,
-    const float down_out_scale,
+    const paddle::optional<paddle::Tensor>& down_in_quant_scale,
+    const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& up_out_scale,
+    const paddle::optional<paddle::Tensor>& down_out_scale,
     const bool used_in_ep_low_latency) {
 
     return {MoeExpertFFNWint2Func(permute_input,
@@ -367,6 +424,8 @@ std::vector<paddle::Tensor> MoeExpertFFNWint2(
                                   down_proj_local_scale,
                                   down_proj_code_scale,
                                   down_proj_code_zp,
+                                  down_in_quant_scale,
+                                  expert_idx_per_token,
                                   up_out_scale,
                                   down_out_scale,
                                   used_in_ep_low_latency)};
@@ -386,8 +445,10 @@ std::vector<std::vector<int64_t>> MoeExpertFFNWint2InferShape(
     const paddle::optional<std::vector<int64_t>>& down_proj_local_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_proj_code_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_proj_code_zp_shape,
-    const float up_out_scale,
-    const float down_out_scale,
+    const paddle::optional<std::vector<int64_t>>& down_in_quant_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& expert_idx_per_token_shape,
+    const paddle::optional<std::vector<int64_t>>& up_out_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& down_out_scale_shape,
     const bool used_in_ep_low_latency) {
 #if _GROUP_GEMM_ONLY
     int64_t expanded_active_expert_rows = permute_input_shape[0];
@@ -413,6 +474,10 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
     const paddle::optional<paddle::DataType> &down_proj_local_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_code_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_code_zp_dtype,
+    const paddle::optional<paddle::DataType> &down_in_quant_scale_dtype,
+    const paddle::optional<paddle::DataType> &expert_idx_per_token_dtype,
+    const paddle::optional<paddle::DataType> &up_out_scale_dtype,
+    const paddle::optional<paddle::DataType> &down_out_scale_dtype,
     const float up_out_scale,
     const float down_out_scale,
     const bool used_in_ep_low_latency) {
@@ -490,11 +555,14 @@ PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
            paddle::Optional("up_gate_proj_code_zp"),
            paddle::Optional("down_proj_local_scale"),
            paddle::Optional("down_proj_code_scale"),
-           paddle::Optional("down_proj_code_zp")})
+           paddle::Optional("down_proj_code_zp"),
+           paddle::Optional("down_in_quant_scale"),
+           paddle::Optional("expert_idx_per_token"),
+           paddle::Optional("up_out_scale"),
+           paddle::Optional("down_out_scale"),
+           })
     .Outputs({"output_tensor"})
-    .Attrs({"up_out_scale: float",
-            "down_out_scale: float",
-            "used_in_ep_low_latency: bool"})
+    .Attrs({"used_in_ep_low_latency: bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFNWint2))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertFFNWint2InferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertFFNWint2InferDtype));

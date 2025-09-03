@@ -38,6 +38,7 @@ class MixedMoeGemmRunner {
                          const WeightType* B,
                          const OutType* weight_scales,
                          const OutType* biases,
+                         const float* out_dq_scale,
                          OutType* C,
                          int64_t* total_rows_before_expert,
                          int64_t total_rows,
@@ -45,7 +46,6 @@ class MixedMoeGemmRunner {
                          int64_t gemm_n,
                          int64_t gemm_k,
                          int num_experts,
-                         const float out_scale,
                          const Arguments& quant_args_B,
                          std::string activation_type,
                          cudaStream_t stream);
@@ -53,6 +53,7 @@ class MixedMoeGemmRunner {
   void moe_gemm(const InType* A,
                 const WeightType* B,
                 const OutType* weight_scales,
+                const float* out_dq_scale,
                 OutType* C,
                 int64_t* total_rows_before_expert,
                 int64_t total_rows,
@@ -60,7 +61,6 @@ class MixedMoeGemmRunner {
                 int64_t gemm_n,
                 int64_t gemm_k,
                 int num_experts,
-                const float out_scale,
                 const Arguments& quant_args_B,
                 cudaStream_t stream);
 
@@ -70,13 +70,13 @@ class MixedMoeGemmRunner {
                         const WeightType* B,
                         const OutType* weight_scales,
                         const OutType* biases,
+                        const float* out_dq_scale,
                         OutType* C,
                         int64_t* total_rows_before_expert,
                         int64_t total_rows,
                         int64_t gemm_n,
                         int64_t gemm_k,
                         int num_experts,
-                        const float out_scale,
                         const Arguments& quant_args_B,
                         CutlassGemmConfig gemm_config,
                         cudaStream_t stream,
@@ -87,6 +87,7 @@ class MixedMoeGemmRunner {
                 const WeightType* B,
                 const OutType* weight_scales,
                 const OutType* biases,
+                const float* out_dq_scale,
                 OutType* C,
                 int64_t* total_rows_before_expert,
                 int64_t total_rows,
@@ -94,7 +95,6 @@ class MixedMoeGemmRunner {
                 int64_t gemm_n,
                 int64_t gemm_k,
                 int num_experts,
-                const float out_scale,
                 const Arguments& quant_args_B,
                 cudaStream_t stream);
 

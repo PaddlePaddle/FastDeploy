@@ -621,19 +621,19 @@ public:
 
       uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
 
-      CUTLASS_TRACE_DEVICE_TID(" warp_mma_k = %d, warp_loaded_frag_B_[0:7]=[%d, %d, %d, %d, %d, %d, %d, %d]",
-          warp_mma_k,
-          static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
-          static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
-          static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
-          static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]));
+    //   CUTLASS_TRACE_DEVICE_TID(" warp_mma_k = %d, warp_loaded_frag_B_[0:7]=[%d, %d, %d, %d, %d, %d, %d, %d]",
+    //       warp_mma_k,
+    //       static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
+    //       static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
+    //       static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
+    //       static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]));
 
-      CUTLASS_TRACE_DEVICE_TID(" warp_mma_k = %d, warp_loaded_frag_B_[8:15]=[%d, %d, %d, %d, %d, %d, %d, %d]",
-          warp_mma_k,
-          static_cast<int>(reg_uint8_ptr[8]), static_cast<int>(reg_uint8_ptr[9]),
-          static_cast<int>(reg_uint8_ptr[10]), static_cast<int>(reg_uint8_ptr[11]),
-          static_cast<int>(reg_uint8_ptr[12]), static_cast<int>(reg_uint8_ptr[13]),
-          static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]));
+    //   CUTLASS_TRACE_DEVICE_TID(" warp_mma_k = %d, warp_loaded_frag_B_[8:15]=[%d, %d, %d, %d, %d, %d, %d, %d]",
+    //       warp_mma_k,
+    //       static_cast<int>(reg_uint8_ptr[8]), static_cast<int>(reg_uint8_ptr[9]),
+    //       static_cast<int>(reg_uint8_ptr[10]), static_cast<int>(reg_uint8_ptr[11]),
+    //       static_cast<int>(reg_uint8_ptr[12]), static_cast<int>(reg_uint8_ptr[13]),
+    //       static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]));
 
       // load next-tile of group-wise local_scale from shared memory
       if (warp_mma_k == Base::kWarpGemmIterations - 1) {
@@ -711,6 +711,8 @@ public:
       //   CUTLASS_TRACE_DEVICE(" warp_frag_B_[%d] = %f", aa, static_cast<float>(pipe_state.warp_frag_B_[warp_mma_k % 2][aa]));
       // }
       
+
+      unsigned long long start_mma_clk = clock64();
       // Execute the current warp-tile of MMA operations
       if constexpr (Detail::kStagedAccumulation) {
         warp_mma_(
@@ -732,9 +734,11 @@ public:
           pipe_state.warp_frag_B_[warp_mma_k % 2],
           accum);
       }
+      unsigned long long end_mma_clk = clock64();
+      // CUTLASS_TRACE_DEVICE(" mma time:        %llu", end_mma_clk - start_mma_clk);
 
 
-#if 1
+#if 0
       // CUTLASS_TRACE_DEVICE_TID(" warp_loaded_frag_B_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
       //       static_cast<float>(pipe_state.warp_loaded_frag_B_[0]), static_cast<float>(pipe_state.warp_loaded_frag_B_[1]),
       //       static_cast<float>(pipe_state.warp_loaded_frag_B_[2]), static_cast<float>(pipe_state.warp_loaded_frag_B_[3]),

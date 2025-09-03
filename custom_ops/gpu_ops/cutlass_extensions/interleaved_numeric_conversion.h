@@ -597,14 +597,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         int32_t decode_value[4];
         ScaleComputeT new_code_zp = code_zp + 0.5f;
 
-        CUTLASS_TRACE_DEVICE_TID(" fp32_intermediates_casted = [%f, %f, %f, %f]",
-                                   static_cast<float>(fp32_intermediates[0]),
-                                   static_cast<float>(fp32_intermediates[1]),
-                                   static_cast<float>(fp32_intermediates[2]),
-                                   static_cast<float>(fp32_intermediates[3]));
-        CUTLASS_TRACE_DEVICE_TID(" code_scale = %f, code_zp = %f",
-                                   static_cast<float>(code_scale),
-                                   static_cast<float>(code_zp));
         decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale, new_code_zp));
         decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale, new_code_zp));
         decode_value[2] = __float2int_rd(fmaf(fp32_intermediates[2], code_scale, new_code_zp));
@@ -632,23 +624,8 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
-        CUTLASS_TRACE_DEVICE_TID(" fp32_intermediates_casted = [%f, %f, %f, %f]",
-                                   static_cast<float>(fp32_intermediates[0]),
-                                   static_cast<float>(fp32_intermediates[1]),
-                                   static_cast<float>(fp32_intermediates[2]),
-                                   static_cast<float>(fp32_intermediates[3]));
+        
         int32_t decode_value[4];
-        CUTLASS_TRACE_DEVICE_TID(" code_scale = [%f, %f, %f, %f]",
-                                   static_cast<float>(code_scale[0]),
-                                   static_cast<float>(code_scale[1]),
-                                   static_cast<float>(code_scale[2]),
-                                   static_cast<float>(code_scale[3]));
-        CUTLASS_TRACE_DEVICE_TID(" code_zp = [%f, %f, %f, %f]",
-                                   static_cast<float>(code_zp[0]),
-                                   static_cast<float>(code_zp[1]),
-                                   static_cast<float>(code_zp[2]),
-                                   static_cast<float>(code_zp[3]));
-
 
         decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale[0], code_zp[0] + 0.5f));
         decode_value[1] = __float2int_rd(fmaf(fp32_intermediates[1], code_scale[1], code_zp[1] + 0.5f));

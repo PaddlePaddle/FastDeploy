@@ -22,6 +22,9 @@
 #include "moe/fused_moe_imp_op.h"
 #include "moe/fused_moe_helper.h"
 #include "cutlass/numeric_conversion.h"
+
+#include "cutlass/trace.h"
+
 // Ignore CUTLASS warnings about type punning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
@@ -200,9 +203,12 @@ LoadT input_vec;
 LoadOutT output_vec;
 using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
 float scale_factor = -7.0f / 512.0f;
+CUTLASS_TRACE_DEVICE("token_num: %d, gridDim.x = %d", token_num, gridDim.x);
 for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
   int64_t expert_idx = expert_idx_per_token[token_idx];
   float quant_scale = quant_scales[expert_idx];
+  CUTLASS_TRACE_DEVICE_TID(" kernel quant_scale = %f, expert_idx = %d", quant_scale, expert_idx);
+
   float thread_row_sum = 0.0f;
   for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
     int64_t offset = token_idx * dim + idx * VecSize;
