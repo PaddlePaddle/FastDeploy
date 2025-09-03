@@ -120,7 +120,6 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
       float row_variance =
           max(warp_m2 / head_size, 0.0f);
       float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
-
       if (hi < num_heads) { // q
         Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
         #pragma unroll
@@ -129,6 +128,7 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
         }
       } else { // k
         Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
+        #pragma unroll
         for (int i = 0; i < VecSize; i++) {
           out_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
         }
