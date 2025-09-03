@@ -86,7 +86,7 @@ args = parser.parse_args()
 
 if args.workers is None:
     # In GPU, the workers of uvicorn will be set according to the parameter `max-num-seqs`
-    if is_package_installed("paddlepaddle-gpu"):
+    if True:
         args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
     else:
         args.workers = 1
