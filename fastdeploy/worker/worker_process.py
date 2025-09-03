@@ -745,7 +745,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if args.splitwise_role != "mixed":
         logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if (not current_platform.is_cuda()) and (not current_platform.is_xpu()):
+    if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
