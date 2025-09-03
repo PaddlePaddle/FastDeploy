@@ -26,9 +26,12 @@ try:
 except:
     moba_attention = None
     get_cur_cu_seq_len_k = None
+import os
 import unittest
 
 import numpy as np
+
+from fastdeploy import LLM, SamplingParams
 
 
 def naive_attn(q_input, k_input, v_input, mask):
@@ -333,6 +336,43 @@ class TestMobaAttention(unittest.TestCase):
         )
 
         self.compare_attn(attn_out, qk_gate_topk_idx)
+
+    def test_server(self):
+        if get_cur_cu_seq_len_k is None:
+            return
+        os.environ["FD_ATTENTION_BACKEND"] = "MOBA_ATTN"
+        base_path = os.getenv("MODEL_PATH")
+        if base_path:
+            model_path = os.path.join(base_path, "./ernie-4_5-21b-a3b-bf16-paddle")
+        else:
+            model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+
+        moba_attention_config = {
+            "moba_encoder_top_k_left": 50,
+            "moba_encoder_top_k_right": 60,
+            "moba_decoder_top_k_left": 100,
+            "moba_decoder_top_k_right": 120,
+        }
+
+        # 加载模型
+        llm = LLM(
+            model=model_path,
+            tensor_parallel_size=2,
+            max_model_len=131072,
+            engine_worker_queue_port=8793,
+            max_num_seqs=32,
+            quantization="wint4",
+            enable_chunked_prefill=True,
+            max_num_batched_tokens=8192,
+            moba_attention_config=moba_attention_config,
+        )
+
+        prompts = ["Hello world!"]
+        sampling_params = SamplingParams(temperature=1.0, top_p=0.0, max_tokens=32)
+        outputs = llm.generate(prompts, sampling_params, use_tqdm=True)
+
+        for output in outputs:
+            print(output.outputs.text)
 
 
 if __name__ == "__main__":

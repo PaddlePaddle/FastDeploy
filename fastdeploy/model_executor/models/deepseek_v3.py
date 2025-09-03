@@ -694,7 +694,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
         logits = self.lm_head(hidden_states)
-        logits = paddle.cast(logits, paddle.float32)
+        logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
@@ -733,7 +733,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         return hidden_states
 
     def clear_grpah_opt_backend(self):
-        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
         self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 

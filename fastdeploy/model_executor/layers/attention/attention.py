@@ -118,7 +118,13 @@ class Attention(nn.Layer):
             self.k_norm_key = f"{self.prefix}.k_norm"
             self.init_weight()
 
-        if fd_config.moba_attention_config is not None:
+        if (
+            fd_config.moba_attention_config is not None
+            and fd_config.moba_attention_config.moba_encoder_top_k_left is not None
+            and fd_config.moba_attention_config.moba_encoder_top_k_right is not None
+            and fd_config.moba_attention_config.moba_decoder_top_k_left is not None
+            and fd_config.moba_attention_config.moba_decoder_top_k_right is not None
+        ):
             mlp_weight_path = os.path.join(
                 fd_config.model_config.model, fd_config.moba_attention_config.mlp_weight_name
             )
@@ -157,14 +163,14 @@ class Attention(nn.Layer):
     def init_weight(self):
         self.q_norm_weight = self.create_parameter(
             shape=[self.qk_head_dim],
-            dtype=self._dtype,
+            dtype="float32",
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
         self.k_norm_weight = self.create_parameter(
             shape=[self.qk_head_dim],
-            dtype=self._dtype,
+            dtype="float32",
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
@@ -178,8 +184,8 @@ class Attention(nn.Layer):
         if self.use_qk_norm:
             q_norm_weight_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.q_norm_key + ".weight")))
             k_norm_weight_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.k_norm_key + ".weight")))
-            self.q_norm_weight.set_value(q_norm_weight_tensor)
-            self.k_norm_weight.set_value(k_norm_weight_tensor)
+            self.q_norm_weight.set_value(q_norm_weight_tensor.astype("float32"))
+            self.k_norm_weight.set_value(k_norm_weight_tensor.astype("float32"))
 
     def forward(
         self,

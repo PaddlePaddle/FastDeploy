@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+from contextlib import contextmanager
 from typing import Any, Optional, Union
 
 import paddle
@@ -159,6 +160,7 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         output_dim = getattr(param, "output_dim", None)
         model_format = getattr(param, "model_format", "")
         if model_format == "torch":
+            loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
         if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
@@ -185,3 +187,15 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         param.copy_(loaded_weight, False)
 
     return fn
+
+
+@contextmanager
+def temporary_dtype(dtype: str):
+    """Temporarily set Paddle default dtype"""
+    orig_dtype = paddle.get_default_dtype()
+    try:
+        if dtype is not None and dtype == "float32":
+            paddle.set_default_dtype(dtype)
+        yield
+    finally:
+        paddle.set_default_dtype(orig_dtype)

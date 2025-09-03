@@ -127,11 +127,13 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.reasoning_parser = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.lm_head_fp32: bool = False
         self.model_format = "auto"
         for key, value in args.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
         assert self.model != ""
@@ -256,7 +258,7 @@ class ParallelConfig:
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
         self.moe_phase = MoEPhase("prefill")  # Generation phase
-        self.msg_queue_id = 1  # mesage queue id
+        self.msg_queue_id = 1  # message queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
         self.tensor_parallel_size = 1  # TP degree
@@ -340,7 +342,8 @@ class ParallelConfig:
     def set_tp_group(self):
         # different tp group id
         # prevent different tp_groups using the same group_id
-        dist.collective._set_custom_gid(self.data_parallel_rank + 100)
+        tp_gid_offset = envs.FD_TP_GROUP_GID_OFFSET
+        dist.collective._set_custom_gid(self.data_parallel_rank + tp_gid_offset)
         self.tp_group = dist.new_group(
             range(
                 self.data_parallel_rank * self.tensor_parallel_size,
@@ -348,7 +351,8 @@ class ParallelConfig:
             )
         )
         # same ep group id
-        dist.collective._set_custom_gid(self.data_parallel_size + 100)
+        dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+        self.ep_group = dist.new_group(range(self.expert_parallel_size))
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -546,7 +550,7 @@ class GraphOptimizationConfig:
             It requires that all input buffers have fixed addresses, and all
             splitting ops write their outputs to input buffers.
             - With dyncmic graph backend: ...
-            - With static grpah backend: WIP
+            - With static graph backend: WIP
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
@@ -1219,10 +1223,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        assert (
-            self.device_ids.split(",").__len__() == self.worker_num_per_node
-        ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
-
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
@@ -1235,13 +1235,13 @@ class FDConfig:
         self.paddle_commit_id = paddle.version.commit
 
         if self.max_num_batched_tokens is None:
-            if self.cache_config.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
-                    self.max_num_batched_tokens = self.max_model_len
+                if self.cache_config.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = self.max_model_len
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
@@ -1250,7 +1250,8 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
-            if self.model_config.enable_mm:
+            if current_platform.is_xpu() or self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
@@ -1320,12 +1321,10 @@ class FDConfig:
             ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
 
             if self.guided_decoding_backend != "off":
-                # TODO: mm support guided_decoding
-                assert (
-                    self.model_config.enable_mm is False
-                ), "Multimodal model currently do not support guided_decoding"
-
                 # TODO: speculative decoding support guided_decoding
+                assert (
+                    self.speculative_config.method is None
+                ), "speculative decoding currently do not support guided_decoding"
 
                 # TODO: xpu support guided_decoding
                 assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
@@ -1336,6 +1335,7 @@ class FDConfig:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"
                     )
+
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 
@@ -1375,7 +1375,7 @@ class FDConfig:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.engine_worker_queue_port,
+                        "port": self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id],
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":

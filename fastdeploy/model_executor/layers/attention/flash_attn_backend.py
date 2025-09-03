@@ -176,7 +176,7 @@ class FlashAttentionBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             return (
@@ -311,6 +311,7 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "cache_quant_type_str", "none"),
+                self.rope_3d,
             )
 
             res_encoder = self.flash_attn_func(
@@ -358,6 +359,7 @@ class FlashAttentionBackend(AttentionBackend):
             getattr(layer, "cache_v_zp", None),
             layer.linear_shift,
             layer.linear_smooth,
+            forward_meta.attn_mask_offsets,
             metadata.kv_signal_data_list[layer.layer_id],
             getattr(layer, "q_norm_weight", None),
             getattr(layer, "k_norm_weight", None),
@@ -377,7 +379,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.speculate_max_draft_token_num + 1,
             self.causal,
             self.speculative_method is not None,
-        )[0]
+        )
 
         if metadata.max_len_tensor_cpu[1] > 0:
             merge_prefill_decode_output(

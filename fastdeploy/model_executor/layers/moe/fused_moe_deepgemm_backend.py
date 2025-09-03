@@ -49,13 +49,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ]
         self.up_gate_proj_scale_shape = [
             layer.num_local_experts,
-            layer.moe_intermediate_size * 2 // self.quant_config.weight_block_size[0],
-            layer.hidden_size // self.quant_config.weight_block_size[1],
+            ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
+            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
         ]
         self.down_proj_scale_shape = [
             layer.num_local_experts,
-            layer.hidden_size // self.quant_config.weight_block_size[0],
-            layer.moe_intermediate_size // self.quant_config.weight_block_size[1],
+            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
+            ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
         ]
         if self.quant_config.is_checkpoint_bf16:
             layer.up_gate_proj_weight = layer.create_parameter(
@@ -283,8 +283,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
             "down_proj_weight": down_proj_weight,
-            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
-            "down_proj_weight_scale": down_proj_weight_scale,
+            "up_gate_proj_weight_scale_inv": up_gate_proj_weight_scale,
+            "down_proj_weight_scale_inv": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
             getattr(layer, name).set_value(tensor)
@@ -571,6 +571,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out, self.tp_group)
+            tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

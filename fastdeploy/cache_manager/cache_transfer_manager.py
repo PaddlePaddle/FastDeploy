@@ -57,7 +57,7 @@ def parse_args():
         "--protocol",
         type=str,
         default="ipc",
-        help="cache transfer protocol, only surport ipc now",
+        help="cache transfer protocol, only support ipc now",
     )
     parser.add_argument("--enable_splitwise", type=int, default=0, help="enable splitwise ")
     parser.add_argument("--cache_queue_port", type=int, default=9923, help="cache queue port")

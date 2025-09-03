@@ -27,6 +27,7 @@ import time
 import traceback
 import uuid
 import weakref
+from dataclasses import asdict
 
 import numpy as np
 import paddle
@@ -37,7 +38,7 @@ from fastdeploy.engine.common_engine import EngineSevice
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -177,6 +178,22 @@ class LLMEngine:
 
     # _insert_task_to_worker moved to CommonEngine
 
+    def _has_guided_input(self, request):
+        """
+        Check if the request has any guided input.
+        """
+        return any(
+            x is not None
+            for x in (
+                request.guided_json,
+                request.guided_regex,
+                request.guided_choice,
+                request.structural_tag,
+                request.guided_grammar,
+                request.guided_json_object,
+            )
+        )
+
     def add_requests(self, task, sampling_params=None, **kwargs):
         """
         Add a new request to the queue.
@@ -190,6 +207,8 @@ class LLMEngine:
         """
         # TODO 输入输出长度确认
 
+        if sampling_params is not None:
+            task.update(asdict(sampling_params))
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
@@ -246,8 +265,15 @@ class LLMEngine:
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        if self.engine.guided_decoding_checker is not None:
-            request, err_msg = self.engine.guided_decoding_checker.schema_format(request)
+        if self._has_guided_input(request):
+            err_msg = None
+            if self.guided_decoding_checker is None:
+                err_msg = (
+                    "guided_backend is None, use --guided-decoding-backend to specify the backend at server startup."
+                )
+            else:
+                request, err_msg = self.guided_decoding_checker.schema_format(request)
+
             if err_msg is not None:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
@@ -359,7 +385,10 @@ class LLMEngine:
             self.zmq_server.close()
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
+                console_logger.info(f"Waiting for worker {p.pid} to exit")
                 p.join()
+            for p in self.dp_engine_worker_queue_server:
+                p.cleanup()
 
     def _setting_environ_variables(self):
         """
@@ -371,7 +400,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
             "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
             "FLAGS_hardamard_use_diagonal_block_matrix": int(
                 os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
@@ -463,6 +492,7 @@ class LLMEngine:
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --reasoning_parser {self.cfg.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
@@ -477,11 +507,11 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
+            "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
-        llm_logger.info(f"gaoziyuan test ips :{self.cfg.ips}")
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
@@ -608,11 +638,26 @@ class LLMEngine:
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
             if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+                self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
+                self.dp_engine_worker_queue_server = []
                 for i in range(
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
+                    address = (
+                        self.cfg.master_ip,
+                        int(self.cfg.engine_worker_queue_port[i]),
+                    )
+                    llm_logger.info(f"dp start queue service {address}")
+                    self.dp_engine_worker_queue_server.append(
+                        EngineWorkerQueue(
+                            address=address,
+                            is_server=True,
+                            num_client=self.cfg.parallel_config.tensor_parallel_size,
+                            local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                        )
+                    )
                     self.dp_processed.append(
                         multiprocessing.Process(
                             target=start_data_parallel_service,
@@ -623,7 +668,7 @@ class LLMEngine:
                         )
                     )
                     llm_logger.info(
-                        f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}"
+                        f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()

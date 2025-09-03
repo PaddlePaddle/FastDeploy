@@ -61,7 +61,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         Get quantization method.
         """
         if isinstance(layer, FusedMoE):
-            if self.use_deep_gemm:
+            if layer.ep_size > 1 or self.use_deep_gemm:
                 from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
                     DeepGemmFusedMoeMethod,
                 )
