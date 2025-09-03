@@ -18,6 +18,166 @@
 #include "mma_tensor_op.cuh"
 #include "utils.cuh"
 
+template <typename T, int VecSize = 1, typename InT = T>
+__global__ void append_speculate_cache_T_rope_qk_norm_kernel(
+    const InT* __restrict__ qkv,  // [token_num, num_heads + 2 * gqa_group_size,
+                                  // head_size]
+    T* __restrict__ key_cache,    // [num_blocks, gqa_group_size, block_size,
+                                  // head_size // 2]
+    T* __restrict__ value_cache,  // [num_blocks, gqa_group_size, block_size,
+                                  // head_size // 2]
+    T* __restrict__ q_out,
+    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+    const int* __restrict__ cu_seqlens_q,
+    const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const float* __restrict__ cos_emb,
+    const float* __restrict__ sin_emb,
+    const float*
+        qkv_out_scales,   // [(num_heads + 2 * gqa_group_size) * head_size]
+    const T* qkv_biases,  // [num_head + 2 * gqa_group_size, dim_head]
+    const int max_seq_len,
+    const int max_blocks_per_seq,
+    const int num_heads,
+    const int output_inner_dim,
+    const int head_size,
+    const int block_size,
+    const int elem_cnt,
+    const int gqa_group_size,
+    const float* q_norm_weight,
+    const float* k_norm_weight,
+    const float rms_norm_eps) {
+  using LoadT = AlignedVector<T, VecSize>;
+  using LoadFloat = AlignedVector<float, VecSize>;
+  using LoadInT = AlignedVector<InT, VecSize>;
+  constexpr int HalfVecSize = VecSize / 2;
+  using LoadEmbT = AlignedVector<float, HalfVecSize>;
+  LoadInT src_vec;
+  LoadFloat scale_vec;
+  LoadT bias_vec;
+  LoadEmbT cos_emb_vec;
+  LoadEmbT sin_emb_vec;
+  LoadFloat tmp_vec;
+  LoadFloat q_norm_vec;
+  LoadFloat k_norm_vec;
+
+  int64_t global_warp_idx = blockDim.y * blockIdx.x + threadIdx.y;
+  int64_t all_warp_num = gridDim.x * blockDim.y;
+  int64_t all_head_dim = elem_cnt / head_size;
+
+  const int64_t hidden_size = (num_heads + 2 * gqa_group_size) * head_size;
+  const int half_head_size = head_size / 2;
+  for (int global_hi = global_warp_idx; global_hi < all_head_dim; global_hi += all_warp_num) {
+    int64_t linear_index = global_hi * head_size + threadIdx.x * VecSize;
+    const int token_id = linear_index / hidden_size;
+    const int ori_bi = batch_id_per_token[token_id];
+    if (seq_lens_decoder[ori_bi] == 0) continue;
+    const int bias = linear_index % hidden_size;
+    const int hi = bias / head_size;  // q + k + v
+    const int h_bias = bias % head_size;
+    const int start_token_idx = cu_seqlens_q[ori_bi];
+    const int write_seq_id =
+        seq_lens_decoder[ori_bi] + token_id - start_token_idx;
+    if (write_seq_id == 0) continue;
+
+    const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
+    const int block_idx = block_table_now[write_seq_id / block_size];
+    if (block_idx < 0) {
+      printf(
+          "Fatal Error!!!, block idx %d when write_seq_id is %d\n some key var "
+          "%d %d %d %d\n",
+          block_idx,
+          write_seq_id,
+          ori_bi,
+          seq_lens_decoder[ori_bi],
+          token_id,
+          cu_seqlens_q[ori_bi]);
+    }
+    const int block_offset = write_seq_id % block_size;
+
+    const int write_q_idx =
+        token_id * output_inner_dim * head_size + hi * head_size + h_bias;
+
+    const int bias_idx = hi * head_size + h_bias;
+    Load<InT, VecSize>(&qkv[linear_index], &src_vec);
+    if (qkv_biases) {
+      Load<T, VecSize>(&qkv_biases[bias_idx], &bias_vec);
+    }
+    if (qkv_out_scales) {
+      Load<float, VecSize>(&qkv_out_scales[bias_idx], &scale_vec);
+    }
+    if (hi < num_heads + gqa_group_size) {
+      // q k rope
+      const int64_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
+      Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
+      Load<float, HalfVecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+    }
+    float thread_m2 = 0.0f;
+    float warp_m2 = 0.0f;
+#pragma unroll
+    for (int i = 0; i < HalfVecSize; i++) {
+      // add_bias + rope
+      float input_left = static_cast<float>(src_vec[2 * i]);
+      float input_right = static_cast<float>(src_vec[2 * i + 1]);
+      if (qkv_out_scales) {
+        input_left *= scale_vec[2 * i];
+        input_right *= scale_vec[2 * i + 1];
+      }
+      if (qkv_biases) {
+        input_left = input_left + static_cast<float>(bias_vec[2 * i]);
+        input_right = input_right + static_cast<float>(bias_vec[2 * i + 1]);
+      }
+      if (hi < num_heads + gqa_group_size) {
+        const float cos_tmp = cos_emb_vec[i];
+        const float sin_tmp = sin_emb_vec[i];
+        float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
+        float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+        thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
+        tmp_vec[2 * i] = tmp1;
+        tmp_vec[2 * i + 1] = tmp2;
+      } else {
+        bias_vec[2 * i] = static_cast<T>(input_left);
+        bias_vec[2 * i + 1] = static_cast<T>(input_right);
+      }
+    }
+    if (hi < (num_heads + gqa_group_size)) {
+      WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
+      float row_variance =
+          max(warp_m2 / head_size, 0.0f);
+      float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
+      if (hi < num_heads) {
+        Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
+        #pragma unroll
+        for (int i = 0; i < VecSize; i++) {
+          bias_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
+        }
+      } else {
+        Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
+        #pragma unroll
+        for (int i = 0; i < VecSize; i++) {
+          bias_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
+        }
+      }
+    }
+    if (hi < num_heads) {
+      // write q
+      Store<T, VecSize>(bias_vec, &q_out[write_q_idx]);
+    } else {
+      //  write k/v
+      const int kv_head_idx = (hi - num_heads) % gqa_group_size;
+      const int tgt_idx = (block_idx * gqa_group_size * block_size * head_size +
+                           kv_head_idx * block_size * head_size +
+                           block_offset * head_size + h_bias);
+      // write
+      if (hi < num_heads + gqa_group_size) {
+        Store<T, VecSize>(bias_vec, &key_cache[tgt_idx]);
+      } else {
+        Store<T, VecSize>(bias_vec, &value_cache[tgt_idx]);
+      }
+    }
+  }
+}
+
 template <int VecSize = 4, int HeadDim = 128>
 __global__ void append_clear_cache_int8_block(
     uint8_t* __restrict__ key_cache,    // [num_blocks, gqa_group_size,
