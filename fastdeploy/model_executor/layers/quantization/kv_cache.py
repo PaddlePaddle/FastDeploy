@@ -33,6 +33,7 @@ class KvCacheQuantzationTypes(str, Enum):
 
     INT8 = "int8"
     FP8 = "float8_e4m3fn"
+    BLOCK_WISE_FP8 = "block_wise_fp8"
     INT8_ZP = "int8_zp"
     INT4_ZP = "int4_zp"
     FP8_ZP = "float8_e4m3fn_zp"
@@ -62,7 +63,11 @@ class KvCacheQuantConfig(QuantConfigBase):
 
         if self.quant_type == KvCacheQuantzationTypes.INT8 or self.quant_type == KvCacheQuantzationTypes.INT8_ZP:
             self.max_bound = 127.0
-        elif self.quant_type == KvCacheQuantzationTypes.FP8 or self.quant_type == KvCacheQuantzationTypes.FP8_ZP:
+        elif (
+            self.quant_type == KvCacheQuantzationTypes.FP8
+            or self.quant_type == KvCacheQuantzationTypes.FP8_ZP
+            or self.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8
+        ):
             self.max_bound = 448.0
         elif self.quant_type == KvCacheQuantzationTypes.INT4_ZP:
             self.max_bound = 7.0
@@ -178,12 +183,17 @@ class KVCacheMethodBase(QuantMethodBase):
             layer.cache_quant_type_str = "cache_int4_zp"
             layer.quant_max_bound = 7.0
             layer.quant_min_bound = -7.0
+        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
+            layer.cache_quant_type_str = "block_wise_fp8"
+            layer.quant_max_bound = 448.0
+            layer.quant_min_bound = -448.0
         else:
             raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
 
-        self.load_scale(layer, state_dict)
-        if self.cache_quant_config.has_zero_point:
-            self.load_zp(layer, state_dict)
+        if "block_wise" not in layer.cache_quant_type_str:
+            self.load_scale(layer, state_dict)
+            if self.cache_quant_config.has_zero_point:
+                self.load_zp(layer, state_dict)
 
     def apply(self, layer):
         """
