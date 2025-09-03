@@ -70,8 +70,14 @@ class TestDraftModelPostProcess(unittest.TestCase):
         np.testing.assert_allclose(base_model_seq_lens_this_time.numpy(), base_model_seq_lens_this_time_gpu.numpy())
 
     def test_enough_cases(self):
+        self._test_draft_model_postprocess(100, 1024)
         self._test_draft_model_postprocess(1, 11)
+        self._test_draft_model_postprocess(1, 8192)
         self._test_draft_model_postprocess(2, 2048)
+        self._test_draft_model_postprocess(3, 1023)
+        self._test_draft_model_postprocess(4, 2047)
+        self._test_draft_model_postprocess(5, 4095)
+        self._test_draft_model_postprocess(10, 9191)
 
 
 if __name__ == "__main__":
