@@ -1023,7 +1023,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_ffn", &MoeExpertFFNFunc, "moe export ffn function");
 
   /**
-   * moe/fused_moe/moe_ffn_wint2.cu
+   * moe/fused_moe/moe_expert_ffn_wint2.cu
    * moe_expert_ffn_wint2
    */
   m.def("moe_expert_ffn_wint2", &MoeExpertFFNWint2Func, "moe export ffn wint2 function");
