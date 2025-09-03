@@ -180,7 +180,7 @@ __global__ void multi_query_append_attention_c8_kernel(
   } else {
     o_base_ptr_int8 = out + o_offset;
   }
-  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -609,7 +609,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           tid % 8 * num_elems_per_128b<T>();
     }
   }
-  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id : nullptr;
+  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
