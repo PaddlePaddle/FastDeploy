@@ -41,15 +41,20 @@ class MoEMethodBase(QuantMethodBase):
         ]
         self.pack_num = 1
 
+    def import_backend_ep_runner(self) -> None:
+        from .ep import EPDecoderRunner, EPPrefillRunner
+
+        self.EPPrefillRunner = EPPrefillRunner
+        self.EPDecoderRunner = EPDecoderRunner
+
     def init_ep(self, layer: nn.Layer) -> None:
         """
         Init EP related module
         """
+        self.import_backend_ep_runner()
         if layer.ep_size > 1:
             if layer.fd_config.parallel_config.splitwise_role == "mixed":
-                from .ep import EPDecoderRunner, EPPrefillRunner
-
-                self.ep_prefill_runner = EPPrefillRunner(
+                self.ep_prefill_runner = self.EPPrefillRunner(
                     layer.top_k,
                     layer.hidden_size,
                     layer.num_experts,
@@ -60,7 +65,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.fd_config.model_config.redundant_experts_num,
                     ep_group=layer.fd_config.parallel_config.ep_group,
                 )
-                self.ep_decoder_runner = EPDecoderRunner(
+                self.ep_decoder_runner = self.EPDecoderRunner(
                     layer.top_k,
                     layer.hidden_size,
                     layer.num_experts,
@@ -73,9 +78,7 @@ class MoEMethodBase(QuantMethodBase):
                 )
             else:
                 if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                    from .ep import EPPrefillRunner
-
-                    self.ep_prefill_runner = EPPrefillRunner(
+                    self.ep_prefill_runner = self.EPPrefillRunner(
                         layer.top_k,
                         layer.hidden_size,
                         layer.num_experts,
@@ -87,9 +90,7 @@ class MoEMethodBase(QuantMethodBase):
                         ep_group=layer.fd_config.parallel_config.ep_group,
                     )
                 else:
-                    from .ep import EPDecoderRunner
-
-                    self.ep_decoder_runner = EPDecoderRunner(
+                    self.ep_decoder_runner = self.EPDecoderRunner(
                         layer.top_k,
                         layer.hidden_size,
                         layer.num_experts,

@@ -19,7 +19,7 @@ from abc import abstractmethod
 from typing import Optional
 
 import paddle
-from paddle.nn.quant import weight_only_linear, weight_quantize
+from paddle.nn.quant import weight_quantize
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
@@ -29,6 +29,13 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 from fastdeploy.platforms import current_platform
+
+if current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (
+        weight_only_linear_xpu as weight_only_linear,
+    )
+else:
+    from paddle.nn.quant import weight_only_linear
 
 from ..moe import FusedMoE
 from ..utils import get_tensor
@@ -70,16 +77,24 @@ class WeightOnlyConfig(QuantConfigBase):
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.layers.backends import (
-                XPUWeightOnlyLinearMethod,
-            )
-            from fastdeploy.model_executor.layers.moe.fused_moe_xpu_backend import (
-                XPUWeightOnlyMoEMethod,
-            )
-
             if isinstance(layer, FusedMoE):
-                return XPUWeightOnlyMoEMethod(self)
+                if layer.ep_size > 1:
+                    from fastdeploy.model_executor.layers.backends import (
+                        XPUWeightOnlyMoeEpMethod,
+                    )
+
+                    return XPUWeightOnlyMoeEpMethod(self)
+                else:
+                    from fastdeploy.model_executor.layers.backends import (
+                        XPUWeightOnlyMoEMethod,
+                    )
+
+                    return XPUWeightOnlyMoEMethod(self)
             else:
+                from fastdeploy.model_executor.layers.backends import (
+                    XPUWeightOnlyLinearMethod,
+                )
+
                 return XPUWeightOnlyLinearMethod(self)
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.layers.backends import (

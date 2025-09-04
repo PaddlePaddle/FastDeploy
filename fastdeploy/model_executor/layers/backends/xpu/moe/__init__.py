@@ -11,21 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """
-xpu backend methods
+xpu fused moe methods
 """
-
-from .moe.fused_moe import (
-    XPUMoEMethod,
-    XPUWeightOnlyMoeEpMethod,
-    XPUWeightOnlyMoEMethod,
-)
-from .quantization.weight_only import XPUWeightOnlyLinearMethod
-
-__all__ = [
-    "XPUWeightOnlyLinearMethod",
-    "XPUMoEMethod",
-    "XPUWeightOnlyMoEMethod",
-    "XPUWeightOnlyMoeEpMethod",
-]

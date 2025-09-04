@@ -43,7 +43,7 @@ def get_moe_method():
 
         return CutlassMoEMethod(None)
     elif current_platform.is_xpu():
-        from .fused_moe_xpu_backend import XPUMoEMethod
+        from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
         return XPUMoEMethod(None)
     elif current_platform.is_gcu():
