@@ -146,7 +146,7 @@ class OpenAIServingCompletion:
                     request_id_idx = f"{request_id}-{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)  # tokenize
+                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))

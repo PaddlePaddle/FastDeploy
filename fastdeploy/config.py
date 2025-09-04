@@ -891,7 +891,7 @@ class CacheConfig:
         else:
             self.kv_cache_ratio = 0.75
         self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
-        self.prealloc_dec_block_slot_num_threshold = 5
+        self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
         self.enable_chunked_prefill = False
@@ -1292,7 +1292,7 @@ class FDConfig:
         ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
