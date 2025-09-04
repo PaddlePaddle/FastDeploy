@@ -15,7 +15,7 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-template <int THREADBLOCK_SIZE, bool TRCUNCATE_FIRST_TOKEN>
+template <int THREADBLOCK_SIZE, bool TRUNCATE_FIRST_TOKEN>
 __global__ void process_splitwise_prefill(
     int64_t* draft_tokens,
     int64_t* input_ids,
@@ -58,7 +58,7 @@ __global__ void process_splitwise_prefill(
       stop_flags[tid] = false;
       int64_t base_model_first_token = accept_tokens_now[0];
       int position = seq_len_encoder;
-      if (TRCUNCATE_FIRST_TOKEN) {
+      if (TRUNCATE_FIRST_TOKEN) {
         input_ids_now[position - 1] = base_model_first_token;
         seq_lens_this_time[tid] = seq_len_encoder;
       } else {
@@ -84,7 +84,7 @@ __global__ void process_splitwise_prefill(
 
 
 
-template <int THREADBLOCK_SIZE, bool TRCUNCATE_FIRST_TOKEN>
+template <int THREADBLOCK_SIZE, bool TRUNCATE_FIRST_TOKEN>
 __global__ void draft_model_preprocess_kernel(
     int64_t* draft_tokens,
     int64_t* input_ids,
@@ -149,7 +149,7 @@ __global__ void draft_model_preprocess_kernel(
         int64_t base_model_first_token = accept_tokens_now[0];
         pre_ids_now[0] = base_model_first_token;
         int position = seq_len_encoder;
-        if (TRCUNCATE_FIRST_TOKEN) {
+        if (TRUNCATE_FIRST_TOKEN) {
           input_ids_now[position - 1] = base_model_first_token;
           seq_lens_this_time[tid] = seq_len_encoder;
         } else {
@@ -189,7 +189,7 @@ __global__ void draft_model_preprocess_kernel(
   }
 }
 
-template <bool TRCUNCATE_FIRST_TOKEN>
+template <bool TRUNCATE_FIRST_TOKEN>
 void DispatchRunner(
     const cudaStream_t& stream,
     int64_t* draft_tokens,
@@ -221,7 +221,7 @@ void DispatchRunner(
     const bool splitwise_prefill) {
   constexpr int BlockSize = 512;
   if (splitwise_prefill) {
-    process_splitwise_prefill<BlockSize, TRCUNCATE_FIRST_TOKEN>
+    process_splitwise_prefill<BlockSize, TRUNCATE_FIRST_TOKEN>
           <<<1, BlockSize, 0, stream>>>(
               draft_tokens,
               input_ids,
@@ -250,7 +250,7 @@ void DispatchRunner(
               base_model_draft_tokens_len,
               pre_ids_len);
   } else {
-      draft_model_preprocess_kernel<BlockSize, TRCUNCATE_FIRST_TOKEN>
+      draft_model_preprocess_kernel<BlockSize, TRUNCATE_FIRST_TOKEN>
           <<<1, BlockSize, 0, stream>>>(
               draft_tokens,
               input_ids,
