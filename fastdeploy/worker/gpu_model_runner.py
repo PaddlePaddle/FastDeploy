@@ -1691,7 +1691,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Clear CudaGraph
         if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
+            self.model.clear_graph_opt_backend()
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 

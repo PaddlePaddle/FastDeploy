@@ -889,7 +889,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
 
-        # 2. Padding inputs for cuda grph
+        # 2. Padding inputs for cuda graph
 
         # 3. Execute model
         model_output = self.model(self.share_inputs["ids_remove_padding"], self.forward_meta)

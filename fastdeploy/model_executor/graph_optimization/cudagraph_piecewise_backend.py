@@ -25,7 +25,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import capture_custom_allreduce
 from fastdeploy.utils import get_logger
 
-logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
+logger = get_logger("cudagraph_piecewise_backend", "cudagraph_piecewise_backend.log")
 
 
 @dataclass
@@ -170,17 +170,17 @@ class CudaGraphPiecewiseBackend:
             input_addresses = [x.data_ptr() for (_, x) in kwargs.items() if isinstance(x, paddle.Tensor)]
             entry.input_addresses = input_addresses
 
-            new_grpah = graphs.CUDAGraph()
+            new_graph = graphs.CUDAGraph()
             paddle.device.synchronize()
 
             # Capture
             with capture_custom_allreduce():
-                new_grpah.capture_begin()
+                new_graph.capture_begin()
                 output = entry.runnable(**kwargs)
-                new_grpah.capture_end()
+                new_graph.capture_end()
 
             # Store output buffer
-            entry.cuda_graph = new_grpah
+            entry.cuda_graph = new_graph
             entry.output_buffer = paddle.zeros_like(output)
             output._share_buffer_to(entry.output_buffer)
             output._clear
@@ -188,7 +188,7 @@ class CudaGraphPiecewiseBackend:
             paddle.device.synchronize()
 
             # For CUDAGraph debug
-            # self._save_cudagrpah_dot_files(entry)
+            # self._save_cudagraph_dot_files(entry)
             logger.debug(f"[CUDA GRAPH] CUDAGraph captured for real shape {padding_real_shape}")
 
         # Replay
@@ -222,7 +222,7 @@ class CudaGraphPiecewiseBackend:
         # Create new entrys
         self._create_entry_dict()
 
-    def _save_cudagrpah_dot_files(self, entry):
+    def _save_cudagraph_dot_files(self, entry):
         """Print CUDAGrpah to dot files"""
         if entry.cuda_graph:
             entry.cuda_graph.print_to_dot_files(

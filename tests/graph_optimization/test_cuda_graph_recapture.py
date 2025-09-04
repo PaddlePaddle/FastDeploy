@@ -74,10 +74,10 @@ class TestModel1(paddle.nn.Layer):
 
         return sublayer2_output
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """ """
-        self.sublayer1.clear_grpah_opt_backend(fd_config=self.fd_config)
-        self.sublayer2.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.sublayer1.clear_graph_opt_backend(fd_config=self.fd_config)
+        self.sublayer2.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
 class TestCUDAGrpahRecapture(unittest.TestCase):
@@ -124,7 +124,7 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
 
         # Destroy
         print_gpu_memory_use(0, "before destory")
-        self.test_model1.clear_grpah_opt_backend()
+        self.test_model1.clear_graph_opt_backend()
         print_gpu_memory_use(0, "after destory")
 
     def recapture_and_replay(self, input_tensor1, forward_meta1):
@@ -140,7 +140,7 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
 
         # Destroy
         print_gpu_memory_use(0, "before destory")
-        self.test_model1.clear_grpah_opt_backend()
+        self.test_model1.clear_graph_opt_backend()
         print_gpu_memory_use(0, "after destory")
 
 
