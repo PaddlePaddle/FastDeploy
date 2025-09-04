@@ -81,7 +81,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # set traec exporter_otlp_headers.
     "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
     # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
-    "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")),
+    "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
@@ -103,6 +103,11 @@ def __getattr__(name: str):
     if name in environment_variables:
         return environment_variables[name]()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __setattr__(name: str, value: Any):
+    assert name in environment_variables
+    environment_variables[name] = lambda: value
 
 
 def __dir__():

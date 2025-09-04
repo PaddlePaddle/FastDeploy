@@ -63,7 +63,9 @@ class DynamicWeightManager:
         paddle.device.cuda.empty_cache()
 
         if not self.first_load:
-            paddle.distributed.restart_process_group()
+            paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+            if self.parallel_config.enable_expert_parallel:
+                paddle.distributed.restart_process_group(self.parallel_config.ep_group)
 
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
@@ -110,8 +112,12 @@ class DynamicWeightManager:
             param._clear_data()
 
         self._verify_parameters("clearance")
-        if self.nranks > 1:
-            paddle.distributed.barrier()
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+        paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
         paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, -2)
 
@@ -141,8 +147,8 @@ class DynamicWeightManager:
     def _finalize_update(self, pid: int):
         """Finalize update process with verification."""
         self._verify_parameters("update")
-        if self.nranks > 1:
-            paddle.distributed.barrier()
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
         if not self.first_load:
             self._update_shared_status(pid, 0)
         self.first_load = False

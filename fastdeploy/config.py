@@ -350,8 +350,8 @@ class ParallelConfig:
             )
         )
         # same ep group id
-        # (TODO:gaoziyuan move this gid config to ep.py)
         dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+        self.ep_group = dist.new_group(range(self.expert_parallel_size))
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -1284,13 +1284,9 @@ class FDConfig:
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
-        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
-            self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
-        ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
