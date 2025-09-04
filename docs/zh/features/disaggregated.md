@@ -75,6 +75,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
 #### 前置依赖 Redis
 * 使用`conda`安装
 
+> **⚠️ 注意**  
+> **Redis 版本要求：6.2.0 及以上**  
+> 低于此版本可能不支持所需的命令。
+
 ```bash
 # 安装
 conda install redis
@@ -127,6 +131,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-name "splitwise" \
        --scheduler-host "127.0.0.1" \
        --scheduler-port 6379 \
+       --scheduler-topic "test" \
        --scheduler-ttl 9000
 ```
 
@@ -150,6 +155,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-host "127.0.0.1" \
        --scheduler-port 6379 \
        --scheduler-ttl 9000
+       --scheduler-topic "test" \
        --splitwise-role "decode"
 ```
 
@@ -168,5 +174,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 * --scheduler-host: 连接的redis地址
 * --scheduler-port: 连接的redis端口
 * --scheduler-ttl: 指定redis的ttl时间，单位为秒
+* --scheduler-topic: 指定redis的topic
 * --pd-comm-port: 指定pd通信的端口
 * --rdma-comm-ports: 指定RDMA通信的端口，多个端口用逗号隔开，数量与卡数一致
