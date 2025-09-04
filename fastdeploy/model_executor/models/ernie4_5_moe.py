@@ -539,6 +539,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
+            ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
+            ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
+            ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
         ]
 
         expert_params_mapping = []
@@ -563,6 +567,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         all_param_mapping = general_params_mapping + expert_params_mapping
 
         params_dict = dict(self.named_parameters())
+
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
@@ -591,7 +596,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 weight_loader(param, loaded_weight, shard_id)
 
-            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
