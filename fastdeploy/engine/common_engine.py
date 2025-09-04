@@ -47,7 +47,7 @@ from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
 
-class EngineSevice:
+class EngineService:
     """
     Base class containing common engine functionality
     """
