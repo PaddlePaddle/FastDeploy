@@ -270,10 +270,11 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
 
-                if len(request.output_token_ids) == 0:
-                    input_ids = request.prompt_token_ids
+                if isinstance(request.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = request.prompt_token_ids.tolist()
                 else:
-                    input_ids = request.prompt_token_ids + request.output_token_ids
+                    prompt_token_ids = request.prompt_token_ids
+                input_ids = prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
@@ -1337,7 +1338,11 @@ class GPUModelRunner(ModelRunnerBase):
             A list of indices corresponding to the requests that need to be skipped.
         """
         skip_idx_list = []
-        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
+        if (
+            not self.cache_config.enable_chunked_prefill
+            or self.guided_backend is None
+            or envs.ENABLE_V1_KVCACHE_SCHEDULER
+        ):
             return skip_idx_list
 
         for task in model_forward_batch:

@@ -119,7 +119,7 @@ class OpenAIServingChat:
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
-                prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
@@ -323,7 +323,9 @@ class OpenAIServingChat:
                             continue
                         delta_message.content = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        delta_message.tool_calls = delta_message_output.tool_calls
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called = True
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
