@@ -25,6 +25,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.inter_communicator import ModelWeightsStatus
 
 
 class DynamicWeightManager:
@@ -117,7 +118,7 @@ class DynamicWeightManager:
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
             paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
-        self._update_shared_status(pid, -2)
+        self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""
@@ -148,7 +149,7 @@ class DynamicWeightManager:
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
         if not self.first_load:
-            self._update_shared_status(pid, 0)
+            self._update_shared_status(pid, ModelWeightsStatus.NORMAL)
         self.first_load = False
 
     def _get_gpu_id(self) -> int:
@@ -215,24 +216,27 @@ class DynamicWeightManager:
         """
         check model weights status
         """
+        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
         is_stop = 0
-        while model_weights_status.value[0] != 0:
-            if model_weights_status.value[0] == 1:
+        while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+            if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
                 model_runner.update_parameters(pid)
-            elif model_weights_status.value[0] == -1:
+            elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
                 model_runner.clear_parameters(pid)
-
-            while True:
-                if model_weights_status.value[0] == 0:
-                    logger.info("finished loading new checkpoint")
-                    break
-                elif is_stop == 1 or (model_weights_status.value[0] == -2 and is_stop == 0):
-                    if is_stop == 0:
-                        logger.info("finished clearing checkpoint")
-                        is_stop = 1
-                    time.sleep(0.001)
-                    break
-                else:
-                    time.sleep(0.001)
+            elif model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                while True:
+                    if model_weights_status.value[0] == ModelWeightsStatus.NORMAL:
+                        logger.info("finished loading new checkpoint")
+                        break
+                    elif is_stop == 1 or (
+                        model_weights_status.value[0] == ModelWeightsStatus.CLEARED and is_stop == 0
+                    ):
+                        if is_stop == 0:
+                            logger.info("finished clearing checkpoint")
+                            is_stop = 1
+                        time.sleep(0.001)
+                        break
+                    else:
+                        time.sleep(0.001)
