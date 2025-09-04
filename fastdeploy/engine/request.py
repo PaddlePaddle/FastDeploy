@@ -286,7 +286,8 @@ class CompletionOutput:
 
     index: int
     send_idx: int
-    token_ids: list[int]
+    token_ids: list[Any]
+    decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
