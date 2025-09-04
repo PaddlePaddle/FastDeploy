@@ -107,13 +107,17 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 **注意**：
 * `KVCACHE_RDMA_NICS` 指定当前机器的RDMA网卡，多个网卡用逗号隔开。
+* 仓库中提供了自动检测RDMA网卡的脚本 `bash scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
 
 **prefill 实例**
 
 ```bash
 export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7,mlx5_8,mlx5_9"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
+
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4_5-300B-A47B-FP8-Paddle \
        --port 8180 --metrics-port 8181 \
@@ -138,7 +142,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7,mlx5_8,mlx5_9"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4_5-300B-A47B-FP8-Paddle \
        --port 8184 --metrics-port 8185 \
