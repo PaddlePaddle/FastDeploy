@@ -59,10 +59,12 @@ FLASK_PORT = get_available_port("FLASK_PORT", base_port + 1)
 FD_API_PORT = get_available_port("FD_API_PORT", FLASK_PORT + 1)
 FD_ENGINE_QUEUE_PORT = get_available_port("FD_ENGINE_QUEUE_PORT", FD_API_PORT + 1)
 FD_METRICS_PORT = get_available_port("FD_METRICS_PORT", FD_ENGINE_QUEUE_PORT + 1)
+FD_CACHE_QUEUE_PORT = get_available_port("FD_CACHE_QUEUE_PORT", FD_METRICS_PORT + 1)
 DEFAULT_PARAMS = {
     "--port": FD_API_PORT,
     "--engine-worker-queue-port": FD_ENGINE_QUEUE_PORT,
     "--metrics-port": FD_METRICS_PORT,
+    "--cache-queue-port": FD_CACHE_QUEUE_PORT,
     "--enable-logprob": True,
 }
 
