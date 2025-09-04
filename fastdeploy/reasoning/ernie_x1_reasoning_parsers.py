@@ -62,60 +62,59 @@ class ErnieX1ReasoningParser(ReasoningParser):
         delta_token_ids: Sequence[int],
     ) -> Union[DeltaMessage, None]:
         """
-        根据用户需求实现的流式解析方法:
-        1. 初始内容都视为思考内容，返回delta_text,""
-        2. 当遇到\n时检查后续是否是</think>
-        3. 如果直接遇到</think>也结束思考
-        4. 思考结束后检查是<response>还是<tool_call>
-        5. 对于<response>内容，处理各种边界条件
+        Streaming parsing method implemented based on user requirements:
+        1. Initial content is treated as reasoning content
+        2. When encountering newline, check for </think> tag
+        3. After reasoning phase, determine if it's <response> or <tool_call>
+        4. For <response> content, process line breaks and termination tags
         """
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        # 思考阶段处理
+        # Thinking content processing
         if not previous_text.endswith(self.think_end_token) and self.think_end_token not in previous_text:
-            # 如果遇到\n，暂时不返回，等待下一个delta_text
+            # If thinking not ended, check for think end token
             if delta_text == "\n":
                 return None
-            # 如果前一个是\n且当前是</think>，结束思考
+            # If previous is newline and current is </think>, end reasoning
             elif previous_text.endswith("\n") and delta_text.startswith(self.think_end_token):
                 return None
-            # 如果直接遇到</think>也结束思考
+            # If directly encountering </think>, end reasoning
             elif delta_text.startswith(self.think_end_token):
                 return None
-            # 否则继续返回思考内容
+            # Otherwise continue returning reasoning content
             return DeltaMessage(reasoning_content=delta_text)
 
-        # 思考结束后检查是tool_call还是response
+        # After reasoning phase, check for tool_call or response
         remaining_text = previous_text + delta_text
         after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token) :]
-        after_think = after_think.lstrip("\n")  # 跳过think后的换行
+        after_think = after_think.lstrip("\n")  # Skip newlines after think tag
 
-        # 处理tool_call情况
+        # Handle tool_call case
         if after_think.startswith(self.tool_call_start_token):
             return None
 
-        # 处理response情况
+        # Handle response case
         if after_think.startswith(self.response_start_token):
-            # 遇到<response>标签时不立即返回
+            # Don't return immediately when encountering <response> tag
             if delta_text == self.response_start_token:
                 return None
-            # 遇到<response>后的换行符也不立即返回
+            # Also don't return immediately for newline after <response>
             elif delta_text == "\n" and previous_text.endswith(self.response_start_token):
                 return None
-            # 处理回复内容中的换行符
+            # Process newlines in response content
             if delta_text == "\n":
                 return None
-            # 如果前一个是\n且当前是</response>，结束回复
+            # If previous is newline and current is </response>, end response
             elif previous_text.endswith("\n") and delta_text == self.response_end_token:
                 return None
-            # 如果直接遇到</response>也结束回复
+            # If directly encountering </response>, end response
             elif delta_text == self.response_end_token:
                 return None
-            # 其他情况返回实际内容
+            # In other cases return actual content
             else:
                 return DeltaMessage(content=delta_text)
 
-        # 默认情况不返回内容
+        # Default case returns nothing
         return None
 
     def extract_reasoning_content(self, model_output: str, request: ChatCompletionRequest) -> Tuple[str, str]:
