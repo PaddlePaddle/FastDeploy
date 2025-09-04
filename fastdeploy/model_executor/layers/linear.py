@@ -317,7 +317,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
     ):
         """
         Initializes a mergedreplicated linear layer.
-
         Args:
             fd_config (FDConfig): Inference-related parameters.
             prefix (str): Unique name of the layer, used to name internal attributes.
@@ -343,13 +342,12 @@ class MergedReplicatedLinear(ReplicatedLinear):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         model_format = getattr(param, "model_format", "")
+        loaded_weight = get_tensor(loaded_weight)
+
         if model_format == "torch":
             loaded_weight = loaded_weight.transpose([1, 0])
 
-        # split gate up
         assert loaded_shard_id in ["q_a", "kv_a"]
-
-        loaded_weight = get_tensor(loaded_weight)
         if not param._is_initialized():
             param.initialize()
 
