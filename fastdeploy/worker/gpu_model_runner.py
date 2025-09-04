@@ -45,6 +45,7 @@ from fastdeploy.model_executor.ops.gpu import (
     recover_decode_task,
     set_value_by_flags_and_idx,
     share_external_data,
+    set_data_ipc,
 )
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
@@ -63,7 +64,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
-
+from fastdeploy.inter_communicator import IPCSignal
 
 class GPUModelRunner(ModelRunnerBase):
     def __init__(
@@ -870,6 +871,10 @@ class GPUModelRunner(ModelRunnerBase):
 
             self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
 
+        # static_save = self.model.state_dict()
+        # path = f"{self.model_config.model}/model_state.tp0{self.local_rank}.pdparams"
+        # paddle.save(static_save, path)
+
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
@@ -954,14 +959,19 @@ class GPUModelRunner(ModelRunnerBase):
         if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
+                key_cache_name = f"key_caches_{i}_rank{local_rank}_device{self.device_id}"
+                val_cache_name = f"value_caches_{i}_rank{local_rank}_device{self.device_id}"
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
                 value_cache = share_external_data(value_cache, val_cache_name, kv_cache_shape)
                 cache_kvs_list.append(value_cache)
+                # key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                # value_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                # set_data_ipc(key_cache, key_cache_name)
+                # set_data_ipc(value_cache, val_cache_name)
+                # cache_kvs_list.extend([key_cache, value_cache])
 
             self.share_inputs["caches"] = cache_kvs_list
 

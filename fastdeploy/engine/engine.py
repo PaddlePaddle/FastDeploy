@@ -57,7 +57,7 @@ from fastdeploy.output.token_processor import TokenProcessor, WarmUpTokenProcess
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
-
+from fastdeploy.inter_communicator import ModelWeightsStatus
 
 class LLMEngine:
     """
@@ -988,6 +988,25 @@ class LLMEngine:
             create=True,
         )
 
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=self.ipc_signal_suffix,
+            create=True,
+        )
+
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
+            dtype=np.int32,
+            suffix=self.ipc_signal_suffix,
+            create=True,
+        )
+        
+
     def _exit_sub_services(self):
         """
         exit sub services
@@ -1232,7 +1251,14 @@ class LLMEngine:
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
+        max_running_requests = num_gpu_blocks * self.cfg.cache_config.block_size // self.cfg.max_model_len
+        console_logger.info(
+            f"After profiling, there are {num_gpu_blocks} available gpu blocks in cache, "
+            f"hence supporting {max_running_requests} running requests "
+            f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
+        )
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            console_logger.info(f"Waiting for cache manager processes to be ready..")
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,

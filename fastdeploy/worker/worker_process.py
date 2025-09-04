@@ -41,6 +41,7 @@ from fastdeploy.config import (
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import ModelWeightsStatus, ExistTaskStatus
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
@@ -298,10 +299,10 @@ class PaddleDisWorkerProc:
         num_running_requests = 0
         while True:
             if self.local_rank == 0:
-                if self.model_weights_status.value[0] != 0:
-                    self.exist_task_signal.value[0] = 2
+                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+                    self.exist_task_signal.value[0] = ExistTaskStatus.REFUSE
                 else:
-                    self.exist_task_signal.value[0] = 0
+                    self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize before updating weights
@@ -320,7 +321,7 @@ class PaddleDisWorkerProc:
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
-                            self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 1
+                            self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = ExistTaskStatus.EXIST
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
@@ -328,7 +329,7 @@ class PaddleDisWorkerProc:
                 paddle.distributed.barrier()
 
             if self.fd_config.load_config.dynamic_load_weight:
-                if self.exist_task_signal.value[0] == 2:
+                if self.exist_task_signal.value[0] == ExistTaskStatus.REFUSE:
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
@@ -340,7 +341,7 @@ class PaddleDisWorkerProc:
                     )
 
             if (
-                self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] == 1
+                self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] == ExistTaskStatus.EXIST
                 or self.task_queue.read_finish_flag.get() == 1
             ):
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -349,7 +350,7 @@ class PaddleDisWorkerProc:
                 tasks, read_finish = self.task_queue.get_tasks()
                 if read_finish:
                     # Ensure that every worker get the task
-                    self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = 0
+                    self.exist_task_signal.value[self.fd_config.parallel_config.expert_parallel_rank] = ExistTaskStatus.EMPTY
                     self.task_queue.read_finish_flag.set(0)
 
                 req_dicts = []

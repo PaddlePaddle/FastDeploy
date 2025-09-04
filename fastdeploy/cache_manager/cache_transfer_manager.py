@@ -19,16 +19,26 @@ import concurrent.futures
 import json
 import queue
 import time
+import threading
+import gc
+import sys
 
 import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal
+from fastdeploy.inter_communicator import (
+    EngineCacheQueue, 
+    IPCSignal, 
+    KVCacheStatus,
+    ModelWeightsStatus 
+)
 from fastdeploy.model_executor.ops.gpu import (
+    cuda_host_free,
     cuda_host_alloc,
     set_data_ipc,
+    share_external_data,
     swap_cache_all_layers,
 )
 from fastdeploy.utils import get_logger
@@ -231,6 +241,8 @@ class CacheTransferManager:
             create=False,
         )
 
+        threading.Thread(target=self.clear_caches, args=(args.engine_pid,)).start()
+
     def _do_swap_to_cpu_task(
         self,
         swap_node_ids,
@@ -427,6 +439,51 @@ class CacheTransferManager:
             event_type,
             transfer_task_id,
         )
+
+    def clear_caches(self, pid_suffix):
+        logger.info("Start a thread to clear kv cache when model weights are cleared.")
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
+            dtype=np.int32,
+            suffix=pid_suffix,
+            create=False,
+        )
+        workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
+        model_weights_status_signal = IPCSignal(
+            name="model_weights_status",
+            array=workers_model_weights,
+            dtype=np.int32,
+            suffix=pid_suffix,
+            create=False,
+        )
+        while True:
+            if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
+                while not model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
+                    time.sleep(0.001)
+                # paddle.device.set_device(f"gpu:{self.device}")
+                for tensor in self.gpu_cache_kvs.values():
+                    del tensor
+                self.gpu_cache_kvs.clear()
+                self.gpu_cache_k_tensors.clear()
+                self.gpu_cache_v_tensors.clear()
+                if self.cache_messager:
+                    self.cache_messager.gpu_cache_kvs.clear()
+                paddle.device.cuda.empty_cache()
+
+                logger.info("GPU kv cache is cleared.")
+
+                for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
+                    cuda_host_free(ptrs)
+                self.cpu_cache_kvs.clear()
+                self.k_dst_ptrs.clear()
+                self.v_dst_ptrs.clear()
+                logger.info("CPU kv cache is cleared.")
+                gc.collect()
+
+                kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
+            time.sleep(0.001)
 
 
 def main():

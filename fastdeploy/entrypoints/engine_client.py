@@ -22,10 +22,10 @@ import numpy as np
 from fastdeploy import envs
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.inter_communicator import ModelWeightsStatus, PrefixTreeStatus, KVCacheStatus
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
-
 
 class EngineClient:
     """
@@ -75,6 +75,22 @@ class EngineClient:
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
             array=model_weights_status,
+            dtype=np.int32,
+            suffix=pid,
+            create=False,
+        )
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=pid,
+            create=False,
+        )
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
             dtype=np.int32,
             suffix=pid,
             create=False,
@@ -291,18 +307,18 @@ class EngineClient:
         1 : worker receive the signal and start to update model weight
         2 : worker update finish and notify client
         """
-        if self.model_weights_status_signal.value[0] == 0:
+        if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
             return True, ""
-        if self.model_weights_status_signal.value[0] == 1:
+        if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
             return False, "updating model weight already"
 
-        self.model_weights_status_signal.value[0] = 1
+        self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
         api_server_logger.info(f"start update model weight {self.model_weights_status_signal.value}")
-        while self.model_weights_status_signal.value[0] != 0 and timeout != 0:
+        while self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL and timeout != 0:
             time.sleep(1)
             timeout -= 1
             continue
-        if self.model_weights_status_signal.value[0] != 0:
+        if self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL:
             return False, "Update model weight timeout"
         time.sleep(1)
         return True, ""
@@ -313,19 +329,21 @@ class EngineClient:
         -1 : worker receive the signal and start to clear model weight
         -2 : worker clear finish and notify client
         """
-        if self.model_weights_status_signal.value[0] == -2:
+        if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
             return True, ""
-        if self.model_weights_status_signal.value[0] == -1:
+        if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
             return False, "clearing model weight already"
 
-        self.model_weights_status_signal.value[0] = -1
+        self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
+        self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
+        self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
 
         api_server_logger.info(f"start clear model weight {self.model_weights_status_signal.value}")
-        while self.model_weights_status_signal.value[0] != -2 and timeout != 0:
+        while self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED and timeout != 0:
             time.sleep(1)
             timeout -= 1
             continue
-        if self.model_weights_status_signal.value[0] != -2:
+        if self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
             return False, "clear model weight timeout"
         time.sleep(1)
         return True, ""

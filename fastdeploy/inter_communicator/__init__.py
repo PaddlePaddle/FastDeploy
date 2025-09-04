@@ -19,5 +19,17 @@ from .engine_worker_queue import EngineWorkerQueue
 from .ipc_signal import IPCSignal
 from .zmq_client import ZmqIpcClient
 from .zmq_server import ZmqIpcServer, ZmqTcpServer
+from .ipc_signal_const import ModelWeightsStatus, ExistTaskStatus, PrefixTreeStatus, KVCacheStatus
 
-__all__ = ["ZmqIpcClient", "IPCSignal", "EngineWorkerQueue", "EngineCacheQueue", "ZmqTcpServer", "ZmqIpcServer"]
+__all__ = [
+    "ZmqIpcClient", 
+    "IPCSignal", 
+    "EngineWorkerQueue", 
+    "EngineCacheQueue", 
+    "ZmqTcpServer", 
+    "ZmqIpcServer", 
+    "ModelWeightsStatus", 
+    "ExistTaskStatus"
+    "PrefixTreeStatus", 
+    "KVCacheStatus",
+]
