@@ -137,6 +137,8 @@ class ResourceManagerV1(ResourceManager):
                 self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+                main_process_metrics.num_requests_waiting.inc(1)
+                main_process_metrics.num_requests_running.dec(1)
                 if preempted_req == request:
                     # No more request to preempt.
                     can_schedule = False
@@ -155,6 +157,7 @@ class ResourceManagerV1(ResourceManager):
         if not self.config.model_config.enable_mm:
             return num_new_tokens
 
+        request.with_image = False
         inputs = request.multimodal_inputs
         if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
             pre_end_idx = request.num_computed_tokens
@@ -198,8 +201,6 @@ class ResourceManagerV1(ResourceManager):
             and inputs.get("image_patch_id", None) is not None
             and inputs.get("grid_thw", None) is not None
         ):
-            request.with_image = False
-
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
@@ -383,6 +384,8 @@ class ResourceManagerV1(ResourceManager):
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             request.status = RequestStatus.RUNNING
+                            main_process_metrics.num_requests_waiting.dec(1)
+                            main_process_metrics.num_requests_running.inc(1)
                             allocated_position = self.get_available_position()
                             request.idx = allocated_position
                             self.tasks_list[allocated_position] = request
@@ -413,6 +416,8 @@ class ResourceManagerV1(ResourceManager):
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             request.status = RequestStatus.RUNNING
+                            main_process_metrics.num_requests_waiting.dec(1)
+                            main_process_metrics.num_requests_running.inc(1)
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
