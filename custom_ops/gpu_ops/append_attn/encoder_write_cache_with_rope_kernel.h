@@ -80,8 +80,8 @@ void EncoderWriteCacheWithRopeKernel(
         stream,
         use_neox_style,
         rope_3d,
-        q_norm_weight ? q_norm_weight.get().data<T>() : nullptr,
-        k_norm_weight ? k_norm_weight.get().data<T>() : nullptr,
+        q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+        k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
         rms_norm_eps);
     } else {
       PD_THROW(

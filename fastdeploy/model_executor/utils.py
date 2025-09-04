@@ -14,7 +14,10 @@
 # limitations under the License.
 """
 
+from contextlib import contextmanager
 from typing import Any, Optional, Union
+
+import paddle
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -155,10 +158,17 @@ def default_weight_loader(fd_config: FDConfig) -> None:
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
         output_dim = getattr(param, "output_dim", None)
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
         if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
             dim = -1 if output_dim else 0
-            size = loaded_weight.get_shape()[dim]
+            if isinstance(loaded_weight, paddle.Tensor):
+                size = loaded_weight.shape[dim]
+            else:
+                size = loaded_weight.get_shape()[dim]
             block_size = size // fd_config.parallel_config.tensor_parallel_size
             shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
@@ -177,3 +187,15 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         param.copy_(loaded_weight, False)
 
     return fn
+
+
+@contextmanager
+def temporary_dtype(dtype: str):
+    """Temporarily set Paddle default dtype"""
+    orig_dtype = paddle.get_default_dtype()
+    try:
+        if dtype is not None and dtype == "float32":
+            paddle.set_default_dtype(dtype)
+        yield
+    finally:
+        paddle.set_default_dtype(orig_dtype)

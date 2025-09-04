@@ -59,6 +59,8 @@ class RolloutModelConfig:
         graph_optimization_config: str = None,
         early_stop_config: str = None,
         local_rank: int = 0,
+        moba_attention_config: str = None,
+        data_parallel_size: int = 1,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -94,6 +96,7 @@ class RolloutModelConfig:
         self.splitwise_role = splitwise_role
         self.expert_parallel_size = expert_parallel_size
         self.enable_expert_parallel = enable_expert_parallel
+        self.data_parallel_size = data_parallel_size
         self.ori_vocab_size = ori_vocab_size
         self.quantization = quantization
         self.guided_decoding_backend = guided_decoding_backend
@@ -103,6 +106,7 @@ class RolloutModelConfig:
         self.local_rank = local_rank
         self.early_stop_config = early_stop_config
         self.ips = None
+        self.moba_attention_config = moba_attention_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

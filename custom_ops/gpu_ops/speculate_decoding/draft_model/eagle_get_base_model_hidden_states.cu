@@ -49,9 +49,7 @@ __global__ void ComputeOrderKernel(
         for (int j = 0; j < cur_seq_lens_encoder; j++) {
           position_map[in_offset++] = out_offset++;
         }
-      // 2. base model encoder. Base step=0
-      } else if (cur_base_model_seq_lens_encoder != 0) {
-      // 3. New end
+      // 2. Base model stop at last verify-step.
       } else if (cur_base_model_seq_lens_this_time != 0 && cur_seq_lens_this_time == 0) {
 #ifdef DEBUG_EAGLE_KERNEL
         printf("batch %d: base=0. draft !=0 \n", i);
@@ -65,7 +63,7 @@ __global__ void ComputeOrderKernel(
           position_map[in_offset++] = out_offset++;
         }
         in_offset += cur_base_model_seq_lens_this_time - accept_num;
-// (liuzichang): Temperary Reserved for debug
+// (liuzichang): Temporary Reserved for debug
 //         if (accept_num <= actual_draft_token_num) /*Accept partial draft tokens*/ {
 // #ifdef DEBUG_EAGLE_KERNEL
 //         printf("batch %d: accept_num <= actual_draft_token_num \n", i);
