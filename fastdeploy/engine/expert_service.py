@@ -25,7 +25,7 @@ import weakref
 
 import numpy as np
 
-from fastdeploy.engine.common_engine import EngineSevice
+from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.utils import console_logger, envs, llm_logger
 
@@ -64,7 +64,7 @@ class ExpertService:
             else:
                 self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
-        self.engine = EngineSevice(self.cfg, start_queue)
+        self.engine = EngineService(self.cfg, start_queue)
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.reset_nodeid(f"{self.engine.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
