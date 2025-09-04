@@ -2,6 +2,8 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
+#安装lsof工具
+apt install -y lsof
 #先kill一遍
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
@@ -14,9 +16,11 @@ python -m pip install -r requirements.txt
 echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+#python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+#改为使用relase分支的paddle框架安装包
+python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Xpu-P800-SelfBuiltPypiUse/latest/paddlepaddle_xpu-0.0.0-cp310-cp310-linux_x86_64.whl
 echo "build whl"
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+bash custom_ops/xpu_ops/src/download_dependencies.sh stable
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
 bash build.sh || exit 1

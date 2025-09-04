@@ -146,7 +146,7 @@ class OpenAIServingCompletion:
                     request_id_idx = f"{request_id}-{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)  # tokenize
+                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
@@ -331,6 +331,7 @@ class OpenAIServingCompletion:
                 if request.max_streaming_response_tokens is not None
                 else (request.suffix or {}).get("max_streaming_response_tokens", 1)
             )  # dierctly passed & passed in suffix
+            max_streaming_response_tokens = max(max_streaming_response_tokens, 1)
             choices = []
             chunk = CompletionStreamResponse(
                 id=request_id,
@@ -417,7 +418,9 @@ class OpenAIServingCompletion:
                             continue
                         delta_message.text = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        delta_message.tool_calls = delta_message_output.tool_calls
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called[idx] = True
 
                     choices.append(delta_message)
 
@@ -461,10 +464,6 @@ class OpenAIServingCompletion:
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
 
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
