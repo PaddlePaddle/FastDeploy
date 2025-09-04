@@ -260,7 +260,7 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
                                           T * __restrict__ out, // [token_num, num_heads, head_dim]
                                           const int num_chunks,
                                           const int num_heads,
-                                          const int chunk_size,
+                                          const int * __restrict__ chunk_size_device,
                                           const int head_dim,
                                           const int token_num,
                                           const int bsz,
@@ -271,13 +271,14 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
   __shared__ float md_smem[bdy * 2];
   for (int qid = blockIdx.x; qid < token_num; qid += gridDim.x) {
     const uint32_t bid = batch_id_per_token[qid];
+    if (bid == -1) continue;
     const int seq_len_q = seq_lens_this_time[bid];
     if (seq_len_q == 0) continue;
     const uint32_t local_seq_id = qid - cu_seqlens_q[bid];
     int seq_len_kv = seq_lens_decoder[bid];
     if (seq_len_kv == 0) continue;
     seq_len_kv += seq_len_q;
-    const int num_chunks_this_seq = cute::ceil_div(seq_len_kv, chunk_size);
+    const int num_chunks_this_seq = cute::ceil_div(seq_len_kv, chunk_size_device[0]);
     if (num_chunks_this_seq <= 1) {
       // not need merge
       continue;

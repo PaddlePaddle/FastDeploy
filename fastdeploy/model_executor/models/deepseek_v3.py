@@ -356,6 +356,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             key = paddle.empty_like(query)
             key[..., : self.qk_nope_head_dim] = key_nope
             key[..., self.qk_nope_head_dim :] = key_pe
+            # key = paddle.concat([key_nope, key_pe], axis=-1)
             value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
             fmha_out_prefill = self.mla_attn(
@@ -637,6 +638,8 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
             ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
+            ("qkv_a_proj_with_mqa", "q_a_proj", "q_a"),
+            ("qkv_a_proj_with_mqa", "kv_a_proj_with_mqa", "kv_a"),
         ]
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(

@@ -76,7 +76,7 @@ struct Params {
     alignas(16) IdType *batch_ids;
     alignas(16) IdType *tile_ids_per_batch;
     alignas(16) IdType *num_blocks_x;
-
+    alignas(16) IdType *chunk_size_device;
 
     uint32_t q_stride_bsz;
     uint32_t q_stride_head_num;
@@ -118,7 +118,7 @@ struct Params {
     return cudaErrorNotSupported;                            \
   }
 
-template <typename CollectiveMainloop, typename CollectiveEpilogue, typename Ktraits, bool CAUSAL, int SM_COUNT = 132, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=false>
+template <typename CollectiveMainloop, typename CollectiveEpilogue, typename Ktraits, bool CAUSAL, int SM_COUNT = 132, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=true>
 __global__ void __launch_bounds__(Ktraits::NUM_WARPS * cutlass::NumThreadsPerWarp, 1)
 MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
                      typename CollectiveMainloop::Params const mainloop_params,
@@ -137,6 +137,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
   static constexpr int BLOCK_SHAPE_Q = Ktraits::BLOCK_SHAPE_Q;
   static constexpr int BLOCK_SHAPE_KV = Ktraits::BLOCK_SHAPE_KV;
   const int num_blocks_x = mainloop_params.num_blocks_x[0];
+  const int chunk_size = mainloop_params.chunk_size_device[0];
 
   static constexpr bool use_tma_load_kv = CollectiveMainloop::USE_TMA_LOAD_KV;
 
@@ -367,7 +368,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
             start_token_idx,
             tile_id,
             seq_len_decoder_now,
-            mainloop_params.chunk_size,
+            chunk_size,
             mainloop_params.max_draft_token_num,
             mainloop_params.o_stride_bsz);
       }
@@ -429,7 +430,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           start_token_idx,
           tile_id,
           seq_len_decoder_now,
-          mainloop_params.chunk_size,
+          chunk_size,
           mainloop_params.max_draft_token_num,
           mainloop_params.o_stride_bsz);
     }
@@ -437,7 +438,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
 }
 
 
-template <typename KernelTraits, bool CAUSAL, typename Params, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=false>
+template <typename KernelTraits, bool CAUSAL, typename Params, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=true>
 cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
                                                            cudaStream_t stream) {
   using DTypeQ = typename KernelTraits::DTypeQ;
@@ -466,6 +467,7 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.batch_ids,
       params.tile_ids_per_batch,
       params.num_blocks_x,
+      params.chunk_size_device,
       params.sm_scale,
       params.bsz,
       params.max_block_num,
@@ -517,37 +519,38 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
     constexpr int merge_block_size = 256;
     constexpr int blockx = KernelTraits::HEAD_DIM_VO / vec_size;
     constexpr int blocky = (merge_block_size + blockx - 1) / blockx;
-    dim3 grids_merge(min(multiprocessor_count, params.token_num), params.q_num_head); // 128k is too large
+    dim3 grids_merge(multiprocessor_count, params.q_num_head); // 128k is too large
     dim3 blocks_merge(blockx, blocky);
-    merge_multi_chunks_kernel<NV_TYPE, vec_size, blocky, KernelTraits::HEAD_DIM_VO><<<grids_merge, blocks_merge, 0, stream>>>(
-      reinterpret_cast<NV_TYPE*>(params.O_tmp),
-      params.m,
-      params.d,
-      params.seq_lens_this_time,
-      params.seq_lens_decoder,
-      params.seq_lens_encoder,
-      params.cumsum_q_seqlens,
-      params.batch_id_per_token,
-      reinterpret_cast<NV_TYPE*>(params.O),
-      params.chunk_num,
-      params.q_num_head,
-      params.chunk_size,
-      params.vo_head_dim,
-      params.token_num,
-      params.bsz,
-      params.max_draft_token_num
-    );
+    merge_multi_chunks_kernel<NV_TYPE, vec_size,blocky, KernelTraits::HEAD_DIM_VO>
+        <<<grids_merge, blocks_merge, 0, stream>>>(
+              reinterpret_cast<NV_TYPE *>(params.O_tmp),
+              params.m,
+              params.d,
+              params.seq_lens_this_time,
+              params.seq_lens_decoder,
+              params.seq_lens_encoder,
+              params.cumsum_q_seqlens,
+              params.batch_id_per_token,
+              reinterpret_cast<NV_TYPE *>(params.O),
+              params.chunk_num,
+              params.q_num_head,
+              params.chunk_size_device,
+              params.vo_head_dim,
+              params.token_num,
+              params.bsz,
+              params.max_draft_token_num);
+
   }
   return cudaSuccess;
 }
 
-template <uint32_t HEAD_DIM_QK, uint32_t HEAD_DIM_VO, typename NV_TYPE, typename Params, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=false>
+template <uint32_t HEAD_DIM_QK, uint32_t HEAD_DIM_VO, typename NV_TYPE, typename Params, bool USE_REG_EALLOC=false, bool USE_FIXED_BLOCK=true>
 cudaError_t BatchMLAWithPagedKVCacheDispatched(Params& params, cudaStream_t stream) {
   constexpr bool CAUSAL = true;
   if constexpr (HEAD_DIM_QK == 576) {
     DISPATCH_GROUP_SIZE(params.q_num_head, GROUP_SIZE,
       BatchMLAWithPagedKVCacheKernelTraitsDispatched<
-          AttentionKernelTraits</*USE_TMA_LOAD_KV=*/false,
+          AttentionKernelTraits</*USE_TMA_LOAD_KV=*/true,
                                 HEAD_DIM_QK,
                                 HEAD_DIM_VO,
                                 GROUP_SIZE,

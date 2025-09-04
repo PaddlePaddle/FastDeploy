@@ -299,7 +299,7 @@ class ReplicatedLinear(LinearBase):
 
 class MergedReplicatedLinear(ReplicatedLinear):
     """
-    Replicated linear layer.
+    MergedReplicatedLinear linear layer.
     """
 
     def __init__(
@@ -315,8 +315,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
         weight_key: str = "",
     ):
         """
-        Initializes a replicated linear layer.
-
+        Initializes a mergedreplicated linear layer.
         Args:
             fd_config (FDConfig): Inference-related parameters.
             prefix (str): Unique name of the layer, used to name internal attributes.
@@ -338,6 +337,35 @@ class MergedReplicatedLinear(ReplicatedLinear):
             weight_dtype=weight_dtype,
             weight_key=weight_key,
         )
+        self.output_sizes = output_sizes
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
+
+        # split gate up
+        assert loaded_shard_id in ["q_a", "kv_a"]
+
+        loaded_weight = get_tensor(loaded_weight)
+        if not param._is_initialized():
+            param.initialize()
+
+        if loaded_shard_id == "q_a":
+            param_shard_offset = 0
+            param_shard_size = self.output_sizes[0]
+        else:
+            # loaded_shard_id == "kv_a"
+            param_shard_offset = self.output_sizes[0]
+            param_shard_size = self.output_sizes[1]
+
+        if hasattr(param, "tensor_track"):
+            param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        param = slice_fn(param, True, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(loaded_weight, False)
 
 
 class ColumnParallelLinear(LinearBase):

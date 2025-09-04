@@ -134,6 +134,7 @@ struct CollectiveMainloop {
     IdType const* batch_ids;
     IdType const* tile_ids_per_batch;
     IdType const* num_blocks_x;
+    IdType const* chunk_size_device;
     float sm_scale;
     int bsz;
     int max_block_num;
@@ -166,6 +167,7 @@ struct CollectiveMainloop {
     IdType* batch_ids;
     IdType* tile_ids_per_batch;
     IdType* num_blocks_x;
+    IdType* chunk_size_device;
     float sm_scale;
     int bsz;
     int max_block_num;
@@ -204,6 +206,7 @@ struct CollectiveMainloop {
             const_cast<IdType*>(args.batch_ids),
             const_cast<IdType*>(args.tile_ids_per_batch),
             const_cast<IdType*>(args.num_blocks_x),
+            const_cast<IdType*>(args.chunk_size_device),
             args.sm_scale,
             args.bsz,
             args.max_block_num,
@@ -281,9 +284,9 @@ struct CollectiveMainloop {
     auto gmem_thr_copy_kv = gmem_tiled_copy_kv.get_slice(thread_idx);
 
     static constexpr int BLOCK_SHAPE_KV = get<1>(TileShape_QKD{});
-    const int start_len = tile_idx * mainloop_params.chunk_size;
+    const int start_len = tile_idx * mainloop_params.chunk_size_device[0];
     const int start_tile_idx = start_len / BLOCK_SHAPE_KV;
-    const int end_tile_idx = cute::ceil_div(min(start_len + mainloop_params.chunk_size, kv_len), BLOCK_SHAPE_KV) - 1;
+    const int end_tile_idx = cute::ceil_div(min(start_len + mainloop_params.chunk_size_device[0], kv_len), BLOCK_SHAPE_KV) - 1;
 
     auto kv_block_tables = make_tensor(make_gmem_ptr(mainloop_params.kv_block_tables), make_layout(make_shape(mainloop_params.bsz, mainloop_params.max_block_num_per_seq), make_stride(mainloop_params.max_block_num_per_seq, 1)));
 
@@ -322,9 +325,9 @@ struct CollectiveMainloop {
                       group_modes<0, 2>(sK), group_modes<0, 2>(gKV));
 
     static constexpr int BLOCK_SHAPE_KV = get<1>(TileShape_QKD{});
-    const int start_len = tile_idx * mainloop_params.chunk_size;
+    const int start_len = tile_idx * mainloop_params.chunk_size_device[0];
     const int start_tile_idx = start_len / BLOCK_SHAPE_KV;
-    const int end_tile_idx = cute::ceil_div(min(start_len + mainloop_params.chunk_size, kv_len), BLOCK_SHAPE_KV) - 1;
+    const int end_tile_idx = cute::ceil_div(min(start_len + mainloop_params.chunk_size_device[0], kv_len), BLOCK_SHAPE_KV) - 1;
 
     auto kv_block_tables = make_tensor(make_gmem_ptr(mainloop_params.kv_block_tables), make_layout(make_shape(mainloop_params.bsz, mainloop_params.max_block_num_per_seq), make_stride(mainloop_params.max_block_num_per_seq, 1)));
 

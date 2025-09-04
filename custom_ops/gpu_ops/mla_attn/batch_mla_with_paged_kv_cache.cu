@@ -80,8 +80,9 @@ void BatchMLAWithPagedKVCacheKernel(
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
     const int chunk_size,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
+    const paddle::Tensor& max_len_kv, // const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -105,7 +106,7 @@ void BatchMLAWithPagedKVCacheKernel(
   int k_head_dim = meta_data.head_dims;
   int v_head_dim = meta_data.head_dims_v;
   // int num_chunks = max_dec_len / chunk_size;
-  int num_chunks = div_up(max_dec_len, chunk_size);
+  int num_chunks = div_up(max_seq_len, 64);
 
   auto *allocator = paddle::GetAllocator(q.place());
   phi::Allocator::AllocationPtr O_tmp, m_tmp, d_tmp;
@@ -153,6 +154,7 @@ void BatchMLAWithPagedKVCacheKernel(
   params.max_draft_token_num = draft_token_num;
   params.sm_scale = softmax_scale;
   params.chunk_size = chunk_size;
+  params.chunk_size_device = const_cast<int*>(decoder_chunk_size_device.data<int>());
   params.chunk_num = num_chunks;
 
   if (q_head_dim == 576) {
@@ -187,8 +189,9 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
     const int chunk_size,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
+    const paddle::Tensor& max_len_kv, // const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -222,8 +225,9 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const std::string& cache_quant_type_str,
     const int num_blocks_x,
     const int chunk_size,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
+    const paddle::Tensor& max_len_kv, // const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
