@@ -75,12 +75,8 @@ void DisPatchW4AFp8Gemm(
         const int64_t K,
         cudaStream_t stream) {
 
-    int kBlockN = (max_tokens + 15) / 16 * 16;
+    int kBlockN = 256;
     int TailN = 0;
-    if (kBlockN > 256) {
-        TailN = kBlockN % 256;
-        kBlockN = 256;
-    }
     if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
         GEMM_SWITCH_BF16(
             M, K, batch_size, token_padding_size, kBlockN, TailN,
@@ -226,8 +222,8 @@ __global__ void permute_scale_kernel(
 }
 
 void W4AFp8GemmScalePermute(const paddle::Tensor& scale) {
-    const int row = scale.dims()[0];
-    const int col = scale.dims()[1];
+    const int row = scale.dims().size() == 2 ? scale.dims()[0] : 1;
+    const int col = scale.dims().size() == 2 ? scale.dims()[1] : scale.dims()[0];
     if (col % 16 != 0) {
         PD_THROW("Only supported when col is divisible by 16.");
     }

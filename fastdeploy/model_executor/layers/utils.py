@@ -257,7 +257,7 @@ def remove_padding(
             - The key sequence lengths (paddle.Tensor).
     """
     if current_platform.is_cuda():
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         token_num = paddle.sum(seq_lens_this_time)
         (
             ids_remove_padding,
@@ -301,7 +301,7 @@ def speculate_remove_padding(
             - Key sequence lengths (paddle.Tensor).
     """
     if current_platform.is_cuda():
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         token_num = paddle.sum(seq_lens_this_time)
         (
             ids_remove_padding,
