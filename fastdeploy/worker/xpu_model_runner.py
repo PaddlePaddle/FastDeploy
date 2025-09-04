@@ -377,7 +377,6 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
         """
-        print("走到了insert_tasks_v1")
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
