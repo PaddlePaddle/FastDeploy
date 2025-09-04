@@ -190,8 +190,6 @@ void generic_moe_gemm_kernelLauncher(const T* A,
 
   typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
-                                          
-  CUTLASS_TRACE_HOST("eplogue output op alpha = " << epilogue_op.alpha);
 
   const uint8_t* local_scale_B = nullptr;
   const float* code_scale_B = nullptr;
@@ -201,7 +199,6 @@ void generic_moe_gemm_kernelLauncher(const T* A,
     code_scale_B = quant_args_B.code_scale_ptr;
     code_zp_B = quant_args_B.code_zp_ptr;
   }
-
 
   typename GemmGrouped::Arguments args(
       num_experts,
@@ -219,7 +216,8 @@ void generic_moe_gemm_kernelLauncher(const T* A,
       WeightQuantTraits::kQuantMethod,
       local_scale_B,
       code_scale_B,
-      code_zp_B);
+      code_zp_B,
+      nullptr);
 
   GemmGrouped gemm;
 
@@ -432,9 +430,9 @@ void dispatch_gemm_config(const T* A,
 
   switch (gemm_config.stages) {
     dispatch_stages_macro(2);
-    // dispatch_stages_macro(3);
-    // dispatch_stages_macro(4);
-    // dispatch_stages_macro(5);
+    dispatch_stages_macro(3);
+    dispatch_stages_macro(4);
+    dispatch_stages_macro(5);
     default:
       std::string err_msg = "dispatch_gemm_config does not support stages " +
                             std::to_string(gemm_config.stages);
@@ -566,16 +564,16 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   } else {
     switch (gemm_config.tile_config) {
       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-      // dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
-      // dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
-      // dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-      // dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
-      // dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
-      // dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
-      // dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
-      // dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
-      // dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
-      // dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
+      dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
+      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+      dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
+      dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
+      dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
+      dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
+      dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
       case CutlassTileConfig::Undefined:
         throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
         break;
@@ -662,29 +660,29 @@ void MoeGemmRunner<T, WeightQuantTraits>::dispatch_to_arch<EpilogueTag>(
     CutlassGemmConfig gemm_config,
     cudaStream_t stream,
     int* occupancy) {
-#define dispatch_moe_gemm_to_cutlass_macro(ARCH)                  \
-  dispatch_moe_gemm_to_cutlass<T, WeightQuantTraits, ARCH, EpilogueTag>( \
-      A,                                                          \
-      B,                                                          \
-      weight_scales,                                              \
-      biases,                                                     \
-      C,                                                          \
-      total_rows_before_expert,                                   \
-      total_rows,                                                 \
-      gemm_n,                                                     \
-      gemm_k,                                                     \
-      num_experts,                                                \
-      quant_args_B,                                               \
-      gemm_config,                                                \
-      sm_,                                                        \
-      multi_processor_count_,                                     \
-      stream,                                                     \
+#define dispatch_moe_gemm_to_cutlass_macro(ARCH)                           \
+  dispatch_moe_gemm_to_cutlass<T, WeightQuantTraits, ARCH, EpilogueTag>(   \
+      A,                                                                   \
+      B,                                                                   \
+      weight_scales,                                                       \
+      biases,                                                              \
+      C,                                                                   \
+      total_rows_before_expert,                                            \
+      total_rows,                                                          \
+      gemm_n,                                                              \
+      gemm_k,                                                              \
+      num_experts,                                                         \
+      quant_args_B,                                                        \
+      gemm_config,                                                         \
+      sm_,                                                                 \
+      multi_processor_count_,                                              \
+      stream,                                                              \
       occupancy);
 
   if (sm_ >= 70 && sm_ < 75) {
-    // dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm70);
+    dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm70);
   } else if (sm_ >= 75 && sm_ < 80) {
-    // dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm75);
+    dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm75);
   } else if (sm_ >= 80 && sm_ < 91) {
     dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm80);
   } else {
@@ -779,7 +777,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
         check_cuda_error(cudaEventDestroy(start));
         check_cuda_error(cudaEventDestroy(stop));
-        std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
+        // std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
         if (elapsed < best_time) {
           best_id = ii;
           best_time = elapsed;
@@ -792,7 +790,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
       }
     }
     if (find_one) {
-      std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
+      // std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
       gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
       chosen_config = best_config;
     } else {

@@ -624,7 +624,7 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
         asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
-        
+
         int32_t decode_value[4];
 
         decode_value[0] = __float2int_rd(fmaf(fp32_intermediates[0], code_scale[0], code_zp[0] + 0.5f));
@@ -703,8 +703,8 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
 template <typename T, int N>
 struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
 {
-    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value
-        || platform::is_same<T, cutlass::float_e4m3_t>::value,
+    static_assert(platform::is_same<T, half_t>::value
+            || platform::is_same<T, bfloat16_t>::value,
         "T must be fp16 or bf16");
 
     static constexpr int kVecWidth = 16;
@@ -717,7 +717,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
     CUTLASS_DEVICE
     static result_type convert(source_type const& source, code_type const& code_scale, code_type const& code_zp)
     {
-        CUTLASS_TRACE_DEVICE(" bqw_test 111");
         using scalar_result_type = typename result_type::Element;
         using scalar_source_type = typename source_type::Element;
         FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, kVecWidth>
@@ -730,7 +729,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
         vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
         vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
 
-        CUTLASS_TRACE_DEVICE(" N = %d, kVecWidth = %d, loop = %d", N, kVecWidth, N / kVecWidth);
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < N / kVecWidth; ++i)
         {
@@ -743,7 +741,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
     CUTLASS_DEVICE
     static result_type convert(source_type const& source, Array<float, N / 4> const& code_scale, Array<float, N / 4> const& code_zp)
     {
-        CUTLASS_TRACE_DEVICE(" bqw_test 222");
         using scalar_result_type = typename result_type::Element;
         using scalar_source_type = typename source_type::Element;
         using Converter = FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, kVecWidth>;
@@ -770,7 +767,6 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
     CUTLASS_DEVICE
     result_type operator()(source_type const& s, code_type const& code_scale, code_type const& code_zp)
     {
-        CUTLASS_TRACE_DEVICE(" bqw_test 000");
         return convert(s, code_scale, code_zp);
     }
 };

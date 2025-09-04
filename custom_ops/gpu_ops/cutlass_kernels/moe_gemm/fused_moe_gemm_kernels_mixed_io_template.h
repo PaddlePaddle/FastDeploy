@@ -115,36 +115,31 @@ void generic_moe_gemm_kernelLauncher(const InType* A,
     throw std::runtime_error("[MoeGemm] Grouped gemm does not support split-k");
   }
 
-#ifdef PADDLE_CUDA_BF16
-
-#ifdef PADDLE_CUDA_FP8
-  static_assert(cutlass::platform::is_same<InType, __nv_bfloat16>::value ||
-                    cutlass::platform::is_same<InType, half>::value ||
-                    cutlass::platform::is_same<InType, float>::value ||
-                    cutlass::platform::is_same<InType, cutlass::float_e4m3_t>::value,
-                "Specialized for fp8, bfloat16, half, float");
+#if defined(PADDLE_CUDA_BF16) && defined(PADDLE_CUDA_FP8)
+  static_assert(
+      cutlass::platform::is_same<InType, __nv_bfloat16>::value ||
+          cutlass::platform::is_same<InType, half>::value ||
+          cutlass::platform::is_same<InType, float>::value ||
+          cutlass::platform::is_same<InType, cutlass::float_e4m3_t>::value,
+      "Specialized for bfloat16, fp8 (e4m3), half, or float");
+#elif defined(PADDLE_CUDA_BF16)
+  static_assert(
+      cutlass::platform::is_same<InType, __nv_bfloat16>::value ||
+          cutlass::platform::is_same<InType, half>::value ||
+          cutlass::platform::is_same<InType, float>::value,
+      "Specialized for bfloat16, half, or float");
+#elif defined(PADDLE_CUDA_FP8)
+  static_assert(
+      cutlass::platform::is_same<InType, half>::value ||
+          cutlass::platform::is_same<InType, float>::value ||
+          cutlass::platform::is_same<InType, cutlass::float_e4m3_t>::value,
+      "Specialized for fp8 (e4m3), half, or float");
 #else
-  static_assert(cutlass::platform::is_same<InType, __nv_bfloat16>::value ||
-                    cutlass::platform::is_same<InType, half>::value ||
-                    cutlass::platform::is_same<InType, float>::value,
-                "Specialized for fp8, bfloat16, half, float");
+  static_assert(
+      cutlass::platform::is_same<InType, half>::value ||
+          cutlass::platform::is_same<InType, float>::value,
+      "Specialized for half or float");
 #endif
-
-#else
-
-#ifdef PADDLE_CUDA_FP8
-  static_assert(cutlass::platform::is_same<InType half>::value ||
-                    cutlass::platform::is_same<InType, float>::value ||
-                    cutlass::platform::is_same<InType, cutlass::float_e4m3_t>::value,
-                "Specialized for fp8, bfloat16, half, float");
-#else
-  static_assert(cutlass::platform::is_same<InType half>::value ||
-                    cutlass::platform::is_same<InType, float>::value,
-                "Specialized for fp8, bfloat16, half, float");
-#endif
-
-#endif
-
 
   using WeightType = typename WeightQuantTraits::WeightType;
 
@@ -474,9 +469,9 @@ void dispatch_gemm_config(const InType* A,
 
   switch (gemm_config.stages) {
     dispatch_stages_macro(2);
-    // dispatch_stages_macro(3);
-    // dispatch_stages_macro(4);
-    // dispatch_stages_macro(5);
+    dispatch_stages_macro(3);
+    dispatch_stages_macro(4);
+    dispatch_stages_macro(5);
     default:
       std::string err_msg = "dispatch_gemm_config does not support stages " +
                             std::to_string(gemm_config.stages);
@@ -640,27 +635,19 @@ void dispatch_moe_gemm_to_cutlass(const InType* A,
       throw std::runtime_error(
               "[dispatch_moe_gemm_to_cutlass] weight_only_int2 does not support sm70.");
     }
-  } else {
-    // CUTLASS_TRACE_HOST("tile_shape_k = " << tile_shape_k);
-    CUTLASS_TRACE_HOST("Current tile_config value = " << static_cast<int>(gemm_config.tile_config));
-
-            
+  } else { 
     switch (gemm_config.tile_config) {
-      // dispatch_gemm_config_macro(16, 128, 128, 16, 32, 128);
-      // dispatch_gemm_config_macro(16, 256, 128, 16, 64, 128);
-      // dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-
       dispatch_gemm_config_with_k_macro(16, 128, 64, 16, 32, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(16, 256, 64, 16, 64, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(64, 64, 64, 32, 32, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(32, 128, 64, 32, 32, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(128, 64, 64, 64, 32, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 64, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(128, 128, 64, 64, 64, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(128, 128, 64, 128, 32, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(128, 256, 64, 64, 64, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 32, 64, tile_shape_k);
-      // dispatch_gemm_config_with_k_macro(256, 128, 64, 64, 64, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(16, 256, 64, 16, 64, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(64, 64, 64, 32, 32, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(32, 128, 64, 32, 32, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(128, 64, 64, 64, 32, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 64, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(128, 128, 64, 64, 64, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(128, 128, 64, 128, 32, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(128, 256, 64, 64, 64, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(64, 128, 64, 64, 32, 64, tile_shape_k);
+      dispatch_gemm_config_with_k_macro(256, 128, 64, 64, 64, 64, tile_shape_k);
       case CutlassTileConfig::Undefined:
         throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
         break;
@@ -753,31 +740,28 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::dispatch_to_arch<Ep
     CutlassGemmConfig gemm_config,
     cudaStream_t stream,
     int* occupancy) {
-#define dispatch_moe_gemm_to_cutlass_macro(ARCH)                  \
+#define dispatch_moe_gemm_to_cutlass_macro(ARCH)                                       \
   dispatch_moe_gemm_to_cutlass<InType, OutType, WeightQuantTraits, ARCH, EpilogueTag>( \
-      A,                                                          \
-      B,                                                          \
-      weight_scales,                                              \
-      biases,                                                     \
-      out_scale,                                                  \
-      C,                                                          \
-      total_rows_before_expert,                                   \
-      total_rows,                                                 \
-      gemm_n,                                                     \
-      gemm_k,                                                     \
-      num_experts,                                                \
-      quant_args_B,                                               \
-      gemm_config,                                                \
-      sm_,                                                        \
-      multi_processor_count_,                                     \
-      stream,                                                     \
+      A,                                                                               \
+      B,                                                                               \
+      weight_scales,                                                                   \
+      biases,                                                                          \
+      out_scale,                                                                       \
+      C,                                                                               \
+      total_rows_before_expert,                                                        \
+      total_rows,                                                                      \
+      gemm_n,                                                                          \
+      gemm_k,                                                                          \
+      num_experts,                                                                     \
+      quant_args_B,                                                                    \
+      gemm_config,                                                                     \
+      sm_,                                                                             \
+      multi_processor_count_,                                                          \
+      stream,                                                                          \
       occupancy);
 
-  if (sm_ >= 70 && sm_ < 75) {
-    // dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm70);
-  } else if (sm_ >= 75 && sm_ < 80) {
-    // dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm75);
-  } else if (sm_ >= 80 && sm_ < 91) {
+  // Only architectures with SM89 and above support FP8 MMA operations.
+  if (sm_ >= 89 && sm_ < 91) {
     dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm89);
   } else {
     throw std::runtime_error("[MoE][GEMM Dispatch] Arch unsupported for MoE GEMM");
@@ -831,75 +815,71 @@ void MixedMoeGemmRunner<InType, OutType, WeightQuantTraits>::run_gemm<EpilogueTa
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
     size_t num_candidate_configs_size = candidate_configs.size();
-
-    best_config = candidate_configs[0];
-    chosen_config = best_config;
-
-    // for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
-    //   CUTLASS_TRACE_HOST("Current tile_config value = " << static_cast<int>(candidate_configs[ii].tile_config));
-
-    //   try {
-    //     for (int i = 0; i < warm_time; i++) {
-    //       dispatch_to_arch<EpilogueTag>(A,
-    //                                     B,
-    //                                     weight_scales,
-    //                                     biases,
-    //                                     C,
-    //                                     total_rows_before_expert,
-    //                                     total_rows,
-    //                                     gemm_n,
-    //                                     gemm_k,
-    //                                     num_experts,
-    //                                     quant_args_B,
-    //                                     candidate_configs[ii],
-    //                                     stream);
-    //     }
-    //     cudaEvent_t start;
-    //     cudaEvent_t stop;
-    //     check_cuda_error(cudaEventCreate(&start));
-    //     check_cuda_error(cudaEventCreate(&stop));
-    //     check_cuda_error(cudaStreamSynchronize(stream));
-    //     check_cuda_error(cudaEventRecord(start, stream));
-    //     for (int i = 0; i < test_time; i++) {
-    //       dispatch_to_arch<EpilogueTag>(A,
-    //                                     B,
-    //                                     weight_scales,
-    //                                     biases,
-    //                                     C,
-    //                                     total_rows_before_expert,
-    //                                     total_rows,
-    //                                     gemm_n,
-    //                                     gemm_k,
-    //                                     num_experts,
-    //                                     quant_args_B,
-    //                                     candidate_configs[ii],
-    //                                     stream);
-    //     }
-    //     check_cuda_error(cudaEventRecord(stop, stream));
-    //     check_cuda_error(cudaEventSynchronize(stop));
-    //     float elapsed;
-    //     check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
-    //     check_cuda_error(cudaEventDestroy(start));
-    //     check_cuda_error(cudaEventDestroy(stop));
-    //     //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
-    //     if (elapsed < best_time) {
-    //       best_id = ii;
-    //       best_time = elapsed;
-    //       best_config = candidate_configs[ii];
-    //     }
-    //     find_one = true;
-    //   } catch (const std::exception& e) {
-    //     std::cerr << "MOE config[" << ii << "]  Caught exception: " << e.what()
-    //               << std::endl;
-    //   }
-    // }
-    // if (find_one) {
-    //   //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
-    //   gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
-    //   chosen_config = best_config;
-    // } else {
-    //   PADDLE_FATAL("[MoE Configure Search] find no one available config.");
-    // }
+    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
+      try {
+        for (int i = 0; i < warm_time; i++) {
+          dispatch_to_arch<EpilogueTag>(A,
+                                        B,
+                                        weight_scales,
+                                        biases,
+                                        out_scale,
+                                        C,
+                                        total_rows_before_expert,
+                                        total_rows,
+                                        gemm_n,
+                                        gemm_k,
+                                        num_experts,
+                                        quant_args_B,
+                                        candidate_configs[ii],
+                                        stream);
+        }
+        cudaEvent_t start;
+        cudaEvent_t stop;
+        check_cuda_error(cudaEventCreate(&start));
+        check_cuda_error(cudaEventCreate(&stop));
+        check_cuda_error(cudaStreamSynchronize(stream));
+        check_cuda_error(cudaEventRecord(start, stream));
+        for (int i = 0; i < test_time; i++) {
+          dispatch_to_arch<EpilogueTag>(A,
+                                        B,
+                                        weight_scales,
+                                        biases,
+                                        out_scale,
+                                        C,
+                                        total_rows_before_expert,
+                                        total_rows,
+                                        gemm_n,
+                                        gemm_k,
+                                        num_experts,
+                                        quant_args_B,
+                                        candidate_configs[ii],
+                                        stream);
+        }
+        check_cuda_error(cudaEventRecord(stop, stream));
+        check_cuda_error(cudaEventSynchronize(stop));
+        float elapsed;
+        check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
+        check_cuda_error(cudaEventDestroy(start));
+        check_cuda_error(cudaEventDestroy(stop));
+        //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
+        if (elapsed < best_time) {
+          best_id = ii;
+          best_time = elapsed;
+          best_config = candidate_configs[ii];
+        }
+        find_one = true;
+      } catch (const std::exception& e) {
+        std::cerr << "MOE config[" << ii << "]  Caught exception: " << e.what()
+                  << std::endl;
+      }
+    }
+    if (find_one) {
+      //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
+      gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
+      chosen_config = best_config;
+    } else {
+      PADDLE_FATAL("[MoE Configure Search] find no one available config.");
+    }
   }
 
   dispatch_to_arch<EpilogueTag>(A,

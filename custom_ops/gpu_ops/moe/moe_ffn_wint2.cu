@@ -20,7 +20,17 @@
 #include "moe/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
 
-#define _GROUP_GEMM_ONLY 0
+#define E4M3_MAX_POS 448.0f
+
+template <paddle::DataType D>
+struct MyPDTraits : public PDTraits<D> {};
+ 
+template <>
+struct MyPDTraits<paddle::DataType::FLOAT8_E4M3FN>
+    : public PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
+    using DataType = cutlass::float_e4m3_t;             
+    using data_t = paddle::float8_e4m3fn;      
+};
 
 template <paddle::DataType IN_DTYPE, paddle::DataType OUT_DTYPE, typename WeightSavedT, cutlass::WintQuantMethod QuantMethod>
 void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
@@ -50,14 +60,14 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
                             const int num_experts,
                             const bool used_in_ep_low_latency) {
     using namespace phi;
-    using in_data_t = typename PDTraits<IN_DTYPE>::data_t;
-    using InNvType = typename PDTraits<IN_DTYPE>::DataType;
-    using out_data_t = typename PDTraits<OUT_DTYPE>::data_t;
-    using OutNvType = typename PDTraits<OUT_DTYPE>::DataType;
+    using in_data_t = typename MyPDTraits<IN_DTYPE>::data_t;
+    using InNvType = typename MyPDTraits<IN_DTYPE>::DataType;
+    using out_data_t = typename MyPDTraits<OUT_DTYPE>::data_t;
+    using OutNvType = typename MyPDTraits<OUT_DTYPE>::DataType;
+
     // WeightOnlyTraits need mma dtype
     using WeightOnlyTraits = cutlass::WintQuantTraits<InNvType, QuantMethod>;
     using WeightType = typename WeightOnlyTraits::WeightType;
-
     typename WeightOnlyTraits::Arguments up_gate_proj_quant_args;
     typename WeightOnlyTraits::Arguments down_proj_quant_args;
     if constexpr (QuantMethod == cutlass::WintQuantMethod::kWeightOnlyInt2) {
@@ -71,30 +81,48 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
     }
 
     auto stream = permute_input.stream();
-    // MoeGemmRunner<InNvType, WeightOnlyTraits> moe_gemm_runner;
-    MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits> mixed_moe_gemm_runner;
     if constexpr (std::is_same<InNvType, OutNvType>::value) {
-//         moe_gemm_runner = MoeGemmRunner<InNvType, WeightOnlyTraits>();
-//         moe_gemm_runner.moe_gemm_bias_act(
-//             reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
-//             reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
-//             reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
-//             reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
-// #if _GROUP_GEMM_ONLY
-//             reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
-// #else
-//             reinterpret_cast<OutNvType*>(fc1_out.data<out_data_t>()),
-// #endif
-//             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-//             total_rows_in_ll_else_minus1,
-//             actual_total_rows,
-//             inter_size,
-//             hidden_size,
-//             num_experts,
-//             up_gate_proj_quant_args,
-//             "none",
-//             stream);
+        MoeGemmRunner<InNvType, WeightOnlyTraits> moe_gemm_runner;
+        moe_gemm_runner = MoeGemmRunner<InNvType, WeightOnlyTraits>();
+
+        moe_gemm_runner.moe_gemm_bias_act(
+            reinterpret_cast<const InNvType*>(permute_input.data<in_data_t>()),
+            reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
+            reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
+            reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
+            reinterpret_cast<OutNvType*>(fc1_out.data<out_data_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            total_rows_in_ll_else_minus1,
+            actual_total_rows,
+            inter_size,
+            hidden_size,
+            num_experts,
+            up_gate_proj_quant_args,
+            "none",
+            stream);
+
+        paddle::Tensor act_out;
+        if (used_in_ep_low_latency) {
+            act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
+        } else {
+            act_out = paddle::experimental::swiglu(fc1_out, nullptr);
+        }
+
+        moe_gemm_runner.moe_gemm(
+            reinterpret_cast<const InNvType*>(act_out.data<in_data_t>()),
+            reinterpret_cast<const WeightType*>(down_proj_weight.data<WeightSavedT>()),
+            reinterpret_cast<const OutNvType*>(down_proj_super_scale ? down_proj_super_scale->data<out_data_t>() : nullptr),
+            reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
+            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+            total_rows_in_ll_else_minus1,
+            actual_total_rows,
+            hidden_size,
+            inter_size / 2,
+            num_experts,
+            down_proj_quant_args,
+            stream);
     } else {
+        MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits> mixed_moe_gemm_runner;
         mixed_moe_gemm_runner = MixedMoeGemmRunner<InNvType, OutNvType, WeightOnlyTraits>();
 
         mixed_moe_gemm_runner.moe_gemm_bias_act(
@@ -103,49 +131,24 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
             reinterpret_cast<const OutNvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<out_data_t>() : nullptr),
             reinterpret_cast<const OutNvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<out_data_t>() : nullptr),
             reinterpret_cast<const float*>(up_out_scale ? up_out_scale->data<float>() : nullptr),
-#if _GROUP_GEMM_ONLY
-            reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
-#else
             reinterpret_cast<OutNvType*>(fc1_out.data<out_data_t>()),
-#endif
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
             total_rows_in_ll_else_minus1,
             actual_total_rows,
             inter_size,
             hidden_size,
             num_experts,
-            // 1.0,
-            // up_out_scale,
             up_gate_proj_quant_args,
             "none",
             stream);
-    }
 
-#if _GROUP_GEMM_ONLY
-    // do nothing
-#else
-    paddle::Tensor act_out;
-    if (used_in_ep_low_latency) {
-        act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
-    } else {
-        act_out = paddle::experimental::swiglu(fc1_out, nullptr);
-    }
+        paddle::Tensor act_out;
+        if (used_in_ep_low_latency) {
+            act_out = GroupSwigluWithMasked(fc1_out, tokens_expert_prefix_sum);
+        } else {
+            act_out = paddle::experimental::swiglu(fc1_out, nullptr);
+        }
 
-    if constexpr (std::is_same<InNvType, OutNvType>::value) {
-        // moe_gemm_runner.moe_gemm(
-        //     reinterpret_cast<const InNvType*>(act_out.data<in_data_t>()),
-        //     reinterpret_cast<const WeightType*>(down_proj_weight.data<WeightSavedT>()),
-        //     reinterpret_cast<const OutNvType*>(down_proj_super_scale ? down_proj_super_scale->data<out_data_t>() : nullptr),
-        //     reinterpret_cast<OutNvType*>(ffn_out.data<out_data_t>()),
-        //     const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-        //     total_rows_in_ll_else_minus1,
-        //     actual_total_rows,
-        //     hidden_size,
-        //     inter_size / 2,
-        //     num_experts,
-        //     down_proj_quant_args,
-        //     stream);
-    } else {
         auto place = permute_input.place();
         Allocator* allocator = paddle::GetAllocator(place);
 
@@ -155,33 +158,12 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         Allocator::AllocationPtr ffn2_input_row_sum;
         ffn2_input_row_sum = allocator->Allocate(sizeof(float) * actual_total_rows);
 
-        std::cout << " act_out Tensor shape: ";
-        for (auto dim : act_out.shape()) {
-            std::cout << dim << " ";
-        }
-        std::cout << "\n";
-        std::cout << " act_out Tensor dtype: " << act_out.dtype() << "\n";
-        std::cout << " act_out Tensor place: " << act_out.place() << "\n";
-
-        auto cpu_tensor = act_out.copy_to(paddle::CPUPlace(), true);  // 先拷贝到 CPU
-        auto* data = cpu_tensor.data<out_data_t>();  // 假设是 float 类型（需根据 dtype 调整）
-        for (int i = 0; i < 30; ++i) {
-            std::cout << data[i] << " ";
-            if ((i + 1) % 10 == 0) std::cout << "\n";  // 每 10 个数据换行
-        }
-        std::cout << "\n";
-
-        std::cout << "fp8_act_out \n";
         quantize_moe_input<out_data_t, in_data_t>(
             act_out.data<out_data_t>(),
-            // expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
             expert_idx_per_token ? const_cast<paddle::Tensor*>(expert_idx_per_token)->data<int64_t>() : nullptr,
             down_in_quant_scale ? const_cast<paddle::Tensor*>(down_in_quant_scale)->data<float>() : nullptr,
-            // reinterpret_cast<const paddle::Tensor*>(down_in_quant_scale ? down_in_quant_scale->data<float>() : nullptr),
-            // down_in_quant_scale ? reinterpret_cast<const float*>(down_in_quant_scale.data<float>() : nullptr),
-            // down_in_quant_scale ? const_cast<paddle::Tensor*>(`.get_ptr())->data<float>() : nullptr,
-            448.0f,
-            -448.0f,
+            E4M3_MAX_POS,
+            -E4M3_MAX_POS,
             actual_total_rows,
             inter_size / 2,
             reinterpret_cast<float*>(ffn2_input_row_sum->ptr()),
@@ -190,18 +172,6 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
             used_in_ep_low_latency,
             reinterpret_cast<in_data_t *>(fp8_act_out->ptr()),
             stream);
-
-
-        in_data_t* host_buffer = new in_data_t[30];
-        in_data_t* dev_ptr = static_cast<in_data_t*>(fp8_act_out->ptr());
-        cudaMemcpy(host_buffer, dev_ptr, 30, cudaMemcpyDeviceToHost);
-
-
-        for (int i = 0; i < 30; ++i) {
-            std::cout << host_buffer[i] << " ";
-            if ((i + 1) % 10 == 0) std::cout << "\n";  // 每 10 个数据换行
-        }
-        std::cout << "\n";
 
         mixed_moe_gemm_runner.moe_gemm(
             reinterpret_cast<const InNvType*>(fp8_act_out->ptr()),
@@ -215,12 +185,9 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
             hidden_size,
             inter_size / 2,
             num_experts,
-            // 1.0,
-            // down_out_scale,
             down_proj_quant_args,
             stream);    
     }
-#endif
 }
 
 template <paddle::DataType IN_DTYPE, paddle::DataType OUT_DTYPE>
@@ -243,10 +210,6 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
                        const paddle::optional<paddle::Tensor>& down_out_scale,
                        const bool used_in_ep_low_latency,
                        paddle::Tensor ffn_out) {
-    // using namespace phi;
-    // using data_t = typename PDTraits<IN_DTYPE>::data_t;
-    // using NvType = typename PDTraits<IN_DTYPE>::DataType;
-
     auto place = permute_input.place();
 
     assert(permute_input.dims().size() == 3 || permute_input.dims().size() == 2);
@@ -335,49 +298,42 @@ paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::optional<paddle::Tensor>& down_out_scale,
     const bool used_in_ep_low_latency) {
 #define dispatch_out_dtype_macro(IN_DTYPE, OUT_DTYPE)                       \
-    case OUT_DTYPE:                                                        \
-        MoeFFNWint2Kernel<IN_DTYPE, OUT_DTYPE>(permute_input,              \
+    case OUT_DTYPE:                                                         \
+        MoeFFNWint2Kernel<IN_DTYPE, OUT_DTYPE>(permute_input,               \
                                                tokens_expert_prefix_sum,    \
-                                               up_gate_proj_weight,        \
-                                               down_proj_weight,           \
-                                               up_gate_proj_bias,          \
-                                               up_gate_proj_scale,         \
-                                               down_proj_scale,            \
+                                               up_gate_proj_weight,         \
+                                               down_proj_weight,            \
+                                               up_gate_proj_bias,           \
+                                               up_gate_proj_scale,          \
+                                               down_proj_scale,             \
                                                up_gate_proj_local_scale,    \
-                                               up_gate_proj_code_scale,    \
-                                               up_gate_proj_code_zp,       \
-                                               down_proj_local_scale,      \
-                                               down_proj_code_scale,       \
-                                               down_proj_code_zp,          \
-                                               down_in_quant_scale,        \
-                                               expert_idx_per_token,       \
-                                               up_out_scale,               \
-                                               down_out_scale,             \
+                                               up_gate_proj_code_scale,     \
+                                               up_gate_proj_code_zp,        \
+                                               down_proj_local_scale,       \
+                                               down_proj_code_scale,        \
+                                               down_proj_code_zp,           \
+                                               down_in_quant_scale,         \
+                                               expert_idx_per_token,        \
+                                               up_out_scale,                \
+                                               down_out_scale,              \
                                                used_in_ep_low_latency,      \
-                                               ffn_out);                   \
+                                               ffn_out);                    \
     break;                                                          
 
-#define dispatch_in_dtype_macro(IN_DTYPE)                                 \
-    case IN_DTYPE:                                                         \
-        switch (out_dtype) {                                               \
+#define dispatch_in_dtype_macro(IN_DTYPE)                                   \
+    case IN_DTYPE:                                                          \
+        switch (out_dtype) {                                                \
             dispatch_out_dtype_macro(IN_DTYPE, paddle::DataType::FLOAT16);  \
             dispatch_out_dtype_macro(IN_DTYPE, paddle::DataType::BFLOAT16); \
-        default:                                                           \
-            PD_THROW("Unsupported data type for MoeExpertFFN");            \
-        }                                                                  \
+        default:                                                            \
+            PD_THROW("Unsupported data type for MoeExpertFFN");             \
+        }                                                                   \
     break;
 
     const auto in_dtype = permute_input.dtype();
     const auto out_dtype = up_gate_proj_scale ? up_gate_proj_scale->dtype() : in_dtype;
 
-#if _GROUP_GEMM_ONLY
-    auto place = permute_input.place();
-    int64_t expanded_active_expert_rows = permute_input.dims()[0];
-    int64_t inter_size = up_gate_proj_scale.get().dims()[1];
-    auto ffn_out = GetEmptyTensor({expanded_active_expert_rows, inter_size}, out_dtype, place);
-#else
     auto ffn_out = paddle::empty_like(permute_input, out_dtype);
-#endif
 
     switch (in_dtype) {
         dispatch_in_dtype_macro(paddle::DataType::FLOAT8_E4M3FN);
@@ -386,7 +342,6 @@ paddle::Tensor MoeExpertFFNWint2Func(
         default:
             PD_THROW("Unsupported data type for MoeExpertFFN");
     }
-
 
     return ffn_out;
 }
@@ -450,14 +405,8 @@ std::vector<std::vector<int64_t>> MoeExpertFFNWint2InferShape(
     const paddle::optional<std::vector<int64_t>>& up_out_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_out_scale_shape,
     const bool used_in_ep_low_latency) {
-#if _GROUP_GEMM_ONLY
-    int64_t expanded_active_expert_rows = permute_input_shape[0];
-    int64_t inter_size = up_gate_proj_scale_shape.get()[1];
-    std::cout << "expanded_active_expert_rows: " << expanded_active_expert_rows << ", inter_size: " << inter_size << std::endl;
-    return {std::vector<int64_t>{expanded_active_expert_rows, inter_size}};
-#else
+
     return {permute_input_shape};
-#endif
 }
 
 std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
@@ -481,19 +430,11 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
     const float up_out_scale,
     const float down_out_scale,
     const bool used_in_ep_low_latency) {
-// if (up_gate_proj_bias_dtype) {
-//     return {up_gate_proj_bias_dtype.value()};  // 解包 optional，返回 vector<paddle::DataType>
-//     } else {
-//     return {permute_input_dtype};              // 没有值就返回默认的
-// }
-
     if (up_gate_proj_scale_dtype) {
-        return {*up_gate_proj_scale_dtype};  // 解包 optional，返回 vector<paddle::DataType>
+        return {*up_gate_proj_scale_dtype};
     } else {
-        return {permute_input_dtype};              // 没有值就返回默认的
+        return {permute_input_dtype};
     }
-
-    // return up_gate_proj_bias_dtype ? {up_gate_proj_bias_dtype} : {permute_input_dtype};
 }
 
 /**
@@ -509,40 +450,70 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
  * Inputs:
  *   - permute_input: Permuted input tensor organized by expert
  *                   Shape: [total_tokens * top_k, hidden_size]
- *                   dtype: bfloat16/float16 (or int8 for w4a8)
+ *                   dtype: fp8/bfloat16/float16 (or int8 for w4a8)
  *   - tokens_expert_prefix_sum: Prefix sum array of token counts per expert for group_gemm
  *                              Shape: [num_experts]
  *                              dtype: int64
  *   - up_gate_proj_weight: First FFN layer weights
- *                 Shape: [num_experts, inter_size * 2, hidden_size]
+ *                 Shape: [num_experts, hidden_size / 4, inter_size * 2]
  *                 dtype: Same as input (unquantized) or int8 (quantized)
  *   - down_proj_weight: Second FFN layer weights
- *                 Shape: [num_experts, hidden_size, inter_size]
+ *                 Shape: [num_experts, inter_size / 4, hidden_size]
  *                 dtype: Same as input (unquantized) or int8 (quantized)
  *   - up_gate_proj_bias: Optional bias for first FFN layer
  *               Shape: [num_experts, inter_size * 2]
- *               dtype: Same as input
+ *               dtype: W2Afp8 is bfloat16, other same as input
  *   - up_gate_proj_scale: Quantization scales for first FFN layer
  *                Shape: [num_experts, inter_size * 2]
- *                dtype: Same as input
+ *                dtype: W2Afp8 is bfloat16, other same as input
  *   - down_proj_scale: Quantization scales for second FFN layer
  *                Shape: [num_experts, hidden_size]
- *                dtype: Same as input
+ *                dtype: W2Afp8 is bfloat16, other same as input
+ *   - up_gate_proj_local_scale: Quantization local scale for first FFN layer
+ *                Shape: [num_experts, hidden_size // group_size // 2, inter_size * 2]
+ *                dtype: int8 (quantized)
+ *   - up_gate_proj_code_scale: Quantization code scale for first FFN layer
+ *                Shape: [num_experts, inter_size * 2]
+ *                dtype: float32
+ *   - up_gate_proj_code_zp: Quantization code zp for first FFN layer
+ *                Shape: [num_experts, inter_size * 2]
+ *                dtype: float32
+ *   - down_proj_local_scale: Quantization local scale for second FFN layer
+ *                Shape: [num_experts, inter_size// group_size // 2, hidden_size]
+ *                dtype: int8 (quantized)
+ *   - down_proj_code_scale: Quantization code scale for second FFN layer
+ *                Shape: [num_experts, hidden_size]
+ *                dtype: float32
+ *   - down_proj_code_zp: Quantization code zp for second FFN layer
+ *                Shape: [num_experts, hidden_size]
+ *                dtype: float32
+ *   - down_in_quant_scale: Optional input scales for second FFN layer (W2Afp8 only)
+ *                Shape: [num_experts]
+ *                dtype: float32
+ *   - expert_idx_per_token: Optional expert indices per token (W2Afp8 only)
+ *                Shape: [total_tokens]
+ *                dtype: int64
+ *   - up_out_scale: Optional dequant scales for first FFN layer  (W2Afp8 only)
+ *                Shape: [num_experts]
+ *                dtype: float32
+ *   - down_out_scale: Optional dequant scales for second FFN layer (W2Afp8 only)
+ *                Shape: [num_experts]
+ *                dtype: float32
+
  * Outputs:
  *   - output_tensor: Output tensor after MoE FFN computation
  *                   Shape: Same as permute_input
- *                   dtype: Same as input (or up_gate_proj_scale dtype for w4a8)
+ *                   dtype: W2Afp8 is bfloat16, other same as input
  *
  * Attributes:
- *   - up_out_scale: Out scales for first FFN layer
- *   - down_out_scale: Out scales for second FFN layer
  *   - used_in_ep_low_latency: Whether running in low latency mode
  *                            Affects activation function implementation
  *
  * Note:
  * - Low latency mode uses specialized grouped SwiGLU implementation
  */
-PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
+// PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
+PD_BUILD_OP(moe_expert_ffn_wint2)
   .Inputs({"permute_input",
            "tokens_expert_prefix_sum",
            "up_gate_proj_weight",

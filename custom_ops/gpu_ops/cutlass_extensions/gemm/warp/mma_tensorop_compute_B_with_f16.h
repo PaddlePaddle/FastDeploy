@@ -379,6 +379,7 @@ public:
             || (platform::is_same<ElementA, bfloat16_t>::value && ArchTag::kMinComputeCapability >= 80)
             || (platform::is_same<ElementA, float_e4m3_t>::value && ArchTag::kMinComputeCapability >= 89),
         "MmaTensorOpCvtBToA only supports Fp16 A or Bf16 A on Ampere+, or FP8 on Ada");
+
     /// Indicates class of matrix operator
     using OperatorClass = arch::OpClassTensorOp;
 

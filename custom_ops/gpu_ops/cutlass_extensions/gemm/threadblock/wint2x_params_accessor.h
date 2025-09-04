@@ -47,9 +47,10 @@ template <
     int GroupSize_>
 class Wint2ParamsAccessor {
 public:
-  static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value
-          || platform::is_same<T, float_e4m3_t>::value,
-      "T must be fp8, fp16 or bf16");
+  static_assert(platform::is_same<T, half_t>::value
+            || platform::is_same<T, bfloat16_t>::value
+            || platform::is_same<T, float_e4m3_t>::value,
+        "T must be fp8, fp16 or bf16");
   using ElementType = T;
   using Shape = Shape_;
 

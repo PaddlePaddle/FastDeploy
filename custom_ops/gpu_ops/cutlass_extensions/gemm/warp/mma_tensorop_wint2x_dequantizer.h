@@ -241,7 +241,8 @@ class MmaTensorOpWin2xDequantizer<
     //    && platform::is_same<typename MmaOperator_::ArchMmaOperator::LayoutB, layout::ColumnMajor>::value>::type>
 {
 public:
-    static_assert(platform::is_same<ElementOperand_, half_t>::value || platform::is_same<ElementOperand_, bfloat16_t>::value,
+    static_assert(platform::is_same<ElementOperand_, half_t>::value
+            || platform::is_same<ElementOperand_, bfloat16_t>::value,
         "T must be fp16 or bf16");
 
     /// Mma Operator
@@ -390,6 +391,8 @@ public:
         Type* output_ptr = reinterpret_cast<Type *>(&output_frag);
         DualType const* scale_ptr = reinterpret_cast<DualType const*>(&scale_frag_);
 
+        auto output_n_stride = kWarpIterationsAlongK * kUnpackInterval;
+
         CUTLASS_PRAGMA_UNROLL
         for (int loop_k = 0; loop_k < kUnpackInterval; ++loop_k) {
             CUTLASS_PRAGMA_UNROLL
@@ -397,9 +400,14 @@ public:
                 int base_idx = mma_n_iter * kUnpackFactor + warp_k_compute_offset * kUnpackInterval;
                     ptr_source[mma_n_iter] = ptr_input[base_idx + loop_k];
             }
+
+            // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
+            // reorder: [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15]
             unpacked_frag_ = Uint2Converter::convert(source_frag, code_scale_frag, code_zp_frag);
 
             DualType const* unpacked_ptr = reinterpret_cast<DualType const*>(&unpacked_frag_);
+
+            auto warp_k_offset = loop_k * kWarpIterationsAlongK;
 
             CUTLASS_PRAGMA_UNROLL
             for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; mma_n_iter += 2) {
@@ -411,8 +419,8 @@ public:
                 for (int mma_k_iter = 0; mma_k_iter < kWarpIterationsAlongK; ++mma_k_iter) {
                     DualType unpacked_valuex2 = unpacked_ptr[mapped_idx_base + mma_k_iter];
                     DualType scaled_value = __hmul2(unpacked_valuex2, scalex2);
-                    output_ptr[mma_n_iter * kWarpIterationsAlongK * kUnpackInterval + mma_k_iter + loop_k * kWarpIterationsAlongK] = scaled_value.x;
-                    output_ptr[(mma_n_iter + 1) * kWarpIterationsAlongK * kUnpackInterval + mma_k_iter + loop_k * kWarpIterationsAlongK] = scaled_value.y;
+                    output_ptr[mma_n_iter * output_n_stride + mma_k_iter + warp_k_offset] = scaled_value.x;
+                    output_ptr[(mma_n_iter + 1) * output_n_stride + mma_k_iter + warp_k_offset] = scaled_value.y;
                 }
             }
         }
