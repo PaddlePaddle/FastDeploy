@@ -420,7 +420,7 @@ if __name__ == "__main__":
     # output = llm.generate(prompts="who are you？", use_tqdm=True)
     # print(output)
     llm = LLM(
-        model="/opt/baidu/paddle_internal/FastDeploy/Qwen2.5-7B",
+        model="/opt/baidu/FastDeploy/Qwen2.5-7B",
         tensor_parallel_size=2,
     )
     sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
