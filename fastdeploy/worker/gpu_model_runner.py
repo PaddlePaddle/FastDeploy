@@ -29,9 +29,9 @@ from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
 )
-from fastdeploy.model_executor.guided_decoding import get_guided_backend
-from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
+from fastdeploy.model_executor.guided_decoding import (
     LogitsProcessorBase,
+    get_guided_backend,
 )
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -71,8 +71,11 @@ from fastdeploy.model_executor.pre_and_post_process import (
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
+import zmq
+
 from fastdeploy import envs
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.inter_communicator import ZmqClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -97,10 +100,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
-
-        self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
-            self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         # VL model config:
         if self.enable_mm:
@@ -129,6 +128,11 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
+
+        self.guided_backend = None
+        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+            self.guided_backend = get_guided_backend(fd_config=self.fd_config)
+            self.sampler.set_reasoning_parser(self.guided_backend.get_reasoning_parser())
 
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
@@ -162,6 +166,12 @@ class GPUModelRunner(ModelRunnerBase):
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+
+        self.zmq_client = None
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            self.zmq_client.connect()
+            self.zmq_client.socket.SNDTIMEO = 3000
 
     def exist_prefill(self):
         """
@@ -207,7 +217,16 @@ class GPUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        return self.guided_backend.get_logits_processor(schemata_key=schemata_key), schemata_key
+        enable_thinking = request.get("enable_thinking", True)
+        enable_thinking = enable_thinking if enable_thinking is not None else True
+
+        return (
+            self.guided_backend.get_logits_processor(
+                schemata_key=schemata_key,
+                enable_thinking=enable_thinking,
+            ),
+            schemata_key,
+        )
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -1209,6 +1228,7 @@ class GPUModelRunner(ModelRunnerBase):
                 block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
+                zmq_client=self.zmq_client,
             )
 
             if self.speculative_decoding:
@@ -1336,10 +1356,10 @@ class GPUModelRunner(ModelRunnerBase):
         Returns:
             A list of indices corresponding to the requests that need to be skipped.
         """
-        skip_idx_list = []
-        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
-            return skip_idx_list
+        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None or model_forward_batch is None:
+            return []
 
+        skip_idx_list = []
         for task in model_forward_batch:
             if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
                 continue
@@ -1504,7 +1524,10 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
+            zmq_client=self.zmq_client,
         )
+        if self.guided_backend is not None and sampler_output is not None:
+            self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
 
         # 6. Speculative decode
         if self.speculative_decoding:
@@ -1538,7 +1561,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Add cache for guided decoding.
         """
-        if self.guided_backend is None:
+        if self.guided_backend is None or model_forward_batch is None:
             return
 
         for request in model_forward_batch:
