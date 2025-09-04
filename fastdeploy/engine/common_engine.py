@@ -526,9 +526,8 @@ class EngineSevice:
                 self.cfg.max_prefill_batch,
             )
 
-            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
-                available_blocks=self.resource_manager.available_block_num(),
+                available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
