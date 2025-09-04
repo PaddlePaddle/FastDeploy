@@ -263,13 +263,11 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        return (
-            f"Request(request_id={self.request_id}, "
-            f"prompt={self.prompt!r}, "
-            f"prompt_token_ids={self.prompt_token_ids}, "
-            f"draft_token_ids={self.draft_token_ids}, "
-            f"sampling_params={self.sampling_params})"
-        )
+        non_none_fields = []
+        for attr, value in vars(self).items():
+            if value is not None and not attr.startswith("_"):
+                non_none_fields.append(f"{attr}={value!r}")
+        return f"Request({', '.join(non_none_fields)})"
 
 
 @dataclass(slots=True)

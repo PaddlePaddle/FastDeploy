@@ -322,7 +322,7 @@ jobs:
 
   stable_test:
     name: Run Stable Tests
-    needs: [clone,build]
+    needs: [clone,build_sm8090]
     uses: ./.github/workflows/_stable_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate

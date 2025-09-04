@@ -59,13 +59,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ]
         if self.quant_config.is_checkpoint_bf16:
             layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
@@ -164,7 +164,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 3.quantize weight
         from fastdeploy.model_executor.layers.utils import per_block_cast_to_fp8
 
-        for expert_id in range(layer.num_experts):
+        for expert_id in range(layer.num_local_experts):
             weight_quant, scale[expert_id] = per_block_cast_to_fp8(
                 getattr(layer, unquantized_weight_name)[expert_id], self.quant_config.weight_block_size
             )
