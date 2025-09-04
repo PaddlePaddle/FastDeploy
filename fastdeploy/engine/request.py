@@ -40,6 +40,7 @@ class RequestType(Enum):
     PREFILL = 0
     DECODE = 1
     PREEMPTED = 2
+    EXTEND = 3
 
 
 @dataclass
@@ -141,6 +142,9 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        # extend block tables
+        self.use_extend_tables = False
+        self.extend_block_tables = []
 
     @classmethod
     def from_dict(cls, d: dict):
