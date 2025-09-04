@@ -55,9 +55,6 @@ from fastdeploy.metrics.metrics import (
     main_process_metrics,
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
-from fastdeploy.plugins.model_register import load_model_register_plugins
-
-load_model_register_plugins()
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     StatefulSemaphore,
@@ -70,7 +67,7 @@ from fastdeploy.utils import (
 parser = FlexibleArgumentParser()
 parser.add_argument("--port", default=8000, type=int, help="port to the http server")
 parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=1, type=int, help="number of workers")
+parser.add_argument("--workers", default=None, type=int, help="number of workers")
 parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
 parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
 parser.add_argument(
@@ -80,10 +77,19 @@ parser.add_argument(
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+parser.add_argument(
+    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
+)
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
+
+if args.workers is None:
+    args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
+
+console_logger.info(f"Number of api-server workers: {args.workers}.")
+
 args.model = retrive_model_from_server(args.model, args.revision)
-chat_template = load_chat_template(args.chat_template)
+chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
@@ -179,7 +185,14 @@ async def lifespan(app: FastAPI):
     )
     app.state.model_handler = model_handler
     chat_handler = OpenAIServingChat(
-        engine_client, app.state.model_handler, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+        chat_template,
+        args.enable_mm_output,
+        args.tokenizer_base_url,
     )
     completion_handler = OpenAIServingCompletion(
         engine_client,
@@ -470,7 +483,7 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
-    llm_engine.scheduler.reset()
+    llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
@@ -488,11 +501,13 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
-        llm_engine.scheduler.reset()
+        llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
-        if hasattr(llm_engine.scheduler, "update_config") and callable(llm_engine.scheduler.update_config):
-            llm_engine.scheduler.update_config(
+        if hasattr(llm_engine.engine.scheduler, "update_config") and callable(
+            llm_engine.engine.scheduler.update_config
+        ):
+            llm_engine.engine.scheduler.update_config(
                 load_shards_num=request.load_shards_num,
                 reallocate=request.reallocate_shard,
             )
@@ -532,7 +547,6 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-    load_model_register_plugins()
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return

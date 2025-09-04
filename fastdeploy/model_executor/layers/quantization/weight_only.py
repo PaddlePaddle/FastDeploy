@@ -34,12 +34,6 @@ from ..utils import get_tensor
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
-def get_sm_version():
-    prop = paddle.device.cuda.get_device_properties()
-    cc = prop.major * 10 + prop.minor
-    return cc
-
-
 class WeightOnlyConfig(QuantConfigBase):
     """
     Quantization config for weight only
@@ -139,10 +133,14 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
+                from fastdeploy.model_executor.layers.quantization.ops.machete_mm import (
+                    _ENABLE_MACHETE,
+                )
+
                 if (
                     self.name() == "wint4"
+                    and _ENABLE_MACHETE
                     and envs.FD_USE_MACHETE == "1"
-                    and get_sm_version() == 90
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
                 ):

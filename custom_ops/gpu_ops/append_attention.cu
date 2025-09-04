@@ -277,7 +277,10 @@ void AppendAttentionKernel(
             exec_stream,
             &qkv_out,
             const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache));
+            const_cast<paddle::Tensor*>(&value_cache),
+            q_norm_weight,
+            k_norm_weight,
+            rms_norm_eps);
       } else {
         SpeculateWriteCacheWithRoPEKernel<data_t, data_t>(
             meta_data,
@@ -300,7 +303,10 @@ void AppendAttentionKernel(
             exec_stream,
             &qkv_out,
             const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache));
+            const_cast<paddle::Tensor*>(&value_cache),
+            q_norm_weight,
+            k_norm_weight,
+            rms_norm_eps);
       }
     } else {
       if (qkv_out_scales) {

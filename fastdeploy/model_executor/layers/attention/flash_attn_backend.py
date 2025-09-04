@@ -176,7 +176,7 @@ class FlashAttentionBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             return (
@@ -359,6 +359,7 @@ class FlashAttentionBackend(AttentionBackend):
             getattr(layer, "cache_v_zp", None),
             layer.linear_shift,
             layer.linear_smooth,
+            forward_meta.attn_mask_offsets,
             metadata.kv_signal_data_list[layer.layer_id],
             getattr(layer, "q_norm_weight", None),
             getattr(layer, "k_norm_weight", None),
