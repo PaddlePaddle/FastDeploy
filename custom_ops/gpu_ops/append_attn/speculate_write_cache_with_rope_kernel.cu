@@ -489,7 +489,8 @@ void SpeculateWriteCacheWithRoPEKernel(
             bsz,
             token_nums,
             stream,
-            use_neox_rotary_style);
+            use_neox_rotary_style,
+            rope_3d);
     } else if (cache_quant_type_str == "cache_int8") {
         append_speculate_cache_int8_rope(
             reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
@@ -522,7 +523,8 @@ void SpeculateWriteCacheWithRoPEKernel(
             bsz,
             token_nums,
             stream,
-            use_neox_rotary_style);
+            use_neox_rotary_style,
+            rope_3d);
     } else if (cache_quant_type_str == "cache_fp8") {
         append_speculate_cache_int8_rope<DataType_, QKV_TYPE, true>(
             reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
@@ -555,7 +557,8 @@ void SpeculateWriteCacheWithRoPEKernel(
             bsz,
             token_nums,
             stream,
-            use_neox_rotary_style);
+            use_neox_rotary_style,
+            rope_3d);
     } else if (cache_quant_type_str == "cache_int4_zp") {
         append_speculate_cache_int4_rope(
             reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
@@ -594,7 +597,8 @@ void SpeculateWriteCacheWithRoPEKernel(
             bsz,
             token_nums,
             stream,
-            use_neox_rotary_style);
+            use_neox_rotary_style,
+            rope_3d);
     } else {
         PD_THROW(
             "cache_quant_type_str should be one of [none, cache_int8, "
