@@ -47,7 +47,7 @@ from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
 
-class EngineSevice:
+class EngineService:
     """
     Base class containing common engine functionality
     """
@@ -589,7 +589,7 @@ class EngineSevice:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
+                    llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
@@ -644,13 +644,13 @@ class EngineSevice:
                     self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receving new request from zmq, details={e}, "
+                    f"Error happend while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:
