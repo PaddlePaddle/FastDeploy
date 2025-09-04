@@ -32,7 +32,7 @@
 | ```max_long_partial_prefills```    | `int`       | 开启Chunked Prefill时，Prefill阶段并发中包启的最多长请求数，默认1 |
 | ```long_prefill_token_threshold``` | `int`       | 开启Chunked Prefill时，请求Token数超过此值的请求被视为长请求，默认为max_model_len*0.04 |
 | ```static_decode_blocks```         | `int`       | 推理过程中，每条请求强制从Prefill的KVCache分配对应块数给Decode使用，默认2|
-| ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
+| ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容，详见[思考链输出](features/reasoning_output.md) |
 | ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False。开启前建议仔细阅读  [graph_optimization.md](./features/graph_optimization.md)，在多卡场景需要同时开启 Custom all-reduce。 |
 | ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
