@@ -460,8 +460,9 @@ class CacheTransferManager:
         )
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
-                while not model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
-                    time.sleep(0.001)
+                # while not model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
+                #     time.sleep(0.001)
+
                 # paddle.device.set_device(f"gpu:{self.device}")
                 for tensor in self.gpu_cache_kvs.values():
                     del tensor

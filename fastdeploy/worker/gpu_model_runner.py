@@ -959,8 +959,8 @@ class GPUModelRunner(ModelRunnerBase):
         if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
-                key_cache_name = f"key_caches_{i}_rank{local_rank}_device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}_device{self.device_id}"
+                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
                 cache_kvs_list.append(key_cache)
