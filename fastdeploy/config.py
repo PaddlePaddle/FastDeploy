@@ -127,12 +127,13 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.reasoning_parser = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
         for key, value in args.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
         assert self.model != ""
@@ -350,8 +351,8 @@ class ParallelConfig:
             )
         )
         # same ep group id
-        # (TODO:gaoziyuan move this gid config to ep.py)
         dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+        self.ep_group = dist.new_group(range(self.expert_parallel_size))
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -890,7 +891,7 @@ class CacheConfig:
         else:
             self.kv_cache_ratio = 0.75
         self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
-        self.prealloc_dec_block_slot_num_threshold = 5
+        self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
         self.enable_chunked_prefill = False
@@ -1233,23 +1234,14 @@ class FDConfig:
 
         self.paddle_commit_id = paddle.version.commit
 
-        if self.cache_config.enable_chunked_prefill:
-            self.force_chunked_prefill = int(envs.FD_FORCE_CHUNKED_PREFILL)
-            if (
-                self.speculative_config is not None
-                and self.speculative_config.method in ["mtp"]
-                and not self.force_chunked_prefill
-            ):
-                self.cache_config.enable_chunked_prefill = False
-
         if self.max_num_batched_tokens is None:
-            if self.cache_config.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
-                    self.max_num_batched_tokens = self.max_model_len
+                if self.cache_config.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = self.max_model_len
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
@@ -1258,7 +1250,8 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
-            if self.model_config.enable_mm:
+            if current_platform.is_xpu() or self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
@@ -1299,7 +1292,7 @@ class FDConfig:
         ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
@@ -1328,12 +1321,10 @@ class FDConfig:
             ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
 
             if self.guided_decoding_backend != "off":
-                # TODO: mm support guided_decoding
-                assert (
-                    self.model_config.enable_mm is False
-                ), "Multimodal model currently do not support guided_decoding"
-
                 # TODO: speculative decoding support guided_decoding
+                assert (
+                    self.speculative_config.method is None
+                ), "speculative decoding currently do not support guided_decoding"
 
                 # TODO: xpu support guided_decoding
                 assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
@@ -1344,6 +1335,7 @@ class FDConfig:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"
                     )
+
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 

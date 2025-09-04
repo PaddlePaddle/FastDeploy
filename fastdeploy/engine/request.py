@@ -40,6 +40,7 @@ class RequestType(Enum):
     PREFILL = 0
     DECODE = 1
     PREEMPTED = 2
+    EXTEND = 3
 
 
 @dataclass
@@ -141,6 +142,9 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        # extend block tables
+        self.use_extend_tables = False
+        self.extend_block_tables = []
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -263,13 +267,11 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        return (
-            f"Request(request_id={self.request_id}, "
-            f"prompt={self.prompt!r}, "
-            f"prompt_token_ids={self.prompt_token_ids}, "
-            f"draft_token_ids={self.draft_token_ids}, "
-            f"sampling_params={self.sampling_params})"
-        )
+        non_none_fields = []
+        for attr, value in vars(self).items():
+            if value is not None and not attr.startswith("_"):
+                non_none_fields.append(f"{attr}={value!r}")
+        return f"Request({', '.join(non_none_fields)})"
 
 
 @dataclass(slots=True)
@@ -284,7 +286,8 @@ class CompletionOutput:
 
     index: int
     send_idx: int
-    token_ids: list[int]
+    token_ids: list[Any]
+    decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
