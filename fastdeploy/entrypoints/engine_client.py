@@ -339,10 +339,14 @@ class EngineClient:
         self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
 
         api_server_logger.info(f"start clear model weight {self.model_weights_status_signal.value}")
-        while self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED and timeout != 0:
+        while timeout >= 0:
+            api_server_logger.info(f"{timeout}, {self.model_weights_status_signal.value[0]}, {self.prefix_tree_status_signal.value[0]}, {self.kv_cache_status_signal.value[0]}")
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED and \
+                    self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL and \
+                    self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL:
+                break
             time.sleep(1)
             timeout -= 1
-            continue
         if self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
             return False, "clear model weight timeout"
         time.sleep(1)

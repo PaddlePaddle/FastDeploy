@@ -135,6 +135,7 @@ class CacheTransferManager:
         self.n_ranks = args.mp_num
         self.rank = rank
         self.device = device
+        self.engine_pid = args.engine_pid
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
@@ -241,7 +242,7 @@ class CacheTransferManager:
             create=False,
         )
 
-        threading.Thread(target=self.clear_caches, args=(args.engine_pid,)).start()
+        threading.Thread(target=self.clear_caches, daemon=True).start()
 
     def _do_swap_to_cpu_task(
         self,
@@ -440,39 +441,27 @@ class CacheTransferManager:
             transfer_task_id,
         )
 
-    def clear_caches(self, pid_suffix):
+    def clear_caches(self):
         logger.info("Start a thread to clear kv cache when model weights are cleared.")
+        logger.info(f"{self.engine_pid}")
         kv_cache_status = np.zeros([1], dtype=np.int32)
         kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
-            suffix=pid_suffix,
-            create=False,
-        )
-        workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
-        model_weights_status_signal = IPCSignal(
-            name="model_weights_status",
-            array=workers_model_weights,
-            dtype=np.int32,
-            suffix=pid_suffix,
+            suffix=self.engine_pid,
             create=False,
         )
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
-                # while not model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
-                #     time.sleep(0.001)
-
-                # paddle.device.set_device(f"gpu:{self.device}")
-                for tensor in self.gpu_cache_kvs.values():
-                    del tensor
+                logger.info(f"Before clearing, reserved={paddle.device.cuda.memory_reserved()}, allocated={paddle.device.cuda.memory_allocated()}")
+                logger.info(f"Start clearing gpu caches ")
                 self.gpu_cache_kvs.clear()
                 self.gpu_cache_k_tensors.clear()
                 self.gpu_cache_v_tensors.clear()
-                if self.cache_messager:
-                    self.cache_messager.gpu_cache_kvs.clear()
+                logger.info(f"After clearing, reserved={paddle.device.cuda.memory_reserved()}, allocated={paddle.device.cuda.memory_allocated()}")
                 paddle.device.cuda.empty_cache()
-
+                logger.info(f"After empty cache, reserved={paddle.device.cuda.memory_reserved()}, allocated={paddle.device.cuda.memory_allocated()}")
                 logger.info("GPU kv cache is cleared.")
 
                 for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
@@ -484,7 +473,7 @@ class CacheTransferManager:
                 gc.collect()
 
                 kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
-            time.sleep(0.001)
+            time.sleep(1)
 
 
 def main():
