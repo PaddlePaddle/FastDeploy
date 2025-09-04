@@ -77,9 +77,17 @@ parser.add_argument(
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+
 parser.add_argument(
     "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
 )
+parser.add_argument(
+    "--timeout-graceful-shutdown",
+    default=0,
+    type=int,
+    help="timeout for graceful shutdown in seconds (used by uvicorn)",
+)
+
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 
@@ -431,6 +439,7 @@ def launch_api_server() -> None:
             workers=args.workers,
             log_config=UVICORN_CONFIG,
             log_level="info",
+            timeout_graceful_shutdown=args.timeout_graceful_shutdown,
         )  # set log level to error to avoid log
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
