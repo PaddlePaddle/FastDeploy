@@ -156,7 +156,12 @@ class VisionFlashAttention2(nn.Layer):
     """
 
     def __init__(
-        self, dim: int, num_heads: int = 16, tensor_parallel_degree: int = 1, tensor_parallel_rank: int = 0
+        self,
+        dim: int,
+        num_heads: int = 16,
+        tensor_parallel_degree: int = 1,
+        tensor_parallel_rank: int = 0,
+        model_format: str = "",
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
@@ -180,19 +185,25 @@ class VisionFlashAttention2(nn.Layer):
                 has_bias=True,
             )
             set_weight_attrs(self.qkv.weight, {"weight_loader": self.weight_loader})
-            set_weight_attrs(self.qkv.bias, {"weight_loader": self.weight_loader, "load_bias": True})
-            set_weight_attrs(self.qkv.bias, {"output_dim": True})
+            set_weight_attrs(
+                self.qkv.bias, {"weight_loader": self.weight_loader, "load_bias": True, "output_dim": True}
+            )
             set_weight_attrs(self.proj.weight, {"output_dim": False})
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
             self.proj = nn.Linear(dim, dim)
 
+        set_weight_attrs(self.qkv.weight, {"model_format": model_format})
+        set_weight_attrs(self.proj.weight, {"model_format": model_format})
         self.head_dim = dim // num_heads  # must added
         self.num_heads = num_heads
         self.hidden_size = dim
         self.num_heads_per_rank = divide(self.num_heads, self.tensor_parallel_degree)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        model_format = getattr(param, "model_format", "")
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
         load_bias = getattr(param, "load_bias", None)
         if load_bias:
             head_dim = self.hidden_size // self.num_heads
@@ -320,6 +331,7 @@ class VisionMlp(nn.Layer):
         hidden_dim: int,
         hidden_act: str,
         tensor_parallel_degree: int = 1,
+        model_format: str = "",
     ) -> None:
         super().__init__()
         self.tensor_parallel_degree = tensor_parallel_degree
@@ -345,6 +357,10 @@ class VisionMlp(nn.Layer):
         else:
             self.fc1 = nn.Linear(dim, hidden_dim)
             self.fc2 = nn.Linear(hidden_dim, dim)
+
+        set_weight_attrs(self.fc1.weight, {"model_format": model_format})
+        set_weight_attrs(self.fc2.weight, {"model_format": model_format})
+
         self.act = ACT2FN[hidden_act]
 
     def forward(self, x) -> paddle.Tensor:
@@ -403,6 +419,7 @@ class DFNRopeVisionBlock(nn.Layer):
         tensor_parallel_degree: int,
         tensor_parallel_rank: int,
         attn_implementation: str = "sdpa",
+        model_format: str = "",
     ) -> None:
         """_summary_
 
@@ -420,12 +437,14 @@ class DFNRopeVisionBlock(nn.Layer):
             num_heads=config.num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
             tensor_parallel_rank=tensor_parallel_rank,
+            model_format=model_format,
         )
         self.mlp = VisionMlp(
             dim=config.embed_dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=config.hidden_act,
             tensor_parallel_degree=tensor_parallel_degree,
+            model_format=model_format,
         )
         self.config = config
 
@@ -509,6 +528,8 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             in_channels=config.vision_config.in_channels,
             embed_dim=config.vision_config.embed_dim,
         )
+        model_format = getattr(config, "model_format", "")
+        set_weight_attrs(self.patch_embed.proj.weight, {"model_format": model_format})
 
         head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
@@ -519,6 +540,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
                     config.vision_config,
                     config.pretrained_config.tensor_parallel_degree,
                     config.pretrained_config.tensor_parallel_rank,
+                    model_format=model_format,
                 )
                 for _ in range(config.vision_config.depth)
             ]
