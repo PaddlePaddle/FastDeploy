@@ -266,7 +266,7 @@ class AppendAttentionBackend(AttentionBackend):
             else:
                 res = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type)
 
-            append_attention_with_output(
+            res = append_attention_with_output(
                 qkv,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],

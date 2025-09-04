@@ -590,7 +590,7 @@ std::vector<paddle::Tensor> AppendAttention(
   return {paddle::Tensor{}};
 }
 
-void AppendAttentionWithOutput(
+std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
@@ -755,6 +755,8 @@ void AppendAttentionWithOutput(
       break;
     }
   }
+
+  return {fmha_out};
 }
 
 
