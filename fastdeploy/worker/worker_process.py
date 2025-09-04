@@ -755,6 +755,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if parallel_config.guided_decoding_backend != "off":
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     fd_config = FDConfig(
         model_config=model_config,
