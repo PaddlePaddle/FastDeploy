@@ -69,7 +69,7 @@ class QwenVLProcessor(TextProcessor):
             tokenizer=self.tokenizer,
             **processor_kwargs,
         )
-
+        self.image_patch_id = self.processor.image_token_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
     def process_request(self, request, max_model_len=None, **kwargs):

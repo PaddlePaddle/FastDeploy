@@ -62,6 +62,7 @@ class ErnieArchitectures:
     """Helper class for ERNIE architecture check."""
 
     ARCHITECTURES = {
+        "Ernie4_5ForCausalLM",  # 0.3B-PT
         "Ernie4_5_ForCausalLM",
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
@@ -1219,7 +1220,10 @@ class FDConfig:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if paddle.is_compiled_with_xpu():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048
