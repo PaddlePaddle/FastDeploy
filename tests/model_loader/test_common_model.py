@@ -77,7 +77,7 @@ for model, cfg in model_param_map.items():
                 model,
                 cfg.get("tensor_parallel_size", 1),
                 cfg.get("max_num_seqs", 1),
-                cfg.get("max_model_len", 2048),
+                cfg.get("max_model_len", 1024),
                 quant,
                 cfg.get("max_tokens", 32),
                 env,
