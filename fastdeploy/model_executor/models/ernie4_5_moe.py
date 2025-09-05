@@ -637,7 +637,7 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         return "Ernie4_5_ForCausalLM"
 
 
-class Ernie4_5ForCausalLM(Ernie4_5_MoeForCausalLM):
+class Ernie4_5ForCausalLM(Ernie4_5_ForCausalLM):
     """
     Ernie4_5ForCausalLM 0.3B-PT
     """
@@ -801,3 +801,16 @@ class Ernie4_5_PretrainedModel(Ernie4_5_MoePretrainedModel):
         Model Architecture Name
         """
         return "Ernie4_5_ForCausalLM"
+
+
+class Ernie4_5PretrainedModel(Ernie4_5_PretrainedModel):
+    """
+    Ernie4_5PretrainedModel 0.3B-PT
+    """
+
+    @classmethod
+    def arch_name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5ForCausalLM"
