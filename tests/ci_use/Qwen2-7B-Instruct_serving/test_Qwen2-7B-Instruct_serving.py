@@ -494,9 +494,9 @@ def test_metrics_endpoint(metrics_url):
             _, value = line.rsplit(" ", 1)
             assert float(value) >= 0, "cache_config_info 值错误"
             cache_config_info_found = True
-        elif line.startswith("fastdeploy:hit_req_rate"):
+        elif line.startswith("fastdeploy:available_batch_size"):
             _, value = line.rsplit(" ", 1)
-            assert float(value) >= 0, "hit_req_rate 值错误"
+            assert float(value) >= 0, "available_batch_size 值错误"
             available_batch_size_found = True
         elif line.startswith("fastdeploy:hit_req_rate"):
             _, value = line.rsplit(" ", 1)
