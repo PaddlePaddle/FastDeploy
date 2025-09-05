@@ -245,8 +245,6 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         speculate_get_token_penalty_multi_scores_ref(*inputs_clone)
 
         np.testing.assert_allclose(inputs[1].numpy(), inputs_clone[1].numpy(), atol=1e-5, rtol=1e-5)
-        # logits_ref = np.array([0.000000e00, -7.603661e00, -1.227168e01, -8.381664e00]).astype(data_type)
-        # np.testing.assert_allclose(logits.numpy()[0][0:4], logits_ref, atol=1e-5, rtol=1e-5)
 
 
 if __name__ == "__main__":
