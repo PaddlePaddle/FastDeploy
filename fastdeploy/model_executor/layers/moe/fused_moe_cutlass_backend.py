@@ -127,6 +127,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             self.moe_quant_type,
             used_in_ep_low_latency,
             estimate_total_token_nums,
+            getattr(layer.moe_quant_config, "hadamard_block_size", 128),
         )
 
     def apply_ep_prefill(
