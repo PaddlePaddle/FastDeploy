@@ -1341,6 +1341,7 @@ class GPUModelRunner(ModelRunnerBase):
         if (
             not self.cache_config.enable_chunked_prefill
             or self.guided_backend is None
+            or model_forward_batch is None
             or envs.ENABLE_V1_KVCACHE_SCHEDULER
         ):
             return skip_idx_list
@@ -1543,7 +1544,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Add cache for guided decoding.
         """
-        if self.guided_backend is None:
+        if self.guided_backend is None or model_forward_batch is None:
             return
 
         for request in model_forward_batch:
