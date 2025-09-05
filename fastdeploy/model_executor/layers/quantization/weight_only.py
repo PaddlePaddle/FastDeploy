@@ -24,6 +24,7 @@ from paddle.nn.quant import weight_only_linear, weight_quantize
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
@@ -203,11 +204,15 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
             quant_attrs = extra_weight_attrs
-            if isinstance(layer, MergedColumnParallelLinear) or isinstance(layer, QKVParallelLinear):
+            if (
+                isinstance(layer, MergedColumnParallelLinear)
+                or isinstance(layer, QKVParallelLinear)
+                or isinstance(layer, MergedReplicatedLinear)
+            ):
                 quant_attrs = {
                     **extra_weight_attrs,
                     "tensor_track": TensorTracker(
-                        shape=layer.weight_shape, output_dim=extra_weight_attrs.get("output_dim")
+                        shape=layer.weight_shape, output_dim=extra_weight_attrs.get("output_dim", True)
                     ),
                 }
             set_weight_attrs(
