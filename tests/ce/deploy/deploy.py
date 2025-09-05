@@ -181,7 +181,7 @@ def stop_server(signum=None, frame=None):
     except Exception as e:
         print(f"Failed to stop server: {e}, {str(traceback.format_exc())}")
 
-    for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]:
+    for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]:
         try:
             output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
             for pid in output.splitlines():
