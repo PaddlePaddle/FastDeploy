@@ -59,7 +59,7 @@ class MoEMethodBase(QuantMethodBase):
             "hidden_size": layer.hidden_size,
             "num_experts": layer.num_experts,
             "splitwise_role": layer.fd_config.parallel_config.splitwise_role,
-            "max_dispatch_tokens": layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+            "num_max_dispatch_tokens_per_rank": layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
             "ep_size": layer.ep_size,
             "ep_rank": layer.ep_rank,
             "redundant_experts_num": layer.fd_config.model_config.redundant_experts_num,

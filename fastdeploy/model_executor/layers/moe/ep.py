@@ -70,7 +70,7 @@ class DeepEPEngine:
     def __init__(
         self,
         num_max_dispatch_tokens_per_rank: int,
-        hidden: int,
+        hidden_size: int,
         num_experts: int,
         ep_size: int,
         ep_rank: int,
@@ -86,7 +86,7 @@ class DeepEPEngine:
             ep_size: The number of ranks.
             rank_id: The rank id.
             num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
-            hidden: The hidden dimension of the model.
+            hidden_size: The hidden_size dimension of the model.
             num_experts: The number of experts.
         """
         # TODO(@wufeisheng): Support configurable EP size​
@@ -95,7 +95,7 @@ class DeepEPEngine:
         self.group = group
         self.ep_size = ep_size
         self.rank_id = ep_rank
-        self.hidden = hidden
+        self.hidden_size = hidden_size
         self.num_experts = num_experts
         self.num_local_experts = num_experts // ep_size
         self.async_finish = async_finish
@@ -107,10 +107,22 @@ class DeepEPEngine:
         self.ep_config = Config(24, 6, 256)
         self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
 
+        # Store phase and role for later reuse
+        self._splitwise_role = splitwise_role
+        self._moe_phase = moe_phase
+
+        # Initialize buffer based on role and phase
+        self._init_buffer()
+
+    def _init_buffer(self):
+        """Initialize DeepEP buffer based on splitwise role and MoE phase."""
         # In mixed EP mode on a single node, we dynamically switch between
         # high throughput and low latency modes.
+        paddle.device.cuda.empty_cache()
+        self.deepep_engine = None
 
-        if splitwise_role == "mixed":
+        if self._splitwise_role == "mixed":
+            logger.info("Initializing mixed mode buffer (low latency).")
             self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 int(2e9),
@@ -118,13 +130,12 @@ class DeepEPEngine:
                 low_latency_mode=True,
                 num_qps_per_rank=24,
             )
-        # In disaggregated mode on multiple nodes, we either use
-        # high throughput mode or low latency mode.
         else:
-            if moe_phase.phase == "decode":
-                logger.info("Initializing Low Latency Buffer")
+            if self._moe_phase.phase == "decode":
+                logger.info("Initializing Low Latency Buffer for decode phase.")
                 self.get_low_latency_buffer()
-            elif moe_phase.phase == "prefill":
+            elif self._moe_phase.phase == "prefill":
+                logger.info("Initializing High Throughput Buffer for prefill phase.")
                 self.deepep_engine = deep_ep.Buffer(
                     self.group,
                     int(5e8),
@@ -133,7 +144,19 @@ class DeepEPEngine:
                     num_qps_per_rank=1,
                 )
             else:
-                raise ValueError(f"Unknown generation phase {moe_phase}")
+                raise ValueError(f"Unknown generation phase: {self._moe_phase.phase}")
+
+    def clear_deep_ep_buffer(self):
+        """Clear existing DeepEP buffer and free GPU memory."""
+        if self.deepep_engine is not None:
+            del self.deepep_engine
+        paddle.device.cuda.empty_cache()
+        self.deepep_engine = None
+
+    def create_deep_ep_buffer(self):
+        """Recreate the DeepEP buffer based on current role and phase."""
+        self.clear_deep_ep_buffer()
+        self._init_buffer()
 
     def get_low_latency_buffer(self):
         """
@@ -141,14 +164,14 @@ class DeepEPEngine:
         Args:
             group: The MPI group object.
             num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
-            hidden: The hidden dimension of the model.
+            hidden_size: The hidden_size dimension of the model.
         """
         # NOTES: the low-latency mode will consume much more space than the normal mode
         # So we recommend that `num_max_dispatch_tokens_per_rank`
         #   (the actual batch size in the decoding engine) should be less than 256
         num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
             self.num_max_dispatch_tokens_per_rank,
-            self.hidden,
+            self.hidden_size,
             self.ep_size,
             self.num_experts,
         )
@@ -178,12 +201,12 @@ class DeepEPEngine:
     ):
         """
         Args:
-            hidden_states: [token_num, hidden] 'bfloat16/int8'
+            hidden_states: [token_num, hidden_size] 'bfloat16/int8'
             topk_idx: [token_num, num_topk] 'int64'
 
         Returns:
             recv_hidden_states: [num_local_experts,
-                                 num_max_dispatch_tokens_per_rank * ep_size, hidden]
+                                 num_max_dispatch_tokens_per_rank * ep_size, hidden_size]
                                  ep_size * num_local_experts = num_experts
             recv_count: [num_local_experts]
             recv_count: a tensor shaped `[num_local_experts]` with type `torch.int`, indicating how many tokens each
@@ -221,7 +244,7 @@ class DeepEPEngine:
         """
 
         Return:
-            combined_hidden_states: [num_tokens, hidden]
+            combined_hidden_states: [num_tokens, hidden_size]
         """
         if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":  # not develop version of PaddlePaddle
             # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
@@ -255,7 +278,7 @@ class DeepEPEngine:
         clean_low_latency_buffer
         """
         self.deepep_engine.clean_low_latency_buffer(
-            self.num_max_dispatch_tokens_per_rank, self.hidden, self.num_experts
+            self.num_max_dispatch_tokens_per_rank, self.hidden_size, self.num_experts
         )
 
     def barrier_all(self):
@@ -273,7 +296,7 @@ class EPRunner:
     def __init__(
         self,
         top_k: int,
-        hidden: int,
+        hidden_size: int,
         num_experts: int,
         splitwise_role: str,
         moe_phase: MoEPhase,
@@ -288,7 +311,7 @@ class EPRunner:
         self.redundant_experts_num = redundant_experts_num
         self.ep_engine = DeepEPEngine(
             num_max_dispatch_tokens_per_rank=num_max_dispatch_tokens_per_rank,
-            hidden=hidden,
+            hidden_size=hidden_size,
             num_experts=num_experts + redundant_experts_num,
             ep_size=ep_size,
             ep_rank=ep_rank,
@@ -357,6 +380,14 @@ class EPRunner:
     def clean_low_latency_buffer(self):
         self.ep_engine.clean_low_latency_buffer()
 
+    def clear_deep_ep_buffer(self):
+        """Clear existing DeepEP buffer and free GPU memory."""
+        self.ep_engine.clear_deep_ep_buffer()
+
+    def create_deep_ep_buffer(self):
+        """Recreate the DeepEP buffer based on current role and phase."""
+        self.ep_engine.create_deep_ep_buffer()
+
 
 class EPPrefillRunner(EPRunner):
     """
@@ -366,7 +397,7 @@ class EPPrefillRunner(EPRunner):
     def __init__(
         self,
         top_k: int,
-        hidden: int,
+        hidden_size: int,
         num_experts: int,
         splitwise_role: str,
         num_max_dispatch_tokens_per_rank: int,
@@ -378,7 +409,7 @@ class EPPrefillRunner(EPRunner):
     ):
         super().__init__(
             top_k,
-            hidden,
+            hidden_size,
             num_experts,
             splitwise_role,
             moe_phase,
@@ -446,7 +477,7 @@ class EPDecoderRunner(EPRunner):
     def __init__(
         self,
         top_k: int,
-        hidden: int,
+        hidden_size: int,
         num_experts: int,
         splitwise_role: str,
         num_max_dispatch_tokens_per_rank: int,
@@ -458,7 +489,7 @@ class EPDecoderRunner(EPRunner):
     ):
         super().__init__(
             top_k,
-            hidden,
+            hidden_size,
             num_experts,
             splitwise_role,
             moe_phase,
