@@ -291,9 +291,10 @@ class ResourceManagerV1(ResourceManager):
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
-                    self.cache_manager.update_cache_blocks(
-                        request, self.config.cache_config.block_size, request.num_computed_tokens
-                    )
+                    if self.config.cache_config.enable_prefix_caching:
+                        self.cache_manager.update_cache_blocks(
+                            request, self.config.cache_config.block_size, request.num_computed_tokens
+                        )
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
@@ -324,9 +325,10 @@ class ResourceManagerV1(ResourceManager):
                             request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
-                            self.cache_manager.update_cache_blocks(
-                                request, self.config.cache_config.block_size, request.num_computed_tokens
-                            )
+                            if self.config.cache_config.enable_prefix_caching:
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
                             request.status = RequestStatus.RUNNING
                             allocated_position = self.get_available_position()
                             request.idx = allocated_position
@@ -357,9 +359,10 @@ class ResourceManagerV1(ResourceManager):
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
-                            self.cache_manager.update_cache_blocks(
-                                request, self.config.cache_config.block_size, request.num_computed_tokens
-                            )
+                            if self.config.cache_config.enable_prefix_caching:
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
                             request.status = RequestStatus.RUNNING
                         else:
                             if self.config.cache_config.enable_prefix_caching:
@@ -402,7 +405,7 @@ class ResourceManagerV1(ResourceManager):
 
             matched_block_num = len(common_block_ids)
             no_cache_block_num = self.cache_manager.get_required_block_num(
-                request.prompt_token_ids_len - matched_token_num,
+                request.need_prefill_tokens - matched_token_num,
                 self.config.cache_config.block_size,
             )
 
@@ -418,7 +421,7 @@ class ResourceManagerV1(ResourceManager):
             main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
             main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
 
-            if matched_token_num == request.prompt_token_ids_len:
+            if matched_token_num == request.need_prefill_tokens:
                 request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
                 request.skip_allocate = True
             else:

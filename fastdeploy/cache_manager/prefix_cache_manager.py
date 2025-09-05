@@ -252,7 +252,8 @@ class PrefixCacheManager:
         Check if num_blocks gpu blocks can be allocated.
         """
         if len(self.gpu_free_block_list) < num_blocks:
-            self.free_block_ids(num_blocks)
+            if self.cache_config.enable_prefix_caching:
+                self.free_block_ids(num_blocks)
             if len(self.gpu_free_block_list) < num_blocks:
                 return False
             else:
@@ -511,7 +512,7 @@ class PrefixCacheManager:
                 hit_info["gpu_cache_blocks"] = 0
                 hit_info["cpu_cache_blocks"] = 0
                 self.metrics.req_count += 1
-                input_ids = task.prompt_token_ids
+                input_ids = task.prompt_token_ids + task.output_token_ids
                 req_id = task.request_id
                 logger.info(f"request_match_blocks: start to allocate blocks for req_id {req_id}")
                 input_token_num = len(input_ids)
