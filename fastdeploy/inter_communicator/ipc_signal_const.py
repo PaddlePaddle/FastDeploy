@@ -12,12 +12,17 @@ class ModelWeightsStatus:
 @dataclass
 class PrefixTreeStatus:
     NORMAL = 0
-    CLEARING = 1
+    UPDATING = 1
+    CLEARING = -1
+    CLEARED = -2
 
 @dataclass
 class KVCacheStatus:
     NORMAL = 0
-    CLEARING = 1
+    UPDATING = 1
+    CLEARING = -1
+    CLEARED = -2
+    
 
 @dataclass
 class ExistTaskStatus:

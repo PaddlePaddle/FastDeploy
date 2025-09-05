@@ -198,7 +198,8 @@ class LLMEngine:
             self.recv_result_handle_thread.start()
             time.sleep(3)
 
-        if self.do_profile == 0 and (
+        # If block numer is specified and model is deployed in mixed mode, start cache manager first
+        if not self.do_profile and (
             self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"
         ):
             device_ids = self.cfg.device_ids.split(",")
@@ -211,6 +212,7 @@ class LLMEngine:
                 pid_suffix=self.ipc_signal_suffix,
             )
 
+        # Start workers
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waiting for worker processes to be ready...")
         time.sleep(5)
@@ -236,8 +238,11 @@ class LLMEngine:
                 return False
             time.sleep(1)
 
+        # If block number is not specified, let workers do profiling to determine the block number,
+        # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
+        
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
@@ -935,6 +940,17 @@ class LLMEngine:
                 suffix=self.ipc_signal_suffix,
                 create=True,
             )
+            
+            cache_ready_signal_data = np.zeros(shape=[self.cfg.tensor_parallel_size], dtype=np.int32)
+            self.cache_ready_signal = IPCSignal(
+                name="cache_ready_signal",
+                array=cache_ready_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+            from fastdeploy.utils import lyh_logger
+            lyh_logger.info("created cache_ready_signal") 
 
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
@@ -1253,8 +1269,8 @@ class LLMEngine:
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         max_running_requests = num_gpu_blocks * self.cfg.cache_config.block_size // self.cfg.max_model_len
         console_logger.info(
-            f"After profiling, there are {num_gpu_blocks} available gpu blocks in cache, "
-            f"hence supporting {max_running_requests} running requests "
+            f"Detected {num_gpu_blocks} available gpu blocks in cache. "
+            f"FastDeploy will be serving {max_running_requests} running requests "
             f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
         )
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":

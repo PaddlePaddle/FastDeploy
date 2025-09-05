@@ -46,6 +46,7 @@ from fastdeploy.model_executor.ops.gpu import (
     set_value_by_flags_and_idx,
     share_external_data,
     set_data_ipc,
+    unset_data_ipc,
 )
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
@@ -956,24 +957,30 @@ class GPUModelRunner(ModelRunnerBase):
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and (
+            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
+        ):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
-                cache_kvs_list.append(key_cache)
-                value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, kv_cache_shape)
-                cache_kvs_list.append(value_cache)
-                # key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                # value_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                # set_data_ipc(key_cache, key_cache_name)
-                # set_data_ipc(value_cache, val_cache_name)
-                # cache_kvs_list.extend([key_cache, value_cache])
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"                
+                key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                set_data_ipc(key_cache, key_cache_name)
+                set_data_ipc(val_cache, val_cache_name)
+                cache_kvs_list.extend([key_cache, val_cache])
 
             self.share_inputs["caches"] = cache_kvs_list
+
+            cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+            self.cache_ready_signal = IPCSignal(
+                name="cache_ready_signal",
+                array=cache_ready_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_pid,
+                create=False,
+            )
+            self.cache_ready_signal.value[local_rank] = 1
 
         else:
             for i in range(self.model_config.num_hidden_layers):
@@ -1584,7 +1591,14 @@ class GPUModelRunner(ModelRunnerBase):
 
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""
-        self.share_inputs.pop("caches", None)
+        caches = self.share_inputs.pop("caches", None)
+        i = 0
+        for tensor in caches:
+            key_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
+            unset_data_ipc(tensor, key_name, True, False)
+            val_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
+            unset_data_ipc(tensor, val_name, True, False)
+            i += 1
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
 

@@ -46,6 +46,8 @@ class EngineClient:
         enable_logprob=False,
         workers=1,
         tool_parser=None,
+        enable_prefix_caching=None,
+        splitwise_role=None,
     ):
         input_processor = InputPreprocessor(
             tokenizer,
@@ -60,6 +62,7 @@ class EngineClient:
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
+        self.has_cache_manager = enable_prefix_caching or (splitwise_role != "mixed")
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(max_chips_per_node, tensor_parallel_size * data_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
@@ -313,12 +316,27 @@ class EngineClient:
             return False, "updating model weight already"
 
         self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
+        if self.has_cache_manager:
+            self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
+            self.kv_cache_status_signal.value[0] = KVCacheStatus.UPDATING
         api_server_logger.info(f"start update model weight {self.model_weights_status_signal.value}")
-        while self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL and timeout != 0:
+        while timeout >= 0:
+            api_server_logger.info(
+                f"Updating model weights.. "
+                f"model weights status: {self.model_weights_status_signal.value[0]}, "
+                f"prefix tree status: {self.prefix_tree_status_signal.value[0]}, "
+                f"kv cache status: {self.kv_cache_status_signal.value[0]} "
+            )
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
+                if self.has_cache_manager:
+                    if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL and \
+                        self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL:
+                        break
+                else:
+                    break
             time.sleep(1)
             timeout -= 1
-            continue
-        if self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL:
+        if timeout < 0:
             return False, "Update model weight timeout"
         time.sleep(1)
         return True, ""
@@ -335,19 +353,28 @@ class EngineClient:
             return False, "clearing model weight already"
 
         self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
-        self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
-        self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
+        if self.has_cache_manager:
+            self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
+            self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
 
         api_server_logger.info(f"start clear model weight {self.model_weights_status_signal.value}")
         while timeout >= 0:
-            api_server_logger.info(f"{timeout}, {self.model_weights_status_signal.value[0]}, {self.prefix_tree_status_signal.value[0]}, {self.kv_cache_status_signal.value[0]}")
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED and \
-                    self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL and \
-                    self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL:
-                break
+            api_server_logger.info(
+                f"Clearing model weights.. "
+                f"model weights status: {self.model_weights_status_signal.value[0]}, "
+                f"prefix tree status: {self.prefix_tree_status_signal.value[0]}, "
+                f"kv cache status: {self.kv_cache_status_signal.value[0]} "
+            )
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
+                if self.has_cache_manager:
+                    if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED and \
+                        self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED:
+                        break
+                else:
+                    break
             time.sleep(1)
             timeout -= 1
-        if self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
-            return False, "clear model weight timeout"
+        if timeout < 0:
+            return False, "Clear model weight timeout"
         time.sleep(1)
         return True, ""

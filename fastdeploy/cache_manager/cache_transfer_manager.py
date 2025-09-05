@@ -38,6 +38,7 @@ from fastdeploy.model_executor.ops.gpu import (
     cuda_host_free,
     cuda_host_alloc,
     set_data_ipc,
+    unset_data_ipc,
     share_external_data,
     swap_cache_all_layers,
 )
@@ -119,7 +120,6 @@ class CacheTransferManager:
 
         device = args.device_id
         rank = args.rank
-        paddle.set_device(f"gpu:{device}")
         self.gpu_cache_kvs = {}
         self.cpu_cache_kvs = {}
         self.gpu_cache_k_tensors = []
@@ -148,41 +148,26 @@ class CacheTransferManager:
 
         self.num_cpu_blocks = args.num_cpu_blocks
 
+        paddle.set_device(f"gpu:{device}")
         cache_type = args.cache_dtype
+
+        logger.info("cache_transfer_manager initialize kv cache for all layers")
+
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
-
-            self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"] = paddle.full(
-                shape=[
-                    num_gpu_blocks,
-                    args.kv_num_head,
-                    args.block_size,
-                    args.head_dim,
-                ],
-                fill_value=0,
-                dtype=cache_type,
-            )
-            self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"])
-            self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"] = paddle.full(
-                shape=[
-                    num_gpu_blocks,
-                    args.kv_num_head,
-                    args.block_size,
-                    args.head_dim,
-                ],
-                fill_value=0,
-                dtype=cache_type,
-            )
-            self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
-
-            set_data_ipc(
-                self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
-                f"key_caches_{i}_rank{rank}.device{device}",
-            )
-            set_data_ipc(
-                self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
-                f"value_caches_{i}_rank{rank}.device{device}",
-            )
+            cache_shape = [num_gpu_blocks, args.kv_num_head, args.block_size, args.head_dim]
+            key_name = f"key_caches_{i}_rank{rank}.device{device}"
+            val_name = f"value_caches_{i}_rank{rank}.device{device}"
+            key_cache = paddle.empty(shape=[], dtype=cache_type)
+            val_cache = paddle.empty(shape=[], dtype=cache_type)
+            logger.info(f"layer {i} | share_external_data: ({key_name}, {val_name}), cache shape: {cache_shape}")
+            key_cache = share_external_data(key_cache, key_name, cache_shape)
+            val_cache = share_external_data(val_cache, val_name, cache_shape)
+            self.gpu_cache_kvs[key_name] = key_cache
+            self.gpu_cache_kvs[val_name] = val_cache
+            self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
+            self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
+        
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
         logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
@@ -200,16 +185,6 @@ class CacheTransferManager:
                 args.num_cpu_blocks * args.bytes_per_layer_per_block
             )
             self.v_dst_ptrs.append(self.cpu_cache_kvs[f"value_caches_{i}_rank{rank}"])
-
-        cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
-        self.cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=args.engine_pid,
-            create=False,
-        )
-        self.cache_ready_signal.value[self.rank] = 1
 
         paddle.set_device(f"gpu:{device}")
         if args.enable_splitwise:
@@ -454,26 +429,65 @@ class CacheTransferManager:
         )
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
-                logger.info(f"Before clearing, reserved={paddle.device.cuda.memory_reserved()}, allocated={paddle.device.cuda.memory_allocated()}")
-                logger.info(f"Start clearing gpu caches ")
+                logger.info(f"Start clearing GPU caches.")
+                for name, tensor in self.gpu_cache_kvs.items():
+                    unset_data_ipc(tensor, name, True, True)
                 self.gpu_cache_kvs.clear()
                 self.gpu_cache_k_tensors.clear()
                 self.gpu_cache_v_tensors.clear()
-                logger.info(f"After clearing, reserved={paddle.device.cuda.memory_reserved()}, allocated={paddle.device.cuda.memory_allocated()}")
                 paddle.device.cuda.empty_cache()
-                logger.info(f"After empty cache, reserved={paddle.device.cuda.memory_reserved()}, allocated={paddle.device.cuda.memory_allocated()}")
-                logger.info("GPU kv cache is cleared.")
+                logger.info("GPU caches are cleared.")
 
+                logger.info(f"Start clearing CPU caches.")
                 for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
                     cuda_host_free(ptrs)
                 self.cpu_cache_kvs.clear()
                 self.k_dst_ptrs.clear()
                 self.v_dst_ptrs.clear()
-                logger.info("CPU kv cache is cleared.")
+                logger.info("CPU caches are cleared.")
                 gc.collect()
 
+                kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+            
+            elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
+                logger.info(f"Start restoring GPU caches.")
+                paddle.set_device(f"gpu:{device}")
+                rank = self.rank
+                device = self.device
+                cache_type = args.cache_dtype
+                for i in range(args.num_layers + self.num_extra_layers):
+                    num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
+                    cache_shape = [num_gpu_blocks, args.kv_num_head, args.block_size, args.head_dim]
+                    key_name = f"key_caches_{i}_rank{rank}.device{device}"
+                    val_name = f"value_caches_{i}_rank{rank}.device{device}"
+                    key_cache = paddle.empty(shape=[], dtype=cache_type)
+                    val_cache = paddle.empty(shape=[], dtype=cache_type)
+                    logger.info(f"layer {i} | share_external_data: ({key_name}, {val_name}), cache shape: {cache_shape}")
+                    key_cache = share_external_data(key_cache, key_name, cache_shape)
+                    val_cache = share_external_data(val_cache, val_name, cache_shape)
+                    self.gpu_cache_kvs[key_name] = key_cache
+                    self.gpu_cache_kvs[val_name] = val_cache
+                    self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
+                    self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
+                logger.info("GPU caches are restored.")
+
+                logger.info(f"Start restoring CPU caches.")
+                paddle.set_device("cpu")
+                self.k_dst_ptrs = []
+                self.v_dst_ptrs = []
+                for i in range(args.num_layers + self.num_extra_layers):
+                    key_name = f"key_caches_{i}_rank{rank}"
+                    val_name = f"value_caches_{i}_rank{rank}"
+                    logger.info(f"layer {i} | cuda_host_alloc: ({key_name}, {val_name}), cache shape: {cache_shape}")
+                    self.cpu_cache_kvs[key_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
+                    self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
+                    self.cpu_cache_kvs[val_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
+                    self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
+                logger.info("CPU caches are restored.")
+                
                 kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
-            time.sleep(1)
+
+            time.sleep(0.1)
 
 
 def main():
