@@ -12,11 +12,12 @@
 安装FastDeploy方式参考[安装文档](./installation/README.md)。
 
 ## 准备模型
-部署时指定 ```--model baidu/ERNIE-4.5-300B-A47B-Paddle``` 即可自动从AIStudio下载模型，并支持断点续传。你也可以自行从不同渠道下载模型，需要注意的是FastDeploy依赖Paddle格式的模型，更多说明参考[支持模型列表](../supported_models.md)。
+部署时指定 ```--model baidu/ERNIE-4.5-300B-A47B-Paddle``` 或 ```--model baidu/ERNIE-4.5-VL-424B-A47B-PT``` 即可自动从AIStudio下载模型，并支持断点续传。你也可以自行从不同渠道下载模型，更多说明参考[支持模型列表](../supported_models.md)。
 
 ## 启动服务
 
 >💡 **注意**： 由于模型参数量为300B-A47B，在80G * 8卡的机器上，需指定 ```--quantization wint4``` (wint8也可部署，其中wint4 4卡即可部署，wint8则需要8卡)。
+> 当使用HuggingFace 模型(torch格式)时, 需要开启 `--load_choices "default_v1"`
 
 执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](../parameters.md)。
 

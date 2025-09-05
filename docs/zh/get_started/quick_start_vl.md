@@ -1,6 +1,6 @@
-# 10分钟完成 ERNIE-4.5-VL-28B-A3B-Paddle 多模态模型部署
+# 10分钟完成 ERNIE-4.5-VL-28B-A3B-Paddle/ERNIE-4.5-VL-28B-A3B-PT 多模态模型部署
 
-本文档讲解如何部署ERNIE-4.5-VL-28B-A3B-Paddle模型，在开始部署前，请确保你的硬件环境满足如下条件：
+本文档讲解如何部署ERNIE-4.5-VL-28B-A3B-Paddle/ERNIE-4.5-VL-28B-A3B-PT模型，在开始部署前，请确保你的硬件环境满足如下条件：
 
 - GPU驱动 >= 535
 - CUDA >= 12.3
@@ -9,11 +9,12 @@
 - Python >= 3.10
 - 运行模型满足最低硬件配置要求，参考[支持模型列表文档](../supported_models.md)
 
-为了快速在各类硬件部署，本文档采用 ```ERNIE-4.5-VL-28B-A3B-Paddle``` 多模态模型作为示例，可在大部分硬件上完成部署。
+为了快速在各类硬件部署，本文档采用 ```ERNIE-4.5-VL-28B-A3B-Paddle/ERNIE-4.5-VL-28B-A3B-PT``` 多模态模型作为示例，可在大部分硬件上完成部署。
 
 安装FastDeploy方式参考[安装文档](./installation/README.md)。
 
 >💡 **提示**： ERNIE多模态系列模型均支持思考模式，可以通过在发起服务请求时设置 ```enable_thinking``` 开启（参考如下示例）。
+> 当使用HuggingFace 模型(torch格式)时, 需要开启 `--load_choices "default_v1"`
 
 ## 1. 启动服务
 安装FastDeploy后，在终端执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](../parameters.md)

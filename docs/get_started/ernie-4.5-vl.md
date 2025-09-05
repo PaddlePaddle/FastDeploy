@@ -14,13 +14,14 @@ Refer to the [Installation Guide](./installation/README.md) for FastDeploy setup
 >💡 **Note**: ERNIE multimodal models all support thinking mode, which can be enabled by setting ```enable_thinking``` when initiating a service request (see the example below)..
 
 ## Prepare the Model
-Specify ```--model baidu/ERNIE-4.5-VL-424B-A47B-Paddle``` during deployment to automatically download the model from AIStudio with resumable downloads. You can also manually download the model from other sources. Note that FastDeploy requires Paddle-format models. For more details, see [Supported Models](../supported_models.md).
+Specify ```--model baidu/ERNIE-4.5-VL-424B-A47B-Paddle``` or ```--model baidu/ERNIE-4.5-VL-424B-A47B-PT```during deployment to automatically download the model from AIStudio with resumable downloads. You can also manually download the model from other sources. For more details, see [Supported Models](../supported_models.md).
 
 ## Launch the Service
 
 Execute the following command to start the service. For parameter configurations, refer to [Parameter Guide](../parameters.md).
 
 >💡 **Note**: Since the model parameter size is 424B-A47B, on an 80G * 8 GPU machine, specify ```--quantization wint4``` (wint8 is also supported).
+> When using HuggingFace models (torch format), you need to enable `--load_choices "default_v1"`.
 
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1

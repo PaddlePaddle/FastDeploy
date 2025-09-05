@@ -2,9 +2,9 @@
 
 FastDeploy currently supports the following models, which can be downloaded automatically during FastDeploy deployment.Specify the ``model`` parameter as the model name in the table below to automatically download model weights (all supports resumable downloads). The following three download sources are supported:
 
-- 1. Search for corresponding Paddle-version ERNIE models on [AIStudio/PaddlePaddle](https://aistudio.baidu.com/modelsoverview), e.g., `ERNIE-4.5-0.3B-Paddle`
-- 2. Download Paddle-version ERNIE models from [HuggingFace/baidu/models](https://huggingface.co/baidu/models), e.g., `baidu/ERNIE-4.5-0.3B-Paddle`
-- 3. Search for corresponding Paddle-version ERNIE models on [ModelScope/PaddlePaddle](https://www.modelscope.cn/models?name=PaddlePaddle&page=1&tabKey=task), e.g., `ERNIE-4.5-0.3B-Paddle`
+- Search for corresponding Paddle-version ERNIE models on [AIStudio/PaddlePaddle](https://aistudio.baidu.com/modelsoverview), e.g., `ERNIE-4.5-0.3B-Paddle`
+- Download Paddle-version ERNIE models from [HuggingFace/baidu/models](https://huggingface.co/baidu/models), e.g., `baidu/ERNIE-4.5-0.3B-Paddle`
+- Search for corresponding Paddle-version ERNIE models on [ModelScope/PaddlePaddle](https://www.modelscope.cn/models?name=PaddlePaddle&page=1&tabKey=task), e.g., `ERNIE-4.5-0.3B-Paddle`
 
 When using automatic download, the default download source is AIStudio. Users can modify the default download source by setting the ``FD_MODEL_SOURCE`` environment variable, which can be set to “AISTUDIO”, ‘MODELSCOPE’ or “HUGGINGFACE”. The default download path is ``~/`` (i.e., the user's home directory). Users can modify the default download path by setting the ``FD_MODEL_CACHE`` environment variable, e.g.:
 
@@ -12,6 +12,28 @@ When using automatic download, the default download source is AIStudio. Users ca
 export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
 export FD_MODEL_CACHE=/ssd1/download_models
 ```
+> ⭐ Note: Models marked with a star can directly use HuggingFace Torch weights and support FP8/WINT8/WINT4 dynamic quantization as well as BF16 precision inference. To run inference, --load_choices "default_v1" must be enabled.
+
+## Text Generation
+
+| Model     | Example HF Models                                                     |   Chunked Prefill | Prefix Caching |
+|----------|--------------------------------------------------------------|------------------------|------------------|
+| ⭐ERNIE | baidu/ERNIE-4.5-300B-A47B-Paddle, baidu/ERNIE-4.5-300B-A47B-PT,<br> baidu/ERNIE-4.5-21B-A3B-PT,baidu/ERNIE-4.5-21B-A3B-Paddle 等      |  ✅              | ✅             |
+| ⭐QWEN3-MOE | Qwen/Qwen3-235B-A22B, Qwen/Qwen3-30B-A3B 等            |  ✅              | ✅             |
+| ⭐QWEN3    | Qwen/Qwen3-8B, Qwen/Qwen3-4B,Qwen/Qwen3-32B 等               |  ✅              | ✅             |
+| ⭐QWEN2    | Qwen/Qwen2-72B, Qwen/Qwen2-7B 等                            |  ✅              | ✅             |
+| ⭐QwQ    | Qwen/QwQ-32B 等                          |  ✅              | ✅             |
+| ⭐QWEN2.5    | Qwen/Qwen2.5-72B, Qwen/Qwen2.5-14B-Instruct 等                          |  ✅              | ✅             |
+| DEEPSEEK | deepseek-ai/DeepSeek-V3, deepseek-ai/DeepSeek-R1等            |  ✅              | ✅             |
+
+## Multimodal Language Models
+
+Depending on the model, multiple modalities (text, images, etc.) can be combined.
+
+| Model    | Example HF Models                                                    |  Chunked Prefill | Prefix Caching |
+|----------|--------------------------------------------------------------|------------------------|------------------|
+| QWEN-VL  | Qwen/Qwen2.5-VL-7B-Instruct, Qwen/Qwen2.5-VL-3B-Instruct  等    |  ✅              | ✅             |
+| ERNIE-VL  | baidu/ERNIE-4.5-VL-424B-A47B-Paddle,baidu/ERNIE-4.5-VL-424B-A47B-PT,<br> baidu/ERNIE-4.5-VL-28B-A3B-Paddle,baidu/ERNIE-4.5-VL-28B-A3B-PT  等  |  ✅              | ✅             |
 
 | Model Name                                  | Context Length | Quantization | Minimum Deployment Resources | Notes                                                                                      |
 | :------------------------------------------ | :------------- | :----------- | :--------------------------- | :----------------------------------------------------------------------------------------- |

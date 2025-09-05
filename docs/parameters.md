@@ -52,7 +52,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
 | ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
 | ```lm_head_fp32```       | `bool`      | Specify the dtype of the lm_head layer as FP32. |
-
+| ```load_choices```       | `str`      | By default, the "default" loader is used for weight loading. To load Torch weights or enable weight acceleration, "default_v1" must be used.|
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 
 During FastDeploy inference, GPU memory is occupied by ```model weights```, ```preallocated KVCache blocks``` and ```model computation intermediate activation values```. The preallocated KVCache blocks are determined by ```num_gpu_blocks_override```, with ```block_size``` (default: 64) as its unit, meaning one block can store KVCache for 64 Tokens.

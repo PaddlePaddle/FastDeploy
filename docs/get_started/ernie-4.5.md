@@ -12,11 +12,12 @@ This document explains how to deploy the ERNIE-4.5 model. Before starting the de
 For FastDeploy installation, refer to the [Installation Guide](./installation/README.md).
 
 ## Prepare the Model
-Specify `--model baidu/ERNIE-4.5-300B-A47B-Paddle` during deployment to automatically download the model from AIStudio with support for resumable transfers. Alternatively, you can download the model manually from other sources. Note that FastDeploy requires the model in Paddle format. For more details, see the [Supported Models List](../supported_models.md).
+Specify `--model baidu/ERNIE-4.5-300B-A47B-Paddle` or ```--model baidu/ERNIE-4.5-VL-424B-A47B-PT``` during deployment to automatically download the model from AIStudio with support for resumable transfers. Alternatively, you can download the model manually from other sources.  For more details, see the [Supported Models List](../supported_models.md).
 
 ## Start the Service
 
 >💡 **Note**: Since the model parameter size is 300B-A47B,, on an 80G * 8-GPU machine, specify `--quantization wint4` (wint8 is also supported, where wint4 requires 4 GPUs and wint8 requires 8 GPUs).
+> When using HuggingFace models (torch format), you need to enable `--load_choices "default_v1"`.
 
 Execute the following command to start the service. For configuration details, refer to the [Parameter Guide](../parameters.md):
 

@@ -14,13 +14,14 @@
 >💡 **提示**：  ERNIE多模态系列模型均支持思考模式，可以通过在发起服务请求时设置 ```enable_thinking``` 开启（参考如下示例）。
 
 ## 准备模型
-部署时指定```--model baidu/ERNIE-4.5-VL-424B-A47B-Paddle```即可自动从AIStudio下载模型，并支持断点续传。你也可以自行从不同渠道下载模型，需要注意的是FastDeploy依赖Paddle格式的模型，更多说明参考[支持模型列表](../supported_models.md)。
+部署时指定```--model baidu/ERNIE-4.5-VL-424B-A47B-Paddle``` 或```--model baidu/ERNIE-4.5-VL-424B-A47B-PT``` 即可自动从AIStudio下载模型，并支持断点续传。你也可以自行从不同渠道下载模型，更多说明参考[支持模型列表](../supported_models.md)。
 
 ## 启动服务
 
 执行如下命令，启动服务,其中启动命令配置方式参考[参数说明](../parameters.md)
 
-**注意**： 由于模型参数量为424B-A47B，在80G * 8卡的机器上，需指定```--quantization wint4```(wint8也可部署)。
+> **注意**： 由于模型参数量为424B-A47B，在80G * 8卡的机器上，需指定```--quantization wint4```(wint8也可部署)。
+> 当使用HuggingFace 模型(torch格式)时, 需要开启 `--load_choices "default_v1"`
 
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1

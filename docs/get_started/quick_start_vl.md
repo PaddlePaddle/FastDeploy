@@ -1,4 +1,4 @@
-# Deploy ERNIE-4.5-VL-28B-A3B-Paddle Multimodal Model in 10 Minutes
+# Deploy ERNIE-4.5-VL-28B-A3B-Paddle/ERNIE-4.5-VL-28B-A3B-PT Multimodal Model in 10 Minutes
 
 Before deployment, please ensure your environment meets the following requirements:
 
@@ -9,12 +9,12 @@ Before deployment, please ensure your environment meets the following requiremen
 - Python >= 3.10
 - Hardware configuration meets minimum requirements (refer to [Supported Models](../supported_models.md))
 
-For quick deployment across different hardware, this guide uses the ERNIE-4.5-VL-28B-A3B-Paddle multimodel model as an example, which can run on most hardware configurations.
+For quick deployment across different hardware, this guide uses the ERNIE-4.5-VL-28B-A3B-Paddle or ERNIE-4.5-VL-28B-A3B-PT multimodel model as an example, which can run on most hardware configurations.
 
 For more information about how to install FastDeploy, refer to the [installation document](./installation/README.md).
 
 >💡 **Note**: All ERNIE multimodal models support reasoning capability. Enable/disable it by setting ```enable_thinking``` in requests (see example below).
-
+> When using HuggingFace models (torch format), you need to enable `--load_choices "default_v1"`.
 ## 1. Launch Service
 After installing FastDeploy, execute the following command in the terminal to start the service. For the configuration method of the startup command, refer to [Parameter Description](../parameters.md)
 
