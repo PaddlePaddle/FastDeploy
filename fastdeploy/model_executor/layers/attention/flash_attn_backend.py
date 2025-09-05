@@ -221,6 +221,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+        forward_meta.decoder_num_blocks_cpu = forward_meta.decoder_num_blocks.cpu()
 
         (
             metadata.cu_seqlens_k,

@@ -165,6 +165,7 @@ class AppendAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+        forward_meta.decoder_num_blocks_cpu = forward_meta.decoder_num_blocks.cpu()
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
