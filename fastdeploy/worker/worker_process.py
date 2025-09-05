@@ -655,7 +655,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
+        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
+            max_chips_per_node // parallel_config.tensor_parallel_size
+        )
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
@@ -752,6 +754,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if parallel_config.guided_decoding_backend != "off":
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     fd_config = FDConfig(
