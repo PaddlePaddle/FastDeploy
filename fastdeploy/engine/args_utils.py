@@ -398,6 +398,8 @@ class EngineArgs:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.guided_decoding_backend != "off":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
