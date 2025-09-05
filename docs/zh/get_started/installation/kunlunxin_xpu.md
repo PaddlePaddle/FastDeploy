@@ -83,20 +83,20 @@ cd FastDeploy
 ### 下载昆仑编译依赖
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh stable
+bash custom_ops/xpu_ops/download_dependencies.sh stable
 ```
 
 或者你也可以下载最新版编译依赖
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+bash custom_ops/xpu_ops/download_dependencies.sh develop
 ```
 
 设置环境变量
 
 ```bash
-export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 ```
 
 ### 开始编译并安装：
