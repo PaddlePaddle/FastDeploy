@@ -58,6 +58,19 @@ model_param_map = {
             {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
         ],
     },
+    "DeepSeek-V3-0324": {
+        "tensor_parallel_size": 2,
+        "quantizations": [
+            {
+                "quant_type": "wint4",
+                "env": {
+                    "FD_ATTENTION_BACKEND": "MLA_ATTN",
+                    "FLAGS_mla_use_tensorcore": "1",
+                    "FLAGS_flash_attn_version": "3",
+                },
+            },
+        ],
+    },
 }
 
 
