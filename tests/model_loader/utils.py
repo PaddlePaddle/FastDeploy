@@ -72,6 +72,7 @@ def form_model_get_output_topp0(
     fd_runner,
     model_path,
     tensor_parallel_size,
+    max_num_seqs,
     max_model_len,
     max_tokens,
     quantization,
@@ -84,6 +85,7 @@ def form_model_get_output_topp0(
         with fd_runner(
             model_path,
             tensor_parallel_size=tensor_parallel_size,
+            max_num_seqs=max_num_seqs,
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,

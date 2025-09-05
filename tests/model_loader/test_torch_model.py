@@ -92,7 +92,8 @@ for model, cfg in hugging_face_model_param_map.items():
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 2),
-                cfg.get("max_model_len", 1024),
+                cfg.get("max_num_seqs", 1),
+                cfg.get("max_model_len", 2048),
                 q,
                 cfg.get("max_tokens", 100),
                 marks=[pytest.mark.core_model],
@@ -101,13 +102,14 @@ for model, cfg in hugging_face_model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    "model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens",
     hf_params,
 )
 def test_model_against_baseline(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
+    max_num_seqs: int,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
@@ -124,6 +126,7 @@ def test_model_against_baseline(
             fd_runner,
             torch_model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,

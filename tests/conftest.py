@@ -23,6 +23,7 @@ class FDRunner:
         self,
         model_name_or_path: str,
         tensor_parallel_size: int = 1,
+        max_num_seqs: int = 1,
         max_model_len: int = 1024,
         load_choices: str = "default",
         quantization: str = "None",
@@ -38,6 +39,7 @@ class FDRunner:
         self.llm = LLM(
             model=model_name_or_path,
             tensor_parallel_size=tensor_parallel_size,
+            max_num_seqs=max_num_seqs,
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,
@@ -69,7 +71,7 @@ class FDRunner:
     ) -> list[tuple[list[int], str]]:
         from fastdeploy.engine.sampling_params import SamplingParams
 
-        topp_params = SamplingParams(temperature=0.1, top_p=0, max_tokens=max_tokens)
+        topp_params = SamplingParams(temperature=1.0, top_p=0, max_tokens=max_tokens)
         outputs = self.generate(prompts, topp_params, **kwargs)
         return outputs
 
