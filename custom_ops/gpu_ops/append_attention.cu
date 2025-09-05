@@ -317,7 +317,6 @@ void AppendAttentionKernel(
             qkv,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
@@ -344,7 +343,6 @@ void AppendAttentionKernel(
             qkv_out,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
