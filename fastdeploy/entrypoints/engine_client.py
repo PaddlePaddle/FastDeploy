@@ -329,9 +329,9 @@ class EngineClient:
         while timeout >= 0:
             api_server_logger.info(
                 f"Updating model weights.. "
-                f"model weights status: {self.model_weights_status_signal.value[0]}, "
-                f"prefix tree status: {self.prefix_tree_status_signal.value[0]}, "
-                f"kv cache status: {self.kv_cache_status_signal.value[0]} "
+                f"model_weights_status: {self.model_weights_status_signal.value[0]}, "
+                f"prefix_tree_status: {self.prefix_tree_status_signal.value[0]}, "
+                f"kv_cache_status: {self.kv_cache_status_signal.value[0]} "
             )
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
                 if self.has_cache_manager:
@@ -369,9 +369,9 @@ class EngineClient:
         while timeout >= 0:
             api_server_logger.info(
                 f"Clearing model weights.. "
-                f"model weights status: {self.model_weights_status_signal.value[0]}, "
-                f"prefix tree status: {self.prefix_tree_status_signal.value[0]}, "
-                f"kv cache status: {self.kv_cache_status_signal.value[0]} "
+                f"model_weights_status: {self.model_weights_status_signal.value[0]}, "
+                f"prefix_tree_status: {self.prefix_tree_status_signal.value[0]}, "
+                f"kv_cache_status: {self.kv_cache_status_signal.value[0]} "
             )
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
                 if self.has_cache_manager:

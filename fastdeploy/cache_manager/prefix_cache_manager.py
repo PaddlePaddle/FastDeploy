@@ -162,6 +162,15 @@ class PrefixCacheManager:
             kv_num_head = cache_config.model_cfg.num_attention_heads // tensor_parallel_size
         kv_num_head = max(1, kv_num_head)
 
+        cache_ready_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=pid_suffix,
+            create=True,
+        )
+
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
@@ -195,6 +204,10 @@ class PrefixCacheManager:
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
             cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+
+        logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
+        while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
+            time.sleep(1)
 
         exit_code = cache_manager_processes[-1].poll()
         if exit_code is None:

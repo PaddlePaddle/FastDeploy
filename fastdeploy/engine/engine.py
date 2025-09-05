@@ -939,15 +939,6 @@ class LLMEngine:
                 create=True,
             )
 
-            cache_ready_signal_data = np.zeros(shape=[self.cfg.tensor_parallel_size], dtype=np.int32)
-            self.cache_ready_signal = IPCSignal(
-                name="cache_ready_signal",
-                array=cache_ready_signal_data,
-                dtype=np.int32,
-                suffix=self.ipc_signal_suffix,
-                create=True,
-            )
-
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
             launched_expert_service_signal_data = np.zeros(
@@ -1041,6 +1032,8 @@ class LLMEngine:
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
         self.model_weights_status_signal.clear()
+        self.prefix_tree_status_signal.clear()
+        self.kv_cache_status_signal.clear()
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)

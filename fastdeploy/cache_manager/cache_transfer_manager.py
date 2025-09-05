@@ -31,7 +31,7 @@ from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheSt
 from fastdeploy.model_executor.ops.gpu import (
     cuda_host_alloc,
     cuda_host_free,
-    share_external_data,
+    set_data_ipc,
     swap_cache_all_layers,
     unset_data_ipc,
 )
@@ -187,33 +187,38 @@ class CacheTransferManager:
         threading.Thread(target=self.clear_caches, args=[args], daemon=True).start()
 
     def _init_gpu_cache(self, args):
-        logger.info("CacheTransferManager is waiting for kv cache to be created.")
-        while np.sum(self.cache_ready_signal.value) != args.mp_num:
-            # share_external_data must be called after set_data_ipc
-            time.sleep(1)
 
-        logger.info("CacheTransferManager is connecting to kv cache for all layers.")
+        logger.info("CacheTransferManager is initializing kv cache for all layers.")
         paddle.set_device(f"gpu:{self.device}")
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
             cache_shape = [num_gpu_blocks, args.kv_num_head, args.block_size, args.head_dim]
             key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
             val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
-            key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-            val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-            logger.info(f"layer {i} | share_external_data: ({key_name}, {val_name}), cache shape: {cache_shape}")
-            key_cache = share_external_data(key_cache, key_name, cache_shape)
-            val_cache = share_external_data(val_cache, val_name, cache_shape)
+
+            # key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+            # val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+            # logger.info(f"layer {i} | share_external_data: ({key_name}, {val_name}), cache shape: {cache_shape}")
+            # key_cache = share_external_data(key_cache, key_name, cache_shape)
+            # val_cache = share_external_data(val_cache, val_name, cache_shape)
+            key_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
+            val_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
+            logger.info(f"layer {i} | set_data_ipc: ({key_name}, {val_name}), cache shape: {cache_shape}")
+            set_data_ipc(key_cache, key_name)
+            set_data_ipc(val_cache, val_name)
+
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_kvs[val_name] = val_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
 
+        self.cache_ready_signal.value[self.rank] = 1
+
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
         logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
         logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
-        logger.info("CacheTransferManager has connected to kv cache for all layers.")
+        logger.info("CacheTransferManager has initialized kv cache for all layers.")
 
     def _init_cpu_cache(self, args):
         logger.info("CacheTransferManager is creating swap cache for all layers.")
@@ -458,7 +463,9 @@ class CacheTransferManager:
                     logger.info("CPU caches are cleared.")
                     gc.collect()
 
+                    self.cache_ready_signal.value[self.rank] = 0
                     kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+
                 except Exception as e:
                     logger.error(f"Failed to clear caches: {e}")
 

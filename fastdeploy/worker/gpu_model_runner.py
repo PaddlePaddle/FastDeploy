@@ -43,8 +43,8 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import (
     recover_decode_task,
-    set_data_ipc,
     set_value_by_flags_and_idx,
+    share_external_data,
     unset_data_ipc,
 )
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -119,14 +119,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
-        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
-        self.cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
-            create=False,
-        )
+
         # Cuda Graph
         self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
@@ -969,17 +962,18 @@ class GPUModelRunner(ModelRunnerBase):
             for i in range(self.model_config.num_hidden_layers):
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                logger.info(
-                    f"layer {i} | set_data_ipc: ({key_cache_name}, {val_cache_name}), cache shape: {kv_cache_shape}"
-                )
-                set_data_ipc(key_cache, key_cache_name)
-                set_data_ipc(val_cache, val_cache_name)
+                # key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                # val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                # set_data_ipc(key_cache, key_cache_name)
+                # set_data_ipc(val_cache, val_cache_name)
+                key_cache = paddle.empty(shape=[], dtype=cache_type)
+                val_cache = paddle.empty(shape=[], dtype=cache_type)
+                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
+                val_cache = share_external_data(val_cache, val_cache_name, kv_cache_shape)
+
                 cache_kvs_list.extend([key_cache, val_cache])
 
             self.share_inputs["caches"] = cache_kvs_list
-            self.cache_ready_signal.value[local_rank] = 1
 
         else:
             for i in range(self.model_config.num_hidden_layers):
@@ -1600,7 +1594,6 @@ class GPUModelRunner(ModelRunnerBase):
             i += 1
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
-        self.cache_ready_signal.value[self.local_rank] = 0
 
     def clear_parameters(self, pid):
         """ " Dynamic model loader use to clear parameters use for RL"""
@@ -1611,6 +1604,16 @@ class GPUModelRunner(ModelRunnerBase):
 
     def update_parameters(self, pid):
         """ " Dynamic model loader use to update parameters use for RL"""
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=pid,
+            create=False,
+        )
+        while cache_ready_signal.value[self.local_rank] != 1:
+            time.sleep(0.1)
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
