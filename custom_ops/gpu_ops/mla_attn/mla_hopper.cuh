@@ -521,25 +521,25 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
     constexpr int blocky = (merge_block_size + blockx - 1) / blockx;
     dim3 grids_merge(multiprocessor_count, params.q_num_head); // 128k is too large
     dim3 blocks_merge(blockx, blocky);
-    merge_multi_chunks_kernel<NV_TYPE, vec_size,blocky, KernelTraits::HEAD_DIM_VO>
+    merge_multi_chunks_kernel<NV_TYPE,
+                              vec_size,
+                              blocky,
+                              KernelTraits::HEAD_DIM_VO>
         <<<grids_merge, blocks_merge, 0, stream>>>(
-              reinterpret_cast<NV_TYPE *>(params.O_tmp),
-              params.m,
-              params.d,
-              params.seq_lens_this_time,
-              params.seq_lens_decoder,
-              params.seq_lens_encoder,
-              params.cumsum_q_seqlens,
-              params.batch_id_per_token,
-              reinterpret_cast<NV_TYPE *>(params.O),
-              params.chunk_num,
-              params.q_num_head,
-              params.chunk_size_device,
-              params.vo_head_dim,
-              params.token_num,
-              params.bsz,
-              params.max_draft_token_num);
-
+            reinterpret_cast<NV_TYPE *>(params.O_tmp),
+            params.m,
+            params.d,
+            params.seq_lens_this_time,
+            params.seq_lens_decoder,
+            params.cumsum_q_seqlens,
+            params.batch_id_per_token,
+            params.chunk_size_device,
+            reinterpret_cast<NV_TYPE *>(params.O),
+            params.q_num_head,
+            params.vo_head_dim,
+            params.token_num,
+            params.bsz,
+            params.max_draft_token_num);
   }
   return cudaSuccess;
 }

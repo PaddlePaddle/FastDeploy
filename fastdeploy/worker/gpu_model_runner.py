@@ -891,6 +891,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
+        # NOTE : (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)

@@ -170,6 +170,13 @@ class DeepSeekV3MoE(nn.Layer):
 
     def load_state_dict(self, state_dict):
         """ """
+        if self.experts.gate_correction_bias is not None:
+            gate_correction_bias_tensor = state_dict.pop(self.experts.gate_correction_bias_key)
+            if self.experts.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(
+                    self.experts.gate_correction_bias.shape
+                )
+            self.experts.gate_correction_bias.set_value(gate_correction_bias_tensor)
         self.gate.load_state_dict(state_dict)
         self.experts.load_state_dict(state_dict)
         self.shared_experts.load_state_dict(state_dict)
