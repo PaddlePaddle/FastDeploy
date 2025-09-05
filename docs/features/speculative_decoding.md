@@ -18,6 +18,13 @@ This project implements an efficient **Speculative Decoding** inference framewor
   - ⏳ Coming Soon: Support Chunk-prefill
   - ⏳ Coming Soon: Multi-layer MTP Layer
 
+- **Decoding with Hybrid MTP and Ngram Methods(Hybrid-MTP-with-Ngram)**
+
+  - Overview: A hybrid method combining MTP and Ngram. First, MTP generates N draft tokens, then Ngram matching is used to supplement additional draft tokens.
+
+  - Use Cases: Suitable when higher draft token coverage is required, leveraging both MTP’s generation capability and the efficiency of Ngram matching.
+
+
 ---
 
 ### Coming Soon
@@ -132,7 +139,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --scheduler-password "scheduler_mtp" \
     --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}' &
 ```
+## Decoding with Hybrid MTP and Ngram Methods
 
+When starting the service, you only need to modify the --speculative-config option.
+For example, use MTP to generate two draft tokens, and then append three additional draft tokens from Ngram matching:
+```
+--speculative-config '{"method": "mtp", "num_model_steps": 2, "mtp_strategy": "with_ngram", "num_speculative_tokens": 5, "model": "'$model_path'/mtp"}'
+```
 ## 🧠 Using Ngram-Based Decoding
 This method uses an n-gram sliding window to match the prompt and generated tokens to predict draft tokens. It is particularly effective in scenarios with high input-output overlap (e.g., code completion, document search).
 
