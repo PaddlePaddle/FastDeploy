@@ -567,7 +567,7 @@ void DecoderWriteCacheWithRoPEKernel(
             : rotary_embs.get().data<float>() + max_seq_len * dim_head / 2;
     rotary_dim = rotary_embs.get().dims()[rotary_embs.get().dims().size()-1] * 2;
     if(rotary_dim < dim_head){
-      if (!use_neox_rotary_style || qkv_out_scales || q_norm_weight || k_norm_weight|| cache_quant_type_str == "none"){
+      if (!use_neox_rotary_style || qkv_out_scales || q_norm_weight || k_norm_weight|| cache_quant_type_str != "none"){
         PADDLE_THROW(phi::errors::Fatal(
           "partial_rotary_factor < 1.0 only supports neox_rotary_style=True, qkv_out_scales is None, q_norm_weight/k_norm_weight) is None, and cache_quant_type_str is 'none'."));
       }
