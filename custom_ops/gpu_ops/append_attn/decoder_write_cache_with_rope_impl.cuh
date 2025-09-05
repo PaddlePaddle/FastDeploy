@@ -18,6 +18,53 @@
 #include "mma_tensor_op.cuh"
 #include "utils.cuh"
 
+
+// Note(ZKK)
+// This function is very easy!
+// just make HeadDim data to be new HeadDim data!
+
+template <typename T, int VecSize=8, int HEAD_DIM=128, int NUM_THREADS=32>
+__device__ __forceinline__ void apply_rope(
+  const T* input,
+  const float* cos_emb,
+  const float* sin_emb,
+  T* output,
+  const int thread_id) {
+
+  using LoadT = AlignedVector<T, VecSize>;
+  using LoadBiasT = AlignedVector<T, VecSize>;
+  using LoadOutScaleT = AlignedVector<float, VecSize>;
+  constexpr int HalfVecSize = VecSize / 2;
+  using LoadEmbT = AlignedVector<float, HalfVecSize>;
+
+  LoadT src_vec;
+  LoadBiasT out_vec;
+  LoadEmbT cos_emb_vec;
+  LoadEmbT sin_emb_vec;
+
+#pragma unroll
+    for (uint32_t head_bias = thread_id * VecSize; head_bias < HEAD_DIM; head_bias +=  NUM_THREADS * VecSize) {
+      Load<T, VecSize>(&input[head_bias], &src_vec);
+      const uint32_t emb_idx = head_bias / 2;
+      Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
+      Load<float, HalfVecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+#pragma unroll
+      for (int i = 0; i < HalfVecSize; i++) {
+
+        float input_left = static_cast<float>(src_vec[2 * i]);
+        float input_right = static_cast<float>(src_vec[2 * i + 1]);
+
+        const float cos_tmp = cos_emb_vec[i];
+        const float sin_tmp = sin_emb_vec[i];
+        out_vec[2 * i] =
+            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+        out_vec[2 * i + 1] =
+            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      }
+      Store<T, VecSize>(out_vec, &output[head_bias]);
+    }
+}
+
 template <typename T, int VecSize = 1>
 __global__ void append_decode_cache_T_rope_qk_norm_kernel(
     const T* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
@@ -28,7 +75,7 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
                                   // head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -164,7 +211,7 @@ __global__ void append_decode_cache_T_rope_kernel(
                                   // head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -270,7 +317,7 @@ __global__ void append_decode_cache_T_rope_kernel(
                                   // head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -391,7 +438,6 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
                                   // head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -505,7 +551,6 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
                                   // head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -639,7 +684,6 @@ __global__ void append_decode_cache_int8_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -677,44 +721,18 @@ __global__ void append_decode_cache_int8_rope_kernel(
 
   if (head_idx < num_heads) {
     // q
-    using LoadT = AlignedVector<T, VecSize>;
-    using LoadBiasT = AlignedVector<T, VecSize>;
-    using LoadOutScaleT = AlignedVector<float, VecSize>;
-    constexpr int HalfVecSize = VecSize / 2;
-    using LoadEmbT = AlignedVector<float, HalfVecSize>;
+    const T* qkv_now = quant_qkv + start_token_idx * hidden_size + head_idx * HeadDim;
+    T* qkv_out_now = qkv_out + start_token_idx * hidden_size + head_idx * HeadDim;
 
-    LoadT src_vec;
-    LoadBiasT out_vec;
-    LoadEmbT cos_emb_vec;
-    LoadEmbT sin_emb_vec;
-    const T* qkv_now = quant_qkv + start_token_idx * hidden_size;
-    T* qkv_out_now = qkv_out + start_token_idx * hidden_size;
-#pragma unroll
-    for (uint32_t head_bias = lane_id * VecSize; head_bias < HeadDim;
-         head_bias += 32 * VecSize) {
-      const int bias_idx = head_idx * HeadDim + head_bias;
-      Load<T, VecSize>(&qkv_now[bias_idx], &src_vec);
+    uint32_t emb_offset = write_seq_id * half_head_size;
+    emb_offset += rope_3d ? bid * max_seq_len * HeadDim : 0;
+    apply_rope<T, VecSize, HeadDim, 32>(
+      qkv_now,
+      cos_emb + emb_offset,
+      sin_emb + emb_offset,
+      qkv_out_now,
+      lane_id);
 
-      // q rope
-      const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
-      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
-#pragma unroll
-      for (int i = 0; i < HalfVecSize; i++) {
-        // dequant + add_bias + rope
-        float input_left = static_cast<float>(src_vec[2 * i]);
-        float input_right = static_cast<float>(src_vec[2 * i + 1]);
-
-        const float cos_tmp = cos_emb_vec[i];
-        const float sin_tmp = sin_emb_vec[i];
-        out_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        out_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
-      }
-      Store<T, VecSize>(out_vec, &qkv_out_now[bias_idx]);
-    }
   } else if (head_idx < num_heads + 2 * kv_num_heads) {
     // k
     constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
@@ -889,7 +907,6 @@ __global__ void append_decode_cache_int8_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -1194,7 +1211,6 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -1496,7 +1512,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -1893,7 +1909,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -1934,44 +1950,18 @@ __global__ void append_decode_cache_int4_rope_kernel(
 
   if (head_idx < num_heads) {
     // q
-    using LoadT = AlignedVector<T, VecSize>;
-    using LoadBiasT = AlignedVector<T, VecSize>;
-    using LoadOutScaleT = AlignedVector<float, VecSize>;
-    constexpr int HalfVecSize = VecSize / 2;
-    using LoadEmbT = AlignedVector<float, HalfVecSize>;
+    const T* qkv_now = quant_qkv + start_token_idx * hidden_size + head_idx * HeadDim;
+    T* qkv_out_now = qkv_out + start_token_idx * hidden_size + head_idx * HeadDim;
 
-    LoadT src_vec;
-    LoadBiasT out_vec;
-    LoadEmbT cos_emb_vec;
-    LoadEmbT sin_emb_vec;
-    const T* qkv_now = quant_qkv + start_token_idx * hidden_size;
-    T* qkv_out_now = qkv_out + start_token_idx * hidden_size;
-#pragma unroll
-    for (uint32_t head_bias = lane_id * VecSize; head_bias < HeadDim;
-         head_bias += 32 * VecSize) {
-      const int bias_idx = head_idx * HeadDim + head_bias;
-      Load<T, VecSize>(&qkv_now[bias_idx], &src_vec);
+    uint32_t emb_offset = write_seq_id * half_head_size;
+    emb_offset += rope_3d ? bid * max_seq_len * HeadDim : 0;
+    apply_rope<T, VecSize, HeadDim, 32>(
+      qkv_now,
+      cos_emb + emb_offset,
+      sin_emb + emb_offset,
+      qkv_out_now,
+      lane_id);
 
-      // q rope
-      const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
-      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
-#pragma unroll
-      for (int i = 0; i < HalfVecSize; i++) {
-        // dequant + add_bias + rope
-        float input_left = static_cast<float>(src_vec[2 * i]);
-        float input_right = static_cast<float>(src_vec[2 * i + 1]);
-
-        const float cos_tmp = cos_emb_vec[i];
-        const float sin_tmp = sin_emb_vec[i];
-        out_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        out_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
-      }
-      Store<T, VecSize>(out_vec, &qkv_out_now[bias_idx]);
-    }
   } else if (head_idx < num_heads + 2 * kv_num_heads) {
     // k
     constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
@@ -2191,7 +2181,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -2522,7 +2512,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -2895,7 +2885,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
