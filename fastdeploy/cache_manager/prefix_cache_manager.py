@@ -257,7 +257,8 @@ class PrefixCacheManager:
         Check if num_blocks gpu blocks can be allocated.
         """
         if len(self.gpu_free_block_list) < num_blocks:
-            self.free_block_ids(num_blocks)
+            if self.cache_config.enable_prefix_caching:
+                self.free_block_ids(num_blocks)
             if len(self.gpu_free_block_list) < num_blocks:
                 return False
             else:

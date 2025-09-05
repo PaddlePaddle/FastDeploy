@@ -348,9 +348,10 @@ class ResourceManagerV1(ResourceManager):
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
-                    self.cache_manager.update_cache_blocks(
-                        request, self.config.cache_config.block_size, request.num_computed_tokens
-                    )
+                    if self.config.cache_config.enable_prefix_caching:
+                        self.cache_manager.update_cache_blocks(
+                            request, self.config.cache_config.block_size, request.num_computed_tokens
+                        )
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
@@ -381,9 +382,10 @@ class ResourceManagerV1(ResourceManager):
                             request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
-                            self.cache_manager.update_cache_blocks(
-                                request, self.config.cache_config.block_size, request.num_computed_tokens
-                            )
+                            if self.config.cache_config.enable_prefix_caching:
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
                             request.status = RequestStatus.RUNNING
                             main_process_metrics.num_requests_waiting.dec(1)
                             main_process_metrics.num_requests_running.inc(1)
@@ -416,9 +418,10 @@ class ResourceManagerV1(ResourceManager):
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
-                            self.cache_manager.update_cache_blocks(
-                                request, self.config.cache_config.block_size, request.num_computed_tokens
-                            )
+                            if self.config.cache_config.enable_prefix_caching:
+                                self.cache_manager.update_cache_blocks(
+                                    request, self.config.cache_config.block_size, request.num_computed_tokens
+                                )
                             request.status = RequestStatus.RUNNING
                             main_process_metrics.num_requests_waiting.dec(1)
                             main_process_metrics.num_requests_running.inc(1)
