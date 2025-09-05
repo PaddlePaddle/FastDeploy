@@ -70,7 +70,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         ):
             return prompt_token_ids
 
-        def mock_format_and_add_data(current_req_dict):
+        async def mock_format_and_add_data(current_req_dict):
             return current_req_dict
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
@@ -97,7 +97,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         ):
             return prompt_token_ids
 
-        def mock_format_and_add_data(current_req_dict):
+        async def mock_format_and_add_data(current_req_dict):
             return current_req_dict
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
