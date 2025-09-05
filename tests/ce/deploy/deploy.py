@@ -181,6 +181,19 @@ def stop_server(signum=None, frame=None):
     except Exception as e:
         print(f"Failed to stop server: {e}, {str(traceback.format_exc())}")
 
+    try:
+        result = subprocess.run(
+            f"ps -ef -ww | grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            pid = int(parts[1])  # ps -ef 的第二列是 PID
+            print(f"Killing PID: {pid}")
+            os.kill(pid, signal.SIGKILL)
+    except Exception as e:
+        print(f"Failed to kill cache manager process: {e}, {str(traceback.format_exc())}")
     for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]:
         try:
             output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
