@@ -949,8 +949,6 @@ class LLMEngine:
                 suffix=self.ipc_signal_suffix,
                 create=True,
             )
-            from fastdeploy.utils import lyh_logger
-            lyh_logger.info("created cache_ready_signal") 
 
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
         if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:

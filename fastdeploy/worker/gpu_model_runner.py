@@ -119,7 +119,14 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
-
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_pid,
+            create=False,
+        )
         # Cuda Graph
         self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
@@ -966,20 +973,12 @@ class GPUModelRunner(ModelRunnerBase):
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"                
                 key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
                 val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                logger.info(f"layer {i} | set_data_ipc: ({key_cache_name}, {val_cache_name}), cache shape: {kv_cache_shape}")
                 set_data_ipc(key_cache, key_cache_name)
                 set_data_ipc(val_cache, val_cache_name)
                 cache_kvs_list.extend([key_cache, val_cache])
 
             self.share_inputs["caches"] = cache_kvs_list
-
-            cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
-            self.cache_ready_signal = IPCSignal(
-                name="cache_ready_signal",
-                array=cache_ready_signal_data,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
-                create=False,
-            )
             self.cache_ready_signal.value[local_rank] = 1
 
         else:
@@ -1601,6 +1600,7 @@ class GPUModelRunner(ModelRunnerBase):
             i += 1
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
+        self.cache_ready_signal.value[self.local_rank] = 0
 
     def clear_parameters(self, pid):
         """ " Dynamic model loader use to clear parameters use for RL"""

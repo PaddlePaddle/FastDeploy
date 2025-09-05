@@ -162,21 +162,6 @@ class PrefixCacheManager:
             kv_num_head = cache_config.model_cfg.num_attention_heads // tensor_parallel_size
         kv_num_head = max(1, kv_num_head)
 
-        # Wait until cache transfer manager is ready
-        logger.info("Waiting for cache transfer manager to be ready...")
-        from fastdeploy.utils import lyh_logger
-        lyh_logger.info(f"reading cache_ready_signal pid_suffix: {pid_suffix}")
-        cache_ready_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
-        self.cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=pid_suffix,
-            create=False,
-        )
-        while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
-            time.sleep(1)
-
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
