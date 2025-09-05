@@ -70,7 +70,7 @@ class PrefixCacheManager:
         else:
             self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
-        
+
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
             self.cpu_free_block_list = list(range(self.num_cpu_blocks - 1, -1, -1))
@@ -78,7 +78,7 @@ class PrefixCacheManager:
             self.cpu_free_block_list = []
         heapq.heapify(self.gpu_free_block_list)
         heapq.heapify(self.cpu_free_block_list)
-        
+
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
         self.radix_tree_root = BlockNode(-1, [], 0, 0, -1, 0, None, None, None)
@@ -196,7 +196,6 @@ class PrefixCacheManager:
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
             cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
 
-
         exit_code = cache_manager_processes[-1].poll()
         if exit_code is None:
             logger.info("Launch cache transfer manager successful")
@@ -212,7 +211,6 @@ class PrefixCacheManager:
             threading.Thread(target=self.clear_prefix_cache, args=(pid_suffix,), daemon=True).start()
 
         return cache_manager_processes
-
 
     def update_cache_config(self, cache_config):
         """
@@ -1281,7 +1279,7 @@ class PrefixCacheManager:
 
         if len(self.node_map) == 0:
             return
-        
+
         logger.info("Resetting the RadixTree!")
 
         # wait for swap tasks to finish
@@ -1302,11 +1300,11 @@ class PrefixCacheManager:
         # reset gpu cache data structure
         self.gpu_lru_leaf_heap.clear()
         self.gpu_lru_leaf_set.clear()
-        
+
         # reset cpu cache data structure
         self.cpu_lru_leaf_heap.clear()
         self.cpu_lru_leaf_set.clear()
-        
+
         # reset gpu/cpu free block list
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
@@ -1324,7 +1322,6 @@ class PrefixCacheManager:
         self.metrics.reset_metrics()
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
-
 
     def clear_prefix_cache(self, pid_suffix):
         """

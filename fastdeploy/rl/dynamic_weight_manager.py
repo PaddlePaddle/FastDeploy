@@ -24,8 +24,8 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.inter_communicator import ModelWeightsStatus
 from fastdeploy.config import FDConfig
+from fastdeploy.inter_communicator import ModelWeightsStatus
 
 
 class DynamicWeightManager:
@@ -226,7 +226,9 @@ class DynamicWeightManager:
                     if model_weights_status.value[0] == ModelWeightsStatus.NORMAL:
                         logger.info("finished loading new checkpoint")
                         break
-                    elif is_stop == 1 or (model_weights_status.value[0] == ModelWeightsStatus.CLEARED and is_stop == 0):
+                    elif is_stop == 1 or (
+                        model_weights_status.value[0] == ModelWeightsStatus.CLEARED and is_stop == 0
+                    ):
                         if is_stop == 0:
                             logger.info("finished clearing checkpoint")
                             is_stop = 1

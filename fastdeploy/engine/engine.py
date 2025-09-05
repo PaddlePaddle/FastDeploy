@@ -57,7 +57,7 @@ from fastdeploy.output.token_processor import TokenProcessor, WarmUpTokenProcess
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
-from fastdeploy.inter_communicator import ModelWeightsStatus
+
 
 class LLMEngine:
     """
@@ -199,9 +199,7 @@ class LLMEngine:
             time.sleep(3)
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
-        if not self.do_profile and (
-            self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"
-        ):
+        if not self.do_profile and (self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"):
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
@@ -242,7 +240,7 @@ class LLMEngine:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        
+
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
@@ -940,7 +938,7 @@ class LLMEngine:
                 suffix=self.ipc_signal_suffix,
                 create=True,
             )
-            
+
             cache_ready_signal_data = np.zeros(shape=[self.cfg.tensor_parallel_size], dtype=np.int32)
             self.cache_ready_signal = IPCSignal(
                 name="cache_ready_signal",
@@ -1019,7 +1017,6 @@ class LLMEngine:
             suffix=self.ipc_signal_suffix,
             create=True,
         )
-        
 
     def _exit_sub_services(self):
         """
@@ -1272,7 +1269,7 @@ class LLMEngine:
             f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
         )
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
-            console_logger.info(f"Waiting for cache manager processes to be ready..")
+            console_logger.info("Waiting for cache manager processes to be ready..")
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,

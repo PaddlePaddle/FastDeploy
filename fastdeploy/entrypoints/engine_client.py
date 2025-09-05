@@ -21,11 +21,17 @@ import numpy as np
 
 from fastdeploy import envs
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
-from fastdeploy.inter_communicator import ModelWeightsStatus, PrefixTreeStatus, KVCacheStatus
+from fastdeploy.inter_communicator import (
+    IPCSignal,
+    KVCacheStatus,
+    ModelWeightsStatus,
+    PrefixTreeStatus,
+    ZmqIpcClient,
+)
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
+
 
 class EngineClient:
     """
@@ -329,8 +335,10 @@ class EngineClient:
             )
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
                 if self.has_cache_manager:
-                    if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL and \
-                        self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL:
+                    if (
+                        self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL
+                        and self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
+                    ):
                         break
                 else:
                     break
@@ -367,8 +375,10 @@ class EngineClient:
             )
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
                 if self.has_cache_manager:
-                    if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED and \
-                        self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED:
+                    if (
+                        self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED
+                        and self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
+                    ):
                         break
                 else:
                     break

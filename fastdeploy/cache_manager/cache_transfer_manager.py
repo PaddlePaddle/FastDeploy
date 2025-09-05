@@ -16,31 +16,24 @@
 
 import argparse
 import concurrent.futures
+import gc
 import json
 import queue
-import time
 import threading
-import gc
-import sys
+import time
 
 import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.inter_communicator import (
-    EngineCacheQueue, 
-    IPCSignal, 
-    KVCacheStatus,
-    ModelWeightsStatus 
-)
+from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.model_executor.ops.gpu import (
-    cuda_host_free,
     cuda_host_alloc,
-    set_data_ipc,
-    unset_data_ipc,
+    cuda_host_free,
     share_external_data,
     swap_cache_all_layers,
+    unset_data_ipc,
 )
 from fastdeploy.utils import get_logger
 
@@ -215,7 +208,7 @@ class CacheTransferManager:
             self.gpu_cache_kvs[val_name] = val_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
-        
+
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
         logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
@@ -236,7 +229,7 @@ class CacheTransferManager:
             self.cpu_cache_kvs[val_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
             self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
         logger.info("CacheTransferManager has created swap cache for all layers.")
-        
+
     def _do_swap_to_cpu_task(
         self,
         swap_node_ids,
@@ -447,7 +440,7 @@ class CacheTransferManager:
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 try:
-                    logger.info(f"Start clearing GPU caches.")
+                    logger.info("Start clearing GPU caches.")
                     for name, tensor in self.gpu_cache_kvs.items():
                         unset_data_ipc(tensor, name, True, False)
                     self.gpu_cache_kvs.clear()
@@ -456,7 +449,7 @@ class CacheTransferManager:
                     paddle.device.cuda.empty_cache()
                     logger.info("GPU caches are cleared.")
 
-                    logger.info(f"Start clearing CPU caches.")
+                    logger.info("Start clearing CPU caches.")
                     for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
                         cuda_host_free(ptrs)
                     self.cpu_cache_kvs.clear()
@@ -468,19 +461,19 @@ class CacheTransferManager:
                     kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
                 except Exception as e:
                     logger.error(f"Failed to clear caches: {e}")
-            
+
             elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 try:
-                    logger.info(f"Start restoring GPU caches.")
+                    logger.info("Start restoring GPU caches.")
                     self._init_gpu_cache(args)
                     logger.info("GPU caches are restored.")
 
-                    logger.info(f"Start restoring CPU caches.")
+                    logger.info("Start restoring CPU caches.")
                     self._init_cpu_cache(args)
                     logger.info("CPU caches are restored.")
-                    
+
                     kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
-                
+
                 except Exception as e:
                     logger.error(f"Failed to restore caches: {e}")
 

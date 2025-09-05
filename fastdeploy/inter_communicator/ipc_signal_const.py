@@ -1,6 +1,5 @@
-
-
 from dataclasses import dataclass
+
 
 @dataclass
 class ModelWeightsStatus:
@@ -9,6 +8,7 @@ class ModelWeightsStatus:
     CLEARING = -1
     CLEARED = -2
 
+
 @dataclass
 class PrefixTreeStatus:
     NORMAL = 0
@@ -16,13 +16,14 @@ class PrefixTreeStatus:
     CLEARING = -1
     CLEARED = -2
 
+
 @dataclass
 class KVCacheStatus:
     NORMAL = 0
     UPDATING = 1
     CLEARING = -1
     CLEARED = -2
-    
+
 
 @dataclass
 class ExistTaskStatus:

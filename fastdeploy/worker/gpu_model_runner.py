@@ -43,9 +43,8 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import (
     recover_decode_task,
-    set_value_by_flags_and_idx,
-    share_external_data,
     set_data_ipc,
+    set_value_by_flags_and_idx,
     unset_data_ipc,
 )
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -61,11 +60,12 @@ if not current_platform.is_dcu():
 
 from fastdeploy import envs
 from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
-from fastdeploy.inter_communicator import IPCSignal
+
 
 class GPUModelRunner(ModelRunnerBase):
     def __init__(
@@ -964,16 +964,16 @@ class GPUModelRunner(ModelRunnerBase):
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (
-            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
-        ):
+        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"                
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
                 val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                logger.info(f"layer {i} | set_data_ipc: ({key_cache_name}, {val_cache_name}), cache shape: {kv_cache_shape}")
+                logger.info(
+                    f"layer {i} | set_data_ipc: ({key_cache_name}, {val_cache_name}), cache shape: {kv_cache_shape}"
+                )
                 set_data_ipc(key_cache, key_cache_name)
                 set_data_ipc(val_cache, val_cache_name)
                 cache_kvs_list.extend([key_cache, val_cache])
