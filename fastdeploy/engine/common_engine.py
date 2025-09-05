@@ -587,7 +587,7 @@ class EngineSevice:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
+                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
