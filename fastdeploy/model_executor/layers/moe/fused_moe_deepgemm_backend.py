@@ -319,7 +319,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 4. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
@@ -481,7 +481,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
 
         if layer.topk_method == "noaux_tc":
-            from .ep import get_moe_scores
+            from .moe import get_moe_scores
 
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,

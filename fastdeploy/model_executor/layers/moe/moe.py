@@ -27,6 +27,11 @@ from fastdeploy.model_executor.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
+try:
+    from fastdeploy.model_executor.ops.gpu import noaux_tc
+except:
+    logger.warning("import noaux_tc Failed!")
+
 
 def get_moe_method():
     """
@@ -52,6 +57,31 @@ def get_moe_method():
 
         return MetaxTritonWeightOnlyMoEMethod(None)
     raise NotImplementedError
+
+
+def get_moe_scores(
+    gating_output: paddle.Tensor,
+    n_group,
+    topk_group,
+    top_k,
+    routed_scaling_factor,
+    e_score_correction_bias,
+) -> paddle.Tensor:
+    """
+    compute moe scores using e_score_correction_bias.
+    """
+    scores = paddle.nn.functional.sigmoid(gating_output)
+    assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
+    scores_with_bias = scores + e_score_correction_bias
+    scores, topk_values, topk_idx = noaux_tc(
+        scores,
+        scores_with_bias,
+        n_group if n_group > 0 else 1,
+        topk_group if topk_group > 0 else 1,
+        top_k,
+        routed_scaling_factor,
+    )
+    return scores, topk_values, topk_idx
 
 
 class FusedMoE(nn.Layer):

@@ -24,7 +24,7 @@ from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
-from .ep import get_moe_scores
+from .moe import get_moe_scores
 
 try:
     from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
