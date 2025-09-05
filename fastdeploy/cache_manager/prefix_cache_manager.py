@@ -199,7 +199,7 @@ class PrefixCacheManager:
                 + f" >{log_dir}/launch_cache_manager_{int(device_ids[i])}.log 2>&1"
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
-            cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True))
+            cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
         # 等待cache初始化完毕
         logger.info("Waiting for cache transfer manager ready...")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
