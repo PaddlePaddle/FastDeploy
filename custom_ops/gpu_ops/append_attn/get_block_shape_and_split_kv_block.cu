@@ -364,6 +364,8 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
           decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
 
+      //  NOTE: (changwenbin) When using auto_chunk,
+      // decode_max_tile_size must take into account the maximum case, where * 1024 can cover 128K.
       const uint32_t decoder_batch_shape = seq_lens_decoder.dims()[0] * 1024;
       PADDLE_ENFORCE_GPU_SUCCESS(
           cudaMemsetAsync(decoder_batch_ids.data<int>(),

@@ -1079,6 +1079,8 @@ class GPUModelRunner(ModelRunnerBase):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
+        # NOTE: (changwenbin) When using auto_chunk,
+        # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
         decode_max_tile_size = (
             1024
             * self.parallel_config.max_num_seqs
