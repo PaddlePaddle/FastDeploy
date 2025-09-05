@@ -116,7 +116,6 @@ def test_generate_prompts(llm):
 
     try:
         outputs = llm.generate(prompts, sampling_params)
-        print("outputs", outputs)
 
         # Verify basic properties of the outputs
         assert len(outputs) == len(prompts), "Number of outputs should match number of prompts"
