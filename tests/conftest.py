@@ -43,6 +43,7 @@ class FDRunner:
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,
+            max_num_batched_tokens=max_model_len,
             **kwargs,
         )
 

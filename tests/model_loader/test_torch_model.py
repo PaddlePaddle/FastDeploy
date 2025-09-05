@@ -93,7 +93,7 @@ for model, cfg in hugging_face_model_param_map.items():
                 model,
                 cfg.get("tensor_parallel_size", 2),
                 cfg.get("max_num_seqs", 1),
-                cfg.get("max_model_len", 2048),
+                cfg.get("max_model_len", 1024),
                 q,
                 cfg.get("max_tokens", 100),
                 marks=[pytest.mark.core_model],
