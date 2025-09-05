@@ -87,12 +87,10 @@ class ForwardMeta:
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
     # The number of blocks that attention backend can use in decode stage
     decoder_num_blocks: Optional[paddle.Tensor] = None
-    decoder_num_blocks_cpu: Optional[paddle.Tensor] = None
     # Recorded multiple lengths related to prefill or decode
     max_len_tensor_cpu: Optional[paddle.Tensor] = None
 
     decoder_chunk_size_device: Optional[paddle.Tensor] = None
-    decoder_chunk_size_cpu: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None

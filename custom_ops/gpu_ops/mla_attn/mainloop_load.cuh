@@ -128,7 +128,7 @@ struct CollectiveMainloop {
     DTypeMD const* d_ptr;
     IdType const* kv_block_tables;
     IdType const* seq_lens_this_time;
-    IdType const* seq_lens_encoder;
+    // IdType const* seq_lens_encoder;
     IdType const* seq_lens_decoder;
     IdType const* cumsum_q_seqlens;
     IdType const* batch_ids;
@@ -145,7 +145,7 @@ struct CollectiveMainloop {
     int kv_stride_block_size;
     int o_stride_bsz;
     int o_stride_head_num;
-    int chunk_size;
+    // int chunk_size;
     int chunk_num;
     int max_draft_token_num;
   };
@@ -161,7 +161,7 @@ struct CollectiveMainloop {
     DTypeMD* d_ptr;
     IdType* kv_block_tables;
     IdType* seq_lens_this_time;
-    IdType* seq_lens_encoder;
+    // IdType* seq_lens_encoder;
     IdType* seq_lens_decoder;
     IdType* cumsum_q_seqlens;
     IdType* batch_ids;
@@ -178,7 +178,7 @@ struct CollectiveMainloop {
     int kv_stride_block_size;
     int o_stride_bsz;
     int o_stride_head_num;
-    int chunk_size;
+    // int chunk_size;
     int chunk_num;
     int max_draft_token_num;
     TMA_KV tma_load_KV;
@@ -200,7 +200,7 @@ struct CollectiveMainloop {
             const_cast<DTypeMD*>(args.d_ptr),
             const_cast<IdType*>(args.kv_block_tables),
             const_cast<IdType*>(args.seq_lens_this_time),
-            const_cast<IdType*>(args.seq_lens_encoder),
+            // const_cast<IdType*>(args.seq_lens_encoder),
             const_cast<IdType*>(args.seq_lens_decoder),
             const_cast<IdType*>(args.cumsum_q_seqlens),
             const_cast<IdType*>(args.batch_ids),
@@ -217,7 +217,7 @@ struct CollectiveMainloop {
             args.kv_stride_block_size,
             args.o_stride_bsz,
             args.o_stride_head_num,
-            args.chunk_size,
+            // args.chunk_size,
             args.chunk_num,
             args.max_draft_token_num,
             tma_load_KV

@@ -743,10 +743,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
         self.share_inputs["decoder_num_blocks"] = None
-        self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.share_inputs["max_len_tensor_cpu"] = None  # CPU
         self.share_inputs["decoder_chunk_size_device"] = None
-        self.share_inputs["decoder_chunk_size_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -891,7 +889,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        # NOTE : (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
+        # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
@@ -972,10 +970,8 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
             decoder_num_blocks=self.share_inputs["decoder_num_blocks"],
-            decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             decoder_chunk_size_device=self.share_inputs["decoder_chunk_size_device"],
-            decoder_chunk_size_cpu=self.share_inputs["decoder_chunk_size_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
@@ -1091,10 +1087,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_num_blocks"] = paddle.full([1], 0, dtype="int32")
-        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
         self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-        self.share_inputs["decoder_chunk_size_cpu"] = paddle.full([1], 64, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()

@@ -305,10 +305,8 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks,         // Inplace
-    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
     paddle::Tensor &decoder_chunk_size_device,  // Inplace
-    paddle::Tensor &decoder_chunk_size_cpu,     // Inplace
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -468,25 +466,25 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& query,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& seq_lens_encoder,
+    // const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
-    const paddle::Tensor& encoder_batch_ids,
-    const paddle::Tensor& encoder_tile_ids_per_batch,
-    const paddle::Tensor& encoder_num_blocks,
+    // const paddle::Tensor& encoder_batch_ids,
+    // const paddle::Tensor& encoder_tile_ids_per_batch,
+    // const paddle::Tensor& encoder_num_blocks,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids_per_batch,
     const paddle::Tensor& kv_num_blocks,
     const paddle::Tensor& decoder_batch_ids,
     const paddle::Tensor& decoder_tile_ids_per_batch,
     const paddle::Tensor& decoder_num_blocks,
-    const paddle::Tensor& decoder_num_blocks_cpu,
-    const paddle::Tensor& decoder_chunk_size_cpu,
+    // const paddle::Tensor& decoder_num_blocks_cpu,
+    // const paddle::Tensor& decoder_chunk_size_cpu,
     const paddle::Tensor& decoder_chunk_size_device,
-    const paddle::Tensor& max_enc_len_this_time,
+    // const paddle::Tensor& max_enc_len_this_time,
     const paddle::Tensor& max_dec_len_this_time,
     const paddle::Tensor& max_len_kv,
     const paddle::optional<paddle::Tensor>& attn_mask,

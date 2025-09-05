@@ -62,13 +62,12 @@ struct Params {
     alignas(16) DTypeQ *Q; // [token_num, head_num, dim_head]
     alignas(16) DTypeKV *KV; // [max_block_num, block_size, dim_head]
     alignas(16) DTypeO *O; // [token_num, head_num, dim_head]
-    alignas(16) DTypeO *O_tmp; // [num_chunks, bsz, head_num, dim_head]
-    alignas(16) float *m; // [num_chunks, bsz * max_draft_token_num * head_num]
-    alignas(16) float *d; // [num_chunks, bsz * max_draft_token_num * head_num]
+    alignas(16) DTypeO *O_tmp; // [max_num_chunks, bsz, head_num, dim_head]
+    alignas(16) float *m; // [max_num_chunks, bsz * max_draft_token_num * head_num]
+    alignas(16) float *d; // [max_num_chunks, bsz * max_draft_token_num * head_num]
 
     alignas(16) IdType *block_tables;
     alignas(16) IdType *seq_lens_this_time;
-    alignas(16) IdType *seq_lens_encoder;
     alignas(16) IdType *seq_lens_decoder;
     alignas(16) IdType *cumsum_q_seqlens;
     alignas(16) IdType *batch_id_per_token;
@@ -96,9 +95,7 @@ struct Params {
     int vo_head_dim;
     int block_size;
     int max_draft_token_num;
-    int chunk_size;
     int chunk_num;
-    int num_blocks_x_int;
 
     float sm_scale;
 };
@@ -206,58 +203,10 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
 
     PipelineStateQ smem_pipe_write_q = cutlass::make_producer_start_state<MainloopPipelineQ>();
     PipelineState smem_pipe_write_kv = cutlass::make_producer_start_state<MainloopPipeline>();
-    if constexpr(USE_FIXED_BLOCK) {
-      for (int i = blockIdx.x; i < num_blocks_x; i += SM_COUNT) {
-        const int bid = mainloop_params.batch_ids[i];
-        const int tile_id = mainloop_params.tile_ids_per_batch[i];
-        const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
-        const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
-        const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
-        const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-        cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
-                                          /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
-
-        // load Q
-        collective_mainloop.load_q(
-            mainloop_params,
-            pipeline_q,
-            smem_pipe_write_q,
-            shared_storage,
-            threadIdx.x,
-            bid);
-
-        if constexpr (!use_tma_load_kv) {
-          // load kv
-          collective_mainloop.load_kv(
-              mainloop_params,
-              pipeline_kv,
-              smem_pipe_write_kv,
-              shared_storage,
-              bid,
-              seq_len_decoder_now,
-              tile_id
-          );
-        } else {
-          if (warp_idx_in_warpgroup == 0) {
-            // load kv tma
-            collective_mainloop.load_kv_tma(
-                mainloop_params,
-                pipeline_kv,
-                smem_pipe_write_kv,
-                shared_storage,
-                bid,
-                seq_len_decoder_now,
-                tile_id
-            );
-          }
-        }
-      }
-    } else {
-      const int block_id = blockIdx.x;
-      const int bid = mainloop_params.batch_ids[block_id];
-      const int tile_id = mainloop_params.tile_ids_per_batch[block_id];
+    for (int i = blockIdx.x; i < num_blocks_x; i += SM_COUNT) {
+      const int bid = mainloop_params.batch_ids[i];
+      const int tile_id = mainloop_params.tile_ids_per_batch[i];
       const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
-      const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
       const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
       const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
       cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
@@ -310,76 +259,12 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
     Tensor tOrO = partition_fragment_C(tiled_mma_pv, select<0, 1>(TileShape_PDV{}));
 
     auto attention_updater = OnlineSoftmax<2 * size<1>(tOrO), /*WITH_SCALE=*/true>(mainloop_params.sm_scale);
-    if constexpr(USE_FIXED_BLOCK) {
-      for (int i = blockIdx.x; i < num_blocks_x; i += SM_COUNT) {
-        clear(tOrO);
-        clear(attention_updater.scores_scale);
-        const int bid = mainloop_params.batch_ids[i];
-        const int tile_id = mainloop_params.tile_ids_per_batch[i];
-        const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
-        const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
-        const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
-        const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
-        cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
-                                          /*id=*/static_cast<int>(NamedBarriers::kWG0WG1WG2Sync));
-
-        if constexpr (BLOCK_SHAPE_KV == 64) {
-          mma_f16<Ktraits, CAUSAL>(
-            mainloop_params,
-            pipeline_q,
-            smem_pipe_read_q,
-            pipeline_kv,
-            smem_pipe_read_kv,
-            tOrO,
-            attention_updater,
-            threadIdx.x - NUM_COPY_THREADS,
-            bid,
-            seq_len_decoder_now,
-            seq_len_now,
-            tile_id,
-            shared_storage);
-        } else if (BLOCK_SHAPE_KV == 32) {
-          mma_f16_two_stages<Ktraits, CAUSAL>(
-            mainloop_params,
-            pipeline_q,
-            smem_pipe_read_q,
-            pipeline_kv,
-            smem_pipe_read_kv,
-            tOrO,
-            attention_updater,
-            threadIdx.x - NUM_COPY_THREADS,
-            bid,
-            seq_len_decoder_now,
-            seq_len_now,
-            tile_id,
-            shared_storage);
-        }
-
-        collective_epilogue.store(
-            epilogue_params,
-            tOrO,
-            attention_updater.get_lse(),
-            shared_storage,
-            tiled_mma_pv,
-            threadIdx.x - NUM_COPY_THREADS,
-            bid,
-            mainloop_params.bsz,
-            seq_len_now,
-            start_token_idx,
-            tile_id,
-            seq_len_decoder_now,
-            chunk_size,
-            mainloop_params.max_draft_token_num,
-            mainloop_params.o_stride_bsz);
-      }
-    } else {
-      const int block_id = blockIdx.x;
+    for (int i = blockIdx.x; i < num_blocks_x; i += SM_COUNT) {
       clear(tOrO);
       clear(attention_updater.scores_scale);
-      const int bid = mainloop_params.batch_ids[block_id];
-      const int tile_id = mainloop_params.tile_ids_per_batch[block_id];
+      const int bid = mainloop_params.batch_ids[i];
+      const int tile_id = mainloop_params.tile_ids_per_batch[i];
       const int seq_len_now = mainloop_params.seq_lens_this_time[bid];
-      const int seq_len_encoder_now = mainloop_params.seq_lens_encoder[bid];
       const int seq_len_decoder_now = mainloop_params.seq_lens_decoder[bid] + seq_len_now;
       const int start_token_idx = mainloop_params.cumsum_q_seqlens[bid];
       cutlass::arch::NamedBarrier::sync(Ktraits::NUM_THREADS,
@@ -433,7 +318,7 @@ MLAWithKVCacheKernel(CUTE_GRID_CONSTANT
           chunk_size,
           mainloop_params.max_draft_token_num,
           mainloop_params.o_stride_bsz);
-    }
+      }
   }
 }
 
@@ -461,7 +346,6 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.d,
       params.block_tables,
       params.seq_lens_this_time,
-      params.seq_lens_encoder,
       params.seq_lens_decoder,
       params.cumsum_q_seqlens,
       params.batch_ids,
@@ -478,7 +362,6 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.kv_stride_block_size,
       params.o_stride_bsz,
       params.o_stride_head_num,
-      params.chunk_size,
       params.chunk_num,
       params.max_draft_token_num
   });
@@ -502,13 +385,9 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(
       &act_blocks_per_sm, kernel, KernelTraits::NUM_WARPS * 32, smem_size);
 
-  int gridx;
-  if constexpr(USE_FIXED_BLOCK) {
-    gridx = multiprocessor_count;
-  } else {
-    gridx = params.num_blocks_x_int;
-  }
-  dim3 grid_dims = {gridx, 1, 1};
+  // NOTE: (changwenbin) Here the grid size is fixed so that MLA can be captured
+  // by the graph.
+  dim3 grid_dims = {multiprocessor_count, 1, 1};
   static constexpr int ctaSize = KernelTraits::NUM_WARPS * 32;
   dim3 block_dims(ctaSize, 1, 1);
   kernel<<<grid_dims, block_dims, smem_size, stream>>>(

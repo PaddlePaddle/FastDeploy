@@ -286,10 +286,8 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks_x,         // Inplace
-    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
     paddle::Tensor &decoder_chunk_size_device,  // Inplace
-    paddle::Tensor &decoder_chunk_size_cpu,     // Inplace
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -321,6 +319,7 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
   paddle::Tensor kv_tile_ids_per_batch;
   paddle::Tensor kv_num_blocks_x_cpu;       /*cpu*/
   paddle::Tensor max_len_kv_cpu;            /*cpu*/
+  paddle::Tensor decoder_chunk_size_cpu;
 
   auto max_len_kv =
       GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_decoder.place());
@@ -379,9 +378,6 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
                           stream));
 
 
-      decoder_num_blocks_x_cpu.copy_(
-          decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
-
       split_block_for_mla<<<1, 32, 0, stream>>>(
           seq_lens_this_time.data<int>(),
           seq_lens_encoder.data<int>(),
@@ -390,7 +386,6 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
           decoder_tile_ids_per_batch.data<int>(),
           bsz,
           chunk_size);
-
 
     } else {
         const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
@@ -411,22 +406,14 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
             decoder_block_shape_q,
             group_size);
 
-        decoder_num_blocks_x_cpu.copy_(decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
-
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
             decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
-        decoder_chunk_size_cpu =
-            decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
     }
   } else {
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
           decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
-      decoder_chunk_size_cpu =
-          decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
             decoder_num_blocks_x.data<int>(), 0, sizeof(int32_t), stream));
-      decoder_num_blocks_x_cpu.copy_(
-          decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
   }
 
   // encoder
@@ -502,10 +489,8 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "decoder_batch_ids",
       "decoder_tile_ids_per_batch",
       "decoder_num_blocks_x"
-      "decoder_num_blocks_x_cpu",
       "max_len_tensor_cpu",
       "decoder_chunk_size_device",
-      "decoder_chunk_size_cpu"
     })
     .Outputs({
       paddle::Optional("encoder_batch_ids"),
