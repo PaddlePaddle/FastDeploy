@@ -36,19 +36,23 @@ prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
 model_param_map = {
     "Qwen3-0.6B": {
+        "max_num_seqs": 1,
         "quantizations": ["None", "wint8", "wint4"],
     },
     "ernie-4_5-21b-a3b-bf16-paddle": {
+        "max_num_seqs": 1,
         "tensor_parallel_size": 2,
         "quantizations": [
             "wint8",
         ],
     },
     "Qwen2-7B-Instruct": {
+        "max_num_seqs": 1,
         "quantizations": ["wint4"],
     },
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
+        "max_num_seqs": 1,
         "quantizations": [
             {
                 "quant_type": "block_wise_fp8",

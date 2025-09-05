@@ -74,10 +74,12 @@ def check_result_against_baseline(outputs, baseline_file, threshold=0.05):
 
 hugging_face_model_param_map = {
     "Qwen2.5-7B-Instruct": {
+        "max_num_seqs": 1,
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
     "Qwen3-30B-A3B": {
+        "max_num_seqs": 1,
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
