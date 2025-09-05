@@ -58,6 +58,7 @@ else:
         recover_decode_task,
         set_value_by_flags_and_idx,
         share_external_data,
+        speculate_schedule_cache,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -70,8 +71,11 @@ from fastdeploy.model_executor.pre_and_post_process import (
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
+import zmq
+
 from fastdeploy import envs
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.inter_communicator import ZmqClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -162,6 +166,12 @@ class GPUModelRunner(ModelRunnerBase):
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+
+        self.zmq_client = None
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            self.zmq_client.connect()
+            self.zmq_client.socket.SNDTIMEO = 3000
 
     def exist_prefill(self):
         """
@@ -386,6 +396,8 @@ class GPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        if self.speculative_method in ["mtp"]:
+            self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -807,6 +819,13 @@ class GPUModelRunner(ModelRunnerBase):
                 fill_value=0,
                 dtype="int32",
             )
+            # For V1_KVCACHE_SCHEDULER
+            self.share_inputs["step_draft_tokens"] = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            )
+            self.share_inputs["step_seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
@@ -845,7 +864,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"],
                 self.share_inputs["block_tables"],
                 self.share_inputs["is_block_step"],
+                self.share_inputs["draft_tokens"] if self.speculative_decoding else None,
+                self.share_inputs["step_draft_tokens"] if self.speculative_decoding else None,
+                self.share_inputs["step_seq_lens_this_time"] if self.speculative_decoding else None,
                 self.cache_config.block_size,
+                self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
 
         # Remove padding
@@ -1220,6 +1243,7 @@ class GPUModelRunner(ModelRunnerBase):
                 block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
+                zmq_client=self.zmq_client,
             )
 
             if self.speculative_decoding:
@@ -1347,7 +1371,12 @@ class GPUModelRunner(ModelRunnerBase):
         Returns:
             A list of indices corresponding to the requests that need to be skipped.
         """
-        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None or model_forward_batch is None:
+        if (
+            not self.cache_config.enable_chunked_prefill
+            or self.guided_backend is None
+            or model_forward_batch is None
+            or envs.ENABLE_V1_KVCACHE_SCHEDULER
+        ):
             return []
 
         skip_idx_list = []
@@ -1515,6 +1544,7 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
+            zmq_client=self.zmq_client,
         )
         if self.guided_backend is not None and sampler_output is not None:
             self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
@@ -1541,6 +1571,24 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
+        elif self.speculative_decoding:
+            speculate_schedule_cache(
+                self.share_inputs["draft_tokens"],
+                self.share_inputs["block_tables"],
+                self.share_inputs["stop_flags"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["step_seq_lens_decoder"],
+                self.share_inputs["step_draft_tokens"],
+                self.share_inputs["step_seq_lens_this_time"],
+                self.share_inputs["accept_num"],
+                self.share_inputs["accept_tokens"],
+                self.share_inputs["is_block_step"],
+                self.share_inputs["not_need_stop"],
+                self.share_inputs["stop_nums"],
+                self.cache_config.block_size,
+                self.speculative_config.num_speculative_tokens,
+            )
 
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
