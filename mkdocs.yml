@@ -83,6 +83,7 @@ plugins:
             Sampling: 采样策略
             MultiNode Deployment: 多机部署
             Graph Optimization: 图优化
+            Data Parallelism: 数据并行
             Supported Models: 支持模型列表
             Benchmark: 基准测试
             Usage: 用法
@@ -132,6 +133,7 @@ nav:
       - 'Sampling': features/sampling.md
       - 'MultiNode Deployment': features/multi-node_deployment.md
       - 'Graph Optimization': features/graph_optimization.md
+      - 'Data Parallelism': features/data_parallel_service.md
   - 'Supported Models': supported_models.md
   - Benchmark: benchmark.md
   - Usage:
