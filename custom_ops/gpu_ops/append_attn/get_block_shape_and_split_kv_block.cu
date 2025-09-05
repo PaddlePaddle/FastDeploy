@@ -488,7 +488,7 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "seq_lens_this_time",
       "decoder_batch_ids",
       "decoder_tile_ids_per_batch",
-      "decoder_num_blocks_x"
+      "decoder_num_blocks_x",
       "max_len_tensor_cpu",
       "decoder_chunk_size_device",
     })
