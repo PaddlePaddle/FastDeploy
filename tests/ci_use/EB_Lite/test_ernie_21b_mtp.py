@@ -229,7 +229,6 @@ def get_stream_chunks(response):
     return chunks
 
 
-@pytest.mark.skip(reason="需#3759合入")
 def test_chat_usage_stream(api_url):
     """测试流式chat usage"""
     payload = {
@@ -259,7 +258,6 @@ def test_chat_usage_stream(api_url):
     assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
 
 
-@pytest.mark.skip(reason="需#3759合入")
 def test_chat_usage_non_stream(api_url):
     """测试非流式chat usage"""
     payload = {
@@ -286,7 +284,6 @@ def test_chat_usage_non_stream(api_url):
     assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
 
 
-@pytest.mark.skip(reason="需#3759合入")
 def test_non_chat_usage_stream(api_url):
     """测试流式非chat usage"""
     payload = {
@@ -314,7 +311,6 @@ def test_non_chat_usage_stream(api_url):
     assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
 
 
-@pytest.mark.skip(reason="需#3759合入")
 def test_non_chat_usage_non_stream(api_url):
     """测试非流式非chat usage"""
     payload = {
