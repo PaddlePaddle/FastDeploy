@@ -31,7 +31,7 @@ class TestFp8Fp8Fp8DualGemm(unittest.TestCase):
         paddle.seed(2024)
         self.prop = paddle.device.cuda.get_device_properties()
         self.sm_version = self.prop.major * 10 + self.prop.minor
-        print(f"sm version", self.sm_version)
+        print(f"sm version: {self.sm_version}")
         self.E4M3_MAX_POS = 448.0
         os.environ["FLAGS_cuda_core_fp8_gemm"] = "1"
         print(paddle.device.cuda.get_device_properties())
