@@ -231,6 +231,15 @@ class QwenVLProcessor(TextProcessor):
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
+            chat_template_kwargs = request.get("chat_template_kwargs")
+            if chat_template_kwargs:
+                if isinstance(chat_template_kwargs, dict):
+                    for k, v in chat_template_kwargs.items():
+                        if k not in request:
+                            request[k] = v
+                else:
+                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+            request.setdefault("enable_thinking", True)
             outputs = self.processor.request2ids(request)
 
         else:
