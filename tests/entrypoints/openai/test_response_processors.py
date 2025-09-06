@@ -80,7 +80,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         image_part = results[1]["outputs"]["multipart"][0]
         self.assertEqual(image_part["type"], "image")
         self.assertEqual(image_part["url"], "http://image.url/test.png")
-        self.assertEqual(results[1]["outputs"]["token_ids"], [[11, 22]])
+        self.assertEqual(results[1]["outputs"]["token_ids"], [[[11, 22]]])
 
         # 第三个 yield：text
         text_part = results[2]["outputs"]["multipart"][0]
@@ -99,7 +99,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertEqual(results, [])
-        self.assertEqual(self.processor_mm._mm_buffer, [[33, 44]])
+        self.assertEqual(self.processor_mm._mm_buffer, [[[33, 44]]])
 
     async def test_non_streaming_accumulate_and_emit(self):
         """非流式模式：等 eos_token_id 才输出 multipart（text+image）"""

@@ -273,11 +273,15 @@ void AppendAttentionKernel(
             cache_v_zp,
             cache_quant_type_str,
             use_neox_rotary_style,
+            rope_3d,
             max_input_length,
             exec_stream,
             &qkv_out,
             const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache));
+            const_cast<paddle::Tensor*>(&value_cache),
+            q_norm_weight,
+            k_norm_weight,
+            rms_norm_eps);
       } else {
         SpeculateWriteCacheWithRoPEKernel<data_t, data_t>(
             meta_data,
@@ -296,11 +300,15 @@ void AppendAttentionKernel(
             cache_v_zp,
             cache_quant_type_str,
             use_neox_rotary_style,
+            rope_3d,
             max_input_length,
             exec_stream,
             &qkv_out,
             const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache));
+            const_cast<paddle::Tensor*>(&value_cache),
+            q_norm_weight,
+            k_norm_weight,
+            rms_norm_eps);
       }
     } else {
       if (qkv_out_scales) {
@@ -309,7 +317,6 @@ void AppendAttentionKernel(
             qkv,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
@@ -336,7 +343,6 @@ void AppendAttentionKernel(
             qkv_out,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
