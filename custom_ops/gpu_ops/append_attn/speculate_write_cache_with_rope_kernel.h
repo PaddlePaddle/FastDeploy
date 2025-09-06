@@ -35,6 +35,7 @@ void SpeculateWriteCacheWithRoPEKernel(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
+    const bool rope_3d,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
