@@ -71,6 +71,7 @@ class InputPreprocessor:
         """
         reasoning_parser_obj = None
         tool_parser_obj = None
+        print("123")
         try:
             from fastdeploy.plugins.reasoning_parser import (
                 load_reasoning_parser_plugins,
