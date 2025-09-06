@@ -77,6 +77,8 @@ class InputPreprocessor:
                 load_reasoning_parser_plugins,
             )
 
+            cus = reasoning_parser_obj
+            print(cus)
             reasoning_parser_obj = load_reasoning_parser_plugins()
         except:
             if self.reasoning_parser:
