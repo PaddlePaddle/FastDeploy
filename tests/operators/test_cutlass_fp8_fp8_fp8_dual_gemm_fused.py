@@ -31,7 +31,7 @@ class TestFp8Fp8Fp8DualGemm(unittest.TestCase):
         paddle.seed(2024)
         self.prop = paddle.device.cuda.get_device_properties()
         self.sm_version = self.prop.major * 10 + self.prop.minor
-        print(self.prop)
+        print(f"sm version", self.sm_version)
         self.E4M3_MAX_POS = 448.0
         os.environ["FLAGS_cuda_core_fp8_gemm"] = "1"
         print(paddle.device.cuda.get_device_properties())
@@ -41,8 +41,8 @@ class TestFp8Fp8Fp8DualGemm(unittest.TestCase):
         """
         Check if the cutlass_fp8_fp8_fp8_dual_gemm_fused function works properly.
         """
-        if self.sm_version != 90:
-            self.skipTest("cutlass_fp8_fp8_fp8_dual_gemm_fused only support sm90")
+        if self.sm_version < 90:
+            self.skipTest("cutlass_fp8_fp8_fp8_dual_gemm_fused only support sm90+")
         nks = [
             [2048, 2048],
             [2048, 5504],
