@@ -74,12 +74,6 @@ class OpenAIServingChat:
             self.master_ip = "0.0.0.0"
         api_server_logger.info(f"master ip: {self.master_ip}")
 
-    async def _ensure_connection_manager(self):
-        """ensure connection manager initialized"""
-        if not self.engine_client.connection_initialized:
-            await self.engine_client.connection_manager.initialize()
-            self.engine_client.connection_initialized = True
-
     def _check_master(self):
         return self.engine_client.is_master
 
@@ -119,7 +113,7 @@ class OpenAIServingChat:
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
-                prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
@@ -206,7 +200,6 @@ class OpenAIServingChat:
         api_server_logger.info(f"create chat completion request: {request_id}")
 
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
@@ -419,7 +412,6 @@ class OpenAIServingChat:
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
             final_res = None

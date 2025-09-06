@@ -225,7 +225,8 @@ class EngineSevice:
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             local_data_parallel_id=min(
-                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
+                self.cfg.worker_num_per_node // self.cfg.parallel_config.tensor_parallel_size * self.cfg.node_rank
+                + self.cfg.parallel_config.local_data_parallel_id,
                 self.cfg.parallel_config.data_parallel_size - 1,
             ),
         )
@@ -526,9 +527,8 @@ class EngineSevice:
                 self.cfg.max_prefill_batch,
             )
 
-            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
-                available_blocks=self.resource_manager.available_block_num(),
+                available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
@@ -552,8 +552,6 @@ class EngineSevice:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
-                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
@@ -589,7 +587,7 @@ class EngineSevice:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
+                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
