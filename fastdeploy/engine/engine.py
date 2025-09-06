@@ -34,7 +34,7 @@ import paddle
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineSevice
+from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
@@ -93,7 +93,7 @@ class LLMEngine:
             cfg.model_config.enable_mm,
             cfg.tool_parser,
         )
-        self.engine = EngineSevice(cfg)
+        self.engine = EngineService(cfg)
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = 1
@@ -401,10 +401,6 @@ class LLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
-            "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
-            "FLAGS_hardamard_use_diagonal_block_matrix": int(
-                os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
-            ),
         }
         # environment variables needed by Dy2St
         variables.update(
