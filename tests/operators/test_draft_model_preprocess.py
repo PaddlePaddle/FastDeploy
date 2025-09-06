@@ -323,7 +323,7 @@ class TestDraftModelPreprocess:
         paddle.seed(2022)
 
         # Define parameters
-        bsz = 1
+        bsz = 10
         draft_tokens_len = 4
         input_ids_len = 100
         max_draft_token = 10
