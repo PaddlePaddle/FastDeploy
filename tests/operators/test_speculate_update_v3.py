@@ -137,14 +137,14 @@ class TestSpeculateUpdateV3(unittest.TestCase):
             for k in paddle_inputs
         }
 
-        out_pd = speculate_update(*(paddle_inputs.values()))
-        (
-            seq_lens_encoder_pd,
-            seq_lens_decoder_pd,
-            not_need_stop_pd,
-            draft_tokens_pd,
-            actual_draft_nums_pd,
-        ) = out_pd
+        speculate_update(*(paddle_inputs.values()))
+        pd_tensors = (
+            paddle_inputs["seq_lens_encoder"],
+            paddle_inputs["seq_lens_decoder"],
+            paddle_inputs["not_need_stop"],
+            paddle_inputs["draft_tokens"],
+            paddle_inputs["actual_draft_token_nums"],
+        )
 
         out_np = speculate_update_v3_np(**np_inputs)
 
@@ -154,13 +154,6 @@ class TestSpeculateUpdateV3(unittest.TestCase):
             "not_need_stop",
             "draft_tokens",
             "actual_draft_token_nums",
-        ]
-        pd_tensors = [
-            seq_lens_encoder_pd,
-            seq_lens_decoder_pd,
-            not_need_stop_pd,
-            draft_tokens_pd,
-            actual_draft_nums_pd,
         ]
 
         for name, pd_val, np_val in zip(names, pd_tensors, out_np):
