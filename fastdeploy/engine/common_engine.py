@@ -532,7 +532,7 @@ class EngineSevice:
                 available_blocks = self.resource_manager.available_block_num()
             else:
                 available_blocks = self.cfg.cache_config.max_block_num_per_seq
-                
+
             tasks = self.scheduler.get_requests(
                 available_blocks=available_blocks,
                 block_size=self.cfg.cache_config.block_size,
