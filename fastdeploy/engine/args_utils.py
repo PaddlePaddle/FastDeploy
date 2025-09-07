@@ -14,10 +14,13 @@
 # limitations under the License.
 """
 
+import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
+
+import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -188,7 +191,7 @@ class EngineArgs:
     """
     Flag to indicate whether to use warm-up before inference.
     """
-    enable_prefix_caching: bool = False
+    enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
     """
@@ -385,6 +388,16 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
+        if self.speculative_config is not None:
+            self.enable_prefix_caching = False
+        if self.enable_mm:
+            self.enable_prefix_caching = False
+        if not current_platform.is_cuda():
+            self.enable_prefix_caching = False
+        if self.dynamic_load_weight:
+            self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -723,7 +736,7 @@ class EngineArgs:
         perf_group = parser.add_argument_group("Performance Tuning")
         perf_group.add_argument(
             "--enable-prefix-caching",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
         )
@@ -1006,7 +1019,10 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if paddle.is_compiled_with_xpu():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048
