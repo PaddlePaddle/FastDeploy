@@ -36,46 +36,15 @@ prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
 
 model_param_map = {
-    "Qwen3-0.6B": {
-        "quantizations": ["None", "wint8", "wint4"],
-    },
     "ernie-4_5-21b-a3b-bf16-paddle": {
-        "tensor_parallel_size": 2,
-        "quantizations": [
-            "wint8",
-        ],
-    },
-    "Qwen2-7B-Instruct": {
-        "quantizations": ["wint4"],
-    },
-    "Qwen3-30B-A3B": {
-        "tensor_parallel_size": 2,
-        "quantizations": [
-            {
-                "quant_type": "block_wise_fp8",
-                "backend": "triton",
-                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
-            },
-            {
-                "quant_type": "block_wise_fp8",
-                "backend": "deepgemm",
-                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17", "FD_USE_DEEP_GEMM": "1"},
-            },
-        ],
-    },
-    "DeepSeek-V3-0324": {
         "tensor_parallel_size": 2,
         "quantizations": [
             {
                 "quant_type": "wint4",
-                "env": {
-                    "FD_ATTENTION_BACKEND": "MLA_ATTN",
-                    "FLAGS_mla_use_tensorcore": "1",
-                    "FLAGS_flash_attn_version": "3",
-                },
-            },
+                "env": {"FD_ENABLE_MODEL_CACHE": "1"},
+            }
         ],
-    },
+    }
 }
 
 
@@ -104,7 +73,7 @@ for model, cfg in model_param_map.items():
     "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
     params,
 )
-def test_common_model(
+def test_model_cache(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
@@ -115,25 +84,7 @@ def test_common_model(
     monkeypatch,
 ) -> None:
     model_path = get_paddle_model_path(model_name_or_path)
-    if env:
-        for k, v in env.items():
-            monkeypatch.setenv(k, v)
 
-    fd_outputs_v0 = run_with_timeout(
-        target=form_model_get_output_topp0,
-        args=(
-            fd_runner,
-            model_path,
-            tensor_parallel_size,
-            max_model_len,
-            max_tokens,
-            quantization,
-            "default",
-            FD_ENGINE_QUEUE_PORT,
-            prompts,
-            FD_CACHE_QUEUE_PORT,
-        ),
-    )
     fd_outputs_v1 = run_with_timeout(
         target=form_model_get_output_topp0,
         args=(
@@ -149,9 +100,29 @@ def test_common_model(
             FD_CACHE_QUEUE_PORT,
         ),
     )
+
+    if env:
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+
+    fd_outputs_v1_with_cache = run_with_timeout(
+        target=form_model_get_output_topp0,
+        args=(
+            fd_runner,
+            model_path,
+            tensor_parallel_size,
+            max_model_len,
+            max_tokens,
+            quantization,
+            "default_v1",
+            FD_ENGINE_QUEUE_PORT,
+            prompts,
+            FD_CACHE_QUEUE_PORT,
+        ),
+    )
     check_tokens_id_and_text_close(
-        outputs_0_lst=fd_outputs_v0,
-        outputs_1_lst=fd_outputs_v1,
-        name_0="default loader",
-        name_1="default_v1 loader",
+        outputs_0_lst=fd_outputs_v1,
+        outputs_1_lst=fd_outputs_v1_with_cache,
+        name_0="default_v1 laoder",
+        name_1="default_v1 loader using cache",
     )

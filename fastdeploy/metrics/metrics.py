@@ -470,6 +470,12 @@ class MetricsManager:
                 )
 
     def set_cache_config_info(self, obj) -> None:
+        if hasattr(self, "cache_config_info") and isinstance(self.cache_config_info, Gauge):
+            metrics_info = obj.metrics_info()
+            if metrics_info:
+                self.cache_config_info.labels(**metrics_info).set(1)
+            return
+
         metrics_info = obj.metrics_info()
         if not metrics_info:
             return
