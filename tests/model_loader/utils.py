@@ -63,9 +63,14 @@ def run_with_timeout(target, args, timeout=60 * 5):
         print_logs()
         raise RuntimeError("Worker process hung and was terminated")
     try:
-        return result_queue.get(timeout=60)
+        result = result_queue.get(timeout=60)
     except Exception as e:
         raise RuntimeError(f"Failed to get result from worker: {e}")
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
+
+    return result
 
 
 def form_model_get_output_topp0(
