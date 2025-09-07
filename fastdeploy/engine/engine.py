@@ -342,7 +342,8 @@ class LLMEngine:
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    os.killpg(p.pid, signal.SIGTERM)
+                    pgid = os.getpgid(p.pid)
+                    os.killpg(pgid, signal.SIGTERM)
                 except Exception as e:
                     console_logger.error(
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"

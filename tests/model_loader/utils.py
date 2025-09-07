@@ -79,6 +79,7 @@ def form_model_get_output_topp0(
     load_choices,
     engine_worker_queue_port,
     prompts,
+    cache_queue_port,
     result_queue,
 ):
     try:
@@ -90,6 +91,7 @@ def form_model_get_output_topp0(
             load_choices=load_choices,
             quantization=quantization,
             engine_worker_queue_port=engine_worker_queue_port,
+            cache_queue_port=cache_queue_port,
         ) as fd_model:
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
             result_queue.put(fd_outputs)
