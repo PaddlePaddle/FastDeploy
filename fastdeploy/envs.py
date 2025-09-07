@@ -97,6 +97,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DISABLE_CHUNKED_PREFILL": lambda: bool(int(os.getenv("FD_DISABLE_CHUNKED_PREFILL", "0"))),
     # Whether to use new get_output and save_output method (0 or 1)
     "FD_USE_GET_SAVE_OUTPUT_V1": lambda: bool(int(os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0"))),
+    # Whether to enable model cache feature
+    "FD_ENABLE_MODEL_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_CACHE", "0"))),
 }
 
 
