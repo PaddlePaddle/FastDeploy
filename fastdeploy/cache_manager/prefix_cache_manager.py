@@ -168,7 +168,7 @@ class PrefixCacheManager:
             array=cache_ready_signal_data,
             dtype=np.int32,
             suffix=pid_suffix,
-            create=True,
+            create=False,
         )
 
         # Run command to launch cache transfer managers

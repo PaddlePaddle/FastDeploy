@@ -1612,8 +1612,9 @@ class GPUModelRunner(ModelRunnerBase):
             suffix=pid,
             create=False,
         )
-        while cache_ready_signal.value[self.local_rank] != 1:
-            time.sleep(0.1)
+        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+            while cache_ready_signal.value[self.local_rank] != 1:
+                time.sleep(0.1)
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
