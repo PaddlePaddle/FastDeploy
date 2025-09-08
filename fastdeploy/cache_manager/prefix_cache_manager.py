@@ -220,7 +220,6 @@ class PrefixCacheManager:
             logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result).start()
         if cache_config.enable_prefix_caching:
-            logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.clear_prefix_cache, args=(pid_suffix,), daemon=True).start()
 
         return cache_manager_processes
