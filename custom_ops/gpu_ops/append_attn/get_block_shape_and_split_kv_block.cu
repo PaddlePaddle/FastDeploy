@@ -285,7 +285,7 @@ void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_this_time,
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
-    paddle::Tensor &decoder_num_blocks_x,         // Inplace
+    paddle::Tensor &decoder_num_blocks_x_cpu,         // Inplace
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, CPU
     paddle::Tensor &encoder_batch_ids,          // Inplace
     paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
@@ -321,7 +321,6 @@ void GetBlockShapeAndSplitKVBlock(
 
   paddle::Tensor decoder_chunk_size_cpu;
 
-
   auto max_len_kv =
       GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_decoder.place());
   get_max_len_kv_ernel<128><<<1, 128, 0, stream>>>(
@@ -341,7 +340,10 @@ void GetBlockShapeAndSplitKVBlock(
           decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
 
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-          decoder_num_blocks_x.data<int>(), 0, sizeof(int32_t), stream));
+          decoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
+      
+      auto decoder_num_blocks_x = GetEmptyTensor(
+          {1}, paddle::DataType::INT32, seq_lens_encoder.place());
 
       int device;
       cudaGetDevice(&device);
@@ -361,6 +363,8 @@ void GetBlockShapeAndSplitKVBlock(
                                  block_size,
                                  sm_cout);
 
+      decoder_num_blocks_x_cpu.copy_(
+          decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
       decoder_chunk_size_cpu =
           decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
@@ -394,7 +398,7 @@ void GetBlockShapeAndSplitKVBlock(
         const uint32_t decoder_batch_shape = bsz * decoder_max_tile_size_per_bs_q;
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_batch_ids.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_num_blocks_x.data<int>(), 0, sizeof(int32_t), stream));
+
         auto decoder_num_blocks_x =
             GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
 
@@ -408,14 +412,11 @@ void GetBlockShapeAndSplitKVBlock(
             decoder_block_shape_q,
             group_size);
 
+        decoder_num_blocks_x_cpu.copy_(
+            decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
             decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
-  } else {
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-          decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-            decoder_num_blocks_x.data<int>(), 0, sizeof(int32_t), stream));
   }
 
   // encoder
@@ -459,7 +460,7 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "seq_lens_this_time",
       "decoder_batch_ids",
       "decoder_tile_ids_per_batch",
-      "decoder_num_blocks_x",
+      "decoder_num_blocks_x_cpu",
       "max_len_tensor_cpu",
       "decoder_chunk_size_device",
       "encoder_batch_ids",

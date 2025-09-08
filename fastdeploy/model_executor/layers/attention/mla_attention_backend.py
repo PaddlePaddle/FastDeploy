@@ -189,7 +189,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_this_time,
             forward_meta.decoder_batch_ids,  # decoder_batch_ids_per_ctax
             forward_meta.decoder_tile_ids_per_batch,  # decoder_chunk_ids_per_ctax_each_batch
-            forward_meta.decoder_num_blocks,
+            forward_meta.decoder_num_blocks_cpu,
             forward_meta.max_len_tensor_cpu,
             forward_meta.decoder_chunk_size_device,
             forward_meta.encoder_batch_ids,
@@ -205,6 +205,7 @@ class MLAAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+        forward_meta.decoder_num_blocks = forward_meta.decoder_num_blocks_cpu.cuda()
 
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
