@@ -383,9 +383,9 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
 
             quanted_weight_zeros = quanted_weight_scale * 8
             create_and_set_parameter(layer, zeros_name, quanted_weight_zeros)
-            print(f"________{weight_name=}_____________{quanted_weight.shape=}")
-            print(f"________{scale_name=}_____________{quanted_weight_scale.shape=}")
-            print(f"________{zeros_name=}_____________{quanted_weight_zeros.shape=}")
+            print(f"________{weight_name=}____{quanted_weight.dtype=}_________{quanted_weight.shape=}")
+            print(f"________{scale_name=}_____{quanted_weight_scale.dtype=}________{quanted_weight_scale.shape=}")
+            print(f"________{zeros_name=}_____{quanted_weight_zeros.dtype=}________{quanted_weight_zeros.shape=}")
 
     def apply(
         self,
