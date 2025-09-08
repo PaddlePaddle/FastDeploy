@@ -193,14 +193,6 @@ def create_hadamard_matrix(hidden_size: int) -> paddle.Tensor:
     return hadamard_matrix
 
 
-create_hadamard_matrix_map = {}
-# Zkk: below key are used in 4.5T fp8.
-create_hadamard_matrix_map[8192] = create_hadamard_matrix(8192)
-create_hadamard_matrix_map[448] = create_hadamard_matrix(448)
-create_hadamard_matrix_map[1024] = create_hadamard_matrix(1024)
-create_hadamard_matrix_map[3584] = create_hadamard_matrix(3584)
-
-
 def ensure_divisibility(numerator, denominator):
     """
     Ensure the numerator is divisible by the denominator.

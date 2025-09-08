@@ -167,7 +167,7 @@ void EncoderWriteCacheWithRopeKernel(
                                     stream,
                                     key_cache_out,
                                     value_cache_out);
-  } else if (cache_quant_type_str == "cache_int8" or cache_quant_type_str == "cache_fp8") {
+  } else if (cache_quant_type_str == "cache_int8" or cache_quant_type_str == "cache_fp8" or cache_quant_type_str == "block_wise_fp8") {
     DISPATCH_HEAD_DIM(
         head_dim, HEAD_DIM, {DISPATCH_BLOCK_SIZE(block_size, BLOCK_SIZE, {
           CascadeAppendWriteCacheKVC8QKV<T, HEAD_DIM, BLOCK_SIZE>(
@@ -187,7 +187,7 @@ void EncoderWriteCacheWithRopeKernel(
               num_blocks,
               max_seq_len,
               is_scale_channel_wise,
-              cache_quant_type_str == "cache_fp8",
+              cache_quant_type_str,
               stream,
               key_cache_out,
               value_cache_out);
