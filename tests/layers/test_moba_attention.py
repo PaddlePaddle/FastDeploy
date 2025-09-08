@@ -360,6 +360,7 @@ class TestMobaAttention(unittest.TestCase):
             tensor_parallel_size=2,
             max_model_len=131072,
             engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT")),
+            cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT")),
             max_num_seqs=32,
             quantization="wint4",
             enable_chunked_prefill=True,

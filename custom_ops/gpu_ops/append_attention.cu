@@ -140,8 +140,8 @@ void AppendAttentionKernel(
           key_cache,
           value_cache,
           attn_mask,
-          cache_k_dequant_scales,
-          cache_v_dequant_scales,
+          cache_quant_type_str == "block_wise_fp8" ? cache_k_quant_scales : cache_k_dequant_scales,
+          cache_quant_type_str == "block_wise_fp8" ? cache_v_quant_scales : cache_v_dequant_scales,
           cache_k_zp,
           cache_v_zp,
           out_linear_shifts,
@@ -317,7 +317,6 @@ void AppendAttentionKernel(
             qkv,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
@@ -344,7 +343,6 @@ void AppendAttentionKernel(
             qkv_out,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
