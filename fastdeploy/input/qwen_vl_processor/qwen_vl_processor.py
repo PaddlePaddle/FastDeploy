@@ -249,6 +249,16 @@ class QwenVLProcessor(TextProcessor):
         # Handle continuation of previous generation by appending existing tokens
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
+
+        enable_thinking = False
+        if metadata:
+            enable_thinking = metadata.get("enable_thinking", False)
+
+        if request.get("chat_template_kwargs"):
+            chat_template_kwargs = request.get("chat_template_kwargs")
+            enable_thinking = chat_template_kwargs.get("enable_thinking", False)
+        request["enable_thinking"] = enable_thinking
+
         outputs = self.pack_outputs(outputs)
 
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
