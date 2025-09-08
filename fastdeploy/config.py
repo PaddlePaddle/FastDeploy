@@ -585,6 +585,13 @@ class GraphOptimizationConfig:
         When cudagraph_only_prefill is True, only capture prefill-only.
         Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
+        """When full_cuda_graph is True,the attention will be capture in cudagraph.
+        When full_cuda_graph is False,the attention will not be captured in cudagraph."""
+        self.fullsence_use_cuda_graph: bool = False
+        """When fullsence_use_cuda_graph = True, mix batch, pure_prefill batch,
+        pure_decode batch will all be captured in cudagraph.
+        When fullsence_use_cuda_graph = False, only pure_decode batch
+        will all be captured in cudagraph."""
 
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None

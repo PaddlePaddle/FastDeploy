@@ -1101,7 +1101,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
         self.forward_meta.step_use_cudagraph = (
-            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
+            (only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph)
+            if not self.graph_opt_config.fullsence_use_cuda_graph
+            else self.use_cudagraph
         )
 
         # Initialzie attention meta data
