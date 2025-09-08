@@ -449,8 +449,8 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
   const int half_lastdim = last_dim / 2;
   const int offset = (q_num_head + kv_num_head) * last_dim;
   const int all_head_num = elem_cnt / last_dim;
-  for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_num; gloabl_hi += all_warp_num) {
-    int64_t linear_index = gloabl_hi * last_dim + threadIdx.x * VecSize;
+  for (int global_hi = global_warp_idx; global_hi < all_head_num; global_hi += all_warp_num) {
+    int64_t linear_index = global_hi * last_dim + threadIdx.x * VecSize;
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
