@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import random
 from dataclasses import dataclass, fields
 from typing import Any, List, Optional, Union
@@ -245,6 +246,9 @@ class SamplingParams:
     @property
     def bad_words_token_ids(self) -> Optional[List[list[int]]]:
         return self._bad_words_token_ids
+
+    def clone(self) -> SamplingParams:
+        return copy.deepcopy(self)
 
 
 @dataclass
