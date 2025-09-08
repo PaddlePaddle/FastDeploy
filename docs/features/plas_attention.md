@@ -118,7 +118,7 @@ We evaluated the precision of full attention and sparse attention on LongBenchV2
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;">94.50</td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;">82.32</td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;">57.85</td>
-    </tr>    
+    </tr>
 </table>
 
 ### Performance
