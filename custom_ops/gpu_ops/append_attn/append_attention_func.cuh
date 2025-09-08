@@ -82,6 +82,14 @@ struct prefill_softmax_state_t {
       o[i] /= d_t;
     }
   }
+
+  __device__ __forceinline__ void normalize(float current_sink) {
+    const T d_t = static_cast<T>(d + __expf(current_sink - m));
+#pragma unroll
+    for (size_t i = 0; i < vec_size; ++i) {
+      o[i] /= d_t;
+    }
+  }
 };
 
 template <typename T, uint32_t num_frags_x, uint32_t num_frags_y>
@@ -1315,6 +1323,33 @@ __device__ __forceinline__ void normalize_d(float (*o_frag)[num_frags_y][8],
   }
 }
 
+template <uint32_t num_frags_x, uint32_t num_frags_y>
+__device__ __forceinline__ void normalize_d(float (*o_frag)[num_frags_y][8],
+                                            float (*d)[2],
+                                            float (*m)[2],
+                                            float current_sink) {
+  float d_rcp[num_frags_x][2];
+#pragma unroll
+  for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+#pragma unroll
+    for (uint32_t j = 0; j < 2; ++j) {
+      d_rcp[fx][j] = 1.f / (d[fx][j] + __expf(current_sink - m[fx][j]));
+    }
+  }
+
+#pragma unroll
+  for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+#pragma unroll
+    for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
+#pragma unroll
+      for (uint32_t reg_id = 0; reg_id < 8; ++reg_id) {
+        o_frag[fx][fy][reg_id] =
+            o_frag[fx][fy][reg_id] * d_rcp[fx][(reg_id % 4) / 2];
+      }
+    }
+  }
+}
+
 template <uint32_t num_frags_x,
           uint32_t num_frags_y,
           uint32_t NUM_WARPS,
@@ -2128,6 +2163,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const int *__restrict__ cu_seqlens_q,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
+    const T *__restrict__ sinks, // [q_num_heads]
     OutT *__restrict__ out,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -2218,7 +2254,12 @@ __global__ void merge_multi_chunks_decoder_kernel(
       const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
       st.merge(load_vec, m_tmp, d_tmp);
     }
-    st.normalize();
+    if (sinks) {
+      float current_sink = static_cast<float>(sinks[hid]);
+      st.normalize(current_sink);
+    } else {
+      st.normalize();
+    }
 
     const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
     AlignedVector<T, vec_size> shift_bias_vec;
@@ -2258,6 +2299,7 @@ __global__ void merge_multi_chunks_v2_kernel(
     const int *__restrict__ cu_seqlens_q,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
+    const T *__restrict__ sinks,  // [q_num_heads]
     OutT *__restrict__ out,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -2370,7 +2412,13 @@ __global__ void merge_multi_chunks_v2_kernel(
         const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
         st.merge(load_vec, m_tmp, d_tmp);
       }
+
+    if (sinks) {
+      float current_sink = static_cast<float>(sinks[hid]);
+      st.normalize(current_sink);
+    } else {
       st.normalize();
+    }
 
       const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
       AlignedVector<T, vec_size> shift_bias_vec;

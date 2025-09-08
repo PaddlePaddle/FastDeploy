@@ -37,6 +37,8 @@ void CascadeAppendAttentionC16Kernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -82,6 +84,8 @@ void CascadeAppendAttentionC8Kernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -127,6 +131,8 @@ void CascadeAppendAttentionC4Kernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -172,6 +178,8 @@ void CascadeAppendAttentionKernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -208,6 +216,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -243,6 +252,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -278,6 +288,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -313,6 +324,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,

@@ -142,6 +142,19 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.rotary_embs = forward_meta.rotary_embs
         metadata.attn_mask = forward_meta.attn_mask
         metadata.pre_caches_length = forward_meta.pre_caches_length
+        print("[debug0] forward_meta.seq_lens_encoder:\n", forward_meta.seq_lens_encoder)
+        print("[debug0] forward_meta.seq_lens_decoder:\n", forward_meta.seq_lens_decoder)
+        print("[debug0] forward_meta.seq_lens_this_time:\n", forward_meta.seq_lens_this_time)
+        print("[debug0] forward_meta.decoder_batch_ids:\n", forward_meta.decoder_batch_ids)
+        print("[debug0] forward_meta.decoder_tile_ids_per_batch:\n", forward_meta.decoder_tile_ids_per_batch)
+        print("[debug0] forward_meta.decoder_num_blocks_cpu:\n", forward_meta.decoder_num_blocks_cpu)
+        print("[debug0] forward_meta.max_len_tensor_cpu:\n", forward_meta.max_len_tensor_cpu)
+        print("[debug0] encoder_block_shape_q:\n", self.encoder_block_shape_q)
+        print("[debug0] decoder_block_shape_q:\n", self.decoder_block_shape_q)
+        print("[debug0] group_size:\n", self.group_size)
+        print("[debug0] block_size:\n", self.block_size)
+        print("[debug0] speculate_max_draft_token_num:\n", self.speculate_max_draft_token_num)
+
         (
             metadata.encoder_batch_ids,
             metadata.encoder_tile_ids_per_batch,
@@ -164,6 +177,18 @@ class AppendAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+
+        print("[debug1] metadata.encoder_batch_ids:\n", metadata.encoder_batch_ids)
+        print("[debug1] metadata.encoder_tile_ids_per_batch:\n", metadata.encoder_tile_ids_per_batch)
+        print("[debug1] metadata.encoder_num_blocks:\n", metadata.encoder_num_blocks)
+        print("[debug1] metadata.kv_batch_ids:\n", metadata.kv_batch_ids)
+        print("[debug1] metadata.kv_tile_ids_per_batch:\n", metadata.kv_tile_ids_per_batch)
+        print("[debug1] metadata.kv_num_blocks:\n", metadata.kv_num_blocks)
+        print("[debug1] metadata.max_len_kv:\n", metadata.max_len_kv)
+
+        print("[debug1] forward_meta.decoder_batch_ids:\n", forward_meta.decoder_batch_ids)
+        print("[debug1] forward_meta.decoder_tile_ids_per_batch:\n", forward_meta.decoder_tile_ids_per_batch)
+        print("[debug1] forward_meta.decoder_num_blocks_cpu:\n", forward_meta.decoder_num_blocks_cpu)
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers

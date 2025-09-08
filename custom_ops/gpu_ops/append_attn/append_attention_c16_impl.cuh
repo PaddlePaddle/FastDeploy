@@ -37,6 +37,7 @@ __global__ void multi_query_append_attention_kernel(
     T *__restrict__ cache_v,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
+    const T *__restrict__ sinks,  // [q_num_heads]
     const int *__restrict__ seq_lens,
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ batch_ids,
@@ -313,8 +314,13 @@ __global__ void multi_query_append_attention_kernel(
   wait_group<0>();
   __syncthreads();
 
-  if constexpr (!partition_kv) {
-    normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+  if constexpr (!partition_kv ) {
+    if (sinks) {
+      float current_sink = static_cast<float>(sinks[q_head_idx]);
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sink);
+    } else {
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    }
   }
   if constexpr (partition_kv) {
     write_o_reg_gmem_shift_smooth_quant<GROUP_SIZE,
@@ -406,6 +412,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     T *__restrict__ cache_v,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
+    const T *__restrict__ sinks,  // [q_num_heads]
     const int *__restrict__ seq_lens,
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ batch_ids,
@@ -688,7 +695,12 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
   if (num_chunks_this_seq <= 1) {
-    normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    if (sinks) {
+      float current_sink = static_cast<float>(sinks[q_head_idx]);
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sink);
+    } else {
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    }
   }
 
   // write o
@@ -781,6 +793,7 @@ void MultiQueryAppendAttention(
     const paddle::optional<paddle::Tensor> &attn_mask,
     const paddle::optional<paddle::Tensor> &shift_bias,
     const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::optional<paddle::Tensor> &sinks,
     const paddle::Tensor &seq_lens_q,
     const paddle::Tensor &seq_lens_kv,
     const paddle::Tensor &seq_lens_encoder,
@@ -887,6 +900,9 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -945,6 +961,7 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -992,6 +1009,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1028,6 +1048,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1117,6 +1140,9 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -1187,8 +1213,9 @@ void MultiQueryAppendAttention(
                             const_cast<T *>(shift_bias.get().data<T>()))
                       : nullptr,
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
-                              const_cast<T *>(smooth_weight.get().data<T>()))
-                        : nullptr,
+                            const_cast<T *>(smooth_weight.get().data<T>()))
+                      : nullptr,
+          nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -1240,6 +1267,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1275,7 +1305,10 @@ void MultiQueryAppendAttention(
                             : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
-                              : nullptr,
+                            : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                                  const_cast<T *>(sinks.get().data<T>()))
+                            : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1313,6 +1346,8 @@ void CascadeAppendAttentionC16Kernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -1376,6 +1411,7 @@ void CascadeAppendAttentionC16Kernel(
                                 attn_mask,
                                 shift_bias,
                                 smooth_weight,
+                                sinks,
                                 seq_lens_q,
                                 seq_lens_kv,
                                 seq_lens_encoder,

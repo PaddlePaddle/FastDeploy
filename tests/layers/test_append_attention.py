@@ -19,6 +19,8 @@ import numpy as np
 import paddle
 from paddle.incubate.nn.functional import fused_rms_norm
 
+import fastdeploy
+
 paddle.seed(10)
 
 
@@ -50,7 +52,7 @@ class RopeEmbedding:
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
         # shape: [B, S, D/2]
         emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, head_dim // 2))
-        # shape: [B, S, 1, D]
+        # shape: [B, S, 1, D/2]
         emb = paddle.unsqueeze(emb, 2)
 
         rot_emb[0] = paddle.cos(emb)
@@ -92,7 +94,6 @@ class RopeEmbedding:
                 paddle.shape(k),
             )
         else:
-            # import pdb;pdb.set_trace()
             sin_pos = paddle.reshape(paddle.stack([sin, sin], axis=-1), [1, 1, seq, head_dim])
             # cos [θ0,θ1,θ2......θd/2-1] -> cos_pos [θ0,θ0,θ1,θ1,θ2,θ2......θd/2-1,θd/2-1]
             cos_pos = paddle.reshape(paddle.stack([cos, cos], axis=-1), [1, 1, seq, head_dim])
@@ -160,6 +161,7 @@ def naive_attention_impl(
     use_cachekv_int8="None",
     q_norm_weight=None,
     k_norm_weight=None,
+    sinks=None,
 ):
     batch = query.shape[0]
     heads = query.shape[1]
@@ -191,7 +193,14 @@ def naive_attention_impl(
     attention = qk_res * scale
     if mask is not None:
         attention = attention + mask
-    softmax_result = paddle.nn.functional.softmax(attention, -1)
+
+    if sinks is not None:
+        kv_len = attention.shape[-1]
+        sinks_tiled = sinks.unsqueeze([0, 2, 3]).expand([batch, heads, seq_len, 1])
+        attention = paddle.concat([attention, sinks_tiled], axis=-1)
+        softmax_result = paddle.nn.functional.softmax(attention, -1)[:, :, :, :kv_len]
+    else:
+        softmax_result = paddle.nn.functional.softmax(attention, -1)
     result = paddle.matmul(paddle.cast(softmax_result, dtype=value.dtype), value)
     return result
 
@@ -202,6 +211,7 @@ def get_padding_offset(bsz, max_seq_len, seq_lens_this_time):
     cum_offsets[1:] = cum_offsets_now
     token_num = paddle.sum(seq_lens_this_time)
     padding_offsets = paddle.zeros(shape=(token_num), dtype="int32")
+    batch_id_per_token = paddle.zeros(shape=(token_num), dtype="int32")
     cu_seqlens_q = paddle.zeros(shape=(bsz + 1), dtype="int32")
     cu_seqlens_k = paddle.zeros(shape=(bsz + 1), dtype="int32")
     for i in range(bsz):
@@ -209,10 +219,14 @@ def get_padding_offset(bsz, max_seq_len, seq_lens_this_time):
         cum_offset = cum_offsets[i]
         for j in range(seq_len_now):
             padding_offsets[i * max_seq_len - cum_offset + j] = cum_offset
+            batch_id_per_token[i * max_seq_len - cum_offset + j] = i
         cum_seq_len = (i + 1) * max_seq_len - cum_offsets[i + 1]
         cu_seqlens_q[i + 1] = cum_seq_len
         cu_seqlens_k[i + 1] = cum_seq_len
-    return padding_offsets, cum_offsets[:-1], cu_seqlens_q, cu_seqlens_k
+    if fastdeploy.platforms.current_platform.is_cuda():
+        return batch_id_per_token, cum_offsets[:-1], cu_seqlens_q, cu_seqlens_k
+    else:
+        return padding_offsets, cum_offsets[:-1], cu_seqlens_q, cu_seqlens_k
 
 
 def remove_padding(seq_lens, cu_seq_lens, inputs, token_num):
@@ -333,12 +347,12 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         paddle.disable_static()
         self.name = "TestAppendGroupQueryAttnWithRope"
         self.place = paddle.CUDAPlace(0)
-        self.batch_size = 1
+        self.batch_size = 4
         self.q_num_head = 12
         self.kv_num_head = 2
         self.seq_len = 64
-        self.max_dec_len = 64
-        self.dim_head = 128
+        self.max_dec_len = 32
+        self.dim_head = 64
         self.q_hid_dim = self.q_num_head * self.dim_head
         self.kv_hid_dim = self.kv_num_head * self.dim_head
         self.blocksize = 64
@@ -349,7 +363,8 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.rope_theta = 10000
         self.dtype = "float16"
         self.use_qk_norm = True
-        self.use_mask_offset = False
+        self.use_mask_offset = True
+        self.use_sinks = True
         self.init_tensor()
 
     def init_tensor(self):
@@ -424,7 +439,12 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             self.place,
             self.dtype,
         )
-
+        if self.use_sinks:
+            sinks = paddle.to_tensor(
+                np.random.random([self.q_num_head]) / 10, place=self.place, dtype=self.dtype, stop_gradient=False
+            )
+        else:
+            sinks = None
         q, k = self.rope._apply_rope(self.rope_emb, q, k, causal=True)
         if self.use_qk_norm:
             q, k, q_norm_weight, k_norm_weight = apply_qk_norm(self.dim_head, self.dtype, q, k)
@@ -441,7 +461,9 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             None,
             attn_mask,
             self.scale,
+            sinks=sinks,
         )
+        paddle.device.synchronize()
         out_ = remove_padding(self.seq_lens_this_time, self.cu_seqlens_q, out_, self.token_num)
         speculate_max_draft_token_num = 1
         from fastdeploy.model_executor.layers.attention.ops import (
@@ -471,7 +493,6 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             self.blocksize,
             speculate_max_draft_token_num + 1,
         )
-
         # Warm up
         WARM_UP = 1
         RUN_TIME = 2
@@ -479,6 +500,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             if i == WARM_UP:
                 paddle.device.synchronize()
                 start_time = time.time()
+            paddle.device.synchronize()
             out = append_attention(
                 qkv,
                 self.cache_k,
@@ -487,7 +509,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.seq_lens_decoder,
                 self.seq_lens_this_time,
                 self.padding_offset,
-                self.cum_offset,
+                self.cu_seqlens_q,
                 self.block_tables,
                 encoder_batch_ids,
                 encoder_tile_ids_per_batch,
@@ -516,6 +538,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 None,  # kv_signal_data
                 q_norm_weight,  # q_norm_weight
                 k_norm_weight,  # k_norm_weight
+                sinks,  # sinks
                 1e-6,
                 "fp16",
                 "none",  # cache_quant_type
@@ -533,6 +556,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 True,  # causal
                 False,  # speculate_decoder
             )
+            paddle.device.synchronize()
         paddle.device.synchronize()
         end_time = time.time()
         print(f"[append-attn ut]  cost_time:{(end_time - start_time) / RUN_TIME * 1000}ms")
@@ -630,8 +654,12 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.dtype = "float16"
         self.use_qk_norm = False
         self.use_mask_offset = True
+        self.use_sinks = False
         self.init_tensor()
 
 
 if __name__ == "__main__":
     unittest.main()
+    # test = TestAppendGroupQueryAttnWithRope()
+    # test.setUp()
+    # test.test_all()
