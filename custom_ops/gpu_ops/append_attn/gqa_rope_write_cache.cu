@@ -217,7 +217,7 @@ __global__ void append_cache_kv_c16(
 
   // load k_smem 64 rows 128 cols
   for (int fz = 0; fz < 4; fz++) { // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 noce, need 2 iter
+    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 once, need 2 iter
       k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             k_smem_offset_w, cur_cache_k + k_read_idx, end_idx > 0);
       k_smem_offset_w =
@@ -235,7 +235,7 @@ __global__ void append_cache_kv_c16(
   // deal k_smem 64 rows 128 cols
   for (int fz = 0; fz < 1; fz++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 noce, need 8 iter
+    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 once, need 8 iter
       uint32_t col_idx = fy * 16 + tid % 4 * 2;
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_frag);
       // layout
@@ -278,7 +278,7 @@ __global__ void append_cache_kv_c16(
 
   // load v_smem 64 rows 128 cols
   for (int fz = 0; fz < 4; fz++) { // // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 noce, need 2 iter
+    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 once, need 2 iter
       v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             v_smem_offset_w, cur_cache_v + v_read_idx, end_idx > 0);
       v_smem_offset_w =
@@ -296,7 +296,7 @@ __global__ void append_cache_kv_c16(
   // deal v_smem 64 rows 128 cols
   for (int fz = 0; fz < 1; fz++) { //  16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 noce, need 8 iter
+    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 once, need 8 iter
       uint32_t col_idx = fy * 16 + tid % 4 * 2;
       v_smem.ldmatrix_m8n8x4(v_smem_offset_r, kv_frag);
       // layout
@@ -400,7 +400,7 @@ __global__ void append_cache_kv_c8(
 
   // load v_smem 64 rows, 128 cols
   for (int fz = 0; fz < 4; fz++) { // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 1; fy++) { // 8 * 128b = 128 * uint8 noce, need 1 iter
+    for (int fy = 0; fy < 1; fy++) { // 8 * 128b = 128 * uint8 once, need 1 iter
       k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             k_smem_offset_w, cur_cache_k + k_read_idx, end_idx > 0);
       k_smem_offset_w =
@@ -418,7 +418,7 @@ __global__ void append_cache_kv_c8(
   // deal k_smem 64 rows, 128 cols
   for (int fz = 0; fz < 1; fz++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 4; fy++) { // 2 * 128b = 32 * uint8 noce, need 4 iter
+    for (int fy = 0; fy < 4; fy++) { // 2 * 128b = 32 * uint8 once, need 4 iter
       uint32_t col_idx = fy * 32 + tid % 4 * 2;
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, k_frag);
       // layout
@@ -466,7 +466,7 @@ __global__ void append_cache_kv_c8(
                           tid % 4 * num_elems_per_128b<CacheT>();
   // load v_smem 128 rows 64 cols
   for (int fy = 0; fy < 4; fy++) { // 8 rows pre warp once, 32 rows all 4 warps once, need 4 iter
-    for (int fz = 0; fz < 1; fz++) { // 4 * 128b = 64 * uint8 noce, need 1 iter
+    for (int fz = 0; fz < 1; fz++) { // 4 * 128b = 64 * uint8 once, need 1 iter
       v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
               v_smem_offset_w, cur_cache_v + v_read_idx, end_idx > 0);
       v_smem_offset_w =
@@ -485,7 +485,7 @@ __global__ void append_cache_kv_c8(
   // deal v_smem 128 rows 64 cols
   for (int fy = 0; fy < 2; fy++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 2 iter
     uint32_t dim_idx = fy * NUM_WARPS * 16 + wid * 16 + tid / 4;
-    for (int fz = 0; fz < 2; fz++) { // 2 * 128b = 32 * uint8 noce, need 2 iter
+    for (int fz = 0; fz < 2; fz++) { // 2 * 128b = 32 * uint8 once, need 2 iter
       uint32_t kv_idx = fz * 32 + tid % 4 * 2;
       v_smem.ldmatrix_m8n8x4(v_smem_offset_r, v_frag);
       // layout
@@ -614,7 +614,7 @@ __global__ void append_cache_kv_c4(
 
   // load k_smem 64 rows 128 cols
   for (int fz = 0; fz < 2; fz++) { // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 1; fy++) { // 4 * 128b = 128 * int4 noce, need 1 iter
+    for (int fy = 0; fy < 1; fy++) { // 4 * 128b = 128 * int4 once, need 1 iter
       k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             k_smem_offset_w, cur_cache_k + k_read_idx, end_idx > 0);
       k_smem_offset_w =
@@ -632,7 +632,7 @@ __global__ void append_cache_kv_c4(
   // deal k_smem 64 rows 128 cols
   for (int fz = 0; fz < 1; fz++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 2; fy++) { // 2 * 128b = 64 * int4 noce, need 2 iter
+    for (int fy = 0; fy < 2; fy++) { // 2 * 128b = 64 * int4 once, need 2 iter
       uint32_t col_idx = fy * 64 + tid % 4 * 2;
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, k_frag);
 
@@ -685,7 +685,7 @@ __global__ void append_cache_kv_c4(
                           tid % 2 * num_elems_per_128b<CacheT>();
   // load v_smem 128 rows 64 rows
   for (int fy = 0; fy < 2; fy++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 2 iter
-    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 noce, need 1 iter
+    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 once, need 1 iter
       v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
               v_smem_offset_w, cur_cache_v + v_read_idx, end_idx > 0);
       v_smem_offset_w =
@@ -704,7 +704,7 @@ __global__ void append_cache_kv_c4(
   // deal v_smem 128 rows 64 cols
   for (int fy = 0; fy < 2; fy++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 2 iter
     uint32_t dim_idx = fy * NUM_WARPS * 16 + wid * 16 + tid / 4;
-    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 noce, need 1 iter
+    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 once, need 1 iter
       uint32_t kv_idx = fz * 64 + tid % 4 * 2;
       v_smem.ldmatrix_m8n8x4(v_smem_offset_r, v_frag);
       // layout

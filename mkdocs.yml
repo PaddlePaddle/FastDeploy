@@ -58,6 +58,7 @@ plugins:
             OpenAI-Compitable API Server: 兼容 OpenAI 协议的服务化部署
             Monitor Metrics: 监控Metrics
             Scheduler: 调度器
+            Graceful Shutdown: 服务优雅关闭
             Offline Inference: 离线推理
             Best Practices: 最佳实践
             ERNIE-4.5-0.3B: ERNIE-4.5-0.3B
@@ -108,6 +109,7 @@ nav:
       - 'OpenAI-Compitable API Server': online_serving/README.md
       - 'Monitor Metrics': online_serving/metrics.md
       - 'Scheduler': online_serving/scheduler.md
+      - 'Graceful Shutdown': online_serving/graceful_shutdown_service.md
   - 'Offline Inference': offline_inference.md
   - Best Practices:
       - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md

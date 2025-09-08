@@ -434,6 +434,12 @@ def test_metrics_endpoint(metrics_url):
     gpu_cache_usage_perc_found = False
     request_params_max_tokens_sum_found = False
     request_success_total_found = False
+    cache_config_info_found = False
+    available_batch_size_found = False
+    hit_req_rate_found = False
+    hit_token_rate_found = False
+    cpu_hit_token_rate_found = False
+    gpu_hit_token_rate_found = False
 
     for line in metric_lines:
         if line.startswith("fastdeploy:num_requests_running"):
@@ -500,7 +506,30 @@ def test_metrics_endpoint(metrics_url):
             _, value = line.rsplit(" ", 1)
             assert float(value) >= 0, "request_success_total 值错误"
             request_success_total_found = True
-
+        elif line.startswith("fastdeploy:cache_config_info"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "cache_config_info 值错误"
+            cache_config_info_found = True
+        elif line.startswith("fastdeploy:available_batch_size"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "available_batch_size 值错误"
+            available_batch_size_found = True
+        elif line.startswith("fastdeploy:hit_req_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "hit_req_rate 值错误"
+            hit_req_rate_found = True
+        elif line.startswith("fastdeploy:hit_token_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "hit_token_rate 值错误"
+            hit_token_rate_found = True
+        elif line.startswith("fastdeploy:cpu_hit_token_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "cpu_hit_token_rate 值错误"
+            cpu_hit_token_rate_found = True
+        elif line.startswith("fastdeploy:gpu_hit_token_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "gpu_hit_token_rate 值错误"
+            gpu_hit_token_rate_found = True
     assert num_requests_running_found, "缺少 fastdeploy:num_requests_running 指标"
     assert num_requests_waiting_found, "缺少 fastdeploy:num_requests_waiting 指标"
     assert time_to_first_token_seconds_sum_found, "缺少 fastdeploy:time_to_first_token_seconds_sum 指标"
@@ -517,6 +546,12 @@ def test_metrics_endpoint(metrics_url):
     assert gpu_cache_usage_perc_found, "缺少 fastdeploy:gpu_cache_usage_perc 指标"
     assert request_params_max_tokens_sum_found, "缺少 fastdeploy:request_params_max_tokens_sum 指标"
     assert request_success_total_found, "缺少 fastdeploy:request_success_total 指标"
+    assert cache_config_info_found, "缺少 fastdeploy:cache_config_info 指标"
+    assert available_batch_size_found, "缺少 fastdeploy:available_batch_size 指标"
+    assert hit_req_rate_found, "缺少 fastdeploy:hit_req_rate 指标"
+    assert hit_token_rate_found, "缺少 fastdeploy:hit_token_rate 指标"
+    assert cpu_hit_token_rate_found, "缺少 fastdeploy:hit_token_rate 指标"
+    assert gpu_hit_token_rate_found, "缺少 fastdeploy:gpu_hit_token_rate 指标"
 
 
 # ==========================
