@@ -62,6 +62,7 @@ class ErnieArchitectures:
     """Helper class for ERNIE architecture check."""
 
     ARCHITECTURES = {
+        "Ernie4_5ForCausalLM",  # 0.3B-PT
         "Ernie4_5_ForCausalLM",
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
@@ -127,12 +128,13 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
+        self.reasoning_parser = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
         for key, value in args.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
         assert self.model != ""
@@ -350,8 +352,8 @@ class ParallelConfig:
             )
         )
         # same ep group id
-        # (TODO:gaoziyuan move this gid config to ep.py)
         dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+        self.ep_group = dist.new_group(range(self.expert_parallel_size))
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -578,6 +580,10 @@ class GraphOptimizationConfig:
         """ Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
+        self.cudagraph_only_prefill: bool = False
+        """When cudagraph_only_prefill is False, only capture decode-only.
+        When cudagraph_only_prefill is True, only capture prefill-only.
+        Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = None
@@ -590,13 +596,13 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
+    def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(
@@ -630,7 +636,7 @@ class GraphOptimizationConfig:
         # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Shape [256, 288, ... 992, 1024]
-        draft_capture_sizes += [32 * i for i in range(17, 33)]
+        draft_capture_sizes += [32 * i for i in range(9, 33)]
 
         draft_capture_sizes.append(max_num_seqs)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
@@ -890,7 +896,7 @@ class CacheConfig:
         else:
             self.kv_cache_ratio = 0.75
         self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
-        self.prealloc_dec_block_slot_num_threshold = 5
+        self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
         self.enable_chunked_prefill = False
@@ -1138,7 +1144,11 @@ class FDConfig:
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
-        self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
+
+        if self.graph_opt_config.cudagraph_only_prefill:
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
+        else:
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.parallel_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
@@ -1235,7 +1245,10 @@ class FDConfig:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if paddle.is_compiled_with_xpu():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048
@@ -1249,7 +1262,8 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
-            if self.model_config.enable_mm:
+            if current_platform.is_xpu() or self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
@@ -1290,7 +1304,7 @@ class FDConfig:
         ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
@@ -1319,12 +1333,10 @@ class FDConfig:
             ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
 
             if self.guided_decoding_backend != "off":
-                # TODO: mm support guided_decoding
-                assert (
-                    self.model_config.enable_mm is False
-                ), "Multimodal model currently do not support guided_decoding"
-
                 # TODO: speculative decoding support guided_decoding
+                assert (
+                    self.speculative_config.method is None
+                ), "speculative decoding currently do not support guided_decoding"
 
                 # TODO: xpu support guided_decoding
                 assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
@@ -1335,6 +1347,7 @@ class FDConfig:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"
                     )
+
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 

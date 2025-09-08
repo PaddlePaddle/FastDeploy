@@ -63,9 +63,14 @@ def run_with_timeout(target, args, timeout=60 * 5):
         print_logs()
         raise RuntimeError("Worker process hung and was terminated")
     try:
-        return result_queue.get(timeout=60)
+        result = result_queue.get(timeout=60)
     except Exception as e:
         raise RuntimeError(f"Failed to get result from worker: {e}")
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
+
+    return result
 
 
 def form_model_get_output_topp0(
@@ -78,6 +83,7 @@ def form_model_get_output_topp0(
     load_choices,
     engine_worker_queue_port,
     prompts,
+    cache_queue_port,
     result_queue,
 ):
     try:
@@ -88,6 +94,7 @@ def form_model_get_output_topp0(
             load_choices=load_choices,
             quantization=quantization,
             engine_worker_queue_port=engine_worker_queue_port,
+            cache_queue_port=cache_queue_port,
         ) as fd_model:
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
             result_queue.put(fd_outputs)

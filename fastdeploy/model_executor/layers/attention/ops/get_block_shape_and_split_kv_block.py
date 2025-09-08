@@ -32,6 +32,13 @@ def get_block_shape_and_split_kv_block(
     decoder_tile_ids_per_batch: paddle.Tensor,
     decoder_num_blocks_x_cpu: paddle.Tensor,
     max_len_tensor_cpu: paddle.Tensor,
+    encoder_batch_ids: paddle.Tensor,
+    encoder_tile_ids_per_batch: paddle.Tensor,
+    encoder_num_blocks_x_cpu: paddle.Tensor,
+    kv_batch_ids: paddle.Tensor,
+    kv_tile_ids_per_batch: paddle.Tensor,
+    kv_num_blocks_x_cpu: paddle.Tensor,
+    max_len_kv_cpu: paddle.Tensor,
     encoder_block_shape_q: int,
     decoder_block_shape_q: int,
     group_size: int,
@@ -42,15 +49,7 @@ def get_block_shape_and_split_kv_block(
     get_block_shape_and_split_kv_block
     """
     if current_platform.is_cuda():
-        (
-            encoder_batch_ids,
-            encoder_tile_ids_per_batch,
-            encoder_num_blocks,
-            kv_batch_ids,
-            kv_tile_ids_per_batch,
-            kv_num_blocks,
-            max_len_kv_cpu,
-        ) = get_block_shape_and_split_kv_block_cuda(
+        get_block_shape_and_split_kv_block_cuda(
             seq_lens_encoder,
             seq_lens_decoder,
             seq_lens_this_time,
@@ -58,20 +57,19 @@ def get_block_shape_and_split_kv_block(
             decoder_tile_ids_per_batch,
             decoder_num_blocks_x_cpu,
             max_len_tensor_cpu,
+            encoder_batch_ids,
+            encoder_tile_ids_per_batch,
+            encoder_num_blocks_x_cpu,
+            kv_batch_ids,
+            kv_tile_ids_per_batch,
+            kv_num_blocks_x_cpu,
+            max_len_kv_cpu,
             encoder_block_shape_q,
             decoder_block_shape_q,
             group_size,
             block_size,
             decoder_step_token_num,
         )
-        return (
-            encoder_batch_ids,
-            encoder_tile_ids_per_batch,
-            encoder_num_blocks,
-            kv_batch_ids,
-            kv_tile_ids_per_batch,
-            kv_num_blocks,
-            max_len_kv_cpu,
-        )
+
     else:
         raise NotImplementedError
