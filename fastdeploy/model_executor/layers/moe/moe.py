@@ -27,11 +27,6 @@ from fastdeploy.model_executor.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
-if current_platform.is_gcu():
-    from fastdeploy.model_executor.layers.backends.gcu.moe.fused_moe_method_gcu_backend import (
-        GCUWeightOnlyMoEMethod,
-    )
-
 
 def get_moe_method():
     """
@@ -57,6 +52,17 @@ def get_moe_method():
 
         return MetaxTritonWeightOnlyMoEMethod(None)
     raise NotImplementedError
+
+
+def _is_gcu_weight_only_moe(obj) -> bool:
+    if current_platform.is_gcu():
+        from fastdeploy.model_executor.layers.backends.gcu.moe.fused_moe_method_gcu_backend import (
+            GCUWeightOnlyMoEMethod,
+        )
+
+        return isinstance(obj, GCUWeightOnlyMoEMethod)
+    else:
+        return False
 
 
 class FusedMoE(nn.Layer):
@@ -156,7 +162,7 @@ class FusedMoE(nn.Layer):
             self.gate_correction_bias = gate_correction_bias
         else:
             self.gate_correction_bias = None
-        if not isinstance(self.quant_method, GCUWeightOnlyMoEMethod):
+        if not _is_gcu_weight_only_moe(self.quant_method):
             self.quant_method.create_weights(
                 self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
             )
@@ -485,7 +491,7 @@ class FusedMoE(nn.Layer):
         load_state_dict function.
         """
         if self.fd_config.model_config.is_quantized:
-            if isinstance(self.quant_method, GCUWeightOnlyMoEMethod):
+            if _is_gcu_weight_only_moe(self.quant_method):
                 self.quant_method.process_prequanted_weights(self, state_dict)
                 return
             if getattr(self.fd_config.quant_config, "is_permuted", True):
@@ -493,7 +499,7 @@ class FusedMoE(nn.Layer):
             else:
                 self.quant_method.process_loaded_weights(self, state_dict)
         else:
-            if isinstance(self.quant_method, GCUWeightOnlyMoEMethod):
+            if _is_gcu_weight_only_moe(self.quant_method):
                 self.quant_method.create_weights(self, state_dict)
                 return
             self.quant_method.process_loaded_weights(self, state_dict)
