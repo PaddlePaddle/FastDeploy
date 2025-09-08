@@ -467,7 +467,11 @@ class PrefixCacheManager:
             block_tables = task.block_tables
 
             last_node, num_cached_tokens = self.cache_info[req_id]
-            input_ids = task.prompt_token_ids + task.output_token_ids
+            if isinstance(task.prompt_token_ids, np.ndarray):
+                prompt_token_ids = task.prompt_token_ids.tolist()
+            else:
+                prompt_token_ids = task.prompt_token_ids
+            input_ids = prompt_token_ids + task.output_token_ids
             can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
             left_input_ids = input_ids[num_cached_tokens:can_cache_computed_tokens]
             gpu_extra_block_ids = block_tables[num_cached_tokens // block_size :]
@@ -517,7 +521,11 @@ class PrefixCacheManager:
                 hit_info["gpu_cache_blocks"] = 0
                 hit_info["cpu_cache_blocks"] = 0
                 self.metrics.req_count += 1
-                input_ids = task.prompt_token_ids + task.output_token_ids
+                if isinstance(task.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = task.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = task.prompt_token_ids
+                input_ids = prompt_token_ids + task.output_token_ids
                 req_id = task.request_id
                 logger.info(f"request_match_blocks: start to allocate blocks for req_id {req_id}")
                 input_token_num = len(input_ids)
