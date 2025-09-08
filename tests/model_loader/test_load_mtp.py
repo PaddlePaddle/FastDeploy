@@ -26,7 +26,7 @@ from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.models.ernie4_5_mtp import Ernie4_5_MTPForCausalLM
 
 sys.path.append("../")
-from utils import get_default_test_fd_config
+from tests.utils import get_default_test_fd_config
 
 strategy = fleet.DistributedStrategy()
 fleet.init(strategy=strategy)

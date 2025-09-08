@@ -25,9 +25,11 @@ logger = get_logger("default_loader_v1", "default_loader_v1.log")
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
 from fastdeploy.model_executor.load_weight_utils import (
-    fast_weights_iterator,
-    get_all_safetensors,
+    get_weight_iterator,
+    is_weight_cache_enabled,
+    load_weights_form_cache,
     measure_time,
+    save_model,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.registry import model_registry
@@ -49,11 +51,14 @@ class DefaultModelLoaderV1(BaseModelLoader):
             paddle.device.cuda.empty_cache()
             paddle.device.synchronize()
 
-    @measure_time
-    def load_weights(self, model, fd_config: FDConfig) -> None:
-        _, safetensor_files = get_all_safetensors(fd_config.model_config.model)
-        weights_iterator = fast_weights_iterator(safetensor_files)
-        model.load_weights(weights_iterator)
+    @save_model()
+    @measure_time()
+    def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
+        weights_iterator = get_weight_iterator(fd_config.model_config.model)
+        if enable_cache:
+            load_weights_form_cache(model, weights_iterator)
+        else:
+            model.load_weights(weights_iterator)
         self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
@@ -66,10 +71,11 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
             architectures = architectures + "RL"
 
-        with context:
-            model_cls = model_registry.get_class(architectures)
-
-            model = model_cls(fd_config)
+        enable_cache, _, weight_cache_context = is_weight_cache_enabled(fd_config)
+        with weight_cache_context:
+            with context:
+                model_cls = model_registry.get_class(architectures)
+                model = model_cls(fd_config)
 
         convert_type = fd_config.model_config.convert_type
         logger.info(f"convert_type:{convert_type}")
@@ -82,9 +88,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
             assert_never(convert_type)
 
         model.eval()
-
         # RL model not need set_state_dict
         if fd_config.load_config.dynamic_load_weight:
             return model
-        self.load_weights(model, fd_config)
+        self.load_weights(model, fd_config, enable_cache)
         return model
