@@ -348,6 +348,15 @@ class ResourceManagerV1(ResourceManager):
                     if request.status == RequestStatus.WAITING:
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
+                            if (
+                                self.config.cache_config.enable_hierarchical_cache
+                                and self.cache_manager.num_cpu_blocks > 0
+                            ):
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
+                                    // self.config.cache_config.block_size
+                                ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                                    break
                             success = self.get_prefix_cached_blocks(request)
                             if not success:
                                 self._free_blocks(request)
@@ -387,6 +396,15 @@ class ResourceManagerV1(ResourceManager):
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         if self.config.cache_config.enable_prefix_caching:
+                            if (
+                                self.config.cache_config.enable_hierarchical_cache
+                                and self.cache_manager.num_cpu_blocks > 0
+                            ):
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
+                                    // self.config.cache_config.block_size
+                                ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                                    break
                             success = self.get_prefix_cached_blocks(request)
                             if not success:
                                 self._free_blocks(request)
