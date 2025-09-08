@@ -872,10 +872,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
 
-        # static_save = self.model.state_dict()
-        # path = f"{self.model_config.model}/model_state.tp0{self.local_rank}.pdparams"
-        # paddle.save(static_save, path)
-
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)

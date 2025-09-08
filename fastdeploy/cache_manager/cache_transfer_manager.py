@@ -152,6 +152,7 @@ class CacheTransferManager:
 
         self._init_gpu_cache(args)
         self._init_cpu_cache(args)
+        self.cache_ready_signal.value[self.rank] = 1
 
         paddle.set_device(f"gpu:{device}")
         if args.enable_splitwise:
@@ -211,8 +212,6 @@ class CacheTransferManager:
             self.gpu_cache_kvs[val_name] = val_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
-
-        self.cache_ready_signal.value[self.rank] = 1
 
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
@@ -479,6 +478,7 @@ class CacheTransferManager:
                     self._init_cpu_cache(args)
                     logger.info("CPU caches are restored.")
 
+                    self.cache_ready_signal.value[self.rank] = 1
                     kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:
