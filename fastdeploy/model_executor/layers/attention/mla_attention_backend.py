@@ -190,8 +190,8 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,  # decoder_batch_ids_per_ctax
             forward_meta.decoder_tile_ids_per_batch,  # decoder_chunk_ids_per_ctax_each_batch
             forward_meta.decoder_num_blocks_cpu,
-            forward_meta.max_len_tensor_cpu,
             forward_meta.decoder_chunk_size_device,
+            forward_meta.max_len_tensor_cpu,
             forward_meta.encoder_batch_ids,
             forward_meta.encoder_tile_ids_per_batch,
             forward_meta.encoder_num_blocks_x_cpu,
