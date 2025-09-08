@@ -22,13 +22,15 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.backends.gcu.moe.fused_moe_method_gcu_backend import (
-    GCUWeightOnlyMoEMethod,
-)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
+
+if current_platform.is_gcu():
+    from fastdeploy.model_executor.layers.backends.gcu.moe.fused_moe_method_gcu_backend import (
+        GCUWeightOnlyMoEMethod,
+    )
 
 
 def get_moe_method():
