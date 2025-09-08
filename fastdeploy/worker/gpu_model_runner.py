@@ -26,6 +26,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
+    GPUMemoryChecker,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -137,6 +138,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
+        self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
@@ -1406,6 +1408,8 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
             hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cu_seqlens_q"],
@@ -1415,7 +1419,6 @@ class GPUModelRunner(ModelRunnerBase):
                 (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
                 self.parallel_config.max_model_len,
             )
-
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
 
@@ -1440,7 +1443,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                     group=self.parallel_config.tp_group,
                 )
-
         else:
             self.sampler(
                 logits,
@@ -1528,7 +1530,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 7. Update 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             step_cuda(
                 self.share_inputs,
@@ -1540,7 +1541,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
-
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
@@ -1588,8 +1588,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         self._dummy_run(
-            num_tokens=self.parallel_config.max_num_batched_tokens,
-            batch_size=min(self.parallel_config.max_num_seqs, 3),
+            num_tokens=self.parallel_config.max_model_len,
+            batch_size=self.parallel_config.max_num_seqs,
         )
 
         # 3. gc
@@ -1705,6 +1705,7 @@ class GPUModelRunner(ModelRunnerBase):
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.use_cudagraph:
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
 
     def _init_image_preprocess(self) -> None:

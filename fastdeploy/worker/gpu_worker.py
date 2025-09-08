@@ -84,7 +84,7 @@ class GpuWorker(WorkerBase):
         self.model_runner: ModelRunnerBase = ModelRunner(
             fd_config=self.fd_config,
             device=self.device,
-            device_id=self.device_ids[self.local_rank % self.max_chips_per_node],
+            device_id=int(self.device_ids[self.local_rank % self.max_chips_per_node]),
             rank=self.rank,
             local_rank=self.local_rank,
         )
