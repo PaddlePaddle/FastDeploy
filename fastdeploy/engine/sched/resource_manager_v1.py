@@ -363,7 +363,9 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if self.config.model_config.enable_mm and self.exist_prefill(scheduled_reqs):
+                    if (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(
+                        scheduled_reqs
+                    ):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
