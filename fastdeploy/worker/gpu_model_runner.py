@@ -485,8 +485,11 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
                 if self.enable_mm:
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
+                    if "ernie" in self.model_config.model_type:
+                        enable_thinking = request.get("enable_thinking", True)
+                        enable_thinking = enable_thinking if enable_thinking is not None else True
+                    else:
+                        enable_thinking = False
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)

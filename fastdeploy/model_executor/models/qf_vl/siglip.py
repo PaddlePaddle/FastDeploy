@@ -1,5 +1,5 @@
 """
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -256,7 +256,7 @@ class SiglipVisionEmbeddings(nn.Layer):
             patch_embeds = self.patch_embedding(pixel_values.to(dtype=target_dtype))  # shape = [*, width, grid, grid]
             embeddings = patch_embeds.flatten(-2).squeeze(-1)
             embeddings = rearrange(embeddings, "(b l) d -> b l d", b=batch_size, l=squence_len)
-            # todo: not dubug
+            # todo: not debug
             if interpolate_pos_encoding and image_grid_thw is not None:
                 flatten_image_grid_thw = self.flatten_list(image_grid_thw)
                 flatten_image_grid_thw = np.array(flatten_image_grid_thw)

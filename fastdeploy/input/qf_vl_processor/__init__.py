@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from .qf_vl_processor import QFVLProcessor
 from .process import DataProcessor
+from .qf_vl_processor import QFVLProcessor
 
 __all__ = ["DataProcessor", "QFVLProcessor"]

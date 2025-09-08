@@ -1,5 +1,5 @@
 """
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -332,7 +332,7 @@ class QFVLPretrainedModel(PretrainedModel):
                     **({extra.value: True} if extra else {}),
                 }
 
-                if "lm_head.weight" or "" in weight_name:
+                if "lm_head.weight" in weight_name or weight_name == "":
                     key = weight_name
                 elif not has_prefix(prefix_name, weight_name):
                     key = f"{prefix_name}{weight_name}"

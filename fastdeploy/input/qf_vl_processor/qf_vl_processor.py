@@ -48,7 +48,7 @@ class QFVLProcessor(TextProcessor):
         tool_parser_obj=None,
     ):
         """
-        Initialize QwenVLProcessor instance.
+        Initialize QFVLProcessor instance.
 
         Args:
             config: Model configuration object

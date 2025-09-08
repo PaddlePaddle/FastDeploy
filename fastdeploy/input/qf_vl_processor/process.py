@@ -447,6 +447,7 @@ class DataProcessor:
             request["messages"],
             tokenize=False,
             add_generation_prompt=request.get("add_generation_prompt", True),
+            chat_template=request.get("chat_template", None),
         )
         prompt_token_str = raw_prompt.replace(self.image_token, "").replace(self.video_token, "")
         request["text_after_process"] = raw_prompt
