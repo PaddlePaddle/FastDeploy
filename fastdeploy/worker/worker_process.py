@@ -36,7 +36,7 @@ from fastdeploy.config import (
     LoadConfig,
     ModelConfig,
     ParallelConfig,
-    PLASAttentionConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
@@ -677,7 +677,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    plas_attention_config = PLASAttentionConfig(args.plas_attention_config)
+    plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
