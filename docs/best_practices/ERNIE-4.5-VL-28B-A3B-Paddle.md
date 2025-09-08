@@ -34,7 +34,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --reasoning-parser ernie-45-vl \
   --gpu-memory-utilization 0.9 \
   --max-num-batched-tokens 384 \
-  --quantization wint4 \
+  --quantization wint4
 ```
 **Example 2:** Deploying a 128K Context Service on Dual H800 GPUs
 ```shell
@@ -50,7 +50,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --reasoning-parser ernie-45-vl \
   --gpu-memory-utilization 0.9 \
   --max-num-batched-tokens 384 \
-  --quantization wint4 \
+  --quantization wint4
 ```
 
 An example is a set of configurations that can run stably while also delivering relatively good performance. If you have further requirements for precision or performance, please continue reading the content below.

@@ -33,7 +33,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --reasoning-parser ernie-45-vl \
     --gpu-memory-utilization 0.9 \
     --max-num-batched-tokens 384 \
-    --quantization wint4 \
+    --quantization wint4
 ```
  **示例2：** H800上双卡部署128K上下文的服务
 ```shell

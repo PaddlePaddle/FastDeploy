@@ -29,7 +29,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 16 \
     --limit-mm-per-prompt '{"image": 100, "video": 100}' \
     --reasoning-parser ernie-45-vl \
-    --gpu-memory-utilization 0.8 \
+    --gpu-memory-utilization 0.85 \
     --max-num-batched-tokens 384 \
     --quantization wint4
 ```
