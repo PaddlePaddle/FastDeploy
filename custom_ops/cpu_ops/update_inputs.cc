@@ -46,7 +46,7 @@ void update_inputs_kernel(bool *not_need_stop,
     not_need_stop[0] = stop_sum < stop_nums[0];
 }
 
-void UpdateInputes(const paddle::Tensor &stop_flags,
+void UpdateInputs(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &not_need_stop,
                    const paddle::Tensor &seq_lens_this_time,
                    const paddle::Tensor &seq_lens_encoder,
@@ -90,4 +90,4 @@ PD_BUILD_STATIC_OP(update_inputs_cpu)
                     {"seq_lens_encoder", "seq_lens_encoder_out"},
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"input_ids", "input_ids_out"}})
-    .SetKernelFn(PD_KERNEL(UpdateInputes));
+    .SetKernelFn(PD_KERNEL(UpdateInputs));
