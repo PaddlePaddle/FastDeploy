@@ -838,7 +838,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
         self.share_inputs["decoder_num_blocks_cpu"] = None
-        self.share_inputs["decoder_num_blocks"] = None
+        self.share_inputs["decoder_num_blocks"] = None  # Pinning Memory
         self.share_inputs["max_len_tensor_cpu"] = None  # CPU
         self.share_inputs["decoder_chunk_size_device"] = None
         self.share_inputs["encoder_batch_ids"] = None
