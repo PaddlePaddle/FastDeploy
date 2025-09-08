@@ -579,7 +579,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.padding_offset,
                 self.cum_offset,
                 self.block_tables,
-                self.encoder_batch_ids,
+                self.encoder_num_blocks_x_cpu,
                 self.encoder_tile_ids_per_batch,
                 self.encoder_num_blocks,
                 self.kv_batch_ids,
