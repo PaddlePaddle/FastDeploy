@@ -32,5 +32,6 @@ void MoeFastHardamardWrapper(const T *x_data,
                             const int64_t dim,
                             const int num_max_tokens_per_expert,
                             bool used_in_ep_low_latency,
+                            const int hadamard_block_size,
                             OutT* out,
                             cudaStream_t &stream);

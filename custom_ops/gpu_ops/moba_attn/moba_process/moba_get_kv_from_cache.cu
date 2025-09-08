@@ -50,14 +50,14 @@ __global__ void get_kv_from_cache_c16_kernel(
     const int physical_block_number = block_tables[bidb * max_blocks_per_seq + block_idx];
 
 
-    const int ramian_tokens = seq_len - base_token_idx;
+    const int remain_tokens = seq_len - base_token_idx;
 
     if (bidh < kv_head_num) {
         const int cache_offset = physical_block_number * kv_head_num * kBlockSize * kHeadDim + bidh * kBlockSize * kHeadDim + col_idx;
         const int base_store_idx = (base_token_idx + cu_seq_k[bidb]) * kv_head_num * kHeadDim + bidh * kHeadDim + col_idx;
         #pragma unroll
         for (int i = row_idx; i < kBlockSize; i += 128 / (kHeadDim / kPackSize)) {
-            if (i < ramian_tokens) {
+            if (i < remain_tokens) {
                 *reinterpret_cast<float4*>(k_input + base_store_idx + i * kv_head_num * kHeadDim) = *reinterpret_cast<const float4*>(cache_k + cache_offset + i * kHeadDim);
             }
         }
@@ -67,7 +67,7 @@ __global__ void get_kv_from_cache_c16_kernel(
         const int base_store_idx = (base_token_idx + cu_seq_k[bidb]) * kv_head_num * kHeadDim + bidh * kHeadDim + col_idx;
         #pragma unroll
         for (int i = row_idx; i < kBlockSize; i += 128 / (kHeadDim / kPackSize)) {
-            if (i < ramian_tokens) {
+            if (i < remain_tokens) {
                 *reinterpret_cast<float4*>(v_input + base_store_idx + i * kv_head_num * kHeadDim) = *reinterpret_cast<const float4*>(cache_v + cache_offset + i * kHeadDim);
             }
         }
