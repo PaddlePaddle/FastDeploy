@@ -32,7 +32,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.graph_optimization.decorator import (
-    mm_buffer,
+    cuda_graph_buffers,
     support_graph_optimization,
 )
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
@@ -394,7 +394,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         return hidden_states, residual
 
 
-@mm_buffer(
+@cuda_graph_buffers(
     {
         "text_input": {
             "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],

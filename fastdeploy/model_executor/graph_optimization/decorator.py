@@ -101,7 +101,7 @@ class GraphOptWrapper:
         self.graph_opt_backend.clear_cudagraph_piecewise_backend()
 
 
-def mm_buffer(buffer_meta):
+def cuda_graph_buffers(buffer_meta):
     def decorator(cls):
         original_init = cls.__init__
 
