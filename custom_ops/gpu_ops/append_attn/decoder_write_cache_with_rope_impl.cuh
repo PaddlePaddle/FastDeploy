@@ -684,7 +684,6 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
