@@ -219,5 +219,5 @@ python -m fastdeploy.entrypoints.openai.api_server
 **Parameter Description:**
 
 * `FD_ATTENTION_BACKEND="MOBA_ATTN"` 启用 MOBA sparse attention.
-* `moba_encoder_top_k_left=50, moba_encoder_top_k_right=60` 表示当编码器稀疏时，top-k的范围在50到60之间。
-* `moba_decoder_top_k_left=100, moba_decoder_top_k_right=120` indicates that the range of top-k is between 100 and 120 when the decoder is sparse.
+* `moba_encoder_top_k_left=50, moba_encoder_top_k_right=60` 表示当encoder时，top-k的范围在50到60之间。
+* `moba_decoder_top_k_left=100, moba_decoder_top_k_right=120` 表示当decoder时，top-k的范围在100到120之间。
