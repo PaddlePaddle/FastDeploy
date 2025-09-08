@@ -204,7 +204,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/get_output_msg_with_topk.cc",
         "gpu_ops/save_output_msg_with_topk.cc",
         "gpu_ops/transfer_output.cc",
-        "gpu_ops/set_value_by_flags.cu",
+        "gpu_ops/set_value_by_flags_and_idx.cu",
         "gpu_ops/token_penalty_multi_scores.cu",
         "gpu_ops/stop_generation.cu",
         "gpu_ops/stop_generation_multi_ends.cu",
@@ -223,7 +223,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/speculate_decoding/speculate_get_output_padding_offset.cu",
         "gpu_ops/speculate_decoding/speculate_get_seq_lens_output.cu",
         "gpu_ops/speculate_decoding/speculate_save_output.cc",
-        "gpu_ops/speculate_decoding/speculate_set_value_by_flags.cu",
+        "gpu_ops/speculate_decoding/speculate_set_value_by_flags_and_idx.cu",
         "gpu_ops/speculate_decoding/speculate_step.cu",
         "gpu_ops/speculate_decoding/speculate_step_system_cache.cu",
         "gpu_ops/speculate_decoding/speculate_update_v3.cu",
@@ -261,7 +261,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/save_output_msg_with_topk.cc",
         "gpu_ops/transfer_output.cc",
         "gpu_ops/set_mask_value.cu",
-        "gpu_ops/set_value_by_flags.cu",
+        "gpu_ops/set_value_by_flags_and_idx.cu",
         "gpu_ops/ngram_mask.cu",
         "gpu_ops/gather_idx.cu",
         "gpu_ops/get_output_ep.cc",
@@ -276,7 +276,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/recover_decode_task.cu",
         "gpu_ops/step.cu",
         "gpu_ops/step_reschedule.cu",
-        "gpu_ops/fused_get_rope.cu",
+        "gpu_ops/fused_get_rotary_embedding.cu",
         "gpu_ops/get_padding_offset.cu",
         "gpu_ops/update_inputs.cu",
         "gpu_ops/update_inputs_beam.cu",
@@ -373,6 +373,7 @@ elif paddle.is_compiled_with_cuda():
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
 
+    cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
@@ -385,6 +386,7 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
+
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
     if nvcc_version >= 12.0:
@@ -505,20 +507,28 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
 
     if cc >= 90 and nvcc_version >= 12.0:
-        # Hopper optmized mla
+        # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
+        sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
+        sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
+        sources += ["gpu_ops/moba_attn/moba_attn.cu"]
         os.system("python utils/auto_gen_w4afp8_gemm_kernel.py")
         sources += find_end_files("gpu_ops/w4afp8_gemm", ".cu")
         os.system("python utils/auto_gen_wfp8afp8_sparse_gemm_kernel.py")
         sources += find_end_files("gpu_ops/wfp8afp8_sparse_gemm", ".cu")
+        os.system("python gpu_ops/machete/generate.py")
+        sources += find_end_files("gpu_ops/machete", ".cu")
+        cc_compile_args += ["-DENABLE_MACHETE"]
 
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
-            extra_compile_args={"nvcc": nvcc_compile_args},
+            extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
+            extra_link_args=["-lcuda"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
@@ -550,7 +560,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/save_output_msg_with_topk.cc",
                 "gpu_ops/transfer_output.cc",
                 "gpu_ops/get_padding_offset.cu",
-                "gpu_ops/set_value_by_flags.cu",
+                "gpu_ops/set_value_by_flags_and_idx.cu",
                 "gpu_ops/rebuild_padding.cu",
                 "gpu_ops/update_inputs.cu",
                 "gpu_ops/stop_generation_multi_ends.cu",
@@ -599,7 +609,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/transfer_output.cc",
         "gpu_ops/save_with_output.cc",
         "gpu_ops/set_mask_value.cu",
-        "gpu_ops/set_value_by_flags.cu",
+        "gpu_ops/set_value_by_flags_and_idx.cu",
         "gpu_ops/ngram_mask.cu",
         "gpu_ops/gather_idx.cu",
         "gpu_ops/get_output_ep.cc",
@@ -608,7 +618,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/stop_generation.cu",
         "gpu_ops/stop_generation_multi_ends.cu",
         "gpu_ops/set_flags.cu",
-        "gpu_ops/fused_get_rope.cu",
+        "gpu_ops/fused_get_rotary_embedding.cu",
         "gpu_ops/get_padding_offset.cu",
         "gpu_ops/update_inputs.cu",
         "gpu_ops/update_inputs_beam.cu",

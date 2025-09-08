@@ -91,6 +91,49 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num, const bool causal,
     const bool speculate_decoder);
 
+void AppendAttentionWithOutput(
+    const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
+    const paddle::Tensor &value_cache, const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &batch_id_per_token, const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &block_tables, const paddle::Tensor &encoder_batch_ids,
+    const paddle::Tensor &encoder_tile_ids_per_batch,
+    const paddle::Tensor &encoder_num_blocks,
+    const paddle::Tensor &kv_batch_ids,
+    const paddle::Tensor &kv_tile_ids_per_batch,
+    const paddle::Tensor &kv_num_blocks,
+    const paddle::Tensor &decoder_batch_ids,
+    const paddle::Tensor &decoder_tile_ids_per_batch,
+    const paddle::Tensor &decoder_num_blocks,
+    const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
+    paddle::Tensor &fmha_out,
+    const paddle::optional<paddle::Tensor> &rotary_embs,
+    const paddle::optional<paddle::Tensor> &attn_mask,
+    const paddle::optional<paddle::Tensor> &qkv_bias,
+    const paddle::optional<paddle::Tensor> &qkv_out_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_zp,
+    const paddle::optional<paddle::Tensor> &cache_v_zp,
+    const paddle::optional<paddle::Tensor> &out_linear_shifts,
+    const paddle::optional<paddle::Tensor> &out_linear_smooths,
+    const paddle::optional<paddle::Tensor> &mask_offset,
+    const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
+    const std::string &compute_dtype, const std::string &cache_quant_type_str,
+    const bool use_neox_rotary_style, const bool rope_3d,
+    const int max_input_length, const float quant_max_bound,
+    const float quant_min_bound, const float out_linear_in_scale,
+    const int encoder_block_shape_q, const int decoder_block_shape_q,
+    const int max_partition_size, const int encoder_max_partition_size,
+    const int speculate_max_draft_token_num, const bool causal,
+    const bool speculate_decoder);
+
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
     const paddle::Tensor &value_cache, const paddle::Tensor &cu_seqlens_q,
@@ -111,7 +154,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor> &cache_v_zp,
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const int kv_token_num, const int max_seq_len,
-    const std::string &cache_quant_type);
+    const std::string &cache_quant_type,
+    const bool rope_3d);
 
 std::vector<paddle::Tensor>
 PreCacheLenConcat(const paddle::Tensor &seq_lens_decoder,
@@ -128,11 +172,29 @@ paddle::Tensor FusedExpertMoeFunc(
     const std::string &quant_method, const int moe_topk,
     const bool norm_topk_prob, const bool group_moe);
 
+std::vector<paddle::Tensor> MacheteMMKernel(
+    paddle::Tensor const& A, paddle::Tensor const& B,
+    paddle::optional<paddle::Tensor> const& maybe_group_scales,
+    paddle::optional<paddle::Tensor> const& maybe_group_zeros,
+    paddle::optional<paddle::Tensor> const& maybe_channel_scales,
+    paddle::optional<paddle::Tensor> const& maybe_token_scales,
+    std::string const& b_type_str,
+    std::string const& maybe_out_type_str,
+    int64_t const& maybe_group_size,
+    std::string const& maybe_schedule);
+
+std::vector<paddle::Tensor> MachetePrepackBKernel(
+    paddle::Tensor const& B, std::string const& a_type_str, std::string const& b_type_str,
+    std::string const& maybe_group_scales_type_str);
+
+std::vector<std::string> MacheteSupportedSchedules(
+    std::string const& a_type_str, std::string const& b_type_str);
+
 std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor &input, const paddle::Tensor &gating_output,
     const paddle::optional<paddle::Tensor> &gating_correction_bias,
     const paddle::optional<paddle::Tensor> &w4a8_in_scale, const int moe_topk,
-    const bool group_moe, const bool topk_only_mode);
+    const bool group_moe, const std::string &moe_quant_type, const bool topk_only_mode);
 
 std::vector<paddle::Tensor>
 MoETopKSelectKernel(const paddle::Tensor &gating_logits,
@@ -193,7 +255,8 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
     const std::string& quant_method, const bool used_in_ep_low_latency,
-    const int estimate_total_token_nums);
+    const int estimate_total_token_nums,
+    const int hadamard_block_size);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
@@ -236,7 +299,7 @@ paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const int device_id,
 paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
                                        const int layer_id);
 
-std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
+void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
@@ -244,6 +307,13 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    paddle::Tensor &encoder_batch_ids,          // Inplace
+    paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &kv_batch_ids,               // Inplace
+    paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
+    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
+    paddle::Tensor &max_len_kv_cpu,             // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -316,9 +386,11 @@ void RecoverDecodeTask(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &step_seq_lens_decoder,
                    const paddle::Tensor &block_tables,
                    const paddle::Tensor &is_block_step,
-                   const int block_size);
-
-
+                   const paddle::optional<paddle::Tensor> &draft_tokens,
+                   const paddle::optional<paddle::Tensor> &step_draft_tokens,
+                   const paddle::optional<paddle::Tensor> &step_seq_lens_this_time,
+                   const int block_size,
+                   const int max_draft_tokens);
 
 paddle::Tensor
 GroupSwigluWithMasked(const paddle::Tensor &fc1_out_tensor,
@@ -614,7 +686,7 @@ void SpeculateVerify(
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
     int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode);
 
-void SpeculateUpdateV3(const paddle::Tensor &seq_lens_encoder,
+void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
                        const paddle::Tensor &not_need_stop,
                        const paddle::Tensor &draft_tokens,
@@ -645,6 +717,22 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
                               const paddle::Tensor& seq_lens_decoder);
 
+void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
+                            const paddle::Tensor &block_tables,
+                            const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_decoder,
+                            const paddle::Tensor &step_seq_lens_decoder,
+                            const paddle::Tensor &step_draft_tokens,
+                            const paddle::Tensor &step_seq_lens_this_time,
+                            const paddle::Tensor &accept_num,
+                            const paddle::Tensor &accept_tokens,
+                            const paddle::Tensor &is_block_step,
+                            const paddle::Tensor &not_need_stop,
+                            const paddle::Tensor &stop_nums,
+                            const int block_size,
+                            const int max_draft_tokens);
+
 void NgramMatch(const paddle::Tensor &input_ids,
         const paddle::Tensor &input_ids_len,
         const paddle::Tensor &pre_ids,
@@ -656,6 +744,20 @@ void NgramMatch(const paddle::Tensor &input_ids,
         const paddle::Tensor &seq_lens_decoder,
         const paddle::Tensor &max_dec_len,
         const int max_ngram_size,
+        const int max_draft_tokens);
+
+
+void HybridMtpNgram(const paddle::Tensor &input_ids,
+        const paddle::Tensor &input_ids_len,
+        const paddle::Tensor &pre_ids,
+        const paddle::Tensor &step_idx,
+        const paddle::Tensor &draft_token_num,
+        const paddle::Tensor &draft_tokens,
+        const paddle::Tensor &seq_lens_this_time,
+        const paddle::Tensor &seq_lens_decoder,
+        const paddle::Tensor &max_dec_len,
+        const int max_ngram_size,
+        const int min_ngram_size,
         const int max_draft_tokens);
 
 
@@ -674,7 +776,9 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
+                          const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
+                          const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -686,7 +790,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& base_model_draft_tokens,
                           const int max_draft_token,
                           const bool truncate_first_token,
-                          const bool splitwise_prefill);
+                          const bool splitwise_prefill,
+                          const bool kvcache_scheduler_v1);
 
 
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
@@ -768,15 +873,15 @@ void SpeculateStepPaddle(
     const int max_draft_tokens);
 
 void MergePrefillDecodeOutput(
-        const paddle::Tensor &encoder_res,
-        const paddle::Tensor &decoder_res,
-        const paddle::Tensor &seq_lens_encoder,
-        const paddle::Tensor &seq_lens_decoder,
-        const paddle::Tensor &seq_lens_this_time,
-        const paddle::Tensor &cu_seq_q,
-        const int head_num,
-        const int head_dim,
-        const int max_token);
+    const paddle::Tensor &encoder_res,
+    const paddle::Tensor &decoder_res,
+    const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &cu_seq_q,
+    const int head_num,
+    const int head_dim,
+    const int max_token);
 
 std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
                                                const paddle::Tensor &top_p,
@@ -847,6 +952,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * append_attention
    */
   m.def("append_attention", &AppendAttention, "append attention function");
+  m.def("append_attention_with_output", &AppendAttentionWithOutput, "append attention with output function");
   /**
    * gqa_rope_write_cache.cu
    * gqa_rope_write_cache
@@ -878,7 +984,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_dispatch", &MoeExpertDispatch, py::arg("input"),
         py::arg("gating_output"), py::arg("gating_correction_bias"),
         py::arg("w4a8_in_scale"), py::arg("moe_topk"), py::arg("group_moe"),
-        py::arg("topk_only_mode"), "moe export dispatch function");
+        py::arg("moe_quant_type"), py::arg("topk_only_mode"), "moe export dispatch function");
 
   /**
    * moe/fused_moe/ep_moe_prefill_func.cu
@@ -902,11 +1008,32 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("per_token_quant_padding", &PerTokenQuantPadding, py::arg("input"),
         py::arg("block_size"),
-        "per token per block quant and padding tranpose scale");
+        "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant", &MaskedPerTokenQuant, py::arg("input"),
         py::arg("recv_expert_count"), py::arg("block_size"),
         "per token per block quant");
+
+#ifdef ENABLE_MACHETE
+  /*machete/machete_mm.cu
+   * machete_mm
+   */
+  m.def("machete_mm", &MacheteMMKernel, py::arg("A"), py::arg("B"), py::arg("maybe_group_scale"),
+        py::arg("maybe_group_zeros"), py::arg("maybe_channel_scales"), py::arg("maybe_token_scales"),
+        py::arg("b_type_str"), py::arg("maybe_out_type_str"), py::arg("maybe_group_size"),
+        py::arg("maybe_schedule"),
+        "machete mm function");
+
+  /*machete/machete_prepack_B.cu
+   * machete_prepack_B
+   */
+  m.def("machete_prepack_B", &MachetePrepackBKernel, "machete prepacked B function");
+
+  /*machete/machete_supported_schedules.cu
+   * machete_supported_schedules
+   */
+  m.def("machete_supported_schedules", &MacheteSupportedSchedules, "machete supported schedules function");
+#endif
 
   /**
    * moe/fused_moe/moe_topk_select.cu
@@ -924,7 +1051,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_ffn", &MoeExpertFFNFunc, "moe export ffn function");
 
   /**
-   * moe/fused_moe/moe_ffn_wint2.cu
+   * moe/fused_moe/moe_expert_ffn_wint2.cu
    * moe_expert_ffn_wint2
    */
   m.def("moe_expert_ffn_wint2", &MoeExpertFFNWint2Func, "moe export ffn wint2 function");
@@ -1121,7 +1248,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",&SpeculateVerify, "speculate_verify function");
 
-  m.def("speculate_update_v3",&SpeculateUpdateV3, "noaux_tc for Deepseekv3 MoE compute function");
+  m.def("speculate_update",&SpeculateUpdate, "Speculate Update Kernel");
 
   m.def("speculate_set_value_by_flags_and_idx",&SpeculateSetValueByFlagsAndIdx, "speculate_set_value_by_flags_and_idx function");
 
@@ -1129,7 +1256,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_clear_accept_nums",&SpeculateClearAcceptNums, "speculate_clear_accept_nums function");
 
+  m.def("speculate_schedule_cache",&SpeculateScheduleCache, "SpeculateScheduleCache function");
+
   m.def("ngram_match", &NgramMatch, "ngram_match function");
+
+  m.def("hybird_mtp_ngram", &HybridMtpNgram, "ngram_match_mixed function");
 
   m.def("draft_model_postprocess",&DraftModelPostprocess, "draft_model_postprocess function");
 

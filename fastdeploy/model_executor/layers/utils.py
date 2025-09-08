@@ -193,14 +193,6 @@ def create_hadamard_matrix(hidden_size: int) -> paddle.Tensor:
     return hadamard_matrix
 
 
-create_hadamard_matrix_map = {}
-# Zkk: below key are used in 4.5T fp8.
-create_hadamard_matrix_map[8192] = create_hadamard_matrix(8192)
-create_hadamard_matrix_map[448] = create_hadamard_matrix(448)
-create_hadamard_matrix_map[1024] = create_hadamard_matrix(1024)
-create_hadamard_matrix_map[3584] = create_hadamard_matrix(3584)
-
-
 def ensure_divisibility(numerator, denominator):
     """
     Ensure the numerator is divisible by the denominator.
@@ -257,7 +249,7 @@ def remove_padding(
             - The key sequence lengths (paddle.Tensor).
     """
     if current_platform.is_cuda():
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         token_num = paddle.sum(seq_lens_this_time)
         (
             ids_remove_padding,
@@ -301,7 +293,7 @@ def speculate_remove_padding(
             - Key sequence lengths (paddle.Tensor).
     """
     if current_platform.is_cuda():
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         token_num = paddle.sum(seq_lens_this_time)
         (
             ids_remove_padding,

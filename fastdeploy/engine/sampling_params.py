@@ -21,8 +21,6 @@ import random
 from dataclasses import dataclass, fields
 from typing import Any, List, Optional, Union
 
-from fastdeploy.utils import llm_logger as logger
-
 
 @dataclass
 class SamplingParams:
@@ -103,7 +101,8 @@ class SamplingParams:
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
     bad_words: Optional[List[str]] = None
-    _bad_words_token_ids: Optional[List[int]] = None
+    guided_decoding: Optional[GuidedDecodingParams] = None
+    bad_words_token_ids: Optional[List[int]] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -135,6 +134,8 @@ class SamplingParams:
         min_tokens=1,
         logprobs=None,
         bad_words=None,
+        guided_decoding=None,
+        bad_words_token_ids=None,
     ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
@@ -155,6 +156,8 @@ class SamplingParams:
             min_tokens=min_tokens,
             logprobs=logprobs,
             bad_words=bad_words,
+            guided_decoding=guided_decoding,
+            bad_words_token_ids=bad_words_token_ids,
         )
 
     def __post_init__(self):
@@ -261,3 +264,51 @@ class BeamSearchParams:
     temperature: float = 0.0
     length_penalty: float = 1.0
     include_stop_str_in_output: bool = False
+
+
+@dataclass
+class GuidedDecodingParams:
+    """Guided decoding parameters for text generation."""
+
+    json: Optional[Union[str, dict]] = None
+    regex: Optional[str] = None
+    choice: Optional[List[str]] = None
+    grammar: Optional[str] = None
+    json_object: Optional[bool] = None
+    structural_tag: Optional[str] = None
+
+    def to_dict(self):
+        """convert to dict"""
+        key_dict = {
+            "guided_json": self.json,
+            "guided_regex": self.regex,
+            "guided_choice": self.choice,
+            "guided_grammar": self.grammar,
+            "structural_tag": self.structural_tag,
+            "guided_json_object": self.json_object,
+        }
+
+        guided_dict = {}
+        for key, value in key_dict.items():
+            if value is not None:
+                guided_dict[key] = value
+        return guided_dict
+
+    def __post_init__(self):
+        """Verify the arguments."""
+        guided_count = sum(
+            [
+                self.json is not None,
+                self.regex is not None,
+                self.choice is not None,
+                self.grammar is not None,
+                self.json_object is not None,
+                self.structural_tag is not None,
+            ]
+        )
+
+        if guided_count > 1:
+            raise ValueError(
+                "You can only use one kind of guided decoding "
+                "('json', 'json_object', 'regex', 'choice', 'grammar', 'structural_tag')."
+            )
