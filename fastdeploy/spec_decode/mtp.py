@@ -212,6 +212,22 @@ class MTPProposer(Proposer):
             self.target_model_inputs["max_len_tensor_cpu"]
         ).cpu()
 
+        self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
+        self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
+            self.target_model_inputs["encoder_tile_ids_per_batch"]
+        )
+        self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
+            self.target_model_inputs["encoder_num_blocks_x_cpu"]
+        ).cpu()
+        self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
+        self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
+            self.target_model_inputs["kv_tile_ids_per_batch"]
+        )
+        self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
+            self.target_model_inputs["kv_num_blocks_x_cpu"]
+        ).cpu()
+        self.model_inputs["max_len_kv_cpu"] = paddle.zeros_like(self.target_model_inputs["max_len_kv_cpu"]).cpu()
+
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
@@ -321,6 +337,13 @@ class MTPProposer(Proposer):
         self.model_inputs["decoder_tile_ids_per_batch"] = None
         self.model_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.model_inputs["max_len_tensor_cpu"] = None  # CPU
+        self.model_inputs["encoder_batch_ids"] = None
+        self.model_inputs["encoder_tile_ids_per_batch"] = None
+        self.model_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
+        self.model_inputs["kv_batch_ids"] = None
+        self.model_inputs["kv_tile_ids_per_batch"] = None
+        self.model_inputs["kv_num_blocks_x_cpu"] = None  # CPU
+        self.model_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Input tokens
         self.model_inputs["draft_tokens"] = paddle.full(
@@ -512,6 +535,13 @@ class MTPProposer(Proposer):
             cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
             block_tables=self.model_inputs["block_tables"],
             caches=self.model_inputs["caches"],
+            encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+            encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+            encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+            kv_batch_ids=self.model_inputs["kv_batch_ids"],
+            kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+            kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+            max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
         )
 
         # Initialzie attention meta data
