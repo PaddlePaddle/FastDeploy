@@ -68,10 +68,19 @@ Add the following lines to the startup parameters, where `--enable-prefix-cachin
 By predicting multiple tokens at once, the number of decoding steps is reduced to significantly speed up the generation speed, while maintaining the generation quality through certain strategies. For details, please refer to [Speculative Decoding](../features/speculative_decoding.md)。
 
 **How to enable:**
-Add the following lines to the startup parameters
+Add the following lines to the startup parameters.
 ```
+# Case 1: Use MTP with one draft token
 --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
+
+# Case 2: Use MTP with two draft tokens
+--speculative-config '{"method": "mtp", "num_speculative_tokens": 2, "model": "${path_to_mtp_model}"}'
+
+# Case 3: Use Hybrid MTP with Ngram
+# Generates two draft tokens from MTP, plus up to three additional tokens from Ngram matching
+--speculative-config '{"method": "mtp", "num_speculative_tokens": 5, "num_model_steps": 2, "model": "${path_to_mtp_model}"}'
 ```
+
 Notes:
 1. MTP currently does not support simultaneous use with Prefix Caching, Chunked Prefill, and CUDAGraph.
 2. MTP currently does not support service management global blocks, i.e. do not run with `export ENABLE_V1_KVCACHE_SCHEDULER=1`
