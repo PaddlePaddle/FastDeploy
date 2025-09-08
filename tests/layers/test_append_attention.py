@@ -350,9 +350,9 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.batch_size = 4
         self.q_num_head = 12
         self.kv_num_head = 2
-        self.seq_len = 64
-        self.max_dec_len = 32
-        self.dim_head = 64
+        self.seq_len = 8192
+        self.max_dec_len = 64
+        self.dim_head = 128
         self.q_hid_dim = self.q_num_head * self.dim_head
         self.kv_hid_dim = self.kv_num_head * self.dim_head
         self.blocksize = 64
@@ -642,7 +642,7 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.kv_num_head = 2
         self.seq_len = 64
         self.max_dec_len = 64
-        self.dim_head = 128
+        self.dim_head = 64
         self.q_hid_dim = self.q_num_head * self.dim_head
         self.kv_hid_dim = self.kv_num_head * self.dim_head
         self.blocksize = 64
@@ -660,6 +660,3 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
 
 if __name__ == "__main__":
     unittest.main()
-    # test = TestAppendGroupQueryAttnWithRope()
-    # test.setUp()
-    # test.test_all()
