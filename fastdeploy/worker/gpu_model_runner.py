@@ -222,6 +222,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        has_preempted_task = False
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -321,6 +322,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                has_preempted_task = True
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -376,6 +378,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
+        if has_preempted_task:
+            self.share_inputs["not_need_stop"][0] = not (
+                self.share_inputs["stop_flags"].sum() == self.parallel_config.max_num_seqs
+            )
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
@@ -1341,6 +1347,7 @@ class GPUModelRunner(ModelRunnerBase):
         if (
             not self.cache_config.enable_chunked_prefill
             or self.guided_backend is None
+            or model_forward_batch is None
             or envs.ENABLE_V1_KVCACHE_SCHEDULER
         ):
             return skip_idx_list
@@ -1543,7 +1550,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Add cache for guided decoding.
         """
-        if self.guided_backend is None:
+        if self.guided_backend is None or model_forward_batch is None:
             return
 
         for request in model_forward_batch:

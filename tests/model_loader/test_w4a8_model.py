@@ -28,6 +28,7 @@ FD_ENGINE_QUEUE_PORTS = [
     [9981, 9982, 9983, 9984, 9985, 9986, 9987, 9988],
     [9991, 9992, 9993, 9994, 9995, 9996, 9997, 9998],
 ]
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 
 models = [
@@ -53,6 +54,7 @@ def llm(request):
             max_model_len=8192,
             num_gpu_blocks_override=1024,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORTS[port_index],
+            cache_queue_port=FD_CACHE_QUEUE_PORT,
             load_choices="default",
             enable_expert_parallel=True,
         )
