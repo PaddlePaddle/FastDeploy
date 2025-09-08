@@ -23,6 +23,7 @@ from multiprocessing import Process, Queue
 import pytest
 
 TokensIdText = list[tuple[list[int], str]]
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
 
 
 def clear_logs():
@@ -117,6 +118,19 @@ def clean_ports(ports_to_clean: list[int]):
     """
     Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
     """
+    try:
+        result = subprocess.run(
+            f"ps -efww | grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            pid = int(parts[1])
+            print(f"Killing PID: {pid}")
+            os.kill(pid, signal.SIGKILL)
+    except Exception as e:
+        print(f"Failed to kill cache manager process: {e}, {str(traceback.format_exc())}")
     for port in ports_to_clean:
         kill_process_on_port(port)
 
