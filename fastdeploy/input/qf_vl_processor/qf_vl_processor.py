@@ -17,9 +17,10 @@
 import numpy as np
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qf_vl_processor import DataProcessor
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
+
+from .process import DataProcessor
 
 
 class QFVLProcessor(TextProcessor):
@@ -68,7 +69,7 @@ class QFVLProcessor(TextProcessor):
             tokenizer=self.tokenizer,
             **processor_kwargs,
         )
-
+        self.image_patch_id = self.processor.image_patch_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
     def process_request(self, request, max_model_len=None, **kwargs):

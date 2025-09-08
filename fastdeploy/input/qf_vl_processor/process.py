@@ -85,6 +85,7 @@ class DataProcessor:
 
         self.image_token_id = self.tokenizer.convert_tokens_to_ids(self.image_token)
         self.video_token_id = self.tokenizer.convert_tokens_to_ids(self.video_token)
+        self.image_patch_id = self.image_token_id
 
         self.vision_start = "<|vision_start|>"
         self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
