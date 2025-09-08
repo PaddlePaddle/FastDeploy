@@ -202,6 +202,7 @@ class TestTreeMask(unittest.TestCase):
         decoder_batch_ids = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         decoder_tile_ids_per_batch = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         decoder_num_blocks = paddle.full([1], 0, dtype="int32").pin_memory()
+        decoder_num_blocks_device = paddle.full([1], 0, dtype="int32")
         max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
         encoder_batch_ids = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         encoder_tile_ids_per_batch = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
@@ -222,6 +223,7 @@ class TestTreeMask(unittest.TestCase):
             decoder_batch_ids,
             decoder_tile_ids_per_batch,
             decoder_num_blocks,
+            decoder_num_blocks_device,
             max_len_tensor_cpu,
             encoder_batch_ids,
             encoder_tile_ids_per_batch,

@@ -384,6 +384,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.decoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
         self.decoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
         self.decoder_num_blocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.decoder_num_blocks_device = paddle.full([1], 0, dtype="int32")
         self.max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
 
         self.encoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
@@ -484,6 +485,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             self.decoder_batch_ids,
             self.decoder_tile_ids_per_batch,
             self.decoder_num_blocks_cpu,
+            self.decoder_num_blocks_device,
             self.max_len_tensor_cpu,
             self.encoder_batch_ids,
             self.encoder_tile_ids_per_batch,
@@ -577,17 +579,17 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.padding_offset,
                 self.cum_offset,
                 self.block_tables,
-                encoder_batch_ids,
-                encoder_tile_ids_per_batch,
-                encoder_num_blocks,
-                kv_batch_ids,
-                kv_tile_ids_per_batch,
-                kv_num_blocks,
+                self.encoder_batch_ids,
+                self.encoder_tile_ids_per_batch,
+                self.encoder_num_blocks,
+                self.kv_batch_ids,
+                self.kv_tile_ids_per_batch,
+                self.kv_num_blocks,
                 self.decoder_batch_ids,
                 self.decoder_tile_ids_per_batch,
                 self.decoder_num_blocks_cpu,
                 self.max_len_tensor_cpu,
-                max_len_kv,
+                self.max_len_kv,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask
                 None,  # qkv_bias
