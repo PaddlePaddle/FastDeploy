@@ -87,8 +87,8 @@ class ErnieX1ReasoningParser(ReasoningParser):
         # After reasoning phase, check for tool_call or response
         remaining_text = previous_text + delta_text
         after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token) :]
-        after_think = after_think.lstrip("\n") 
-        
+        after_think = after_think.lstrip("\n")
+
         # Handle tool_call case
         if after_think.startswith(self.tool_call_start_token):
             return None
