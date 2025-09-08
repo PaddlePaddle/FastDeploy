@@ -839,8 +839,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = None
         self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.share_inputs["decoder_num_blocks"] = None
-        self.share_inputs["max_len_tensor_cpu"] = None  # CPU
         self.share_inputs["decoder_chunk_size_device"] = None
+        self.share_inputs["max_len_tensor_cpu"] = None  # CPU
         self.share_inputs["encoder_batch_ids"] = None
         self.share_inputs["encoder_tile_ids_per_batch"] = None
         self.share_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
@@ -1076,8 +1076,8 @@ class GPUModelRunner(ModelRunnerBase):
             # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks in place of GPU tensor,
             # adapted to cudagraph.
             decoder_num_blocks=self.share_inputs["decoder_num_blocks"],
-            max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             decoder_chunk_size_device=self.share_inputs["decoder_chunk_size_device"],
+            max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
@@ -1222,8 +1222,8 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks in place of GPU tensor,
         # adapted to cudagraph.
         self.share_inputs["decoder_num_blocks"] = paddle.full([1], 0, dtype="int32")
-        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
 
         self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")

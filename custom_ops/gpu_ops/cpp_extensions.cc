@@ -306,8 +306,8 @@ void GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
-    paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
     paddle::Tensor &decoder_chunk_size_device,  // Inplace
+    paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
     paddle::Tensor &encoder_batch_ids,          // Inplace
     paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory

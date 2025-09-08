@@ -286,6 +286,7 @@ void GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &decoder_chunk_size_device,  // Inplace
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, CPU
     paddle::Tensor &encoder_batch_ids,          // Inplace
     paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
@@ -294,7 +295,6 @@ void GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
     paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, CPU
     paddle::Tensor &max_len_kv_cpu,             // Inplace, CPU
-    paddle::Tensor &decoder_chunk_size_device,  // Inplace
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -319,8 +319,6 @@ void GetBlockShapeAndSplitKVBlock(
   int max_system_len = max_len_cpu_ptr[6];
   int max_just_dec_len_without_system = max_len_cpu_ptr[7];
 
-  paddle::Tensor decoder_chunk_size_cpu;
-
   auto max_len_kv =
       GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_decoder.place());
   get_max_len_kv_ernel<128><<<1, 128, 0, stream>>>(
@@ -339,8 +337,6 @@ void GetBlockShapeAndSplitKVBlock(
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
           decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
 
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-          decoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
 
       auto decoder_num_blocks_x = GetEmptyTensor(
           {1}, paddle::DataType::INT32, seq_lens_encoder.place());
@@ -365,7 +361,7 @@ void GetBlockShapeAndSplitKVBlock(
 
       decoder_num_blocks_x_cpu.copy_(
           decoder_num_blocks_x, decoder_num_blocks_x_cpu.place(), false);
-      decoder_chunk_size_cpu =
+      auto decoder_chunk_size_cpu =
           decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
 
@@ -461,8 +457,8 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "decoder_batch_ids",
       "decoder_tile_ids_per_batch",
       "decoder_num_blocks_x_cpu",
-      "max_len_tensor_cpu",
       "decoder_chunk_size_device",
+      "max_len_tensor_cpu",
       "encoder_batch_ids",
       "encoder_tile_ids_per_batch",
       "encoder_num_blocks_x_cpu",
