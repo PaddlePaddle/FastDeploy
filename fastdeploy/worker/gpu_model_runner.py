@@ -837,8 +837,8 @@ class GPUModelRunner(ModelRunnerBase):
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
-        self.share_inputs["decoder_num_blocks_cpu"] = None
-        self.share_inputs["decoder_num_blocks"] = None  # Pinning Memory
+        self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
+        self.share_inputs["decoder_num_blocks"] = None
         self.share_inputs["max_len_tensor_cpu"] = None  # CPU
         self.share_inputs["decoder_chunk_size_device"] = None
         self.share_inputs["encoder_batch_ids"] = None
@@ -1073,6 +1073,8 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
             decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
+            # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks in place of GPU tensor,
+            # adapted to cudagraph.
             decoder_num_blocks=self.share_inputs["decoder_num_blocks"],
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             decoder_chunk_size_device=self.share_inputs["decoder_chunk_size_device"],
@@ -1203,8 +1205,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE: (changwenbin) When using auto_chunk,
         # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
-        decode_max_tile_size = 1024 * self.parallel_config.max_num_seqs * np.ceil(
-            (decoder_step_token_num * group_size) / decoder_block_shape_q
+        decode_max_tile_size = (
+            1024
+            * self.parallel_config.max_num_seqs
+            * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
         )
         encode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
             (self.model_config.max_model_len * group_size) / encoder_block_shape_q
@@ -1215,6 +1219,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+        # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks in place of GPU tensor,
+        # adapted to cudagraph.
         self.share_inputs["decoder_num_blocks"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
