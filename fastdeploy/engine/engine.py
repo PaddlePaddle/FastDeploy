@@ -472,6 +472,8 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --runner {self.cfg.model_config.runner}"
+            f" --convert {self.cfg.model_config.convert}"
         )
 
         worker_append_flag = {

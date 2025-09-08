@@ -617,6 +617,20 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--runner",
+        type=str,
+        default="auto",
+        help="The type of model runner to use.Each FD instance only supports one model runner.even if the same model can be used for multiple types.",
+    )
+
+    parser.add_argument(
+        "--convert",
+        type=str,
+        default="auto",
+        help="Convert the model using adapters. The most common use case is to adapt a text generation model to be used for pooling tasks.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -631,7 +645,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         FDConfig: Initialized FastDeploy configuration object
     """
     paddle.set_default_dtype(args.dtype)
+    logger.info(f"args {vars(args)}")
     model_config = ModelConfig(vars(args))
+    logger.info(f"model_config.runner:{model_config.runner}")
+    logger.info(f"model_config.convert:{model_config.convert}")
     device_config = DeviceConfig(vars(args))
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(args.speculative_config)

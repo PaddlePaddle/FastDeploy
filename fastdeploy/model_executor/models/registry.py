@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Union
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
 
+from fastdeploy.config import ModelConfig
+
 if TYPE_CHECKING:
     pass
 
@@ -234,7 +236,7 @@ class ModelRegistry:
 
         raise ValueError(f"找不到支持的模型: {architectures}")
 
-    def is_multimodal_model(self, architectures: Union[str, List[str]]) -> bool:
+    def is_multimodal_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
         """检查是否为多模态模型"""
         if isinstance(architectures, str):
             architectures = [architectures]
@@ -245,7 +247,7 @@ class ModelRegistry:
                 return model_info.is_multimodal
         return False
 
-    def is_text_generation_model(self, architectures: Union[str, List[str]]) -> bool:
+    def is_text_generation_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
         """检查是否为文本生成模型"""
         if isinstance(architectures, str):
             architectures = [architectures]
@@ -256,7 +258,7 @@ class ModelRegistry:
                 return model_info.is_text_generation
         return False
 
-    def is_pooling_model(self, architectures: Union[str, List[str]]) -> bool:
+    def is_pooling_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
         if isinstance(architectures, str):
             architectures = [architectures]
 
@@ -267,5 +269,4 @@ class ModelRegistry:
         return False
 
 
-# 全局注册中心实例
 model_registry = ModelRegistry()

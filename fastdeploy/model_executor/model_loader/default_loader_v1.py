@@ -16,7 +16,12 @@
 
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
+from typing_extensions import assert_never
+
+from fastdeploy.model_executor.models.adapters import as_embedding_model
+from fastdeploy.utils import get_logger
+
+logger = get_logger("default_loader_v1", "default_loader_v1.log")
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
 from fastdeploy.model_executor.load_weight_utils import (
@@ -63,7 +68,18 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
         with context:
             model_cls = model_registry.get_class(architectures)
+
             model = model_cls(fd_config)
+
+        convert_type = fd_config.model_config.convert_type
+        logger.info(f"convert_type:{convert_type}")
+        if convert_type == "none":
+            pass
+        elif convert_type == "embed":
+            logger.info("Converting to embedding model.")
+            model_cls = as_embedding_model(model_cls)
+        else:
+            assert_never(convert_type)
 
         model.eval()
 

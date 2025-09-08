@@ -997,11 +997,12 @@ class EngineArgs:
         """
         Create and return a Config object based on the current settings.
         """
-        print("create_engine_config")
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
 
-        # if model_cfg.
+        print("model_cfg", model_cfg)
+        print("model_cfg.runner", model_cfg.runner)
+        print("model_cfg.convert", model_cfg.convert)
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

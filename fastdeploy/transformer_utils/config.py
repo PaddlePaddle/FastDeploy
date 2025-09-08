@@ -15,11 +15,13 @@ def file_or_path_exists(model, config_name):
 
 
 def get_pooling_config_name(pooling_name: str):
-    if "pooling_model_" in pooling_name:
-        pooling_name = pooling_name.replace("pooling_model_", "")
+
+    if "pooling_mode_" in pooling_name:
+        pooling_name = pooling_name.replace("pooling_mode_", "")
 
     if "_" in pooling_name:
         pooling_name = pooling_name.split("_")[0]
+    print("pooling_name", pooling_name)
 
     if "lasttoken" in pooling_name:
         pooling_name = "last"

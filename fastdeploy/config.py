@@ -86,13 +86,17 @@ def try_match_architecture_defaults(
     runner_type: Optional[RunnerType] = None,
     convert_type: Optional[ConvertType] = None,
 ):
+    logger.info(f"Trying to match architecture: {architecture}")
     for suffix, (default_runner_type, default_convert_type) in iter_architecture_defaults():
+        logger.info(f"Checking suffix: {suffix}, defaults: {default_runner_type}, {default_convert_type}")
         if (
             (runner_type is None or runner_type == default_runner_type)
             and (convert_type is None or convert_type == default_convert_type)
             and architecture.endswith(suffix)
         ):
+            logger.info(f"Matched! Using suffix: {suffix}")
             return suffix, (default_runner_type, default_convert_type)
+    logger.info("No match found")
     return None
 
 
@@ -196,7 +200,6 @@ class ModelConfig:
         self.model_format = "auto"
         self.runner = "auto"
         self.convert = "auto"
-        self.model_impl: Union[str, ModelImpl] = ModelImpl.AUTO.value
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -225,6 +228,8 @@ class ModelConfig:
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
 
         architectures = self.architectures[0]
+        logger.info(f"Model architecture: {architectures}")
+        logger.info(f"All architectures: {self.architectures}")
 
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
@@ -236,8 +241,11 @@ class ModelConfig:
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
-        self.runner_type = self._get_runner_type(architectures=architectures, runner=self.runner)
-        print("self.runner_type", self.runner_type)
+        logger.info(f"self.runner:{self.runner}")
+        self.runner_type = self._get_runner_type(self.architectures, self.runner)
+        logger.info(f"self.runner_type:{self.runner_type}")
+        self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
+        logger.info(f"self.convert_type:{self.convert_type}")
 
     @property
     def registry(self):
@@ -313,13 +321,18 @@ class ModelConfig:
         architectures: list[str],
     ) -> RunnerType:
         registry = self.registry
+        logger.info(f"Registry supported archs: {registry.get_supported_archs()}")
+        logger.info(f"self.model:{self.model}")
         if get_pooling_config(self.model):
             return "pooling"
         for arch in architectures:
             if arch in registry.get_supported_archs():
+                logger.info(f"architecutes:{architectures}")
                 if registry.is_pooling_model(architectures, self):
+                    logger.info("Registry determined: pooling model")
                     return "pooling"
                 if registry.is_text_generation_model(architectures, self):
+                    logger.info("Registry determined: text generation model")
                     return "generate"
             match = try_match_architecture_defaults(arch)
             if match:
@@ -327,15 +340,44 @@ class ModelConfig:
                 return runner_type
         return "generate"
 
+    def _get_default_convert_type(
+        self,
+        architectures: list[str],
+        runner_type: RunnerType,
+    ) -> ConvertType:
+        registry = self.registry
+
+        for arch in architectures:
+            if arch in registry.get_supported_archs():
+                if runner_type == "generate" and registry.is_text_generation_model(architectures, self):
+                    return "none"
+                if runner_type == "pooling" and registry.is_pooling_model(architectures, self):
+                    return "none"
+            logger.info(f"arch:{arch}")
+            match = try_match_architecture_defaults(arch, runner_type=runner_type)
+            if match:
+                _, (_, convert_type) = match
+                return convert_type
+
+        # This is to handle Sentence Transformers models that use *ForCausalLM
+        # and also multi-modal pooling models which are not defined as
+        # Sentence Transformers models
+        if runner_type == "pooling":
+            return "embed"
+
+        return "none"
+
     def _get_runner_type(
         self,
         architectures: list[str],
         runner: RunnerOption,
     ) -> RunnerType:
         if runner != "auto":
+            logger.info(f"使用显式设置的 runner 类型: {runner}")
             return runner
 
         runner_type = self._get_default_runner_type(architectures)
+        logger.info(f"get_runner_type的runner_type:{runner_type}")
         if runner_type != "generate":
             logger.info(
                 "Resolved `--runner auto` to `--runner %s`. " "Pass the value explicitly to silence this message.",
@@ -343,6 +385,26 @@ class ModelConfig:
             )
 
         return runner_type
+
+    def _get_convert_type(
+        self,
+        architectures: list[str],
+        runner_type: RunnerType,
+        convert: ConvertOption,
+    ) -> ConvertType:
+        if convert != "auto":
+            logger.info(f"使用显式设置的 convert 类型: {convert}")
+            return convert
+
+        convert_type = self._get_default_convert_type(architectures, runner_type)
+
+        if convert_type != "none":
+            logger.info(
+                "Resolved `--convert auto` to `--convert %s`. " "Pass the value explicitly to silence this message.",
+                convert_type,
+            )
+
+        return convert_type
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -1242,6 +1304,7 @@ class FDConfig:
         test_mode=False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
+        logger.info(f"self.model_config.runner_type:{self.model_config.runner_type}")
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.scheduler_config: SchedulerConfig = scheduler_config  # type: ignore
         self.parallel_config = parallel_config  # type: ignore
