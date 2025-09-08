@@ -500,7 +500,6 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             if i == WARM_UP:
                 paddle.device.synchronize()
                 start_time = time.time()
-            paddle.device.synchronize()
             out = append_attention(
                 qkv,
                 self.cache_k,
@@ -556,7 +555,6 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 True,  # causal
                 False,  # speculate_decoder
             )
-            paddle.device.synchronize()
         paddle.device.synchronize()
         end_time = time.time()
         print(f"[append-attn ut]  cost_time:{(end_time - start_time) / RUN_TIME * 1000}ms")
