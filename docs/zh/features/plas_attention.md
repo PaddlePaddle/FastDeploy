@@ -214,7 +214,7 @@ python -m fastdeploy.entrypoints.openai.api_server
     --plas-attention-config '{"plas_encoder_top_k_left": 50, "plas_encoder_top_k_right": 60, "plas_decoder_top_k_left": 100, "plas_decoder_top_k_right": 120}'
 ```
 
-**Note**: 如果启用了稀疏注意力机制，系统将自动从权重目录中的`plas_mlp_weight.safetensors`文件加载 MLP 权重。如果未找到 MLP 权重文件，则将对关键表示应用均值池化
+**Note**: 如果启用了稀疏注意力机制，系统将自动从权重目录中的`plas_attention_mlp_weight.safetensors`文件加载 MLP 权重。如果未找到 MLP 权重文件，则将对关键表示应用均值池化
 
 **Parameter Description:**
 
