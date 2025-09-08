@@ -2,11 +2,13 @@ site_name: 'FastDeploy : Large Language Model Deployement'
 repo_url: https://github.com/PaddlePaddle/FastDeploy
 repo_name: FastDeploy
 
+copyright: Copyright &copy; 2025 Maintained by FastDeploy
+
 theme:
   name: material
   highlightjs: true
-  icon:
-    repo: fontawesome/brands/github
+  favicon: assets/images/favicon.ico
+  logo: assets/images/logo.jpg
   palette:
     - media: "(prefers-color-scheme: light)" # 浅色
       scheme: default
@@ -50,10 +52,12 @@ plugins:
             HYGON DCU: 海光 DCU
             Enflame S60: 燧原 S60
             Iluvatar CoreX: 天数 CoreX
+            Metax C550: 沐曦 C550
             Quick Deployment For ERNIE-4.5-0.3B: ERNIE-4.5-0.3B快速部署
             Quick Deployment for ERNIE-4.5-VL-28B-A3B: ERNIE-4.5-VL-28B-A3B快速部署
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B快速部署
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B快速部署
+            Quick Deployment For QWEN: Qwen3-0.6b快速部署
             Online Serving: 在线服务
             OpenAI-Compitable API Server: 兼容 OpenAI 协议的服务化部署
             Monitor Metrics: 监控Metrics
@@ -85,6 +89,7 @@ plugins:
             MultiNode Deployment: 多机部署
             Graph Optimization: 图优化
             Data Parallelism: 数据并行
+            PLAS: PLAS
             Supported Models: 支持模型列表
             Benchmark: 基准测试
             Usage: 用法
@@ -93,24 +98,26 @@ plugins:
             Environment Variables: 环境变量
 
 nav:
-  - 'FastDeploy': index.md
-  - 'Quick Start':
+  - FastDeploy: index.md
+  - Quick Start:
       - Installation:
-          - 'Nvidia GPU': get_started/installation/nvidia_gpu.md
-          - 'KunlunXin XPU': get_started/installation/kunlunxin_xpu.md
-          - 'HYGON DCU': get_started/installation/hygon_dcu.md
-          - 'Enflame S60': get_started/installation/Enflame_gcu.md
-          - 'Iluvatar CoreX': get_started/installation/iluvatar_gpu.md
-      - 'Quick Deployment For ERNIE-4.5-0.3B': get_started/quick_start.md
-      - 'Quick Deployment for ERNIE-4.5-VL-28B-A3B': get_started/quick_start_vl.md
-      - 'ERNIE-4.5-300B-A47B': get_started/ernie-4.5.md
-      - 'ERNIE-4.5-VL-424B-A47B': get_started/ernie-4.5-vl.md
-  - 'Online Serving':
-      - 'OpenAI-Compitable API Server': online_serving/README.md
-      - 'Monitor Metrics': online_serving/metrics.md
-      - 'Scheduler': online_serving/scheduler.md
-      - 'Graceful Shutdown': online_serving/graceful_shutdown_service.md
-  - 'Offline Inference': offline_inference.md
+          - Nvidia GPU: get_started/installation/nvidia_gpu.md
+          - KunlunXin XPU: get_started/installation/kunlunxin_xpu.md
+          - HYGON DCU: get_started/installation/hygon_dcu.md
+          - Enflame S60: get_started/installation/Enflame_gcu.md
+          - Iluvatar CoreX: get_started/installation/iluvatar_gpu.md
+          - Metax C550: get_started/installation/metax_gpu.md
+      - Quick Deployment For ERNIE-4.5-0.3B: get_started/quick_start.md
+      - Quick Deployment for ERNIE-4.5-VL-28B-A3B: get_started/quick_start_vl.md
+      - ERNIE-4.5-300B-A47B: get_started/ernie-4.5.md
+      - ERNIE-4.5-VL-424B-A47B: get_started/ernie-4.5-vl.md
+      - Quick Deployment For QWEN: get_started/quick_start_qwen.md
+  - Online Serving:
+      - OpenAI-Compitable API Server: online_serving/README.md
+      - Monitor Metrics: online_serving/metrics.md
+      - Scheduler: online_serving/scheduler.md
+      - Graceful Shutdown: online_serving/graceful_shutdown_service.md
+  - Offline Inference: offline_inference.md
   - Best Practices:
       - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md
       - ERNIE-4.5-21B-A3B: best_practices/ERNIE-4.5-21B-A3B-Paddle.md
@@ -119,27 +126,27 @@ nav:
       - ERNIE-4.5-VL-424B-A47B: best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md
       - FAQ: best_practices/FAQ.md
   - Quantization:
-      - 'Overview': quantization/README.md
-      - 'Online Quantization': quantization/online_quantization.md
-      - 'WINT2 Quantization': quantization/wint2.md
+      - Overview: quantization/README.md
+      - Online Quantization: quantization/online_quantization.md
+      - WINT2 Quantization: quantization/wint2.md
   - Features:
-      - 'Prefix Caching': features/prefix_caching.md
-      - 'Disaggregation': features/disaggregated.md
-      - 'Chunked Prefill': features/chunked_prefill.md
-      - 'Load Balance': features/load_balance.md
-      - 'Speculative Decoding': features/speculative_decoding.md
-      - 'Structured Outputs': features/structured_outputs.md
-      - 'Reasoning Output': features/reasoning_output.md
-      - 'Early Stop': features/early_stop.md
-      - 'Plugins': features/plugins.md
-      - 'Sampling': features/sampling.md
-      - 'MultiNode Deployment': features/multi-node_deployment.md
-      - 'Graph Optimization': features/graph_optimization.md
-      - 'Data Parallelism': features/data_parallel_service.md
-  - 'Supported Models': supported_models.md
+      - Prefix Caching: features/prefix_caching.md
+      - Disaggregation: features/disaggregated.md
+      - Chunked Prefill: features/chunked_prefill.md
+      - Load Balance: features/load_balance.md
+      - Speculative Decoding: features/speculative_decoding.md
+      - Structured Outputs: features/structured_outputs.md
+      - Reasoning Output: features/reasoning_output.md
+      - Early Stop: features/early_stop.md
+      - Plugins: features/plugins.md
+      - Sampling: features/sampling.md
+      - MultiNode Deployment: features/multi-node_deployment.md
+      - Graph Optimization: features/graph_optimization.md
+      - Data Parallelism: features/data_parallel_service.md
+      - PLAS: features/plas_attention.md
+  - Supported Models: supported_models.md
   - Benchmark: benchmark.md
   - Usage:
-      - 'Log Description': usage/log.md
-      - 'Code Overview': usage/code_overview.md
-      - 'Environment Variables': usage/environment_variables.md
-      - 'FastDeploy Unit Test Guide': usage/fastdeploy_unit_test_guide.md
+      - Log Description: usage/log.md
+      - Code Overview: usage/code_overview.md
+      - Environment Variables: usage/environment_variables.md
