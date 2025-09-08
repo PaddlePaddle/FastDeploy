@@ -11,15 +11,39 @@
 
 ## 支持模型
 
-| Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
+| Model | Data Type |[PD Disaggregation](./features/disaggregated.md) | [Chunked Prefill](./features/chunked_prefill.md) | [Prefix Caching](./features/prefix_caching.md) |  [MTP](./features/speculative_decoding.md) | [CUDA Graph](./features/graph_optimization.md) | Maximum Context Length |
 |:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
-|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| WIP |128K |
-|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| WIP | 128K |
-|ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ✅ | ✅|128K |
-|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅|128K |
-|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅| 128K |
+|ERNIE-4.5-300B-A47B|BF16\WINT4\WINT8\W4A8C8\WINT2\FP8|✅|✅|✅|✅|✅|128K|
+|ERNIE-4.5-300B-A47B-Base|BF16/WINT4/WINT8|✅|✅|✅|⛔|✅|128K|
+|ERNIE-4.5-VL-424B-A47B|BF16/WINT4/WINT8|🚧|✅|🚧|⛔|🚧|128K|
+|ERNIE-4.5-VL-28B-A3B|BF16/WINT4/WINT8|⛔|✅|🚧|⛔|🚧|128K|
+|ERNIE-4.5-21B-A3B|BF16/WINT4/WINT8/FP8|⛔|✅|✅|✅|✅|128K|
+|ERNIE-4.5-21B-A3B-Base|BF16/WINT4/WINT8/FP8|⛔|✅|✅|⛔|✅|128K|
+|ERNIE-4.5-0.3B|BF16/WINT8/FP8|⛔|✅|✅|⛔|✅|128K|
+|QWEN3-MOE|BF16/WINT4/WINT8/FP8|⛔|✅|✅|🚧|✅|128K|
+|QWEN3|BF16/WINT8/FP8|⛔|✅|✅|🚧|✅|128K|
+|QWEN-VL|BF16/WINT8/FP8|⛔|✅|✅|🚧|⛔|128K|
+|QWEN2|BF16/WINT8/FP8|⛔|✅|✅|🚧|✅|128K|
+|DEEPSEEK-V3|BF16/WINT4|⛔|✅|✅|🚧|✅|128K|
+|DEEPSEEK-R1|BF16/WINT4|⛔|✅|✅|🚧|✅|128K|
+
+```
+✅ 已支持 🚧 适配中 ⛔ 暂无计划
+```
+
+## 支持硬件
+
+| 模型 | [英伟达GPU](./get_started/installation/nvidia_gpu.md) |[昆仑芯P800](./get_started/installation/kunlunxin_xpu.md) | 昇腾910B | [海光K100-AI](./get_started/installation/hygon_dcu.md) | [天数天垓150](./get_started/installation/iluvatar_gpu.md) | [沐曦曦云C550](./get_started/installation/metax_gpu.md.md) | [燧原S60/L600](./get_started/installation/Enflame_gcu.md) |
+|:------|---------|------------|----------|-------------|-----------|-------------|-------------|
+| ERNIE4.5-VL-424B-A47B | ✅ | 🚧 | 🚧 | ⛔ | ⛔ | ⛔ | ⛔ |
+| ERNIE4.5-300B-A47B | ✅ | ✅ | 🚧 | ✅ | ✅ | 🚧 | ✅ |
+| ERNIE4.5-VL-28B-A3B | ✅ | 🚧 | 🚧 | ⛔ | 🚧 | ⛔ | ⛔ |
+| ERNIE4.5-21B-A3B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
+| ERNIE4.5-0.3B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
+
+```
+✅ 已支持 🚧 适配中 ⛔ 暂无计划
+```
 
 ## 文档说明
 
