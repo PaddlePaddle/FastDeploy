@@ -378,7 +378,8 @@ class LLMEngine:
             self.get_profile_block_num_signal.clear()
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
-                os.killpg(self.worker_proc.pid, signal.SIGTERM)
+                pgid = os.getpgid(self.worker_proc.pid)
+                os.killpg(pgid, signal.SIGTERM)
             except Exception as e:
                 console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
