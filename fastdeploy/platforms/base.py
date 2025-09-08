@@ -27,6 +27,7 @@ class _Backend(enum.Enum):
     FLASH_ATTN = enum.auto()
     BLOCK_ATTN = enum.auto()
     MOBA_ATTN = enum.auto()
+    DYNAMIC_QUANT_CACHE_ATTN = enum.auto()
 
 
 class Platform:

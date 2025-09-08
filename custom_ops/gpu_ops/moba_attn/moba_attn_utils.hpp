@@ -115,6 +115,13 @@ struct HalfMax<cutlass::half_t> {
 };
 
 template<>
+struct HalfMax<phi::dtype::float16> {
+    inline __device__ __half2 operator()(const __half2 x, const __half2 y) {
+        return HalfMax<cutlass::half_t>()(x, y);
+    }
+};
+
+template<>
 struct HalfMax<cutlass::bfloat16_t> {
     inline __device__ nv_bfloat162 operator()(const nv_bfloat162 x, const nv_bfloat162 y) {
         nv_bfloat162 res;
@@ -123,6 +130,13 @@ struct HalfMax<cutlass::bfloat16_t> {
             "r"(*reinterpret_cast<const uint32_t*>(&x)),
             "r"(*reinterpret_cast<const uint32_t*>(&y)));
         return res;
+    }
+};
+
+template<>
+struct HalfMax<phi::dtype::bfloat16> {
+    inline __device__ nv_bfloat162 operator()(const nv_bfloat162 x, const nv_bfloat162 y) {
+        return HalfMax<cutlass::bfloat16_t>()(x, y);
     }
 };
 
@@ -142,6 +156,13 @@ struct HalfMin<cutlass::half_t> {
 };
 
 template<>
+struct HalfMin<phi::dtype::float16> {
+    inline __device__ __half2 operator()(const __half2 x, const __half2 y) {
+        return HalfMin<cutlass::half_t>()(x, y);
+    }
+};
+
+template<>
 struct HalfMin<cutlass::bfloat16_t> {
     inline __device__ nv_bfloat162 operator()(const nv_bfloat162 x, const nv_bfloat162 y) {
         nv_bfloat162 res;
@@ -150,6 +171,13 @@ struct HalfMin<cutlass::bfloat16_t> {
             "r"(*reinterpret_cast<const uint32_t*>(&x)),
             "r"(*reinterpret_cast<const uint32_t*>(&y)));
         return res;
+    }
+};
+
+template<>
+struct HalfMin<phi::dtype::bfloat16> {
+    inline __device__ nv_bfloat162 operator()(const nv_bfloat162 x, const nv_bfloat162 y) {
+        return HalfMin<cutlass::bfloat16_t>()(x, y);
     }
 };
 
@@ -580,7 +608,7 @@ inline __device__ void apply_rotary_embedding(Vec<T, PackSize>& vec, Vec<float, 
     }
 }
 
-template <bool Is_even_MN=true, typename TiledCopy, typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Engine2, typename Layout2>
+template <bool Is_even_MN=true, bool Clear_OOB_MN=false, typename TiledCopy, typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Engine2, typename Layout2>
 __forceinline__ __device__ void copy(
         TiledCopy tiled_copy, Tensor<Engine0, Layout0> const &S,
         Tensor<Engine1, Layout1> &D,
@@ -598,6 +626,8 @@ __forceinline__ __device__ void copy(
             for (int k = 0; k < size<2>(S); ++k) {
                 cute::copy(tiled_copy, S(_, m, k), D(_, m, k));
             }
+        } else if (Clear_OOB_MN) {
+            cute::clear(D(_, m, _));
         }
     }
 }

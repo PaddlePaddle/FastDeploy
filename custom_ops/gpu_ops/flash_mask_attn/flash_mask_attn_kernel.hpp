@@ -35,6 +35,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     using Element = typename Ktraits::Element;
     using ElementAccum = typename Ktraits::ElementAccum;
+    using output_type = typename Ktraits::output_type;
     using SoftType = ElementAccum;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
@@ -169,7 +170,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             threadIdx.x - NumCopyThreads,
             o_head_stride,
             real_seq,
-            reinterpret_cast<Element*>(data_params.o_ptr) + store_offset);
+            reinterpret_cast<output_type*>(data_params.o_ptr) + store_offset);
     }
 
 }
@@ -184,18 +185,21 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
     using CollectiveMainloop = CollectiveMainloopAttn<Kernel_traits>;
     constexpr int kHeadDim = Kernel_traits::kHeadDim;
 
+    const int total_q = params.max_seq_len_q * params.batch_size;
+    const int total_kv = params.max_seq_len_k * params.batch_size;
+
     typename CollectiveMainloop::Params mainloop_params =
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(params.q_ptr),
-            get_gmem_layout<kHeadDim>(params.max_seq_len_q, params.head_num),
+            get_gmem_layout<kHeadDim>(total_q, params.head_num),
             static_cast<Element const*>(params.k_ptr),
-            get_gmem_layout<kHeadDim>(params.max_seq_len_k, params.kv_head_num),
+            get_gmem_layout<kHeadDim>(total_kv, params.kv_head_num),
             static_cast<Element const*>(params.v_ptr),
-            get_gmem_layout<kHeadDim>(params.max_seq_len_k, params.kv_head_num),
+            get_gmem_layout<kHeadDim>(total_kv, params.kv_head_num),
             params.scale_softmax_log2
         });
 
-    int num_blocks_m = cutlass::ceil_div(params.max_seq_len_q, Kernel_traits::kBlockM);
+    int num_blocks_m = cutlass::ceil_div(total_q, Kernel_traits::kBlockM);
 
     num_blocks_m = cutlass::ceil_div(num_blocks_m, size<0>(ClusterShape{})) * size<0>(ClusterShape{});
 
@@ -219,13 +223,13 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
     cutlass::launch_kernel_on_cluster(launch_params, kernel, mainloop_params, params);
 }
 
-template <int kBlockM, int kBlockN, bool NeedMask, typename InputType>
+template <int kBlockM, int kBlockN, bool NeedMask, typename InputType, typename OutputType>
 void flash_attn_headdim128(Flash_mask_params &params, cudaStream_t stream) {
 
     constexpr static int Headdim = 128;
     constexpr static int kNWarps = kBlockM / 16 + 4;
     constexpr static int kStages = 2;
 
-    using Ktraits = Flash_mask_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, NeedMask, InputType>;
+    using Ktraits = Flash_mask_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, NeedMask, InputType, OutputType>;
     run_flash_mask<Ktraits>(params, stream);
 }

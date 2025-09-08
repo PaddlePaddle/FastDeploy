@@ -23,6 +23,7 @@ template <typename Ktraits>
 struct CollectiveMainloopAttn {
 
     using Element = typename Ktraits::Element;
+    using output_type = typename Ktraits::output_type;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
 
@@ -399,7 +400,7 @@ struct CollectiveMainloopAttn {
         auto smem_tiled_copy_O = make_tiled_copy_C(SmemCopyAtomO{}, tiled_mma);
         auto smem_thr_copy_O = smem_tiled_copy_O.get_thread_slice(thread_idx);
 
-        Tensor tOrO_out = convert_type<Element>(tOrO);
+        Tensor tOrO_out = convert_type<output_type>(tOrO);
         Tensor taccOrO = smem_thr_copy_O.retile_S(tOrO_out);
         Tensor taccOsO = smem_thr_copy_O.partition_D(sO);
 

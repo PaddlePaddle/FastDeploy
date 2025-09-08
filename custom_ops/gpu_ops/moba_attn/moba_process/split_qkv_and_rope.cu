@@ -112,7 +112,7 @@ __global__ void fused_block_mean_and_rope_kernel(
                 cos.load_from(cos_rope);
                 apply_rotary_embedding<input_type, kPackSize>(src, cos, sin);
 
-                src.store_to(k_input + (cu_seq_k[bidb] + cur_token) * head_num * kHeadDim + bias_idx- head_num * kHeadDim);
+                src.store_to(k_input + (cu_seq_k[bidb] + cur_token) * kv_head_num * kHeadDim + bias_idx- head_num * kHeadDim);
             }
         } else {
             if (bidt_k >= seq_len) {

@@ -67,6 +67,9 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.MOBA_ATTN:
             logger.info("Using MOBA ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.MobaAttentionBackend"
+        elif selected_backend == _Backend.DYNAMIC_QUANT_CACHE_ATTN:
+            logger.info("Using DYNAMIC QUANT CACHE ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.DynamciQuantCacheAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
