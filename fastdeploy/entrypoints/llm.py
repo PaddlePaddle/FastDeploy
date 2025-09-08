@@ -102,7 +102,7 @@ class LLM:
         self.master_node_ip = self.llm_engine.cfg.master_ip
         self._receive_output_thread = threading.Thread(target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
-        self.chat_template = load_chat_template(chat_template)
+        self.chat_template = load_chat_template(chat_template, model)
 
     def _check_master(self):
         """
@@ -112,7 +112,7 @@ class LLM:
 
     def _receive_output(self):
         """
-        Recieve output from token processor and store them in cache
+        Receive output from token processor and store them in cache
         """
         while True:
             try:
@@ -295,6 +295,9 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
+            if current_sampling_params.guided_decoding is not None:
+                guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
+                tasks.update(guided_decoding_dict)
             self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 

@@ -104,14 +104,14 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         x = paddle.randint(32, shape=[1, 8])
         forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
 
-        # Triger Capture
+        # Trigger Capture
         _ = test_model1(x, forward_meta=forward_meta1)
 
-        # Reaplay
+        # Replay
         _ = test_model1(x, forward_meta=forward_meta1)
         output1 = test_model1(x, forward_meta=forward_meta1)
 
-        # Corrent output
+        # Correct output
         output1_correct = test_model1.forward_correct(x, forward_meta=forward_meta1)
 
         assert (output1 == output1_correct).all()

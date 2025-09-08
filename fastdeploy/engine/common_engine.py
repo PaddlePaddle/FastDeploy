@@ -47,12 +47,12 @@ from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
 
-class EngineSevice:
+class EngineService:
     """
     Base class containing common engine functionality
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, start_queue=True):
         """
         Initializes the LLMEngine with the provided configuration.
 
@@ -84,7 +84,7 @@ class EngineSevice:
                 cfg.parallel_config.local_data_parallel_id,
             )
 
-        self.start_worker_queue_service()
+        self.start_worker_queue_service(start_queue)
 
         os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[
             self.cfg.parallel_config.local_data_parallel_id
@@ -181,7 +181,7 @@ class EngineSevice:
             create=True,
         )
 
-    def start_worker_queue_service(self):
+    def start_worker_queue_service(self, start_queue):
         """
         start queue service for engine worker communication
         """
@@ -189,7 +189,8 @@ class EngineSevice:
             self.cfg.master_ip,
             int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
         )
-        if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
+
+        if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             llm_logger.info(f"Starting engine worker queue server service at {address}")
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
@@ -397,7 +398,7 @@ class EngineSevice:
             image_type_ids = paddle.to_tensor(inputs["image_type_ids"], dtype="int32")
             image_mask = input_ids == self.data_processor.image_patch_id
             image_token_sum = paddle.full(shape=[len(input_ids) + 1], fill_value=0, dtype="int32")
-            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"))
+            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"), dtype="int32")
             grid_thw = []
             for one in inputs["grid_thw"]:
                 if one[0] == 1:
@@ -586,7 +587,7 @@ class EngineSevice:
                 else:
                     err, data = self.zmq_server.receive_pyobj_once(block)
                 if err is not None:
-                    llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
+                    llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
@@ -596,6 +597,7 @@ class EngineSevice:
                     try:
                         request = Request.from_dict(data)
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        main_process_metrics.requests_number.inc()
                         llm_logger.debug(f"Receive request: {request}")
                     except Exception as e:
                         llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
@@ -640,13 +642,13 @@ class EngineSevice:
                     self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receving new request from zmq, details={e}, "
+                    f"Error happend while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:

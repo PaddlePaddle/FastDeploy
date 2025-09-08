@@ -63,7 +63,6 @@ class AppendAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    mask_offset: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
@@ -113,7 +112,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
-        self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 32768))
+        self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 
@@ -142,7 +141,6 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.block_tables = forward_meta.block_tables
         metadata.rotary_embs = forward_meta.rotary_embs
         metadata.attn_mask = forward_meta.attn_mask
-        metadata.mask_offset = forward_meta.attn_mask_offsets
         metadata.pre_caches_length = forward_meta.pre_caches_length
         (
             metadata.encoder_batch_ids,
@@ -195,7 +193,7 @@ class AppendAttentionBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             return (
@@ -233,6 +231,17 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
             )
+        cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
+        if cache_quant_type_str == "block_wise_fp8":
+            cache_k = forward_meta.caches[4 * layer.layer_id]
+            cache_v = forward_meta.caches[4 * layer.layer_id + 1]
+            cache_k_scales = forward_meta.caches[4 * layer.layer_id + 2]
+            cache_v_scales = forward_meta.caches[4 * layer.layer_id + 3]
+        else:
+            cache_k = forward_meta.caches[2 * layer.layer_id]
+            cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+            cache_k_scales = getattr(layer, "cache_k_scale", None)
+            cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
@@ -271,8 +280,8 @@ class AppendAttentionBackend(AttentionBackend):
 
             append_attention_with_output(
                 qkv,
-                forward_meta.caches[2 * layer.layer_id],
-                forward_meta.caches[2 * layer.layer_id + 1],
+                cache_k,
+                cache_v,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
@@ -295,15 +304,15 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
-                getattr(layer, "cache_k_scale", None),
-                getattr(layer, "cache_v_scale", None),
+                cache_k_scales,
+                cache_v_scales,
                 getattr(layer, "cache_k_out_scale", None),
                 getattr(layer, "cache_v_out_scale", None),
                 getattr(layer, "cache_k_zp", None),
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
-                metadata.mask_offset,
+                forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
@@ -327,8 +336,8 @@ class AppendAttentionBackend(AttentionBackend):
         else:
             res = append_attention(
                 qkv,
-                forward_meta.caches[2 * layer.layer_id],
-                forward_meta.caches[2 * layer.layer_id + 1],
+                cache_k,
+                cache_v,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
@@ -350,15 +359,15 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
-                getattr(layer, "cache_k_scale", None),
-                getattr(layer, "cache_v_scale", None),
+                cache_k_scales,
+                cache_v_scales,
                 getattr(layer, "cache_k_out_scale", None),
                 getattr(layer, "cache_v_out_scale", None),
                 getattr(layer, "cache_k_zp", None),
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
-                metadata.mask_offset,
+                forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
