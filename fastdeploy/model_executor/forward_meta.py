@@ -81,14 +81,42 @@ class ForwardMeta:
     attn_mask: Optional[paddle.Tensor] = None
     # Attention mask offset
     attn_mask_offsets: Optional[paddle.Tensor] = None
+
+    # A common pattern for launching CUDA kernels is to set the kernel's grids.x dimension
+    # using a `num_blocks` variable, and then map each thread block to a specific batch and
+    # data tile using `batch_ids` and `tile_ids_per_batch`.
+    #
+    # The variable names below follow this pattern, using a common prefix (e.g., `encoder_`, `decoder_`, `kv_`)
+    # for variables that are logically grouped together. The mapping works as follows:
+    #
+    # Usage: `my_kernel<<<grids, ...>>>(..., batch_ids, tile_ids, ...)`
+    #   `grids.x` = `num_blocks_cpu`
+    #   `batch_id` = `batch_ids[blockIdx.x]`
+    #   `tile_id`  = `tile_ids[blockIdx.x]`
+
+    # Maps the thread block index (blockIdx.x) to the corresponding batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
     # Decoder batch id. Used by attention backend.
     decoder_batch_ids: Optional[paddle.Tensor] = None
-    # Tile ID for each batch of the decoder. Used by attention backend.
+    # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
-    # The number of blocks that attention backend can use in decode stage
+    # The number of CUDA blocks to launch in the x-dimension for the multi_query_append_attention_warp1_4_kernel, defining its grids.x.
     decoder_num_blocks_cpu: Optional[paddle.Tensor] = None
-    # Recorded multiple lengths related to prefill or decode
+    # A tensor that holds multiple lengths related to prefill or decode stages.
     max_len_tensor_cpu: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the corresponding batch for the encoder stage in multi_query_append_attention_kernel.
+    encoder_batch_ids: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the encoder stage in multi_query_append_attention_kernel.
+    encoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    # The number of CUDA blocks to launch in the x-dimension for the multi_query_append_attention_kernel, defining its grids.x.
+    encoder_num_blocks_x_cpu: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the corresponding batch for the append_write_cache_kv kernel.
+    kv_batch_ids: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the append_write_cache_kv kernel.
+    kv_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    # The number of CUDA blocks to launch in the x-dimension for the append_write_cache_kv kernel, defining its grids.x.
+    kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
+    # The maximum sequence length of the KV cache, which may represent the current maximum decoder length.
+    max_len_kv_cpu: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None
@@ -133,6 +161,7 @@ class ForwardMeta:
                     "shape": obj.shape,
                     "dtype": str(obj.dtype),
                     "place": str(obj.place),
+                    # "content": obj if obj.numel()<10 else "Too big to show"
                 }
                 return tensor_info
             elif isinstance(obj, (list, tuple)):

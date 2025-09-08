@@ -298,6 +298,76 @@ class ReplicatedLinear(LinearBase):
         )
 
 
+class MergedReplicatedLinear(ReplicatedLinear):
+    """
+    MergedReplicatedLinear linear layer.
+    """
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        prefix: str = "",
+        input_size: int = None,
+        output_sizes: list[int] = None,
+        with_bias: bool = False,
+        add_bias: bool = False,
+        skip_quant: bool = False,
+        weight_dtype: str = "",
+        weight_key: str = "",
+    ):
+        """
+        Initializes a mergedreplicated linear layer.
+        Args:
+            fd_config (FDConfig): Inference-related parameters.
+            prefix (str): Unique name of the layer, used to name internal attributes.
+                Can be arbitrarily named.
+            input_size (int): Number of input features. Defaults to None.
+            output_sizes (list[int]): Number of output features list. Defaults to None.
+            with_bias (bool): Whether to include bias or not. Defaults to False.
+            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
+            skip_quant (bool): Whether to skip quantization. Defaults to False.
+        """
+        super().__init__(
+            fd_config=fd_config,
+            prefix=prefix,
+            input_size=input_size,
+            output_size=sum(output_sizes),
+            with_bias=with_bias,
+            add_bias=add_bias,
+            skip_quant=skip_quant,
+            weight_dtype=weight_dtype,
+            weight_key=weight_key,
+        )
+        self.output_sizes = output_sizes
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        model_format = getattr(param, "model_format", "")
+        loaded_weight = get_tensor(loaded_weight)
+
+        if model_format == "torch":
+            loaded_weight = loaded_weight.transpose([1, 0])
+
+        assert loaded_shard_id in ["q_a", "kv_a"]
+        if not param._is_initialized():
+            param.initialize()
+
+        if loaded_shard_id == "q_a":
+            param_shard_offset = 0
+            param_shard_size = self.output_sizes[0]
+        else:
+            # loaded_shard_id == "kv_a"
+            param_shard_offset = self.output_sizes[0]
+            param_shard_size = self.output_sizes[1]
+
+        if hasattr(param, "tensor_track"):
+            param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        param = slice_fn(param, True, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(loaded_weight, False)
+
+
 class ColumnParallelLinear(LinearBase):
     """
     ColumnParallelLinear Layer.
@@ -415,6 +485,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         model_format = getattr(param, "model_format", "")
         if model_format == "torch":
+            loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
@@ -446,7 +517,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_size)
-
+            loaded_weight = get_tensor(loaded_weight)
             if not param._is_initialized():
                 param.initialize()
             param_shard_size = output_size // 2
@@ -548,6 +619,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         head_dim = param.shape[dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
         model_format = getattr(param, "model_format", "")
         if model_format == "torch":
+            loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         if loaded_shard_id is None:
             # Loaded weight is already fused on disk
@@ -568,11 +640,12 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if self.nranks != 1:
                 block_size = self._get_shard_size_mapping(loaded_shard_id)
-                dim = -1 if output_dim else 0
                 shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
                 shard_offset = shard_id * block_size
                 shard_size = (shard_id + 1) * block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_size)
+
+            loaded_weight = get_tensor(loaded_weight)
 
             if not param._is_initialized():
                 param.initialize()
