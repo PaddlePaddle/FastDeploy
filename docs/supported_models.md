@@ -49,25 +49,4 @@ These models accept multi-modal inputs (e.g., images and text).
 | ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[quick start](./get_started/ernie-4.5-vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[quick start](./get_started/quick_start_vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 
-## Minimum Resource Deployment Instruction
-
-There is no universal formula for minimum deployment resources; it depends on both context length and quantization method. We recommend estimating the required GPU memory using the following formula:
-```
-Required GPU Memory = Number of Parameters × Quantization Byte factor
-```
-> (The factor list is provided below.)
-
-And the final number of GPUs depends on:
-```
-Number of GPUs = Total Memory Requirement ÷ Memory per GPU
-```
-
-| Quantization Method | Bytes per Parameter factor |
-| :---      | :---      |
-|BF16       |2          |
-|FP8        |1          |
-|WINT8      |1          |
-|WINT4      |0.5        |
-|W4A8C8     |0.5        |
-
 More models are being supported. You can submit requests for new model support via [Github Issues](https://github.com/PaddlePaddle/FastDeploy/issues).

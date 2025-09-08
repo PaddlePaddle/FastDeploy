@@ -7,13 +7,12 @@
 - CUDNN >= 9.5
 - Linux X86_64
 - Python >= 3.10
-- 运行模型满足最低硬件配置要求，参考[支持模型列表文档](supported_models.md)
 
 为了快速在各类硬件部署，本文档采用 ```Qwen3-0.6b``` 模型作为示例，可在大部分硬件上完成部署。
 
 安装FastDeploy方式参考[安装文档](./installation/README.md)。
 ## 1. 启动服务
-安装FastDeploy后，在终端执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](parameters.md)
+安装FastDeploy后，在终端执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](../parameters.md)
 
 > ⚠️ **注意:**
 > 当使用HuggingFace 模型(torch格式)时, 需要开启 `--load_choices "default_v1"`
@@ -30,14 +29,14 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --load_choices "default_v1"
 ```
 
->💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```Qwen/Qwen3-0.6B```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](supported_models.md)。
+>💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```Qwen/Qwen3-0.6B```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](../supported_models.md)。
 ```--max-model-len``` 表示当前部署的服务所支持的最长Token数量。
 ```--max-num-seqs``` 表示当前部署的服务所支持的最大并发处理数量。
 
 **相关文档**
 
-- [服务部署配置](online_serving/README.md)
-- [服务监控metrics](online_serving/metrics.md)
+- [服务部署配置](../online_serving/README.md)
+- [服务监控metrics](../online_serving/metrics.md)
 
 ## 2. 用户发起服务请求
 
@@ -92,6 +91,3 @@ for chunk in response:
         print(chunk.choices[0].delta.content, end='')
 print('\n')
 ```
-📌
-⚙️
-✕
