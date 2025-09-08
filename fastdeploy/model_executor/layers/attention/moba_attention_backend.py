@@ -39,7 +39,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 
 
 @dataclass
-class MobaAttentionMetadata(AttentionMetadata):
+class PlasAttentionMetadata(AttentionMetadata):
     """
     AppendAttentionMetadata
     """
@@ -54,7 +54,7 @@ class MobaAttentionMetadata(AttentionMetadata):
     max_dec_len_this_time: int = 0
 
 
-class MobaAttentionBackend(AttentionBackend):
+class PlasAttentionBackend(AttentionBackend):
     """
     The backend class that uses paddle native attention implementation.
     Which is used only for testing purpose.
@@ -70,11 +70,11 @@ class MobaAttentionBackend(AttentionBackend):
         decoder_block_shape_q: int = -1,
     ) -> None:
         """
-        MobaAttentionBackend __init__
+        PlasAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: MobaAttentionMetadata = None
-        assert fd_config.moba_attention_config is not None, "moba_attention_config is None"
+        self.attention_metadata: PlasAttentionMetadata = None
+        assert fd_config.plas_attention_config is not None, "plas_attention_config is None"
         self.block_size = fd_config.parallel_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
         self.max_num_seqs = fd_config.parallel_config.max_num_seqs
@@ -83,18 +83,18 @@ class MobaAttentionBackend(AttentionBackend):
         self.head_dim = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.attn_block_m = 128
-        self.moba_block_size = fd_config.moba_attention_config.moba_block_size
-        self.moba_encoder_top_k_left = int(fd_config.moba_attention_config.moba_encoder_top_k_left)
-        self.moba_encoder_top_k_right = int(fd_config.moba_attention_config.moba_encoder_top_k_right)
-        self.moba_use_encoder_seq_limit = int(fd_config.moba_attention_config.moba_use_encoder_seq_limit)
-        self.moba_decoder_top_k_left = int(fd_config.moba_attention_config.moba_decoder_top_k_left)
-        self.moba_decoder_top_k_right = int(fd_config.moba_attention_config.moba_decoder_top_k_right)
-        self.moba_use_decoder_seq_limit = int(fd_config.moba_attention_config.moba_use_decoder_seq_limit)
-        self.moba_max_seq_length = fd_config.moba_attention_config.moba_max_seq_length
+        self.plas_block_size = fd_config.plas_attention_config.plas_block_size
+        self.plas_encoder_top_k_left = int(fd_config.plas_attention_config.plas_encoder_top_k_left)
+        self.plas_encoder_top_k_right = int(fd_config.plas_attention_config.plas_encoder_top_k_right)
+        self.plas_use_encoder_seq_limit = int(fd_config.plas_attention_config.plas_use_encoder_seq_limit)
+        self.plas_decoder_top_k_left = int(fd_config.plas_attention_config.plas_decoder_top_k_left)
+        self.plas_decoder_top_k_right = int(fd_config.plas_attention_config.plas_decoder_top_k_right)
+        self.plas_use_decoder_seq_limit = int(fd_config.plas_attention_config.plas_use_decoder_seq_limit)
+        self.plas_max_seq_length = fd_config.plas_attention_config.plas_max_seq_length
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Init the metadata for a forward pass."""
-        metadata = MobaAttentionMetadata()
+        metadata = PlasAttentionMetadata()
         metadata._dtype = paddle.get_default_dtype()
         metadata.cu_seq_q_pack, metadata.cu_seqlens_k, metadata.q_pack_tokens = get_cur_cu_seq_len_k(
             forward_meta.seq_lens_encoder,
@@ -116,7 +116,7 @@ class MobaAttentionBackend(AttentionBackend):
             [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], dtype=metadata._dtype
         )
         self.attention_metadata = metadata
-        assert self.max_seq_len <= self.moba_max_seq_length
+        assert self.max_seq_len <= self.plas_max_seq_length
 
     def get_kv_cache_shape(
         self,
@@ -186,13 +186,13 @@ class MobaAttentionBackend(AttentionBackend):
             self.max_seq_len,
             attention_metadata.max_enc_len_this_time,
             attention_metadata.max_dec_len_this_time,
-            self.moba_encoder_top_k_left,
-            self.moba_encoder_top_k_right,
-            self.moba_use_encoder_seq_limit,
-            self.moba_decoder_top_k_left,
-            self.moba_decoder_top_k_right,
-            self.moba_use_decoder_seq_limit,
-            layer.moba_use_mlp,
+            self.plas_encoder_top_k_left,
+            self.plas_encoder_top_k_right,
+            self.plas_use_encoder_seq_limit,
+            self.plas_decoder_top_k_left,
+            self.plas_decoder_top_k_right,
+            self.plas_use_decoder_seq_limit,
+            layer.plas_use_mlp,
             getattr(layer, "cache_quant_type_str", "none"),
         )[0]
         return out

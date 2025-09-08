@@ -200,7 +200,7 @@
 ## 使用方式
 
 ```
-export FD_ATTENTION_BACKEND="MOBA_ATTN"
+export FD_ATTENTION_BACKEND="PLAS_ATTN"
 
 python -m fastdeploy.entrypoints.openai.api_server
     --model baidu/ERNIE-4.5-300B-A47B-Paddle  \
@@ -211,13 +211,13 @@ python -m fastdeploy.entrypoints.openai.api_server
     --max-num-batched-tokens 8192 \
     --max-model-len 131072 \
     --max-num-seqs 32 \
-    --moba-attention-config '{"moba_encoder_top_k_left": 50, "moba_encoder_top_k_right": 60, "moba_decoder_top_k_left": 100, "moba_decoder_top_k_right": 120}'
+    --plas-attention-config '{"plas_encoder_top_k_left": 50, "plas_encoder_top_k_right": 60, "plas_decoder_top_k_left": 100, "plas_decoder_top_k_right": 120}'
 ```
 
-**Note**: 如果启用了稀疏注意力机制，系统将自动从权重目录中的`moba_mlp_weight.safetensors`文件加载 MLP 权重。如果未找到 MLP 权重文件，则将对关键表示应用均值池化
+**Note**: 如果启用了稀疏注意力机制，系统将自动从权重目录中的`plas_mlp_weight.safetensors`文件加载 MLP 权重。如果未找到 MLP 权重文件，则将对关键表示应用均值池化
 
 **Parameter Description:**
 
-* `FD_ATTENTION_BACKEND="MOBA_ATTN"` 启用 MOBA sparse attention.
-* `moba_encoder_top_k_left=50, moba_encoder_top_k_right=60` 表示当encoder时，top-k的范围在50到60之间。
-* `moba_decoder_top_k_left=100, moba_decoder_top_k_right=120` 表示当decoder时，top-k的范围在100到120之间。
+* `FD_ATTENTION_BACKEND="PLAS_ATTN"` 启用 PLAS sparse attention.
+* `plas_encoder_top_k_left=50, plas_encoder_top_k_right=60` 表示当encoder时，top-k的范围在50到60之间。
+* `plas_decoder_top_k_left=100, plas_decoder_top_k_right=120` 表示当decoder时，top-k的范围在100到120之间。
