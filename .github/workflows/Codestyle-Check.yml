@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - 'release/*'
+      - 'feature/*'
 
 jobs:
   pre-commit:
