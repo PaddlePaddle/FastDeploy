@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fastdeploy.config import ErnieArchitectures, FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.reasoning import ReasoningParserManager
 from fastdeploy.utils import llm_logger
 
 
@@ -35,8 +36,9 @@ class LogitsProcessorBase:
         None (all state should be managed by subclasses)
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, enable_reasoning):
+        self.reasoning_ended = False
+        self.enable_reasoning = enable_reasoning
 
     def fill_token_bitmask(self, token_bitmask, idx):
         """
@@ -137,8 +139,14 @@ class BackendBase:
         self.fd_config = fd_config
         self.executor = ThreadPoolExecutor()
         self.max_cache_size = 2048
+        self.reasoning_parser = None
 
         self.hf_tokenizer = self._get_tokenizer_hf()
+        if self.fd_config.model_config.reasoning_parser:
+            reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(
+                self.fd_config.model_config.reasoning_parser
+            )
+            self.reasoning_parser = reasoning_parser_obj(self.hf_tokenizer)
 
     def _create_processor(self):
         """
@@ -149,70 +157,88 @@ class BackendBase:
         """
         raise NotImplementedError
 
-    def _json_processor(self, schemata):
+    def _json_processor(self, schemata, enable_thinking=False):
         """
         Process JSON schemata.
 
         Args:
             schemata (str): The schemata string.
+            enable_thinking (bool): Whether to enable thinking mode.
 
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
         raise NotImplementedError
 
-    def _regex_processor(self, schemata):
+    def _regex_processor(self, schemata, enable_thinking=False):
         """
         Process regular expression schemata.
 
         Args:
             schemata (str): The schemata string.
+            enable_thinking (bool): Whether to enable thinking mode.
 
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
         raise NotImplementedError
 
-    def _grammar_processor(self, schemata):
+    def _grammar_processor(self, schemata, enable_thinking=False):
         """
         Process grammar schemata.
 
         Args:
             schemata (str): The schemata string.
+            enable_thinking (bool): Whether to enable thinking mode.
 
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
         raise NotImplementedError
 
-    def _structural_tag_processor(self, schemata):
+    def _structural_tag_processor(self, schemata, enable_thinking=False):
         """
         Process structural tag schemata.
 
         Args:
             schemata (str): The schemata string.
+            enable_thinking (bool): Whether to enable thinking mode.
 
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
         raise NotImplementedError
 
-    def _unsupported_processor_type(self, key_type, schemata):
+    def _unsupported_processor_type(self, key_type, schemata, enable_thinking=False):
         """
         Process unsupported type.
 
         Args:
             key_type (str): The key type string.
             schemata (str): The schemata string.
+            enable_thinking (bool): Whether to enable thinking mode.
         """
         raise Exception(f"Unsupported processor type {key_type}.")
 
-    def _init_logits_processor(self, schemata_key: tuple[str, str]) -> LogitsProcessorBase:
+    def get_reasoning_parser(self):
+        """
+        Get reasoning parser object.
+        Returns:
+            ReasoningParser: Reasoning parser object or None
+        """
+        return self.reasoning_parser
+
+    def _init_logits_processor(
+        self,
+        schemata_key: tuple[str, str],
+        enable_thinking: bool = False,
+    ) -> LogitsProcessorBase:
         """
         init logits processor by type and schemata.
 
         Args:
             schemata_key (tuple[str, str]): Tuple containing processor type and schema string
+            enable_thinking (bool): Whether to enable thinking step
 
         Returns:
             LogitsProcessorBase: Initialized logits processor instance
@@ -222,18 +248,22 @@ class BackendBase:
         """
         key_type, schemata = schemata_key
         if key_type == "json":
-            return self._json_processor(schemata)
+            return self._json_processor(schemata, enable_thinking)
         elif key_type == "regex":
-            return self._regex_processor(schemata)
+            return self._regex_processor(schemata, enable_thinking)
         elif key_type == "grammar":
-            return self._grammar_processor(schemata)
+            return self._grammar_processor(schemata, enable_thinking)
         elif key_type == "structural_tag":
-            return self._structural_tag_processor(schemata)
+            return self._structural_tag_processor(schemata, enable_thinking)
         else:
             llm_logger.error(f"Unsupported processor type {key_type}.")
             return None
 
-    def get_logits_processor(self, schemata_key: tuple[str, str]) -> tuple[LogitsProcessorBase, bool]:
+    def get_logits_processor(
+        self,
+        schemata_key: tuple[str, str],
+        enable_thinking: bool = False,
+    ) -> tuple[LogitsProcessorBase, bool]:
         """
         get logits processor by key from cache or create new one.
 
@@ -247,8 +277,10 @@ class BackendBase:
         """
         value = self.cache.get(schemata_key, None)
         if value:
-            return value.copy(), True
-        value = self.executor.submit(self._init_logits_processor, schemata_key)
+            value_copy = value.copy()
+            value_copy.enable_reasoning = enable_thinking
+            return value_copy, True
+        value = self.executor.submit(self._init_logits_processor, schemata_key, enable_thinking)
         return value, False
 
     def _get_tokenizer_hf(self):
@@ -267,7 +299,6 @@ class BackendBase:
         try:
             architectures = self.fd_config.model_config.architectures
             if not ErnieArchitectures.contains_ernie_arch(architectures):
-
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
                 tokenizer = AutoTokenizer.from_pretrained(

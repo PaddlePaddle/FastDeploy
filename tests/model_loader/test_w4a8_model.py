@@ -23,11 +23,12 @@ from fastdeploy.entrypoints.llm import LLM
 
 bash_path = os.getenv("MODEL_PATH")
 FD_ENGINE_QUEUE_PORTS = [
-    [9961, 9962, 9963, 9964, 9965, 9966, 9967, 9968],
-    [9971, 9972, 9973, 9974, 9975, 9976, 9977, 9978],
-    [9981, 9982, 9983, 9984, 9985, 9986, 9987, 9988],
-    [9991, 9992, 9993, 9994, 9995, 9996, 9997, 9998],
+    [9961, 9962],
+    [9971, 9972],
+    [9981, 9982],
+    [9991, 9992],
 ]
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 
 models = [
@@ -49,16 +50,17 @@ def llm(request):
         llm_instance = LLM(
             model=model_path,
             tensor_parallel_size=1,
-            data_parallel_size=8,
+            data_parallel_size=2,
             max_model_len=8192,
             num_gpu_blocks_override=1024,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORTS[port_index],
+            cache_queue_port=FD_CACHE_QUEUE_PORT,
             load_choices="default",
             enable_expert_parallel=True,
         )
         yield weakref.proxy(llm_instance)
     except Exception as e:
-        pytest.skip(f"LLM initialization failed: {e}")
+        assert False, f"LLM initialization failed: {e}"
 
 
 @pytest.mark.timeout(60)

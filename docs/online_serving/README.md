@@ -192,9 +192,6 @@ return_token_ids: Optional[bool] = None
 prompt_token_ids: Optional[List[int]] = None
 # Directly passes the token ID list of the prompt, skipping the text encoding step (default None means using text input).
 
-max_streaming_response_tokens: Optional[int] = None
-# Maximum number of tokens returned at a time during streaming output (default None means no limit).
-
 disable_chat_template: Optional[bool] = False
 # Whether to disable chat template rendering, using raw input directly (default False means template is enabled).
 
@@ -369,9 +366,6 @@ return_token_ids: Optional[bool] = None
 
 prompt_token_ids: Optional[List[int]] = None
 # Directly passes the token ID list of the prompt, skipping the text encoding step (default None means using text input).
-
-max_streaming_response_tokens: Optional[int] = None
-# Maximum number of tokens returned at a time during streaming output (default None means no limit).
 ```
 
 ### Overview of Return Parameters

@@ -57,8 +57,9 @@ FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**,
 - [Iluvatar GPU](./docs/get_started/installation/iluvatar_gpu.md)
 - [Enflame GCU](./docs/get_started/installation/Enflame_gcu.md)
 - [Hygon DCU](./docs/get_started/installation/hygon_dcu.md)
+- [MetaX GPU](./docs/get_started/installation/metax_gpu.md.md)
 
-**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU and MetaX GPU are currently under development and testing. Stay tuned for updates!
+**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU are currently under development and testing. Stay tuned for updates!
 
 ## Get Started
 
@@ -68,20 +69,12 @@ Learn how to use FastDeploy through our documentation:
 - [ERNIE-4.5-VL Multimodal Model Deployment](./docs/get_started/ernie-4.5-vl.md)
 - [Offline Inference Development](./docs/offline_inference.md)
 - [Online Service Deployment](./docs/online_serving/README.md)
-- [Full Supported Models List](./docs/supported_models.md)
 - [Best Practices](./docs/best_practices/README.md)
 
 ## Supported Models
 
-| Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
-|:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
-|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| ✅ |128K |
-|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| ✅ | 128K |
-|ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ✅ | ✅|128K |
-|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌  | ✅|128K |
-|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌ | ✅| 128K |
+Learn how to download models, enable support for Torch weights, and calculate minimum resource requirements, and more:
+- [Full Supported Models List](./docs/supported_models.md)
 
 ## Advanced Usage
 

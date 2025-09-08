@@ -17,5 +17,11 @@
 from .input_processor import load_input_processor_plugins
 from .model_register import load_model_register_plugins
 from .model_runner import load_model_runner_plugins
+from .reasoning_parser import load_reasoning_parser_plugins
 
-__all__ = ["load_model_register_plugins", "load_model_runner_plugins", "load_input_processor_plugins"]
+__all__ = [
+    "load_model_register_plugins",
+    "load_model_runner_plugins",
+    "load_input_processor_plugins",
+    "load_reasoning_parser_plugins",
+]

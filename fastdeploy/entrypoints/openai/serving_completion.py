@@ -51,12 +51,6 @@ class OpenAIServingCompletion:
         else:
             self.master_ip = "0.0.0.0"
 
-    async def _ensure_connection_manager(self):
-        """ensure connection manager initialized"""
-        if not self.engine_client.connection_initialized:
-            await self.engine_client.connection_manager.initialize()
-            self.engine_client.connection_initialized = True
-
     def _check_master(self):
         return self.engine_client.is_master
 
@@ -73,7 +67,7 @@ class OpenAIServingCompletion:
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
-                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
                 return ErrorResponse(message=err_msg, code=400)
         created_time = int(time.time())
@@ -146,7 +140,7 @@ class OpenAIServingCompletion:
                     request_id_idx = f"{request_id}-{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)  # tokenize
+                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
@@ -208,7 +202,6 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
@@ -314,7 +307,6 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
@@ -331,6 +323,7 @@ class OpenAIServingCompletion:
                 if request.max_streaming_response_tokens is not None
                 else (request.suffix or {}).get("max_streaming_response_tokens", 1)
             )  # dierctly passed & passed in suffix
+            max_streaming_response_tokens = max(1, max_streaming_response_tokens)
             choices = []
             chunk = CompletionStreamResponse(
                 id=request_id,
@@ -417,7 +410,9 @@ class OpenAIServingCompletion:
                             continue
                         delta_message.text = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        delta_message.tool_calls = delta_message_output.tool_calls
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called[idx] = True
 
                     choices.append(delta_message)
 
@@ -461,10 +456,6 @@ class OpenAIServingCompletion:
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
 
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")

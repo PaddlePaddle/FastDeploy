@@ -4,7 +4,7 @@
 namespace xpu3 {
 namespace plugin {
 #define MAX_LM_SIZE 28672
-// One core has 32KB LM（gropu LM), MAX_LM_SIZE = (32 - 4)KB / 2 = 30720, 4KB is
+// One core has 32KB LM（group LM), MAX_LM_SIZE = (32 - 4)KB / 2 = 30720, 4KB is
 // the stack space
 #define MAX_BATCH 512
 #define ALIGNMENT 64

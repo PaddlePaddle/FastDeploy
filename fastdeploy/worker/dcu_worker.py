@@ -143,4 +143,4 @@ class DcuWorker(GpuWorker):
             )
         )
 
-        return available_kv_cache_memory  # return to caculate the block num in this device
+        return available_kv_cache_memory  # return to calculate the block num in this device

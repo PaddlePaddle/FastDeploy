@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import inspect
 import os
 import time
 import traceback
@@ -112,7 +113,7 @@ class EngineClient:
         self.zmq_client = ZmqClient(model, mode)
         self.zmq_client.connect()
 
-    def format_and_add_data(self, prompts: dict):
+    async def format_and_add_data(self, prompts: dict):
         """
         Format the request data and send the request to the server.
         """
@@ -123,10 +124,10 @@ class EngineClient:
         if "max_tokens" not in prompts:
             prompts["max_tokens"] = self.max_model_len - 1
 
-        self.add_requests(prompts)
+        await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
-    def add_requests(self, task):
+    async def add_requests(self, task):
         """
         Add a new request to the queue.
 
@@ -140,7 +141,10 @@ class EngineClient:
 
         task["preprocess_start_time"] = time.time()
         try:
-            self.data_processor.process_request_dict(task, self.max_model_len)
+            if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
+                await self.data_processor.process_request_dict(task, self.max_model_len)
+            else:
+                self.data_processor.process_request_dict(task, self.max_model_len)
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]

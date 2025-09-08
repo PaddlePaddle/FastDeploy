@@ -114,7 +114,7 @@ class BlockAttentionBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             return (
