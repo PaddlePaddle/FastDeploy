@@ -61,7 +61,7 @@ An example is a set of configurations that can run stably while also delivering 
 
 #### 2.2.2 Chunked Prefill
 - **Parameters：** `--enable-chunked-prefill`
-- **Description：** Enabling `chunked prefill` can reduce peak GPU memory usage and improve service throughput. It is **enabled by default**.
+- **Description：** Enabling `chunked prefill` can reduce peak GPU memory usage and improve service throughput. Version 2.2 has **enabled by default**; for versions prior to 2.2, you need to enable it manually—refer to the best practices documentation for 2.1.
 - **Relevant configurations**:
 
     `--max-num-batched-tokens`：Limit the maximum number of tokens per chunk, with a recommended setting of 384.

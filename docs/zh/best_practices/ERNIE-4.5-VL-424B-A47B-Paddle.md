@@ -61,7 +61,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 #### 2.2.2 Chunked Prefill
 - **参数：** `--enable-chunked-prefill`
-- **用处：** 开启 `chunked prefill` 可降低显存峰值并提升服务吞吐。已经**默认开启**。
+- **用处：** 开启 `chunked prefill` 可降低显存峰值并提升服务吞吐。2.2版本已经**默认开启**，2.2之前需要手动开启，参考2.1的最佳实践文档。
 
 - **相关配置**:
 
