@@ -341,7 +341,7 @@ void GetBlockShapeAndSplitKVBlock(
 
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
           decoder_num_blocks_x_cpu.data<int>(), 0, sizeof(int32_t), stream));
-      
+
       auto decoder_num_blocks_x = GetEmptyTensor(
           {1}, paddle::DataType::INT32, seq_lens_encoder.place());
 

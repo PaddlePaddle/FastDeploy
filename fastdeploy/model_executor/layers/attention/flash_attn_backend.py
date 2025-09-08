@@ -197,7 +197,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_this_time,
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
-            forward_meta.decoder_num_blocks_cpu,,
+            forward_meta.decoder_num_blocks_cpu,
             forward_meta.max_len_tensor_cpu,
             forward_meta.decoder_chunk_size_device,
             forward_meta.encoder_batch_ids,
