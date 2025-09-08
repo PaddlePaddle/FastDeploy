@@ -255,7 +255,8 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
     const std::string& quant_method, const bool used_in_ep_low_latency,
-    const int estimate_total_token_nums);
+    const int estimate_total_token_nums,
+    const int hadamard_block_size);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
@@ -298,7 +299,7 @@ paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const int device_id,
 paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
                                        const int layer_id);
 
-std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
+void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
@@ -307,6 +308,13 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_num_blocks,         // Inplace
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
     paddle::Tensor &decoder_chunk_size_device,  // Inplace
+    paddle::Tensor &encoder_batch_ids,          // Inplace
+    paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &kv_batch_ids,               // Inplace
+    paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
+    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
+    paddle::Tensor &max_len_kv_cpu,             // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
