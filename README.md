@@ -73,7 +73,7 @@ Learn how to use FastDeploy through our documentation:
 
 ## Supported Models
 
-Learn how to download models, enable support for Torch weights, and calculate minimum resource requirements, and more:
+Learn how to download models, enable using the torch format, and more:
 - [Full Supported Models List](./docs/supported_models.md)
 
 ## Advanced Usage
