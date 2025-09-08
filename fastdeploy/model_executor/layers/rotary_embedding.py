@@ -87,34 +87,14 @@ class GlmRotaryEmbedding:
         bsz, max_seq_len = position_ids.shape[:2]
         inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
-        if paddle.is_compiled_with_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
-            # shape: [B, S, D]
-            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
-            emb = paddle.stack([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
-        elif current_platform.is_gcu():
-            # shape: [B, S, D]
-            rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
-            return rot_emb
-        elif paddle.is_compiled_with_custom_device("metax_gpu"):
-            # shape: [B, S, D]
-            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
-            emb = paddle.stack([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
-        else:
-            # shape: [B, S, D/2]
-            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
-            emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
+        # shape: [B, S, D/2]
+        rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
+        emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
         # shape: [B, S, 1, D]
         emb = paddle.unsqueeze(emb, 2)
         rot_emb[0] = paddle.cos(emb)
         rot_emb[1] = paddle.sin(emb)
-        if paddle.is_compiled_with_custom_device("npu"):
-            return (
-                paddle.concat([rot_emb, rot_emb], axis=3)
-                .transpose([0, 1, 2, 4, 3])
-                .reshape([2, bsz, max_seq_len, 1, self.rotary_dim])
-            )
-        else:
-            return rot_emb
+        return rot_emb
 
 
 class QwenRotaryEmbedding:

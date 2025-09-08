@@ -81,11 +81,6 @@ class Glm4MoeMLP(nn.Layer):
             act_method=fd_config.model_config.hidden_act,
         )
 
-    def load_state_dict(self, state_dict):
-        """ """
-        self.up_gate_proj.load_state_dict(state_dict)
-        self.down_proj.load_state_dict(state_dict)
-
     def forward(self, x):
         """ """
         gate_up_out = self.up_gate_proj(x)
@@ -159,42 +154,14 @@ class Glm4Moe(nn.Layer):
             reduce_results=False,
         )
 
-    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
-        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
-        # AllGather will hang when the data shapes on multi-ranks are different!
-        part_hidden_states = paddle.zeros(
-            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
-        )
-        start_offset = self.tensor_parallel_rank * token_num_per_rank
-        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
-        if end_offset > token_num:
-            end_offset = token_num
-        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
-        out = self.experts(part_hidden_states, self.gate)
-        multi_outs = []
-        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
-        out = paddle.concat(multi_outs, axis=0)
-        out = out[:token_num, :]
-        return out
-
     def forward(self, x):
-        token_num = x.shape[0]
         shared_experts_out = self.shared_experts(x)
-        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
-            out = self.split_allgather_out(x, token_num)
-        else:
-            out = self.experts(x, self.gate)
+        out = self.experts(x, self.gate)
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tensor_parallel_size > 1:
             tensor_model_parallel_all_reduce(out)
         return out
-
-    def load_state_dict(self, state_dict):
-        """ """
-        self.gate.load_state_dict(state_dict)
-        self.experts.load_state_dict(state_dict)
-        self.shared_experts.load_state_dict(state_dict)
 
 
 class Glm4MoeAttention(nn.Layer):
@@ -244,15 +211,6 @@ class Glm4MoeAttention(nn.Layer):
                 prefix=f"{prefix}.k_norm",
                 begin_norm_axis=2,
             )
-
-    def load_state_dict(self, state_dict):
-        """ """
-        self.qkv_proj.load_state_dict(state_dict)
-        self.o_proj.load_state_dict(state_dict)
-        if self.use_qk_norm:
-            self.q_norm.load_state_dict(state_dict)
-            self.k_norm.load_state_dict(state_dict)
-        self.attn.load_state_dict(state_dict)
 
     def forward(
         self,
@@ -318,13 +276,6 @@ class Glm4MoeDecoderLayer(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
-
-    def load_state_dict(self, state_dict):
-        """ """
-        self.self_attn.load_state_dict(state_dict)
-        self.mlp.load_state_dict(state_dict)
-        self.input_layernorm.load_state_dict(state_dict)
-        self.post_attention_layernorm.load_state_dict(state_dict)
 
     def forward(
         self,
@@ -395,21 +346,6 @@ class Glm4MoeModel(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
-
-    def load_state_dict(self, state_dict):
-        """
-        Load model parameters from a given state dictionary.
-
-        Args:
-            state_dict (dict[str, np.ndarray | paddle.Tensor]):
-                A dictionary containing model parameters, where keys are parameter names
-                and values are NumPy arrays or PaddlePaddle tensors.
-        """
-        self.embed_tokens.load_state_dict(state_dict)
-        self.norm.load_state_dict(state_dict)
-        for i in range(self.num_layers):
-            logger.info(f"Start load layer {i}")
-            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -533,15 +469,9 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
         """
-        Load model parameters from a given state dictionary.
-
-        Args:
-            state_dict (dict[str, np.ndarray | paddle.Tensor]):
-                A dictionary containing model parameters, where keys are parameter names
-                and values are NumPy arrays or PaddlePaddle tensors.
+        glm4_moe only support loader_v1.
         """
-        self.model.load_state_dict(state_dict)
-        self.lm_head.load_state_dict(state_dict)
+        assert False, "glm4_moe only support --load_choices default_v1."
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
