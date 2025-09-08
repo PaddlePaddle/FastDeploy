@@ -1053,7 +1053,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
 
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        if self.quant_config.is_checkpoint_bf16:
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
@@ -1138,7 +1138,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not layer.fd_config.load_config.load_choices == "default_v1":
+        if not self.quant_config.is_checkpoint_bf16:
             return
         weight_id_map = {"gate_up": 0, "down": 1}
         if (

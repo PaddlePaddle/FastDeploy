@@ -1232,6 +1232,411 @@ __global__ void append_write_cache_kv_c8_qkv(
   }
 }
 
+template <typename T,
+          uint32_t num_frags_y,
+          uint32_t num_frags_z,
+          uint32_t HEAD_DIM,
+          uint32_t BLOCK_SIZE,
+          uint32_t NUM_WARPS,
+          bool is_need_kv_quant,
+          bool IsFP8 = true>
+__global__ void append_write_cache_kv_c8_qkv_dynamic(
+    uint8_t *__restrict__ cache_k,
+    uint8_t *__restrict__ cache_v,
+    const T *__restrict__ qkv_input,
+    T *__restrict__ cache_k_scales, // [block_num, num_heads, block_size]
+    T *__restrict__ cache_v_scales, // [block_num, num_heads, block_size]
+    const int *__restrict__ batch_ids,
+    const int *__restrict__ tile_ids,
+    const int *__restrict__ seq_lens_this_time,
+    const int *__restrict__ seq_lens_decoder,
+    const int *__restrict__ batch_id_per_token,
+    const int *__restrict__ cu_seqlens_q,
+    const int *__restrict__ block_tables,
+    const int max_seq_len,
+    const int max_blocks_per_seq,
+    const int num_heads,
+    const int kv_num_heads) {
+  constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
+  constexpr uint32_t pad_len = BLOCK_SIZE;
+  const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
+  const T cache_k_scale = cache_k_scales[kv_head_idx];
+  const T cache_v_scale = cache_v_scales[kv_head_idx];
+  const uint32_t tid = threadIdx.x, wid = threadIdx.y;
+  const uint32_t batch_id = batch_ids[btid];
+  const uint32_t tile_id = tile_ids[btid];
+  const uint32_t seq_len_this_time = seq_lens_this_time[batch_id];
+  if (seq_len_this_time <= 0) {
+    return;
+  }
+  const int *block_table_now = nullptr;
+
+  block_table_now = block_tables + batch_id * max_blocks_per_seq;
+
+  const uint32_t num_rows_per_block =
+      NUM_WARPS * num_frags_z * 16;  // BLOCK_SIZE
+  const uint32_t start_len = seq_lens_decoder[batch_id];
+  const uint32_t bf_pad_len = start_len % pad_len;
+  const uint32_t start_len_pad = start_len - bf_pad_len;
+  const uint32_t end_len = start_len + seq_len_this_time;
+
+  const uint32_t tile_start = start_len_pad + tile_id * num_rows_per_block;
+  int block_id = __ldg(&block_table_now[tile_start / BLOCK_SIZE]);
+  uint32_t chunk_start = tile_start + wid * num_frags_z * 16 + tid / 8;
+
+  const uint32_t start_token_idx = cu_seqlens_q[batch_id];
+  const uint32_t kv_batch_stride = (num_heads + 2 * kv_num_heads) * HEAD_DIM;
+  const uint32_t kv_h_stride = HEAD_DIM;
+  __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
+  __shared__ T v_smem_ori[num_rows_per_block * HEAD_DIM];
+  __shared__ T v_scale_smem[BLOCK_SIZE];
+  if (tile_start >= start_len) {
+    constexpr int KV_VEC_SIZE = 16 / sizeof(uint8_t);  // 16
+    using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
+    // pad zero for this kv_head_idx for this block
+    LoadPadKVT pad_cache_vec;
+    *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+    // reset k
+    constexpr int num_vecs_per_head_k = HEAD_DIM / KV_VEC_SIZE;
+    constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k;
+    uint32_t tgt_idx =
+        (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE * HEAD_DIM +
+        tid % num_vecs_per_head_k * KV_VEC_SIZE;
+    for (int block_i = tid / num_vecs_per_head_k;
+          block_i < BLOCK_SIZE;
+          block_i += num_token_each_time_k) {
+      Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
+                                  &cache_k[tgt_idx + block_i * HEAD_DIM]);
+    }
+
+    // reset v
+    const int num_vecs_per_head_v = BLOCK_SIZE / KV_VEC_SIZE;
+    const int num_token_each_time_v = 32 / num_vecs_per_head_v;
+    tgt_idx =
+        (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE +
+        tid % num_vecs_per_head_v * KV_VEC_SIZE;
+    for (int block_i = tid / num_vecs_per_head_v; block_i < HEAD_DIM;
+          block_i += num_token_each_time_v) {
+      Store<uint8_t, KV_VEC_SIZE>(
+          pad_cache_vec, &cache_v[tgt_idx + block_i * BLOCK_SIZE]);
+    }
+  }
+  smem_t k_smem(k_smem_ori);
+  smem_t v_smem(v_smem_ori);
+
+  uint32_t kv_smem_offset_w = smem_t::get_permuted_offset<num_vecs_per_head>(
+      wid * num_frags_z * 16 + tid / 8, tid % 8);  // 4 * 8 per warp
+
+  /*
+   0 | 1
+   2 | 3
+  */
+  uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
+      wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
+
+  constexpr uint32_t num_frags_v = num_frags_y / NUM_WARPS;
+  /*
+   0 | 2
+   1 | 3
+  */
+  uint32_t v_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
+      tid % 16, wid * num_frags_v * 2 + tid / 16);
+
+  // load kv gmem to smem
+  const uint32_t real_start_token_idx = start_token_idx - bf_pad_len +
+                                        tile_id * num_rows_per_block +
+                                        wid * num_frags_z * 16 + tid / 8;
+  uint32_t k_read_idx = real_start_token_idx * kv_batch_stride +
+                        (num_heads + kv_head_idx) * kv_h_stride +
+                        tid % 8 * num_elems_per_128b<T>();
+  uint32_t v_read_idx = real_start_token_idx * kv_batch_stride +
+                        (num_heads + kv_num_heads + kv_head_idx) * kv_h_stride +
+                        tid % 8 * num_elems_per_128b<T>();
+#pragma unroll
+  for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
+#pragma unroll
+    for (uint32_t j = 0; j < 4; ++j) {
+#pragma unroll
+      for (uint32_t fy = 0; fy < num_frags_y / 4;
+           ++fy) {  // (num_frags_y * 16) / (8 *  num_elems_per_128b<T>())
+        if (chunk_start >= start_len && chunk_start < end_len) {
+          k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
+              kv_smem_offset_w, qkv_input + k_read_idx, chunk_start < end_len);
+          v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
+              kv_smem_offset_w, qkv_input + v_read_idx, chunk_start < end_len);
+        }
+        kv_smem_offset_w =
+            k_smem.advance_offset_by_column<8>(kv_smem_offset_w, fy);
+        k_read_idx += 8 * num_elems_per_128b<T>();
+        v_read_idx += 8 * num_elems_per_128b<T>();
+      }
+      kv_smem_offset_w =
+          k_smem.advance_offset_by_row<4, num_vecs_per_head>(kv_smem_offset_w) -
+          2 * num_frags_y;
+      chunk_start += 4;
+      k_read_idx +=
+          4 * kv_batch_stride - 2 * num_frags_y * num_elems_per_128b<T>();
+      v_read_idx +=
+          4 * kv_batch_stride - 2 * num_frags_y * num_elems_per_128b<T>();
+    }
+  }
+  commit_group();
+  wait_group<0>();
+  __syncthreads();
+
+  // reduce scale
+  // 16 rows per warp
+  uint32_t kv_reduce_frag[4];
+  T *kv_reduce_frag_T = reinterpret_cast<T*>(kv_reduce_frag);
+
+   T k_local_max_value[num_frags_z * 2];
+   T v_local_max_value[num_frags_z * 2];
+#pragma unroll
+  for (int i = 0; i < num_frags_z * 2; i++) {
+    k_local_max_value[i] = -INFINITY;
+  }
+#pragma unroll
+  for (int i = 0; i < num_frags_z * 2; i++) {
+    v_local_max_value[i] = -INFINITY;
+  }
+  const int num_kv_heads = gridDim.z;
+  const int scale_offset = block_id * num_kv_heads * BLOCK_SIZE + kv_head_idx * BLOCK_SIZE;
+  T *cache_k_scale_now = cache_k_scales + scale_offset;
+  T *cache_v_scale_now = cache_v_scales + scale_offset;
+  // k scale
+#pragma unroll
+  for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
+#pragma unroll
+    for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
+      // reduce per thread, 4 threads each row
+      k_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_reduce_frag);
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        k_local_max_value[fz * 2] = __hmax(__habs(kv_reduce_frag_T[i]), k_local_max_value[fz * 2]);
+      }
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        k_local_max_value[fz * 2 + 1] = __hmax(__habs(kv_reduce_frag_T[i + 4]), k_local_max_value[fz * 2 + 1]);
+      }
+      k_smem_offset_r = k_smem.advance_offset_by_column<2>(k_smem_offset_r, fy);
+    }
+    // reduce per row
+    for (int i = 0; i < 2; i++) {
+      T local_max_value = __habs(k_local_max_value[fz * 2 + i]);
+      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 2));
+      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 1));
+      // used for quant
+      k_local_max_value[fz * 2 + i] = __hdiv(448, local_max_value);
+    }
+    // store
+    if (tid % 4 == 0) {
+      const int offset_now = wid * num_frags_z * 16 + tid / 4;
+      // used for dequant
+      if (tile_start + offset_now >= start_len) {
+        if (tile_start + offset_now < end_len) {
+          cache_k_scale_now[offset_now] = __hdiv(1, k_local_max_value[fz * 2]);
+        } else {
+          cache_k_scale_now[offset_now] = 0;
+        }
+      }
+      if (tile_start + offset_now + 8 >= start_len) {
+        if (tile_start + offset_now + 8 < end_len) {
+          cache_k_scale_now[offset_now + 8] = __hdiv(1, k_local_max_value[fz * 2 + 1]);
+        } else {
+          cache_k_scale_now[offset_now + 8] = 0;
+        }
+      }
+    }
+    __syncthreads();
+    k_smem_offset_r -= 2 * num_frags_y; // num_frags_z = 1
+  }
+  // v scale
+  #pragma unroll
+  for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
+#pragma unroll
+    for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
+      // reduce per thread, 4 threads each row
+      v_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_reduce_frag);
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        v_local_max_value[fz * 2] = __hmax(__habs(kv_reduce_frag_T[i]), v_local_max_value[fz * 2]);
+      }
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        v_local_max_value[fz * 2 + 1] = __hmax(__habs(kv_reduce_frag_T[i + 4]), v_local_max_value[fz * 2 + 1]);
+      }
+      k_smem_offset_r = v_smem.advance_offset_by_column<2>(k_smem_offset_r, fy);
+    }
+    // reduce per row
+    for (int i = 0; i < 2; i++) {
+      T local_max_value = __habs(v_local_max_value[fz * 2 + i]);
+      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 2));
+      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 1));
+      v_local_max_value[fz * 2 + i] = __hdiv(448, local_max_value);
+    }
+    // store
+    if (tid % 4 == 0) {
+      const int offset_now = wid * num_frags_z * 16 + tid / 4;
+      // used for dequant
+      if (tile_start + offset_now >= start_len) {
+        if (tile_start + offset_now < end_len) {
+          cache_v_scale_now[offset_now] = __hdiv(1, v_local_max_value[fz * 2]);
+          v_scale_smem[offset_now] = v_local_max_value[fz * 2];
+        } else {
+          cache_v_scale_now[offset_now] = 0;
+          v_scale_smem[offset_now] = 0;
+        }
+      }
+      if (tile_start + offset_now + 8 >= start_len) {
+        if (tile_start + offset_now + 8 < end_len) {
+          cache_v_scale_now[offset_now + 8] = __hdiv(1, v_local_max_value[fz * 2 + 1]);
+          v_scale_smem[offset_now + 8] = v_local_max_value[fz * 2 + 1];
+        } else {
+          cache_v_scale_now[offset_now + 8] = 0;
+          v_scale_smem[offset_now + 8] = 0;
+        }
+      }
+    }
+    __syncthreads();
+    k_smem_offset_r -= 2 * num_frags_y; // num_frags_z = 1
+  }
+  __syncthreads();
+
+  // mask, quant, store
+  using LoadKVT = AlignedVector<uint8_t, 4>;
+  LoadKVT cache_vec1;
+  LoadKVT cache_vec2;
+
+  uint32_t chunk_start_k = tile_start + wid * num_frags_z * 16 + tid / 4;
+  uint32_t kv_frag[4];
+  const uint32_t write_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
+  const uint32_t write_h_stride = BLOCK_SIZE * HEAD_DIM;
+  const uint32_t write_b_stride = HEAD_DIM;
+  const uint32_t write_d_stride = BLOCK_SIZE;
+  uint32_t k_write_idx = block_id * write_n_stride +
+                         kv_head_idx * write_h_stride +
+                         (wid * num_frags_z * 16 + tid / 4) * write_b_stride +
+                         tid % 4 * 4;  // 4 * int8 = 8 * int4 = 32bit
+#pragma unroll
+  for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
+    uint32_t k_write_idx_now_z = k_write_idx + fz * 16 * write_b_stride;
+#pragma unroll
+    for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
+      uint32_t k_write_idx_now = k_write_idx_now_z +
+                                 fy % 2 * 8 * write_b_stride +
+                                 fy / 2 * 32;  // + fy % 2 * 16;
+      // load
+      k_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_frag);
+      // quant
+      T *k_frag_T = reinterpret_cast<T *>(kv_frag);
+      if (bf_pad_len != 0) {
+        Load<uint8_t, 4>(cache_k + k_write_idx_now, &cache_vec1);
+        Load<uint8_t, 4>(cache_k + k_write_idx_now + 16, &cache_vec2);
+      }
+#pragma unroll
+      for (uint32_t v_id = 0; v_id < 8; ++v_id) {
+        uint8_t uint_quant_value;
+        if (chunk_start_k + (v_id / 4) * 8 >= start_len &&
+            chunk_start_k + (v_id / 4) * 8 < end_len) {
+          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(k_local_max_value[fz * 2 + v_id / 4], k_frag_T[v_id], 127.0f, -127.0f);
+        } else {
+          uint_quant_value = 0;
+        }
+        if (bf_pad_len != 0) {
+          if (v_id < 4) {
+            cache_vec1[v_id] |= uint_quant_value;
+          } else {
+            cache_vec2[v_id % 4] |= uint_quant_value;
+          }
+        } else {
+          if (v_id < 4) {
+            cache_vec1[v_id] = uint_quant_value;
+          } else {
+            cache_vec2[v_id - 4] = uint_quant_value;
+          }
+        }
+      }
+      // store
+      Store<uint8_t, 4>(cache_vec1, cache_k + k_write_idx_now);
+      Store<uint8_t, 4>(cache_vec2, cache_k + k_write_idx_now + 16);
+      k_smem_offset_r = k_smem.advance_offset_by_column<2>(k_smem_offset_r, fy);
+    }
+    k_smem_offset_r =
+        k_smem.advance_offset_by_row<16, num_vecs_per_head>(k_smem_offset_r) -
+        2 * num_frags_y;
+    chunk_start_k += 16;
+  }
+
+  uint32_t chunk_start_v = tile_start + tid % 4 * 2;
+  uint32_t v_write_idx = block_id * write_n_stride +
+                         kv_head_idx * write_h_stride +
+                         (wid * num_frags_v * 16 + tid / 4) * write_d_stride +
+                         tid % 4 * 4;  // 4 * int8 = 8 * int4 = 32bit
+  const uint32_t num_frags_z_v = num_frags_z * NUM_WARPS;
+  T v_scales[num_frags_z_v * 4];
+  for (int v_i = 0; v_i < num_frags_z_v; v_i++) {
+    const int offset = v_i * 16;
+    const int t_offset = tid % 4 * 2;
+    v_scales[v_i * 4] = v_scale_smem[offset + t_offset];
+    v_scales[v_i * 4 + 1] = v_scale_smem[offset + t_offset + 1];
+    v_scales[v_i * 4 + 2] = v_scale_smem[offset + t_offset + 8];
+    v_scales[v_i * 4 + 3] = v_scale_smem[offset + t_offset + 9];
+  }
+
+#pragma unroll
+  for (uint32_t fy = 0; fy < num_frags_v; ++fy) {
+    uint32_t v_write_idx_now_v = v_write_idx + fy * 16 * write_d_stride;
+#pragma unroll
+    for (uint32_t fz = 0; fz < num_frags_z_v; ++fz) {
+      uint32_t v_write_idx_now = v_write_idx_now_v +
+                                 fz % 2 * 8 * write_d_stride +
+                                 fz / 2 * 32;  // + fz % 2 * 16;
+      // load
+      v_smem.ldmatrix_m8n8x4_trans(v_smem_offset_r, kv_frag);
+      // quant
+      T *v_frag_T = reinterpret_cast<T *>(kv_frag);
+      if (bf_pad_len != 0) {
+        Load<uint8_t, 4>(cache_v + v_write_idx_now, &cache_vec1);
+        Load<uint8_t, 4>(cache_v + v_write_idx_now + 16, &cache_vec2);
+      }
+#pragma unroll
+      for (uint32_t v_id = 0; v_id < 8; ++v_id) {
+        uint8_t uint_quant_value;
+        if (chunk_start_v + v_id % 2 + (v_id % 4) / 2 * 8 >= start_len &&
+            chunk_start_v + v_id % 2 + (v_id % 4) / 2 * 8 < end_len) {
+          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(v_scales[fz * 4 + v_id % 4], v_frag_T[v_id], 127.0f, -127.0f);
+          // store now
+        } else {
+          uint_quant_value = 0;
+        }
+        if (bf_pad_len != 0) {
+          if (v_id < 4) {
+            cache_vec1[v_id] |= uint_quant_value;
+          } else {
+            cache_vec2[v_id % 4] |= uint_quant_value;
+          }
+        } else {
+          if (v_id < 4) {
+            cache_vec1[v_id] = uint_quant_value;
+          } else {
+            cache_vec2[v_id % 4] = uint_quant_value;
+          }
+        }
+      }
+      // store
+      Store<uint8_t, 4>(cache_vec1, cache_v + v_write_idx_now);
+      Store<uint8_t, 4>(cache_vec2, cache_v + v_write_idx_now + 16);
+      chunk_start_v += 16;
+      v_smem_offset_r =
+          k_smem.advance_offset_by_row<16, num_vecs_per_head>(v_smem_offset_r);
+    }
+    v_smem_offset_r = k_smem.advance_offset_by_column<2>(
+                          v_smem_offset_r, wid * num_frags_v + fy) -
+                      16 * num_frags_z_v * num_vecs_per_head;
+    chunk_start_v -= 16 * num_frags_z_v;
+  }
+}
+
 // Write Cache KV in Append
 template <typename T,
           uint32_t num_frags_y,
@@ -2006,10 +2411,11 @@ void CascadeAppendWriteCacheKVC8QKV(
     int num_blocks_x_cpu,
     int max_seq_len,
     bool is_scale_channel_wise,
-    const bool is_fp8,
+    const std::string& cache_quant_type,
     cudaStream_t &stream,
     paddle::Tensor *cache_k_out,
     paddle::Tensor *cache_v_out) {
+  using NV_TYPE = typename cascade_attn_type_traits<T>::type;
   auto max_blocks_per_seq = meta_data.max_blocks_per_seq;
   auto num_tokens = meta_data.token_nums;
   auto num_heads = meta_data.q_num_heads;
@@ -2027,49 +2433,77 @@ void CascadeAppendWriteCacheKVC8QKV(
   dim3 blocks(32, num_warps);
 
   const uint32_t smem_size = (BLOCK_SIZE * HEAD_DIM) * sizeof(T) * 2;
-  auto kernel_fn = append_write_cache_kv_c8_qkv<T,
-                                                num_frags_y,
-                                                num_frags_z,
-                                                HEAD_DIM,
-                                                BLOCK_SIZE,
-                                                num_warps,
-                                                true, false>;
-  if (is_fp8) {
-    kernel_fn = append_write_cache_kv_c8_qkv<T,
-                                                num_frags_y,
-                                                num_frags_z,
-                                                HEAD_DIM,
-                                                BLOCK_SIZE,
-                                                num_warps,
-                                                true, true>;
+  if (cache_quant_type != "block_wise_fp8") {
+    auto kernel_fn = append_write_cache_kv_c8_qkv<T,
+                                                  num_frags_y,
+                                                  num_frags_z,
+                                                  HEAD_DIM,
+                                                  BLOCK_SIZE,
+                                                  num_warps,
+                                                  true, false>;
+    if (cache_quant_type == "cache_fp8") {
+      kernel_fn = append_write_cache_kv_c8_qkv<T,
+                                              num_frags_y,
+                                              num_frags_z,
+                                              HEAD_DIM,
+                                              BLOCK_SIZE,
+                                              num_warps,
+                                              true, true>;
+    }
+    if (is_scale_channel_wise) {
+      kernel_fn = append_write_cache_kv_c8_qkv<T,
+                                              num_frags_y,
+                                              num_frags_z,
+                                              HEAD_DIM,
+                                              BLOCK_SIZE,
+                                              num_warps,
+                                              false>;
+    }
+    cudaFuncSetAttribute(
+        kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+    kernel_fn<<<grids, blocks, 0, stream>>>(cache_k_out->data<uint8_t>(),
+                                            cache_v_out->data<uint8_t>(),
+                                            qkv.data<T>(),
+                                            cache_k_scale.data<T>(),
+                                            cache_v_scale.data<T>(),
+                                            batch_ids.data<int>(),
+                                            tile_ids_per_batch.data<int>(),
+                                            seq_lens_this_time.data<int>(),
+                                            seq_lens_decoder.data<int>(),
+                                            batch_id_per_token.data<int>(),
+                                            cu_seqlens_q.data<int>(),
+                                            block_table.data<int>(),
+                                            max_seq_len,
+                                            max_blocks_per_seq,
+                                            num_heads,
+                                            kv_num_heads);
+  } else {
+    auto kernel_fn = append_write_cache_kv_c8_qkv_dynamic<NV_TYPE,
+                                                          num_frags_y,
+                                                          num_frags_z,
+                                                          HEAD_DIM,
+                                                          BLOCK_SIZE,
+                                                          num_warps,
+                                                          true, true>;
+    cudaFuncSetAttribute(
+        kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+    kernel_fn<<<grids, blocks, 0, stream>>>(cache_k_out->data<uint8_t>(),
+                                            cache_v_out->data<uint8_t>(),
+                                            reinterpret_cast<const NV_TYPE*>(qkv.data<T>()),
+                                            const_cast<NV_TYPE*>(reinterpret_cast<const NV_TYPE*>(cache_k_scale.data<T>())),
+                                            const_cast<NV_TYPE*>(reinterpret_cast<const NV_TYPE*>(cache_v_scale.data<T>())),
+                                            batch_ids.data<int>(),
+                                            tile_ids_per_batch.data<int>(),
+                                            seq_lens_this_time.data<int>(),
+                                            seq_lens_decoder.data<int>(),
+                                            batch_id_per_token.data<int>(),
+                                            cu_seqlens_q.data<int>(),
+                                            block_table.data<int>(),
+                                            max_seq_len,
+                                            max_blocks_per_seq,
+                                            num_heads,
+                                            kv_num_heads);
   }
-  if (is_scale_channel_wise) {
-    kernel_fn = append_write_cache_kv_c8_qkv<T,
-                                             num_frags_y,
-                                             num_frags_z,
-                                             HEAD_DIM,
-                                             BLOCK_SIZE,
-                                             num_warps,
-                                             false>;
-  }
-  cudaFuncSetAttribute(
-      kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-  kernel_fn<<<grids, blocks, 0, stream>>>(cache_k_out->data<uint8_t>(),
-                                          cache_v_out->data<uint8_t>(),
-                                          qkv.data<T>(),
-                                          cache_k_scale.data<T>(),
-                                          cache_v_scale.data<T>(),
-                                          batch_ids.data<int>(),
-                                          tile_ids_per_batch.data<int>(),
-                                          seq_lens_this_time.data<int>(),
-                                          seq_lens_decoder.data<int>(),
-                                          batch_id_per_token.data<int>(),
-                                          cu_seqlens_q.data<int>(),
-                                          block_table.data<int>(),
-                                          max_seq_len,
-                                          max_blocks_per_seq,
-                                          num_heads,
-                                          kv_num_heads);
 }
 
 template <typename T, uint32_t HEAD_DIM, uint32_t BLOCK_SIZE>
