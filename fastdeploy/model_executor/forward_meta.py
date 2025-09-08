@@ -100,7 +100,7 @@ class ForwardMeta:
     # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
     # The number of blocks that attention backend can use in decode stage
-    decoder_num_blocks: Optional[paddle.Tensor] = None
+    decoder_num_blocks_device: Optional[paddle.Tensor] = None
     # The number of CUDA blocks to launch in the x-dimension for the multi_query_append_attention_warp1_4_kernel, defining its grids.x.
     decoder_num_blocks_cpu: Optional[paddle.Tensor] = None
     # A tensor that holds multiple lengths related to prefill or decode stages.

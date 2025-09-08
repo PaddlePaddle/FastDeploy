@@ -190,6 +190,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,  # decoder_batch_ids_per_ctax
             forward_meta.decoder_tile_ids_per_batch,  # decoder_chunk_ids_per_ctax_each_batch
             forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_num_blocks_device,
             forward_meta.decoder_chunk_size_device,
             forward_meta.max_len_tensor_cpu,
             forward_meta.encoder_batch_ids,
@@ -205,10 +206,6 @@ class MLAAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
-
-        # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks in place of GPU tensor,
-        # adapted to cudagraph.
-        forward_meta.decoder_num_blocks = forward_meta.decoder_num_blocks_cpu.cuda()
 
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
@@ -362,7 +359,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.kv_num_blocks_x_cpu,
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
-            forward_meta.decoder_num_blocks,
+            forward_meta.decoder_num_blocks_device,
             forward_meta.decoder_chunk_size_device,
             metadata.max_dec_len_this_time,
             forward_meta.max_len_kv_cpu,
@@ -478,7 +475,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.kv_num_blocks_x_cpu,
                 forward_meta.decoder_batch_ids,
                 forward_meta.decoder_tile_ids_per_batch,
-                forward_meta.decoder_num_blocks,
+                forward_meta.decoder_num_blocks_device,
                 forward_meta.decoder_chunk_size_device,
                 metadata.max_dec_len_this_time,
                 forward_meta.max_len_kv_cpu,
