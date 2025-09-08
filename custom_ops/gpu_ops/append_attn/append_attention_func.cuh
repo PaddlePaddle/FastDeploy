@@ -384,6 +384,113 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
   }
 }
 
+template<uint32_t block_size,
+         uint32_t num_frags_z,
+         uint32_t NUM_WARP_Q,
+         typename T>
+__device__ __forceinline__ void produce_k_dynamic_scale(
+  T* k_smem_scale,
+  T* cache_k_reg,
+  const int* block_table_now,
+  const T* cache_k_scale,
+  const uint32_t kv_idx,
+  const uint32_t kv_num_heads,
+  const uint32_t kv_head_idx,
+  const uint32_t chunk_end
+) {
+  const uint32_t tx = threadIdx.x, ty = threadIdx.y;
+  if constexpr (NUM_WARP_Q == 4) {
+    // 4 warps shared block_size
+    const uint32_t tid = ty * 32 + tx;
+    int block_id = __ldg(&block_table_now[kv_idx / block_size]);
+    if (block_id < 0) block_id = 0;
+    const T* cache_k_scale_now = cache_k_scale + block_id * kv_num_heads * block_size + kv_head_idx * block_size;
+    if (tid < block_size) {
+      k_smem_scale[tid] = cache_k_scale_now[tid];
+    }
+    __syncthreads();
+    const uint32_t row_id = tx / 4;
+    for (uint32_t fz = 0; fz < num_frags_z; fz++) {
+      cache_k_reg[fz * 2] = k_smem_scale[fz * 16 + row_id];
+      cache_k_reg[fz * 2 + 1] = k_smem_scale[fz * 16 + row_id + 8];
+    }
+  } else {
+    // 1 warp 32 tokens
+    const uint32_t kv_idx_now = kv_idx + block_size * ty / 2;
+    int block_id = __ldg(&block_table_now[kv_idx_now / block_size]);
+    if (block_id < 0) block_id = 0;
+    const T* cache_k_scale_now = cache_k_scale + block_id * kv_num_heads * block_size + kv_head_idx * block_size;
+    const int kv_idx_this_thread = kv_idx + ty * 32 + tx;
+    if (kv_idx_this_thread < chunk_end) {
+      k_smem_scale[ty * 32 + tx] = cache_k_scale_now[(ty  % 2) * 32 + tx];
+    } else {
+      k_smem_scale[ty * 32 + tx] = 0;
+    }
+    __syncwarp();
+    const uint32_t row_id = tx / 4;
+    for (uint32_t fz = 0; fz < num_frags_z; fz++) {
+      cache_k_reg[fz * 2] = k_smem_scale[ty * 32 + fz * 16 + row_id];
+      cache_k_reg[fz * 2 + 1] = k_smem_scale[ty * 32 + fz * 16 + row_id + 8];
+    }
+  }
+}
+
+template<uint32_t block_size,
+         uint32_t num_frags_z,
+         uint32_t NUM_WARP_Q,
+         typename T>
+__device__ __forceinline__ void produce_v_dynamic_scale(
+  T* v_smem_scale,
+  T* cache_v_reg,
+  const int* block_table_now,
+  const T* cache_v_scale,
+  const uint32_t kv_idx,
+  const uint32_t kv_num_heads,
+  const uint32_t kv_head_idx,
+  const uint32_t chunk_end
+) {
+  const uint32_t tx = threadIdx.x, ty = threadIdx.y;
+
+  if constexpr (NUM_WARP_Q == 4) {
+    // 4 warps shared block_size
+    const uint32_t tid = ty * 32 + tx;
+    int block_id = __ldg(&block_table_now[kv_idx / block_size]);
+    if (block_id < 0) block_id = 0;
+    const T* cache_v_scale_now = cache_v_scale + block_id * kv_num_heads * block_size + kv_head_idx * block_size;
+    if (tid < block_size) {
+      v_smem_scale[tid] = cache_v_scale_now[tid];
+    }
+    __syncthreads();
+    const uint32_t row_id = tx % 4 * 2;
+    for (uint32_t fz = 0; fz < num_frags_z; fz++) {
+      cache_v_reg[fz * 4] = v_smem_scale[fz * 16 + row_id];
+      cache_v_reg[fz * 4 + 1] = v_smem_scale[fz * 16 + row_id + 1];
+      cache_v_reg[fz * 4 + 2] = v_smem_scale[fz * 16 + row_id + 8];
+      cache_v_reg[fz * 4 + 3] = v_smem_scale[fz * 16 + row_id + 9];
+    }
+  } else {
+    // 1 warp 32 tokens
+    const uint32_t kv_idx_now = kv_idx + block_size * ty / 2;
+    int block_id = __ldg(&block_table_now[kv_idx_now / block_size]);
+    if (block_id < 0) block_id = 0;
+    const T* cache_v_scale_now = cache_v_scale + block_id * kv_num_heads * block_size + kv_head_idx * block_size;
+    const int kv_idx_this_thread = kv_idx + ty * 32 + tx;
+    if (kv_idx_this_thread < chunk_end) {
+      v_smem_scale[ty * 32 + tx] = cache_v_scale_now[(ty  % 2) * 32 + tx];
+    } else {
+      v_smem_scale[ty * 32 + tx] = 0;
+    }
+    __syncwarp();
+    const uint32_t row_id = tx % 4 * 2;
+    for (uint32_t fz = 0; fz < num_frags_z; fz++) {
+      cache_v_reg[fz * 4] = v_smem_scale[ty * 32 + fz * 16 + row_id];
+      cache_v_reg[fz * 4 + 1] = v_smem_scale[ty * 32 + fz * 16 + row_id + 1];
+      cache_v_reg[fz * 4 + 2] = v_smem_scale[ty * 32 + fz * 16 + row_id + 8];
+      cache_v_reg[fz * 4 + 3] = v_smem_scale[ty * 32 + fz * 16 + row_id + 9];
+    }
+  }
+}
+
 template <SharedMemFillMode fill_mode,
           uint32_t num_warps,
           uint32_t block_size,
@@ -816,7 +923,8 @@ template <uint32_t num_frags_x,
           typename T,
           typename CacheT,
           bool is_scale_channel_wise = false,
-          bool IsFP8=false>
+          bool IsFP8 = false,
+          bool IsDynamicC8 = false>
 __device__ __forceinline__ void compute_qk_c8(smem_t* q_smem,
                                               uint32_t* q_smem_offset_r,
                                               smem_t* k_smem,
@@ -860,20 +968,27 @@ __device__ __forceinline__ void compute_qk_c8(smem_t* q_smem,
         convert_c8<T,IsFP8>(b_frag_dq_T, b_frag[fy * 2]);
         convert_c8<T,IsFP8>(b_frag_dq_T + 4, b_frag[fy * 2 + 1]);
         // scale zp
-        if constexpr (is_scale_channel_wise) {
-          const int scale_col = (ky * 2 + fy) * 4;
-          b_frag_dq_T[0] *= cache_k_scale[scale_col];
-          b_frag_dq_T[1] *= cache_k_scale[scale_col + 1];
-          b_frag_dq_T[2] *= cache_k_scale[scale_col + 2];
-          b_frag_dq_T[3] *= cache_k_scale[scale_col + 3];
-          b_frag_dq_T[4] *= cache_k_scale[scale_col];
-          b_frag_dq_T[5] *= cache_k_scale[scale_col + 1];
-          b_frag_dq_T[6] *= cache_k_scale[scale_col + 2];
-          b_frag_dq_T[7] *= cache_k_scale[scale_col + 3];
+        if constexpr (!IsDynamicC8) {
+          if constexpr (is_scale_channel_wise) {
+            const int scale_col = (ky * 2 + fy) * 4;
+            b_frag_dq_T[0] *= cache_k_scale[scale_col];
+            b_frag_dq_T[1] *= cache_k_scale[scale_col + 1];
+            b_frag_dq_T[2] *= cache_k_scale[scale_col + 2];
+            b_frag_dq_T[3] *= cache_k_scale[scale_col + 3];
+            b_frag_dq_T[4] *= cache_k_scale[scale_col];
+            b_frag_dq_T[5] *= cache_k_scale[scale_col + 1];
+            b_frag_dq_T[6] *= cache_k_scale[scale_col + 2];
+            b_frag_dq_T[7] *= cache_k_scale[scale_col + 3];
+          } else {
+#pragma unroll
+            for (uint32_t b_i = 0; b_i < 8; ++b_i) {
+              b_frag_dq_T[b_i] *= cache_k_scale[0];
+            }
+          }
         } else {
 #pragma unroll
           for (uint32_t b_i = 0; b_i < 8; ++b_i) {
-            b_frag_dq_T[b_i] *= cache_k_scale[0];
+            b_frag_dq_T[b_i] *= cache_k_scale[fz * 2 + b_i / 4];
           }
         }
 #pragma unroll
@@ -1093,7 +1208,9 @@ template <uint32_t num_frags_x,
           uint32_t block_size,
           typename T,
           typename CacheT,
-          bool is_scale_channel_wise = false, bool IsFP8=false>
+          bool is_scale_channel_wise = false,
+          bool IsFP8 = false,
+          bool IsDynamicC8 = false>
 __device__ __forceinline__ void compute_sfm_v_c8(
     smem_t* v_smem,
     uint32_t* v_smem_offset_r,
@@ -1135,16 +1252,28 @@ __device__ __forceinline__ void compute_sfm_v_c8(
         convert_c8<T,IsFP8>(b_frag_dq_T, b_frag[fz * 2]);
         convert_c8<T,IsFP8>(b_frag_dq_T + 4, b_frag[fz * 2 + 1]);
         // scale zp
-        if constexpr (is_scale_channel_wise) {
+        if constexpr (!IsDynamicC8) {
+          if constexpr (is_scale_channel_wise) {
 #pragma unroll
-          for (uint32_t b_i = 0; b_i < 8; ++b_i) {
-            b_frag_dq_T[b_i] *= cache_v_scale[b_i / 4 + fy * 2];
+            for (uint32_t b_i = 0; b_i < 8; ++b_i) {
+              b_frag_dq_T[b_i] *= cache_v_scale[b_i / 4 + fy * 2];
+            }
+          } else {
+#pragma unroll
+            for (uint32_t b_i = 0; b_i < 8; ++b_i) {
+              b_frag_dq_T[b_i] *= cache_v_scale[0];
+            }
           }
         } else {
-#pragma unroll
-          for (uint32_t b_i = 0; b_i < 8; ++b_i) {
-            b_frag_dq_T[b_i] *= cache_v_scale[0];
-          }
+          const int scale_col = (kz * 2 + fz) * 4;
+          b_frag_dq_T[0] *= cache_v_scale[scale_col];
+          b_frag_dq_T[1] *= cache_v_scale[scale_col + 1];
+          b_frag_dq_T[2] *= cache_v_scale[scale_col + 2];
+          b_frag_dq_T[3] *= cache_v_scale[scale_col + 3];
+          b_frag_dq_T[4] *= cache_v_scale[scale_col];
+          b_frag_dq_T[5] *= cache_v_scale[scale_col + 1];
+          b_frag_dq_T[6] *= cache_v_scale[scale_col + 2];
+          b_frag_dq_T[7] *= cache_v_scale[scale_col + 3];
         }
 #pragma unroll
         for (uint32_t fx = 0; fx < num_frags_x; ++fx) {  // m: num_frags_x * 16
@@ -1171,7 +1300,9 @@ template <uint32_t num_frags_x,
           uint32_t block_size,
           typename T,
           typename CacheT,
-          bool is_scale_channel_wise = false, bool IsFP8=false>
+          bool is_scale_channel_wise = false,
+          bool IsFP8 = false,
+          bool IsDynamicC8 = false>
 __device__ __forceinline__ void compute_sfm_v_c8_iter_sq_bvec(
     smem_t* v_smem,
     uint32_t* v_smem_offset_r,
@@ -1215,16 +1346,28 @@ __device__ __forceinline__ void compute_sfm_v_c8_iter_sq_bvec(
         convert_c8<T,IsFP8>(b_frag_dq_T, b_frag[fz * 2]);
         convert_c8<T,IsFP8>(b_frag_dq_T + 4, b_frag[fz * 2 + 1]);
         // scale zp
-        if constexpr (is_scale_channel_wise) {
+        if constexpr (!IsDynamicC8) {
+          if constexpr (is_scale_channel_wise) {
 #pragma unroll
-          for (uint32_t b_i = 0; b_i < 8; ++b_i) {
-            b_frag_dq_T[b_i] *= cache_v_scale[b_i / 4 + fy * 2];
+            for (uint32_t b_i = 0; b_i < 8; ++b_i) {
+              b_frag_dq_T[b_i] *= cache_v_scale[b_i / 4 + fy * 2];
+            }
+          } else {
+            #pragma unroll
+            for (uint32_t b_i = 0; b_i < 8; ++b_i) {
+              b_frag_dq_T[b_i] *= cache_v_scale[0];
+            }
           }
         } else {
-          #pragma unroll
-          for (uint32_t b_i = 0; b_i < 8; ++b_i) {
-            b_frag_dq_T[b_i] *= cache_v_scale[0];
-          }
+          const int scale_col = (kz * 2 + fz) * 4;
+          b_frag_dq_T[0] *= cache_v_scale[scale_col];
+          b_frag_dq_T[1] *= cache_v_scale[scale_col + 1];
+          b_frag_dq_T[2] *= cache_v_scale[scale_col + 2];
+          b_frag_dq_T[3] *= cache_v_scale[scale_col + 3];
+          b_frag_dq_T[4] *= cache_v_scale[scale_col];
+          b_frag_dq_T[5] *= cache_v_scale[scale_col + 1];
+          b_frag_dq_T[6] *= cache_v_scale[scale_col + 2];
+          b_frag_dq_T[7] *= cache_v_scale[scale_col + 3];
         }
 #pragma unroll
         for (uint32_t fx = 0; fx < num_frags_x; ++fx) {  // m: num_frags_x * 16

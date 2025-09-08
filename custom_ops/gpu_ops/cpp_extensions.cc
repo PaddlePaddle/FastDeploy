@@ -299,7 +299,7 @@ paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const int device_id,
 paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
                                        const int layer_id);
 
-std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
+void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
@@ -307,6 +307,13 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
     paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    paddle::Tensor &encoder_batch_ids,          // Inplace
+    paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &kv_batch_ids,               // Inplace
+    paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
+    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
+    paddle::Tensor &max_len_kv_cpu,             // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
