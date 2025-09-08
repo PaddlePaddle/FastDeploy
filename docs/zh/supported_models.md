@@ -47,17 +47,4 @@ python -m fastdeploy.entrypoints.openai.api_server \
 | ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[快速部署](./get_started/ernie-4.5-vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[快速部署](./get_started/quick_start_vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 
-## 最小资源部署说明
-
-最小部署资源没有普适公式，需要根据上下文长度 和 量化方式
-我们推荐计算显存需求 = 参数量 × 量化方式字节系数（系数列表如下），最终 GPU 数量取决于 总显存需求 ÷ 单卡显存
-
-|量化方式   |对应每参数字节系数 |
-| :---      | :---      |
-|BF16       |2          |
-|FP8        |1          |
-|WINT8      |1          |
-|WINT4      |0.5        |
-|W4A8C8     |0.5        |
-
 更多模型同步支持中，你可以通过[Github Issues](https://github.com/PaddlePaddle/FastDeploy/issues)向我们提交新模型的支持需求。

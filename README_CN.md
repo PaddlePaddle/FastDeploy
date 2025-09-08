@@ -71,7 +71,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 
 ## 支持模型列表
 
-通过我们的文档了解如何下载模型，如何支持Torch 权重，如何计算最小资源部署等：
+通过我们的文档了解如何下载模型，如何支持torch格式等：
 - [模型支持列表](./docs/zh/supported_models.md)
 
 ## 进阶用法
