@@ -185,6 +185,7 @@ async def lifespan(app: FastAPI):
         workers=args.workers,
         tool_parser=args.tool_call_parser,
     )
+    await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
         model_paths,

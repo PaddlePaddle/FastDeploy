@@ -24,6 +24,7 @@ import pytest
 from fastdeploy import LLM, SamplingParams
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 MAX_WAIT_SECONDS = 60
 
 os.environ["LD_LIBRARY_PATH"] = "/usr/local/nccl/"
@@ -76,6 +77,7 @@ def llm(model_path):
             tensor_parallel_size=2,
             num_gpu_blocks_override=1024,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
+            cache_queue_port=FD_CACHE_QUEUE_PORT,
             max_model_len=8192,
             seed=1,
         )
