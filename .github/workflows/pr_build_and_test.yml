@@ -2,7 +2,7 @@ name: PR Build and Test
 on:
   pull_request:
     types: [opened, synchronize]
-    branches: [develop, release/**]
+    branches: [develop, release/**, feature/**]
 permissions: read-all
 
 concurrency:
