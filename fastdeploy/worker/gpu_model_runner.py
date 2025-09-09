@@ -1581,7 +1581,7 @@ class GPUModelRunner(ModelRunnerBase):
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""
         caches = self.share_inputs.pop("caches", None)
-        paddle.set_device(f"gpu:{self.device_id}")
+        paddle.set_device(f"gpu:{self.device}")
         i = 0
         for tensor in caches:
             if i % 2 == 0:
