@@ -15,7 +15,7 @@
 **注意**： 如下镜像仅支持SM 80/90架构GPU（A800/H800等），如果你是在L20/L40/4090等SM 86/69架构的GPU上部署，请在创建容器后，卸载```fastdeploy-gpu```再重新安装如下文档指定支持86/89架构的`fastdeploy-gpu`包。
 
 ``` shell
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.1.1
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.2.0
 ```
 
 ## 2. 预编译Pip安装
@@ -23,7 +23,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
 
 ``` shell
-python -m pip install paddlepaddle-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 再安装 fastdeploy，**注意不要通过pypi源安装**，需要通过如下方式安装
@@ -64,7 +64,7 @@ docker build -f dockerfiles/Dockerfile.gpu -t fastdeploy:gpu .
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
 
 ``` shell
-python -m pip install paddlepaddle-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 接着克隆源代码，编译安装
