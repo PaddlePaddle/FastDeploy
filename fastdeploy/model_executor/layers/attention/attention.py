@@ -119,19 +119,19 @@ class Attention(nn.Layer):
             self.init_weight()
 
         if (
-            fd_config.moba_attention_config is not None
-            and fd_config.moba_attention_config.moba_encoder_top_k_left is not None
-            and fd_config.moba_attention_config.moba_encoder_top_k_right is not None
-            and fd_config.moba_attention_config.moba_decoder_top_k_left is not None
-            and fd_config.moba_attention_config.moba_decoder_top_k_right is not None
+            fd_config.plas_attention_config is not None
+            and fd_config.plas_attention_config.plas_encoder_top_k_left is not None
+            and fd_config.plas_attention_config.plas_encoder_top_k_right is not None
+            and fd_config.plas_attention_config.plas_decoder_top_k_left is not None
+            and fd_config.plas_attention_config.plas_decoder_top_k_right is not None
         ):
             mlp_weight_path = os.path.join(
-                fd_config.model_config.model, fd_config.moba_attention_config.mlp_weight_name
+                fd_config.model_config.model, fd_config.plas_attention_config.mlp_weight_name
             )
-            self.moba_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
-            moba_block_size = fd_config.moba_attention_config.moba_block_size
-            moba_max_seq_length = fd_config.moba_attention_config.moba_max_seq_length
-            if self.moba_use_mlp:
+            self.plas_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
+            plas_block_size = fd_config.plas_attention_config.plas_block_size
+            plas_max_seq_length = fd_config.plas_attention_config.plas_max_seq_length
+            if self.plas_use_mlp:
                 mlp_weight = {}
                 with safe_open(mlp_weight_path, framework="np", device="cpu") as f:
                     for key_name in f.keys():
@@ -148,12 +148,12 @@ class Attention(nn.Layer):
                         * self.kv_num_heads : (fd_config.parallel_config.tensor_parallel_rank + 1)
                         * self.kv_num_heads
                     ]
-                    assert self.attn_gate_weight.shape[1] % moba_block_size == 0
+                    assert self.attn_gate_weight.shape[1] % plas_block_size == 0
 
             self.cache_k_block_means = paddle.zeros(
                 [
                     fd_config.parallel_config.max_num_seqs,
-                    moba_max_seq_length // moba_block_size,
+                    plas_max_seq_length // plas_block_size,
                     self.kv_num_heads,
                     self.head_dim,
                 ],
