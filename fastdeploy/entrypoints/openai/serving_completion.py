@@ -30,10 +30,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponseChoice,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    ErrorInfo,
     ErrorResponse,
     UsageInfo,
 )
-from fastdeploy.utils import api_server_logger
+from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -63,13 +64,15 @@ class OpenAIServingCompletion:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
-                return ErrorResponse(message=err_msg, code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                )
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
@@ -112,7 +115,7 @@ class OpenAIServingCompletion:
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(message=error_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
@@ -132,7 +135,9 @@ class OpenAIServingCompletion:
                 f"max waiting time: {self.max_waiting_time}"
             )
             api_server_logger.error(error_msg)
-            return ErrorResponse(code=408, message=error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, code=ErrorCode.TIMEOUT, type=ErrorType.TIMEOUT_ERROR)
+            )
 
         try:
             try:
@@ -146,11 +151,17 @@ class OpenAIServingCompletion:
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                     del current_req_dict
+            except ParameterError as e:
+                api_server_logger.error(e.message)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(code=400, message=str(e.message), type="invalid_request", param=e.param)
             except Exception as e:
                 error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
                 self.engine_client.semaphore.release()
-                return ErrorResponse(message=str(e), code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=str(e), code=ErrorCode.INVALID_VALUE, type=ErrorType.INVALID_REQUEST_ERROR)
+                )
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -178,12 +189,12 @@ class OpenAIServingCompletion:
                         f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
                     )
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(code=400, message=error_msg)
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
 
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(message=error_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
 
     async def completion_full_generator(
         self,
