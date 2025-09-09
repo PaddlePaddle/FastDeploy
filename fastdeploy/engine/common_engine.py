@@ -462,7 +462,7 @@ class EngineService:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
-        current_id = -1
+        current_id = 0
         while getattr(self, "running", True):
             try:
                 if self.resource_manager.available_batch() == 0:
@@ -500,12 +500,15 @@ class EngineService:
                     time.sleep(0.001)
                     continue
 
-                current_id = (current_id + 1) % 100003
                 if self.cfg.splitwise_role != "mixed":
                     llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
-                self.insert_tasks(tasks, current_id)
+                insert_successful = self.insert_tasks(tasks, current_id)
+                if insert_successful:
+                    current_id = current_id + 1
+                else:
+                    continue
 
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
@@ -591,6 +594,9 @@ class EngineService:
 
     def _insert_zmq_task_to_scheduler(self):
         added_requests: Dict[str, int] = dict()
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            if self.cfg.splitwise_role == "decode":
+                return
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False

@@ -181,7 +181,13 @@ class TokenProcessor:
                 else:
                     is_blocking = True
                     if self.speculative_decoding:
-                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                        if (
+                            self.cfg.parallel_config.enable_expert_parallel
+                            and self.cfg.parallel_config.data_parallel_size > 1
+                        ):
+                            speculate_get_output(self.output_tokens, rank_id, is_blocking, True)
+                        else:
+                            speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
                         if self.output_tokens[0] == -2:
                             continue
 
@@ -254,13 +260,13 @@ class TokenProcessor:
                         llm_logger.info(f"finished_task_id: {finished_task_id}")
                         self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
                 if task_id in self.prefill_result_status:
-                    self.split_connector.send_first_token(task.disaggregate_info, [result])
                     self.resource_manager.stop_flags[index] = True
                     self.resource_manager.tasks_list[index] = None
                     self.resource_manager._recycle_block_tables(task)
                     if self.prefill_result_status[task_id] != "finished":
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                    self.split_connector.send_first_token(task.disaggregate_info, [result])
                     del self.resource_manager.req_dict[task_id]
                     break
                 else:
@@ -350,16 +356,22 @@ class TokenProcessor:
 
             task_id = task.request_id
             if self.cfg.speculative_config.method:
-                token_ids = tokens[
-                    2
-                    + SPECULATE_MAX_BSZ
-                    + i * MAX_DRAFT_TOKENS : 2
-                    + SPECULATE_MAX_BSZ
-                    + i * MAX_DRAFT_TOKENS
-                    + accept_num[i]
-                ].tolist()
-                if len(token_ids) == 0 or token_ids[-1] <= 0:
-                    continue
+                if accept_num[i] == -3:
+                    recovery_stop = True
+                    if recovery_stop:
+                        llm_logger.info(f"recovery stop signal found at task {task_id}")
+                    token_ids = [RECOVERY_STOP_SIGNAL]
+                else:
+                    token_ids = tokens[
+                        2
+                        + SPECULATE_MAX_BSZ
+                        + i * MAX_DRAFT_TOKENS : 2
+                        + SPECULATE_MAX_BSZ
+                        + i * MAX_DRAFT_TOKENS
+                        + accept_num[i]
+                    ].tolist()
+                    if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                        continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
@@ -456,7 +468,11 @@ class TokenProcessor:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
-            if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+            if (
+                not is_prefill
+                or self.cfg.scheduler_config.name == "splitwise"
+                or self.cfg.scheduler_config.name == "dp"
+            ):
                 batch_result.append(result)
 
         self.postprocess(batch_result)
@@ -498,7 +514,7 @@ class TokenProcessor:
                 self.cfg.speculative_config.num_speculative_tokens,
             )
 
-        real_accept_num = [x for x in accept_num if x != 0]
+        real_accept_num = [x for x in accept_num if x > 0]
         num_accepted_tokens = sum([x - 1 for x in real_accept_num])
         self.num_accepted_tokens += num_accepted_tokens
         num_emitted_tokens = sum(real_accept_num)

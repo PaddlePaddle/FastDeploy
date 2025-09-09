@@ -73,6 +73,7 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
+        dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
         image_start: int = 0,
         video_start: int = 0,
@@ -145,6 +146,8 @@ class Request:
         # extend block tables
         self.use_extend_tables = False
         self.extend_block_tables = []
+        # dp
+        self.dp_rank = dp_rank
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -187,6 +190,7 @@ class Request:
             image_end=d.get("image_end", 0),
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
+            dp_rank=d.get("dp_rank", None),
         )
 
     @property

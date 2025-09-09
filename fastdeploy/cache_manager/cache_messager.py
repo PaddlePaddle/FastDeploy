@@ -147,11 +147,15 @@ class CacheMessager:
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
-        self.dp_rank_id = self.rank + local_data_parallel_id * self.nranks
+        self.rank_id = self.rank + local_data_parallel_id * self.nranks
 
         layerwise_send_cache_thread = threading.Thread(target=self._prefill_layerwise_send_cache_thread)
         layerwise_send_cache_thread.daemon = True
         layerwise_send_cache_thread.start()
+
+        connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
+        connect_rdma_thread.daemon = True
+        connect_rdma_thread.start()
 
         logger.info(f"cache messager init finished, use {transfer_protocol}")
 
@@ -163,29 +167,32 @@ class CacheMessager:
         try:
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
-            prefilled_layer_name = f"splitwise_complete_prefilled_step_{self.dp_rank_id}.{self.gpu_id}"
-            prefilled_step_name = f"splitwise_complete_prefilled_step_{self.dp_rank_id}.{self.gpu_id}"
+            prefilled_layer_name = f"splitwise_complete_prefilled_step_{self.rank_id}.{self.gpu_id}"
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{self.rank_id}.{self.gpu_id}"
             step_shm_value = IPCSignal(
-                name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",
+                name=f"splitwise_complete_prefilled_step_{self.rank_id}",
                 array=prefilled_step_idx_data,
                 dtype=np.int32,
                 suffix=self.gpu_id,
                 create=not shared_memory_exists(prefilled_step_name),
             )
             layer_shm_value = IPCSignal(
-                name=f"splitwise_complete_prefilled_layer_{self.dp_rank_id}",
+                name=f"splitwise_complete_prefilled_layer_{self.rank_id}",
                 array=prefilled_layer_idx_data,
                 dtype=np.int32,
                 suffix=self.gpu_id,
                 create=not shared_memory_exists(prefilled_layer_name),
             )
-            logger.info(f"splitwise_complete_prefilled_step_{self.dp_rank_id}, gpu_id: {self.gpu_id}")
+            logger.info(f"splitwise_complete_prefilled_step_{self.rank_id}, gpu_id: {self.gpu_id}")
 
             step_shm_value.value[0] = -1
             layer_shm_value.value[0] = -1
 
             self.last_step_idx = -1
             self.last_layer_idx = -1  # int32
+
+            max_step_idx = 100003
+            engine_recycled_count = 0
 
             while True:
 
@@ -206,7 +213,6 @@ class CacheMessager:
                                 current_info["status"] = "init"
                                 logger.info(f"start cache_infos: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
-                            self.last_step_idx = min(self.last_step_idx, current_info["current_id"])
                         else:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
@@ -223,7 +229,18 @@ class CacheMessager:
                 if not self.cache_info:
                     time.sleep(0.001)
                     continue
-                logger.debug(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
+
+                if self.last_step_idx > prefilled_step_idx:
+                    engine_recycled_count += 1
+                self.last_step_idx = prefilled_step_idx  # only copy value read from shm memory
+                prefilled_step_idx = (
+                    prefilled_step_idx + max_step_idx * engine_recycled_count
+                )  # remap prefilled_step_idx for comparison
+
+                logger.debug(
+                    f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx in shm: {self.last_step_idx},"
+                    f"prefilled_step_idx: {prefilled_step_idx} engine_recycled_count {engine_recycled_count}"
+                )
                 for req_id, item in list(self.cache_info.items()):
                     if "status" not in item:
                         continue
@@ -297,9 +314,26 @@ class CacheMessager:
                             self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
                             logger.info(f"put write cache {item['request_id']}")
                         del self.cache_info[req_id]
-
-                    self.last_step_idx = prefilled_step_idx
-                    self.last_layer_idx = prefilled_layer_idx
+                self.last_layer_idx = prefilled_layer_idx
 
         except Exception as e:
             logger.error(f"prefill layerwise send cache thread has exception: {e}, {str(traceback.format_exc())}")
+
+    def _handle_connect_task(self):
+        while True:
+            try:
+                task = self.engine_worker_queue.get_connect_rdma_task()
+                if task is None:
+                    time.sleep(0.001)
+                    continue
+                logger.info(f"_handle_connect_task recv task: {task}")
+                task_id = task["task_id"]
+                ip, rdma_port = task["ip"], task["rdma_port"]
+                status = self.messager["rdma"].connect(ip, rdma_port)
+                if not status:
+                    response = {"task_id": task_id, "success": False}
+                else:
+                    response = {"task_id": task_id, "success": True}
+                self.engine_worker_queue.put_connect_rdma_task_response(response)
+            except Exception as e:
+                logger.error(f"handle_connect_task has exception: {e}")
