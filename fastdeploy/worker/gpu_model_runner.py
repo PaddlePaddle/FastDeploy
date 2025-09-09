@@ -281,6 +281,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        vision_inputs = {}
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -291,27 +292,25 @@ class GPUModelRunner(ModelRunnerBase):
                 if self.enable_mm:
                     inputs = request.multimodal_inputs
                     if request.with_image:
-                        vision_inputs = {}
-                        vision_inputs["input_ids"] = paddle.to_tensor(
-                            inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["token_type_ids"] = paddle.to_tensor(
-                            inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["image_type_ids"] = paddle.to_tensor(
-                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
-                            dtype=paddle.int64,
-                        )
-                        vision_inputs["images"] = paddle.to_tensor(
+                        cur_images = paddle.to_tensor(
                             inputs["images"][request.image_start : request.image_end],
                             dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
                         )
-                        vision_inputs["grid_thw"] = paddle.to_tensor(
+                        cur_grid_thw = paddle.to_tensor(
                             inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
                         )
-                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
-                    else:
-                        self.share_inputs["image_features"] = None
+
+                        if "images" in vision_inputs:
+                            vision_inputs["images"] = paddle.concat([vision_inputs["images"], cur_images], axis=0)
+                        else:
+                            vision_inputs["images"] = cur_images
+
+                        if "grid_thw" in vision_inputs:
+                            vision_inputs["grid_thw"] = paddle.concat(
+                                [vision_inputs["grid_thw"], cur_grid_thw], axis=0
+                            )
+                        else:
+                            vision_inputs["grid_thw"] = cur_grid_thw
 
                     if inputs["position_ids"] is not None:
                         position_ids = paddle.to_tensor(
@@ -432,6 +431,12 @@ class GPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
+        if self.enable_mm:
+            if len(vision_inputs) != 0:
+                self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
+            else:
+                self.share_inputs["image_features"] = None
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
@@ -1281,24 +1286,23 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
-                hidden_states = model_output
             else:
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
 
-                hidden_states = rebuild_padding(
-                    model_output,
-                    self.share_inputs["cu_seqlens_q"],
-                    self.share_inputs["seq_lens_this_time"],
-                    self.share_inputs["seq_lens_decoder"],
-                    self.share_inputs["seq_lens_encoder"],
-                    (
-                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                    ),  # speculative decoding requires
-                    self.parallel_config.max_model_len,
-                )
+            hidden_states = rebuild_padding(
+                model_output,
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["seq_lens_encoder"],
+                (
+                    self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
+                ),  # speculative decoding requires
+                self.parallel_config.max_model_len,
+            )
 
             # 4. Execute spec decode
             logits = self.model.compute_logits(hidden_states)
@@ -1591,21 +1595,20 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
-            hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.parallel_config.max_model_len,
-            )
+        hidden_states = rebuild_padding(
+            model_output,
+            self.share_inputs["cu_seqlens_q"],
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["seq_lens_encoder"],
+            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+            self.parallel_config.max_model_len,
+        )
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
@@ -1984,12 +1987,6 @@ class GPUModelRunner(ModelRunnerBase):
         images = images / self.image_preprocess.image_std_tensor
         images = images.cast("bfloat16")
 
-        token_type_ids = inputs["token_type_ids"]
-        token_type_ids_w_video = token_type_ids
-        input_ids = inputs["input_ids"]
-        # convert to img patch id
-        image_mask = input_ids == self.model_config.im_patch_id
-        image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
@@ -2004,13 +2001,7 @@ class GPUModelRunner(ModelRunnerBase):
                 image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
             # ernie-vl has resampler_model
-            image_features = self.model.resampler_model(
-                image_features,
-                image_mask,
-                token_type_ids_w_video,
-                image_type_ids,
-                grid_thw,
-            )
+            image_features = self.model.resampler_model(image_features, grid_thw)
         return image_features
 
     def extract_vision_features_qwen(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
@@ -2025,7 +2016,6 @@ class GPUModelRunner(ModelRunnerBase):
             dtype=self.parallel_config.dtype,
         ):
             image_features = self.model.visual.extract_feature(images, grid_thw)
-
         return image_features
 
     @paddle.no_grad()

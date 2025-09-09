@@ -1200,8 +1200,10 @@ class FDConfig:
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if self.model_config is not None and self.model_config.enable_mm:
-            self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+        if self.model_config is not None:
+            self.max_prefill_batch = 1
+        if self.model_config.enable_mm:
+            self.max_prefill_batch = 32
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
