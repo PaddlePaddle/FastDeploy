@@ -579,17 +579,17 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.padding_offset,
                 self.cum_offset,
                 self.block_tables,
-                self.encoder_num_blocks_x_cpu,
+                self.encoder_batch_ids,
                 self.encoder_tile_ids_per_batch,
-                self.encoder_num_blocks,
+                self.encoder_num_blocks_x_cpu,
                 self.kv_batch_ids,
                 self.kv_tile_ids_per_batch,
-                self.kv_num_blocks,
+                self.kv_num_blocks_x_cpu,
                 self.decoder_batch_ids,
                 self.decoder_tile_ids_per_batch,
                 self.decoder_num_blocks_cpu,
                 self.max_len_tensor_cpu,
-                self.max_len_kv,
+                self.max_len_kv_cpu,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask
                 None,  # qkv_bias

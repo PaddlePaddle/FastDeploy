@@ -363,7 +363,6 @@ class DeepseekV3MLAAttention(nn.Layer):
             key = paddle.empty_like(query)
             key[..., : self.qk_nope_head_dim] = key_nope
             key[..., self.qk_nope_head_dim :] = key_pe
-            # key = paddle.concat([key_nope, key_pe], axis=-1)
             value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
             fmha_out_prefill = self.mla_attn(
