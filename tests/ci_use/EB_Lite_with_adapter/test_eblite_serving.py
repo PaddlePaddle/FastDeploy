@@ -100,6 +100,20 @@ def kill_process_on_port(port: int):
     except subprocess.CalledProcessError:
         pass
 
+    try:
+        result = subprocess.run(
+            f"ps -ef -ww| grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            pid = int(parts[1])  # ps -ef 的第二列是 PID
+            print(f"Killing PID: {pid}")
+            os.kill(pid, signal.SIGKILL)
+    except Exception as e:
+        print(f"Failed to kill cache manager process: {e}")
+
 
 def clean_ports():
     """
@@ -224,9 +238,11 @@ def test_request_and_response(zmq_req_client):
     zmq_req_client.send_request(request)
     zmq_req_client.request_result(req_id)
     has_is_end_result = False
-    for result in result_queue:
+    while True:
+        result = result_queue.get()
         if result["finished"]:
             has_is_end_result = True
+            break
     assert has_is_end_result is True
 
 
