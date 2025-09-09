@@ -198,6 +198,7 @@ def setup_and_run_server():
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
+        clean_ports()
         print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")

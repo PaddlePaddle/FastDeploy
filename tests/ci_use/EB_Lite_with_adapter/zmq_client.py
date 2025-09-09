@@ -53,7 +53,7 @@ class LLMReqClient:
                 print(f"zmq client occured error {e} type: {type(e)} frames: {frames}")
 
     def start(self, result_queue):
-        threading.Thread(target=self.consume_results, args=(result_queue,)).start()
+        threading.Thread(target=self.consume_results, args=(result_queue,), daemon=True).start()
 
     def exit(self):
         print("exit")
@@ -75,7 +75,7 @@ class LLMControlClient:
         self.task_event = {}
         self.result = {}
         self.response_socket_lock = threading.Lock()
-        threading.Thread(target=self.recv_results).start()
+        threading.Thread(target=self.recv_results, daemon=True).start()
 
     def get_payload(self):
         task_id = f"get_payload_{uuid.uuid4()}"
