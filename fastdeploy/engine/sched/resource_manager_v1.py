@@ -122,6 +122,8 @@ class ResourceManagerV1(ResourceManager):
                 self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+                main_process_metrics.num_requests_waiting.inc(1)
+                main_process_metrics.num_requests_running.dec(1)
                 if preempted_req == request:
                     # No more request to preempt.
                     can_schedule = False
@@ -339,6 +341,8 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
+                            main_process_metrics.num_requests_waiting.dec(1)
+                            main_process_metrics.num_requests_running.inc(1)
                             allocated_position = self.get_available_position()
                             request.idx = allocated_position
                             self.tasks_list[allocated_position] = request
@@ -382,6 +386,8 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
+                            main_process_metrics.num_requests_waiting.dec(1)
+                            main_process_metrics.num_requests_running.inc(1)
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
