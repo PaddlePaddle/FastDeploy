@@ -230,12 +230,13 @@ def test_request_and_response(zmq_req_client):
         "frequency_penalty": 0.0,
     }
     result_queue = queue.Queue()
+    zmq_req_client.start(result_queue)
     zmq_req_client.send_request(request)
     zmq_req_client.request_result(req_id)
     has_is_end_result = False
     while True:
         result = result_queue.get()
-        if result["finished"]:
+        if result[-1]["finished"]:
             has_is_end_result = True
             break
     assert has_is_end_result is True
