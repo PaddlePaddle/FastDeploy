@@ -390,8 +390,9 @@ void GetBlockShapeAndSplitKVBlock(
           chunk_size);
 
     } else {
-        const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
-        const uint32_t decoder_batch_shape = bsz * decoder_max_tile_size_per_bs_q;
+        // const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
+        // Note:(changwenbin)In order to adapt to cudagraph, the maximum value should be taken here
+        const uint32_t decoder_batch_shape = seq_lens_decoder.dims()[0] * 1024;
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_batch_ids.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
