@@ -246,6 +246,15 @@ class EngineService:
                 cur_task_idx = self.resource_manager.req_dict[task.request_id]
                 del self.resource_manager.req_dict[task.request_id]
                 cur_task = self.resource_manager.tasks_list[cur_task_idx]
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    if not task.outputs.token_ids:  # first token is eos in Prefill, just recycle resource and continue
+                        self.resource_manager.stop_flags[cur_task_idx] = True
+                        self.resource_manager.tasks_list[cur_task_idx] = None
+                        self.resource_manager._recycle_block_tables(cur_task)
+                        if task.request_id in self.token_processor.tokens_counter:
+                            del self.token_processor.tokens_counter[task.request_id]
+                        llm_logger.warning(f"{task.request_id} need not decode after first token")
+                        continue
                 cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
                 if self.cfg.speculative_config.method in ["mtp"] and self.cfg.splitwise_role == "decode":
                     cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
@@ -262,13 +271,35 @@ class EngineService:
                     continue
                 self.token_processor.tokens_counter[task.request_id] = 1
                 current_tasks.append(cur_task)
-            self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
+            if current_tasks:
+                self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
             return True
 
         self.resource_manager.check_and_free_block_tables()
 
         if not isinstance(tasks, list):
             tasks = [tasks]
+
+        need_delete_tasks = []
+        for task in tasks:
+            if self.cfg.splitwise_role != "mixed":
+                status, msg = self.split_connector.check_decode_allocated(task)
+                if not status:
+                    llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=task.request_id,
+                                finished=True,
+                                error_code=500,
+                                error_msg=msg,
+                            )
+                        ]
+                    )
+                    need_delete_tasks.append(task)
+                    continue
+        for tmp_task in need_delete_tasks:
+            tasks.remove(tmp_task)
 
         for item in tasks:
             item.schedule_start_time = time.time()
@@ -734,11 +765,16 @@ class EngineService:
                                             if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                                                 self.insert_tasks([task])
                                             else:
+                                                if not self.enable_decode_cache_task:
+                                                    task.error_msg = "Not enough resources"
                                                 new_waiting.append(task)
 
                                         if new_waiting:
-                                            self.waiting_requests.extend(new_waiting)
-                                            llm_logger.info(f"Added {len(new_waiting)} tasks to waiting queue")
+                                            if not self.enable_decode_cache_task:
+                                                self.split_connector.send_cache_infos(new_waiting, -1)
+                                            else:
+                                                self.waiting_requests.extend(new_waiting)
+                                                llm_logger.info(f"Added {len(new_waiting)} tasks to waiting queue")
 
                     else:
                         time.sleep(0.001)

@@ -143,7 +143,37 @@ class DPLocalScheduler(LocalScheduler):
         requests: List[Request] = []
 
         with self.requests_not_empty:
-            while True:
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                while True:
+                    batch_ids = self.requests_not_empty.wait_for(
+                        lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
+                        0.005,
+                    )
+                    if batch_ids:
+                        for request_id in batch_ids:
+                            request = self.requests[request_id]
+                            required_input_blocks = self.calc_required_blocks(
+                                request.prompt_tokens_ids_len, block_size
+                            )
+                            current_prefill_tokens += request.prompt_tokens_ids_len
+                            required_total_blocks += required_input_blocks + reserved_output_blocks
+                            if required_total_blocks > available_blocks:
+                                break
+
+                            requests.append(request.raw)
+                            self.ids_read_cursor += 1
+                            start_batch_time = time.time()
+                            if current_prefill_tokens > max_num_batched_tokens:
+                                break
+                            if len(requests) >= batch:
+                                break
+                    if (
+                        (current_prefill_tokens > max_num_batched_tokens)
+                        or (len(requests) >= batch)
+                        or (time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT)
+                    ):
+                        break
+            else:
                 batch_ids = self.requests_not_empty.wait_for(
                     lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
                     0.005,
@@ -151,25 +181,8 @@ class DPLocalScheduler(LocalScheduler):
                 if batch_ids:
                     for request_id in batch_ids:
                         request = self.requests[request_id]
-                        required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
-                        current_prefill_tokens += request.prompt_tokens_ids_len
-                        required_total_blocks += required_input_blocks + reserved_output_blocks
-                        if required_total_blocks > available_blocks:
-                            break
-
                         requests.append(request.raw)
-                        self.ids_read_cursor += 1
-                        start_batch_time = time.time()
-                        if current_prefill_tokens > max_num_batched_tokens:
-                            break
-                        if len(requests) >= batch:
-                            break
-                if (
-                    (current_prefill_tokens > max_num_batched_tokens)
-                    or (len(requests) >= batch)
-                    or (time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT)
-                ):
-                    break
+
         if batch_ids:
             if len(batch_ids) > 0 and len(requests) == 0:
                 self.scheduler_logger.debug(

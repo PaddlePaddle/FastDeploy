@@ -327,6 +327,22 @@ class SplitwiseConnector:
             client_id=0,
         )
 
+    def check_decode_allocated(self, task):
+        if task.disaggregate_info is None:
+            return True, ""
+        if self.enable_decode_cache_task:
+            return True, ""
+        if task.disaggregate_info["role"] != "prefill":
+            return True, ""
+        while self.current_request_ids[task.request_id] == "init":
+            time.sleep(0.001)
+        msg = self.current_request_ids[task.request_id]
+        del self.current_request_ids[task.request_id]
+        if msg == "finished":
+            return True, ""
+        self.logger.error(f"Receive_decode_allocated error: {msg}")
+        return False, msg
+
     def send_cache_infos(self, tasks, current_id):
         """
         Send cache information to specific port.
@@ -433,8 +449,13 @@ class SplitwiseConnector:
                 self._handle_decode(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
-                    del self.current_request_ids[task["request_id"]]
-                self.engine_worker_queue.put_cache_info(payload)
+                    self.logger.info(f"cache_sync task: {task}")
+                    current_status = task.get("error_msg", "finished")
+                    self.current_request_ids[task["request_id"]] = current_status
+                    if self.enable_decode_cache_task:
+                        del self.current_request_ids[task["request_id"]]
+                    if current_status == "finished":
+                        self.engine_worker_queue.put_cache_info(payload)
 
         except Exception as e:
             logger.error(f"Message processing failed: {e}, {str(traceback.format_exc())}")

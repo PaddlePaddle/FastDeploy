@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import argparse
+import json
 import math
 import threading
 import time
@@ -23,14 +25,69 @@ import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import (
     EngineWorkerQueue,
     IPCSignal,
     shared_memory_exists,
 )
+from fastdeploy.model_executor.ops.gpu import set_data_ipc
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
+
+
+def parse_args():
+    """
+    从命令行解析参数
+    """
+    parser = argparse.ArgumentParser("Cache Messager")
+    parser.add_argument(
+        "--splitwise_role",
+        type=str,
+        default="mixed",
+        help="splitwise role, can be decode, prefill or mixed",
+    )
+    parser.add_argument("--rank", type=int, default=0, help="current rank")
+    parser.add_argument("--device_id", type=int, default=0, help="device id")
+    parser.add_argument("--num_hidden_layers", type=int, default=1, help="model num layers")
+    parser.add_argument("--head_dim", type=int, default=1, help="model head dim")
+    parser.add_argument("--kv_num_head", type=int, default=1, help="model kv num head")
+    parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
+    parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
+    parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
+    parser.add_argument(
+        "--protocol",
+        type=str,
+        default="ipc",
+        help="cache transfer protocol, only surport ipc now",
+    )
+    parser.add_argument("--pod_ip", type=str, default="0.0.0.0", help="pod ip")
+    parser.add_argument(
+        "--engine_worker_queue_port",
+        type=int,
+        default=9923,
+        help="engine worker queue port",
+    )
+    parser.add_argument("--num_gpu_blocks", type=int, default=1, help="gpu cache block number")
+    parser.add_argument("--block_size", type=int, default=64, help="cache block size(tokens)")
+    parser.add_argument(
+        "--cache_dtype",
+        type=str,
+        default="bfloat16",
+        choices=["uint8", "bfloat16"],
+        help="cache dtype",
+    )
+    parser.add_argument(
+        "--speculative_config",
+        type=json.loads,
+        default="{}",
+        help="speculative config",
+    )
+    parser.add_argument("--local_data_parallel_id", type=int, default=0)
+
+    args = parser.parse_args()
+    return args
 
 
 class CacheMessager:
@@ -337,3 +394,91 @@ class CacheMessager:
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
             except Exception as e:
                 logger.error(f"handle_connect_task has exception: {e}")
+
+
+def main():
+    device = args.device_id
+    rank = args.rank
+    paddle.set_device(f"gpu:{device}")
+    cache_type = args.cache_dtype
+    speculative_config = SpeculativeConfig(args.speculative_config)
+    num_extra_layers = speculative_config.num_extra_cache_layer
+    num_extra_layer_gpu_blocks = int(args.num_gpu_blocks * speculative_config.num_gpu_block_expand_ratio)
+    gpu_cache_kvs = {}
+    gpu_cache_k_tensors = []
+    gpu_cache_v_tensors = []
+
+    for i in range(args.num_hidden_layers + num_extra_layers):
+        num_gpu_blocks = args.num_gpu_blocks if i < args.num_hidden_layers else num_extra_layer_gpu_blocks
+
+        gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"] = paddle.full(
+            shape=[
+                num_gpu_blocks,
+                args.kv_num_head,
+                args.block_size,
+                args.head_dim,
+            ],
+            fill_value=0,
+            dtype=cache_type,
+        )
+        gpu_cache_k_tensors.append(gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"])
+        gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"] = paddle.full(
+            shape=[
+                num_gpu_blocks,
+                args.kv_num_head,
+                args.block_size,
+                args.head_dim,
+            ],
+            fill_value=0,
+            dtype=cache_type,
+        )
+        gpu_cache_v_tensors.append(gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
+
+        set_data_ipc(
+            gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
+            f"key_caches_{i}_rank{rank}.device{device}",
+        )
+        set_data_ipc(
+            gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
+            f"value_caches_{i}_rank{rank}.device{device}",
+        )
+    cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
+    logger.info(f"device :{device}")
+    logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
+    logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
+
+    cache_messager = CacheMessager(
+        splitwise_role=args.splitwise_role,
+        transfer_protocol=args.protocol,
+        pod_ip=args.pod_ip,
+        engine_worker_queue_port=args.engine_worker_queue_port,
+        local_data_parallel_id=args.local_data_parallel_id,
+        gpu_cache_kvs=gpu_cache_kvs,
+        rank=rank,
+        nranks=args.mp_num,
+        num_hidden_layers=args.num_hidden_layers + num_extra_layers,
+        gpu_id=device,
+        rdma_port=args.rdma_port,
+    )
+
+    cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
+    cache_ready_signal = IPCSignal(
+        name="cache_ready_signal",
+        array=cache_ready_signal_data,
+        dtype=np.int32,
+        suffix=args.engine_pid,
+        create=False,
+    )
+    cache_ready_signal.value[rank] = 1
+    cache_messager.prefill_layerwise_send_cache_thread()
+
+
+if __name__ == "__main__":
+
+    args = parse_args()
+    rank_id = args.rank + args.local_data_parallel_id * args.mp_num
+    logger = get_logger("cache_messager", f"cache_messager_rank{rank_id}.log")
+
+    logger.info("create cache messager...")
+    logger.info(f"{args}")
+    main()
