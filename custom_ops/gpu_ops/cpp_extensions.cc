@@ -335,6 +335,19 @@ void TextImageIndexOut(const paddle::Tensor &token_type_ids,
                        const paddle::Tensor &text_input,
                        const paddle::Tensor &image_input);
 
+void LimitContentLen(const paddle::Tensor& next_tokens,
+                     const paddle::Tensor& end_thinking_tokens,
+                     const paddle::Tensor& max_content_len,
+                     const paddle::Tensor& max_think_len,
+                     const paddle::Tensor& step_idx,
+                     const paddle::Tensor& eos_token_ids,
+                     const paddle::Tensor& max_dec_len,
+                     const paddle::Tensor& limit_content_status,
+                     const paddle::Tensor& enable_thinking,
+                     const paddle::Tensor& accept_num,
+                     const paddle::Tensor& seq_lens_decoder,
+                     const paddle::Tensor& stop_flags);
+
 void TextImageGatherScatter(paddle::Tensor &input, paddle::Tensor &text_input,
                             paddle::Tensor &image_input,
                             paddle::Tensor &token_type_ids,
