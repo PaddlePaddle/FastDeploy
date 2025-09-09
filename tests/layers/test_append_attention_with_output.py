@@ -382,6 +382,13 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.decoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
         self.decoder_num_blocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
         self.max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
+        self.encoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
+        self.encoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
+        self.encoder_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
+        self.kv_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
+        self.kv_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
+        self.kv_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
+        self.max_len_kv_cpu = paddle.full([1], 0, dtype="int32").cpu()
 
         self.cache_shape = (
             self.max_block_num,
@@ -450,15 +457,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             get_block_shape_and_split_kv_block,
         )
 
-        (
-            encoder_batch_ids,
-            encoder_tile_ids_per_batch,
-            encoder_num_blocks,
-            kv_batch_ids,
-            kv_tile_ids_per_batch,
-            kv_num_blocks,
-            max_len_kv,
-        ) = get_block_shape_and_split_kv_block(
+        get_block_shape_and_split_kv_block(
             self.seq_lens_encoder,
             self.seq_lens_decoder,
             self.seq_lens_this_time,
@@ -466,6 +465,13 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             self.decoder_tile_ids_per_batch,
             self.decoder_num_blocks_cpu,
             self.max_len_tensor_cpu,
+            self.encoder_batch_ids,
+            self.encoder_tile_ids_per_batch,
+            self.encoder_num_blocks_x_cpu,
+            self.kv_batch_ids,
+            self.kv_tile_ids_per_batch,
+            self.kv_num_blocks_x_cpu,
+            self.max_len_kv_cpu,
             64,
             12,
             (self.q_num_head + 2 * self.kv_num_head) // self.kv_num_head,
@@ -491,17 +497,17 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.padding_offset,
                 self.cum_offset,
                 self.block_tables,
-                encoder_batch_ids,
-                encoder_tile_ids_per_batch,
-                encoder_num_blocks,
-                kv_batch_ids,
-                kv_tile_ids_per_batch,
-                kv_num_blocks,
+                self.encoder_batch_ids,
+                self.encoder_tile_ids_per_batch,
+                self.encoder_num_blocks_x_cpu,
+                self.kv_batch_ids,
+                self.kv_tile_ids_per_batch,
+                self.kv_num_blocks_x_cpu,
                 self.decoder_batch_ids,
                 self.decoder_tile_ids_per_batch,
                 self.decoder_num_blocks_cpu,
                 self.max_len_tensor_cpu,
-                max_len_kv,
+                self.max_len_kv_cpu,
                 out,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask
