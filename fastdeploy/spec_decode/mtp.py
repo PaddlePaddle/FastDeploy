@@ -19,9 +19,11 @@ from typing import List
 
 import numpy as np
 import paddle
+from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -52,7 +54,7 @@ class MTPProposer(Proposer):
     Proposer for Multi-Token-Prediction(MTP)
     """
 
-    def __init__(self, cfg, main_model, local_rank, device_id, target_model_inputs):
+    def __init__(self, cfg: FDConfig, main_model: nn.Layer, local_rank: int, device_id: int, target_model_inputs):
         super().__init__(cfg)
         self.num_main_model_layers = self.model_config.num_hidden_layers
         self.local_rank = local_rank
