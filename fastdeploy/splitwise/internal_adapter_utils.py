@@ -40,10 +40,11 @@ class InternalAdapter:
             target=self._recv_external_module_control_instruct, daemon=True
         )
         self.recv_external_instruct_thread.start()
-        self.response_external_instruct_thread = threading.Thread(
-            target=self._response_external_module_control_instruct, daemon=True
-        )
-        self.response_external_instruct_thread.start()
+        if self.cfg.splitwise_role != "mixed":
+            self.response_external_instruct_thread = threading.Thread(
+                target=self._response_external_module_control_instruct, daemon=True
+            )
+            self.response_external_instruct_thread.start()
 
     def _get_current_server_info(self):
         """
