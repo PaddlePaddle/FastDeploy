@@ -578,7 +578,7 @@ class EngineSevice:
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
             self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
-            self.external_adapter = InternalAdapter(
+            self.internal_adapter = InternalAdapter(
                 cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
             )
         else:
