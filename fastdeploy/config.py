@@ -31,7 +31,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
+from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger, console_logger
 
 logger = get_logger("config", "config.log")
 
@@ -967,6 +967,12 @@ class CacheConfig:
     def _verify_args(self):
         if self.gpu_memory_utilization > 1.0:
             raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
+        if self.gpu_memory_utilization >= 0.95:
+            console_logger.warning(
+                f"GPU memory utilization is set to {self.gpu_memory_utilization}, which is >= 0.95. "
+                "This may cause out-of-memory (OOM) issues during inference due to GPU memory fluctuations. "
+                "It is recommended to configure gpu_memory_utilization below 0.9 for stable operation."
+            )
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
 

@@ -1,4 +1,6 @@
 import unittest
+import logging
+from unittest.mock import patch
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -78,6 +80,38 @@ class TestConfig(unittest.TestCase):
         )
         fd_config.init_cache_info()
         assert fd_config.disaggregate_info["role"] == "prefill"
+
+    def test_gpu_memory_utilization_warning(self):
+        """Test that a warning is issued when gpu_memory_utilization >= 0.95"""
+        with patch('fastdeploy.utils.console_logger') as mock_logger:
+            # Test case 1: gpu_memory_utilization = 0.95 should trigger warning
+            cache_config = CacheConfig({"gpu_memory_utilization": 0.95})
+            mock_logger.warning.assert_called_once()
+            warning_call = mock_logger.warning.call_args[0][0]
+            self.assertIn("0.95", warning_call)
+            self.assertIn("out-of-memory", warning_call)
+            self.assertIn("below 0.9", warning_call)
+            
+            # Reset mock
+            mock_logger.reset_mock()
+            
+            # Test case 2: gpu_memory_utilization = 0.99 should trigger warning
+            cache_config = CacheConfig({"gpu_memory_utilization": 0.99})
+            mock_logger.warning.assert_called_once()
+            
+            # Reset mock
+            mock_logger.reset_mock()
+            
+            # Test case 3: gpu_memory_utilization = 0.9 should NOT trigger warning
+            cache_config = CacheConfig({"gpu_memory_utilization": 0.9})
+            mock_logger.warning.assert_not_called()
+            
+            # Reset mock
+            mock_logger.reset_mock()
+            
+            # Test case 4: gpu_memory_utilization = 0.8 should NOT trigger warning
+            cache_config = CacheConfig({"gpu_memory_utilization": 0.8})
+            mock_logger.warning.assert_not_called()
 
 
 if __name__ == "__main__":
