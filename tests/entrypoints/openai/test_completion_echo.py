@@ -39,7 +39,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.completion_handler = None
 
     def test_single_prompt_non_streaming(self):
-        """测试单prompt非流式响应"""
+        """Test echo back prompt in non-streaming of the single prompt"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -71,7 +71,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[0].text, "test prompt generated text")
 
     async def test_echo_back_prompt_and_streaming(self):
-        """测试_echo_back_prompt方法和流式响应的prompt拼接逻辑"""
+        """Test echo back prompt and streaming"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -95,7 +95,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(request.prompt, "test prompt")
 
     def test_multi_prompt_non_streaming(self):
-        """测试多prompt非流式响应"""
+        """Test echo back prompt in non-streaming of the multi prompts"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -187,7 +187,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["outputs"]["text"], "!")
 
     async def test_1_echo_is_false(self):
-        """测试echo为False时，_echo_back_prompt不拼接prompt"""
+        """Test echo back prompt when echo is False"""
         request = CompletionRequest(echo=False, prompt="Hello")
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0

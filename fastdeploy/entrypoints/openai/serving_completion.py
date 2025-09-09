@@ -115,7 +115,13 @@ class OpenAIServingCompletion:
             return ErrorResponse(message=error_msg, code=400)
 
         if request_prompt_ids is not None:
-            request_prompts = request_prompt_ids
+            if isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
+                request_prompts = [self.engine_client.data_processor.tokenizer.decode(request.prompt)]
+            elif isinstance(request.prompt, list) and all(isinstance(item, list) and all(isinstance(x, int) for x in item) for item in request.prompt):
+                request_prompts = [self.engine_client.data_processor.tokenizer.decode(item) for item in request.prompt]
+            else:
+                request_prompts = request_prompt_ids
+            request.prompt = request_prompts
 
         num_choices = len(request_prompts)
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
