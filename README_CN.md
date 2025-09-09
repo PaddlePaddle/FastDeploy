@@ -26,7 +26,9 @@
 # FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
 
 ## 最新活动
-**[2025-08] 🔥 FastDeploy v2.1 全新发布:** 全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
+**[2025-09] 🔥 FastDeploy v2.2 全新发布**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
+
+**[2025-08] FastDeploy v2.1 发布**:全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
 
 **[2025-07] 《FastDeploy2.0推理部署实测》专题活动已上线!** 完成文心4.5系列开源模型的推理部署等任务，即可获得骨瓷马克杯等FastDeploy2.0官方周边及丰富奖金！🎁 欢迎大家体验反馈～ 📌[报名地址](https://www.wjx.top/vm/meSsp3L.aspx#)   📌[活动详情](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
@@ -55,8 +57,9 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [天数 CoreX](./docs/zh/get_started/installation/iluvatar_gpu.md)
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
 - [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
+- [沐曦 GPU](./docs/zh/get_started/installation/metax_gpu.md)
 
-**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 和 沐曦（MetaX）GPU 在内的其他硬件平台正在开发测试中。敬请关注更新！
+**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 等其他硬件平台正在开发测试中。敬请关注更新！
 
 ## 入门指南
 
@@ -66,20 +69,12 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [ERNIE-4.5-VL 部署](./docs/zh/get_started/ernie-4.5-vl.md)
 - [离线推理](./docs/zh/offline_inference.md)
 - [在线服务](./docs/zh/online_serving/README.md)
-- [模型支持列表](./docs/zh/supported_models.md)
 - [最佳实践](./docs/zh/best_practices/README.md)
 
 ## 支持模型列表
 
-| Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
-|:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
-|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| ✅ |128K |
-|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| ✅ | 128K |
-|ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ✅ | ✅|128K |
-|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌  | ✅|128K |
-|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌ | ✅| 128K |
+通过我们的文档了解如何下载模型，如何支持torch格式等：
+- [模型支持列表](./docs/zh/supported_models.md)
 
 ## 进阶用法
 
