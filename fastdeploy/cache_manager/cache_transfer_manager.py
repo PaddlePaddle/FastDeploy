@@ -204,7 +204,6 @@ class CacheTransferManager:
             # val_cache = share_external_data(val_cache, val_name, cache_shape)
             key_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
             val_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
-            logger.info(f"layer {i} | set_data_ipc: ({key_name}, {val_name}), cache shape: {cache_shape}")
             set_data_ipc(key_cache, key_name)
             set_data_ipc(val_cache, val_name)
 
@@ -227,7 +226,6 @@ class CacheTransferManager:
         for i in range(args.num_layers + self.num_extra_layers):
             key_name = f"key_caches_{i}_rank{self.rank}"
             val_name = f"value_caches_{i}_rank{self.rank}"
-            logger.info(f"layer {i} | cuda_host_alloc: ({key_name}, {val_name})")
             self.cpu_cache_kvs[key_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
             self.cpu_cache_kvs[val_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
@@ -445,6 +443,7 @@ class CacheTransferManager:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 try:
                     logger.info("Start clearing GPU caches.")
+                    paddle.set_device(f"gpu:{self.device}")
                     for name, tensor in self.gpu_cache_kvs.items():
                         unset_data_ipc(tensor, name, True, False)
                     self.gpu_cache_kvs.clear()
@@ -454,6 +453,7 @@ class CacheTransferManager:
                     logger.info("GPU caches are cleared.")
 
                     logger.info("Start clearing CPU caches.")
+                    paddle.set_device("cpu")
                     for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
                         cuda_host_free(ptrs)
                     self.cpu_cache_kvs.clear()

@@ -1581,12 +1581,15 @@ class GPUModelRunner(ModelRunnerBase):
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""
         caches = self.share_inputs.pop("caches", None)
+        paddle.set_device(f"gpu:{self.device_id}")
         i = 0
         for tensor in caches:
-            key_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
-            unset_data_ipc(tensor, key_name, True, False)
-            val_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
-            unset_data_ipc(tensor, val_name, True, False)
+            if i % 2 == 0:
+                key_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
+                unset_data_ipc(tensor, key_name, True, False)
+            else:
+                val_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
+                unset_data_ipc(tensor, val_name, True, False)
             i += 1
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
