@@ -72,6 +72,11 @@ Refer to the example code `offline_disaggregated_demo.py` in the `fastdeploy/dem
 ### Multi-machine Disaggregated Deployment
 
 #### Prerequisite: Redis
+
+> **⚠️ NOTE**  
+> **Redis requirement: version 6.2.0 or higher**  
+> Versions below this may not support the required commands.
+> 
 * Installation via `conda`
 
 ```bash
@@ -103,14 +108,17 @@ sudo systemctl start redis
 For multi-machine deployment, confirm that the NIC supports RDMA and that all nodes in the cluster have network connectivity.
 
 **Note**:
-* `KVCACHE_RDMA_NICS` specifies the RDMA NICs of the current machine, with multiple NICs separated by commas.
+* `KVCACHE_RDMA_NICS` specifies RDMA network cards for the current machine, multiple cards should be separated by commas.
+* The repository provides an automatic RDMA network card detection script `bash scripts/get_rdma_nics.sh <device>`, where <device> can be `cpu` or `gpu`.
 
 **Prefill Instance**
 
 ```bash
 export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4.5-300B-A47B-BF16 \
        --port 8180 --metrics-port 8181 \
@@ -133,7 +141,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4.5-300B-A47B-BF16 \
        --port 8184 --metrics-port 8185 \
