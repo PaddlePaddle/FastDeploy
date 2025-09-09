@@ -178,7 +178,7 @@ class TokenProcessor:
                                 )
 
                     except Exception as e:
-                        print(f"Recieve message error: {e}")
+                        print(f"Receive message error: {e}")
                         continue
                 else:
                     is_blocking = True

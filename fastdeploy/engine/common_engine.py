@@ -508,7 +508,7 @@ class EngineService:
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
-                err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
+                err_msg = f"Error happened while insert task to engine: {e}, {traceback.format_exc()!s}."
                 llm_logger.error(err_msg)
 
     def _scheduler_task_to_worker_v1(self):
@@ -560,7 +560,7 @@ class EngineService:
                     time.sleep(0.005)
 
             except Exception as e:
-                err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
+                err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 llm_logger.error(err_msg)
 
     def start_zmq_service(self, api_server_pid=None):
@@ -642,7 +642,7 @@ class EngineService:
                     self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receiving new request from zmq, details={e}, "
+                    f"Error happened while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
@@ -660,7 +660,7 @@ class EngineService:
                     self.zmq_server.send_multipart(request_id, contents)
 
             except Exception as e:
-                llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
+                llm_logger.error(f"Unexcepted error happened: {e}, {traceback.format_exc()!s}")
 
     def split_mode_get_tasks(self):
         """
