@@ -14,6 +14,7 @@ def test_normal_case():
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
+    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
@@ -23,6 +24,7 @@ def test_normal_case():
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
+        speculative_config=speculative_cfg,
         max_num_batched_tokens=engine_args.max_num_batched_tokens,
     )
     cache_manager = PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
@@ -42,7 +44,7 @@ def test_normal_case():
     num_new_block = 50
     req1.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
     req1.num_computed_tokens += 50 * block_size
-    cache_manager.update_cache_blocks(req1, block_size)
+    cache_manager.update_cache_blocks(req1, block_size, req1.num_computed_tokens)
     assert len(cache_manager.gpu_free_block_list) == 50
     # allocate for req2 inputs
     (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req2, block_size)
@@ -53,7 +55,7 @@ def test_normal_case():
     num_new_block = 25
     req2.block_tables.extend(common_block_ids)
     req2.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
-    cache_manager.update_cache_blocks(req2, block_size)
+    cache_manager.update_cache_blocks(req2, block_size, req2.num_computed_tokens)
     # allocate for req3 input
     (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req3, block_size)
     assert len(common_block_ids) == 25
@@ -65,5 +67,5 @@ def test_normal_case():
     num_new_block = 25
     assert cache_manager.can_allocate_gpu_blocks(num_new_block)
     req3.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
-    cache_manager.update_cache_blocks(req3, block_size)
+    cache_manager.update_cache_blocks(req3, block_size, req3.num_computed_tokens)
     assert len(cache_manager.gpu_free_block_list) == 0

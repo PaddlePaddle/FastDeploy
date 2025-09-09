@@ -13,6 +13,7 @@ def test_normal_schedule():
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
+    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
@@ -21,6 +22,7 @@ def test_normal_schedule():
         model_config=model_cfg,
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
+        speculative_config=speculative_cfg,
         graph_opt_config=graph_opt_cfg,
         max_num_batched_tokens=engine_args.max_num_batched_tokens,
     )
@@ -74,6 +76,7 @@ def test_preempted_request():
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
+    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
@@ -83,6 +86,7 @@ def test_preempted_request():
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
+        speculative_config=speculative_cfg,
         max_num_batched_tokens=engine_args.max_num_batched_tokens,
     )
     resource_manager_v1 = ResourceManagerV1(
