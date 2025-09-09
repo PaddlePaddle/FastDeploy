@@ -32,6 +32,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.model_executor.ops.gpu import deep_gemm
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
@@ -336,8 +337,9 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
         # 为了计算attn！
         forward_meta.attn_backend.attention_metadata = metadata
-        forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
-        forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
+
+        forward_meta.decoder_batch_ids = metadata.decoder_batch_ids
+        forward_meta.decoder_tile_ids_per_batch = metadata.decoder_tile_ids_per_batch
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -434,6 +436,18 @@ class Ernie4_5_Model(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
+
+        self.cached_attention_in_out = None
+        self.cuda_graph = None
+
+        self.cached_hidden_input = []
+        self.cached_residual_input = []
+
+        self.cached_hidden_output = []
+        self.cached_residual_output = []
+
+        self.dispatch_allocated_memory = None
+
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
 
         IsH20 = self.fd_config.parallel_config.is_H20
@@ -493,6 +507,12 @@ class Ernie4_5_Model(nn.Layer):
         print("microbatch 中非空数量为：", len([a for a in all_hidden_states if a is not None]))
         print("大王啊")
 
+        can_cuda_graph = False
+        if IsH20:
+            can_cuda_graph = (forward_meta.seq_lens_encoder > 0).sum().item() == 0
+            can_cuda_graph &= (forward_meta.seq_lens_this_time > 0).sum().item() == bs
+        print("can_cuda_graph", can_cuda_graph)
+        
         IsH20 = self.fd_config.parallel_config.is_H20
         IsH100 = self.fd_config.parallel_config.is_H100
         runner = self.layers[3].mlp.fused_moe.quant_method.ep_decoder_runner
@@ -505,6 +525,7 @@ class Ernie4_5_Model(nn.Layer):
             attn_metadata = None
             hidden_states = None
             residual = None            
+            # 他俩是个中间tensor哦！,所以cuda graph不需要手动cache地址！          
             topk_idx = None
             topk_weights = None
 
@@ -555,12 +576,54 @@ class Ernie4_5_Model(nn.Layer):
             # 下面俩是动态变化的，每层的时候是会变化的哦！
             attention_in_out[j].hidden_states = all_hidden_states[j]
             attention_in_out[j].residual = all_residual[j]
+            
+        if IsH20 and can_cuda_graph:
+            if self.cached_attention_in_out == None:
+                self.cached_attention_in_out = attention_in_out
+                self.dispatch_allocated_memory = dispatch_allocated_memory
+                self.cached_hidden_input = [attention_in_out[j].hidden_states for j in range(split_num)]
+                self.cached_residual_input = [attention_in_out[j].residual for j in range(split_num)]
+            
+            else:
+
+                # 需要把新产生的地址赋予给老的 cached 变量!
+                for i in range(split_num):
+                    self.cached_hidden_input[i].copy_(attention_in_out[i].hidden_states, False)
+                    self.cached_residual_input[i].copy_(attention_in_out[i].residual, False)
+                    
+                    from dataclasses import dataclass, fields
+                    person_fields = fields(self.cached_attention_in_out[i].forward_meta)
+                    for field in person_fields:
+                        name = field.name
+                        if name in ["decoder_batch_ids", 
+                                    "decoder_tile_ids_per_batch", 
+                                    "seq_lens_encoder", 
+                                    "seq_lens_decoder", 
+                                    "seq_lens_this_time", 
+                                    "batch_id_per_token", 
+                                    "cu_seqlens_q", 
+                                    "cu_seqlens_k"]:
+                            getattr(self.cached_attention_in_out[i].forward_meta, name).copy_(getattr(attention_in_out[i].forward_meta, name), False)
+                    
+
+                    person_fields = fields(self.cached_attention_in_out[i].attn_metadata)
+                    for field in person_fields:
+                        name = field.name
+                        if name in ["decoder_batch_ids", 
+                                    "decoder_tile_ids_per_batch", 
+                                    "decoder_num_blocks", 
+                                    "kv_batch_ids", 
+                                    "kv_tile_ids_per_batch", 
+                                    "kv_num_blocks",
+                                    "max_len_kv",
+                                    "set_max_lengths"]:
+                            getattr(self.cached_attention_in_out[i].attn_metadata, name).copy_(getattr(attention_in_out[i].attn_metadata, name), False)
 
         self.barrier_id = -1
         def zkk_barrier():
             self.barrier_id += 1
-            paddle.device.synchronize()
-            paddle.distributed.barrier()
+            #paddle.device.synchronize()
+            #paddle.distributed.barrier()
             # print("到达", self.barrier_id)
             #paddle.device.synchronize()
 
@@ -625,43 +688,62 @@ class Ernie4_5_Model(nn.Layer):
 
                 combine_events[i].appendleft(event)
             
-            compute_atten(3, 0)
-            dispatch_send(0)
-            dispatch_wait(0)
-            zkk_barrier()
+            def main_code():
+                compute_atten(3, 0)
+                dispatch_send(0)
+                dispatch_wait(0)
+                zkk_barrier()
 
 
-            cuda_graph = graphs.CUDAGraph()
-            cuda_graph.capture_begin()
+                compute_atten(3, 1)
 
-            compute_atten(3, 1)
-            
-            for layer_id in range(3, self.num_layers):
-                tmp_split_num = range(split_num)
-                if layer_id == 3:
-                    tmp_split_num = [2]
-                for j in tmp_split_num:
+                for layer_id in range(3, self.num_layers):
+                    tmp_split_num = range(split_num)
+                    if layer_id == 3:
+                        tmp_split_num = [2]
+                    for j in tmp_split_num:
+                        
+                        # 上一个batch
+                        dispatch_send((j-1+split_num)%split_num)
+                        dispatch_wait((j-1+split_num)%split_num)
+
+                        compute_atten(layer_id, j)
+
+                        # 上上个batch！
+                        combine_receive((j-2+split_num)%split_num)
+                        combine_wait((j-2+split_num)%split_num)
+                
+                dispatch_send(2)
+                dispatch_wait(2)
+                combine_receive(1)
+                combine_wait(1)
+                combine_receive(2)
+                combine_wait(2)
+
+
+            if can_cuda_graph:
+                if self.cuda_graph is None:
+                    self.cuda_graph = graphs.CUDAGraph()
+                    self.cuda_graph.capture_begin()
                     
-                    # 上一个batch
-                    dispatch_send((j-1+split_num)%split_num)
-                    dispatch_wait((j-1+split_num)%split_num)
+                    main_code()
 
-                    compute_atten(layer_id, j)
+                    self.cuda_graph.capture_end()
+                    self.cuda_graph.replay()
+                    
+                    # 保存输出的地址！
+                    self.cached_hidden_output = [attention_in_out[j].hidden_states for j in range(split_num)]
+                    self.cached_residual_output = [attention_in_out[j].residual for j in range(split_num)]
+                else:
 
-                    # 上上个batch！
-                    combine_receive((j-2+split_num)%split_num)
-                    combine_wait((j-2+split_num)%split_num)
-            
-            dispatch_send(2)
-            dispatch_wait(2)
-            combine_receive(1)
-            combine_wait(1)
-            combine_receive(2)
-            combine_wait(2)
+                    self.cuda_graph.replay()
 
-
-            cuda_graph.capture_end()
-            cuda_graph.replay()
+                    # 将cuda graph的输出变量的tensor赋予给attention_in_out！
+                    for j in range(split_num):
+                        attention_in_out[j].hidden_states = self.cached_hidden_output[j]
+                        attention_in_out[j].residual = self.cached_residual_output[j]
+            else:
+                main_code()
 
         else:
             # 搞一个大槽子放东西！
@@ -829,7 +911,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
-        self.ii = 0
+        self.ii = 10
 
     @classmethod
     def name(self):
