@@ -117,7 +117,9 @@ class OpenAIServingCompletion:
         if request_prompt_ids is not None:
             if isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
                 request_prompts = [self.engine_client.data_processor.tokenizer.decode(request.prompt)]
-            elif isinstance(request.prompt, list) and all(isinstance(item, list) and all(isinstance(x, int) for x in item) for item in request.prompt):
+            elif isinstance(request.prompt, list) and all(
+                isinstance(item, list) and all(isinstance(x, int) for x in item) for item in request.prompt
+            ):
                 request_prompts = [self.engine_client.data_processor.tokenizer.decode(item) for item in request.prompt]
             else:
                 request_prompts = request_prompt_ids
