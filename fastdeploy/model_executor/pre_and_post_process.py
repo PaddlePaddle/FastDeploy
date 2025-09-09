@@ -76,7 +76,7 @@ else:
         update_inputs_v1,
     )
 
-from fastdeploy.inter_communicator import ZmqClient
+from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.output.stream_transfer_data import (
     DecoderState,
     StreamTransferData,
@@ -169,7 +169,7 @@ def post_process_normal(
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
-    zmq_client: ZmqClient = None,
+    zmq_client: ZmqIpcClient = None,
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     # handle vl:
@@ -382,7 +382,7 @@ def post_process(
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
     skip_save_output: bool = False,
-    zmq_client: ZmqClient = None,
+    zmq_client: ZmqIpcClient = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
     if speculative_decoding:

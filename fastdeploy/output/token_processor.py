@@ -29,7 +29,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
-from fastdeploy.inter_communicator import IPCSignal, ZmqClient
+from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
@@ -60,9 +60,7 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            self.zmq_server = ZmqClient(name=f"get_save_output_rank{self.cfg.local_device_ids[0]}", mode=zmq.PULL)
-            self.zmq_server.start_server()
-            self.zmq_server.create_router()
+            self.zmq_server = ZmqIpcServer(name=f"get_save_output_rank{self.cfg.local_device_ids[0]}", mode=zmq.PULL)
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
