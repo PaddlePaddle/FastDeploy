@@ -115,15 +115,7 @@ class OpenAIServingCompletion:
             return ErrorResponse(message=error_msg, code=400)
 
         if request_prompt_ids is not None:
-            if isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
-                request_prompts = [self.engine_client.data_processor.tokenizer.decode(request.prompt)]
-            elif isinstance(request.prompt, list) and all(
-                isinstance(item, list) and all(isinstance(x, int) for x in item) for item in request.prompt
-            ):
-                request_prompts = [self.engine_client.data_processor.tokenizer.decode(item) for item in request.prompt]
-            else:
-                request_prompts = request_prompt_ids
-            request.prompt = request_prompts
+            request_prompts = request_prompt_ids
 
         num_choices = len(request_prompts)
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
@@ -286,6 +278,12 @@ class OpenAIServingCompletion:
 
     async def _echo_back_prompt(self, request, res, idx):
         if res["outputs"].get("send_idx", -1) == 0 and request.echo:
+            if isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
+                request.prompt = [self.engine_client.data_processor.tokenizer.decode(request.prompt)]
+            elif isinstance(request.prompt, list) and all(
+                isinstance(item, list) and all(isinstance(x, int) for x in item) for item in request.prompt
+            ):
+                request.prompt = [self.engine_client.data_processor.tokenizer.decode(item) for item in request.prompt]
             if isinstance(request.prompt, list):
                 prompt_text = request.prompt[idx]
             else:
@@ -506,6 +504,12 @@ class OpenAIServingCompletion:
 
             if request.echo:
                 assert prompt_text is not None
+                if isinstance(prompt_text, list) and all(isinstance(item, int) for item in prompt_text):
+                    prompt_text = [self.engine_client.data_processor.tokenizer.decode(prompt_text)]
+                elif isinstance(prompt_text, list) and all(
+                    isinstance(item, list) and all(isinstance(x, int) for x in item) for item in prompt_text
+                ):
+                    prompt_text = [self.engine_client.data_processor.tokenizer.decode(item) for item in prompt_text]
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
                 if isinstance(prompt_text, list):
                     output_text = prompt_text[idx] + output["text"]
