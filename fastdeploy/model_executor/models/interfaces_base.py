@@ -50,3 +50,9 @@ def determine_model_category(class_name: str):
     elif any(pattern in class_name for pattern in ["Embedding", "ForSequenceClassification"]):
         return ModelCategory.EMBEDDING
     return ModelCategory.TEXT_GENERATION
+
+
+def get_default_pooling_type(model_cls: Type[nn.Layer] = None) -> str:
+    if model_cls is not None:
+        return getattr(model_cls, "default_pooling_type", "LAST")
+    return "LAST"

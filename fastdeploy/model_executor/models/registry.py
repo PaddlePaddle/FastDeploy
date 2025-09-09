@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 from .interfaces_base import (
     determine_model_category,
+    get_default_pooling_type,
     is_multimodal_model,
     is_pooling_model,
     is_text_generation_model,
@@ -88,16 +89,17 @@ class ModelInfo:
     is_multimodal: bool
     is_pooling: bool
     module_path: str
+    default_pooling_type: str
 
     @staticmethod
     def from_model_cls(model_cls: Type[nn.Layer], module_path: str = "") -> "ModelInfo":
-        """从模型类创建 ModelInfo 实例"""
         return ModelInfo(
             architecture=model_cls.__name__,
             category=determine_model_category(model_cls.__name__),
             is_text_generation=is_text_generation_model(model_cls),
             is_multimodal=is_multimodal_model(model_cls.__name__),
             is_pooling=is_pooling_model(model_cls),
+            default_pooling_type=get_default_pooling_type(model_cls),
             module_path=module_path,
         )
 
@@ -179,6 +181,25 @@ class ModelRegistry:
         except Exception as e:
             print(f"检查模型 {architecture} 失败: {e}")
             return None
+
+    def inspect_model_cls(
+        self, architectures: Union[str, List[str]], model_config: ModelConfig = None
+    ) -> Tuple[ModelInfo, str]:
+        if isinstance(architectures, str):
+            architectures = [architectures]
+
+        if not architectures:
+            raise ValueError("No model architectures are specified")
+
+        for arch in architectures:
+            model_info = self._try_inspect_model_cls(arch)
+            if model_info is not None:
+                return (model_info, arch)
+
+        supported_archs = self.get_supported_archs()
+        raise ValueError(
+            f"Model architectures {architectures} are not supported. " f"Supported architectures: {supported_archs}"
+        )
 
     def register_model_class(self, model_class):
         """兼容旧的注册方法"""

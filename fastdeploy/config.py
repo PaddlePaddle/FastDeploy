@@ -19,12 +19,14 @@ from __future__ import annotations
 import enum
 import json
 import os
+from dataclasses import field
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
 from paddleformers.transformers.configuration_utils import PretrainedConfig
+from typing_extensions import assert_never
 
 import fastdeploy
 from fastdeploy import envs
@@ -47,10 +49,7 @@ ConvertOption = Literal["auto", "none", "embed"]
 
 ConvertType = Literal["none", "embed"]
 
-_RUNNER_TASKS: dict[RunnerType, list[TaskOption]] = {
-    "generate": ["generate", "transcription"],
-    "pooling": ["embedding", "embed"],
-}
+_ResolvedTask = Literal["generate", "encode", "embed"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
@@ -202,6 +201,9 @@ class ModelConfig:
         self.model_format = "auto"
         self.runner = "auto"
         self.convert = "auto"
+        self.pooler_config: Optional["PoolerConfig"] = field(init=False)
+        self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
+
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -249,6 +251,34 @@ class ModelConfig:
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
         logger.info(f"self.convert_type:{self.convert_type}")
 
+        registry = self.registry
+        is_generative_model = registry.is_text_generation_model(self.architectures, self)
+        logger.info(f"is_generative_model:{is_generative_model}")
+        is_pooling_model = registry.is_pooling_model(self.architectures, self)
+        logger.info(f"is_pooling_model:{is_pooling_model}")
+
+        if self.runner_type == "generate" and not is_generative_model:
+            generate_converts = _RUNNER_CONVERTS["generate"]
+            if self.convert_type not in generate_converts:
+                raise ValueError("This model does not support '--runner generate.")
+        if self.runner_type == "pooling" and not is_pooling_model:
+            pooling_converts = _RUNNER_CONVERTS["pooling"]
+            if self.convert_type not in pooling_converts:
+                convert_option = "<" + "|".join(pooling_converts) + ">"
+                raise ValueError(
+                    "This model does not support `--runner pooling`. "
+                    f"You can pass `--convert {convert_option} to adapt "
+                    "it into a pooling model."
+                )
+
+        self.supported_tasks = self._get_supported_tasks(self.architectures, self.runner_type, self.convert_type)
+        model_info, arch = registry.inspect_model_cls(self.architectures, self)
+        self._model_info = model_info
+        self._architecture = arch
+        logger.info(f"self._architecuture:{self._architecture}")
+
+        self.pooler_config = self._init_pooler_config()
+
     @property
     def registry(self):
         from fastdeploy.model_executor.models.registry import model_registry
@@ -277,7 +307,6 @@ class ModelConfig:
     def read_from_env(self):
         """
         Read configuration information from environment variables and update the object's attributes.
-
         If an attribute is not present or is an empty string in the environment variables, use the default value.
         """
         self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
@@ -407,6 +436,83 @@ class ModelConfig:
             )
 
         return convert_type
+
+    def _get_supported_generation_tasks(
+        self,
+        architectures: list[str],
+        convert_type: ConvertType,
+    ) -> list[_ResolvedTask]:
+        registry = self.registry
+
+        supported_tasks = list[_ResolvedTask]()
+        if registry.is_text_generation_model(architectures, self) or convert_type in _RUNNER_CONVERTS["generate"]:
+            supported_tasks.append("generate")
+
+        # TODO:Temporarily does not support transcription.
+        return supported_tasks
+
+    def _get_default_pooling_task(
+        self,
+        architectures: list[str],
+    ) -> Literal["embed"]:
+        # Temporarily does not support classification and reward.
+        for arch in architectures:
+            match = try_match_architecture_defaults(arch, runner_type="pooling")
+            if match:
+                _, (_, convert_type) = match
+                assert convert_type != "none"
+                return convert_type
+
+        return "embed"
+
+    def _get_supported_pooling_tasks(
+        self,
+        architectures: list[str],
+        convert_type: ConvertType,
+    ) -> list[_ResolvedTask]:
+        registry = self.registry
+
+        supported_tasks = list[_ResolvedTask]()
+        if registry.is_pooling_model(architectures, self) or convert_type in _RUNNER_CONVERTS["pooling"]:
+            supported_tasks.append("encode")
+
+            extra_task = self._get_default_pooling_task(architectures) if convert_type == "none" else convert_type
+            supported_tasks.append(extra_task)
+
+        return supported_tasks
+
+    def _get_supported_tasks(
+        self,
+        architectures: list[str],
+        runner_type: RunnerType,
+        convert_type: ConvertType,
+    ) -> list[_ResolvedTask]:
+        if runner_type == "generate":
+            return self._get_supported_generation_tasks(architectures, convert_type)
+        if runner_type == "pooling":
+            return self._get_supported_generation_tasks(architectures, convert_type)
+
+        assert_never(runner_type)
+
+    def _init_pooler_config(self) -> Optional["PoolerConfig"]:
+        if self.runner_type == "pooling":
+            if isinstance(self.override_pooler_config, dict):
+                self.override_pooler_config = PoolerConfig(**self.override_pooler_config)
+
+            pooler_config = self.override_pooler_config or PoolerConfig()
+
+            base_config = get_pooling_config(self.model)
+            if base_config is not None:
+                for k, v in base_config.items():
+                    if getattr(pooler_config, k) is None:
+                        setattr(pooler_config, k, v)
+
+            default_pooling_type = self._model_info.default_pooling_type
+            if pooler_config.pooling_type is None:
+                pooler_config.pooling_type = default_pooling_type
+
+            return pooler_config
+        return None
 
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
@@ -1028,8 +1134,35 @@ class PoolerConfig:
     """Controls the behavior of output pooling in pooling models."""
 
     pooling_type: Optional[str] = None
-
+    """
+    The pooling method of the pooling model.
+    """
+    # for embeddings models
     normalize: Optional[bool] = None
+    """
+    Whether to normalize the embeddings outputs. Defaults to True.
+    """
+    dimensions: Optional[int] = None
+    """
+    Reduce the dimensions of embeddings if model
+    support matryoshka representation. Defaults to None.
+    """
+    enable_chunked_processing: Optional[bool] = None
+    """
+    Whether to enable chunked processing for long inputs that exceed the model's
+    maximum position embeddings. When enabled, long inputs will be split into
+    chunks, processed separately, and then aggregated using weighted averaging.
+    This allows embedding models to handle arbitrarily long text without CUDA
+    errors. Defaults to False.
+    """
+    max_embed_len: Optional[int] = None
+    """
+    Maximum input length allowed for embedding generation. When set, allows
+    inputs longer than max_embed_len to be accepted for embedding models.
+    When an input exceeds max_embed_len, it will be handled according to
+    the original max_model_len validation logic.
+    Defaults to None (i.e. set to max_model_len).
+    """
 
 
 class LoRAConfig:

@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 from typing_extensions import assert_never
 
-from fastdeploy.model_executor.models.adapters import as_embedding_model
+# from fastdeploy.model_executor.models.adapters import as_embedding_model
 from fastdeploy.utils import get_logger
 
 logger = get_logger("default_loader_v1", "default_loader_v1.log")
@@ -83,7 +83,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
             pass
         elif convert_type == "embed":
             logger.info("Converting to embedding model.")
-            model_cls = as_embedding_model(model_cls)
+            # model_cls = as_embedding_model(model_cls)
         else:
             assert_never(convert_type)
 
