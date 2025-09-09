@@ -18,15 +18,10 @@ The minimum number of cards required for deployment on the following hardware is
 
 Installation process reference documentation [FastDeploy GPU Install](../get_started/installation/nvidia_gpu.md)
 
-> ⚠️ Precautions:
-> - FastDeploy only supports models in Paddle format – please ensure to download models with the `-Paddle` file extension.
-> - The model name will trigger an automatic download. If the model has already been downloaded, you can directly use the absolute path to the model's download location.
-
 ## 2.How to Use
 ### 2.1 Basic: Launching the Service
 **Example 1:** Deploying a 32K Context Service on a Single RTX 4090 GPU
 ```shell
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
   --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
   --port 8180 \
@@ -38,14 +33,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --limit-mm-per-prompt '{"image": 100, "video": 100}' \
   --reasoning-parser ernie-45-vl \
   --gpu-memory-utilization 0.9 \
-  --enable-chunked-prefill \
   --max-num-batched-tokens 384 \
-  --quantization wint4 \
-  --enable-mm
+  --quantization wint4
 ```
 **Example 2:** Deploying a 128K Context Service on Dual H800 GPUs
 ```shell
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
   --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
   --port 8180 \
@@ -57,13 +49,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --limit-mm-per-prompt '{"image": 100, "video": 100}' \
   --reasoning-parser ernie-45-vl \
   --gpu-memory-utilization 0.9 \
-  --enable-chunked-prefill \
   --max-num-batched-tokens 384 \
-  --quantization wint4 \
-  --enable-mm
+  --quantization wint4
 ```
-
-> ⚠️ For versions 2.1 and above, the new scheduler needs to be enabled via an environment variable `ENABLE_V1_KVCACHE_SCHEDULER=1`. Otherwise, some requests may be truncated before reaching the maximum length or return empty results.
 
 An example is a set of configurations that can run stably while also delivering relatively good performance. If you have further requirements for precision or performance, please continue reading the content below.
 ### 2.2 Advanced: How to Achieve Better Performance
@@ -92,8 +80,8 @@ An example is a set of configurations that can run stably while also delivering 
 
 #### 2.2.2 Chunked Prefill
 - **Parameters：** `--enable-chunked-prefill`
-- **Description：** Enabling `chunked prefill` can **reduce peak GPU memory usage** and **improve service throughput**.
-- **Other relevant configurations**:
+- **Description：** Enabling `chunked prefill` can reduce peak GPU memory usage and improve service throughput. Version 2.2 has **enabled by default**; for versions prior to 2.2, you need to enable it manually—refer to the best practices documentation for 2.1.
+- **Relevant configurations**:
 
     `--max-num-batched-tokens`：Limit the maximum number of tokens per chunk, with a recommended setting of 384.
 
@@ -115,12 +103,7 @@ An example is a set of configurations that can run stably while also delivering 
 - **Description：** Rejection sampling involves generating samples from a proposal distribution that is easy to sample from, thereby avoiding explicit sorting and achieving an effect of improving sampling speed, which can enhance inference performance.
 - **Recommendation：** This is a relatively aggressive optimization strategy that affects the results, and we are still conducting comprehensive validation of its impact. If you have high performance requirements and can accept potential compromises in results, you may consider enabling this strategy.
 
-> **Attention Hyperparameter：**`FLAGS_max_partition_size=1024`
-- **Description：** The hyperparameters for the Append Attention (default) backend have been tested on commonly used datasets, and our results show that setting it to 1024 can significantly improve decoding speed, especially in long-text scenarios.
-- **Recommendation：** In the future, it will be modified to an automatic adjustment mechanism. If you have high performance requirements, you may consider enabling it.
-
 ## 3. FAQ
-**Note:** Deploying multimodal services requires adding parameters to the configuration `--enable-mm`.
 
 ### 3.1 Out of Memory
 If the service prompts "Out of Memory" during startup, please try the following solutions:
