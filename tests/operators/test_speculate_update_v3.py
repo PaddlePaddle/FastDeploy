@@ -131,7 +131,7 @@ class TestSpeculateUpdateV3(unittest.TestCase):
         paddle_inputs = {}
         for k, v in inputs.items():
             paddle_inputs[k] = paddle.to_tensor(v)
-        inputs["not_need_stop"] = inputs["not_need_stop"].to(device=paddle.CPUPlace())
+        paddle_inputs["not_need_stop"] = paddle_inputs["not_need_stop"].to(device=paddle.CPUPlace())
 
         np_inputs = {
             k: (paddle_inputs[k].numpy().copy() if isinstance(paddle_inputs[k], paddle.Tensor) else paddle_inputs[k])
