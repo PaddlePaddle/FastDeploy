@@ -34,9 +34,9 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
@@ -397,7 +397,6 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
@@ -562,10 +561,10 @@ def parse_args():
         help="Configuration of Graph optimization backend.",
     )
     parser.add_argument(
-        "--moba_attention_config",
+        "--plas_attention_config",
         type=json.loads,
         default=None,
-        help="Configation of moba attention.",
+        help="Configation of plas attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -678,7 +677,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
+    plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -778,7 +777,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
-        moba_attention_config=moba_attention_config,
+        plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 

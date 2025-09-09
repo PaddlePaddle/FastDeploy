@@ -54,6 +54,7 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m
     const bool causal,
     const bool is_decoder,
     const bool enable_prefill,
+    const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out);
 
@@ -99,5 +100,6 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m
     const bool causal,
     const bool is_decoder,
     const bool enable_prefill,
+    const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out);
