@@ -34,11 +34,11 @@
 
 ## 支持硬件
 
-| 模型 | [英伟达GPU](./get_started/installation/nvidia_gpu.md) |[昆仑芯P800](./get_started/installation/kunlunxin_xpu.md) | 昇腾910B | [海光K100-AI](./get_started/installation/hygon_dcu.md) | [天数天垓150](./get_started/installation/iluvatar_gpu.md) | [沐曦曦云C550](./get_started/installation/metax_gpu.md.md) | [燧原S60/L600](./get_started/installation/Enflame_gcu.md) |
+| 模型 | [英伟达GPU](./get_started/installation/nvidia_gpu.md) |[昆仑芯P800](./get_started/installation/kunlunxin_xpu.md) | 昇腾910B | [海光K100-AI](./get_started/installation/hygon_dcu.md) | [天数天垓150](./get_started/installation/iluvatar_gpu.md) | [沐曦曦云C550](./get_started/installation/metax_gpu.md) | [燧原S60/L600](./get_started/installation/Enflame_gcu.md) |
 |:------|---------|------------|----------|-------------|-----------|-------------|-------------|
 | ERNIE4.5-VL-424B-A47B | ✅ | 🚧 | 🚧 | ⛔ | ⛔ | ⛔ | ⛔ |
-| ERNIE4.5-300B-A47B | ✅ | ✅ | 🚧 | ✅ | ✅ | 🚧 | ✅ |
-| ERNIE4.5-VL-28B-A3B | ✅ | 🚧 | 🚧 | ⛔ | 🚧 | ⛔ | ⛔ |
+| ERNIE4.5-300B-A47B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
+| ERNIE4.5-VL-28B-A3B | ✅ | 🚧 | 🚧 | ⛔ | 🚧 | 🚧 | ⛔ |
 | ERNIE4.5-21B-A3B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
 | ERNIE4.5-0.3B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
 
