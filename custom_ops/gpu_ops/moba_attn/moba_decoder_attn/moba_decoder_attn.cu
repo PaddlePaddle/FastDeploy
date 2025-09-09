@@ -383,7 +383,7 @@ __global__ __launch_bounds__(Kernel_traits::kNThreads) void moba_decoder_attenti
 
 
 template<typename Kernel_traits, typename ParamType>
-inline __device__ float caluate_logit_scale(const int partition_num, const int pack_max_partition_num, ParamType &params, char * shared_mem, const int seq_len, const int *qk_gate_topk_idx_ptr) {
+inline __device__ float calculate_logit_scale(const int partition_num, const int pack_max_partition_num, ParamType &params, char * shared_mem, const int seq_len, const int *qk_gate_topk_idx_ptr) {
     constexpr int32_t kNFloatPacksize = 16 / sizeof(float);
     constexpr int32_t kNReduceThreads = Kernel_traits::kNReduceThreads;
     const int32_t bi = blockIdx.z;
@@ -524,7 +524,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) moba_decoder_a
     const int kv_head_idx = head_idx / Kernel_traits::kGqaGroupSize;
     const int * qk_gate_topk_idx_ptr = params.qk_gate_topk_idx_ptr + (bi * params.kv_head_num + kv_head_idx) * Kernel_traits::kMaxN;
 
-    float inv_global_exp_sum = caluate_logit_scale<Kernel_traits>(partition_num, pack_max_partition_num, params, shared_mem, seq_len, qk_gate_topk_idx_ptr);
+    float inv_global_exp_sum = calculate_logit_scale<Kernel_traits>(partition_num, pack_max_partition_num, params, shared_mem, seq_len, qk_gate_topk_idx_ptr);
 
 
     using T_vec = Vec<cuteType, kNReducePacksize>;
