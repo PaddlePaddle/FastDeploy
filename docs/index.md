@@ -34,11 +34,11 @@
 
 ## Supported Hardware
 
-| Model | [NVIDIA GPU](./get_started/installation/nvidia_gpu.md) |[Kunlunxin XPU](./get_started/installation/kunlunxin_xpu.md) | Ascend NPU | [Hygon DCU](./get_started/installation/hygon_dcu.md) | [Iluvatar GPU](./get_started/installation/iluvatar_gpu.md) | [MetaX GPU](./get_started/installation/metax_gpu.md.md) | [Enflame GCU](./get_started/installation/Enflame_gcu.md) |
+| Model | [NVIDIA GPU](./get_started/installation/nvidia_gpu.md) |[Kunlunxin XPU](./get_started/installation/kunlunxin_xpu.md) | Ascend NPU | [Hygon DCU](./get_started/installation/hygon_dcu.md) | [Iluvatar GPU](./get_started/installation/iluvatar_gpu.md) | [MetaX GPU](./get_started/installation/metax_gpu.md) | [Enflame GCU](./get_started/installation/Enflame_gcu.md) |
 |:------|---------|------------|----------|-------------|-----------|-------------|-------------|
 | ERNIE4.5-VL-424B-A47B | ✅ | 🚧 | 🚧 | ⛔ | ⛔ | ⛔ | ⛔ |
-| ERNIE4.5-300B-A47B | ✅ | ✅ | 🚧 | ✅ | ✅ | 🚧 | ✅ |
-| ERNIE4.5-VL-28B-A3B | ✅ | 🚧 | 🚧 | ⛔ | 🚧 | ⛔ | ⛔ |
+| ERNIE4.5-300B-A47B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
+| ERNIE4.5-VL-28B-A3B | ✅ | 🚧 | 🚧 | ⛔ | 🚧 | 🚧 | ⛔ |
 | ERNIE4.5-21B-A3B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
 | ERNIE4.5-0.3B | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ |
 
