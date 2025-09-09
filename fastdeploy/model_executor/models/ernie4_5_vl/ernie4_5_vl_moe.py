@@ -56,6 +56,11 @@ if current_platform.is_cuda():
         text_image_gather_scatter,
         text_image_index_out,
     )
+elif current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (
+        text_image_gather_scatter,
+        text_image_index_out,
+    )
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -74,6 +79,7 @@ class VLMoEMeta:
     text_input: paddle.Tensor
     text_index: paddle.Tensor
     image_index: paddle.Tensor
+    image_mask: paddle.Tensor
     token_type_ids: paddle.Tensor
     image_token_num: paddle.Tensor
 
@@ -84,6 +90,7 @@ class VLMoEMeta:
             f"  text_input: {self.text_input}, pointer: {self.text_input.data_ptr()}\n"
             f"  text_index: {self.text_index}, pointer: {self.text_index.data_ptr()}\n"
             f"  image_index: {self.image_index}, pointer: {self.image_index.data_ptr()}\n"
+            f"  image_mask: {self.image_mask}, pointer: {self.image_mask.data_ptr()}\n"
             f"  token_type_ids: {self.token_type_ids}, pointer: {self.token_type_ids.data_ptr()}\n\n"
             f")"
         )
@@ -415,6 +422,11 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
+        },
+        "image_mask": {
+            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "dtype": "bool",
+            "value": False,
         },
         "text_index": {
             "shape": ["parallel_config.max_model_len"],
@@ -762,6 +774,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
+        vl_moe_meta: Optional[VLMoEMeta] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
         if image_token_num > 0:
@@ -781,6 +794,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             image_token_num=vl_moe_meta.image_token_num.item(),
         )
         self._input_embeddings.copy_(input_embeddings, False)
+
+        if vl_moe_meta.image_token_num.item() > 0:  # for XPU
+            forward_meta.token_type_ids = vl_moe_meta.token_type_ids
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,

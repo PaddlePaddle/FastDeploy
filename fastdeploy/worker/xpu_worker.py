@@ -15,6 +15,7 @@
 """
 
 import gc
+import time
 from typing import List, Optional
 
 import paddle
@@ -51,12 +52,13 @@ class XpuWorker(WorkerBase):
         """Initialize device and Construct model runner"""
         if paddle.is_compiled_with_xpu():
             # Set environment variable
+            self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"xpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
-            self.device_ids = self.parallel_config.device_ids.split(",")
 
             gc.collect()
+            paddle.device.xpu.empty_cache()
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
@@ -69,12 +71,11 @@ class XpuWorker(WorkerBase):
             local_rank=self.local_rank,
         )
 
-    def graph_optimize_and_warm_up_model(self) -> None:
+    def exist_prefill(self):
         """
-        Perform the warm-up and the graph optimization
+        check whether prefill stage exist
         """
-        if self.model_runner.graph_opt_level >= 1:
-            self.model_runner.sot_warmup()
+        return self.model_runner.exist_prefill()
 
     def determine_available_memory(self) -> int:
         """
@@ -95,20 +96,30 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory,
         )
 
-        assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
-        assert (
-            len(self.device_ids) > self.local_rank
-        ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
-
-        total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
-        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
-        free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
+        # 1. Record memory state before profile run
+        start_time = time.perf_counter()
+        Gb = 1024**3
+        local_rank = self.local_rank % 8
+        paddle.device.xpu.reset_max_memory_reserved(local_rank)
+        paddle.device.xpu.reset_max_memory_allocated(local_rank)
+        paddle_reserved_mem_before_run = paddle.device.xpu.max_memory_reserved(local_rank)
+        paddle_allocated_mem_before_run = paddle.device.xpu.max_memory_allocated(local_rank)
+        before_run_mem_total = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
+        before_run_mem_used = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        before_run_mem_free = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
 
         logger.info(
-            f"Before warm up, total_memory: {total_memory}, \
-                    used_memory: {used_memory}, free_memory: {free_memory}"
+            (
+                "Before running the profile, the memory usage info is as follows:",
+                f"\nDevice Total memory: {before_run_mem_total / Gb}",
+                f"\nDevice used memory: {before_run_mem_used / Gb}",
+                f"\nDevice free memory: {before_run_mem_free / Gb}",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
+            )
         )
 
+        # 2. Profile run
         self.model_runner.prepare_profile()
         if self.parallel_config.use_ep:
             logger.warning("EP mode does not support profile run.")
@@ -116,37 +127,54 @@ class XpuWorker(WorkerBase):
             self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
-        total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
-        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
-        available_kv_cache_memory = total_available_memory - used_memory
+        # 3. Statistical memory information
+        paddle_reserved_mem_after_run = paddle.device.xpu.max_memory_reserved(local_rank)
+        paddle_allocated_mem_after_run = paddle.device.xpu.max_memory_allocated(local_rank)
+
         model_block_memory_used = self.cal_theortical_kvcache()
+        paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
+
+        paddle.device.xpu.empty_cache()
+
+        after_run_mem_total = xpu_get_total_global_memory(int(self.device_ids[self.local_rank])).item()
+        after_run_mem_used = xpu_get_used_global_memory(int(self.device_ids[self.local_rank])).item()
+        after_run_mem_free = xpu_get_free_global_memory(int(self.device_ids[self.local_rank])).item()
+
+        available_kv_cache_memory = (
+            after_run_mem_total * self.cache_config.gpu_memory_utilization - after_run_mem_used - paddle_peak_increase
+        )
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        
         if self.parallel_config.use_ep:
             available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
-        self.model_runner.clear_block_table()
-
+        end_time = time.perf_counter()
         logger.info(
-            f"After warm up, total_available_memory: {total_available_memory}, \
-                    used_memory: {used_memory}, available_kv_cache_memory: {available_kv_cache_memory}"
+            (
+                "After running the profile, the memory usage info is as follows:",
+                f"\nDevice Total memory: {after_run_mem_total / Gb}",
+                f"\nDevice used memory: {after_run_mem_used / Gb}",
+                f"\nDevice free memory: {after_run_mem_free / Gb}",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
+                f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
+                f"Profile time: {end_time - start_time}",
+            )
         )
-        paddle.device.xpu.empty_cache()
-        return available_kv_cache_memory  # approximate value
 
-    def cal_theortical_kvcache(self) -> int:
-        """ """
-        return self.model_runner.cal_theortical_kvcache()
+        return available_kv_cache_memory  # return to calculate the block num in this device
 
     def load_model(self) -> None:
-        """ """
+        """Load model"""
         self.model_runner.load_model()
 
     def get_model(self) -> nn.Layer:
-        """ """
+        """Get current model"""
         return self.model_runner.get_model()
 
     def initialize_cache(self, num_gpu_blocks: int) -> None:
-        """ """
+        """Initizlize the KV Cache with accurate num_gpu_blocks"""
+        # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
     def execute_model(
@@ -158,12 +186,6 @@ class XpuWorker(WorkerBase):
         """ """
         return self.model_runner.execute_model(model_forward_batch, num_running_requests, is_dummy_run)
 
-    def exist_prefill(self):
-        """
-        check whether prefill stage exist
-        """
-        return self.model_runner.exist_prefill()
-
     def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int = -1) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
@@ -174,6 +196,17 @@ class XpuWorker(WorkerBase):
         else:
             self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
 
+    def graph_optimize_and_warm_up_model(self) -> None:
+        """
+        Perform the warm-up and the graph optimization
+        """
+        if self.model_runner.graph_opt_level >= 1:
+            self.model_runner.sot_warmup()
+
     def check_health(self) -> bool:
         """ """
         return True
+
+    def cal_theortical_kvcache(self) -> int:
+        """Calculate the block memory required"""
+        return self.model_runner.cal_theortical_kvcache()
