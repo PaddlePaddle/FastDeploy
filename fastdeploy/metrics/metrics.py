@@ -20,6 +20,7 @@ metrics
 import os
 import shutil
 from typing import Set
+import uuid
 
 from prometheus_client import (
     CollectorRegistry,
@@ -41,7 +42,7 @@ def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
     """
     base_dir = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
     if instance_id is None:
-        instance_id = str(os.getpid())
+        instance_id =  str(uuid.uuid4())
     prom_dir = f"{base_dir}_{instance_id}"
 
     if os.path.exists(prom_dir):
