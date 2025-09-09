@@ -164,11 +164,6 @@ def setup_and_run_server():
         "128",
         "--quantization",
         "wint4",
-        "--use-cudagraph",
-        "--graph-optimization-config",
-        '{"cudagraph_capture_sizes": [1]}',
-        "--guided-decoding-backend",
-        "auto",
     ]
 
     # Start subprocess in new process group
@@ -229,7 +224,7 @@ def test_request_and_response(zmq_req_client):
         "messages": [],
         "temperature": 0.8,
         "penalty_score": 1.0,
-        "repetition_penalty": 0.0,
+        "repetition_penalty": 1.0,
         "presence_penalty": 0,
         "top_p": 0.8,
         "frequency_penalty": 0.0,
