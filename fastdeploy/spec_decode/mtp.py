@@ -269,12 +269,19 @@ class MTPProposer(Proposer):
         )
 
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
-        self.model_inputs["rope_emb"] = get_rope(
-            rotary_dim=self.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=self.model_config.rope_theta,
-            model_config=self.model_config,
-        )
+        if len(self.main_model_inputs["rope_emb"].shape) == 5:
+            self.model_inputs["rope_emb"] = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.model_config.rope_theta,
+                model_config=self.model_config,
+            )
+        else:
+            self.model_inputs["max_content_len"] = paddle.clone(self.main_model_inputs["max_content_len"])
+            self.model_inputs["max_think_len"] = paddle.clone(self.main_model_inputs["max_think_len"])
+            self.model_inputs["limit_content_status"] = paddle.clone(self.main_model_inputs["limit_content_status"])
+            self.model_inputs["enable_thinking"] = paddle.clone(self.main_model_inputs["enable_thinking"])
+            self.model_inputs["rope_emb"] = paddle.clone(self.main_model_inputs["rope_emb"])
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
         self.model_inputs["top_p"] = self.main_model_inputs["top_p"]
@@ -294,6 +301,7 @@ class MTPProposer(Proposer):
         # Integrate the updated results in model forward
         self.model_inputs["base_model_draft_tokens"] = self.main_model_inputs["draft_tokens"]
         self.model_inputs["substep"] = 0
+        self.max_num_seqs = self.main_model_inputs["draft_tokens"].shape[0]
 
         # Input tokens
         self.model_inputs["draft_tokens"] = paddle.full(
