@@ -143,9 +143,6 @@ fp8_fp8_gemm_scale_bias_act.cu
 fp8_fp8_dual_gemm_scale_bias_act.cu
 visitor_fp8_gemm_fused.cu
 
-# third party
-custom_ops/third_party
-
 fastdeploy/model_executor/ops/base
 fastdeploy/model_executor/ops/gpu/deep_gemm
 
@@ -168,8 +165,6 @@ custom_ops/tmp*
 build
 
 .ccls-cache
-
-third_party
 
 custom_ops/gpu_ops/w4afp8_gemm/w4afp8_gemm_*.cu
 custom_ops/gpu_ops/w4afp8_gemm/w4afp8_gemm_template.h
