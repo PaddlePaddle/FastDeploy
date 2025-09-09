@@ -360,11 +360,10 @@ class MTPProposer(Proposer):
         if "caches" not in self.model_inputs:
             self.initialize_kv_cache()
         req_len = len(req_dicts)
-        # has_prefill_task = False
-        # has_decode_task = False
+
         for i in range(req_len):
             request = req_dicts[i]
-            logger.info(f"{i}th request-{request.request_id}: {request}")
+            logger.debug(f"{i}th request-{request.request_id}: {request}")
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index
