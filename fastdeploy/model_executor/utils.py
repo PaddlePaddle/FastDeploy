@@ -199,3 +199,14 @@ def temporary_dtype(dtype: str):
         yield
     finally:
         paddle.set_default_dtype(orig_dtype)
+
+
+@contextmanager
+def switch_config_context(config_obj, config_attr_name, value):
+    """switch_config_context"""
+    origin_value = getattr(config_obj, config_attr_name)
+    setattr(config_obj, config_attr_name, value)
+    try:
+        yield
+    finally:
+        setattr(config_obj, config_attr_name, origin_value)

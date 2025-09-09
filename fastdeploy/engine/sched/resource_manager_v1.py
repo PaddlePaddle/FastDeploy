@@ -99,9 +99,13 @@ class ResourceManagerV1(ResourceManager):
 
     def get_new_block_nums(self, request: Request, num_new_tokens: int):
         self.check_and_free_block_tables()
-        return (
+        block_num = (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
         ) // self.config.cache_config.block_size - len(request.block_tables)
+
+        if self.config.speculative_config.method is not None:
+            block_num = min(block_num + 1, self.config.cache_config.max_block_num_per_seq)
+        return block_num
 
     def _prepare_prefill_task(self, request, new_token_num):
         request.prefill_start_index = request.num_computed_tokens
@@ -359,7 +363,9 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if self.config.model_config.enable_mm and self.exist_prefill(scheduled_reqs):
+                    if (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(
+                        scheduled_reqs
+                    ):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
