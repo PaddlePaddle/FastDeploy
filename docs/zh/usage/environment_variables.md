@@ -71,5 +71,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 是否使用DeepGemm后端的FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM":
     lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
+
+    # 是否使用 Machete 后端的 wint4 GEMM.
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
 }
 ```

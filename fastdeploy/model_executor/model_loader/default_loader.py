@@ -51,7 +51,7 @@ class DefaultModelLoader(BaseModelLoader):
             paddle.device.cuda.empty_cache()
             paddle.device.synchronize()
 
-    @measure_time
+    @measure_time()
     def load_weights(self, model, fd_config: FDConfig, architectures: str) -> None:
         model_class = ModelRegistry.get_pretrain_cls(architectures)
 
