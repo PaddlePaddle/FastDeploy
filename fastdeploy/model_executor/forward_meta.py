@@ -232,6 +232,10 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
+    # position embedding type in rope, supports 'NORMAL' or 'HALF_HEAD_DIM'
+    pos_emb_type: Optional[str] = "NORMAL"
+    # used in VL model, record the token type, 1 for image, 0 for text
+    token_type_ids: Optional[paddle.Tensor] = None
 
 
 @dataclass
