@@ -281,6 +281,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        vision_inputs = {}
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -291,7 +292,7 @@ class GPUModelRunner(ModelRunnerBase):
                 if self.enable_mm:
                     inputs = request.multimodal_inputs
                     if request.with_image:
-                        vision_inputs = {}
+                        # TODO: ernie model vit del input_ids/token_type_ids/image_type_ids param
                         vision_inputs["input_ids"] = paddle.to_tensor(
                             inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
                         )
@@ -302,16 +303,26 @@ class GPUModelRunner(ModelRunnerBase):
                             inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
                             dtype=paddle.int64,
                         )
-                        vision_inputs["images"] = paddle.to_tensor(
+
+                        cur_images = paddle.to_tensor(
                             inputs["images"][request.image_start : request.image_end],
                             dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
                         )
-                        vision_inputs["grid_thw"] = paddle.to_tensor(
+                        cur_grid_thw = paddle.to_tensor(
                             inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
                         )
-                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
-                    else:
-                        self.share_inputs["image_features"] = None
+
+                        if "images" in vision_inputs:
+                            vision_inputs["images"] = paddle.concat([vision_inputs["images"], cur_images], axis=0)
+                        else:
+                            vision_inputs["images"] = cur_images
+
+                        if "grid_thw" in vision_inputs:
+                            vision_inputs["grid_thw"] = paddle.concat(
+                                [vision_inputs["grid_thw"], cur_grid_thw], axis=0
+                            )
+                        else:
+                            vision_inputs["grid_thw"] = cur_grid_thw
 
                     if inputs["position_ids"] is not None:
                         position_ids = paddle.to_tensor(
@@ -432,6 +443,12 @@ class GPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
+        if self.enable_mm:
+            if len(vision_inputs) != 0:
+                self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
+            else:
+                self.share_inputs["image_features"] = None
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
