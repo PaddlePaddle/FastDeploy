@@ -130,6 +130,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
     async def test_multi_prompt_streaming(self):
+        """Test echo back prompt in streaming of the multi prompts"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -160,6 +161,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(request.prompt, ["prompt1", "prompt2"])
 
     async def test_echo_back_prompt_and_streaming1(self):
+        """Test echo back prompt when prompt is list and send_idx is 0"""
         request = CompletionRequest(echo=True, prompt=["Hello", "World"])
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
@@ -169,6 +171,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["outputs"]["text"], "Hello!")
 
     async def test_1_prompt_is_string_and_send_idx_is_0(self):
+        """Test echo back prompt when prompt is string and send_idx is 0"""
         request = CompletionRequest(echo=True, prompt="Hello")
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
@@ -178,6 +181,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["outputs"]["text"], "Hello!")
 
     async def test_1_send_idx_is_not_0(self):
+        """Test echo back prompt when prompt is string and send_idx is not 0"""
         request = CompletionRequest(echo=True, prompt="Hello")
         res = {"outputs": {"send_idx": 1, "text": "!"}}
         idx = 0
