@@ -291,7 +291,7 @@ class OpenAIServingCompletion:
                 prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt[idx])
         return prompt_text
 
-    async def _process_echo_logic(self, request, idx, res_outputs, prompt_text):
+    async def _process_echo_logic(self, request, idx, res_outputs):
         """
         Process the echo logic and return the modified text.
         """

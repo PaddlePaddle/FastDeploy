@@ -163,8 +163,6 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(len(response.choices), 2)
-        print("response.choices[0].text", response.choices[0].text)
-        print("response.choices[1].text", response.choices[1].text)
         self.assertEqual(response.choices[0].text, "decoded_[1, 2, 3] response1")
         self.assertEqual(response.choices[1].text, "decoded_[4, 5, 6] response2")
 
@@ -176,8 +174,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        prompt_text = ""
-        res = await instance._process_echo_logic(request, idx, res["outputs"], prompt_text)
+        res = await instance._process_echo_logic(request, idx, res["outputs"])
         self.assertEqual(res["text"], "test prompt!")
 
     """Testing echo prompts in streaming of a single int prompt"""
@@ -188,8 +185,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        prompt_text = ""
-        res = await instance._process_echo_logic(request, idx, res["outputs"], prompt_text)
+        res = await instance._process_echo_logic(request, idx, res["outputs"])
         self.assertEqual(res["text"], "decoded_[1, 2, 3]!")
 
     """Testing echo prompts in streaming of multi str prompt"""
@@ -200,8 +196,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        prompt_text = ""
-        res = await instance._process_echo_logic(request, idx, res["outputs"], prompt_text)
+        res = await instance._process_echo_logic(request, idx, res["outputs"])
         self.assertEqual(res["text"], "test prompt1!")
 
 
