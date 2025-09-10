@@ -143,9 +143,9 @@ function build_and_install_ops() {
   TMP_DIR_REAL_PATH=`readlink -f ${OPS_TMP_DIR}`
   is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
   if [ "$is_xpu" = "True" ]; then
-    cd xpu_ops/src
+    cd xpu_ops
     bash build.sh ${TMP_DIR_REAL_PATH}
-    cd ../..
+    cd ..
   elif [ "$FD_CPU_USE_BF16" == "true" ]; then
     if [ "$FD_BUILDING_ARCS" == "" ]; then
       FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
