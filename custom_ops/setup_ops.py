@@ -43,7 +43,17 @@ def update_git_repo():
         original_dir = os.getcwd()
         submodule_dir = os.path.dirname(os.path.abspath(__file__))
         third_party_path = os.path.join(submodule_dir, "third_party")
-        if not os.path.exists(third_party_path):
+        root_path = Path(third_party_path)
+
+        # check if third_party is empty
+        update_third_party = False
+        for dirpath in root_path.iterdir():
+            if dirpath.is_dir():
+                has_content = any(dirpath.iterdir())
+                if not has_content:
+                    update_third_party = True
+
+        if update_third_party:
             os.chdir(submodule_dir)
             subprocess.run(
                 "git submodule sync --recursive && git submodule update --init --recursive",
