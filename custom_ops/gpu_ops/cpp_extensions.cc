@@ -414,8 +414,8 @@ std::vector<paddle::Tensor> MoEDeepGEMMDePermute(
     const paddle::Tensor &topk_idx, const paddle::Tensor &topk_weights);
 
 void TextImageIndexOut(const paddle::Tensor &token_type_ids,
-                       const paddle::Tensor &text_input,
-                       const paddle::Tensor &image_input);
+                        paddle::Tensor &text_input,
+                        paddle::Tensor &image_input);
 
 void TextImageGatherScatter(paddle::Tensor &input, paddle::Tensor &text_input,
                             paddle::Tensor &image_input,
