@@ -285,7 +285,7 @@ void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_this_time,
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
-    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &decoder_num_blocks_cpu,   // Inplace, Pinned Memory
     paddle::Tensor &decoder_num_blocks_device,  // Inplace
     paddle::Tensor &decoder_chunk_size_device,  // Inplace
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, CPU
@@ -359,15 +359,21 @@ void GetBlockShapeAndSplitKVBlock(
                                  block_size,
                                  sm_cout);
 
-      decoder_num_blocks_x_cpu.copy_(
-          decoder_num_blocks_device, decoder_num_blocks_x_cpu.place(), false);
+      decoder_num_blocks_cpu.copy_(
+          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
       auto decoder_chunk_size_cpu =
           decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
 
       //  NOTE: (changwenbin) When using auto_chunk,
       // decode_max_tile_size must take into account the maximum case, where * 1024 can cover 128K.
-      const uint32_t decoder_batch_shape = seq_lens_decoder.dims()[0] * 1024;
+      // const uint32_t decoder_batch_shape = seq_lens_decoder.dims()[0] * 1024;
+
+      const uint32_t decoder_max_tile_size_per_bs_q =
+          div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
+      const uint32_t decoder_batch_shape =
+          bsz * 1024 * decoder_max_tile_size_per_bs_q;
+
       PADDLE_ENFORCE_GPU_SUCCESS(
           cudaMemsetAsync(decoder_batch_ids.data<int>(),
                           0,
@@ -390,13 +396,13 @@ void GetBlockShapeAndSplitKVBlock(
           chunk_size);
 
     } else {
-        // const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
         // Note:(changwenbin)In order to adapt to cudagraph, the maximum value should be taken here
-        const uint32_t decoder_batch_shape = seq_lens_decoder.dims()[0] * 1024;
+        const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
+        const uint32_t decoder_batch_shape = bsz * 1024 * decoder_max_tile_size_per_bs_q;
+
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_batch_ids.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-            decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
+        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
         split_q_block<<<1, 32, 0, stream>>>(
             seq_lens_this_time.data<int>(),
@@ -408,11 +414,18 @@ void GetBlockShapeAndSplitKVBlock(
             decoder_block_shape_q,
             group_size);
 
-        decoder_num_blocks_x_cpu.copy_(
-            decoder_num_blocks_device, decoder_num_blocks_x_cpu.place(), false);
+        decoder_num_blocks_cpu.copy_(
+            decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
             decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
+  } else {
+      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+          decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+          decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
+      decoder_num_blocks_cpu.copy_(
+          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
   }
 
   // encoder
@@ -456,7 +469,7 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "seq_lens_this_time",
       "decoder_batch_ids",
       "decoder_tile_ids_per_batch",
-      "decoder_num_blocks_x_cpu",
+      "decoder_num_blocks_cpu",
       "decoder_num_blocks_device",
       "decoder_chunk_size_device",
       "max_len_tensor_cpu",
