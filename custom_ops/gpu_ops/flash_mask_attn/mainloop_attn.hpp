@@ -28,6 +28,7 @@ enum class AttnNamedBarriers {
     WarpSchedulerWG2 = 5,
     WarpSchedulerWG3 = 6,
 };
+
 template <typename Ktraits>
 struct CollectiveMainloopAttn {
 
@@ -387,7 +388,7 @@ struct CollectiveMainloopAttn {
         Tensor scores_scale = make_fragment_like(softmax.row_max);
         clear(scores_scale);
 
-        #pragma unroll 1
+        #pragma unroll 2
         for (; n_block > 0; --n_block) {
             Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
             consumer_wait(pipeline_k, smem_pipe_read_k);
@@ -407,8 +408,8 @@ struct CollectiveMainloopAttn {
             softmax.rescale_o(tOrO, scores_scale);
             consumer_wait(pipeline_v, smem_pipe_read_v);
             gemm</*zero_init=*/false, /*wg_wait=*/-1>(tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
-            warpgroup_wait<1>();
             warp_scheduler_barrier_arrive();
+            warpgroup_wait<1>();
             pipeline_k.consumer_release(smem_pipe_read_k);  // release K
             cute::copy(softmax.template max</*Is_first=*/false>(tSrS, mainloop_params.softmax_scale_log2), scores_scale);
             softmax.template online_softmax</*Is_first=*/false>(tSrS, mainloop_params.softmax_scale_log2);
@@ -429,7 +430,6 @@ struct CollectiveMainloopAttn {
         ++smem_pipe_read_v;
 
         softmax.rescale_o(tOrO, scores_scale);
-        return;
     }
 
     template <int NumMmaThreads, typename SharedStorage, typename FrgTensorO, typename TiledMma, typename T>
@@ -451,9 +451,10 @@ struct CollectiveMainloopAttn {
         Tensor taccOrO = smem_thr_copy_O.retile_S(tOrO_out);
         Tensor taccOsO = smem_thr_copy_O.partition_D(sO);
 
+        cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(AttnNamedBarriers::ValueEmpty) /*id*/);
         cute::copy(smem_tiled_copy_O, taccOrO, taccOsO);
-
-        cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
+        cutlass::arch::fence_view_async_shared(); // ensure smem writes are visible to TMA
+        cutlass::arch::NamedBarrier::arrive(NumMmaThreads + cutlass::NumThreadsPerWarp,cutlass::arch::ReservedNamedBarriers::EpilogueBarrier);
 
         Tensor gO = make_tensor(make_gmem_ptr(out_ptr),
             Shape<Int<kBlockM>, Int<kHeadDim>>{},

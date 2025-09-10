@@ -161,7 +161,7 @@ class Attention(nn.Layer):
             )
 
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
-            if fd_config.quant_config.kv_cache_quant_type == "int2_zp":
+            if fd_config.quant_config.kv_cache_quant_type == "dynamic_int2_zp":
                 self.c16_remain_seq_len = 128
                 self.block_size = 64
                 self.cache_k_c16 = paddle.zeros(

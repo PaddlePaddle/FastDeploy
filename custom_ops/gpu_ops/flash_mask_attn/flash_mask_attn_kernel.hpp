@@ -108,8 +108,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     const int real_seq = seq_len_q - m_block * kBlockM;
 
-    const int n_block_max = NeedMask ? cute::ceil_div(mask[min(kBlockM - 1, real_seq - 1)], kBlockN) : cute::ceil_div((m_block + 1) * kBlockM + seq_len_k - seq_len_q, kBlockN);
-
+    const int n_block_max = NeedMask ? cute::ceil_div(mask[min(kBlockM - 1, real_seq - 1)], kBlockN) : min(cute::ceil_div((m_block + 1) * kBlockM + seq_len_k - seq_len_q, kBlockN), cute::ceil_div(seq_len_k, kBlockN));;
+    
     if (warp_group_idx == 0) {  // Producer
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 8 ? 56 : 24>();
 
@@ -187,21 +187,18 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
     using CollectiveMainloop = CollectiveMainloopAttn<Kernel_traits>;
     constexpr int kHeadDim = Kernel_traits::kHeadDim;
 
-    const int total_q = params.max_seq_len_q * params.batch_size;
-    const int total_kv = params.max_seq_len_k * params.batch_size;
-
     typename CollectiveMainloop::Params mainloop_params =
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(params.q_ptr),
-            get_gmem_layout<kHeadDim>(total_q, params.head_num),
+            get_gmem_layout<kHeadDim>(params.max_seq_len_q * params.batch_size, params.head_num),
             static_cast<Element const*>(params.k_ptr),
-            get_gmem_layout<kHeadDim>(total_kv, params.kv_head_num),
+            get_gmem_layout<kHeadDim>(params.max_seq_len_k * params.batch_size, params.kv_head_num),
             static_cast<Element const*>(params.v_ptr),
-            get_gmem_layout<kHeadDim>(total_kv, params.kv_head_num),
+            get_gmem_layout<kHeadDim>(params.max_seq_len_k * params.batch_size, params.kv_head_num),
             params.scale_softmax_log2
         });
 
-    int num_blocks_m = cutlass::ceil_div(total_q, Kernel_traits::kBlockM);
+    int num_blocks_m = cutlass::ceil_div(params.max_seq_len_q, Kernel_traits::kBlockM);
 
     num_blocks_m = cutlass::ceil_div(num_blocks_m, size<0>(ClusterShape{})) * size<0>(ClusterShape{});
 

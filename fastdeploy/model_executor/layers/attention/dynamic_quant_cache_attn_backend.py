@@ -102,7 +102,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
-        assert kv_cache_quant_type == "int2_zp"
+        assert kv_cache_quant_type == "dynamic_int2_zp"
         return (
                 max_num_blocks,
                 self.kv_num_heads,
@@ -199,7 +199,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 self.head_dim,
                 self.max_seq_len,
                 metadata.max_enc_len_this_time,
-                metadata.max_enc_len_this_time,
+                metadata.max_dec_len_this_time,
             )
 
         if metadata.max_dec_len_this_time > 0:

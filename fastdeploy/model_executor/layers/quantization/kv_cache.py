@@ -37,7 +37,7 @@ class KvCacheQuantzationTypes(str, Enum):
     INT8_ZP = "int8_zp"
     INT4_ZP = "int4_zp"
     FP8_ZP = "float8_e4m3fn_zp"
-    IN2_ZP = "int2_zp"
+    DYNAMIC_INT2_ZP = "dynamic_int2_zp"
 
 
 class KvCacheQuantConfig(QuantConfigBase):
@@ -72,7 +72,7 @@ class KvCacheQuantConfig(QuantConfigBase):
             self.max_bound = 448.0
         elif self.quant_type == KvCacheQuantzationTypes.INT4_ZP:
             self.max_bound = 7.0
-        elif self.quant_type == KvCacheQuantzationTypes.IN2_ZP:
+        elif self.quant_type == KvCacheQuantzationTypes.DYNAMIC_INT2_ZP:
             self.max_bound = 3.0
         else:
             raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
@@ -186,14 +186,14 @@ class KVCacheMethodBase(QuantMethodBase):
             layer.cache_quant_type_str = "cache_int4_zp"
             layer.quant_max_bound = 7.0
             layer.quant_min_bound = -7.0
-        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.IN2_ZP:
-            layer.cache_quant_type_str = "cache_in2_zp"
+        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.DYNAMIC_INT2_ZP:
+            layer.cache_quant_type_str = "dynamic_int2_zp"
             layer.quant_max_bound = 3.0
             layer.quant_min_bound = 0.0
         else:
             raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
 
-        if self.cache_quant_config.quant_type == KvCacheQuantzationTypes.IN2_ZP:
+        if "dynamic" in self.cache_quant_config.quant_type:
             return
         self.load_scale(layer, state_dict)
         if self.cache_quant_config.has_zero_point:

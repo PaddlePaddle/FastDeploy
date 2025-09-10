@@ -1,7 +1,7 @@
 from fastdeploy import LLM, SamplingParams
 import os
 
-# os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
+# os.environ["FD_ATTENTION_BACKEND"] = "MOBA_ATTN"
 # os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
 os.environ["FD_ATTENTION_BACKEND"] = "DYNAMIC_QUANT_CACHE_ATTN"
 
@@ -12,10 +12,10 @@ prompts = [
 ]
 
 
-sampling_params = SamplingParams(top_p=0.0, max_tokens=2)
+sampling_params = SamplingParams(top_p=0.0, max_tokens=32)
 model_dir = "/root/paddlejob/workspace/output/yangjianfeng/base_c2_attn_ckpt"
 
-if os.environ["FD_ATTENTION_BACKEND"] == "FLASH_ATTN":
+if not os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_CACHE_ATTN":
     model_dir = "/root/paddlejob/workspace/output/yangjianfeng/base_23k_ckpt"
 
 llm = LLM(model=model_dir, tensor_parallel_size=1, max_model_len=8192, engine_worker_queue_port=8521)
