@@ -163,6 +163,8 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(len(response.choices), 2)
+        print("response.choices[0].text", response.choices[0].text)
+        print("response.choices[1].text", response.choices[1].text)
         self.assertEqual(response.choices[0].text, "decoded_[1, 2, 3] response1")
         self.assertEqual(response.choices[1].text, "decoded_[4, 5, 6] response2")
 

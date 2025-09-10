@@ -286,9 +286,9 @@ class OpenAIServingCompletion:
             if all(isinstance(item, str) for item in request.prompt):
                 prompt_text = request.prompt[idx]
             elif all(isinstance(item, int) for item in request.prompt):
-                prompt_text = [self.engine_client.data_processor.tokenizer.decode(request.prompt)]
+                prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt)
             else:
-                prompt_text = [self.engine_client.data_processor.tokenizer.decode(request.prompt[idx])]
+                prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt[idx])
         return prompt_text
 
     async def _process_echo_logic(self, request, idx, res_outputs, prompt_text):
@@ -297,10 +297,7 @@ class OpenAIServingCompletion:
         """
         if request.echo and res_outputs.get("send_idx", -1) == 0:
             prompt_text = self._echo_back_prompt(request, idx)
-            if isinstance(prompt_text, list):
-                res_outputs["text"] = prompt_text[0] + (res_outputs["text"] or "")
-            else:
-                res_outputs["text"] = prompt_text + (res_outputs["text"] or "")
+            res_outputs["text"] = prompt_text + (res_outputs["text"] or "")
         return res_outputs
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
@@ -519,10 +516,7 @@ class OpenAIServingCompletion:
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx)
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
-                if isinstance(prompt_text, list):
-                    output_text = prompt_text[0] + output["text"]
-                else:
-                    output_text = prompt_text + output["text"]
+                output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
