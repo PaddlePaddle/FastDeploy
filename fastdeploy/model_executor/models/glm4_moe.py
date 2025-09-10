@@ -537,10 +537,9 @@ class Glm4MoePretrainedModel(PretrainedModel):
             }
 
             # Self Attention Layer which are need TP.
-            base_actions["layers.0.self_attn.q_b_proj.weight"] = partial(fn, is_column=True)
-            base_actions["layers.0.self_attn.kv_b_proj.weight"] = partial(fn, is_column=True)
-            base_actions["layers.0.self_attn.q_b_proj.weight_scale_inv"] = partial(fn, is_column=True)
-            base_actions["layers.0.self_attn.kv_b_proj.weight_scale_inv"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
 
             # MLP Layer
             base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)

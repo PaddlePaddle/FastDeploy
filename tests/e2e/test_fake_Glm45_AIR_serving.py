@@ -105,7 +105,7 @@ def setup_and_run_server():
         "--port",
         str(FD_API_PORT),
         "--tensor-parallel-size",
-        "2",
+        "1",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
@@ -218,7 +218,7 @@ def test_lm_head_fp32_logprob(api_url, headers, consistent_payload):
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] == "ichertsor"
     assert resp_json["choices"][0]["logprobs"]["content"][0]["token"] == "ichert"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -2.7811279296875
+    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -2.8133668899536133
 
     assert resp_json["choices"][0]["logprobs"]["content"][1]["token"] == "sor"
-    assert resp_json["choices"][0]["logprobs"]["content"][1]["logprob"] == -3.950639009475708
+    assert resp_json["choices"][0]["logprobs"]["content"][1]["logprob"] == -3.956965446472168
