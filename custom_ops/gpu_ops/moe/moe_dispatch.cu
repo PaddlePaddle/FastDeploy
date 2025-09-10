@@ -36,6 +36,9 @@ void MoeDispatchKernel(
     paddle::Tensor *topk_idx, paddle::Tensor *expert_idx_per_token) {
   using namespace phi;
 
+  if (num_rows == 0){
+    return;
+  }
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -184,6 +187,15 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
 
   auto expert_idx_per_token =
       GetEmptyTensor({num_rows * moe_topk}, paddle::DataType::INT32, place);
+
+  if (token_rows == 0){
+    return {permute_input,
+            tokens_expert_prefix_sum,
+            permute_indices_per_token,
+            topk_weight,
+            topk_idx,
+            expert_idx_per_token};
+  }
 
   switch (input_type) {
   case paddle::DataType::BFLOAT16:
