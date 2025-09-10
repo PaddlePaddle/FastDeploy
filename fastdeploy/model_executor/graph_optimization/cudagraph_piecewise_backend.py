@@ -197,7 +197,7 @@ class CudaGraphPiecewiseBackend:
             paddle.device.synchronize()
 
             # For CUDAGraph debug
-            self._save_cudagrpah_dot_files(entry)
+            # self._save_cudagrpah_dot_files(entry)
             logger.debug(f"[CUDA GRAPH] CUDAGraph captured for real shape {padding_real_shape}")
 
         # Replay
