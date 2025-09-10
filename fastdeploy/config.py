@@ -109,7 +109,7 @@ class ModelConfig:
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.lm_head_fp32: bool = False
-
+        self.partial_rotary_factor: float = 1.0
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

@@ -34,6 +34,7 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                               const int num_heads,
                               const int kv_num_heads,
                               const int dim_head,
+                              const int rotary_dim,
                               const int block_size,
                               const int bsz,
                               const cudaStream_t& stream,
@@ -73,7 +74,29 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               elem_nums,
               kv_num_heads);
     } else {
-      append_decode_cache_T_neox_rope_kernel<T, PackSize>
+      if (rotary_dim < dim_head){
+        append_decode_cache_T_neox_partial_rope_kernel<T, PackSize>
+          <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
+                                                key_cache,
+                                                value_cache,
+                                                qkv_out,
+                                                block_tables,
+                                                batch_id_per_token,
+                                                cu_seqlens_q,
+                                                seq_lens,
+                                                seq_lens_encoder,
+                                                cos_emb,
+                                                sin_emb,
+                                                max_seq_len,
+                                                max_blocks_per_seq,
+                                                num_heads,
+                                                dim_head,
+                                                rotary_dim,
+                                                block_size,
+                                                elem_nums,
+                                                kv_num_heads);
+      }else{
+        append_decode_cache_T_neox_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
                                                 key_cache,
                                                 value_cache,
@@ -92,8 +115,9 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                                 block_size,
                                                 elem_nums,
                                                 kv_num_heads);
+      }
     }
-  } else {
+  }else {
     if (qkv_out_scales) {
       append_decode_cache_T_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(
@@ -458,11 +482,20 @@ void DecoderWriteCacheWithRoPEKernel(
   const float* cos_emb =
       rotary_embs ? rotary_embs.get().data<float>() : nullptr;
   const float* sin_emb;
+  int rotary_dim = dim_head;
   if (rotary_embs) {
     sin_emb =
         use_neox_rotary_style
             ? rotary_embs.get().data<float>() + max_seq_len * dim_head
             : rotary_embs.get().data<float>() + max_seq_len * dim_head / 2;
+    rotary_dim = rotary_embs.get().dims()[rotary_embs.get().dims().size()-1] * 2;
+    if(rotary_dim < dim_head){
+      if (!use_neox_rotary_style || qkv_out_scales || cache_quant_type_str != "none"){
+        PADDLE_THROW(phi::errors::Fatal(
+          "partial_rotary_factor < 1.0 only supports neox_rotary_style=True, qkv_out_scales is None and cache_quant_type_str is 'none'."));
+      }
+      sin_emb = rotary_embs.get().data<float>() + max_seq_len * rotary_dim / 2;
+    }
   }
   if (cache_quant_type_str == "none") {
     append_decode_cache_rope(
@@ -486,6 +519,7 @@ void DecoderWriteCacheWithRoPEKernel(
         num_heads,
         kv_num_heads,
         dim_head,
+        rotary_dim,
         block_size,
         bsz,
         stream,
