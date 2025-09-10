@@ -348,12 +348,14 @@ class ParallelConfig:
                 (self.data_parallel_rank + 1) * self.tensor_parallel_size,
             )
         )
+        dist.collective._set_custom_gid(None)
         # same ep group id
         dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
         self.ep_group = dist.new_group(range(self.expert_parallel_size))
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
+        dist.collective._set_custom_gid(None)
 
     def print(self):
         """
