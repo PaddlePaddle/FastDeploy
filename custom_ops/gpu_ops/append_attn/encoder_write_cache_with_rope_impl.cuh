@@ -811,8 +811,7 @@ __global__ void GQANeoxVariableLengthPartialRotaryKernel(
     const int kv_num_head,
     const int seq_len,
     const int head_dim,
-    const int rotary_dim,
-    const bool rope_3d) {
+    const int rotary_dim) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadEmbT = AlignedVector<float, VecSize>;
   LoadT left_vec;

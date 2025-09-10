@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import re
 from functools import partial
 
 import paddle
@@ -80,6 +79,11 @@ class Glm4MoeMLP(nn.Layer):
             bias=None,
             act_method=fd_config.model_config.hidden_act,
         )
+
+    def load_state_dict(self, state_dict):
+        """ """
+        self.up_gate_proj.load_state_dict(state_dict)
+        self.down_proj.load_state_dict(state_dict)
 
     def forward(self, x):
         """ """
@@ -154,6 +158,12 @@ class Glm4Moe(nn.Layer):
             reduce_results=False,
         )
 
+    def load_state_dict(self, state_dict):
+        """ """
+        self.gate.load_state_dict(state_dict)
+        self.experts.load_state_dict(state_dict)
+        self.shared_experts.load_state_dict(state_dict)
+
     def forward(self, x):
         shared_experts_out = self.shared_experts(x)
         out = self.experts(x, self.gate)
@@ -211,6 +221,15 @@ class Glm4MoeAttention(nn.Layer):
                 prefix=f"{prefix}.k_norm",
                 begin_norm_axis=2,
             )
+
+    def load_state_dict(self, state_dict):
+        """ """
+        self.qkv_proj.load_state_dict(state_dict)
+        self.o_proj.load_state_dict(state_dict)
+        if self.use_qk_norm:
+            self.q_norm.load_state_dict(state_dict)
+            self.k_norm.load_state_dict(state_dict)
+        self.attn.load_state_dict(state_dict)
 
     def forward(
         self,
@@ -276,6 +295,13 @@ class Glm4MoeDecoderLayer(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
+
+    def load_state_dict(self, state_dict):
+        """ """
+        self.self_attn.load_state_dict(state_dict)
+        self.mlp.load_state_dict(state_dict)
+        self.input_layernorm.load_state_dict(state_dict)
+        self.post_attention_layernorm.load_state_dict(state_dict)
 
     def forward(
         self,
@@ -347,6 +373,21 @@ class Glm4MoeModel(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
+    def load_state_dict(self, state_dict):
+        """
+        Load model parameters from a given state dictionary.
+
+        Args:
+            state_dict (dict[str, np.ndarray | paddle.Tensor]):
+                A dictionary containing model parameters, where keys are parameter names
+                and values are NumPy arrays or PaddlePaddle tensors.
+        """
+        self.embed_tokens.load_state_dict(state_dict)
+        self.norm.load_state_dict(state_dict)
+        for i in range(self.num_layers):
+            logger.info(f"Start load layer {i}")
+            self.layers[i].load_state_dict(state_dict)
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -395,83 +436,17 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         return "Glm4MoeForCausalLM"
 
     @paddle.no_grad()
-    def load_weights(self, weights_iterator) -> None:
-        """
-        Load model parameters from a given weights_iterator object.
-
-        Args:
-            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
-        """
-
-        from fastdeploy.model_executor.utils import (
-            default_weight_loader,
-            process_weights_after_loading,
-        )
-
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-            ("up_gate_proj", "gate_proj", "gate"),
-            ("up_gate_proj", "up_proj", "up"),
-            ("embed_tokens.embeddings", "embed_tokens", None),
-            ("lm_head.linear", "lm_head", None),
-            ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
-        ]
-        # (param_name, weight_name, expert_id, shard_id)
-        expert_params_mapping = FusedMoE.make_expert_params_mapping(
-            num_experts=self.fd_config.model_config.n_routed_experts,
-            ckpt_gate_proj_name="gate_proj",
-            ckpt_down_proj_name="down_proj",
-            ckpt_up_proj_name="up_proj",
-            param_gate_up_proj_name="experts.up_gate_proj_",
-            param_down_proj_name="experts.down_proj_",
-        )
-        params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
-        for loaded_weight_name, loaded_weight in weights_iterator:
-            for param_name, weight_name, shard_id in stacked_params_mapping:
-                if weight_name not in loaded_weight_name:
-                    continue
-                if "mlp.experts" in loaded_weight_name:
-                    continue
-                model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                if model_param_name not in params_dict:
-                    continue
-                param = params_dict[model_param_name]
-                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                weight_loader(param, loaded_weight, shard_id)
-                break
-            else:
-                for mapping in expert_params_mapping:
-                    param_name, weight_name, expert_id, shard_id = mapping
-                    if weight_name not in loaded_weight_name:
-                        continue
-                    model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                    if model_param_name not in params_dict:
-                        continue
-                    param = params_dict[model_param_name]
-                    weight_loader = param.weight_loader
-                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
-                    break
-                else:
-                    model_param_name = loaded_weight_name
-                    if model_param_name not in params_dict:
-                        continue
-                    param = params_dict[model_param_name]
-                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                    weight_loader(param, loaded_weight)
-
-            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
-            process_weights_after_loading_fn(model_sublayer_name, param)
-
-    @paddle.no_grad()
     def set_state_dict(self, state_dict):
         """
-        glm4_moe only support loader_v1.
+        Load model parameters from a given state dictionary.
+
+        Args:
+            state_dict (dict[str, np.ndarray | paddle.Tensor]):
+                A dictionary containing model parameters, where keys are parameter names
+                and values are NumPy arrays or PaddlePaddle tensors.
         """
-        assert False, "glm4_moe only support --load_choices default_v1."
+        self.model.load_state_dict(state_dict)
+        self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
@@ -490,10 +465,6 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
-
-    def clear_grpah_opt_backend(self):
-        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class Glm4MoePretrainedModel(PretrainedModel):
