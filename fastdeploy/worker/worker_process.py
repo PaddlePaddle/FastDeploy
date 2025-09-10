@@ -709,6 +709,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
+        # TODO(YuanRisheng) is_checkpoint_bf16 may need to be removed and replaced by is_quantized in future
+        if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
+            quantization_config["is_checkpoint_bf16"] = True
+
     elif args.quantization != "None":
         quantization_config = {}
         quant_config_name = args.quantization
