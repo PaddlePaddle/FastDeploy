@@ -21,8 +21,8 @@ import paddle
 from paddle import nn
 
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import set_weight_attrs
 
-from ..utils import create_and_set_parameter
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
@@ -117,9 +117,8 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         cache_k_zeropoint = get_tensor(state_dict.pop(self.cache_k_zp_name)).cast(paddle.get_default_dtype())
         cache_v_zeropoint = get_tensor(state_dict.pop(self.cache_v_zp_name)).cast(paddle.get_default_dtype())
-
-        create_and_set_parameter(layer, "cache_k_zp", cache_k_zeropoint)
-        create_and_set_parameter(layer, "cache_v_zp", cache_v_zeropoint)
+        layer.cache_k_zp.set_value(cache_k_zeropoint)
+        layer.cache_v_zp.set_value(cache_v_zeropoint)
 
     def load_scale(self, layer: nn.Layer, state_dict):
         """
@@ -156,21 +155,15 @@ class KVCacheMethodBase(QuantMethodBase):
             cache_k_out_scale = cache_k_scale_tensor / self.cache_quant_config.max_bound
             cache_v_out_scale = cache_v_scale_tensor / self.cache_quant_config.max_bound
 
-        create_and_set_parameter(layer, "cache_k_scale", cache_k_scale)
-        create_and_set_parameter(layer, "cache_v_scale", cache_v_scale)
-        create_and_set_parameter(layer, "cache_k_out_scale", cache_k_out_scale)
-        create_and_set_parameter(layer, "cache_v_out_scale", cache_v_out_scale)
+        layer.cache_k_scale.set_value(cache_k_scale)
+        layer.cache_v_scale.set_value(cache_v_scale)
+        layer.cache_k_out_scale.set_value(cache_k_out_scale)
+        layer.cache_v_out_scale.set_value(cache_v_out_scale)
 
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         create_weights
         """
-        self.prefix = layer.prefix
-        self.cache_k_scale_name = layer.prefix + ".cachek_matmul.activation_scale"
-        self.cache_v_scale_name = layer.prefix + ".cachev_matmul.activation_scale"
-        self.cache_k_zp_name = layer.prefix + ".cachek_matmul.activation_zero_point"
-        self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
-
         if self.cache_quant_config.quant_type == KvCacheQuantzationTypes.INT8:
             layer.cache_quant_type_str = "cache_int8"
             layer.quant_max_bound = 127.0
@@ -190,10 +183,90 @@ class KVCacheMethodBase(QuantMethodBase):
         else:
             raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
 
+        scale_shape = [layer.fd_config.model_config.num_key_value_heads]
+        if self.cache_quant_config.is_channel_wise:
+            scale_shape = [layer.fd_config.model_config.num_key_value_heads, layer.head_dim]
+
+        layer.cache_k_scale = layer.create_parameter(
+            shape=scale_shape,
+            dtype=paddle.get_default_dtype(),
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.cache_v_scale = layer.create_parameter(
+            shape=scale_shape,
+            dtype=paddle.get_default_dtype(),
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        set_weight_attrs(
+            layer.cache_k_scale,
+            {
+                **extra_weight_attrs,
+            },
+        )
+        set_weight_attrs(
+            layer.cache_v_scale,
+            {
+                **extra_weight_attrs,
+            },
+        )
+        layer.cache_k_out_scale = layer.create_parameter(
+            shape=scale_shape,
+            dtype=paddle.get_default_dtype(),
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.cache_v_out_scale = layer.create_parameter(
+            shape=scale_shape,
+            dtype=paddle.get_default_dtype(),
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        if self.cache_quant_config.has_zero_point:
+            layer.cache_k_zp = layer.create_parameter(
+                shape=scale_shape,
+                dtype=paddle.get_default_dtype(),
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            layer.cache_v_zp = layer.create_parameter(
+                shape=scale_shape,
+                dtype=paddle.get_default_dtype(),
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            set_weight_attrs(
+                layer.cache_k_zp,
+                {
+                    **extra_weight_attrs,
+                },
+            )
+            set_weight_attrs(
+                layer.cache_v_zp,
+                {
+                    **extra_weight_attrs,
+                },
+            )
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        use for loader v0
+        """
+        self.prefix = layer.prefix
+        self.cache_k_scale_name = layer.prefix + ".cachek_matmul.activation_scale"
+        self.cache_v_scale_name = layer.prefix + ".cachev_matmul.activation_scale"
+        self.cache_k_zp_name = layer.prefix + ".cachek_matmul.activation_zero_point"
+        self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
+
         if "block_wise" not in layer.cache_quant_type_str:
             self.load_scale(layer, state_dict)
             if self.cache_quant_config.has_zero_point:
                 self.load_zp(layer, state_dict)
+
+    def process_weights_after_loading(self, layer: nn.Layer):
+        """
+        use for loader v1
+        """
+        if layer.cache_k_scale._is_initialized():
+            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)
+        if layer.cache_v_scale._is_initialized():
+            layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
 
     def apply(self, layer):
         """
