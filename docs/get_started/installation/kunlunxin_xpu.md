@@ -83,20 +83,20 @@ cd FastDeploy
 ### Download Kunlunxin Compilation Dependency
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh stable
+bash custom_ops/xpu_ops/download_dependencies.sh stable
 ```
 
 Alternatively, you can download the latest versions of XTDK and XVLLM (Not recommended)
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+bash custom_ops/xpu_ops/download_dependencies.sh develop
 ```
 
 Set environment variables,
 
 ```bash
-export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 ```
 
 ### Compile and Install.

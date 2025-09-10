@@ -18,13 +18,35 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "msg_utils.h"
 
-#define MAX_BSZ 256
-// #define GET_OUTPUT_DEBUG
-struct msgdata {
-    long mtype;
-    int mtext[MAX_BSZ + 2]; // stop_flag, bsz, tokens
-};
+void GetOutputKVSignal(const paddle::Tensor& x,
+                       int64_t rank_id,
+                       bool wait_flag) {
+  int msg_queue_id = 1024 + rank_id;
+  static struct msgdatakv msg_rcv;
+  static key_t key = ftok("/opt/", msg_queue_id);
+  static int msgid = msgget(key, IPC_CREAT | 0666);
+
+  int* out_data = const_cast<int*>(x.data<int>());
+  int ret = -1;
+  if (!wait_flag) {
+    ret = msgrcv(msgid, &msg_rcv, (MAX_BSZ * 3 + 2) * 4, 0, IPC_NOWAIT);
+  } else {
+    ret = msgrcv(msgid, &msg_rcv, (MAX_BSZ * 3 + 2) * 4, 0, 0);
+  }
+  if (ret == -1) {
+    out_data[0] = -1;
+    out_data[1] = -1;
+    return;
+  }
+  int encoder_count = msg_rcv.mtext[0];
+
+  for (int i = 0; i < encoder_count * 3 + 2; i++) {
+    out_data[i] = msg_rcv.mtext[i];
+  }
+  return;
+}
 
 void GetOutput(const paddle::Tensor &x, int64_t rank_id, bool wait_flag,
                int msg_queue_id) {
