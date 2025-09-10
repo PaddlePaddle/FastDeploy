@@ -121,12 +121,16 @@ def setup_and_run_server():
         "--load_choices",
         "default_v1",
         "--lm_head-fp32",
+        "--quantization",
+        "wint8",
     ]
-
+    env = os.environ.copy()
+    env["FD_MOE_BACKEND"] = "triton"
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
             cmd,
+            env=env,
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True,  # Enables killing full group via os.killpg
