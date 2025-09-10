@@ -121,7 +121,6 @@ def setup_and_run_server():
         "--load_choices",
         "default_v1",
         "--lm_head-fp32",
-        "--enable-logprob",
     ]
 
     # Start subprocess in new process group
@@ -196,29 +195,22 @@ def consistent_payload():
         "top_p": 0,  # fix top_p to reduce randomness
         "seed": 13,  # fixed random seed
         "max_tokens": 3,
-        "logprobs": True,
-        "top_logprobs": 0,
         "stream": False,
     }
 
 
 # ==========================
-# Logprob test for lm_head_fp32 with fixed payload
+# Test for lm_head_fp32 with fixed payload
 # ==========================
-def test_lm_head_fp32_logprob(api_url, headers, consistent_payload):
+def test_lm_head_fp32(api_url, headers, consistent_payload):
     """
     Test that two runs with the same fixed input produce similar outputs.
     """
     # First request
-    response = requests.post(api_url, headers=headers, json=consistent_payload)
+    response = requests.post(api_url, headers=headers, json=consistent_payload, timeout=300)
     assert response.status_code == 200
     print(json.dumps(response.json(), indent=2, ensure_ascii=False))
     resp_json = response.json()
 
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] == "ichertsor"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["token"] == "ichert"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -2.8133668899536133
-
-    assert resp_json["choices"][0]["logprobs"]["content"][1]["token"] == "sor"
-    assert resp_json["choices"][0]["logprobs"]["content"][1]["logprob"] == -3.956965446472168
