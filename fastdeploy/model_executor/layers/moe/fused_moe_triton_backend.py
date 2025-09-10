@@ -695,7 +695,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 layer,
                 down_proj_weight_name,
                 layer.create_parameter(
-                    shape=self.up_gate_proj_weight_shape,
+                    shape=self.down_proj_weight_shape,
                     dtype=self.weight_dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
