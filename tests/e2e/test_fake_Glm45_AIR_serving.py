@@ -210,7 +210,7 @@ def test_lm_head_fp32_logprob(api_url, headers, consistent_payload):
     Test that two runs with the same fixed input produce similar outputs.
     """
     # First request
-    response = requests.post(api_url, headers=headers, json=consistent_payload, stream=False, timeout=600)
+    response = requests.post(api_url, headers=headers, json=consistent_payload)
     assert response.status_code == 200
     print(json.dumps(response.json(), indent=2, ensure_ascii=False))
     resp_json = response.json()
