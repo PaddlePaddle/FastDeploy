@@ -859,6 +859,7 @@ class GPUModelRunner(ModelRunnerBase):
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
         # Set block tables
@@ -1901,25 +1902,27 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.clear_caches()
 
     def clear_parameters(self, pid):
-        """ " Dynamic model loader use to clear parameters use for RL"""
+        """Dynamic model loader use to clear parameters use for RL"""
+        # Clear CUDAGraph
+        if self.use_cudagraph:
+            self.model.clear_grpah_opt_backend()
+        # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
-        # Clear CudaGraph
-        if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
-
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
-        """ " Dynamic model loader use to update parameters use for RL"""
+        """Dynamic model loader use to update parameters use for RL"""
+        # Update parameters
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
-
-        # Recapture CudaGraph
+        # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()
+        # Send single
+        self.dynamic_weight_manager.finalize_update(pid)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
