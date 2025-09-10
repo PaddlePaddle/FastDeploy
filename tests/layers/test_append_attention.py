@@ -380,9 +380,9 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.max_enc_len_this_time = paddle.to_tensor([self.max_enc_len_this_time], "int32", place=paddle.CPUPlace())
         self.max_dec_len_this_time = paddle.to_tensor([self.max_dec_len_this_time], "int32", place=paddle.CPUPlace())
         self.seq_lens_this_time = self.seq_lens_encoder
-
-        self.decoder_batch_ids = paddle.full([self.max_enc_len_this_time * 1024], 0, dtype="int32")
-        self.decoder_tile_ids_per_batch = paddle.full([self.max_enc_len_this_time * 1024], 0, dtype="int32")
+        decode_max_tile_size = 1024 * self.batch_size * np.ceil((2 * 10) / 12)
+        self.decoder_batch_ids = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
+        self.decoder_tile_ids_per_batch = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.decoder_num_blocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
         self.decoder_num_blocks_device = paddle.full([1], 0, dtype="int32")
         self.decoder_chunk_size_device = paddle.full([1], 64, dtype="int32")
