@@ -60,7 +60,6 @@ def update_git_repo():
                 shell=True,
                 check=True,
                 text=True,
-                capture_output=True,
             )
         else:
             print(
