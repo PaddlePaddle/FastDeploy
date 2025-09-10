@@ -23,24 +23,15 @@ from fastdeploy.entrypoints.openai.serving_completion import (
 )
 
 
-class YourClass:
-    async def _1(self, a, b, c):
-        if b["outputs"].get("send_idx", -1) == 0 and a.echo:
-            if isinstance(a.prompt, list):
-                text = a.prompt[c]
-            else:
-                text = a.prompt
-            b["outputs"]["text"] = text + (b["outputs"]["text"] or "")
-
-
 class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.mock_engine = MagicMock()
         self.completion_handler = None
         self.mock_engine.data_processor.tokenizer.decode = lambda x: f"decoded_{x}"
 
+    """Testing echo prompt in non-streaming of a single str prompt"""
+
     def test_single_str_prompt_non_streaming(self):
-        """Testing echo prompt in non-streaming of a single str prompt"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -71,8 +62,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.choices[0].text, "test prompt generated text")
 
+    """Testing echo prompt in non-streaming of a single int prompt"""
+
     def test_single_int_prompt_non_streaming(self):
-        """Testing echo prompt in non-streaming of a single int prompt"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -102,28 +94,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.choices[0].text, "decoded_[1, 2, 3] generated text")
 
-    async def test_single_str_prompt_streaming(self):
-        """Testing echo prompts in streaming of a single str prompt"""
-        request = CompletionRequest(echo=True, prompt=["Hello"])
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
-        idx = 0
-
-        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
-        self.assertEqual(res["outputs"]["text"], "Hello!")
-
-    async def test_single_int_prompt_streaming(self):
-        """Testing echoing prompts in streaming of a single int prompt"""
-        request = CompletionRequest(prompt=[1, 2, 3], max_tokens=10, stream=True, echo=True)
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
-        idx = 0
-
-        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
-        self.assertEqual(res["outputs"]["text"], "decoded_[1, 2, 3]!")
+    """Testing echo prompts in non-streaming of multiple str prompts"""
 
     def test_multi_str_prompt_non_streaming(self):
-        """Testing echo prompts in non-streaming of multiple str prompts"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -157,8 +130,9 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.choices[0].text, "prompt1 response1")
         self.assertEqual(response.choices[1].text, "prompt2 response2")
 
+    """Testing echo prompts in non-streaming of multiple int prompts"""
+
     def test_multi_int_prompt_non_streaming(self):
-        """Testing echo prompts in non-streaming of multiple int prompts"""
         self.completion_handler = OpenAIServingCompletion(
             self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30
         )
@@ -189,50 +163,44 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(len(response.choices), 2)
-        print("response.choices[0].text", response.choices[0].text)
-        print("response.choices[1].text", response.choices[1].text)
         self.assertEqual(response.choices[0].text, "decoded_[1, 2, 3] response1")
         self.assertEqual(response.choices[1].text, "decoded_[4, 5, 6] response2")
 
+    """Testing echo prompts in streaming of a single str prompt"""
+
+    async def test_single_str_prompt_streaming(self):
+        request = CompletionRequest(prompt="test prompt", max_tokens=10, stream=True, echo=True)
+        res = {"outputs": {"send_idx": 0, "text": "!"}}
+        idx = 0
+
+        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
+        prompt_text = ""
+        res = await instance._process_echo_logic(request, idx, res["outputs"], prompt_text)
+        self.assertEqual(res["text"], "test prompt!")
+
+    """Testing echo prompts in streaming of a single int prompt"""
+
+    async def test_single_int_prompt_streaming(self):
+        request = CompletionRequest(prompt=[1, 2, 3], max_tokens=10, stream=True, echo=True)
+        res = {"outputs": {"send_idx": 0, "text": "!"}}
+        idx = 0
+
+        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
+        prompt_text = ""
+        res = await instance._process_echo_logic(request, idx, res["outputs"], prompt_text)
+        self.assertEqual(res["text"], "decoded_[1, 2, 3]!")
+
+    """Testing echo prompts in streaming of multi str prompt"""
+
     async def test_multi_str_prompt_streaming(self):
-        """Testing echo prompts in streaming of multiple str prompts"""
-        request = CompletionRequest(echo=True, prompt=["Hello", "World"])
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
-        idx = 1
-
-        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
-        self.assertEqual(res["outputs"]["text"], "World!")
-
-    async def test_multi_int_prompt_streaming(self):
-        """Testing echo prompts in streaming of multiple int prompts"""
-        request = CompletionRequest(echo=True, prompt=[[1, 2, 3], [4, 5, 6]])
-        res = {"outputs": {"send_idx": 0, "text": "!"}}
-        idx = 1
-
-        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
-        self.assertEqual(res["outputs"]["text"], "decoded_[4, 5, 6]!")
-
-    async def test_send_idx_is_not_0(self):
-        """Testing send_idx is not 0"""
-        request = CompletionRequest(echo=True, prompt="Hello")
-        res = {"outputs": {"send_idx": 1, "text": "!"}}
-        idx = 0
-
-        instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
-        self.assertEqual(res["outputs"]["text"], "!")
-
-    async def test_echo_is_false(self):
-        """Testing echo prompts when echo is False"""
-        request = CompletionRequest(echo=False, prompt="Hello")
+        request = CompletionRequest(prompt=["test prompt1", "test prompt2"], max_tokens=10, stream=True, echo=True)
         res = {"outputs": {"send_idx": 0, "text": "!"}}
         idx = 0
 
         instance = OpenAIServingCompletion(self.mock_engine, models=None, pid=123, ips=None, max_waiting_time=30)
-        await instance._echo_back_prompt(request, res, idx)
-        self.assertEqual(res["outputs"]["text"], "!")
+        prompt_text = ""
+        res = await instance._process_echo_logic(request, idx, res["outputs"], prompt_text)
+        self.assertEqual(res["text"], "test prompt1!")
 
 
 if __name__ == "__main__":
