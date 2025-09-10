@@ -516,13 +516,13 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
 
     print(
         f"\n{title}:",
-        f"\n\tDevice Total memory: {meminfo.total}",
-        f"\n\tDevice Used memory: {meminfo.used}",
-        f"\n\tDevice Free memory: {meminfo.free}",
-        f"\n\tPaddle max memory Reserved: {paddle_max_reserved}",
-        f"\n\tPaddle max memory Allocated: {paddle_max_allocated}",
-        f"\n\tPaddle memory Reserved: {paddle_reserved}",
-        f"\n\tPaddle memory Allocated: {paddle_allocated}",
+        f"\n\tDevice Total memory(GiB): {meminfo.total / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tDevice Used memory(GiB): {meminfo.used / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tDevice Free memory(GiB): {meminfo.free / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle max memory Reserved(GiB): {paddle_max_reserved / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle max memory Allocated(GiB): {paddle_max_allocated / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Reserved(GiB): {paddle_reserved / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}",
     )
 
 
