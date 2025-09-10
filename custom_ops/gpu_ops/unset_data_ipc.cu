@@ -45,27 +45,14 @@ static inline int sharedMemoryUnlinkByName(const char* name) {
 #endif
 }
 
-template <paddle::DataType D>
-void unset_data_ipc_impl(const paddle::Tensor& tmp_input,
+void UnsetDataIpc(const paddle::Tensor& tmp_input,
                          const std::string& shm_name,
                          bool close_ipc,
                          bool unlink_shm) {
   // 1) 关闭消费者导入的 IPC 映射（仅当 close_ipc=true 且该指针确为 OpenMemHandle 得来）
   if (close_ipc) {
     void* ptr = const_cast<void*>(tmp_input.data());
-#ifdef PADDLE_WITH_HIP
-    hipError_t he = hipIpcCloseMemHandle(ptr);
-    if (he != hipSuccess && he != hipErrorInvalidDevicePointer &&
-        he != hipErrorInvalidValue) {
-      PD_THROW("hipIpcCloseMemHandle failed, err=%d", static_cast<int>(he));
-    }
-#else
-    cudaError_t ce = cudaIpcCloseMemHandle(ptr);
-    if (ce != cudaSuccess && ce != cudaErrorInvalidDevicePointer &&
-        ce != cudaErrorInvalidValue) {
-      PD_THROW("cudaIpcCloseMemHandle failed, err=%d", static_cast<int>(ce));
-    }
-#endif
+    checkCudaErrors(cudaIpcCloseMemHandle(ptr));
   }
 
   // 2) 解除共享内存命名对象（仅处理“名字”，不保证解除旧映射）
@@ -78,35 +65,7 @@ void unset_data_ipc_impl(const paddle::Tensor& tmp_input,
   }
 }
 
-void UnsetDataIpc(const paddle::Tensor& tmp_input,
-                  const std::string& shm_name,
-                  bool close_ipc,
-                  bool unlink_shm) {
-  // 数据类型在此处不影响关闭逻辑，但保持与 set_data_ipc 一致的分发
-  switch (tmp_input.type()) {
-    case paddle::DataType::BFLOAT16:
-      return unset_data_ipc_impl<paddle::DataType::BFLOAT16>(
-          tmp_input, shm_name, close_ipc, unlink_shm);
-    case paddle::DataType::FLOAT16:
-      return unset_data_ipc_impl<paddle::DataType::FLOAT16>(
-          tmp_input, shm_name, close_ipc, unlink_shm);
-    case paddle::DataType::FLOAT32:
-      return unset_data_ipc_impl<paddle::DataType::FLOAT32>(
-          tmp_input, shm_name, close_ipc, unlink_shm);
-    case paddle::DataType::INT8:
-      return unset_data_ipc_impl<paddle::DataType::INT8>(
-          tmp_input, shm_name, close_ipc, unlink_shm);
-    case paddle::DataType::UINT8:
-      return unset_data_ipc_impl<paddle::DataType::UINT8>(
-          tmp_input, shm_name, close_ipc, unlink_shm);
-    default:
-      PD_THROW("NOT supported data type. Only float16, bfloat16, float32, int8, uint8 are supported.");
-  }
-}
-
 PD_BUILD_STATIC_OP(unset_data_ipc)
     .Inputs({"tmp_input"})
     .Attrs({"shm_name: std::string", "close_ipc: bool", "unlink_shm: bool"})
-    .Outputs({"tmp_input_out"})
-    .SetInplaceMap({{"tmp_input", "tmp_input_out"}})
     .SetKernelFn(PD_KERNEL(UnsetDataIpc));

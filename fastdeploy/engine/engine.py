@@ -243,7 +243,7 @@ class LLMEngine:
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
-        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+        if self.cfg.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
 
         # Worker launched

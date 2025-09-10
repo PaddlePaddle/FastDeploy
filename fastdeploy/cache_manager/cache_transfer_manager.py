@@ -31,7 +31,7 @@ from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheSt
 from fastdeploy.model_executor.ops.gpu import (
     cuda_host_alloc,
     cuda_host_free,
-    set_data_ipc,
+    share_external_data,
     swap_cache_all_layers,
     unset_data_ipc,
 )
@@ -197,15 +197,10 @@ class CacheTransferManager:
             key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
             val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
 
-            # key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-            # val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-            # logger.info(f"layer {i} | share_external_data: ({key_name}, {val_name}), cache shape: {cache_shape}")
-            # key_cache = share_external_data(key_cache, key_name, cache_shape)
-            # val_cache = share_external_data(val_cache, val_name, cache_shape)
-            key_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
-            val_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
-            set_data_ipc(key_cache, key_name)
-            set_data_ipc(val_cache, val_name)
+            key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+            val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+            key_cache = share_external_data(key_cache, key_name, cache_shape)
+            val_cache = share_external_data(val_cache, val_name, cache_shape)
 
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_kvs[val_name] = val_cache
@@ -443,13 +438,11 @@ class CacheTransferManager:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 try:
                     logger.info("Start clearing GPU caches.")
-                    paddle.set_device(f"gpu:{self.device}")
                     for name, tensor in self.gpu_cache_kvs.items():
                         unset_data_ipc(tensor, name, True, False)
                     self.gpu_cache_kvs.clear()
                     self.gpu_cache_k_tensors.clear()
                     self.gpu_cache_v_tensors.clear()
-                    paddle.device.cuda.empty_cache()
                     logger.info("GPU caches are cleared.")
 
                     logger.info("Start clearing CPU caches.")

@@ -43,9 +43,9 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import (
     recover_decode_task,
+    set_data_ipc,
     set_value_by_flags_and_idx,
     share_external_data,
-    unset_data_ipc,
 )
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
@@ -953,15 +953,11 @@ class GPUModelRunner(ModelRunnerBase):
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and self.parallel_config.splitwise_role != "mixed":
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                # key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                # val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                # set_data_ipc(key_cache, key_cache_name)
-                # set_data_ipc(val_cache, val_cache_name)
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 val_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
@@ -973,16 +969,15 @@ class GPUModelRunner(ModelRunnerBase):
 
         else:
             for i in range(self.model_config.num_hidden_layers):
-                cache_kvs[f"key_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
-                    fill_value=0,
-                    dtype=cache_type,
-                )
-                cache_kvs[f"value_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
-                    fill_value=0,
-                    dtype=cache_type,
-                )
+                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                cache_kvs[f"key_caches_{i}"] = key_cache
+                cache_kvs[f"value_caches_{i}"] = val_cache
+                if self.cache_config.enable_prefix_caching:
+                    set_data_ipc(key_cache, key_cache_name)
+                    set_data_ipc(val_cache, val_cache_name)
             self.share_inputs["caches"] = list(cache_kvs.values())
             for value in cache_kvs.values():
                 del value
@@ -1580,24 +1575,15 @@ class GPUModelRunner(ModelRunnerBase):
 
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""
-        caches = self.share_inputs.pop("caches", None)
-        i = 0
-        for tensor in caches:
-            if i % 2 == 0:
-                key_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
-                unset_data_ipc(tensor, key_name, True, False)
-            else:
-                val_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
-                unset_data_ipc(tensor, val_name, True, False)
-            i += 1
+        self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
+        paddle.device.cuda.empty_cache()
 
     def clear_parameters(self, pid):
         """ " Dynamic model loader use to clear parameters use for RL"""
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
-        paddle.device.cuda.empty_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
