@@ -39,6 +39,7 @@ def load_module_from_path(module_name, path):
 
 def update_git_repo():
     try:
+        print("update third party repo...")
         original_dir = os.getcwd()
         submodule_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(submodule_dir)
@@ -56,15 +57,14 @@ def update_git_repo():
         patch = "0001-DeepGEMM-95e81b3.patch"
         patch_source = os.path.join(submodule_dir, patch)
         patch_destination = os.path.join(dst_path, patch)
-        shutil.copy(patch_source, patch_destination)
-        apply_cmd = ["git", "apply", patch]
-        os.chdir(dst_path)
-        subprocess.run(apply_cmd, check=True)
-
+        if not os.path.exists(patch_destination):
+            shutil.copy(patch_source, patch_destination)
+            apply_cmd = ["git", "apply", patch]
+            os.chdir(dst_path)
+            subprocess.run(apply_cmd, check=True)
         os.chdir(original_dir)
-        return True
     except subprocess.CalledProcessError:
-        return False
+        raise Exception("Git submodule update or apply patch failed.")
 
 
 ROOT_DIR = Path(__file__).parent.parent
