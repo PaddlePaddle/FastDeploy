@@ -394,11 +394,19 @@ class SplitwiseConnector:
                 addr = "prefill"
                 if current_id == -1:
                     current_id = tasks[i].disaggregate_info["cache_info"]["ipc"]["current_id"]
-                cache_info = {
-                    "request_id": tasks[i].request_id,
-                    "src_block_ids": tasks[i].block_tables,
-                    "current_id": current_id,
-                }
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    cache_info = {
+                        "request_id": tasks[i].request_id,
+                        "src_block_ids": tasks[i].block_tables,
+                        "current_id": tasks[i].idx,
+                        "need_prefill_tokens": tasks[i].need_prefill_tokens,
+                    }
+                else:
+                    cache_info = {
+                        "request_id": tasks[i].request_id,
+                        "src_block_ids": tasks[i].block_tables,
+                        "current_id": current_id,
+                    }
                 if addr not in temp_cache_info:
                     temp_cache_info[addr] = []
 

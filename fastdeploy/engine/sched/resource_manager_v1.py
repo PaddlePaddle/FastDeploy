@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import threading
 import time
 import traceback
@@ -26,7 +27,7 @@ from typing import Union
 import numpy as np
 import paddle
 
-from fastdeploy.engine.request import Request, RequestStatus, RequestType
+from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
@@ -283,6 +284,12 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def has_finish_scheduled_prefill(self, request):
+        if request.num_computed_tokens == request.need_prefill_tokens:
+            return True
+        else:
+            return False
+
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -298,6 +305,8 @@ class ResourceManagerV1(ResourceManager):
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
+                    if self.config.splitwise_role == "prefill":  # do not need to schedule for decoding
+                        continue
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
                     else:  # prefill finished
@@ -548,6 +557,83 @@ class ResourceManagerV1(ResourceManager):
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
+    def prerelease_resource(self, request: Request):
+        """
+        Release resource in P or D before finished due to unexpected error.
+        """
+        with self.lock:
+            self.tasks_list[request.idx] = None
+            self.stop_flags[request.idx] = True
+            del self.requests[request.request_id]
+            del self.req_dict[request.request_id]
+
+    def preallocate_resource_in_p(self, request: Request):
+        """
+        In P/D aggregated deployment, preallocate resource for P.
+        If can allocate, allocate resources and return True
+        If can not, return False
+        """
+        assert self.config.splitwise_role == "prefill", "Only P instance can call this method"
+        with self.lock:
+            # todo: consider prompt cache
+            request.need_prefill_tokens = len(request.prompt_token_ids)
+            need_prealloc_prefill_blocks = (
+                request.need_prefill_tokens + self.config.cache_config.block_size - 1
+            ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
+            if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                request.num_computed_tokens = 0
+                allocated_position = self.get_available_position()
+                request.idx = allocated_position
+                self.tasks_list[request.idx] = request
+                self.stop_flags[request.idx] = False
+                self.requests[request.request_id] = request
+                self.req_dict[request.request_id] = allocated_position
+                return True
+            return False
+
+    def preallocate_resource_in_d(self, request: Request):
+        """
+        In P/D aggregated deployment, D should preallocate resource for P.
+        If can allocate, allocate resources and return True
+        If can not, return False
+        """
+        assert self.config.splitwise_role == "decode", "Only D instance can call this method"
+        with self.lock:
+            if len(self.waiting) > 0:
+                return False
+            if self.available_batch() == 0:
+                return False
+            request.need_prefill_tokens = len(request.prompt_token_ids)
+            need_prealloc_prefill_blocks = (
+                request.need_prefill_tokens + self.config.cache_config.block_size - 1
+            ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
+            if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                request.num_computed_tokens = request.need_prefill_tokens
+                allocated_position = self.get_available_position()
+                request.idx = allocated_position
+                self.tasks_list[request.idx] = request
+                self.stop_flags[request.idx] = False
+                self.requests[request.request_id] = request
+                self.req_dict[request.request_id] = allocated_position
+                return True
+            return False
+
+    def insert_task_for_decoding(self, request_output_in_p: RequestOutput):
+        """
+        In P/D aggregated deployment, D should continue to decode after recieving first token and cache from P.
+        """
+        assert self.config.splitwise_role == "decode", "Only D instance can call this method"
+        with self.lock:
+            request = self.requests[request_output_in_p.request_id]
+            request.output_token_ids.append(request_output_in_p.outputs.token_ids[0])
+            if self.config.speculative_config.method in ["mtp"] and self.config.splitwise_role == "decode":
+                request.draft_token_ids = copy.deepcopy(request_output_in_p.outputs.draft_token_ids)
+            # update request.need_prefill_tokens
+            request.need_prefill_tokens = len(request.prompt_token_ids) + 1
+            self.running.append(request)
+
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
             # TODO(chengyanfu): support cache output blocks for prefix caching
@@ -607,5 +693,7 @@ class ResourceManagerV1(ResourceManager):
                     self.tasks_list[request.idx] = None
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
+                    if req_id in self.req_dict:
+                        del self.req_dict[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")

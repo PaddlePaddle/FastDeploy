@@ -629,6 +629,13 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--cache-transfer-protocol",
+        type=str,
+        default="ipc",
+        help="support protocol list, comma separated, default is ipc",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -754,8 +761,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if args.splitwise_role != "mixed":
-        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+    if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")

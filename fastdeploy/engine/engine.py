@@ -424,7 +424,10 @@ class LLMEngine:
         )
 
         if self.cfg.splitwise_role != "mixed":
-            variables["FLAGS_use_pd_disaggregation"] = 1
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                variables["FLAGS_use_pd_disaggregation_per_chunk"] = 1
+            else:
+                variables["FLAGS_use_pd_disaggregation"] = 1
             # TODO dynamic load environment variable
             if self.cfg.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
@@ -495,6 +498,7 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
         )
 
         worker_append_flag = {
