@@ -36,7 +36,7 @@ void MoeReduceKernel(const paddle::Tensor &ffn_out,
   typedef typename traits_::data_t data_t;
   auto stream = ffn_out.stream();
 
-  finalize_moe_routing_kernelLauncher<data_t>::run(
+  finalize_moe_routing_kernelLauncher(
       ffn_out.data<data_t>(), output->data<data_t>(),
       down_proj_bias ? down_proj_bias->data<data_t>() : nullptr,
       top_k_weight.data<float>(), permute_indices_per_token.data<int32_t>(),
