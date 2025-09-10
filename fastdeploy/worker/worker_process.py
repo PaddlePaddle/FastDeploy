@@ -732,9 +732,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             quantization_config["moe_quant_type"] = "wint8"
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
-            logger.info(
-                "The dense part of 'Glm4Moe' architecture model only supports the wfp8afp8 quantization type, so it is changed to the wfp8afp8 quantization type for dense gemm."
-            )
     else:
         quant_config_name = None
 
