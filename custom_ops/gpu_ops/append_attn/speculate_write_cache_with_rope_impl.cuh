@@ -46,7 +46,8 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int gqa_group_size,
     const float* q_norm_weight,
     const float* k_norm_weight,
-    const float rms_norm_eps) {
+    const float rms_norm_eps,
+    const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadFloat = AlignedVector<float, VecSize>;
   using LoadInT = AlignedVector<InT, VecSize>;
@@ -109,8 +110,9 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     if (hi < num_heads + gqa_group_size) {
       // q k rope
       const int64_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
-      Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      uint32_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
+      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
     float thread_m2 = 0.0f;
     float warp_m2 = 0.0f;
