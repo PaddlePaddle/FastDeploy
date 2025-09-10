@@ -857,6 +857,7 @@ class GPUModelRunner(ModelRunnerBase):
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
         # Set block tables
