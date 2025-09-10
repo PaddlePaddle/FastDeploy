@@ -50,8 +50,8 @@ __global__ void write_decoder_c16_cache_kernel(
     rope_type sin, cos;
     dst_type dst;
     
-    int bidh = blockIdx.x;
-    const int bidb = blockIdx.y;
+    int bidh = blockIdx.y;
+    const int bidb = blockIdx.x;
     const int tidx = threadIdx.x;
     const int seq_len_decoder = seq_lens_decoder[bidb];
 
@@ -63,26 +63,32 @@ __global__ void write_decoder_c16_cache_kernel(
 
     const int step = step_idx[bidb];
 
-    if (seq_len_decoder + 1 == c16_max_cache_seq_len && step > 0) {
-        if (bidh < kv_head_num) {
-            write_c2_cache_kernel<output_type, ScaleType, kBlockSize, kHeadDim, 128, false>(
-                cache_k_c16,
-                cache_v_c16,
-                cache_k_c2,
-                cache_v_c2,
-                cu_seq_q,
-                seq_lens_encoder,
-                seq_lens_decoder,
-                block_tables,
-                max_num_blocks_per_seq,
-                data_num_per_block,
-                c16_remain_seq_len,
-                head_num,
-                kv_head_num,
-                bidb,
-                bidh,
-                0);
-        }
+    int store_token_idx;
+    if (seq_len_decoder + 1 < c16_max_cache_seq_len) {
+        store_token_idx = seq_len_decoder;
+    } else {
+        store_token_idx = (seq_len_decoder + 1) % kBlockSize + c16_remain_seq_len - 1;
+    }
+
+    if (bidh >= head_num && store_token_idx + 1 == c16_remain_seq_len && step > 0) {
+        write_c2_cache_kernel<output_type, ScaleType, kBlockSize, kHeadDim, 128, false>(
+            cache_k_c16,
+            cache_v_c16,
+            cache_k_c2,
+            cache_v_c2,
+            cu_seq_q,
+            seq_lens_encoder,
+            seq_lens_decoder,
+            block_tables,
+            max_num_blocks_per_seq,
+            data_num_per_block,
+            c16_remain_seq_len,
+            head_num,
+            kv_head_num,
+            bidb,
+            bidh - head_num,
+            0
+        );
     }
 
     if (tidx >= 32) {
@@ -113,32 +119,27 @@ __global__ void write_decoder_c16_cache_kernel(
 
         dst.store_to(q_input + cu_seq_q[bidb] * head_num * kHeadDim + bias_idx);
     } else {
-        int store_token_idx;
-        if (seq_len_decoder + 1 < c16_max_cache_seq_len) {
-            store_token_idx = seq_len_decoder;
-        } else {
-            store_token_idx = (seq_len_decoder + 1) % kBlockSize + c16_remain_seq_len - 1;
+        const float * cos_rope = rotary_embs + seq_len_decoder * (kHeadDim / 2) + tidx * (kPackSize / 2);
+        const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
+
+        sin.load_from(sin_rope);
+        cos.load_from(cos_rope);
+        apply_rotary_embedding<input_type, output_type, kPackSize>(src, dst, cos, sin);
+
+        src.load_from(qkv_out + cu_seq_q[bidb] * (head_num + 2 * kv_head_num) * kHeadDim + bias_idx + kv_head_num * kHeadDim);
+        if (qkv_bias != nullptr) {
+            bias.load_from(qkv_bias + bias_idx + kv_head_num * kHeadDim);
+            src.add(bias);
         }
 
-        if (bidh < head_num + kv_head_num) {
-            const float * cos_rope = rotary_embs + seq_len_decoder * (kHeadDim / 2) + tidx * (kPackSize / 2);
-            const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
+        bidh -= head_num;
+        const int store_idx = (bidb * c16_max_cache_seq_len + store_token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim + tidx * kPackSize;
+        dst.store_to(cache_k_c16 + store_idx);
 
-            sin.load_from(sin_rope);
-            cos.load_from(cos_rope);
-            apply_rotary_embedding<input_type, output_type, kPackSize>(src, dst, cos, sin);
-
-            bidh -= head_num;
-            const int store_idx = (bidb * c16_max_cache_seq_len + store_token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim + tidx * kPackSize;
-            dst.store_to(cache_k_c16 + store_idx);
-        } else {
-            bidh -= head_num + kv_head_num;
-            const int store_idx = (bidb * c16_max_cache_seq_len + store_token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim + tidx * kPackSize;
-            for (int i = 0; i < kPackSize; i++) {
-                dst.data.elt[i] = static_cast<output_type>(src.data.elt[i]);
-            }
-            dst.store_to(cache_v_c16 + store_idx);
+        for (int i = 0; i < kPackSize; i++) {
+            dst.data.elt[i] = static_cast<output_type>(src.data.elt[i]);
         }
+        dst.store_to(cache_v_c16 + store_idx);
     }
 }
 
@@ -167,14 +168,16 @@ void write_decoder_c16_cache(
         cudaStream_t stream) {
     
     constexpr int kHeadDim = 128;
-    constexpr int kThreads = 32;
+    constexpr int kThreads = 128;
     constexpr int kBlockSize = 64;
 
     dim3 gird_dim;
-    gird_dim.x = head_num + 2 * kv_head_num;
-    gird_dim.y = bsz;
+    gird_dim.x = bsz;
+    gird_dim.y = head_num + kv_head_num;
 
-    write_decoder_c16_cache_kernel<input_type, output_type, ScaleType, kBlockSize, kHeadDim><<<gird_dim, kThreads, 0, stream>>>(
+    constexpr int smem_size = 2 * kBlockSize * kHeadDim * sizeof(input_type);
+
+    write_decoder_c16_cache_kernel<input_type, output_type, ScaleType, kBlockSize, kHeadDim><<<gird_dim, kThreads, smem_size, stream>>>(
         qkv_out,
         qkv_bias,
         rotary_embs,

@@ -73,16 +73,14 @@ __device__ void write_c2_cache_kernel(
     using pakc_half = typename PackedHalf<T>::Type;
 
     const int tidx = threadIdx.x;
-    const int seq_len_encoder = encoder_seqs_len[bidb];
+    const int seq_len_encoder = is_encoder ? encoder_seqs_len[bidb] : decoder_seqs_len[bidb];
     const int warp_idx = tidx / 32;
     const int lane_idx = tidx % 32;
 
     const int token_idx = block_idx * kBlockSize;
     
-    if constexpr (is_encoder) {
-        if (seq_len_encoder == 0) {
-            return;
-        }
+    if (seq_len_encoder == 0) {
+        return;
     }
 
     const int c16_cache_max_len = kBlockSize + c16_remain_seq_len;

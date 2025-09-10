@@ -12,7 +12,7 @@ prompts = [
 ]
 
 
-sampling_params = SamplingParams(top_p=0.0, max_tokens=32)
+sampling_params = SamplingParams(top_p=0.0, max_tokens=1024)
 model_dir = "/root/paddlejob/workspace/output/yangjianfeng/base_c2_attn_ckpt"
 
 if not os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_CACHE_ATTN":

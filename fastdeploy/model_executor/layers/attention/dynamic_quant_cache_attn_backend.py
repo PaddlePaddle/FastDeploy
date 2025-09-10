@@ -145,6 +145,9 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
     ):  
         out = paddle.zeros([qkv.shape[0], self.num_heads * self.head_dim], dtype=qkv.dtype) 
 
+        if qkv.shape[0] == 3 or qkv.shape[0] == 8190:
+            return out
+        
         metadata = self.attention_metadata
         if metadata.max_enc_len_this_time > 0:
             split_qkv_and_rope(
