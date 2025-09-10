@@ -39,17 +39,24 @@ def load_module_from_path(module_name, path):
 
 def update_git_repo():
     try:
-        print("update third party repo...")
+        print("update third party repo...", flush=True)
         original_dir = os.getcwd()
         submodule_dir = os.path.dirname(os.path.abspath(__file__))
-        os.chdir(submodule_dir)
-        subprocess.run(
-            "git submodule sync --recursive && git submodule update --init --recursive",
-            shell=True,
-            check=True,
-            text=True,
-            capture_output=True,
-        )
+        third_party_path = os.path.join(submodule_dir, "third_party")
+        if not os.path.exists(third_party_path):
+            os.chdir(submodule_dir)
+            subprocess.run(
+                "git submodule sync --recursive && git submodule update --init --recursive",
+                shell=True,
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+        else:
+            print(
+                "\033[33m[===WARNING===]third_party directory already exists, skip clone and update.\033[0m",
+                flush=True,
+            )
 
         # apply deep gemm patch
         deep_gemm_dir = "third_party/DeepGEMM"
@@ -64,7 +71,7 @@ def update_git_repo():
             subprocess.run(apply_cmd, check=True)
         os.chdir(original_dir)
     except subprocess.CalledProcessError:
-        raise Exception("Git submodule update or apply patch failed.")
+        raise Exception("Git submodule update and apply patch failed. Maybe network connection is poor.")
 
 
 ROOT_DIR = Path(__file__).parent.parent
