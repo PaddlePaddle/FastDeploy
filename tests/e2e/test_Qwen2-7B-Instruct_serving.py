@@ -15,6 +15,8 @@
 import concurrent.futures
 import json
 import os
+import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -30,9 +32,10 @@ from jsonschema import validate
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 # List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
 
 def is_port_open(host: str, port: int, timeout=1.0):
@@ -54,8 +57,14 @@ def kill_process_on_port(port: int):
     """
     try:
         output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
+        current_pid = os.getpid()
+        parent_pid = os.getppid()
         for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
+            pid = int(pid)
+            if pid in (current_pid, parent_pid):
+                print(f"Skip killing current process (pid={pid}) on port {port}")
+                continue
+            os.kill(pid, signal.SIGKILL)
             print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
@@ -67,6 +76,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -80,6 +90,10 @@ def setup_and_run_server():
     """
     print("Pre-test port cleanup...")
     clean_ports()
+
+    print("log dir clean ")
+    if os.path.exists("log") and os.path.isdir("log"):
+        shutil.rmtree("log")
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
@@ -102,6 +116,8 @@ def setup_and_run_server():
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
+        "--cache-queue-port",
+        str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -138,6 +154,7 @@ def setup_and_run_server():
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
+        clean_ports()
         print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
@@ -634,3 +651,168 @@ def test_streaming(openai_client, capsys):
     for chunk in response:
         output.append(chunk.choices[0].text)
     assert len(output) > 0
+
+
+def test_profile_reset_block_num():
+    """测试profile reset_block_num功能，与baseline diff不能超过5%"""
+    log_file = "./log/config.log"
+    baseline = 32562
+
+    if not os.path.exists(log_file):
+        pytest.fail(f"Log file not found: {log_file}")
+
+    with open(log_file, "r") as f:
+        log_lines = f.readlines()
+
+    target_line = None
+    for line in log_lines:
+        if "Reset block num" in line:
+            target_line = line.strip()
+            break
+
+    if target_line is None:
+        pytest.fail("日志中没有Reset block num信息")
+
+    match = re.search(r"total_block_num:(\d+)", target_line)
+    if not match:
+        pytest.fail(f"Failed to extract total_block_num from line: {target_line}")
+
+    try:
+        actual_value = int(match.group(1))
+    except ValueError:
+        pytest.fail(f"Invalid number format: {match.group(1)}")
+
+    lower_bound = baseline * (1 - 0.05)
+    upper_bound = baseline * (1 + 0.05)
+    print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
+
+    assert lower_bound <= actual_value <= upper_bound, (
+        f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
+        f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
+    )
+
+
+def test_prompt_token_ids_in_non_streaming_completion(openai_client):
+    """
+    Test cases for passing token ids through `prompt`/`prompt_token_ids` in non-streaming completion api
+    """
+    # Test case for passing a token id list in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
+        stream=False,
+    )
+    assert len(response.choices) == 1
+    assert response.usage.prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]]},
+        stream=False,
+    )
+    assert len(response.choices) == 2
+    assert response.usage.prompt_tokens == 9 + 3
+
+    # Test case for passing a token id list in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+    assert len(response.choices) == 1
+    assert response.usage.prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+    assert len(response.choices) == 2
+    assert response.usage.prompt_tokens == 9 + 3
+
+
+def test_prompt_token_ids_in_streaming_completion(openai_client):
+    """
+    Test cases for passing token ids through `prompt`/`prompt_token_ids` in streaming completion api
+    """
+    # Test case for passing a token id list in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]]},
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9 + 3
+
+    # Test case for passing a token id list in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9 + 3

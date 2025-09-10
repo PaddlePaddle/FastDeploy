@@ -20,7 +20,12 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | `fastdeploy:gpu_cache_usage_perc`            | Gauge     | GPU KV-cache usage rate          | Percentage    |
 | `fastdeploy:request_params_max_tokens`       | Histogram | Distribution of max_tokens for requests       | Count   |
 | `fastdeploy:request_success_total`           | Counter   | Number of successfully processed requests           | Count   |
-
+| `fastdeploy:cache_config_info`               | Gauge     | Information of the engine's CacheConfig             | Count   |
+| `fastdeploy:available_batch_size`            | Gauge     | Number of requests that can still be inserted during the Decode phase| Count   |
+| `fastdeploy:hit_req_rate`                    | Gauge     | Request-level prefix cache hit rate                 | Percentage   |
+| `fastdeploy:hit_token_rate`                  | Gauge     | Token-level prefix cache hit rate                   | Percentage   |
+| `fastdeploy:cpu_hit_token_rate`              | Gauge     | Token-level CPU prefix cache hit rate               | Percentage   |
+| `fastdeploy:gpu_hit_token_rate`              | Gauge     | Token-level GPU prefix cache hit rate               | Percentage   |
 ## Accessing Metrics
 
 - Access URL: `http://localhost:8000/metrics`
