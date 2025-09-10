@@ -165,8 +165,7 @@ class EngineArgs:
     """
     Ratio of tokens to process in a block.
     """
-
-    prealloc_dec_block_slot_num_threshold: int = 5
+    prealloc_dec_block_slot_num_threshold: int = 12
     """
     Token slot threshold for preallocating decoder blocks.
     """
@@ -405,8 +404,6 @@ class EngineArgs:
                 raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
-        if self.speculative_config is not None:
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.splitwise_role != "mixed":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda():
@@ -706,7 +703,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--prealloc-dec-block-slot-num-threshold",
             type=int,
-            default=5,
+            default=12,
             help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 

@@ -378,9 +378,11 @@ void RecoverDecodeTask(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &step_seq_lens_decoder,
                    const paddle::Tensor &block_tables,
                    const paddle::Tensor &is_block_step,
-                   const int block_size);
-
-
+                   const paddle::optional<paddle::Tensor> &draft_tokens,
+                   const paddle::optional<paddle::Tensor> &step_draft_tokens,
+                   const paddle::optional<paddle::Tensor> &step_seq_lens_this_time,
+                   const int block_size,
+                   const int max_draft_tokens);
 
 paddle::Tensor
 GroupSwigluWithMasked(const paddle::Tensor &fc1_out_tensor,
@@ -707,6 +709,22 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
                               const paddle::Tensor& seq_lens_decoder);
 
+void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
+                            const paddle::Tensor &block_tables,
+                            const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_decoder,
+                            const paddle::Tensor &step_seq_lens_decoder,
+                            const paddle::Tensor &step_draft_tokens,
+                            const paddle::Tensor &step_seq_lens_this_time,
+                            const paddle::Tensor &accept_num,
+                            const paddle::Tensor &accept_tokens,
+                            const paddle::Tensor &is_block_step,
+                            const paddle::Tensor &not_need_stop,
+                            const paddle::Tensor &stop_nums,
+                            const int block_size,
+                            const int max_draft_tokens);
+
 void NgramMatch(const paddle::Tensor &input_ids,
         const paddle::Tensor &input_ids_len,
         const paddle::Tensor &pre_ids,
@@ -750,6 +768,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
+                          const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
@@ -763,7 +782,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& base_model_draft_tokens,
                           const int max_draft_token,
                           const bool truncate_first_token,
-                          const bool splitwise_prefill);
+                          const bool splitwise_prefill,
+                          const bool kvcache_scheduler_v1);
 
 
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
@@ -1227,6 +1247,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_save_output", &SpeculateSaveWithOutputMsgStatic, "speculate_save_output function");
 
   m.def("speculate_clear_accept_nums",&SpeculateClearAcceptNums, "speculate_clear_accept_nums function");
+
+  m.def("speculate_schedule_cache",&SpeculateScheduleCache, "SpeculateScheduleCache function");
 
   m.def("ngram_match", &NgramMatch, "ngram_match function");
 

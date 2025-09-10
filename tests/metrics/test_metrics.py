@@ -14,12 +14,13 @@
 # limitations under the License.
 """
 
+import os
 import unittest
 from unittest.mock import patch
 
 from prometheus_client import Gauge
 
-from fastdeploy.metrics.metrics import get_filtered_metrics
+from fastdeploy.metrics.metrics import cleanup_prometheus_files, get_filtered_metrics
 
 
 class TestGetFilteredMetrics(unittest.TestCase):
@@ -66,6 +67,31 @@ class TestGetFilteredMetrics(unittest.TestCase):
 
         # 3. Custom metric should appear
         self.assertIn("custom_metric_total", result)
+
+
+class TestCleanupPrometheusFiles(unittest.TestCase):
+    def test_cleanup_prometheus_files(self):
+        prom_dir = cleanup_prometheus_files(is_main=True)
+        self.assertTrue(os.path.exists(prom_dir))
+        self.assertTrue(os.path.isdir(prom_dir))
+
+        prom_dir2 = cleanup_prometheus_files(is_main=True)
+        self.assertNotEqual(prom_dir, prom_dir2)
+        self.assertTrue(os.path.exists(prom_dir2))
+        self.assertTrue(os.path.isdir(prom_dir2))
+
+        prom_dir = cleanup_prometheus_files(is_main=True, instance_id="001")
+        self.assertTrue(os.path.exists(prom_dir))
+        self.assertTrue(os.path.isdir(prom_dir))
+        test_file = os.path.join(prom_dir, "test.txt")
+        with open(test_file, "w") as f:
+            f.write("hello")
+        self.assertTrue(os.path.exists(test_file))
+        prom_dir2 = cleanup_prometheus_files(is_main=True, instance_id="001")
+        self.assertEqual(prom_dir, prom_dir2)
+        self.assertTrue(os.path.exists(prom_dir2))
+        self.assertTrue(os.path.isdir(prom_dir2))
+        self.assertFalse(os.path.exists(test_file))
 
 
 if __name__ == "__main__":

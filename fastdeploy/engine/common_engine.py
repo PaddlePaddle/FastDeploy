@@ -62,7 +62,6 @@ class EngineSevice:
         self.cfg = cfg
 
         self.scheduler = cfg.scheduler_config.scheduler()
-
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
                 cfg.max_num_seqs,
