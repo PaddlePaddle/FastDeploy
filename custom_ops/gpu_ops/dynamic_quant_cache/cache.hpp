@@ -103,7 +103,7 @@ __device__ void write_c2_cache_kernel(
 
     const int load_idx = is_encoder ? ((cu_seq_q[bidb] + block_idx * kBlockSize) * kv_head_num + bidh) * kHeadDim : bidb * c16_cache_max_len * kv_head_num * kHeadDim + bidh * kHeadDim;
 
-    const int stride_k = is_encoder ? kHeadDim : kHeadDim * kv_head_num;
+    const int stride_k = kHeadDim * kv_head_num;
 
     Tensor gK = make_tensor(
         make_gmem_ptr(k_input + load_idx), 

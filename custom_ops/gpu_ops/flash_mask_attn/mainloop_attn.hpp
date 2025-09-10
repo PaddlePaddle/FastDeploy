@@ -19,6 +19,15 @@
 
 using namespace cute;
 
+enum class AttnNamedBarriers {
+    QueryEmpty = 0,
+    ValueEmpty = 1,
+    TileCountSmemEmpty = 2,
+    TileCountSmemFull = 3,
+    WarpSchedulerWG1 = 4,
+    WarpSchedulerWG2 = 5,
+    WarpSchedulerWG3 = 6,
+};
 template <typename Ktraits>
 struct CollectiveMainloopAttn {
 
@@ -255,6 +264,40 @@ struct CollectiveMainloopAttn {
         }
     }
 
+    CUTLASS_DEVICE void
+    warp_scheduler_barrier_sync() {
+        if constexpr (UseSchedulerBarrier) {
+            cutlass::arch::NamedBarrier::sync(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + cutlass::canonical_warp_group_idx() /*id*/);
+        }
+    }
+
+    CUTLASS_DEVICE void
+    mma_init() {
+        if constexpr (!UseSchedulerBarrier) { return; }
+        static_assert(NumMmaThreads == 2 * cutlass::NumThreadsPerWarpGroup || NumMmaThreads == 3 * cutlass::NumThreadsPerWarpGroup);
+        if (cutlass::canonical_warp_group_idx() > 1) {
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + 1 /*id*/);
+        }
+        if constexpr (NumMmaThreads == 3 * cutlass::NumThreadsPerWarpGroup) {
+            if (cutlass::canonical_warp_group_idx() > 2) {
+                cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + 2 /*id*/);
+            }
+        }
+
+    }
+
+    CUTLASS_DEVICE void
+    warp_scheduler_barrier_arrive() {
+        if constexpr (!UseSchedulerBarrier) { return; }
+        static_assert(NumMmaThreads == 2 * cutlass::NumThreadsPerWarpGroup || NumMmaThreads == 3 * cutlass::NumThreadsPerWarpGroup);
+        if constexpr (NumMmaThreads == 2 * cutlass::NumThreadsPerWarpGroup) {
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + (3 - cutlass::canonical_warp_group_idx()) /*id*/);
+        } else {
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + (cutlass::canonical_warp_group_idx() <= 2 ? cutlass::canonical_warp_group_idx() + 1 : cutlass::canonical_warp_group_idx() + 1 - 3)  /*id*/);
+            cutlass::arch::NamedBarrier::arrive(NumMmaThreads, static_cast<int>(AttnNamedBarriers::WarpSchedulerWG1) - 1 + (cutlass::canonical_warp_group_idx() <= 1 ? cutlass::canonical_warp_group_idx() + 2 : cutlass::canonical_warp_group_idx() + 2 - 3)  /*id*/);
+        }
+    }
+
     template <typename SharedStorage, typename FrgTensorO, typename Softmax>
     CUTLASS_DEVICE void
     mma(Params const& mainloop_params,
@@ -299,7 +342,9 @@ struct CollectiveMainloopAttn {
 
         Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
         consumer_wait(pipeline_k, smem_pipe_read_k);
+        warp_scheduler_barrier_sync();
         gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
+        warp_scheduler_barrier_arrive();
         warpgroup_wait<0>();
         pipeline_k.consumer_release(smem_pipe_read_k);
         ++smem_pipe_read_k;
@@ -346,6 +391,7 @@ struct CollectiveMainloopAttn {
         for (; n_block > 0; --n_block) {
             Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
             consumer_wait(pipeline_k, smem_pipe_read_k);
+            warp_scheduler_barrier_sync();
 
             if constexpr (NeedMask) {
                 if (n_block >= mask_start_idx) {
@@ -362,6 +408,7 @@ struct CollectiveMainloopAttn {
             consumer_wait(pipeline_v, smem_pipe_read_v);
             gemm</*zero_init=*/false, /*wg_wait=*/-1>(tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
             warpgroup_wait<1>();
+            warp_scheduler_barrier_arrive();
             pipeline_k.consumer_release(smem_pipe_read_k);  // release K
             cute::copy(softmax.template max</*Is_first=*/false>(tSrS, mainloop_params.softmax_scale_log2), scores_scale);
             softmax.template online_softmax</*Is_first=*/false>(tSrS, mainloop_params.softmax_scale_log2);

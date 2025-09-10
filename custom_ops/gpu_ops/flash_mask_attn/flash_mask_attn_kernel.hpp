@@ -138,6 +138,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 8 ? 256 : 240>();
         typename Ktraits::TiledMma1 tiled_mma1;
 
+        collective_mainloop.mma_init();
+
         PipelineState smem_pipe_read_k, smem_pipe_read_v;
 
         Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 2>(TileShape_MNK{}));

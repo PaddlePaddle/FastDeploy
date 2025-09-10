@@ -243,5 +243,4 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 self.max_seq_len,
                getattr(layer, "cache_quant_type_str", "none")
             )
-        paddle.set_printoptions(threshold=64 * 300)
         return out
