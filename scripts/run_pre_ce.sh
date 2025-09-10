@@ -27,7 +27,7 @@ for subdir in "$run_path"*/; do
                 timeout 600 python -m pytest --disable-warnings -sv "$file"
                 exit_code=$?
                 set -e
-
+                ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
                 if [ $exit_code -ne 0 ]; then
                     if [ -f "${subdir%/}/log/workerlog.0" ]; then
                         echo "---------------- log/workerlog.0 -------------------"

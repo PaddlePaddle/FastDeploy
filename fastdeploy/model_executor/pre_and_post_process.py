@@ -306,7 +306,9 @@ def post_process_normal(
             )
 
 
-def post_process_specualate(model_output, save_each_rank: bool = False, skip_save_output: bool = False):
+def post_process_specualate(
+    model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
+):
     """"""
     speculate_update(
         model_output.seq_lens_encoder,

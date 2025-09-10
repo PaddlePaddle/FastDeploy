@@ -42,6 +42,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import ceil_div
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
@@ -58,6 +59,7 @@ else:
         recover_decode_task,
         set_value_by_flags_and_idx,
         share_external_data,
+        speculate_schedule_cache,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -221,6 +223,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        has_preempted_task = False
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -320,6 +323,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                has_preempted_task = True
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -375,7 +379,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
+        if has_preempted_task:
+            self.share_inputs["not_need_stop"][0] = not (
+                self.share_inputs["stop_flags"].sum() == self.parallel_config.max_num_seqs
+            )
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        if self.speculative_method in ["mtp"]:
+            self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -582,17 +592,16 @@ class GPUModelRunner(ModelRunnerBase):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        full_length = min(
-            num_tokens // batch_size,
+        input_length = min(
+            ceil_div(num_tokens, batch_size),
             self.parallel_config.max_model_len - max_dec_len,
         )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
         if self.fd_config.parallel_config.enable_expert_parallel:
-            full_length = min(full_length, 32)
+            input_length = min(input_length, 32)
 
-        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -797,6 +806,13 @@ class GPUModelRunner(ModelRunnerBase):
                 fill_value=0,
                 dtype="int32",
             )
+            # For V1_KVCACHE_SCHEDULER
+            self.share_inputs["step_draft_tokens"] = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            )
+            self.share_inputs["step_seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
@@ -835,7 +851,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"],
                 self.share_inputs["block_tables"],
                 self.share_inputs["is_block_step"],
+                self.share_inputs["draft_tokens"] if self.speculative_decoding else None,
+                self.share_inputs["step_draft_tokens"] if self.speculative_decoding else None,
+                self.share_inputs["step_seq_lens_this_time"] if self.speculative_decoding else None,
                 self.cache_config.block_size,
+                self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
 
         # Remove padding
@@ -1341,6 +1361,7 @@ class GPUModelRunner(ModelRunnerBase):
         if (
             not self.cache_config.enable_chunked_prefill
             or self.guided_backend is None
+            or model_forward_batch is None
             or envs.ENABLE_V1_KVCACHE_SCHEDULER
         ):
             return skip_idx_list
@@ -1533,6 +1554,24 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._update_chunked_prefill(model_forward_batch)
             self._add_cache(model_forward_batch)
+        elif self.speculative_decoding:
+            speculate_schedule_cache(
+                self.share_inputs["draft_tokens"],
+                self.share_inputs["block_tables"],
+                self.share_inputs["stop_flags"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["step_seq_lens_decoder"],
+                self.share_inputs["step_draft_tokens"],
+                self.share_inputs["step_seq_lens_this_time"],
+                self.share_inputs["accept_num"],
+                self.share_inputs["accept_tokens"],
+                self.share_inputs["is_block_step"],
+                self.share_inputs["not_need_stop"],
+                self.share_inputs["stop_nums"],
+                self.cache_config.block_size,
+                self.speculative_config.num_speculative_tokens,
+            )
 
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
@@ -1543,7 +1582,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Add cache for guided decoding.
         """
-        if self.guided_backend is None:
+        if self.guided_backend is None or model_forward_batch is None:
             return
 
         for request in model_forward_batch:
