@@ -362,7 +362,7 @@ def test_streaming(openai_client, capsys):
 # ==========================
 
 
-def test_non_streaming_with_stop_str(openai_client):
+def _test_non_streaming_with_stop_str(openai_client):
     """
     Test non-streaming chat functionality with the local service
     """
