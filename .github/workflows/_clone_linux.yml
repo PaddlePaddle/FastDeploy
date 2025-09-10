@@ -36,7 +36,6 @@ jobs:
           echo "Fetching and merging PR..."
           git fetch origin pull/${{ github.event.pull_request.number }}/head:pr/${{ github.event.pull_request.number }}
           git merge --no-ff pr/${{ github.event.pull_request.number }}
-          git submodule sync --recursive && git submodule update --init --recursive
           echo "PR Branch log "
           git log --oneline -n 5 pr/${{ github.event.pull_request.number }}
       - uses: actions/setup-python@v5
