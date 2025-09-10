@@ -616,6 +616,10 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ("resampler_model", "ernie.resampler_model", None, None),
             ("vision_model", "ernie.vision_model", None, None),
             ("gate_correction_bias", "moe_statics.e_score_correction_bias", None, None),
+            ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
+            ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
+            ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
             # for torch model
             ("resampler_model", "model.resampler_model", None, None),
             ("qkv_proj", "q_proj", None, "q"),
@@ -679,7 +683,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
                 weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
             else:
                 weight_loader(param, loaded_weight, shard_id)
-            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
             # because we use lazy guard and is not initialized by default
