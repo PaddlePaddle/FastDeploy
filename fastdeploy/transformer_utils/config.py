@@ -1,6 +1,16 @@
 import json
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Optional, Union
+
+import huggingface_hub
+from huggingface_hub import hf_hub_download, try_to_load_from_cache
+from huggingface_hub.utils import (
+    EntryNotFoundError,
+    HfHubHTTPError,
+    LocalEntryNotFoundError,
+    RepositoryNotFoundError,
+    RevisionNotFoundError,
+)
 
 from fastdeploy.utils import get_logger
 
@@ -35,33 +45,55 @@ def get_pooling_config_name(pooling_name: str):
     raise NotImplementedError(f"Pooling type {pooling_type_name} not supported")
 
 
-def get_hf_file_to_dict(file_name: str, model: Union[str, Path]) -> Optional[Dict]:
-    """
-    Load a file from model directory and return its contents as a dictionary.
+def try_get_local_file(model: Union[str, Path], file_name: str, revision: Optional[str] = "main") -> Optional[Path]:
+    file_path = Path(model) / file_name
+    if file_path.is_file():
+        return file_path
+    else:
+        try:
+            cached_filepath = try_to_load_from_cache(repo_id=model, filename=file_name, revision=revision)
+            if isinstance(cached_filepath, str):
+                return Path(cached_filepath)
+        except ValueError:
+            ...
+    return None
 
-    Args:
-        file_name (str): Name of the file to load
-        model (Union[str, Path]): Model path or identifier
-        revision (str, optional): Model revision. Defaults to 'main'.
+
+def get_hf_file_to_dict(file_name: str, model: Union[str, Path], revision: Optional[str] = "main"):
+    """
+    Downloads a file from the Hugging Face Hub and returns
+    its contents as a dictionary.
+
+    Parameters:
+    - file_name (str): The name of the file to download.
+    - model (str): The name of the model on the Hugging Face Hub.
+    - revision (str): The specific version of the model.
 
     Returns:
-        Optional[Dict]: File contents as dictionary, None if not found
+    - config_dict (dict): A dictionary containing
+    the contents of the downloaded file.
     """
-    model_path = Path(model)
+    file_path = try_get_local_file(model=model, file_name=file_name, revision=revision)
 
-    # Check if it's a local path
-    if model_path.exists():
-        file_path = model_path / file_name
-        if file_path.is_file():
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"Failed to load {file_name}: {e}")
-                return None
+    if file_path is None:
+        try:
+            hf_hub_file = hf_hub_download(model, file_name, revision=revision)
+        except huggingface_hub.errors.OfflineModeIsEnabled:
+            return None
+        except (RepositoryNotFoundError, RevisionNotFoundError, EntryNotFoundError, LocalEntryNotFoundError) as e:
+            logger.debug("File or repository not found in hf_hub_download", e)
+            return None
+        except HfHubHTTPError as e:
+            logger.warning(
+                "Cannot connect to Hugging Face Hub. Skipping file " "download for '%s':", file_name, exc_info=e
+            )
+            return None
+        file_path = Path(hf_hub_file)
 
-    # TODO: Add remote model file downloading logic here
-    # This would depend on your model repository system
+    if file_path is not None and file_path.is_file():
+        with open(file_path) as file:
+            return json.load(file)
+
     return None
 
 

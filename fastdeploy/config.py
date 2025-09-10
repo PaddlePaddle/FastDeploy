@@ -203,6 +203,7 @@ class ModelConfig:
         self.convert = "auto"
         self.pooler_config: Optional["PoolerConfig"] = field(init=False)
         self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
+        self.revision = None
 
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
@@ -354,7 +355,7 @@ class ModelConfig:
         registry = self.registry
         logger.info(f"Registry supported archs: {registry.get_supported_archs()}")
         logger.info(f"self.model:{self.model}")
-        if get_pooling_config(self.model):
+        if get_pooling_config(self.model, self.revision):
             return "pooling"
         for arch in architectures:
             if arch in registry.get_supported_archs():
@@ -501,7 +502,7 @@ class ModelConfig:
 
             pooler_config = self.override_pooler_config or PoolerConfig()
 
-            base_config = get_pooling_config(self.model)
+            base_config = get_pooling_config(self.model, self.revision)
             if base_config is not None:
                 for k, v in base_config.items():
                     if getattr(pooler_config, k) is None:

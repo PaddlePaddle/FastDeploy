@@ -210,3 +210,7 @@ def switch_config_context(config_obj, config_attr_name, value):
         yield
     finally:
         setattr(config_obj, config_attr_name, origin_value)
+
+
+def is_pin_memory_available() -> bool:
+    pass
