@@ -15,7 +15,7 @@ from safetensors.numpy import save_file as safe_save_file
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.load_weight_utils import (
-    get_all_safetensors,
+    get_all_weights_file,
     safetensors_weights_iterator,
 )
 from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute
@@ -158,7 +158,7 @@ def main():
             Ernie4_5Tokenizer.resource_files_names["vocab_file"] = vocab_file_names[i]
             break
     tokenizer = Ernie4_5Tokenizer.from_pretrained(args.model_name_or_path)
-    _, safetensor_files = get_all_safetensors(args.model_name_or_path)
+    _, safetensor_files, _ = get_all_weights_file(args.model_name_or_path)
     weights_iterator = safetensors_weights_iterator(safetensor_files)
     state_dict = {}
     save_state_dict = {}

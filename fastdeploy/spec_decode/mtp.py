@@ -19,9 +19,11 @@ from typing import List
 
 import numpy as np
 import paddle
+from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -52,7 +54,7 @@ class MTPProposer(Proposer):
     Proposer for Multi-Token-Prediction(MTP)
     """
 
-    def __init__(self, cfg, main_model, local_rank, device_id, target_model_inputs):
+    def __init__(self, cfg: FDConfig, main_model: nn.Layer, local_rank: int, device_id: int, target_model_inputs):
         super().__init__(cfg)
         self.num_main_model_layers = self.model_config.num_hidden_layers
         self.local_rank = local_rank
@@ -212,6 +214,22 @@ class MTPProposer(Proposer):
             self.target_model_inputs["max_len_tensor_cpu"]
         ).cpu()
 
+        self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
+        self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
+            self.target_model_inputs["encoder_tile_ids_per_batch"]
+        )
+        self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
+            self.target_model_inputs["encoder_num_blocks_x_cpu"]
+        ).cpu()
+        self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
+        self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
+            self.target_model_inputs["kv_tile_ids_per_batch"]
+        )
+        self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
+            self.target_model_inputs["kv_num_blocks_x_cpu"]
+        ).cpu()
+        self.model_inputs["max_len_kv_cpu"] = paddle.zeros_like(self.target_model_inputs["max_len_kv_cpu"]).cpu()
+
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
@@ -321,6 +339,13 @@ class MTPProposer(Proposer):
         self.model_inputs["decoder_tile_ids_per_batch"] = None
         self.model_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.model_inputs["max_len_tensor_cpu"] = None  # CPU
+        self.model_inputs["encoder_batch_ids"] = None
+        self.model_inputs["encoder_tile_ids_per_batch"] = None
+        self.model_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
+        self.model_inputs["kv_batch_ids"] = None
+        self.model_inputs["kv_tile_ids_per_batch"] = None
+        self.model_inputs["kv_num_blocks_x_cpu"] = None  # CPU
+        self.model_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Input tokens
         self.model_inputs["draft_tokens"] = paddle.full(
@@ -512,6 +537,13 @@ class MTPProposer(Proposer):
             cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
             block_tables=self.model_inputs["block_tables"],
             caches=self.model_inputs["caches"],
+            encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+            encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+            encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+            kv_batch_ids=self.model_inputs["kv_batch_ids"],
+            kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+            kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+            max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
         )
 
         # Initialzie attention meta data

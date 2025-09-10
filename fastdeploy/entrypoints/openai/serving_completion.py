@@ -51,12 +51,6 @@ class OpenAIServingCompletion:
         else:
             self.master_ip = "0.0.0.0"
 
-    async def _ensure_connection_manager(self):
-        """ensure connection manager initialized"""
-        if not self.engine_client.connection_initialized:
-            await self.engine_client.connection_manager.initialize()
-            self.engine_client.connection_initialized = True
-
     def _check_master(self):
         return self.engine_client.is_master
 
@@ -73,7 +67,7 @@ class OpenAIServingCompletion:
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
-                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
                 return ErrorResponse(message=err_msg, code=400)
         created_time = int(time.time())
@@ -208,7 +202,6 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
@@ -314,7 +307,6 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )

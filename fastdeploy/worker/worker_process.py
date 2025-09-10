@@ -397,7 +397,6 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
@@ -710,6 +709,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
+        # TODO(YuanRisheng) is_checkpoint_bf16 may need to be removed and replaced by is_quantized in future
+        if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
+            quantization_config["is_checkpoint_bf16"] = True
+
     elif args.quantization != "None":
         quantization_config = {}
         quant_config_name = args.quantization
