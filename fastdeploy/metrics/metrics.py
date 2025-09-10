@@ -19,6 +19,7 @@ metrics
 """
 import os
 import shutil
+import uuid
 from typing import Set
 
 from prometheus_client import (
@@ -35,24 +36,20 @@ from fastdeploy.metrics import build_1_2_5_buckets
 from fastdeploy.metrics.work_metrics import work_process_metrics
 
 
-def cleanup_prometheus_files(is_main):
+def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
     """
     Cleans and recreates the Prometheus multiprocess directory.
-
-    Depending on whether it's the main process or a worker, this function removes the corresponding
-    Prometheus multiprocess directory (/tmp/prom_main or /tmp/prom_worker) and recreates it as an empty directory.
-
-    Args:
-        is_main (bool): Indicates whether the current process is the main process.
-
-    Returns:
-        str: The path to the newly created Prometheus multiprocess directory.
     """
-    PROM_DIR = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
-    if os.path.exists(PROM_DIR):
-        shutil.rmtree(PROM_DIR)
-    os.makedirs(PROM_DIR, exist_ok=True)
-    return PROM_DIR
+    base_dir = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
+    if instance_id is None:
+        instance_id = str(uuid.uuid4())
+    prom_dir = f"{base_dir}_{instance_id}"
+
+    if os.path.exists(prom_dir):
+        shutil.rmtree(prom_dir, ignore_errors=True)
+    os.makedirs(prom_dir, exist_ok=True)
+
+    return prom_dir
 
 
 class SimpleCollector(Collector):
