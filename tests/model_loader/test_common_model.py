@@ -72,6 +72,7 @@ model_param_map = {
                     "FD_ATTENTION_BACKEND": "MLA_ATTN",
                     "FLAGS_mla_use_tensorcore": "1",
                     "FLAGS_flash_attn_version": "3",
+                    "FD_USE_MACHETE": "1",
                 },
             },
         ],
