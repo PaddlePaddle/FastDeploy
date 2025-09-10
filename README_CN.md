@@ -26,7 +26,7 @@
 # FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
 
 ## 最新活动
-**[2025-09] 🔥 FastDeploy v2.2 全新发布**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!  
+**[2025-09] 🔥 FastDeploy v2.2 全新发布**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
 
 **[2025-08] FastDeploy v2.1 发布**:全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
 
