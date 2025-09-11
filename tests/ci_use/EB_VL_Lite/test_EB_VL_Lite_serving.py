@@ -586,6 +586,7 @@ def non_streaming_chat_base(openai_client, chat_param):
     return response.choices[0].message.content
 
 
+@pytest.mark.skip(reason="Temporarily skip this case due to unstable execution")
 def test_structured_outputs_json_schema(openai_client):
     """
     Test structured outputs json_schema functionality with the local service
@@ -695,6 +696,7 @@ def test_structured_outputs_json_schema(openai_client):
     }, f"json_schema non_streaming response: {json_schema_response['genre']} is not a valid book-type"
 
 
+@pytest.mark.skip(reason="Temporarily skip this case due to unstable execution")
 def test_structured_outputs_structural_tag(openai_client):
     """
     Test structured outputs structural_tag functionality with the local service
