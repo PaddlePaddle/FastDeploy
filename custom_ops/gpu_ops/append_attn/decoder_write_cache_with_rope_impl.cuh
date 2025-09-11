@@ -429,6 +429,142 @@ __global__ void append_decode_cache_T_rope_kernel(
 }
 
 template <typename T, int VecSize = 1>
+__global__ void append_decode_cache_T_neox_partial_rope_kernel(
+    const T* __restrict__ qkv,    // [bsz, num_heads + 2 * kv_num_heads,
+                                  // head_size]
+    T* __restrict__ key_cache,    // [num_blocks, kv_num_heads, block_size,
+                                  // head_size // 2]
+    T* __restrict__ value_cache,  // [num_blocks, kv_num_heads, block_size,
+                                  // head_size // 2]
+    T* __restrict__ qkv_out,
+    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ cu_seqlens_q,
+    const int* __restrict__ seq_lens,          // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
+    const float* __restrict__ cos_emb,         // [2, 1, max_model_len, 1, rotary_dim/2]
+    const float* __restrict__ sin_emb,         // [2, 1, max_model_len, 1, rotary_dim/2]
+    const int max_seq_len,
+    const int max_blocks_per_seq,
+    const int num_heads,
+    const int head_size,
+    const int rotary_dim,
+    const int block_size,
+    const uint32_t elem_cnt,
+    const int kv_num_heads,
+    const bool rope_3d) {
+  using LoadT = AlignedVector<T, VecSize>;
+  using LoadBiasT = AlignedVector<T, VecSize>;
+  using LoadKVT = AlignedVector<T, VecSize>;
+  constexpr int HalfVecSize = VecSize / 2;
+  using LoadEmbT = AlignedVector<float, VecSize>;
+
+  LoadT left_vec, right_vec;
+  LoadBiasT left_bias_vec, right_bias_vec;
+  LoadKVT left_cache_vec, right_cache_vec;
+  LoadEmbT cos_emb_vec;
+  LoadEmbT sin_emb_vec;
+
+  int64_t global_thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
+  const int half_head_size = head_size / 2;
+  const int half_rotary_dim = rotary_dim / 2;
+  const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
+  const int64_t half_hidden_size = hidden_size / 2;
+  // const int64_t offset = 2 * hidden_size;
+
+  for (int32_t linear_index = global_thread_idx * VecSize,
+               step = gridDim.x * blockDim.x * VecSize;
+       linear_index < elem_cnt;
+       linear_index += step) {
+    const int ori_bi = linear_index / half_hidden_size;
+    const int bias = linear_index % half_hidden_size;
+    const int hi = bias / half_head_size;  // q + k + v
+    const int h_bias = bias % half_head_size;
+    if (hi < num_heads && h_bias >= half_rotary_dim){
+      continue;
+    }
+    const int start_token_idx = cu_seqlens_q[ori_bi];
+    if (seq_lens_encoder[ori_bi] > 0) return;
+    const int write_seq_id = seq_lens[ori_bi];
+    if (write_seq_id == 0) continue;
+
+    const int* block_table_now = nullptr;
+
+    block_table_now = block_tables + ori_bi * max_blocks_per_seq;
+    const int block_idx = block_table_now[write_seq_id / block_size];
+    const int block_offset = write_seq_id % block_size;
+    uint32_t ori_idx_left =
+        start_token_idx * hidden_size + hi * head_size + h_bias;
+    uint32_t ori_idx_right = ori_idx_left + half_head_size;
+    if (hi < num_heads){
+      ori_idx_right = ori_idx_left + half_rotary_dim;
+    }else if (hi < num_heads + kv_num_heads){
+      if (h_bias < half_rotary_dim){
+        ori_idx_right = ori_idx_left + half_rotary_dim;
+      }else{
+        ori_idx_left = ori_idx_left + half_rotary_dim;
+        ori_idx_right = ori_idx_left + half_rotary_dim;
+      }
+    }
+
+    Load<T, VecSize>(&qkv[ori_idx_left], &left_vec);
+    Load<T, VecSize>(&qkv[ori_idx_right], &right_vec);
+
+    if (hi < num_heads + kv_num_heads) {
+      // q k rope
+      const uint32_t emb_idx = write_seq_id * half_rotary_dim + h_bias;
+      uint32_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size * 2 : emb_idx;
+      if (h_bias < half_rotary_dim){
+        Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+        Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < VecSize; i++) {
+      // rope
+      float input_left = static_cast<float>(left_vec[i]);
+      float input_right = static_cast<float>(right_vec[i]);
+      if (hi < num_heads + kv_num_heads && h_bias < half_rotary_dim) {
+        const float cos_tmp = cos_emb_vec[i];
+        const float sin_tmp = sin_emb_vec[i];
+        left_bias_vec[i] =
+            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+        right_bias_vec[i] =
+            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      } else {
+        left_bias_vec[i] = static_cast<T>(input_left);
+        right_bias_vec[i] = static_cast<T>(input_right);
+      }
+    }
+    if (hi < num_heads) {
+      // write q
+      Store<T, VecSize>(left_bias_vec, &qkv_out[ori_idx_left]);
+      Store<T, VecSize>(right_bias_vec, &qkv_out[ori_idx_right]);
+    } else {
+      // write k/v
+      const uint32_t kv_head_idx = (hi - num_heads) % kv_num_heads;
+      uint32_t tgt_idx_left =
+          block_idx * kv_num_heads * block_size * head_size +
+          kv_head_idx * block_size * head_size + block_offset * head_size +
+          h_bias;
+      uint32_t tgt_idx_right = tgt_idx_left + half_head_size;
+      if (hi < num_heads + kv_num_heads) {
+        if (h_bias < half_rotary_dim) {
+          tgt_idx_right = tgt_idx_left + half_rotary_dim;
+        }else{
+          tgt_idx_left = tgt_idx_left + half_rotary_dim;
+          tgt_idx_right = tgt_idx_left + half_rotary_dim;
+        }
+        Store<T, VecSize>(left_bias_vec, &key_cache[tgt_idx_left]);
+        Store<T, VecSize>(right_bias_vec, &key_cache[tgt_idx_right]);
+      } else {
+        Store<T, VecSize>(left_bias_vec, &value_cache[tgt_idx_left]);
+        Store<T, VecSize>(right_bias_vec, &value_cache[tgt_idx_right]);
+      }
+    }
+  }
+}
+
+template <typename T, int VecSize = 1>
 __global__ void append_decode_cache_T_neox_rope_kernel(
     const T* __restrict__ qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                   // head_size]
