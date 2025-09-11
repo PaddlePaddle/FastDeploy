@@ -33,7 +33,7 @@ from fastdeploy.inter_communicator import (
     shared_memory_exists,
 )
 from fastdeploy.model_executor.ops.gpu import get_output_kv_signal, set_data_ipc
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import envs, get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
 
@@ -802,19 +802,34 @@ def main():
     logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
     logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
 
-    cache_messager = CacheMessager(
-        splitwise_role=args.splitwise_role,
-        transfer_protocol=args.protocol,
-        pod_ip=args.pod_ip,
-        engine_worker_queue_port=args.engine_worker_queue_port,
-        local_data_parallel_id=args.local_data_parallel_id,
-        gpu_cache_kvs=gpu_cache_kvs,
-        rank=rank,
-        nranks=args.mp_num,
-        num_hidden_layers=args.num_hidden_layers + num_extra_layers,
-        gpu_id=device,
-        rdma_port=args.rdma_port,
-    )
+    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        cache_messager = CacheMessagerV1(
+            splitwise_role=args.splitwise_role,
+            transfer_protocol=args.protocol,
+            pod_ip=args.pod_ip,
+            engine_worker_queue_port=args.engine_worker_queue_port,
+            local_data_parallel_id=args.local_data_parallel_id,
+            gpu_cache_kvs=gpu_cache_kvs,
+            rank=rank,
+            nranks=args.mp_num,
+            num_hidden_layers=args.num_hidden_layers + num_extra_layers,
+            gpu_id=device,
+            rdma_port=args.rdma_port,
+        )
+    else:
+        cache_messager = CacheMessager(
+            splitwise_role=args.splitwise_role,
+            transfer_protocol=args.protocol,
+            pod_ip=args.pod_ip,
+            engine_worker_queue_port=args.engine_worker_queue_port,
+            local_data_parallel_id=args.local_data_parallel_id,
+            gpu_cache_kvs=gpu_cache_kvs,
+            rank=rank,
+            nranks=args.mp_num,
+            num_hidden_layers=args.num_hidden_layers + num_extra_layers,
+            gpu_id=device,
+            rdma_port=args.rdma_port,
+        )
 
     cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
     cache_ready_signal = IPCSignal(
