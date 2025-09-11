@@ -111,10 +111,10 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
+        self.model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
         self.processor = QwenVLProcessor(
             config=config,
-            model_name_or_path=model_name_or_path,
+            model_name_or_path=self.model_name_or_path,
             limit_mm_per_prompt=limit_mm_per_prompt,
             mm_processor_kwargs=mm_processor_kwargs,
             reasoning_parser_obj=None,
@@ -293,6 +293,64 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertTrue(
             np.equal(result["multimodal_inputs"]["position_ids"], result2.multimodal_inputs["position_ids"]).all()
         )
+
+    def test_apply_chat_template(self):
+        """
+        Test the consistency between:
+        1. Directly applying chat template using HuggingFace tokenizer
+        2. Applying chat template through the processor's request processing
+
+        This test verifies that:
+        - The processor correctly handles multimodal messages (image, video, text)
+        - The text_after_process field matches the output from direct tokenizer application
+        - The chat template application preserves the message structure and content
+
+        Test Steps:
+        1. Create sample multimodal messages with image, video and text content
+        2. Apply chat template directly using the tokenizer
+        3. Process the same messages through the processor
+        4. Compare the outputs to ensure consistency
+        """
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path)
+
+        # Sample multimodal messages containing image, video and text
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                    {"type": "video", "video": {"url": "file://3_frame_video.mp4"}},
+                    {"type": "text", "text": "Describe image and video."},
+                ],
+            }
+        ]
+
+        # Apply chat template directly using the tokenizer
+        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+        # Create equivalent request dictionary
+        request = {
+            "request_id": "12345",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                        {"type": "video_url", "video_url": {"url": "file://3_frame_video.mp4"}},
+                        {"type": "text", "text": "Describe image and video."},
+                    ],
+                }
+            ],
+        }
+
+        # Process request through the processor
+        self.processor.process_request_dict(request, 1024 * 100)
+        prompt2 = request["text_after_process"]
+
+        # Verify both methods produce identical prompt strings
+        self.assertEqual(prompt, prompt2)
 
 
 if __name__ == "__main__":
