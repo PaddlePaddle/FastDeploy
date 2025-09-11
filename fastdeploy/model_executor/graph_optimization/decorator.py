@@ -99,3 +99,35 @@ class GraphOptWrapper:
             fd_config.graph_opt_config.graph_opt_level < 1
         ), "Currently unable to update weights in static graph mode."
         self.graph_opt_backend.clear_cudagraph_piecewise_backend()
+
+
+def cuda_graph_buffers(buffer_meta):
+    def decorator(cls):
+        original_init = cls.__init__
+
+        def __init__(self, fd_config: FDConfig, **kwargs):
+            original_init(self, fd_config=fd_config, **kwargs)
+
+            def _resolve_path(root, path: str):
+                cur = root
+                for p in path.split("."):
+                    cur = getattr(cur, p)
+                return cur
+
+            if not hasattr(self, "_mm_buffers"):
+                self._mm_buffers = {}
+                for name, meta in buffer_meta.items():
+                    shape = [_resolve_path(fd_config, s) if isinstance(s, str) else s for s in meta["shape"]]
+                    dtype = meta["dtype"]
+                    if "." in meta["dtype"]:
+                        dtype = _resolve_path(fd_config, meta["dtype"])
+                    self._mm_buffers[name] = paddle.full(
+                        shape=shape,
+                        dtype=dtype,
+                        fill_value=meta.get("value", 0),
+                    )
+
+        cls.__init__ = __init__
+        return cls
+
+    return decorator

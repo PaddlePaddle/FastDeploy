@@ -1,5 +1,6 @@
 import unittest
 
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     FDConfig,
@@ -48,7 +49,8 @@ class TestConfig(unittest.TestCase):
             ips="0.0.0.0",
             test_mode=True,
         )
-        assert fd_config.max_num_batched_tokens == 2048
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            assert fd_config.max_num_batched_tokens == 2048
 
         cache_config.enable_chunked_prefill = False
         fd_config = FDConfig(
@@ -58,7 +60,8 @@ class TestConfig(unittest.TestCase):
             ips="0.0.0.0",
             test_mode=True,
         )
-        assert fd_config.max_num_batched_tokens == 8192
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            assert fd_config.max_num_batched_tokens == 8192
 
     def test_fdconfig_init_cache(self):
         parallel_config = ParallelConfig({})

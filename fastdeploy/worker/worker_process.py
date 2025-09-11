@@ -397,7 +397,6 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
@@ -710,6 +709,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
+        # TODO(YuanRisheng) is_checkpoint_bf16 may need to be removed and replaced by is_quantized in future
+        if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
+            quantization_config["is_checkpoint_bf16"] = True
+
     elif args.quantization != "None":
         quantization_config = {}
         quant_config_name = args.quantization
@@ -747,6 +750,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+
+    if (
+        args.speculative_config is not None
+        and ("method" in args.speculative_config)
+        and (args.speculative_config["method"] is not None)
+    ):
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if args.splitwise_role != "mixed":
+        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if not current_platform.is_cuda():
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if parallel_config.guided_decoding_backend != "off":
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     fd_config = FDConfig(
         model_config=model_config,

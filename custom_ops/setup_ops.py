@@ -542,7 +542,7 @@ elif paddle.is_compiled_with_cuda():
         include_package_data=True,
     )
 elif paddle.is_compiled_with_xpu():
-    assert False, "In XPU, we should use setup_ops.py in xpu_ops/src, not this."
+    assert False, "For XPU, please use setup_ops.py in the xpu_ops directory to compile custom ops."
 elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
     setup(
         name="fastdeploy_ops",
