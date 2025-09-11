@@ -42,7 +42,7 @@ from fastdeploy.inter_communicator import (
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
-from fastdeploy.plugins.input_processor import load_token_processor_plugins
+from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
