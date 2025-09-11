@@ -65,7 +65,7 @@ class WeightOnlyConfig(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "WeightOnlyConfig":
         algo = config["algo"]
-        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        is_checkpoint_bf16 = not config.get("is_quantized", False)
         return cls(algo, is_checkpoint_bf16)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
@@ -162,7 +162,7 @@ class WINT8Config(WeightOnlyConfig):
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT8Config":
-        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        is_checkpoint_bf16 = not config.get("is_quantized", False)
         return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
@@ -182,7 +182,7 @@ class WINT4Config(WeightOnlyConfig):
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT4Config":
-        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        is_checkpoint_bf16 = not config.get("is_quantized", False)
         return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
@@ -202,7 +202,8 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
-        if self.quant_config.is_checkpoint_bf16:
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,

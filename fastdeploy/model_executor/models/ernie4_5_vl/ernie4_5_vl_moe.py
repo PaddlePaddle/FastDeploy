@@ -168,11 +168,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         )
 
         # TODO(hehongyu): remove this after fix model network
-        setattr(
-            self.gate.weight,
-            "model_format",
-            "",
-        )
+        setattr(self.gate.weight, {"weight_need_transpose": False})
 
     def forward(self, hidden_states: paddle.Tensor):
         out = self.experts(hidden_states, self.gate)
