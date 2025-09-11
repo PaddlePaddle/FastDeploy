@@ -546,8 +546,8 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
+        type=json.loads,
+        default=None,
         help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
@@ -713,10 +713,14 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
             quantization_config["is_checkpoint_bf16"] = True
 
-    elif args.quantization != "None":
+    elif args.quantization is not None:
         quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
         if load_config.load_choices == "default_v1":
             quantization_config["is_checkpoint_bf16"] = True
@@ -725,11 +729,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
-            quantization_config["quantization"] = "mix_quant"
-            quant_config_name = "mix_quant"
-        if quant_config_name == "wint8" and "Glm4Moe" in model_config.architectures[0]:
-            quantization_config["dense_quant_type"] = "wfp8afp8"
-            quantization_config["moe_quant_type"] = "wint8"
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:

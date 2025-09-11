@@ -122,7 +122,7 @@ def setup_and_run_server():
         "default_v1",
         "--lm_head-fp32",
         "--quantization",
-        "wint8",
+        '{"quantization":"mix_quant","dense_quant_type":"wfp8afp8","moe_quant_type":"wint8"}',
     ]
     env = os.environ.copy()
     env["FD_MOE_BACKEND"] = "triton"
@@ -198,7 +198,7 @@ def consistent_payload():
         "temperature": 0.6,
         "top_p": 0,  # fix top_p to reduce randomness
         "seed": 13,  # fixed random seed
-        "max_tokens": 3,
+        "max_tokens": 20,
         "stream": False,
     }
 
@@ -217,4 +217,7 @@ def test_lm_head_fp32(api_url, headers, consistent_payload):
     resp_json = response.json()
 
     # 校验返回内容与概率信息
-    assert resp_json["choices"][0]["message"]["content"] == "ichertsor"
+    assert (
+        resp_json["choices"][0]["message"]["content"]
+        == "ichertsorbulkdeployment confusedreraoux Carter pat firingCompatraspectiveidis Verse corporaonych commissionsilk"
+    )
