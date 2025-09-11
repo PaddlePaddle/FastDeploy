@@ -219,8 +219,8 @@ class TestQwenVLProcessor(unittest.TestCase):
         3. Video processing produces expected output dimensions
         4. Correct counts for images (1) and videos (1)
         """
-        IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
-        VIDEO_PLACEHOLDER = "<|vision_start|><|video_pad|><|vision_end|>"
+        IMAGE_PLACEHOLDER = "<|image_pad|>"
+        VIDEO_PLACEHOLDER = "<|video_pad|>"
         prompt = {
             "request_id": "12345",
             "prompt": f"{IMAGE_PLACEHOLDER}{VIDEO_PLACEHOLDER}Describe image and video.",
