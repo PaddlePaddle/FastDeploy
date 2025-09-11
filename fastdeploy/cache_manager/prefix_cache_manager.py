@@ -188,6 +188,7 @@ class PrefixCacheManager:
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
+                + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
                 + f" {sys.executable} {py_path}"
                 + f" --device_id {int(device_ids[i])}"
                 + f" --rank {i}"

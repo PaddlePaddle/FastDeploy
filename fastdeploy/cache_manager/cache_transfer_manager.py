@@ -25,6 +25,7 @@ import time
 import numpy as np
 import paddle
 
+from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
@@ -455,6 +456,7 @@ class CacheTransferManager:
 
     def clear_or_update_caches(self, args):
         logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
+        logger.info(f"FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}")
         kv_cache_status = np.zeros([1], dtype=np.int32)
         kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",
@@ -466,49 +468,48 @@ class CacheTransferManager:
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 try:
-                    logger.info("Start clearing CPU caches.")
-                    paddle.set_device("cpu")
-                    for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
-                        cuda_host_free(ptrs)
-                    self.cpu_cache_kvs.clear()
-                    self.k_dst_ptrs.clear()
-                    self.v_dst_ptrs.clear()
-                    logger.info("Finish clearing CPU caches.")
-                    gc.collect()
+                    if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
+                        paddle.set_device("cpu")
+                        for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
+                            cuda_host_free(ptrs)
+                        self.cpu_cache_kvs.clear()
+                        self.k_dst_ptrs.clear()
+                        self.v_dst_ptrs.clear()
+                        gc.collect()
+                        # reset swap_space_ready_signal
+                        self.swap_space_ready_signal.value[self.rank] = 0
+                        while np.sum(self.swap_space_ready_signal.value) != 0:
+                            time.sleep(0.1)
 
-                    logger.info("Start clearing GPU caches.")
+                    paddle.set_device(f"gpu:{self.device}")
                     for name, tensor in self.gpu_cache_kvs.items():
-                        unset_data_ipc(tensor, name, True, False)
+                        unset_data_ipc(tensor, name, True, True)
                     self.gpu_cache_kvs.clear()
                     self.gpu_cache_k_tensors.clear()
                     self.gpu_cache_v_tensors.clear()
-                    logger.info("Finish clearing GPU caches.")
-
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
-                    self.swap_space_ready_signal.value[self.rank] = 0
+                    if np.sum(self.cache_ready_signal.value) == 0:
+                        time.sleep(0.1)
 
-                    if np.sum(self.cache_ready_signal.value) == 0 and np.sum(self.swap_space_ready_signal.value) == 0:
-                        kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+                    kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
 
                 except Exception as e:
                     logger.error(f"Failed to clear caches: {e}")
 
             elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 try:
-                    logger.info("Start restoring CPU caches.")
-                    self._init_cpu_cache(args)
-                    logger.info("Finish restoring CPU caches.")
+                    if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
+                        self._init_cpu_cache(args)
+                        self.swap_space_ready_signal.value[self.rank] = 1
+                        while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
+                            time.sleep(0.1)
 
-                    logger.info("Start restoring GPU caches.")
                     self._init_gpu_cache(args)
-                    logger.info("Finish restoring GPU caches.")
+                    while np.sum(self.cache_ready_signal.value) != args.mp_num:
+                        time.sleep(0.1)
 
-                    if (
-                        np.sum(self.cache_ready_signal.value) == args.mp_num
-                        and np.sum(self.swap_space_ready_signal.value) == args.mp_num
-                    ):
-                        kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
+                    kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:
                     logger.error(f"Failed to restore caches: {e}")
