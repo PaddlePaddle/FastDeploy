@@ -137,7 +137,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         3. Video processing produces expected output dimensions
         4. Correct counts for images (1) and videos (1)
         """
-        prompt = {
+        message = {
             "request_id": "12345",
             "messages": [
                 {
@@ -151,7 +151,7 @@ class TestQwenVLProcessor(unittest.TestCase):
             ],
         }
 
-        request = Request.from_dict(prompt)
+        request = Request.from_dict(message)
         result = self.processor.process_request(request, 1024 * 100)
 
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
@@ -219,9 +219,11 @@ class TestQwenVLProcessor(unittest.TestCase):
         3. Video processing produces expected output dimensions
         4. Correct counts for images (1) and videos (1)
         """
+        IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
+        VIDEO_PLACEHOLDER = "<|vision_start|><|video_pad|><|vision_end|>"
         prompt = {
             "request_id": "12345",
-            "prompt": "<|image@placeholder|><|video@placeholder|>Describe image and video.",
+            "prompt": f"{IMAGE_PLACEHOLDER}{VIDEO_PLACEHOLDER}Describe image and video.",
             "multimodal_data": {
                 "image": [mock_pil_image(10, 2100)],
                 "video": [{"video": b"123", "fps": 5}],
@@ -242,6 +244,55 @@ class TestQwenVLProcessor(unittest.TestCase):
         )
         self.assertEqual(result.multimodal_inputs["pic_cnt"], 1)
         self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
+
+    def test_message_and_prompt(self):
+        """
+        Test consistency between message-based and prompt-based processing
+
+        Validates that processing a request through:
+        1. The message format (with image/video URLs)
+        2. The prompt format (with direct image/video data)
+        produces identical tokenization and multimodal input results.
+
+        Checks:
+        1. Prompt token IDs match between both processing methods
+        2. Grid dimensions (THW) match between both methods
+        3. Position IDs match between both methods
+        """
+        # Create test request in message format
+        request = {
+            "request_id": "12345",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": "file://demo.jpeg"}},
+                        {"type": "video_url", "video_url": {"url": "file://3_frame_video.mp4"}},
+                        {"type": "text", "text": "Describe image and video."},
+                    ],
+                }
+            ],
+        }
+        result = self.processor.process_request_dict(request, 1024 * 100)
+
+        # Create equivalent request in prompt format
+        prompt = {
+            "request_id": "12345",
+            "prompt": request["text_after_process"],
+            "multimodal_data": {
+                "image": [mock_pil_image(480, 640)],
+                "video": [{"video": b"123"}],
+            },
+        }
+        request2 = Request.from_dict(prompt)
+        result2 = self.processor.process_request(request2, 1024 * 100)
+
+        # Verify both processing methods produce identical results
+        self.assertEqual(result["prompt_token_ids"], result2.prompt_token_ids)
+        self.assertTrue(np.equal(result["multimodal_inputs"]["grid_thw"], result2.multimodal_inputs["grid_thw"]).all())
+        self.assertTrue(
+            np.equal(result["multimodal_inputs"]["position_ids"], result2.multimodal_inputs["position_ids"]).all()
+        )
 
 
 if __name__ == "__main__":
