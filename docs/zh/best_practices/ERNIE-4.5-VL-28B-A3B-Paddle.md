@@ -17,15 +17,10 @@
 
 安装流程参考文档 [FastDeploy GPU 安装](../get_started/installation/nvidia_gpu.md)
 
-> ⚠️ 注意事项
-> - FastDeploy只支持Paddle格式的模型，注意下载Paddle后缀的模型
-> - 使用模型名称会自动下载模型，如果已经下载过模型，可以直接使用模型下载位置的绝对路径
-
 ## 二、如何使用
 ### 2.1 基础：启动服务
  **示例1：** 4090上单卡部署32K上下文的服务
 ```shell
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8180 \
@@ -37,14 +32,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --limit-mm-per-prompt '{"image": 100, "video": 100}' \
     --reasoning-parser ernie-45-vl \
     --gpu-memory-utilization 0.9 \
-    --enable-chunked-prefill \
     --max-num-batched-tokens 384 \
-    --quantization wint4 \
-    --enable-mm
+    --quantization wint4
 ```
  **示例2：** H800上双卡部署128K上下文的服务
 ```shell
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8180 \
@@ -56,12 +48,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --limit-mm-per-prompt '{"image": 100, "video": 100}' \
     --reasoning-parser ernie-45-vl \
     --gpu-memory-utilization 0.9 \
-    --enable-chunked-prefill \
     --max-num-batched-tokens 384 \
-    --quantization wint4 \
-    --enable-mm
+    --quantization wint4
 ```
-> ⚠️ 2.1及以上版本需要通过环境变量开启新调度器 `ENABLE_V1_KVCACHE_SCHEDULER=1`，否则可能会有部分请求最大长度前截断或返空。
 
 示例是可以稳定运行的一组配置，同时也能得到比较好的性能。
 如果对精度、性能有进一步的要求，请继续阅读下面的内容。
@@ -91,9 +80,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 #### 2.2.2 Chunked Prefill
 - **参数：** `--enable-chunked-prefill`
-- **用处：** 开启 `chunked prefill` 可**降低显存峰值**并**提升服务吞吐**。
+- **用处：** 开启 `chunked prefill` 可降低显存峰值并提升服务吞吐。2.2版本已经**默认开启**，2.2之前需要手动开启，参考2.1的最佳实践文档。
 
-- **其他相关配置**:
+- **相关配置**:
 
     `--max-num-batched-tokens`：限制每个chunk的最大token数量。多模场景下每个chunk会向上取整保持图片的完整性，因此实际每次推理的总token数会大于该值。我们推荐设置为384。
 
@@ -115,12 +104,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - **描述**：拒绝采样即从一个易于采样的提议分布（proposal distribution）中生成样本，避免显式排序从而达到提升采样速度的效果，可以提升推理性能。
 - **推荐**：这是一种影响效果的较为激进的优化策略，我们还在全面验证影响。如果对性能有较高要求，也可以接受对效果的影响时可以尝试开启。
 
-> **Attention超参：**`FLAGS_max_partition_size=1024`
-- **描述**：Append Attntion(默认)后端的超参，我们在常用数据集上的测试结果表明，设置为1024后可以大幅提升解码速度，尤其是长文场景。
-- **推荐**：未来会修改为自动调整的机制。如果对性能有较高要求可以尝试开启。
-
 ## 三、常见问题FAQ
-**注意：** 使用多模服务部署需要在配置中添加参数 `--enable-mm`。
 
 ### 3.1 显存不足(OOM)
 如果服务启动时提示显存不足，请尝试以下方法：
