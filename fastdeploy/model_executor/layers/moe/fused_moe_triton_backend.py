@@ -31,7 +31,7 @@ try:
     from .triton_moe_kernels import fused_moe_kernel_paddle
 except ImportError:
     pass
-from fastdeploy.model_executor.layers.moe.utils import get_moe_scores
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
 
 class TritonWeightOnlyMoEMethod(QuantMethodBase):

@@ -39,7 +39,7 @@ elif current_platform.is_iluvatar():
         moe_expert_reduce,
     )
 
-from fastdeploy.model_executor.layers.moe.utils import get_moe_scores
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 
 

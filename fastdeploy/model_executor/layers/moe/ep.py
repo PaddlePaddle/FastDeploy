@@ -28,7 +28,7 @@ except:
 
 import fastdeploy
 from fastdeploy.config import MoEPhase
-from fastdeploy.model_executor.layers.moe.utils import get_moe_scores
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.utils import singleton
 
 

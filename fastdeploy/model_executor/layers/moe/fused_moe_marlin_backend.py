@@ -19,7 +19,7 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.moe.utils import get_moe_scores
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
