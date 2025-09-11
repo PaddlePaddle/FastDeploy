@@ -173,6 +173,7 @@ class PrefixCacheManager:
         )
 
         # Run command to launch cache transfer managers
+        logger.info(f"create_cache_tensor: {create_cache_tensor}")
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
         for i in range(tensor_parallel_size):

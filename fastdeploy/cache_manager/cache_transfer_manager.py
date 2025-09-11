@@ -197,7 +197,6 @@ class CacheTransferManager:
             logger.info("OK! Stop waiting.")
 
         logger.info("Initializing kv cache for all layers.")
-        logger.info(args)
         paddle.set_device(f"gpu:{self.device}")
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
@@ -231,21 +230,22 @@ class CacheTransferManager:
         logger.info(f"device :{self.device}")
         logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
         logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
-        logger.info("CacheTransferManager has initialized kv cache for all layers.")
 
     def _init_cpu_cache(self, args):
-        logger.info("CacheTransferManager is creating swap cache for all layers.")
+        logger.info("Initializing cpu cache for all layers.")
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
         for i in range(args.num_layers + self.num_extra_layers):
             key_name = f"key_caches_{i}_rank{self.rank}"
             val_name = f"value_caches_{i}_rank{self.rank}"
-            self.cpu_cache_kvs[key_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
+            need_to_allocate_bytes = args.num_cpu_blocks * args.bytes_per_layer_per_block
+            logger.info(f"..creating cpu cache for layer {i}: {2 * need_to_allocate_bytes / 1024 ** 3:.2f}GB")
+            self.cpu_cache_kvs[key_name] = cuda_host_alloc(need_to_allocate_bytes)
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
-            self.cpu_cache_kvs[val_name] = cuda_host_alloc(args.num_cpu_blocks * args.bytes_per_layer_per_block)
+            self.cpu_cache_kvs[val_name] = cuda_host_alloc(need_to_allocate_bytes)
             self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
-        logger.info("CacheTransferManager has created swap cache for all layers.")
+        logger.info("Initialized cpu cache for all layers.")
 
     def _do_swap_to_cpu_task(
         self,
@@ -477,7 +477,8 @@ class CacheTransferManager:
 
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
-                    kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+                    if np.sum(self.cache_ready_signal.value) == 0:
+                        kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
 
                 except Exception as e:
                     logger.error(f"Failed to clear caches: {e}")
@@ -492,7 +493,8 @@ class CacheTransferManager:
                     self._init_gpu_cache(args)
                     logger.info("Finish restoring GPU caches.")
 
-                    kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
+                    if np.sum(self.cache_ready_signal.value) == args.mp_num:
+                        kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:
                     logger.error(f"Failed to restore caches: {e}")
