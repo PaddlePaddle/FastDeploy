@@ -1,7 +1,7 @@
 enable_prefix_caching: True
 max_model_len: 32768
 max_num_seqs: 128
-gpu_memory_utilization: 0.9
+gpu_memory_utilization: 0.85
 kv_cache_ratio: 0.71
 tensor_parallel_size: 4
 swap_space: 200

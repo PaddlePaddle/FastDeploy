@@ -2,4 +2,4 @@ max_model_len: 32768
 max_num_seqs: 40
 tensor_parallel_size: 4
 quantization: wint4
-gpu_memory_utilization: 0.9
+gpu_memory_utilization: 0.85
