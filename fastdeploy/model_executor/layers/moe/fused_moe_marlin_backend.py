@@ -19,37 +19,13 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
-    noaux_tc,
     tritonmoe_preprocess_func,
 )
 
 from ..quantization.quant_base import QuantMethodBase
-
-
-def get_moe_scores(
-    gating_output: paddle.Tensor,
-    n_group,
-    topk_group,
-    top_k,
-    routed_scaling_factor,
-    e_score_correction_bias,
-) -> paddle.Tensor:
-    """
-    compute moe scores using e_score_correction_bias.
-    """
-    scores = paddle.nn.functional.sigmoid(gating_output)
-    scores_with_bias = scores + e_score_correction_bias.unsqueeze(0)
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group,
-        topk_group,
-        top_k,
-        routed_scaling_factor,
-    )
-    return scores, topk_values, topk_idx
 
 
 def gptq_marlin_moe_repack(

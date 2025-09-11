@@ -1298,24 +1298,23 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
-                hidden_states = model_output
             else:
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
 
-                hidden_states = rebuild_padding(
-                    model_output,
-                    self.share_inputs["cu_seqlens_q"],
-                    self.share_inputs["seq_lens_this_time"],
-                    self.share_inputs["seq_lens_decoder"],
-                    self.share_inputs["seq_lens_encoder"],
-                    (
-                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                    ),  # speculative decoding requires
-                    self.parallel_config.max_model_len,
-                )
+            hidden_states = rebuild_padding(
+                model_output,
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["seq_lens_encoder"],
+                (
+                    self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
+                ),  # speculative decoding requires
+                self.parallel_config.max_model_len,
+            )
 
             # 4. Execute spec decode
             logits = self.model.compute_logits(hidden_states)
@@ -1608,21 +1607,20 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
-            hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.parallel_config.max_model_len,
-            )
+        hidden_states = rebuild_padding(
+            model_output,
+            self.share_inputs["cu_seqlens_q"],
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["seq_lens_encoder"],
+            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+            self.parallel_config.max_model_len,
+        )
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
