@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 from typing import List
 from unittest.mock import Mock
@@ -16,7 +32,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         engine_client = Mock()
         engine_client.reasoning_parser = "ernie_x1"
         # 创建一个OpenAIServingCompletion实例
-        serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为"tool_call"
         output = {"tool_call": "tool_call"}
         # 调用calc_finish_reason方法
@@ -29,7 +45,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         engine_client = Mock()
         engine_client.reasoning_parser = "ernie_x1"
         # 创建一个OpenAIServingCompletion实例
-        serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为其他值
         output = {"finish_reason": "other_reason"}
         # 调用calc_finish_reason方法
@@ -41,7 +57,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         # 创建一个模拟的engine_client
         engine_client = Mock()
         # 创建一个OpenAIServingCompletion实例
-        serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output
         output = {}
         # 调用calc_finish_reason方法
@@ -52,7 +68,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
     def test_request_output_to_completion_response(self):
         engine_client = Mock()
         # 创建一个OpenAIServingCompletion实例
-        openai_serving_completion = OpenAIServingCompletion(engine_client, "pid", "ips", 360)
+        openai_serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         final_res_batch: List[RequestOutput] = [
             {
                 "outputs": {

@@ -18,7 +18,7 @@ FastDeploy's `GraphOptimizationBackend` design architecture is as follows, **som
 ## 1. GraphOptimizationBackend Current usage restrictions
 In the CUDAGraph multi-device inference task, you need to use the Custom all-reduce operator to perform multi-card all-reduce.
 
-Before version 2.2, neither the CUDAGraph nor the Custom all-reduce operators were enabled by default. You need to add `--enable-custom-all-reduce` to the startup command to manually enable it.
+Before version 2.2, the CUDAGraph was not enabled by default. the Custom all-reduce operators was enabled by default.
 
 ### 1.1 The multi-device scene needs to be enabled Custom all-reduce
 The `FLAGS_max_partition_size` environment variable controls the `gridDim` execution configuration of Kernel in CascadeAppend Attention, and dynamic execution configuration will cause CUDAGraph execution to fail.
@@ -44,7 +44,7 @@ CudaGrpah can be enabled by setting `--use-cudagraph` or `--graph-optimization-c
 The `graph_opt_level` parameter within `--graph-optimization-config` is used to configure the graph optimization level, with the following available options:
 + `0`: Use Dynamic compute graph, default to 0
 + `1`: Use Static compute graph, during the initialization phase, Paddle API will be used to convert the dynamic image into a static image
-+ `2`: Base on Static compute graph, use the complier(CINN, Compiler Infrastructure for Neural Networks) of Paddle  to compile and optimize
++ `2`: Base on Static compute graph, use the compiler(CINN, Compiler Infrastructure for Neural Networks) of Paddle  to compile and optimize
 
 In general, static graphs have lower Kernel Launch overhead than dynamic graphs, and it is recommended to use static graphs.
 For adapted models, FastDeploy's CudaGraph *can support both dynamic and static graphs* simultaneously.

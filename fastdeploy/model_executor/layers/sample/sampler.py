@@ -24,9 +24,7 @@ import paddle.nn.functional as F
 from paddle import nn
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
-    LogitsProcessorBase,
-)
+from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
 )
@@ -38,7 +36,20 @@ from fastdeploy.model_executor.layers.sample.ops import (
     top_k_top_p_sampling,
 )
 from fastdeploy.platforms import current_platform
+from fastdeploy.reasoning import ReasoningParser
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
+
+
+def top_p_normalize_probs_paddle(
+    probs: paddle.Tensor,
+    top_ps: paddle.Tensor,
+):
+    probs_idx = probs.argsort(axis=-1, descending=True)
+    probs_sort = paddle.take_along_axis(probs, probs_idx, axis=-1)
+    probs_sum = paddle.cumsum(probs_sort, axis=-1)
+    probs_sort = paddle.where((probs_sum - probs_sort) > top_ps, paddle.zeros_like(probs_sort), probs_sort)
+    probs_sort.divide_(probs_sort.sum(axis=-1, keepdim=True))
+    return paddle.zeros_like(probs_sort).put_along_axis_(indices=probs_idx, values=probs_sort, axis=-1)
 
 
 class SamplerProcessor:
@@ -57,6 +68,10 @@ class SamplerProcessor:
         self.logits_processor: Dict[int, Optional[Any]] = dict()
         self.executor = ThreadPoolExecutor()
         self.logits_lock = threading.Lock()
+        self.reasoning_parser = None
+
+    def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
+        self.reasoning_parser = reasoning_parser
 
     def add_logits_processor(
         self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = [], skip: bool = False
@@ -178,9 +193,14 @@ class SamplerProcessor:
         if available_processors is None or self.token_bitmask is None:
             return logits
 
-        indices = list(self.logits_processor.keys())
-        mask_idx = [i for i in indices if i not in skip_idx_list]
-        return available_processors.apply_token_mask(logits, self.token_bitmask, indices=mask_idx)
+        indices = []
+        for idx, processor in self.logits_processor.items():
+            if processor is None or idx in skip_idx_list:
+                continue
+            if self.reasoning_parser is None or not processor.enable_reasoning or processor.reasoning_ended:
+                indices.append(idx)
+
+        return available_processors.apply_token_mask(logits, self.token_bitmask, indices=indices)
 
     def _accept_token(self, idx: int, token: int):
         """accept token"""
@@ -188,6 +208,15 @@ class SamplerProcessor:
             raise ValueError(f"Invalid index, idx: {idx}, logit_processors.keys: {self.logits_processor.keys()}")
 
         if self.logits_processor[idx].is_terminated():
+            return
+
+        if (
+            self.reasoning_parser is not None
+            and self.logits_processor[idx].enable_reasoning
+            and not self.logits_processor[idx].reasoning_ended
+        ):
+            reasoning_ended = self.reasoning_parser.is_reasoning_end([token])
+            self.logits_processor[idx].reasoning_ended = reasoning_ended
             return
 
         self.logits_processor[idx].accept_token(token)
@@ -237,6 +266,10 @@ class SamplerBase(nn.Layer):
         """async accept token from outside, update vocab mask for inside"""
         pass
 
+    def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
+        """set reasoning parser"""
+        pass
+
 
 class Sampler(SamplerBase):
     """
@@ -274,6 +307,10 @@ class Sampler(SamplerBase):
             self.early_stopper = early_stopper_cls()
             self.early_stopper.initialize(fd_config.parallel_config.max_num_seqs, fd_config.early_stop_config)
 
+    def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
+        """set reasoning parser"""
+        self.processor.apply_reasoning_parser(reasoning_parser)
+
     def apply_logits_processor(
         self,
         ids: int,
@@ -293,9 +330,45 @@ class Sampler(SamplerBase):
         """async accept token from outside, update vocab mask for inside"""
         self.processor.update_output_tokens(next_tokens, skip_idx_list, skip_list_next)
 
-    def compute_logprobs(self, logits: paddle.Tensor) -> paddle.Tensor:
+    def compute_logprobs(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> paddle.Tensor:
         """ """
-        return F.log_softmax(logits, axis=-1)
+        last_logits = logits
+        real_bsz = last_logits.shape[0]
+        temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
+        top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
+        share_inputs = sampling_metadata.share_inputs
+        if temp_scaled_logprobs is not None:
+            real_bsz_temp_scaled = temp_scaled_logprobs[:real_bsz]
+            temperature = sampling_metadata.temperature[:real_bsz]
+            temp_temperature = paddle.where(real_bsz_temp_scaled, temperature, paddle.ones_like(temperature))
+            last_logits = last_logits / temp_temperature
+
+        last_logprobs = F.log_softmax(last_logits, axis=-1)
+        top_p_logprob = None
+        top_p_req_mask = None
+
+        if top_p_normalized_logprobs is not None and share_inputs is not None:
+            seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])[:real_bsz]
+            seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])[:real_bsz]
+            seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])[:real_bsz]
+            seq_lens_time_sum = seq_lens_this_time + seq_lens_encoder + seq_lens_decoder
+            real_req_mask = seq_lens_time_sum > 0
+            top_p_req_mask = paddle.logical_and(top_p_normalized_logprobs[:real_bsz], real_req_mask)
+            real_req_top_p = sampling_metadata.top_p[:real_bsz]
+            # Normalize logprobs if top_p normalization is enabled
+            # NOTE: only normalize logprobs when top_p is set and not equal to 1.0
+            top_p_req_mask = paddle.logical_and(top_p_req_mask, real_req_top_p != 1.0)
+            if top_p_req_mask.any():
+                probs = F.softmax(last_logits, axis=-1)
+                probs = top_p_normalize_probs_paddle(probs, real_req_top_p)
+                top_p_logprob = paddle.log(probs)
+        if top_p_logprob is not None:
+            last_logprobs = paddle.where(top_p_req_mask, top_p_logprob, last_logprobs)
+        return last_logprobs
 
     def gather_logprobs(
         self,
@@ -320,6 +393,7 @@ class Sampler(SamplerBase):
           Sampled token rank tensor, (num tokens)
         """
         assert token_ids.dtype == paddle.int64
+        logprobs.clip_(min=paddle.finfo(logprobs.dtype).min)
         # Get with the logprob of the prompt or sampled token.
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
@@ -344,11 +418,11 @@ class Sampler(SamplerBase):
         skip_idx_list: List[int] = [],
     ) -> SamplerOutput:
         """ """
+        logits = self.processor.apply_token_mask(logits, skip_idx_list)
+
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
-            raw_logprobs = self.compute_logprobs(logits)
-
-        logits = self.processor.apply_token_mask(logits, skip_idx_list)
+            raw_logprobs = self.compute_logprobs(logits, sampling_metadata)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -383,8 +457,6 @@ class Sampler(SamplerBase):
             # will set the stop batch in stop_flags
             assert sampling_metadata.stop_flags is not None, "need stop_flags for eary stop"
             self.early_stopper.process(probs, next_tokens, sampling_metadata.stop_flags)
-
-        self.processor.update_output_tokens(next_tokens, skip_idx_list)
 
         sampler_output = SamplerOutput(
             # The sampled tokens are expanded to 2D tensor with shape

@@ -88,7 +88,7 @@ struct nv_type_traits<int8_t> {
     constexpr int kLogN = 7;                                                     \
     __VA_ARGS__                                                                  \
   } else {                                                                       \
-    PADDLE_THROW(phi::errors::Unimplemented("logN = %d is unsupport!", logN));   \
+    PADDLE_THROW(phi::errors::Unimplemented("logN = %d is unsupported!", logN));   \
   }
 
 #define DISPATCH_SP_VS(vec_size, VEC_SIZE, ...)                                          \
@@ -108,7 +108,7 @@ struct nv_type_traits<int8_t> {
     constexpr int VEC_SIZE = 1;                                                          \
     __VA_ARGS__                                                                          \
   } else {                                                                               \
-    PADDLE_THROW(phi::errors::Unimplemented("vec_size = %d is unsupport!", vec_size));   \
+    PADDLE_THROW(phi::errors::Unimplemented("vec_size = %d is unsupported!", vec_size));   \
   }
 
 #define DISPATCH_logN(logN, kLogN, ...)                                  \
@@ -605,26 +605,6 @@ void moe_fast_hardamard_kernel(const T *x,
         exchange_smem_pre<kNChunks, kChunksPerSmemSize, VecSize, kWarpSize, kNWarps, false, vec_t>(x_vals, smem_exchange);
     }
     if constexpr (kNChunks > 1) {
-//       T x_vals_transposed[VecSize][kNChunks] = {init_value};
-// #pragma unroll
-//       for (int c = 0; c < kNChunks; ++c) {
-// #pragma unroll
-//           for (int i = 0; i < VecSize; ++i) { x_vals_transposed[i][c] = x_vals[c][i]; }
-//       }
-//       if constexpr (kNChunks == 28) {
-//         hadamard_mult_thread_chunk_28<VecSize>(x_vals_transposed);
-//       } else if constexpr (kNChunks == 36) {
-//         hadamard_mult_thread_chunk_36<VecSize>(x_vals_transposed);
-//       } else {
-//         constexpr int kLogNChunks = cilog2(kNChunks);
-//         static_assert(1 << kLogNChunks == kNChunks, "kNChunks must be a power of 2");
-//         hadamard_mult_thread<kLogNChunks, VecSize>(x_vals_transposed);
-//       }
-// #pragma unroll
-//       for (int c = 0; c < kNChunks; ++c) {
-// #pragma unroll
-//           for (int i = 0; i < VecSize; ++i) { x_vals[c][i] = x_vals_transposed[i][c]; }
-//       }
       if constexpr (kNChunks == 28) {
         hadamard_mult_thread_28_transpose<T, VecSize>(x_vals);
       } else if constexpr (kNChunks == 36) {
@@ -892,16 +872,14 @@ void MoeFastHardamardWrapper(const T *x_data,
                           const int64_t dim,
                           const int num_max_tokens_per_expert,
                           bool used_in_ep_low_latency,
+                          const int hadamard_block_size,
                           OutT* out,
                           cudaStream_t &stream) {
   bool FLAGS_hardamard_use_diagonal_block_matrix = true;
 
-  static const char* FLAGS_hardamard_moe_block_size = std::getenv("FLAGS_hardamard_moe_block_size");
-  static const int32_t hardamard_moe_block_size = FLAGS_hardamard_moe_block_size != nullptr ?
-    stoi(std::string(FLAGS_hardamard_moe_block_size)) : 512;
   constexpr int kThreads = 128;
   if (FLAGS_hardamard_use_diagonal_block_matrix) {
-    const int VecSize = hardamard_moe_block_size / kThreads; // 128 / 128 = 1
+    const int VecSize = hadamard_block_size / kThreads;
     const int logN = int(ceil(std::log2(kThreads * VecSize)));
     constexpr int kNChunks = 1;
     DISPATCH_SP_VS(VecSize, VEC_SIZE, {
@@ -1011,6 +989,7 @@ template void MoeFastHardamardWrapper<phi::dtype::float16, phi::dtype::float16>(
   const int64_t dim,
   const int num_max_tokens_per_expert,
   bool used_in_ep_low_latency,
+  const int hadamard_block_size,
   phi::dtype::float16 *out,
   cudaStream_t &stream
 );
@@ -1029,6 +1008,7 @@ template void MoeFastHardamardWrapper<phi::dtype::float16, int8_t>(
   const int64_t dim,
   const int num_max_tokens_per_expert,
   bool used_in_ep_low_latency,
+  const int hadamard_block_size,
   int8_t *out,
   cudaStream_t &stream
 );
@@ -1047,6 +1027,7 @@ template void MoeFastHardamardWrapper<phi::dtype::bfloat16, phi::dtype::bfloat16
   const int64_t dim,
   const int num_max_tokens_per_expert,
   bool used_in_ep_low_latency,
+  const int hadamard_block_size,
   phi::dtype::bfloat16 *out,
   cudaStream_t &stream
 );
@@ -1065,6 +1046,7 @@ template void MoeFastHardamardWrapper<phi::dtype::bfloat16, int8_t>(
   const int64_t dim,
   const int num_max_tokens_per_expert,
   bool used_in_ep_low_latency,
+  const int hadamard_block_size,
   int8_t *out,
   cudaStream_t &stream
 );

@@ -15,25 +15,32 @@
 """
 
 import json
-import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
+import paddle
+
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
     TaskOption,
 )
-from fastdeploy.engine.config import Config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import DeprecatedOptionWarning, FlexibleArgumentParser
+from fastdeploy.utils import (
+    DeprecatedOptionWarning,
+    FlexibleArgumentParser,
+    is_port_available,
+)
 
 
 def nullable_str(x: str) -> Optional[str]:
@@ -50,6 +57,10 @@ class EngineArgs:
     """
     The name or path of the model to be used.
     """
+    served_model_name: Optional[str] = None
+    """
+    The name of the model being served.
+    """
     revision: Optional[str] = "master"
     """
     The revision for downloading models.
@@ -61,6 +72,10 @@ class EngineArgs:
     tokenizer: str = None
     """
     The name or path of the tokenizer (defaults to model path if not provided).
+    """
+    tokenizer_base_url: str = None
+    """
+    The base URL of the remote tokenizer service (used instead of local tokenizer if provided).
     """
     max_model_len: int = 2048
     """
@@ -149,8 +164,7 @@ class EngineArgs:
     """
     Ratio of tokens to process in a block.
     """
-
-    prealloc_dec_block_slot_num_threshold: int = 5
+    prealloc_dec_block_slot_num_threshold: int = 12
     """
     Token slot threshold for preallocating decoder blocks.
     """
@@ -180,12 +194,12 @@ class EngineArgs:
     Flag to enable prefix caching.
     """
 
-    enable_custom_all_reduce: bool = False
+    disable_custom_all_reduce: bool = False
     """
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: int = 8002
+    engine_worker_queue_port: str = "8002"
     """
     Port for worker queue communication.
     """
@@ -198,6 +212,11 @@ class EngineArgs:
     data_parallel_size: int = 1
     """
     Number of data parallelism.
+    """
+
+    local_data_parallel_id: int = 0
+    """
+    Local data parallel id.
     """
 
     enable_expert_parallel: bool = False
@@ -323,6 +342,10 @@ class EngineArgs:
     """
     Configuration for graph optimization backend execution.
     """
+    moba_attention_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for moba attention.
+    """
 
     enable_logprob: bool = False
     """
@@ -349,7 +372,12 @@ class EngineArgs:
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
-        - "new_loader": new  loader.
+        - "default_v1": default_v1 loader.
+    """
+
+    lm_head_fp32: bool = False
+    """
+    Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
     def __post_init__(self):
@@ -365,6 +393,14 @@ class EngineArgs:
                 raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
+        if self.speculative_config is not None:
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.splitwise_role != "mixed":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if not current_platform.is_cuda():
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.guided_decoding_backend != "off":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -378,6 +414,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.model,
             help="Model name or path to be used.",
+        )
+        model_group.add_argument(
+            "--served-model-name",
+            type=nullable_str,
+            default=EngineArgs.served_model_name,
+            help="Served model name",
         )
         model_group.add_argument(
             "--revision",
@@ -396,6 +438,12 @@ class EngineArgs:
             type=nullable_str,
             default=EngineArgs.tokenizer,
             help="Tokenizer name or path (defaults to model path if not specified).",
+        )
+        model_group.add_argument(
+            "--tokenizer-base-url",
+            type=nullable_str,
+            default=EngineArgs.tokenizer_base_url,
+            help="The base URL of the remote tokenizer service (used instead of local tokenizer if provided).",
         )
         model_group.add_argument(
             "--max-model-len",
@@ -484,7 +532,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
-            type=int,
+            type=lambda s: s.split(",") if s else None,
             default=EngineArgs.engine_worker_queue_port,
             help="port for engine worker queue",
         )
@@ -492,7 +540,7 @@ class EngineArgs:
             "--quantization",
             type=str,
             default=EngineArgs.quantization,
-            help="Quantization name for the model, currentlly support "
+            help="Quantization name for the model, currently support "
             "'wint8', 'wint4',"
             "default is None. The priority of this configuration "
             "is lower than that of the config file. "
@@ -508,6 +556,12 @@ class EngineArgs:
             "--graph-optimization-config",
             type=json.loads,
             default=EngineArgs.graph_optimization_config,
+            help="",
+        )
+        model_group.add_argument(
+            "--moba-attention-config",
+            type=json.loads,
+            default=EngineArgs.moba_attention_config,
             help="",
         )
         model_group.add_argument(
@@ -546,6 +600,12 @@ class EngineArgs:
             default=EngineArgs.early_stop_config,
             help="the config for early stop.",
         )
+        model_group.add_argument(
+            "--lm_head-fp32",
+            action="store_true",
+            default=EngineArgs.lm_head_fp32,
+            help="Specify the dtype of lm_head weight as float32.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -557,10 +617,10 @@ class EngineArgs:
             help="Degree of tensor parallelism.",
         )
         parallel_group.add_argument(
-            "--enable-custom-all-reduce",
+            "--disable-custom-all-reduce",
             action="store_true",
-            default=EngineArgs.enable_custom_all_reduce,
-            help="Flag to enable custom all-reduce.",
+            default=EngineArgs.disable_custom_all_reduce,
+            help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -592,6 +652,13 @@ class EngineArgs:
             type=int,
             default=EngineArgs.data_parallel_size,
             help="Degree of data parallelism.",
+        )
+
+        parallel_group.add_argument(
+            "--local-data-parallel-id",
+            type=int,
+            default=EngineArgs.local_data_parallel_id,
+            help="the rank of data parallelism.",
         )
         parallel_group.add_argument(
             "--enable-expert-parallel",
@@ -627,7 +694,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--prealloc-dec-block-slot-num-threshold",
             type=int,
-            default=5,
+            default=12,
             help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 
@@ -771,7 +838,7 @@ class EngineArgs:
         scheduler_group.add_argument(
             "--scheduler-topic",
             default=EngineArgs.scheduler_topic,
-            help=f"Topic of scheduler. Defaule is {EngineArgs.scheduler_topic}. (global)",
+            help=f"Topic of scheduler. Default is {EngineArgs.scheduler_topic}. (global)",
         )
         scheduler_group.add_argument(
             "--scheduler-min-load-score",
@@ -892,6 +959,18 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
+    def create_moba_attention_config(self) -> MobaAttentionConfig:
+        """
+        Create and retuan a MobaAttentionConfig object based on the current settings.
+        """
+        attention_args = asdict(self)
+        if self.moba_attention_config is not None:
+            for k, v in self.moba_attention_config.items():
+                attention_args[k] = v
+            return MobaAttentionConfig(attention_args)
+        else:
+            return MobaAttentionConfig(None)
+
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
         Create and retuan an EarlyStopConfig object based on the current settings.
@@ -902,7 +981,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> Config:
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -911,14 +990,32 @@ class EngineArgs:
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
+
+        speculative_cfg = self.create_speculative_config()
+        if not self.enable_chunked_prefill:
+            if (
+                current_platform.is_cuda()
+                and self.splitwise_role == "mixed"
+                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
+            ):
+                # default enable chunked prefill
+                self.enable_chunked_prefill = True
+
+            self.disable_chunked_prefill = int(envs.FD_DISABLE_CHUNKED_PREFILL)
+            if self.disable_chunked_prefill:
+                self.enable_chunked_prefill = False
+
         if self.max_num_batched_tokens is None:
-            if self.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
-            else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                if paddle.is_compiled_with_xpu():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+            else:
+                if self.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
+                else:
+                    self.max_num_batched_tokens = self.max_model_len
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
@@ -926,19 +1023,23 @@ class EngineArgs:
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
-        speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
+        moba_attention_config = self.create_moba_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
-        assert not (
-            self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
-        ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
-        return Config(
-            model_name_or_path=self.model,
+        assert is_port_available(
+            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+
+        return FDConfig(
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
             tokenizer=self.tokenizer,
@@ -946,7 +1047,6 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            tensor_parallel_size=self.tensor_parallel_size,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
@@ -955,7 +1055,6 @@ class EngineArgs:
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            # enable_mm=self.enable_mm,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
             splitwise_role=self.splitwise_role,
@@ -963,10 +1062,9 @@ class EngineArgs:
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
-            graph_optimization_config=graph_opt_cfg,
+            graph_opt_config=graph_opt_cfg,
+            moba_attention_config=moba_attention_config,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_logprob=self.enable_logprob,
             early_stop_config=early_stop_cfg,
-            load_choices=self.load_choices,
         )

@@ -1,5 +1,8 @@
 [run]
+branch = True
 source = fastdeploy
+concurrency = multiprocessing
+patch = subprocess
 parallel = True
 
 [paths]
@@ -14,3 +17,4 @@ omit =
     */site-packages/*/tests/*
     */site-packages/setuptools/*
     */dist-packages/*
+    */site-packages/*/fastdeploy/model_executor/ops/gpu*

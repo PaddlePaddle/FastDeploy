@@ -33,6 +33,10 @@ from fastdeploy.model_executor.models.qwen2 import (
     Qwen2ForCausalLM,
     Qwen2PretrainedModel,
 )
+from fastdeploy.model_executor.models.qwen2_5_vl.qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+    Qwen2_5_VLPretrainedModel,
+)
 from fastdeploy.model_executor.models.qwen3 import (
     Qwen3ForCausalLM,
     Qwen3PretrainedModel,
@@ -56,9 +60,6 @@ class RolloutModel(nn.Layer):
     def _init_model(self) -> nn.Layer:
         """Load model from loader based on config."""
         context = paddle.LazyGuard()
-        from fastdeploy.plugins.model_register import load_model_register_plugins
-
-        load_model_register_plugins()
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
         with context:
             model_cls = ModelRegistry.get_class(architectures)
@@ -247,9 +248,9 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
             )
 
             if self.fd_config.model_config.moe_use_aux_free:
-                self.infer_to_train_mapping[
-                    f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.experts.gate_correction_bias"
-                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate_correction_bias"] = (
+                    f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                )
 
             # Initialize defaultdict for expert weights
             from collections import defaultdict
@@ -452,6 +453,54 @@ class Qwen3ForCausalLMRL(Qwen3ForCausalLM, BaseRLModel):
     def name(self) -> str:
         """name"""
         return "Qwen3ForCausalLMRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        if self._mappings_built:
+            return self.infer_to_train_mapping
+
+        self.infer_to_train_mapping = {}
+        self._mappings_built = True
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("model")
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx):
+            # FFN mappings
+            for ph in place_holders:
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"] = (
+                    f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                )
+
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
+
+
+class Qwen2_5_VLForConditionalGenerationRL(Qwen2_5_VLForConditionalGeneration, BaseRLModel):
+    """
+    Qwen2_5_VLForConditionalGenerationRL
+    """
+
+    _get_tensor_parallel_mappings = Qwen2_5_VLPretrainedModel._get_tensor_parallel_mappings
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Qwen2_5_VLForConditionalGenerationRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Qwen2_5_VLForConditionalGenerationRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         if self._mappings_built:

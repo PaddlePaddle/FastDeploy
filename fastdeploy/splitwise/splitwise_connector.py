@@ -25,6 +25,7 @@ import zmq
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
 from fastdeploy.inter_communicator import EngineWorkerQueue
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
 
 logger = get_logger("splitwise_connector", "splitwise_connector.log")
@@ -35,23 +36,22 @@ class SplitwiseConnector:
     SplitwiseConnector class for managing and scheduling Splitwise tasks.
     """
 
-    def __init__(self, cfg, scheduler, worker_queue, resource_manager):
+    def __init__(self, cfg, worker_queue, resource_manager):
         """
         Initialize the SplitwiseConnector instance.
 
         Parameters:
         cfg (dict): Configuration information.
-        scheduler (object): Scheduler object.
         worker_queue (object): Worker queue object.
         resource_manager (object): Resource manager object.
         """
         self.cfg = cfg
-        self.scheduler = scheduler
         self.engine_worker_queue = worker_queue
         self.resource_manager = resource_manager
         self.connect_innode_instances = {}
         self.temp_cache_info = dict()
         self.current_request_ids = dict()
+        self.idx = self.cfg.parallel_config.local_data_parallel_id
 
         if self.cfg.cache_config.pd_comm_port is not None:
             self.zmq_ctx = zmq.Context()
@@ -85,18 +85,20 @@ class SplitwiseConnector:
         """
         while True:
             try:
-                socks = dict(self.poller.poll(100))
-                if not socks:
-                    continue
+                if hasattr(self, "poller"):
+                    socks = dict(self.poller.poll(100))
+                    if not socks:
+                        continue
+                    else:
+                        logger.debug(f"receive {socks}")
+
+                    frames = self.router_socket.recv_multipart()
+                    logger.debug(f"frames: {frames}")
+                    message = frames[-1]
+                    self.io_executor.submit(self._process_message, message)
+                    time.sleep(0.001)
                 else:
-                    logger.debug(f"receive {socks}")
-
-                frames = self.router_socket.recv_multipart()
-                logger.debug(f"frames: {frames}")
-                message = frames[-1]
-                self.io_executor.submit(self._process_message, message)
-                time.sleep(0.001)
-
+                    time.sleep(5)
             except Exception as e:
                 logger.error(f"Receiver error: {e}, {str(traceback.format_exc())}")
                 time.sleep(1)
@@ -154,6 +156,7 @@ class SplitwiseConnector:
                 logger.warning(f"Send queue full for {addr}")
             except Exception as e:
                 logger.error(f"Send to {addr} failed: {e}, {str(traceback.format_exc())}")
+                main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
 
         except Exception as e:
@@ -183,7 +186,7 @@ class SplitwiseConnector:
 
     def dispatch_innode_splitwise_tasks(self, tasks, current_id):
         """
-        Dispatch splitwise tasks to the scheduler.
+        Dispatch splitwise tasks .
 
         Parameters:
         tasks (list): List of tasks.
@@ -203,7 +206,7 @@ class SplitwiseConnector:
                             "cache_info": {
                                 "ipc": {
                                     "ip": "0.0.0.0",
-                                    "port": self.cfg.engine_worker_queue_port,
+                                    "port": self.cfg.engine_worker_queue_port[self.idx],
                                     "current_id": current_id,
                                 },
                             },
@@ -286,7 +289,7 @@ class SplitwiseConnector:
         if port not in self.connect_innode_instances:
             self.create_connection(port)
         for task in tasks:
-            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.engine_worker_queue_port
+            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.engine_worker_queue_port[self.idx]
         self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = port
@@ -320,7 +323,7 @@ class SplitwiseConnector:
         """
         self.connect_innode_instances[port] = EngineWorkerQueue(
             address=("0.0.0.0", int(port)),
-            num_client=self.cfg.tensor_parallel_size,
+            num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
         )
 
