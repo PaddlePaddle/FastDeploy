@@ -45,7 +45,7 @@ class TestSpeculateSetValueByFlagsAndIdx(unittest.TestCase):
         step_idx = np.random.randint(max_draft_tokens, length, size=bs)
         step_idx = paddle.to_tensor(step_idx, dtype="int64")
 
-        out_gpu = speculate_set_value_by_flags_and_idx(
+        speculate_set_value_by_flags_and_idx(
             pre_ids_all,
             accept_tokens,
             accept_num,
@@ -55,7 +55,7 @@ class TestSpeculateSetValueByFlagsAndIdx(unittest.TestCase):
             seq_lens_decoder,
             step_idx,
         )
-        out_gpu = out_gpu.numpy()
+        out_gpu = pre_ids_all.numpy()
 
         out_cpu = paddle.to_tensor(np.full((bs, length), -1), dtype="int64")
         for i in range(bs):

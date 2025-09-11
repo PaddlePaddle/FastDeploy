@@ -70,8 +70,9 @@ class TestSetValueByFlagsAndIdx(unittest.TestCase):
             self.step_idx_np,
             self.stop_flags_np,
         )
-        gpu_out = set_value_by_flags_and_idx(
-            paddle.to_tensor(self.pre_ids_all_np),
+        pre_ids_all = paddle.to_tensor(self.pre_ids_all_np)
+        set_value_by_flags_and_idx(
+            pre_ids_all,
             paddle.to_tensor(self.input_ids_np),
             paddle.to_tensor(self.seq_lens_this_time_np),
             paddle.to_tensor(self.seq_lens_encoder_np),
@@ -79,7 +80,7 @@ class TestSetValueByFlagsAndIdx(unittest.TestCase):
             paddle.to_tensor(self.step_idx_np),
             paddle.to_tensor(self.stop_flags_np),
         )
-        np.testing.assert_allclose(numpy_out, gpu_out.numpy())
+        np.testing.assert_allclose(numpy_out, pre_ids_all.numpy())
 
 
 if __name__ == "__main__":
