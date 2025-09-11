@@ -1778,7 +1778,7 @@ void gqa_rotary_qk_variable(
               kv_num_heads,
               seq_len,
               dim_head);
-    }
+      }
     }
   }
 }

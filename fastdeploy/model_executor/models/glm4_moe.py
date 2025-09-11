@@ -105,7 +105,6 @@ class Glm4Moe(nn.Layer):
         self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
         self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
         self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        self.tp_group = fd_config.parallel_config.tp_group
 
         self.use_ep = self.expert_parallel_size > 1
         self.use_tp = self.tensor_parallel_size > 1
@@ -204,7 +203,6 @@ class Glm4MoeAttention(nn.Layer):
             layer_id=layer_id,
             prefix=prefix,
             use_neox_rotary_style=True,
-            rms_norm_eps=fd_config.model_config.rms_norm_eps,
         )
         if self.use_qk_norm:
             self.q_norm = RMSNorm(

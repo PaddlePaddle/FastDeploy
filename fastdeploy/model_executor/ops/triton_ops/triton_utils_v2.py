@@ -134,7 +134,7 @@ class KernelInterface:
                 *args: positional arguments
                 **kwargs: keyword arguments
             """
-            op_name = "haha" + str(kwargs["N"])
+            op_name = f'haha_N{str(kwargs["N"])}_K{str(kwargs["K"])}'
             if op_name in self.func_map.keys():
                 return self.func_map[op_name](*args)
 
