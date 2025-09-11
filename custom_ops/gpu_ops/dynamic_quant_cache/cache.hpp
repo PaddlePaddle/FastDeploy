@@ -84,15 +84,19 @@ __device__ void write_c2_cache_kernel(
     }
 
     const int c16_cache_max_len = kBlockSize + c16_remain_seq_len;
-    // Subtracting 1 is because there is an additional token when decoding
-    const int c16_cache_len = seq_len_encoder + 1 < c16_cache_max_len ? seq_len_encoder : c16_remain_seq_len + (seq_len_encoder + 1) % kBlockSize;
+    int c16_cache_len;
+    if constexpr (is_encoder) {
+        c16_cache_len = seq_len_encoder < c16_cache_max_len ? seq_len_encoder : c16_remain_seq_len + seq_len_encoder % kBlockSize;
+    } else {
+        c16_cache_len = seq_len_encoder + 1 < c16_cache_max_len ? seq_len_encoder : c16_remain_seq_len + (seq_len_encoder + 1) % kBlockSize;
+    }
 
     const int c2_cache_len = seq_len_encoder - c16_cache_len;
 
     const int remain_token = c2_cache_len - token_idx;
 
     if constexpr (is_encoder) {
-        if (remain_token < 0) {
+        if (remain_token <= 0) {
             return;
         }
     }
@@ -219,6 +223,8 @@ __device__ void write_c2_cache_kernel(
         min_value = HalfMin<T>()(min_value, cur_min);
     }
 
+    __syncthreads();
+
     pakc_half dequant_scale = (max_value - min_value) * dequant_scale_factor;
 
     const pakc_half quant_scale_factor = pakc_half(1.0f, 1.0f);
@@ -226,14 +232,12 @@ __device__ void write_c2_cache_kernel(
 
     pakc_half quant_zp = -min_value * quant_scale;
 
-    __syncthreads();
     pakc_half *s_quant = s_max;
     pakc_half *s_zp = s_min;
 
     s_quant[tidx] = quant_scale;
     s_zp[tidx] = quant_zp;
 
-    // 量化k
     copy(smem_tiles_copy_K, tSsK, tSrK_copy_view);
 
     constexpr int scale_k_num = kHeadDim / 8;
@@ -278,6 +282,8 @@ __device__ void write_c2_cache_kernel(
         }
         cache_k_smem[i * (kThreads / 2) + tidx] = quant_c2_value;
     }
+
+    __syncthreads();
 
     // 将k的反量化scale 写回到全局内存中
     uint32_t * dequant_scale_smem = reinterpret_cast<uint32_t*>(cache_k_smem + scale_k_num / 4 * kThreads);
@@ -383,6 +389,8 @@ __device__ void write_c2_cache_kernel(
         cache_v_smem[i * kThreads + tidx] = quant_c2_value;
     }
 
+    __syncthreads();
+
     // 将反量化scale 写回到共享内存中
     dequant_scale_smem = reinterpret_cast<uint32_t*>(cache_v_smem + scale_k_num / 4 * kThreads);
     neigh_dequant_scale = __shfl_xor_sync(uint32_t(-1), dequant_scale, 1);
@@ -429,7 +437,7 @@ __device__ void write_c2_cache_kernel(
     if constexpr (!is_encoder) {
         // 最后将cache写到前面
         constexpr int kStorePackSize = 16 / sizeof(T);
-        const int data_per_row = c16_remain_seq_len / kStorePackSize;
+        const int data_per_row = kHeadDim / kStorePackSize;
         const int row_idx = tidx / data_per_row;
         const int col_idx = tidx % data_per_row * kStorePackSize;
         const int all_rows = kThreads / data_per_row;
@@ -440,13 +448,13 @@ __device__ void write_c2_cache_kernel(
         T * cache_v_c16 = const_cast<T*>(v_input);
 
         #pragma unroll 4
-        for (int i = row_idx; i < c16_remain_seq_len; i += all_rows) {
+        for (int i = row_idx; i < c16_remain_seq_len - 1; i += all_rows) {
             int4 src = *reinterpret_cast<int4*>(cache_k_c16 + src_load_idx + (i + kBlockSize) * kv_head_num * kHeadDim);
             *reinterpret_cast<int4*>(cache_k_c16 + src_load_idx + i * kv_head_num * kHeadDim) = src;
         }
 
         #pragma unroll 4
-        for (int i = row_idx; i < c16_remain_seq_len; i += all_rows) {
+        for (int i = row_idx; i < c16_remain_seq_len - 1; i += all_rows) {
             int4 src = *reinterpret_cast<int4*>(cache_v_c16 + src_load_idx + (i + kBlockSize) * kv_head_num * kHeadDim);
             *reinterpret_cast<int4*>(cache_v_c16 + src_load_idx + i * kv_head_num * kHeadDim) = src;
         }

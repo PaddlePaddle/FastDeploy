@@ -92,10 +92,10 @@ void __global__ write_encoder_c16_cache_kernel(
     const int c16_max_cache_seq_len = c16_remain_seq_len + kBlockSize;
 
     int c16_cache_seq_len;
-    if (seq_len_encoder + 1 < c16_max_cache_seq_len) {
+    if (seq_len_encoder < c16_max_cache_seq_len) {
         c16_cache_seq_len = seq_len_encoder;
     } else {
-        c16_cache_seq_len = (seq_len_encoder + 1) % kBlockSize + c16_remain_seq_len - 1;
+        c16_cache_seq_len = seq_len_encoder % kBlockSize + c16_remain_seq_len;
     }
 
     if (block_idx >= c16_cache_seq_len) {

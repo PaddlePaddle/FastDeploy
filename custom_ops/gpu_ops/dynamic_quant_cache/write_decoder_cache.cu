@@ -70,7 +70,7 @@ __global__ void write_decoder_c16_cache_kernel(
         store_token_idx = (seq_len_decoder + 1) % kBlockSize + c16_remain_seq_len - 1;
     }
 
-    if (bidh >= head_num && store_token_idx + 1 == c16_remain_seq_len && step > 0) {
+    if (bidh >= head_num && store_token_idx + 1 == c16_remain_seq_len && step > 0 && seq_len_decoder > c16_remain_seq_len -1) {
         write_c2_cache_kernel<output_type, ScaleType, kBlockSize, kHeadDim, 128, false>(
             cache_k_c16,
             cache_v_c16,
@@ -91,11 +91,13 @@ __global__ void write_decoder_c16_cache_kernel(
         );
     }
 
+    __syncthreads();
+
     if (tidx >= 32) {
         return;
     }
 
-    if (tidx == 0) {
+    if (tidx == 0 && bidh == 0) {
         step_idx[bidb] += 1;
     }
 

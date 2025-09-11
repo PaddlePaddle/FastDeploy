@@ -182,7 +182,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
 
     const int cache_offset_step = kv_head_num * data_num_per_block;
 
-    const int remain_seq_len = cache_bits == 2 ? c2_cache_len - partition_idx * kTileN * kBlockSize : c16_cache_len - partition_idx * kTileN * kBlockSize;
+    const int remain_seq_len = cache_bits == 2 ? c2_cache_len - partition_idx * kBlockN : c16_cache_len - partition_idx * kBlockN;
 
     TiledMma tiled_mma;
 
