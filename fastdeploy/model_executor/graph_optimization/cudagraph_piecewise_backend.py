@@ -132,7 +132,7 @@ class CudaGraphPiecewiseBackend:
         with self.cuda_graph_manager.run_impl_guard():
             return entry.runnable(**kwargs)
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs) -> List[paddle.Tensor] | paddle.Tensor:
         # Get real shape(all num tokens)
         ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
         real_shape = ids_remove_padding.shape[0]
