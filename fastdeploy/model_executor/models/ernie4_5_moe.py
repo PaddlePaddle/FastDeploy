@@ -218,6 +218,7 @@ class Ernie4_5_Attention(nn.Layer):
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
+        #attn_out = qkv_out[:,:128*64]
 
         output = self.o_proj(attn_out)
 
@@ -338,8 +339,8 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         # 为了计算attn！
         forward_meta.attn_backend.attention_metadata = metadata
 
-        forward_meta.decoder_batch_ids = metadata.decoder_batch_ids
-        forward_meta.decoder_tile_ids_per_batch = metadata.decoder_tile_ids_per_batch
+        # forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
+        # forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -487,9 +488,9 @@ class Ernie4_5_Model(nn.Layer):
                     # 这个microbatch是空的，不需要处理!!
                     continue
 
-                forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
-                forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
-                forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
+                forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs] + 0
+                forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs] + 0
+                forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs] + 0
 
                 forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
                 forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
@@ -497,9 +498,12 @@ class Ernie4_5_Model(nn.Layer):
 
                 forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
 
+                forward_meta_copy.decoder_batch_ids = forward_meta.decoder_batch_ids + 0
+                forward_meta_copy.decoder_tile_ids_per_batch = forward_meta.decoder_tile_ids_per_batch + 0
+
                 forward_metas[i] = forward_meta_copy
-                all_hidden_states[i] = hidden_states[start_token_id:end_token_id]
-                all_residual[i] = residual[start_token_id:end_token_id]
+                all_hidden_states[i] = hidden_states[start_token_id:end_token_id] + 0
+                all_residual[i] = residual[start_token_id:end_token_id] + 0
         else:
             # MoE 机器啥也不需要做！
             pass
@@ -507,12 +511,23 @@ class Ernie4_5_Model(nn.Layer):
         print("microbatch 中非空数量为：", len([a for a in all_hidden_states if a is not None]))
         print("大王啊")
 
-        can_cuda_graph = False
-        if IsH20:
-            can_cuda_graph = (forward_meta.seq_lens_encoder > 0).sum().item() == 0
-            can_cuda_graph &= (forward_meta.seq_lens_this_time > 0).sum().item() == bs
-        print("can_cuda_graph", can_cuda_graph)
-        
+        can_replay_graph = False
+        need_capature_graph = False
+        all_is_decoder = IsH20 and (forward_meta.seq_lens_encoder > 0).sum().item() == 0
+
+        if IsH20 and all_is_decoder:
+            assert ((forward_meta.seq_lens_encoder.reshape([-1]) > 0) & (forward_meta.seq_lens_decoder.reshape([-1]) > 0)).sum().item() == 0
+            decoder_bs = ((forward_meta.seq_lens_this_time.reshape([-1]) > 0) & (forward_meta.seq_lens_decoder.reshape([-1]) > 0)).sum().item()
+
+            print("decoder_bs", decoder_bs)
+
+            can_replay_graph = (self.cuda_graph is not None and decoder_bs > (bs * 2 // 3))
+            
+            # 利用最大size来捕获图
+            need_capature_graph = (self.cuda_graph is None and decoder_bs == bs)
+
+        print("can_replay_graph", can_replay_graph)
+
         IsH20 = self.fd_config.parallel_config.is_H20
         IsH100 = self.fd_config.parallel_config.is_H100
         runner = self.layers[3].mlp.fused_moe.quant_method.ep_decoder_runner
@@ -570,27 +585,31 @@ class Ernie4_5_Model(nn.Layer):
             attention_in_out[j].forward_meta = forward_metas[j]
 
             if attention_in_out[j].forward_meta is not None:
-                forward_meta.attn_backend.init_attention_metadata(attention_in_out[j].forward_meta)
-                attention_in_out[j].attn_metadata = forward_meta.attn_backend.attention_metadata
+                forward_metas[j].attn_backend.init_attention_metadata(attention_in_out[j].forward_meta)
+                attention_in_out[j].attn_metadata = forward_metas[j].attn_backend.attention_metadata
+                
+                # 这俩个变量没有用！！！
+                del attention_in_out[j].attn_metadata.decoder_batch_ids
+                del attention_in_out[j].attn_metadata.decoder_tile_ids_per_batch
 
             # 下面俩是动态变化的，每层的时候是会变化的哦！
             attention_in_out[j].hidden_states = all_hidden_states[j]
             attention_in_out[j].residual = all_residual[j]
             
-        if IsH20 and can_cuda_graph:
-            if self.cached_attention_in_out == None:
+        if IsH20:
+            if need_capature_graph:
                 self.cached_attention_in_out = attention_in_out
                 self.dispatch_allocated_memory = dispatch_allocated_memory
                 self.cached_hidden_input = [attention_in_out[j].hidden_states for j in range(split_num)]
                 self.cached_residual_input = [attention_in_out[j].residual for j in range(split_num)]
             
-            else:
+            elif can_replay_graph:
 
                 # 需要把新产生的地址赋予给老的 cached 变量!
                 for i in range(split_num):
                     self.cached_hidden_input[i].copy_(attention_in_out[i].hidden_states, False)
                     self.cached_residual_input[i].copy_(attention_in_out[i].residual, False)
-                    
+
                     from dataclasses import dataclass, fields
                     person_fields = fields(self.cached_attention_in_out[i].forward_meta)
                     for field in person_fields:
@@ -599,25 +618,14 @@ class Ernie4_5_Model(nn.Layer):
                                     "decoder_tile_ids_per_batch", 
                                     "seq_lens_encoder", 
                                     "seq_lens_decoder", 
-                                    "seq_lens_this_time", 
-                                    "batch_id_per_token", 
+                                    "seq_lens_this_time",
                                     "cu_seqlens_q", 
                                     "cu_seqlens_k"]:
-                            getattr(self.cached_attention_in_out[i].forward_meta, name).copy_(getattr(attention_in_out[i].forward_meta, name), False)
-                    
-
-                    person_fields = fields(self.cached_attention_in_out[i].attn_metadata)
-                    for field in person_fields:
-                        name = field.name
-                        if name in ["decoder_batch_ids", 
-                                    "decoder_tile_ids_per_batch", 
-                                    "decoder_num_blocks", 
-                                    "kv_batch_ids", 
-                                    "kv_tile_ids_per_batch", 
-                                    "kv_num_blocks",
-                                    "max_len_kv",
-                                    "set_max_lengths"]:
-                            getattr(self.cached_attention_in_out[i].attn_metadata, name).copy_(getattr(attention_in_out[i].attn_metadata, name), False)
+                            cache_tensor = getattr(self.cached_attention_in_out[i].forward_meta, name)
+                            coming_tensor = getattr(attention_in_out[i].forward_meta, name)
+                            assert cache_tensor.data_ptr() != coming_tensor.data_ptr()
+                            assert cache_tensor.shape == coming_tensor.shape
+                            cache_tensor.copy_(coming_tensor, False)
 
         self.barrier_id = -1
         def zkk_barrier():
@@ -688,7 +696,7 @@ class Ernie4_5_Model(nn.Layer):
 
                 combine_events[i].appendleft(event)
             
-            def main_code():
+            def capatured_code():
                 compute_atten(3, 0)
                 dispatch_send(0)
                 dispatch_wait(0)
@@ -720,30 +728,27 @@ class Ernie4_5_Model(nn.Layer):
                 combine_receive(2)
                 combine_wait(2)
 
+            if need_capature_graph:
+                self.cuda_graph = graphs.CUDAGraph()
+                self.cuda_graph.capture_begin()
+                
+                capatured_code()
 
-            if can_cuda_graph:
-                if self.cuda_graph is None:
-                    self.cuda_graph = graphs.CUDAGraph()
-                    self.cuda_graph.capture_begin()
-                    
-                    main_code()
-
-                    self.cuda_graph.capture_end()
-                    self.cuda_graph.replay()
-                    
-                    # 保存输出的地址！
-                    self.cached_hidden_output = [attention_in_out[j].hidden_states for j in range(split_num)]
-                    self.cached_residual_output = [attention_in_out[j].residual for j in range(split_num)]
-                else:
-
-                    self.cuda_graph.replay()
-
-                    # 将cuda graph的输出变量的tensor赋予给attention_in_out！
-                    for j in range(split_num):
-                        attention_in_out[j].hidden_states = self.cached_hidden_output[j]
-                        attention_in_out[j].residual = self.cached_residual_output[j]
+                self.cuda_graph.capture_end()
+                self.cuda_graph.replay()
+                
+                # 保存输出的地址！
+                self.cached_hidden_output = [attention_in_out[j].hidden_states for j in range(split_num)]
+                self.cached_residual_output = [attention_in_out[j].residual for j in range(split_num)]
+            elif can_replay_graph:
+                self.cuda_graph.replay()
+                # 将cuda graph的输出变量的tensor赋予给attention_in_out！
+                for j in range(split_num):
+                    valid_token_num = attention_in_out[j].hidden_states.shape[0]
+                    attention_in_out[j].hidden_states = self.cached_hidden_output[j][:valid_token_num]
+                    attention_in_out[j].residual = self.cached_residual_output[j][:valid_token_num]
             else:
-                main_code()
+                capatured_code()
 
         else:
             # 搞一个大槽子放东西！
