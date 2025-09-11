@@ -36,13 +36,22 @@ class PaddleMemoryInfo:
 class GPUMemoryChecker:
     def __init__(
         self,
+        device: int = 0,  # logic device id
         device_id: int = 0,  # physical device id
         print_debug_info: bool = True,
     ):
         self.gpu_memory_info = None
         self.paddle_memory_info = None
+        self.device = device
         self.device_id = device_id
         self.print_debug_info = print_debug_info
+
+        pynvml.nvmlInit()
+        self.gpu_memory_handle = pynvml.nvmlDeviceGetHandleByIndex(self.device_id)
+
+    def __del__(self):
+        """ """
+        pynvml.nvmlShutdown()
 
     def _print_memory_info(
         self,
@@ -62,20 +71,17 @@ class GPUMemoryChecker:
 
     def get_gpu_memory_info(self):
         """Get Device memory information"""
-        pynvml.nvmlInit()
-        self.gpu_memory_handle = pynvml.nvmlDeviceGetHandleByIndex(self.device_id)
         current_meminfo = pynvml.nvmlDeviceGetMemoryInfo(self.gpu_memory_handle)
-        pynvml.nvmlShutdown()
 
         return current_meminfo
 
     def get_paddle_memory_info(self) -> PaddleMemoryInfo:
         """Get GPU memory information managed by Paddle"""
         current_paddle_memory_info = PaddleMemoryInfo()
-        current_paddle_memory_info.max_reserved = paddle.device.cuda.max_memory_reserved(self.device_id)
-        current_paddle_memory_info.max_allocated = paddle.device.cuda.max_memory_allocated(self.device_id)
-        current_paddle_memory_info.reserved = paddle.device.cuda.memory_reserved(self.device_id)
-        current_paddle_memory_info.allocated = paddle.device.cuda.memory_allocated(self.device_id)
+        current_paddle_memory_info.max_reserved = paddle.device.cuda.max_memory_reserved(self.device)
+        current_paddle_memory_info.max_allocated = paddle.device.cuda.max_memory_allocated(self.device)
+        current_paddle_memory_info.reserved = paddle.device.cuda.memory_reserved(self.device)
+        current_paddle_memory_info.allocated = paddle.device.cuda.memory_allocated(self.device)
 
         return current_paddle_memory_info
 
