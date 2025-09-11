@@ -94,13 +94,14 @@ class DeepEPBuffer:
                 config.get_rdma_buffer_size_hint(hidden_bytes, self.group.world_size), self.num_rdma_bytes
             )
 
-        if self.splitwise_role == "mixed" and self.num_rdma_bytes == 0:
-            self.num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
+        if self.splitwise_role == "mixed" or self.moe_phase.phase == "decode":
+            num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
                 self.num_max_dispatch_tokens_per_rank,
                 self.hidden_size,
                 self.ep_size,
                 self.num_experts,
             )
+            self.num_rdma_bytes = max(self.num_rdma_bytes, num_rdma_bytes)
 
         logger.info(f"DeepEP num nvl bytes : {self.num_nvl_bytes}, num rdma bytes : {self.num_rdma_bytes}")
 
