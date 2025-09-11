@@ -31,6 +31,7 @@ from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheSt
 from fastdeploy.model_executor.ops.gpu import (
     cuda_host_alloc,
     cuda_host_free,
+    set_data_ipc,
     share_external_data,
     swap_cache_all_layers,
     unset_data_ipc,
@@ -96,6 +97,7 @@ def parse_args():
         help="speculative config",
     )
     parser.add_argument("--local_data_parallel_id", type=int, default=0)
+    parser.add_argument("--create_cache_tensor", action="store_true")
 
     args = parser.parse_args()
     return args
@@ -150,9 +152,8 @@ class CacheTransferManager:
 
         self.num_cpu_blocks = args.num_cpu_blocks
 
-        self._init_gpu_cache(args)
         self._init_cpu_cache(args)
-        self.cache_ready_signal.value[self.rank] = 1
+        self._init_gpu_cache(args)
 
         paddle.set_device(f"gpu:{device}")
         if args.enable_splitwise:
@@ -185,11 +186,18 @@ class CacheTransferManager:
             create=False,
         )
 
-        threading.Thread(target=self.clear_caches, args=[args], daemon=True).start()
+        threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
 
     def _init_gpu_cache(self, args):
 
-        logger.info("CacheTransferManager is initializing kv cache for all layers.")
+        if not args.create_cache_tensor:
+            logger.info("Waiting for runners to create kv cache.")
+            while self.cache_ready_signal.value[self.rank] != 1:
+                time.sleep(1)
+            logger.info("OK! Stop waiting.")
+
+        logger.info("Initializing kv cache for all layers.")
+        logger.info(args)
         paddle.set_device(f"gpu:{self.device}")
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
@@ -197,15 +205,27 @@ class CacheTransferManager:
             key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
             val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
 
-            key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-            val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-            key_cache = share_external_data(key_cache, key_name, cache_shape)
-            val_cache = share_external_data(val_cache, val_name, cache_shape)
+            if args.create_cache_tensor:
+                logger.info(f"..creating kv cache for layer {i}: {cache_shape}")
+                key_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
+                val_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
+                set_data_ipc(key_cache, key_name)
+                set_data_ipc(val_cache, val_name)
+            else:
+                logger.info(f"..attaching kv cache for layer {i}: {cache_shape}")
+                key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+                val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+                key_cache = share_external_data(key_cache, key_name, cache_shape)
+                val_cache = share_external_data(val_cache, val_name, cache_shape)
 
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_kvs[val_name] = val_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
+
+        if args.create_cache_tensor:
+            logger.info("✅ kv cache is ready!")
+            self.cache_ready_signal.value[self.rank] = 1
 
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
@@ -424,8 +444,8 @@ class CacheTransferManager:
             transfer_task_id,
         )
 
-    def clear_caches(self, args):
-        logger.info("Start a thread to clear kv cache when model weights are cleared.")
+    def clear_or_update_caches(self, args):
+        logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
         kv_cache_status = np.zeros([1], dtype=np.int32)
         kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",
@@ -437,14 +457,6 @@ class CacheTransferManager:
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 try:
-                    logger.info("Start clearing GPU caches.")
-                    for name, tensor in self.gpu_cache_kvs.items():
-                        unset_data_ipc(tensor, name, True, False)
-                    self.gpu_cache_kvs.clear()
-                    self.gpu_cache_k_tensors.clear()
-                    self.gpu_cache_v_tensors.clear()
-                    logger.info("GPU caches are cleared.")
-
                     logger.info("Start clearing CPU caches.")
                     paddle.set_device("cpu")
                     for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
@@ -452,9 +464,18 @@ class CacheTransferManager:
                     self.cpu_cache_kvs.clear()
                     self.k_dst_ptrs.clear()
                     self.v_dst_ptrs.clear()
-                    logger.info("CPU caches are cleared.")
+                    logger.info("Finish clearing CPU caches.")
                     gc.collect()
 
+                    logger.info("Start clearing GPU caches.")
+                    for name, tensor in self.gpu_cache_kvs.items():
+                        unset_data_ipc(tensor, name, True, False)
+                    self.gpu_cache_kvs.clear()
+                    self.gpu_cache_k_tensors.clear()
+                    self.gpu_cache_v_tensors.clear()
+                    logger.info("Finish clearing GPU caches.")
+
+                    # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
                     kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
 
@@ -463,15 +484,14 @@ class CacheTransferManager:
 
             elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 try:
-                    logger.info("Start restoring GPU caches.")
-                    self._init_gpu_cache(args)
-                    logger.info("GPU caches are restored.")
-
                     logger.info("Start restoring CPU caches.")
                     self._init_cpu_cache(args)
-                    logger.info("CPU caches are restored.")
+                    logger.info("Finish restoring CPU caches.")
 
-                    self.cache_ready_signal.value[self.rank] = 1
+                    logger.info("Start restoring GPU caches.")
+                    self._init_gpu_cache(args)
+                    logger.info("Finish restoring GPU caches.")
+
                     kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:

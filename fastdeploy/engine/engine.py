@@ -199,7 +199,7 @@ class LLMEngine:
             time.sleep(3)
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
-        if not self.do_profile and (self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"):
+        if not self.do_profile and self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
@@ -208,6 +208,7 @@ class LLMEngine:
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
+                create_cache_tensor=True,
             )
 
         # Start workers
@@ -240,6 +241,17 @@ class LLMEngine:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
+        elif self.cfg.cache_config.enable_prefix_caching:
+            device_ids = self.cfg.device_ids.split(",")
+            self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
+                cache_config=self.cfg.cache_config,
+                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                device_ids=device_ids,
+                pod_ip=self.cfg.master_ip,
+                engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+                pid_suffix=self.ipc_signal_suffix,
+                create_cache_tensor=False,
+            )
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
@@ -261,6 +273,23 @@ class LLMEngine:
             console_logger.info("Warmup finished")
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
+
+        # Print blocks number & max running requests to console
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            block_size = self.cfg.cache_config.block_size
+            num_gpu_blocks = self.cfg.cache_config.num_gpu_blocks_override or self.cfg.cache_config.total_block_num
+            num_cpu_blocks = self.cfg.cache_config.num_cpu_blocks
+            max_running_requests = min(
+                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.max_model_len, self.cfg.max_num_seqs
+            )
+            console_logger.info(
+                f"Detected {num_gpu_blocks} gpu blocks and {num_cpu_blocks} cpu blocks in cache (block size: {block_size})."
+            )
+            console_logger.info(
+                f"FastDeploy will be serving {max_running_requests} running requests "
+                f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
+            )
+
         return True
 
     def _zmq_send_generated_tokens(self):
@@ -1262,14 +1291,8 @@ class LLMEngine:
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
-        max_running_requests = num_gpu_blocks * self.cfg.cache_config.block_size // self.cfg.max_model_len
-        console_logger.info(
-            f"Detected {num_gpu_blocks} available gpu blocks in cache. "
-            f"FastDeploy will be serving {max_running_requests} running requests "
-            f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
-        )
+
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
-            console_logger.info("Waiting for cache manager processes to be ready..")
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
@@ -1278,6 +1301,7 @@ class LLMEngine:
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
+                create_cache_tensor=False,
             )
 
     def check_health(self, time_interval_threashold=30):

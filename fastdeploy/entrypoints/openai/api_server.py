@@ -307,6 +307,7 @@ def update_model_weight(request: Request) -> Response:
     """
     update model weight
     """
+    api_server_logger.info(f"update_model_weight received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.update_model_weight()
         if not status:
@@ -321,6 +322,7 @@ def clear_load_weight(request: Request) -> Response:
     """
     clear model weight
     """
+    api_server_logger.info(f"clear_model_weight received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.clear_load_weight()
         if not status:
