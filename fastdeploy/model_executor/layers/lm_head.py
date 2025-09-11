@@ -94,6 +94,12 @@ class ParallelLMHead(nn.Layer):
                         "model_format": self.fd_config.model_config.model_format,
                     },
                 )
+                if self.bias_key is not None:
+                    set_weight_attrs(
+                        self.linear.bias,
+                        {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}},
+                    )
+
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": True})
             else:
@@ -116,6 +122,9 @@ class ParallelLMHead(nn.Layer):
 
                 if self.nranks > 1:
                     set_weight_attrs(self.linear.weight, {"output_dim": False})
+        set_weight_attrs(
+            self.linear.weight, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
+        )
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """

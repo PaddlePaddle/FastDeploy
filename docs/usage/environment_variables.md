@@ -72,5 +72,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_DEEP_GEMM":
     lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
 
+    # Whether to use Machete for wint4 dense GEMM.
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
 }
 ```
