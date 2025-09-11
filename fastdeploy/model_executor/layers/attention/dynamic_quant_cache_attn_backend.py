@@ -111,16 +111,10 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
             )
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = DynamciQuantCacheAttentionMetadata()
-        metadata.cu_seq_q_pack, metadata.cu_seqlens_k, metadata.q_pack_tokens = get_cur_cu_seq_len_k(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            int(self.attn_block_m),
-        )
         metadata.max_enc_len_this_time = forward_meta.seq_lens_encoder.max().cpu()
         metadata.max_dec_len_this_time = forward_meta.seq_lens_decoder.max().cpu()
         q_token_num = int(forward_meta.cu_seqlens_q[-1])
-        k_token_num = int(metadata.cu_seqlens_k[-1])
+        k_token_num = int(forward_meta.cu_seqlens_k[-1])
         metadata.q_input = paddle.zeros(
             [q_token_num + self.attn_block_m, self.num_heads * self.head_dim], dtype="float16"
         )
@@ -190,7 +184,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 metadata.k_input,
                 metadata.v_input,
                 forward_meta.cu_seqlens_q,
-                metadata.cu_seqlens_k,
+                forward_meta.cu_seqlens_k,
                 forward_meta.seq_lens_encoder,
                 out,
                 None,

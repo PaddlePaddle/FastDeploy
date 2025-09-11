@@ -119,7 +119,7 @@ __global__ void write_decoder_c16_cache_kernel(
         cos.load_from(cos_rope);
         apply_rotary_embedding<input_type, output_type, kPackSize>(src, dst, cos, sin);
 
-        dst.store_to(q_input + cu_seq_q[bidb] * head_num * kHeadDim + bias_idx);
+        dst.store_to(q_input + bidb * head_num * kHeadDim + bias_idx);
     } else {
         const float * cos_rope = rotary_embs + seq_len_decoder * (kHeadDim / 2) + tidx * (kPackSize / 2);
         const float * sin_rope = cos_rope + max_input_length * (kHeadDim / 2);
@@ -224,7 +224,7 @@ std::vector<paddle::Tensor> WriteDecoderCache(
         const int max_input_length,
         const std::string& cache_quant_type_str) {
     
-    paddle::Tensor q_input = paddle::empty({qkv_out.dims()[0], head_num, head_dim}, paddle::DataType::FLOAT16, qkv_out.place());
+    paddle::Tensor q_input = paddle::empty({encoder_seqs_len.dims()[0], head_num, head_dim}, paddle::DataType::FLOAT16, qkv_out.place());
     using scale_type = cutlass::float_e4m3_t;
     constexpr int kBlockSize = 64;
     const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 2;

@@ -103,7 +103,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     const int32_t kv_head_num = params.kv_head_num;
     const int data_num_per_block = cache_bits == 2 ? params.data_num_per_block : kBlockSize * kHeadDim;
     
-    const int32_t q_offset = bidb * (head_num + 2 * kv_head_num) * kHeadDim + q_head_idx * kHeadDim;
+    const int32_t q_offset = bidb * head_num * kHeadDim + q_head_idx * kHeadDim;
 
     Tensor gQ = make_tensor(
         make_gmem_ptr(reinterpret_cast<const input_type *>(params.q_input) + q_offset), 
