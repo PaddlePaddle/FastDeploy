@@ -481,7 +481,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
 
         if layer.topk_method == "noaux_tc":
-            from .ep import get_moe_scores
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
