@@ -133,6 +133,7 @@ class ModelConfig:
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
+        self.partial_rotary_factor: float = 1.0
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -156,9 +157,7 @@ class ModelConfig:
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
-        self.ori_vocab_size = self.vocab_size
-        if ErnieArchitectures.contains_ernie_arch(self.architectures):
-            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+        self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
 
         architectures = self.architectures[0]
         if MultimodalRegistry.contains_model(architectures):
