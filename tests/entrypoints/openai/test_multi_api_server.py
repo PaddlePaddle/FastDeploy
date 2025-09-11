@@ -52,6 +52,7 @@ class TestMultiApiServer(unittest.TestCase):
             server_args=self.test_server_args,
             ports=self.test_ports,
             metrics_ports=self.test_metrics_ports,
+            controller_ports="-1",
         )
 
         # Verify subprocess.Popen was called twice (for 2 servers)
@@ -74,6 +75,8 @@ class TestMultiApiServer(unittest.TestCase):
             "8000",
             "--metrics-port",
             "8800",
+            "--controller-port",
+            "-1",
             "--local-data-parallel-id",
             "0",
         ]
@@ -105,9 +108,7 @@ class TestMultiApiServer(unittest.TestCase):
         # Mock port availability check - first port available, second not
         mock_is_port_available.side_effect = [True, False]
 
-        with self.assertRaises(ValueError) as context:
-            check_param(self.test_ports, self.test_server_count)
-        self.assertIn("Port 8001 is already in use", str(context.exception))
+        self.assertFalse(check_param(self.test_ports, self.test_server_count))
 
     @patch("fastdeploy.entrypoints.openai.multi_api_server.start_servers")
     @patch("fastdeploy.entrypoints.openai.multi_api_server.time.sleep")
@@ -123,6 +124,8 @@ class TestMultiApiServer(unittest.TestCase):
             "2",
             "--metrics-ports",
             "8800,8801",
+            "--controller-ports",
+            "8802,8803",
             "--args",
             "--model",
             "test_model",
@@ -147,6 +150,7 @@ class TestMultiApiServer(unittest.TestCase):
             server_args=["--model", "test_model", "--engine-worker-queue-port", "9000,9001"],
             ports=["8000", "8001"],
             metrics_ports=["8800", "8801"],
+            controller_ports="8802,8803",
         )
 
         # Verify processes were terminated and waited for
