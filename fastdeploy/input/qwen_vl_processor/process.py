@@ -166,8 +166,8 @@ class DataProcessor:
         }
 
         # Define placeholders and their lengths
-        IMAGE_PLACEHOLDER = "<|image@placeholder|>"
-        VIDEO_PLACEHOLDER = "<|video@placeholder|>"
+        IMAGE_PLACEHOLDER = "<|image_pad|>"
+        VIDEO_PLACEHOLDER = "<|video_pad|>"
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
 

@@ -37,6 +37,52 @@ def load_module_from_path(module_name, path):
     return module
 
 
+def update_git_repo():
+    try:
+        print("update third party repo...", flush=True)
+        original_dir = os.getcwd()
+        submodule_dir = os.path.dirname(os.path.abspath(__file__))
+        third_party_path = os.path.join(submodule_dir, "third_party")
+        root_path = Path(third_party_path)
+
+        # check if third_party is empty
+        update_third_party = False
+        for dirpath in root_path.iterdir():
+            if dirpath.is_dir():
+                has_content = any(dirpath.iterdir())
+                if not has_content:
+                    update_third_party = True
+
+        if update_third_party:
+            os.chdir(submodule_dir)
+            subprocess.run(
+                "git submodule sync --recursive && git submodule update --init --recursive",
+                shell=True,
+                check=True,
+                text=True,
+            )
+        else:
+            print(
+                "\033[33m[===WARNING===]third_party directory already exists, skip clone and update.\033[0m",
+                flush=True,
+            )
+
+        # apply deep gemm patch
+        deep_gemm_dir = "third_party/DeepGEMM"
+        dst_path = os.path.join(submodule_dir, deep_gemm_dir)
+        patch = "0001-DeepGEMM-95e81b3.patch"
+        patch_source = os.path.join(submodule_dir, patch)
+        patch_destination = os.path.join(dst_path, patch)
+        if not os.path.exists(patch_destination):
+            shutil.copy(patch_source, patch_destination)
+            apply_cmd = ["git", "apply", patch]
+            os.chdir(dst_path)
+            subprocess.run(apply_cmd, check=True)
+        os.chdir(original_dir)
+    except subprocess.CalledProcessError:
+        raise Exception("Git submodule update and apply patch failed. Maybe network connection is poor.")
+
+
 ROOT_DIR = Path(__file__).parent.parent
 
 # cannot import envs directly because it depends on fastdeploy,
@@ -45,6 +91,8 @@ envs = load_module_from_path("envs", os.path.join(ROOT_DIR, "fastdeploy", "envs.
 
 archs = json.loads(envs.FD_BUILDING_ARCS)
 use_bf16 = envs.FD_CPU_USE_BF16 == "True"
+
+update_git_repo()
 
 
 def download_and_extract(url, destination_directory):
@@ -76,52 +124,6 @@ def download_and_extract(url, destination_directory):
         print(f"Error downloading file: {e}")
     except Exception as e:
         print(f"Error extracting file: {e}")
-
-
-def clone_git_repo(version, repo_url, destination_path):
-    """
-    Clone git repo to destination path.
-    """
-    try:
-        subprocess.run(
-            [
-                "git",
-                "clone",
-                "-b",
-                version,
-                "--single-branch",
-                repo_url,
-                destination_path,
-            ],
-            check=True,
-        )
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
-def process_git_repo(cur_path, dst_path, commit_id=None, patch=None):
-    """
-    reset git repo to destination commit and apply patch.
-    """
-    if commit_id is not None:
-        reset_cmd = ["git", "reset", "--hard", commit_id]
-    if patch is not None:
-        patch_source = os.path.join(cur_path, patch)
-        patch_destination = os.path.join(dst_path, patch)
-        shutil.copy(patch_source, patch_destination)
-        apply_cmd = ["git", "apply", patch]
-
-    try:
-        os.chdir(dst_path)
-        if commit_id is not None:
-            subprocess.run(reset_cmd, check=True)
-        if patch is not None:
-            subprocess.run(apply_cmd, check=True)
-        os.chdir(cur_path)
-        return True
-    except subprocess.CalledProcessError:
-        return False
 
 
 def get_sm_version(archs):
@@ -191,13 +193,6 @@ def find_end_files(directory, end_str):
 if paddle.is_compiled_with_rocm():
     # NOTE(@duanyanhui): paddle.is_compiled_with_cuda() returns True when paddle compiled with rocm.
     # so we need to check if paddle compiled with rocm at first.
-    json_dir = "third_party/nlohmann_json"
-    if not os.path.exists(json_dir) or not os.listdir(json_dir):
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://bgithub.xyz/nlohmann/json.git", json_dir)
-        if not os.listdir(json_dir):
-            raise ValueError("Git clone nlohmann_json failed!")
     sources = [
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
@@ -316,28 +311,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
     ]
 
-    cutlass_dir = "third_party/cutlass"
-    if not os.path.exists(cutlass_dir) or not os.listdir(cutlass_dir):
-        if not os.path.exists(cutlass_dir):
-            os.makedirs(cutlass_dir)
-        clone_git_repo("v3.8.0", "https://github.com/NVIDIA/cutlass.git", cutlass_dir)
-        if not os.listdir(cutlass_dir):
-            raise ValueError("Git clone cutlass failed!")
-
-    # deep gemm
-    deep_gemm_dir = "third_party/DeepGEMM"
-    if not os.path.exists(deep_gemm_dir) or not os.listdir(deep_gemm_dir):
-        if not os.path.exists(deep_gemm_dir):
-            os.makedirs(deep_gemm_dir)
-        clone_git_repo("main", "https://github.com/deepseek-ai/DeepGEMM.git", deep_gemm_dir)
-        if not os.listdir(deep_gemm_dir):
-            raise ValueError("Git clone DeepGEMM failed!")
-        cur_path = os.path.dirname(os.path.abspath(__file__))
-        dst_path = os.path.join(cur_path, deep_gemm_dir)
-        commit_id = "95e81b3dd6704e279e5f4757c5b94776ac988a8d"
-        patch = "0001-DeepGEMM-95e81b3.patch"
-        process_git_repo(cur_path, dst_path, commit_id, patch)
-
     dg_third_party_include_dirs = (
         "third_party/cutlass/include/cute",
         "third_party/cutlass/include/cutlass",
@@ -364,14 +337,6 @@ elif paddle.is_compiled_with_cuda():
             shutil.copytree(src_dir, dst_dir)
         except Exception as e:
             raise RuntimeError(f"Failed to copy from {src_dir} to {dst_dir}: {e}")
-
-    json_dir = "third_party/nlohmann_json"
-    if not os.path.exists(json_dir) or not os.listdir(json_dir):
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://github.com/nlohmann/json.git", json_dir)
-        if not os.listdir(json_dir):
-            raise ValueError("Git clone nlohmann_json failed!")
 
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
@@ -593,13 +558,6 @@ elif paddle.is_compiled_with_custom_device("gcu"):
     )
 elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
     maca_path = os.getenv("MACA_PATH", "/opt/maca")
-    json_dir = "third_party/nlohmann_json"
-    if not os.path.exists(json_dir) or not os.listdir(json_dir):
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://gitee.com/learnlov/mirrors_nlohmann_json.git", json_dir)
-        if not os.listdir(json_dir):
-            raise ValueError("Git clone nlohmann_json failed!")
     sources = [
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/save_with_output_msg.cc",
