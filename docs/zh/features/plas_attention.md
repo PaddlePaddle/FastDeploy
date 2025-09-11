@@ -18,7 +18,7 @@
 <img src="images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
 </div>
 
-* **Attention Gate Module**: 如上图所示，为了以较低的计算开销估计每个块的重要性，我们设计了一个轻量级的注意力门模块。该模块首先通过一个 MLP 层压缩每个 K 个块，生成一个具有代表性的低维表示：$K_c^T=W_{kp}K^T$，其中 $W_{kp}$ 表示 MLP 层的权重。与直接应用均值池化相比，可学习的 MLP 可以更有效地捕捉不同 token 之间的语义关系和重要性分布，从而提供每个块的精细表示。在获得压缩表示 $K_c$ 之后，通过以下公式估计每个查询 token 相对于每个块的重要性：$Softmax(Q\cdot K_c^T)$。为了增强 MLP 层的判别能力，我们使用一维最大池化后的完整注意力结果 $1DMaxPooling(Softmax(Q \cdot K^T))$ 作为 ground truth。通过最小化两者之间的分布差异，引导 MLP 层学习更符合真实注意力分布的特征表示。
+* **Attention Gate Module**: 如上图所示，为了以较低的计算开销估计每个块的重要性，我们设计了一个轻量级的注意力门模块。该模块首先通过一个MLP层压缩每个K个块，生成一个具有代表性的低维表示： $K_c^T=W_{kp}K^T$ ，其中 $W_{kp}$ 表示 MLP 层的权重。与直接应用均值池化相比，可学习的 MLP 可以更有效地捕捉不同 token 之间的语义关系和重要性分布，从而提供每个块的精细表示。在获得压缩表示 $K_c$ 之后，通过以下公式估计每个查询 token 相对于每个块的重要性：$Softmax(Q\cdot K_c^T)$。为了增强 MLP 层的判别能力，我们使用一维最大池化后的完整注意力结果 $1DMaxPooling(Softmax(Q \cdot K^T))$ 作为 ground truth。通过最小化两者之间的分布差异，引导 MLP 层学习更符合真实注意力分布的特征表示。
 
 * **Training Data**: 得益于模型架构和训练范式的高效性，我们的方法仅使用 10 亿个 token 进行训练，便实现了近乎无损的精度。训练数据源自内部构建的包含长文本和短文本的混合语料库，从而增强了模块对不同序列长度的适应性。
 
@@ -36,7 +36,7 @@
 
 * **Prefill Toke Union**: 我们观察到相邻的查询标记倾向于选择相似的关键块。利用这种局部性，我们取连续 128 个查询标记选择的关键块的并集，并联合计算这些标记的稀疏注意力机制。
 
-* **Decode Head Union**: 鉴于 GQA 在现代模型中的广泛应用，我们发现同一组内的不同查询头经常选择重叠的关键块。因此，我们将同一组内所有查询头选择的关键块合并为一个统一的集合，并联合计算稀疏注意力机制。这种方式也减少了内存访问开销，并进一步提高了解码效率。
+* **Decode Head Union**: 鉴于GQA在现代模型中的广泛应用，我们发现同一组内的不同查询头经常选择重叠的关键块。因此，我们将同一组内所有查询头选择的关键块合并为一个统一的集合，并联合计算稀疏注意力机制。这种方式也减少了内存访问开销，并进一步提高了解码效率。
 
 * **Top-K Selection**: 传统的 Top-k 算法基于排序或直接调用 Cub 库，会带来显著的运行时开销。为了缓解这个问题，我们实现了一个基于二分查找的近似 Top-k 选择算法，该算法在保持准确率的同时显著降低了延迟，最终实现了性能的显著提升。
 
@@ -200,7 +200,7 @@
 ## 使用方式
 
 ```
-export FD_ATTENTION_BACKEND="MOBA_ATTN"
+export FD_ATTENTION_BACKEND="PLAS_ATTN"
 
 python -m fastdeploy.entrypoints.openai.api_server
     --model baidu/ERNIE-4.5-300B-A47B-Paddle  \
@@ -211,13 +211,13 @@ python -m fastdeploy.entrypoints.openai.api_server
     --max-num-batched-tokens 8192 \
     --max-model-len 131072 \
     --max-num-seqs 32 \
-    --moba-attention-config '{"moba_encoder_top_k_left": 50, "moba_encoder_top_k_right": 60, "moba_decoder_top_k_left": 100, "moba_decoder_top_k_right": 120}'
+    --plas-attention-config '{"plas_encoder_top_k_left": 50, "plas_encoder_top_k_right": 60, "plas_decoder_top_k_left": 100, "plas_decoder_top_k_right": 120}'
 ```
 
-**Note**: 如果启用了稀疏注意力机制，系统将自动从权重目录中的`moba_mlp_weight.safetensors`文件加载 MLP 权重。如果未找到 MLP 权重文件，则将对关键表示应用均值池化
+**Note**: 如果启用了稀疏注意力机制，系统将自动从权重目录中的`plas_attention_mlp_weight.safetensors`文件加载 MLP 权重。如果未找到 MLP 权重文件，则将对关键表示应用均值池化
 
 **Parameter Description:**
 
-* `FD_ATTENTION_BACKEND="MOBA_ATTN"` 启用 MOBA sparse attention.
-* `moba_encoder_top_k_left=50, moba_encoder_top_k_right=60` 表示当encoder时，top-k的范围在50到60之间。
-* `moba_decoder_top_k_left=100, moba_decoder_top_k_right=120` 表示当decoder时，top-k的范围在100到120之间。
+* `FD_ATTENTION_BACKEND="PLAS_ATTN"` 启用 PLAS sparse attention.
+* `plas_encoder_top_k_left=50, plas_encoder_top_k_right=60` 表示当encoder时，top-k的范围在50到60之间。
+* `plas_decoder_top_k_left=100, plas_decoder_top_k_right=120` 表示当decoder时，top-k的范围在100到120之间。
