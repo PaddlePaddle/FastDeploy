@@ -90,7 +90,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
         parallel_config = ParallelConfig({"max_num_seqs": 1})
         graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_capture_size=parallel_config.max_num_seqs)
         cache_config = CacheConfig({})
 
         fd_config = FDConfig(
@@ -104,14 +104,14 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         x = paddle.randint(32, shape=[1, 8])
         forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
 
-        # Triger Capture
+        # Trigger Capture
         _ = test_model1(x, forward_meta=forward_meta1)
 
-        # Reaplay
+        # Replay
         _ = test_model1(x, forward_meta=forward_meta1)
         output1 = test_model1(x, forward_meta=forward_meta1)
 
-        # Corrent output
+        # Correct output
         output1_correct = test_model1.forward_correct(x, forward_meta=forward_meta1)
 
         assert (output1 == output1_correct).all()

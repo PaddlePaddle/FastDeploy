@@ -295,6 +295,9 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
+            if current_sampling_params.guided_decoding is not None:
+                guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
+                tasks.update(guided_decoding_dict)
             self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 

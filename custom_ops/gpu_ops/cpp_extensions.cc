@@ -63,7 +63,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor &kv_num_blocks,
     const paddle::Tensor &decoder_batch_ids,
     const paddle::Tensor &decoder_tile_ids_per_batch,
-    const paddle::Tensor &decoder_num_blocks,
+    const paddle::Tensor &decoder_num_blocks_cpu,
     const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
     const paddle::optional<paddle::Tensor> &rotary_embs,
     const paddle::optional<paddle::Tensor> &attn_mask,
@@ -105,7 +105,7 @@ void AppendAttentionWithOutput(
     const paddle::Tensor &kv_num_blocks,
     const paddle::Tensor &decoder_batch_ids,
     const paddle::Tensor &decoder_tile_ids_per_batch,
-    const paddle::Tensor &decoder_num_blocks,
+    const paddle::Tensor &decoder_num_blocks_cpu,
     const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
     paddle::Tensor &fmha_out,
     const paddle::optional<paddle::Tensor> &rotary_embs,
@@ -255,7 +255,8 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
     const std::string& quant_method, const bool used_in_ep_low_latency,
-    const int estimate_total_token_nums);
+    const int estimate_total_token_nums,
+    const int hadamard_block_size);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
@@ -298,14 +299,23 @@ paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const int device_id,
 paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
                                        const int layer_id);
 
-std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
+void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
-    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &decoder_num_blocks_cpu,     // Inplace, Pinned Memory
+    paddle::Tensor &decoder_num_blocks_device,  // Inplace
+    paddle::Tensor &decoder_chunk_size_device,  // Inplace
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    paddle::Tensor &encoder_batch_ids,          // Inplace
+    paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &kv_batch_ids,               // Inplace
+    paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
+    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
+    paddle::Tensor &max_len_kv_cpu,             // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -378,9 +388,11 @@ void RecoverDecodeTask(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &step_seq_lens_decoder,
                    const paddle::Tensor &block_tables,
                    const paddle::Tensor &is_block_step,
-                   const int block_size);
-
-
+                   const paddle::optional<paddle::Tensor> &draft_tokens,
+                   const paddle::optional<paddle::Tensor> &step_draft_tokens,
+                   const paddle::optional<paddle::Tensor> &step_seq_lens_this_time,
+                   const int block_size,
+                   const int max_draft_tokens);
 
 paddle::Tensor
 GroupSwigluWithMasked(const paddle::Tensor &fc1_out_tensor,
@@ -404,8 +416,8 @@ std::vector<paddle::Tensor> MoEDeepGEMMDePermute(
     const paddle::Tensor &topk_idx, const paddle::Tensor &topk_weights);
 
 void TextImageIndexOut(const paddle::Tensor &token_type_ids,
-                       const paddle::Tensor &text_input,
-                       const paddle::Tensor &image_input);
+                        paddle::Tensor &text_input,
+                        paddle::Tensor &image_input);
 
 void TextImageGatherScatter(paddle::Tensor &input, paddle::Tensor &text_input,
                             paddle::Tensor &image_input,
@@ -463,23 +475,18 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& query,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
-    const paddle::Tensor& encoder_batch_ids,
-    const paddle::Tensor& encoder_tile_ids_per_batch,
-    const paddle::Tensor& encoder_num_blocks,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids_per_batch,
     const paddle::Tensor& kv_num_blocks,
     const paddle::Tensor& decoder_batch_ids,
     const paddle::Tensor& decoder_tile_ids_per_batch,
-    const paddle::Tensor& decoder_num_blocks,
-    const paddle::Tensor& decoder_num_blocks_cpu,
-    const paddle::Tensor& max_enc_len_this_time,
+    const paddle::Tensor& decoder_num_blocks_device,
+    const paddle::Tensor& decoder_chunk_size_device,
     const paddle::Tensor& max_dec_len_this_time,
     const paddle::Tensor& max_len_kv,
     const paddle::optional<paddle::Tensor>& attn_mask,
@@ -707,6 +714,22 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
                               const paddle::Tensor& seq_lens_decoder);
 
+void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
+                            const paddle::Tensor &block_tables,
+                            const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_decoder,
+                            const paddle::Tensor &step_seq_lens_decoder,
+                            const paddle::Tensor &step_draft_tokens,
+                            const paddle::Tensor &step_seq_lens_this_time,
+                            const paddle::Tensor &accept_num,
+                            const paddle::Tensor &accept_tokens,
+                            const paddle::Tensor &is_block_step,
+                            const paddle::Tensor &not_need_stop,
+                            const paddle::Tensor &stop_nums,
+                            const int block_size,
+                            const int max_draft_tokens);
+
 void NgramMatch(const paddle::Tensor &input_ids,
         const paddle::Tensor &input_ids_len,
         const paddle::Tensor &pre_ids,
@@ -750,6 +773,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
                           const paddle::Tensor& not_need_stop,
+                          const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
@@ -763,7 +787,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& base_model_draft_tokens,
                           const int max_draft_token,
                           const bool truncate_first_token,
-                          const bool splitwise_prefill);
+                          const bool splitwise_prefill,
+                          const bool kvcache_scheduler_v1);
 
 
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
@@ -1023,7 +1048,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_ffn", &MoeExpertFFNFunc, "moe export ffn function");
 
   /**
-   * moe/fused_moe/moe_ffn_wint2.cu
+   * moe/fused_moe/moe_expert_ffn_wint2.cu
    * moe_expert_ffn_wint2
    */
   m.def("moe_expert_ffn_wint2", &MoeExpertFFNWint2Func, "moe export ffn wint2 function");
@@ -1227,6 +1252,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_save_output", &SpeculateSaveWithOutputMsgStatic, "speculate_save_output function");
 
   m.def("speculate_clear_accept_nums",&SpeculateClearAcceptNums, "speculate_clear_accept_nums function");
+
+  m.def("speculate_schedule_cache",&SpeculateScheduleCache, "SpeculateScheduleCache function");
 
   m.def("ngram_match", &NgramMatch, "ngram_match function");
 

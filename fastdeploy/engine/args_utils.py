@@ -15,11 +15,13 @@
 """
 
 import json
-import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
+import paddle
+
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
@@ -162,8 +164,7 @@ class EngineArgs:
     """
     Ratio of tokens to process in a block.
     """
-
-    prealloc_dec_block_slot_num_threshold: int = 5
+    prealloc_dec_block_slot_num_threshold: int = 12
     """
     Token slot threshold for preallocating decoder blocks.
     """
@@ -243,7 +244,7 @@ class EngineArgs:
     Ports for rdma communication.
     """
 
-    enable_chunked_prefill: bool = True
+    enable_chunked_prefill: bool = False
     """
     Flag to enable chunked prefilling.
     """
@@ -392,6 +393,14 @@ class EngineArgs:
                 raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
+        if self.speculative_config is not None:
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.splitwise_role != "mixed":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if not current_platform.is_cuda():
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.guided_decoding_backend != "off":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -685,7 +694,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--prealloc-dec-block-slot-num-threshold",
             type=int,
-            default=5,
+            default=12,
             help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 
@@ -981,14 +990,32 @@ class EngineArgs:
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
+
+        speculative_cfg = self.create_speculative_config()
+        if not self.enable_chunked_prefill:
+            if (
+                current_platform.is_cuda()
+                and self.splitwise_role == "mixed"
+                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
+            ):
+                # default enable chunked prefill
+                self.enable_chunked_prefill = True
+
+            self.disable_chunked_prefill = int(envs.FD_DISABLE_CHUNKED_PREFILL)
+            if self.disable_chunked_prefill:
+                self.enable_chunked_prefill = False
+
         if self.max_num_batched_tokens is None:
-            if self.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
-            else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                if paddle.is_compiled_with_xpu():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+            else:
+                if self.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
+                else:
+                    self.max_num_batched_tokens = self.max_model_len
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
@@ -996,7 +1023,6 @@ class EngineArgs:
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
-        speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
         moba_attention_config = self.create_moba_attention_config()

@@ -563,3 +563,11 @@ inline int GetSMVersion() {
   return sm_version;
 
 }
+
+inline bool GetMlaUseTensorcore() {
+  static const bool flags_mla_use_tensorcore = get_mla_use_tensorcore();
+  static const bool enable_mla_tensorcore = GetSMVersion() >= 90 ? true : false;
+  const bool mla_use_tensorcore =
+      flags_mla_use_tensorcore && enable_mla_tensorcore;
+  return mla_use_tensorcore;
+}

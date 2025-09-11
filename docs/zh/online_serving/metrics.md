@@ -20,7 +20,12 @@
 | `fastdeploy:gpu_cache_usage_perc`         | Gauge     | GPU KV-cache 使用率          | 百分比    |
 | `fastdeploy:request_params_max_tokens`    | Histogram | 请求的 max_tokens 分布       | 个   |
 | `fastdeploy:request_success_total`        | Counter   | 成功处理的请求个数           | 个   |
-
+| `fastdeploy:cache_config_info`            | Gauge     | 推理引擎的缓存配置信息        | 个   |
+| `fastdeploy:available_batch_size`         | Gauge     | Decode阶段还可以插入的请求数量 | 个   |
+| `fastdeploy:hit_req_rate`                 | Gauge     | 请求级别前缀缓存命中率        | 百分比   |
+| `fastdeploy:hit_token_rate`               | Gauge     | token级别前缀缓存命中率      | 百分比   |
+| `fastdeploy:cpu_hit_token_rate`           | Gauge     | token级别CPU前缀缓存命中率   | 百分比   |
+| `fastdeploy:gpu_hit_token_rate`           | Gauge     | token级别GPU前缀缓存命中率   | 百分比   |
 ## 指标访问
 
 - 访问地址：`http://localhost:8000/metrics`

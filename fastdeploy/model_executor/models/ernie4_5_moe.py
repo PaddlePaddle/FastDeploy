@@ -539,22 +539,35 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
+            ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
+            ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
+            ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
         ]
 
         expert_params_mapping = []
         if getattr(self.fd_config.model_config, "moe_num_experts", None) is not None:
+            if self.fd_config.parallel_config.expert_parallel_size > 1:
+                num_experts = self.fd_config.parallel_config.num_experts_per_rank
+                num_experts_start_offset = self.fd_config.parallel_config.num_experts_start_offset
+            else:
+                num_experts = self.fd_config.model_config.moe_num_experts
+                num_experts_start_offset = 0
+
             expert_params_mapping = FusedMoE.make_expert_params_mapping(
-                num_experts=self.fd_config.model_config.moe_num_experts,
+                num_experts=num_experts,
                 ckpt_down_proj_name="down_proj",
                 ckpt_gate_up_proj_name="up_gate_proj",
                 ckpt_gate_proj_name="gate_proj",
                 ckpt_up_proj_name="up_proj",
                 param_gate_up_proj_name="experts.up_gate_proj_",
                 param_down_proj_name="experts.down_proj_",
+                num_experts_start_offset=num_experts_start_offset,
             )
         all_param_mapping = general_params_mapping + expert_params_mapping
 
         params_dict = dict(self.named_parameters())
+
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
@@ -583,7 +596,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 weight_loader(param, loaded_weight, shard_id)
 
-            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
@@ -620,7 +635,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         return hidden_states
 
     def clear_grpah_opt_backend(self):
-        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
@@ -635,6 +650,19 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         Model Architecture Name
         """
         return "Ernie4_5_ForCausalLM"
+
+
+class Ernie4_5ForCausalLM(Ernie4_5_ForCausalLM):
+    """
+    Ernie4_5ForCausalLM 0.3B-PT
+    """
+
+    @classmethod
+    def name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5ForCausalLM"
 
 
 class Ernie4_5_MoePretrainedModel(PretrainedModel):
@@ -788,3 +816,16 @@ class Ernie4_5_PretrainedModel(Ernie4_5_MoePretrainedModel):
         Model Architecture Name
         """
         return "Ernie4_5_ForCausalLM"
+
+
+class Ernie4_5PretrainedModel(Ernie4_5_PretrainedModel):
+    """
+    Ernie4_5PretrainedModel 0.3B-PT
+    """
+
+    @classmethod
+    def arch_name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5ForCausalLM"

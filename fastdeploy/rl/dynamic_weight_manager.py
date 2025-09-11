@@ -44,6 +44,7 @@ class DynamicWeightManager:
         self.model: nn.Layer = model
         self._capture_model_state()
         self.update_parameters()
+        self.finalize_update()
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
@@ -63,7 +64,9 @@ class DynamicWeightManager:
         paddle.device.cuda.empty_cache()
 
         if not self.first_load:
-            paddle.distributed.restart_process_group()
+            paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+            if self.parallel_config.enable_expert_parallel:
+                paddle.distributed.restart_process_group(self.parallel_config.ep_group)
 
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
@@ -76,8 +79,6 @@ class DynamicWeightManager:
             raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
-
-        self._finalize_update(pid)
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
@@ -110,9 +111,12 @@ class DynamicWeightManager:
             param._clear_data()
 
         self._verify_parameters("clearance")
-        if self.nranks > 1:
-            paddle.distributed.barrier()
-        paddle.distributed.shutdown_process_group()
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+        paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
         self._update_shared_status(pid, -2)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
@@ -138,11 +142,11 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def _finalize_update(self, pid: int):
+    def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
         self._verify_parameters("update")
-        if self.nranks > 1:
-            paddle.distributed.barrier()
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
         if not self.first_load:
             self._update_shared_status(pid, 0)
         self.first_load = False
