@@ -398,7 +398,7 @@ class SpeculativeConfig:
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
-        self.quantization: Optional[str] = None
+        self.quantization: Optional[Dict[str, Any]] = None
         # allocate more blocks to prevent mtp from finishing the block earlier than the main model
         # Fixed now
         self.num_gpu_block_expand_ratio: Optional[float] = 1
