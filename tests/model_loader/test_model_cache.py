@@ -41,7 +41,7 @@ model_param_map = {
         "quantizations": [
             {
                 "quant_type": "wint4",
-                "env": {"FD_ENABLE_MODEL_CACHE": "1"},
+                "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
             }
         ],
     }
