@@ -41,7 +41,8 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
                               const bool use_neox_style,
                               const float* q_norm_weight,
                               const float* k_norm_weight,
-                              const float rms_norm_eps) {
+                              const float rms_norm_eps,
+                              const bool rope_3d) {
   int output_inner_dim = num_heads + 2 * kv_num_heads;
   const uint32_t elem_nums =
       use_neox_style ? token_num * (num_heads + 2 * kv_num_heads) * dim_head / 2
@@ -53,7 +54,6 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
   const int blocksize = 128;
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
-
   if (use_neox_style) {
       PD_THROW(
           "append_speculate_cache_rope_qk_norm not support neox rope yet");
@@ -82,7 +82,8 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                             kv_num_heads,
                                             q_norm_weight,
                                             k_norm_weight,
-                                            rms_norm_eps);
+                                            rms_norm_eps,
+                                            rope_3d);
   }
 }
 
@@ -426,7 +427,6 @@ void SpeculateWriteCacheWithRoPEKernel(
             ? rotary_embs.get().data<float>() + max_seq_len * dim_head
             : rotary_embs.get().data<float>() + max_seq_len * dim_head / 2;
   }
-
   if (q_norm_weight && k_norm_weight) {
     if (cache_quant_type_str == "none") {
       append_speculate_cache_rope_qk_norm(
@@ -457,11 +457,13 @@ void SpeculateWriteCacheWithRoPEKernel(
           use_neox_rotary_style,
           reinterpret_cast<const float*>(q_norm_weight.get().data<float>()),
           reinterpret_cast<const float*>(k_norm_weight.get().data<float>()),
-          rms_norm_eps);
+          rms_norm_eps,
+          rope_3d);
     } else {
       PD_THROW(
           "append_decode_cache_rope_qk_norm not support cachekv quant yet");
     }
+
   } else {
     if (cache_quant_type_str == "none") {
         append_speculate_cache_rope(
