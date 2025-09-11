@@ -91,9 +91,9 @@ class DynamicWeightManager:
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
 
         # steps in the runner
-        # step 4: update weight status signal
-        # step 5: reinitialze kv_cache in the runner
-        self._finalize_update(pid)
+        # step4: reinitialze kv_cache in the runner
+        # step5: recapture cuda_graph
+        # step6: update weight status signal
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
