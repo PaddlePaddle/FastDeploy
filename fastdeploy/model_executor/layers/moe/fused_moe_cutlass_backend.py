@@ -27,6 +27,7 @@ from ..utils import get_tensor
 from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
+    from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
     from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 
     try:
@@ -39,7 +40,6 @@ elif current_platform.is_iluvatar():
         moe_expert_reduce,
     )
 
-from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 
 
