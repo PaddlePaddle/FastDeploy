@@ -574,7 +574,7 @@ class EngineService:
                 for task in tasks:
                     # assure can allocate block ids in P
                     while not self.resource_manager.preallocate_resource_in_p(task):
-                        time.sleep(0.01)
+                        time.sleep(0.005)
                     self.split_connector.send_splitwise_tasks([task], task.idx)
                 need_delete_tasks = []
                 for task in tasks:
@@ -603,7 +603,14 @@ class EngineService:
                 # to send cache info to cache messager
                 self.split_connector.send_cache_infos(tasks, -1)
             # to do: ensure cache tasks has sent to cache_messager
-            pass
+            while True:
+                req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
+                if req_ids:
+                    for task in tasks:
+                        assert task.request_id in req_ids
+                    break
+                else:
+                    time.sleep(0.001)
             # Fetch requests and add them to the scheduling queue
             for task in tasks:
                 self.resource_manager.add_request(task)
