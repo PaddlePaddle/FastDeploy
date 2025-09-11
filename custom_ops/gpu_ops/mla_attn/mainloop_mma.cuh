@@ -57,7 +57,7 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
   using SmemLayoutVtOneStage = typename Ktraits::SmemLayoutVtOneStage;
   static_assert(is_rmem<FrgTensorO>::value, "O tensor must be rmem resident.");
 
-  const int chunk_num_this_seq = cute::ceil_div(kv_len, mainloop_params.chunk_size);
+  const int chunk_num_this_seq = cute::ceil_div(kv_len, mainloop_params.chunk_size_device[0]);
 
   static constexpr int BLOCK_SHAPE_Q = get<0>(TileShape_QKD{});
   static constexpr int BLOCK_SHAPE_KV = get<1>(TileShape_QKD{});
@@ -84,9 +84,9 @@ CUTLASS_DEVICE void mma_f16(const Params& mainloop_params,
   Tensor tOrV2 = threadMmaPVSS.partition_fragment_B(sVt_s2);
   Tensor tOrP_CS2 = threadMmaPVSS.partition_fragment_A(sPSS);
 
-  const int start_len = tile_idx * mainloop_params.chunk_size;
+  const int start_len = tile_idx * mainloop_params.chunk_size_device[0];
   const int start_tile_idx = start_len / BLOCK_SHAPE_KV;
-  const int end_tile_idx =cute::ceil_div(min(start_len + mainloop_params.chunk_size, kv_len), BLOCK_SHAPE_KV) - 1;
+  const int end_tile_idx =cute::ceil_div(min(start_len + mainloop_params.chunk_size_device[0], kv_len), BLOCK_SHAPE_KV) - 1;
   int kv_tile_idx = end_tile_idx;
 
   auto consumer_wait = [](auto& pipeline, auto& smem_pipe_read) {
@@ -263,7 +263,7 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
   using SmemLayoutVtOneStage = typename Ktraits::SmemLayoutVtOneStage;
   static_assert(is_rmem<FrgTensorO>::value, "O tensor must be rmem resident.");
 
-  const int chunk_num_this_seq = cute::ceil_div(kv_len, mainloop_params.chunk_size);
+  const int chunk_num_this_seq = cute::ceil_div(kv_len, mainloop_params.chunk_size_device[0]);
 
   static constexpr int BLOCK_SHAPE_Q = get<0>(TileShape_QKD{});
   static constexpr int BLOCK_SHAPE_KV = get<1>(TileShape_QKD{});
@@ -295,9 +295,9 @@ CUTLASS_DEVICE void mma_f16_two_stages(const Params& mainloop_params,
   Tensor tOrV4 = threadMmaPVSS.partition_fragment_B(sVt_s4);
   Tensor tOrP_CS2 = threadMmaPVSS.partition_fragment_A(sPSS);
 
-  const int start_len = tile_idx * mainloop_params.chunk_size;
+  const int start_len = tile_idx * mainloop_params.chunk_size_device[0];
   const int start_tile_idx = start_len / BLOCK_SHAPE_KV;
-  const int end_tile_idx = cute::ceil_div(min(start_len + mainloop_params.chunk_size, kv_len), BLOCK_SHAPE_KV) - 1;
+  const int end_tile_idx = cute::ceil_div(min(start_len + mainloop_params.chunk_size_device[0], kv_len), BLOCK_SHAPE_KV) - 1;
   int kv_tile_idx = end_tile_idx;
 
   auto consumer_wait = [](auto& pipeline, auto& smem_pipe_read) {
