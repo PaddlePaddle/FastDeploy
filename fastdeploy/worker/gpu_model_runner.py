@@ -1889,7 +1889,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Dynamic model loader use to clear parameters use for RL"""
         # Clear CUDAGraph
         if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
+            self.model.clear_graph_opt_backend()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()

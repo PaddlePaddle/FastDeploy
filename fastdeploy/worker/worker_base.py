@@ -89,7 +89,7 @@ class WorkerBase(ABC):
 
     @abstractmethod
     def graph_optimize_and_warm_up_model(self) -> None:
-        """Prepare model for execution through graph optimizaiton(CudaGrpah/CINN) or warmup."""
+        """Prepare model for execution through graph optimizaiton(CudaGraph/CINN) or warmup."""
         raise NotImplementedError
 
     @abstractmethod

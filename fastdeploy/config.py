@@ -595,7 +595,7 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
+    def init_with_cudagraph_size(self, max_capture_size: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
@@ -1145,9 +1145,9 @@ class FDConfig:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
 
         if self.graph_opt_config.cudagraph_only_prefill:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
+            self.graph_opt_config.init_with_cudagraph_size(max_capture_size=512)
         else:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.parallel_config.max_num_seqs)
+            self.graph_opt_config.init_with_cudagraph_size(max_capture_size=self.parallel_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:

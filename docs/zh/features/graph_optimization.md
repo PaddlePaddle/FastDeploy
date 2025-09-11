@@ -43,7 +43,7 @@ FastDeploy 的 `GraphOptimizationBackend` 设计架构如下，**部分功能仍
   + `use_cudagraph`: bool = False
   + `cudagraph_capture_sizes` : List[int] = None
 
-可以通过设置 `--use-cudagraph` 或 `--graph-optimization-config '{"use_cudagraph":true}'` 开启 CudaGrpah。
+可以通过设置 `--use-cudagraph` 或 `--graph-optimization-config '{"use_cudagraph":true}'` 开启 CudaGraph。
 
 `--graph-optimization-config` 中的 `graph_opt_level` 参数用于配置图优化等级，可选项如下：
 

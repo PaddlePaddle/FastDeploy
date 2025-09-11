@@ -80,7 +80,7 @@ class TestModel1(paddle.nn.Layer):
         self.sublayer2.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
-class TestCUDAGrpahRecapture(unittest.TestCase):
+class TestCUDAGraphRecapture(unittest.TestCase):
     """
     Test CUDAGraph Memory change
     """

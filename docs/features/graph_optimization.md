@@ -39,7 +39,7 @@ Currently, only user configuration of the following parameters is supported：
   + `use_cudagraph`: bool = False
   + `cudagraph_capture_sizes` : List[int] = None
 
-CudaGrpah can be enabled by setting `--use-cudagraph` or `--graph-optimization-config '{"use_cudagraph":true}'`. Using two different methods to set the use graph simultaneously may cause conflicts.
+CudaGraph can be enabled by setting `--use-cudagraph` or `--graph-optimization-config '{"use_cudagraph":true}'`. Using two different methods to set the use graph simultaneously may cause conflicts.
 
 The `graph_opt_level` parameter within `--graph-optimization-config` is used to configure the graph optimization level, with the following available options:
 + `0`: Use Dynamic compute graph, default to 0

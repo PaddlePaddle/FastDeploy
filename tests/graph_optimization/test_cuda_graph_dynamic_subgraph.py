@@ -142,7 +142,7 @@ class TestModel1(paddle.nn.Layer):
         return sublayer3_output
 
 
-class TestCUDAGrpahSubgraph(unittest.TestCase):
+class TestCUDAGraphSubgraph(unittest.TestCase):
     """
     Test CUDAGraph Memory change
     """
@@ -157,7 +157,7 @@ class TestCUDAGrpahSubgraph(unittest.TestCase):
         cache_config = CacheConfig({})
         # Initialize cuda graph capture list
         graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_capture_size=parallel_config.max_num_seqs)
+        graph_opt_config.init_with_cudagraph_size(max_capture_size=parallel_config.max_num_seqs)
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             parallel_config=parallel_config,
