@@ -59,7 +59,7 @@ class RolloutModelConfig:
         graph_optimization_config: str = None,
         early_stop_config: str = None,
         local_rank: int = 0,
-        moba_attention_config: str = None,
+        plas_attention_config: str = None,
         data_parallel_size: int = 1,
     ):
         # Required parameters
@@ -106,7 +106,7 @@ class RolloutModelConfig:
         self.local_rank = local_rank
         self.early_stop_config = early_stop_config
         self.ips = None
-        self.moba_attention_config = moba_attention_config
+        self.plas_attention_config = plas_attention_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

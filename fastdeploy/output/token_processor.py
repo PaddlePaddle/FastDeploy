@@ -359,6 +359,7 @@ class TokenProcessor:
                 metrics = RequestMetrics(
                     arrival_time=task.arrival_time,
                     inference_start_time=task.inference_start_time,
+                    model_execute_time=time.time() - task.inference_start_time,
                     first_token_time=time.time() - task.inference_start_time,
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
@@ -371,6 +372,7 @@ class TokenProcessor:
                 metrics = RequestMetrics(
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
+                    model_execute_time=time.time() - task.inference_start_time,
                 )
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)
