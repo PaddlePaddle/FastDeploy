@@ -19,8 +19,8 @@ python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/s
 echo "uninstall org"
 python -m pip uninstall paddlepaddle -y
 python -m pip uninstall paddle-custom-gcu -y
-python -m pip install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-python -m pip install --pre paddle-custom-gcu==3.0.0.dev20250801 -i https://www.paddlepaddle.org.cn/packages/nightly/gcu/
+python -m pip install paddlepaddle==3.3.0.dev20250910 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python -m pip install paddle-custom-gcu==3.0.0.dev20250910 -i https://www.paddlepaddle.org.cn/packages/nightly/gcu/
 echo "build whl"
 bash build.sh 1 || exit 1
 
@@ -38,7 +38,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
     --metrics-port 8200 \
-    --tensor-parallel-size 4 \
+    --tensor-parallel-size 2 \
     --num-gpu-blocks-override 4096 \
     --max-model-len 32768 \
     --max-num-seqs 8 \
@@ -97,7 +97,7 @@ cat server.log
 echo -e "\n"
 
 echo "Start inference..."
-python tests/ci_use/GCU/run_ernie.py
+python test/ci_use/GCU/run_ernie.py
 exit_code=$?
 echo -e "exit_code is ${exit_code}.\n"
 
