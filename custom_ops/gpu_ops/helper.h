@@ -25,6 +25,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <nvml.h>
+#include <cassert>
+#include <cstdlib>
 
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_bfloat16.h>
@@ -563,3 +566,31 @@ inline int GetSMVersion() {
   return sm_version;
 
 }
+
+
+#ifndef GPU_MEMORY_CHECKER_H
+#define GPU_MEMORY_CHECKER_H
+class GPUMemoryChecker {
+public:
+    static GPUMemoryChecker* getInstance() {
+        static GPUMemoryChecker instance;
+        return &instance;
+    }
+
+    void addCheckPoint(const char* call_file, int call_line);
+    unsigned int getGPUCount() const { return deviceCount_; }
+    void getCUDAVisibleDevice();
+
+    GPUMemoryChecker(const GPUMemoryChecker&) = delete;
+    void operator=(const GPUMemoryChecker&) = delete;
+
+private:
+    GPUMemoryChecker();
+    ~GPUMemoryChecker();
+
+    unsigned int deviceCount_;
+    std::vector<unsigned int> visible_device_;
+    std::vector<unsigned int> visible_device_mem_usage_;
+};
+
+#endif // GPU_MEMORY_CHECKER_H
