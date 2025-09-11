@@ -768,10 +768,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
+        image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
-        if image_features is not None and len(image_features) > 0:
+        if image_token_num > 0:
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
@@ -781,11 +782,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
+        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding,
+            image_features=image_features,
+            image_token_num=vl_moe_meta.image_token_num.item(),
         )
         self._input_embeddings.copy_(input_embeddings, False)
-        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
