@@ -238,4 +238,7 @@ setup(
     license="Apache 2.0",
     python_requires=">=3.7",
     extras_require={"test": ["pytest>=6.0"]},
+    entry_points={
+        "console_scripts": ["fastdeploy=fastdeploy.entrypoints.cli.main:main"],
+    },
 )
