@@ -1008,6 +1008,15 @@ class LLMEngine:
             create=True,
         )
 
+        swap_space_ready_data = np.zeros(shape=[self.cfg.tensor_parallel_size], dtype=np.int32)
+        self.swap_space_ready_signal = IPCSignal(
+            name="swap_space_ready_signal",
+            array=swap_space_ready_data,
+            dtype=np.int32,
+            suffix=self.ipc_signal_suffix,
+            create=True,
+        )
+
         if self.do_profile:
             get_profile_block_num = np.zeros([1], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(

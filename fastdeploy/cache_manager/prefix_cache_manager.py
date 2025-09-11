@@ -171,6 +171,14 @@ class PrefixCacheManager:
             suffix=pid_suffix,
             create=False,
         )
+        swap_space_ready_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+        self.swap_space_ready_signal = IPCSignal(
+            name="swap_space_ready_signal",
+            array=swap_space_ready_data,
+            dtype=np.int32,
+            suffix=pid_suffix,
+            create=False,
+        )
 
         # Run command to launch cache transfer managers
         logger.info(f"create_cache_tensor: {create_cache_tensor}")
@@ -211,6 +219,10 @@ class PrefixCacheManager:
         logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
             time.sleep(1)
+
+        if getattr(cache_config, "swap_space", 0) > 0:
+            while np.sum(self.swap_space_ready_signal.value) != tensor_parallel_size:
+                time.sleep(1)
 
         exit_code = cache_manager_processes[-1].poll()
         if exit_code is None:

@@ -149,6 +149,14 @@ class CacheTransferManager:
             suffix=self.engine_pid,
             create=False,
         )
+        swap_space_ready_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
+        self.swap_space_ready_signal = IPCSignal(
+            name="swap_space_ready_signal",
+            array=swap_space_ready_data,
+            dtype=np.int32,
+            suffix=self.engine_pid,
+            create=False,
+        )
 
         self.num_cpu_blocks = args.num_cpu_blocks
 
@@ -232,7 +240,7 @@ class CacheTransferManager:
         logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
 
     def _init_cpu_cache(self, args):
-        logger.info("Initializing cpu cache for all layers.")
+        logger.info("Initializing swap space (cpu cache) for all layers.")
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
@@ -245,7 +253,8 @@ class CacheTransferManager:
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
             self.cpu_cache_kvs[val_name] = cuda_host_alloc(need_to_allocate_bytes)
             self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
-        logger.info("Initialized cpu cache for all layers.")
+        logger.info("✅ swap space (cpu cache) is ready!")
+        self.swap_space_ready_signal.value[self.rank] = 1
 
     def _do_swap_to_cpu_task(
         self,
@@ -477,7 +486,9 @@ class CacheTransferManager:
 
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
-                    if np.sum(self.cache_ready_signal.value) == 0:
+                    self.swap_space_ready_signal.value[self.rank] = 0
+
+                    if np.sum(self.cache_ready_signal.value) == 0 and np.sum(self.swap_space_ready_signal.value) == 0:
                         kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
 
                 except Exception as e:
@@ -493,7 +504,10 @@ class CacheTransferManager:
                     self._init_gpu_cache(args)
                     logger.info("Finish restoring GPU caches.")
 
-                    if np.sum(self.cache_ready_signal.value) == args.mp_num:
+                    if (
+                        np.sum(self.cache_ready_signal.value) == args.mp_num
+                        and np.sum(self.swap_space_ready_signal.value) == args.mp_num
+                    ):
                         kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:
