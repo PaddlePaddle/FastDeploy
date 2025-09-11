@@ -44,6 +44,7 @@ class DynamicWeightManager:
         self.model: nn.Layer = model
         self._capture_model_state()
         self.update_parameters()
+        self.finalize_update()
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
@@ -88,11 +89,10 @@ class DynamicWeightManager:
             raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
-
         # steps in the runner
-        # step 4: update weight status signal
-        # step 5: reinitialze kv_cache in the runner
-        self._finalize_update(pid)
+        # step 4: reinitialze kv_cache
+        # step 5: recapture CUDAGraph
+        # step 6: update weight status signal
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
@@ -170,7 +170,7 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def _finalize_update(self, pid: int):
+    def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
         self._verify_parameters("update")
 
