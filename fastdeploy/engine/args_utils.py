@@ -40,6 +40,7 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     is_port_available,
+    parse_quantization,
 )
 
 
@@ -48,16 +49,6 @@ def nullable_str(x: str) -> Optional[str]:
     Convert an empty string to None, preserving other string values.
     """
     return x if x else None
-
-
-def parse_quantization(value: str):
-    """
-    Parse a JSON string into a dictionary.
-    """
-    try:
-        return json.loads(value)
-    except ValueError:
-        return {"quantization": value}
 
 
 @dataclass

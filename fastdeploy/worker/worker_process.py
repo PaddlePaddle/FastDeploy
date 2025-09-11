@@ -44,7 +44,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -642,6 +642,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
