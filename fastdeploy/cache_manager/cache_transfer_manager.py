@@ -501,7 +501,6 @@ class CacheTransferManager:
                 try:
                     if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
-                        self.swap_space_ready_signal.value[self.rank] = 1
                         while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
                             time.sleep(0.1)
 
