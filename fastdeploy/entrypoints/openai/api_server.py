@@ -60,7 +60,6 @@ from fastdeploy.utils import (
     StatefulSemaphore,
     api_server_logger,
     console_logger,
-    is_package_installed,
     is_port_available,
     retrive_model_from_server,
 )
@@ -78,18 +77,23 @@ parser.add_argument(
     help="max waiting time for connection, if set value -1 means no waiting time limit",
 )
 parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+
 parser.add_argument(
     "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
 )
+parser.add_argument(
+    "--timeout-graceful-shutdown",
+    default=0,
+    type=int,
+    help="timeout for graceful shutdown in seconds (used by uvicorn)",
+)
+
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
 
 if args.workers is None:
-    # In GPU, the workers of uvicorn will be set according to the parameter `max-num-seqs`
-    if is_package_installed("paddlepaddle-gpu"):
-        args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
-    else:
-        args.workers = 1
+    args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
+
 console_logger.info(f"Number of api-server workers: {args.workers}.")
 
 args.model = retrive_model_from_server(args.model, args.revision)
@@ -181,6 +185,7 @@ async def lifespan(app: FastAPI):
         workers=args.workers,
         tool_parser=args.tool_call_parser,
     )
+    await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
         model_paths,
@@ -435,6 +440,7 @@ def launch_api_server() -> None:
             workers=args.workers,
             log_config=UVICORN_CONFIG,
             log_level="info",
+            timeout_graceful_shutdown=args.timeout_graceful_shutdown,
         )  # set log level to error to avoid log
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
@@ -487,7 +493,7 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
-    llm_engine.scheduler.reset()
+    llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
@@ -505,11 +511,13 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
-        llm_engine.scheduler.reset()
+        llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
-        if hasattr(llm_engine.scheduler, "update_config") and callable(llm_engine.scheduler.update_config):
-            llm_engine.scheduler.update_config(
+        if hasattr(llm_engine.engine.scheduler, "update_config") and callable(
+            llm_engine.engine.scheduler.update_config
+        ):
+            llm_engine.engine.scheduler.update_config(
                 load_shards_num=request.load_shards_num,
                 reallocate=request.reallocate_shard,
             )
