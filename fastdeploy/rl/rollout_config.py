@@ -61,6 +61,7 @@ class RolloutModelConfig:
         local_rank: int = 0,
         moba_attention_config: str = None,
         data_parallel_size: int = 1,
+        num_nextn_predict_layers: int = 0,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -107,6 +108,7 @@ class RolloutModelConfig:
         self.early_stop_config = early_stop_config
         self.ips = None
         self.moba_attention_config = moba_attention_config
+        self.num_nextn_predict_layers = num_nextn_predict_layers
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

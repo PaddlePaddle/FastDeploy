@@ -132,6 +132,7 @@ class ModelConfig:
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
+        self.num_nextn_predict_layers = 0
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
