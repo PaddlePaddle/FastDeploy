@@ -56,7 +56,7 @@ def update_git_repo():
         if update_third_party:
             os.chdir(submodule_dir)
             subprocess.run(
-                "git submodule sync --recursive && git submodule update --init --recursive",
+                "chown -R $(whoami) /workspace/FastDeploy && git submodule sync --recursive && git submodule update --init --recursive",
                 shell=True,
                 check=True,
                 text=True,
