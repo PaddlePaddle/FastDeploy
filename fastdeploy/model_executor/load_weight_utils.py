@@ -79,7 +79,7 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
     weight_cache_context = contextlib.nullcontext()
     weight_cache_dir = None
     enable_cache = False
-    if envs.FD_ENABLE_MODEL_CACHE:
+    if envs.FD_ENABLE_MODEL_LOAD_CACHE:
         model_weight_cache_path = os.path.join(fd_config.model_config.model, weight_cache_path)
         # model_type + quantization + tp_size + ep_size
         weight_cache_key = "_".join(
@@ -132,7 +132,11 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
 
             with context:
                 result = func(*args, **kwargs)
-            if envs.FD_ENABLE_MODEL_CACHE and weight_cache_dir is not None and not os.path.exists(weight_cache_dir):
+            if (
+                envs.FD_ENABLE_MODEL_LOAD_CACHE
+                and weight_cache_dir is not None
+                and not os.path.exists(weight_cache_dir)
+            ):
                 assert fd_config.quant_config is not None and getattr(
                     fd_config.quant_config, "is_checkpoint_bf16", False
                 ), "Save cache only for dynamic quantization"
