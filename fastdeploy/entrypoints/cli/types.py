@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-# This file is modified from https://github.com/vllm-project/vllm/entrypoints/cli/types.py
+# This file is modified from https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/cli/types.py
 
 from __future__ import annotations
 
