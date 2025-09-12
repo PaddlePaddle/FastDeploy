@@ -13,24 +13,24 @@ class TestDynamicPerTokenScaledFp8Quant(unittest.TestCase):
 
     def _run_dynamic_per_token_scaled_fp8_quant(self, input_data, scale_ub=0.0):
         """
-        运行动态逐token缩放FP8量化算子
+        Run the dynamic per-token scaled FP8 quantization operator
 
-        参数:
-            input_data: 输入数据(numpy数组)
-            scale_ub: 缩放上限值
+        Args:
+            input_data: Input data (numpy array)
+            scale_ub: Scale upper bound value
 
-        返回:
-            量化后的输出和缩放因子
+        Returns:
+            Quantized output and scaling factors
         """
         input_tensor = paddle.to_tensor(input_data)
 
-        # 确定输出形状
+        # Determine the output shape
         num_tokens = input_tensor.shape[0] if len(input_tensor.shape) > 1 else 1
 
-        # 创建输出张量
+        # Create the output tensor
         out_tensor = paddle.empty(input_tensor.shape, dtype=paddle.float8_e4m3fn)
 
-        # 创建scales张量
+        # Create the scales tensor
         scales_tensor = paddle.empty([num_tokens], dtype="float32")
 
         inputs = {"out": out_tensor, "input": input_tensor, "scale": scales_tensor}
@@ -44,23 +44,23 @@ class TestDynamicPerTokenScaledFp8Quant(unittest.TestCase):
 
     def _verify_results(self, input_data, output_data, scales, scale_ub=0.0, tol=7e-2):
         """
-        验证量化结果是否正确
+        Verify that the quantization results are correct
 
-        参数:
-            input_data: 原始输入数据
-            output_data: 量化后的输出数据
-            scales: 使用的缩放因子
-            scale_ub: 缩放上限值
-            tol: 允许的误差范围
+        Args:
+            input_data: Original input data
+            output_data: Quantized output data
+            scales: Scaling factors used
+            scale_ub: Scale upper bound value
+            tol: Allowed tolerance range
         """
-        # 检查输出数据类型是否为FP8
-        self.assertEqual(output_data.dtype, "float8_e4m3fn")  # FP8存储为float8_e4m3fn
+        # Check if the output data type is FP8
+        self.assertEqual(output_data.dtype, "float8_e4m3fn")  # FP8 is stored as float8_e4m3fn
 
-        # 对于每个token验证量化过程
+        # For each token, verify the quantization process
         num_tokens = input_data.shape[0] if len(input_data.shape) > 1 else 1
 
         for i in range(num_tokens):
-            # 获取当前token的输入和输出
+            # Get the current token's input and output
             if len(input_data.shape) > 1:
                 token_input = input_data[i]
                 token_output = output_data[i] if len(output_data.shape) > 1 else output_data
@@ -68,10 +68,10 @@ class TestDynamicPerTokenScaledFp8Quant(unittest.TestCase):
                 token_input = input_data
                 token_output = output_data
 
-            # 获取当前token的缩放因子
+            # Get the current token's scaling factor
             token_scale = scales[i] if num_tokens > 1 else scales[0]
 
-            # 如果有缩放上限，检查是否遵守
+            # If there is a scale upper limit, check if it is respected
             if scale_ub > 0:
                 max_val = np.max(np.abs(token_input))
                 expected_scale = min(max_val, scale_ub) / 448.0
@@ -81,61 +81,61 @@ class TestDynamicPerTokenScaledFp8Quant(unittest.TestCase):
                 expected_scale = max_val / 448.0
                 self.assertAlmostEqual(token_scale, expected_scale, delta=tol)
 
-            # 验证量化后的值是否合理
-            # FP8的范围通常是-1.0到1.0，量化后应在这个范围内
+            # Verify that the quantized values are reasonable
+            # The FP8 range is typically -1.0 to 1.0, quantized values should be within this range
             reconstructed = token_output.astype(np.float32) * token_scale
             diff = np.abs(reconstructed - token_input.astype(np.float32))
             self.assertTrue(np.all(diff <= tol * np.max(np.abs(token_input))))
 
     def test_fp32_input(self):
-        """测试FP32输入"""
+        """Test FP32 input"""
         input_data = np.array([0.1, -0.2, 0.3, -0.4], dtype=np.float32)
 
-        # 测试无缩放上限的情况
+        # Test the case without a scale upper limit
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data)
         self._verify_results(input_data, output_data, scales)
 
-        # 测试有缩放上限的情况
+        # Test the case with a scale upper limit
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data, scale_ub=1.5)
         print(output_data, scales)
         self._verify_results(input_data, output_data, scales, scale_ub=1.5)
 
-        # 测试单token情况
+        # Test the single-token case
         single_token = input_data[0:1]
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(single_token)
         self._verify_results(single_token, output_data, scales)
 
     def test_large_values(self):
-        """测试大数值输入"""
+        """Test large value input"""
         input_data = np.array([100.0, -200.0, 300.0, -320.0], dtype=np.float32)
 
-        # 测试无缩放上限 - 应该使用最大值/448作为缩放因子
+        # Test no scale upper limit - should use max_value / 448 as the scaling factor
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data)
         self._verify_results(input_data, output_data, scales)
 
-        # 测试有缩放上限
+        # Test with scale upper limit
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data, scale_ub=310.0)
         self._verify_results(input_data, output_data, scales, scale_ub=310.0)
 
     def test_edge_cases(self):
-        """测试边界情况"""
-        # 测试全零输入
+        """Test edge cases"""
+        # Test all-zero input
         zero_input = np.zeros((2, 4), dtype=np.float32)
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(zero_input)
         self._verify_results(zero_input, output_data, scales)
 
-        # 测试单元素输入
+        # Test single-element input
         single_element = np.array([[5.0]], dtype=np.float32)
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(single_element)
         self._verify_results(single_element, output_data, scales)
 
-        # 测试非常大的token数量
+        # Test very large number of tokens
         large_input = np.random.randn(1024, 16).astype(np.float32)
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(large_input)
         self._verify_results(large_input, output_data, scales)
 
     def test_dynamic_per_token_scaled_fp8_quant_fp16(self):
-        # 测试float16
+        # Test float16
         input_data = np.array([0.1, -0.2, 0.3, -0.4], dtype="float16")
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data)
         self._verify_results(input_data, output_data, scales)
