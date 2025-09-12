@@ -70,7 +70,6 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
@@ -78,9 +77,8 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::Tensor& tile_ids_per_batch,
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
-    const int num_blocks_x,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -97,14 +95,12 @@ void BatchMLAWithPagedKVCacheKernel(
   const auto q_head_num = meta_data.q_num_heads;
   const auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
   const auto max_block_num = bsz * max_block_num_per_seq;
-  const uint32_t chunk_size = get_max_partition_size(bsz);
-
 
   int q_head_dim = meta_data.head_dims;
   int k_head_dim = meta_data.head_dims;
   int v_head_dim = meta_data.head_dims_v;
   // int num_chunks = max_dec_len / chunk_size;
-  int num_chunks = div_up(max_dec_len, chunk_size);
+  int num_chunks = div_up(max_seq_len, 64);
 
   auto *allocator = paddle::GetAllocator(q.place());
   phi::Allocator::AllocationPtr O_tmp, m_tmp, d_tmp;
@@ -127,14 +123,14 @@ void BatchMLAWithPagedKVCacheKernel(
   params.d = reinterpret_cast<float*>(d_tmp->ptr());
   params.block_tables = const_cast<int*>(block_tables.data<int>());
   params.seq_lens_this_time = const_cast<int*>(seq_lens_this_time.data<int>());
-  params.seq_lens_encoder = const_cast<int*>(seq_lens_encoder.data<int>());
   params.seq_lens_decoder = const_cast<int*>(seq_lens_decoder.data<int>());
   params.cumsum_q_seqlens = const_cast<int*>(cu_seqlens_q.data<int>());
   params.batch_id_per_token = const_cast<int*>(batch_id_per_token.data<int>());
   params.batch_ids = const_cast<int*>(batch_ids.data<int>());
   params.tile_ids_per_batch = const_cast<int*>(tile_ids_per_batch.data<int>());
   params.num_blocks_x = const_cast<int*>(num_blocks_x_device.data<int>());
-  params.num_blocks_x_int = num_blocks_x;
+  params.chunk_size_device =
+      const_cast<int*>(decoder_chunk_size_device.data<int>());
   params.q_stride_bsz = q_head_num * q_head_dim;
   params.q_stride_head_num = q_head_dim;
   params.kv_stride_block_num = block_size * k_head_dim;
@@ -151,7 +147,6 @@ void BatchMLAWithPagedKVCacheKernel(
   params.block_size = block_size;
   params.max_draft_token_num = draft_token_num;
   params.sm_scale = softmax_scale;
-  params.chunk_size = chunk_size;
   params.chunk_num = num_chunks;
 
   if (q_head_dim == 576) {
@@ -176,7 +171,6 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
@@ -184,9 +178,8 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const paddle::Tensor& tile_ids_per_batch,
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
-    const int num_blocks_x,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -210,7 +203,6 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
@@ -218,9 +210,8 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const paddle::Tensor& tile_ids_per_batch,
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
-    const int num_blocks_x,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,
