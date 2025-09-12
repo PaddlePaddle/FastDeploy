@@ -49,7 +49,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
             raise RuntimeError("Could not find think end token id in tokenizer vocabulary")
         self.tool_call_start_token_id = self.vocab.get("<tool_call>")
 
-        # State variable to buffer newline until its role is confirmed
+        # Record whether there is currently a saved \n that needs to be emitted
         self._pending_newline = False
 
     def extract_reasoning_content_streaming(
@@ -93,7 +93,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
             return DeltaMessage(reasoning_content=delta_text)
 
         # ----------- After reasoning: response/tool_call phase -----------
-        after_think = current_text[current_text.find(self.think_end_token) + len(self.think_end_token):]
+        after_think = current_text[current_text.find(self.think_end_token) + len(self.think_end_token) :]
         after_think = after_think.lstrip("\n")
 
         # Handle <tool_call>
