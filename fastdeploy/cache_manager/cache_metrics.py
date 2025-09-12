@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
 
 logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
@@ -53,6 +54,11 @@ class CacheMetrics:
         self.hit_token_ratio = self.matched_token_num / self.total_token_num
         self.cpu_hit_token_ratio = self.total_cpu_matched_token_num / self.total_token_num
         self.gpu_hit_token_ratio = self.total_gpu_matched_token_num / self.total_token_num
+
+        main_process_metrics.hit_req_rate.set(self.hit_req_ratio)
+        main_process_metrics.hit_token_rate.set(self.hit_token_ratio)
+        main_process_metrics.cpu_hit_token_rate.set(self.cpu_hit_token_ratio)
+        main_process_metrics.gpu_hit_token_rate.set(self.gpu_hit_token_ratio)
 
         logger.info(
             f"Metrics for all requests: req_count {self.req_count} hit_req_count {self.hit_req_count}"

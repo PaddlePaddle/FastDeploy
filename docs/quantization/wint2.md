@@ -4,7 +4,7 @@ Weights are compressed offline using the [CCQ (Convolutional Coding Quantization
 - **Supported Hardware**: GPU
 - **Supported Architecture**: MoE architecture
 This method relies on the convolution algorithm to use overlapping bits to map 2-bit values ​​to a larger numerical representation space, so that the model weight quantization retains more information of the original data while compressing the true value to an extremely low 2-bit size. The general principle can be seen in the figure below:
-[卷积编码量化示意图](./wint2.png)
+![卷积编码量化示意图](./images/wint2.png)
 
 CCQ WINT2 is generally used in resource-constrained and low-threshold scenarios. Taking ERNIE-4.5-300B-A47B as an example, weights are compressed to 89GB, supporting single-card deployment on 141GB H20.
 
