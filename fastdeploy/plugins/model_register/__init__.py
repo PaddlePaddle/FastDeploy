@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from fastdeploy.plugins.utils import load_plugins_by_group, plugins_loaded
+from fastdeploy.plugins.utils import load_plugins_by_group
 
 # make sure one process only loads plugins once
 PLUGINS_GROUP = "fastdeploy.model_register_plugins"
@@ -22,11 +22,6 @@ PLUGINS_GROUP = "fastdeploy.model_register_plugins"
 
 def load_model_register_plugins():
     """load_model_runner_plugins"""
-    global plugins_loaded
-    if plugins_loaded:
-        return
-    plugins_loaded = True
-
     plugins = load_plugins_by_group(group=PLUGINS_GROUP)
     # general plugins, we only need to execute the loaded functions
     for func in plugins.values():
