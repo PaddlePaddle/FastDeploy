@@ -311,19 +311,25 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         from fastdeploy.model_executor.utils import AutoWeightsLoader
 
         is_pooling_model = hasattr(self, "is_pooling_model") and self.is_pooling_model
-        print("is_pooling_model", is_pooling_model)
-        loader = AutoWeightsLoader(
-            self,
-            skip_prefixes=(["lm_head."] if self.tie_word_embeddings else None),
-        )
 
-        loaded_params = loader.load_weights(weights_iterator)
+        if is_pooling_model:
+            weights_list = list(weights_iterator)
+            filtered_weights = [(name, weight) for name, weight in weights_list if not name.startswith("lm_head.")]
+            loader = AutoWeightsLoader(self)
+            return loader.load_weights(iter(filtered_weights))
+        else:
+            loader = AutoWeightsLoader(
+                self,
+                skip_prefixes=(["lm_head."] if self.tie_word_embeddings else None),
+            )
 
-        if self.tie_word_embeddings:
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
-            loaded_params.add(f"lm_head.{self.lm_head.weight_key}")
+            loaded_params = loader.load_weights(weights_iterator)
 
-        return loaded_params
+            if self.tie_word_embeddings:
+                self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+                loaded_params.add(f"lm_head.{self.lm_head.weight_key}")
+
+            return loaded_params
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
