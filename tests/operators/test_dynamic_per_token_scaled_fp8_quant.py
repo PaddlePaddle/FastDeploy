@@ -140,6 +140,12 @@ class TestDynamicPerTokenScaledFp8Quant(unittest.TestCase):
         output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data)
         self._verify_results(input_data, output_data, scales)
 
+    def test_dynamic_per_token_scaled_fp8_quant_bf16(self):
+        # Test bfloat16
+        input_data = np.array([0.1, -0.2, 0.3, -0.4], dtype="bfloat16")
+        output_data, scales = self._run_dynamic_per_token_scaled_fp8_quant(input_data)
+        self._verify_results(input_data, output_data, scales)
+
 
 if __name__ == "__main__":
     unittest.main()
