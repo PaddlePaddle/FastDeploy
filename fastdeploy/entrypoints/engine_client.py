@@ -117,16 +117,12 @@ class EngineClient:
             suffix=port,
             create=False,
         )
-        self.connection_manager = DealerConnectionManager(
-            pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
-        )
-        self.connection_initialized = False
         prefix_tree_status = np.zeros([1], dtype=np.int32)
         self.prefix_tree_status_signal = IPCSignal(
             name="prefix_tree_status",
             array=prefix_tree_status,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         kv_cache_status = np.zeros([1], dtype=np.int32)
@@ -134,9 +130,13 @@ class EngineClient:
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
+        self.connection_manager = DealerConnectionManager(
+            pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
+        )
+        self.connection_initialized = False
         self.clear_update_lock = threading.Lock()
 
     def create_zmq_client(self, model, mode):

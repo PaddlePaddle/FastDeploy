@@ -136,7 +136,7 @@ class PrefixCacheManager:
             name="cache_task_broadcast_signal",
             array=broadcast_cache_task_flag_array,
             dtype=np.int32,
-            suffix=pid_suffix,
+            suffix=engine_worker_queue_port,
             create=True,
         )
 
@@ -169,7 +169,7 @@ class PrefixCacheManager:
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=pid_suffix,
+            suffix=engine_worker_queue_port,
             create=False,
         )
         swap_space_ready_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
@@ -177,7 +177,15 @@ class PrefixCacheManager:
             name="swap_space_ready_signal",
             array=swap_space_ready_data,
             dtype=np.int32,
-            suffix=pid_suffix,
+            suffix=engine_worker_queue_port,
+            create=False,
+        )
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
             create=False,
         )
 
@@ -237,7 +245,7 @@ class PrefixCacheManager:
             logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result).start()
         if cache_config.enable_prefix_caching:
-            threading.Thread(target=self.clear_prefix_cache, args=(pid_suffix,), daemon=True).start()
+            threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
         return cache_manager_processes
 
@@ -1358,19 +1366,12 @@ class PrefixCacheManager:
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
-    def clear_prefix_cache(self, pid_suffix):
+    def clear_prefix_cache(self):
         """
         If the model weights status is updating or clearing, reset prefix cache tree
         """
         logger.info("Start a thread to clear prefix cache when model weights are cleared.")
-        prefix_tree_status = np.zeros([1], dtype=np.int32)
-        prefix_tree_status_signal = IPCSignal(
-            name="prefix_tree_status",
-            array=prefix_tree_status,
-            dtype=np.int32,
-            suffix=pid_suffix,
-            create=False,
-        )
+        prefix_tree_status_signal = self.prefix_tree_status_signal
         while True:
             if prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARING:
                 self.reset()
