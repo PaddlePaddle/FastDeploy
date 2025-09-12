@@ -143,9 +143,7 @@ class ModelConfig:
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
-        self.ori_vocab_size = self.vocab_size
-        if ErnieArchitectures.contains_ernie_arch(self.architectures):
-            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+        self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
 
         self.is_unified_ckpt = check_unified_ckpt(self.model)
 

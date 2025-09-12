@@ -165,6 +165,7 @@ class LLMEngine:
                 self.cfg.guided_decoding_backend,
                 disable_any_whitespace=self.cfg.disable_any_whitespace,
             )
+        main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
 
     def start(self, api_server_pid=None):
         """

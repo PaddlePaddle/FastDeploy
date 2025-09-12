@@ -16,7 +16,7 @@ python -m pip install -r requirements.txt
 echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 echo "build whl"
 bash build.sh || exit 1
 echo "pip others"
