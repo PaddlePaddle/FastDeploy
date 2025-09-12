@@ -563,7 +563,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
+            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request
