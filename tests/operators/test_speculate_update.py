@@ -124,7 +124,7 @@ def gen_inputs(
     }
 
 
-class TestSpeculateUpdateV3(unittest.TestCase):
+class TestSpeculateUpdate(unittest.TestCase):
     def test_speculate_update(self):
         inputs = gen_inputs(max_bsz=512, max_draft_tokens=32, real_bsz=201)
 
