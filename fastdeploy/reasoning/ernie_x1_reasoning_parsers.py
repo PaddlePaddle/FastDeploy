@@ -49,8 +49,8 @@ class ErnieX1ReasoningParser(ReasoningParser):
             raise RuntimeError("Could not find think end token id in tokenizer vocabulary")
         self.tool_call_start_token_id = self.vocab.get("<tool_call>")
 
-    def is_reasoning_end(self, input_ids: list[int]) -> bool:
-        return self.tool_call_start_token_id in input_ids
+        # State variable to buffer newline until its role is confirmed
+        self._pending_newline = False
 
     def extract_reasoning_content_streaming(
         self,
@@ -62,60 +62,76 @@ class ErnieX1ReasoningParser(ReasoningParser):
         delta_token_ids: Sequence[int],
     ) -> Union[DeltaMessage, None]:
         """
-        根据用户需求实现的流式解析方法:
-        1. 初始内容都视为思考内容，返回delta_text,""
-        2. 当遇到\n时检查后续是否是</think>
-        3. 如果直接遇到</think>也结束思考
-        4. 思考结束后检查是<response>还是<tool_call>
-        5. 对于<response>内容，处理各种边界条件
+        Streaming version of reasoning parser:
+        1. Treat initial content as reasoning, return delta_text as reasoning_content
+        2. If encountering "\n", buffer it until the next token is known
+        3. If the next token is </think>, drop the buffered newline
+        4. After reasoning ends, check whether the following block is <response> or <tool_call>
+        5. For <response> content, handle boundary conditions precisely
         """
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        # 思考阶段处理
-        if not previous_text.endswith(self.think_end_token) and self.think_end_token not in previous_text:
-            # 如果遇到\n，暂时不返回，等待下一个delta_text
+
+        # ----------- Reasoning phase -----------
+        if self.think_end_token not in previous_text:
+            if delta_text.startswith(self.think_end_token):
+                # Drop the buffered newline before </think>
+                self._pending_newline = False
+                return None
+
             if delta_text == "\n":
+                # Buffer newline until the next token confirms its role
+                self._pending_newline = True
                 return None
-            # 如果前一个是\n且当前是</think>，结束思考
-            elif previous_text.endswith("\n") and delta_text.startswith(self.think_end_token):
-                return None
-            # 如果直接遇到</think>也结束思考
-            elif delta_text.startswith(self.think_end_token):
-                return None
-            # 否则继续返回思考内容
+
+            # If there was a pending newline and this is not </think>, emit it
+            if self._pending_newline:
+                self._pending_newline = False
+                return DeltaMessage(reasoning_content="\n" + delta_text)
+
+            # Normal reasoning content
             return DeltaMessage(reasoning_content=delta_text)
 
-        # 思考结束后检查是tool_call还是response
-        remaining_text = previous_text + delta_text
-        after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token) :]
-        after_think = after_think.lstrip("\n")  # 跳过think后的换行
+        # ----------- After reasoning: response/tool_call phase -----------
+        after_think = current_text[current_text.find(self.think_end_token) + len(self.think_end_token):]
+        after_think = after_think.lstrip("\n")
 
-        # 处理tool_call情况
+        # Handle <tool_call>
         if after_think.startswith(self.tool_call_start_token):
+            self._pending_newline = False
             return None
 
-        # 处理response情况
+        # Handle <response>
         if after_think.startswith(self.response_start_token):
-            # 遇到<response>标签时不立即返回
             if delta_text == self.response_start_token:
+                self._pending_newline = False
                 return None
-            # 遇到<response>后的换行符也不立即返回
-            elif delta_text == "\n" and previous_text.endswith(self.response_start_token):
-                return None
-            # 处理回复内容中的换行符
-            if delta_text == "\n":
-                return None
-            # 如果前一个是\n且当前是</response>，结束回复
-            elif previous_text.endswith("\n") and delta_text == self.response_end_token:
-                return None
-            # 如果直接遇到</response>也结束回复
-            elif delta_text == self.response_end_token:
-                return None
-            # 其他情况返回实际内容
-            else:
-                return DeltaMessage(content=delta_text)
 
-        # 默认情况不返回内容
+            if delta_text == "\n" and previous_text.endswith(self.response_start_token):
+                # Drop the first newline immediately after <response>
+                self._pending_newline = False
+                return None
+
+            if delta_text == self.response_end_token:
+                # Drop </response> and any pending newline before it
+                self._pending_newline = False
+                return None
+
+            if delta_text == "\n":
+                # Buffer newline until the next token confirms its role
+                self._pending_newline = True
+                return None
+
+            # If there was a pending newline and this is not </response>, emit it
+            if self._pending_newline:
+                self._pending_newline = False
+                return DeltaMessage(content="\n" + delta_text)
+
+            # Normal response content
+            return DeltaMessage(content=delta_text)
+
+        # Default case: nothing to return
+        self._pending_newline = False
         return None
 
     def extract_reasoning_content(self, model_output: str, request: ChatCompletionRequest) -> Tuple[str, str]:
