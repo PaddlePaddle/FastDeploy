@@ -257,14 +257,14 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
                     paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
-            if self.fd_config.load_config.dynamic_load_weight:
+            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
 
             self.insert_step = False
