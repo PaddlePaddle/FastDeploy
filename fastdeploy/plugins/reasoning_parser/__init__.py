@@ -23,5 +23,5 @@ PLUGINS_GROUP = "fastdeploy.reasoning_parser_plugins"
 def load_reasoning_parser_plugins():
     """load_reasoning_parser_plugins"""
     plugins = load_plugins_by_group(group=PLUGINS_GROUP)
-    assert len(plugins) == 1, "Most one plugin is allowed to be loaded."
+    assert len(plugins) == 1, "Only one plugin is allowed to be loaded."
     return next(iter(plugins.values()))()
