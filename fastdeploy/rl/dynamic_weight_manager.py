@@ -44,6 +44,7 @@ class DynamicWeightManager:
         self.model: nn.Layer = model
         self._capture_model_state()
         self.update_parameters()
+        self.finalize_update()
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
@@ -79,8 +80,6 @@ class DynamicWeightManager:
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
 
-        self._finalize_update(pid)
-
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
@@ -106,7 +105,7 @@ class DynamicWeightManager:
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
-        logger.info("start clear paramaters")
+        logger.info("start clear parameters")
         paddle.device.cuda.empty_cache()
         for param in self.model.state_dict().values():
             param._clear_data()
@@ -143,7 +142,7 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def _finalize_update(self, pid: int):
+    def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
         self._verify_parameters("update")
         if self.parallel_config.tensor_parallel_size > 1:

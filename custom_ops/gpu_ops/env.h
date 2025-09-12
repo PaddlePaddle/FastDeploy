@@ -59,6 +59,15 @@ inline uint32_t get_cascade_attention_num_threads() {
 inline bool get_mla_use_tensorcore() {
     static const char* mla_use_tensorcore_env = std::getenv("FLAGS_mla_use_tensorcore");
     static const uint32_t mla_use_tensorcore =
-            mla_use_tensorcore_env == nullptr ? 1 : std::stoul(std::string(mla_use_tensorcore_env));
+            mla_use_tensorcore_env == nullptr ? 0 : std::stoul(std::string(mla_use_tensorcore_env));
     return mla_use_tensorcore != 0 ? true : false;
+}
+inline int get_mla_dec_chunk_size(int bsz) {
+    static const char* mla_dec_chunk_size_env =
+        std::getenv("FLAGS_mla_dec_chunk_size");
+    static const int mla_dec_chunk_size =
+        mla_dec_chunk_size_env == nullptr
+            ? -1
+            : std::stoi(std::string(mla_dec_chunk_size_env));
+    return bsz > 1 ? mla_dec_chunk_size : 64;
 }
