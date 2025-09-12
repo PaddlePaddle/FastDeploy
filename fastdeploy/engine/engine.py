@@ -159,15 +159,7 @@ class LLMEngine:
             self._stop_profile()
         elif self.cfg.cache_config.enable_prefix_caching:
             device_ids = self.cfg.device_ids.split(",")
-            self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
-                cache_config=self.cfg.cache_config,
-                tensor_parallel_size=self.cfg.tensor_parallel_size,
-                device_ids=device_ids,
-                pod_ip=self.cfg.master_ip,
-                engine_worker_queue_port=self.cfg.engine_worker_queue_port,
-                pid_suffix=self.ipc_signal_suffix,
-                create_cache_tensor=False,
-            )
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, False)
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
