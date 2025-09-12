@@ -241,10 +241,8 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        metadata = request.get("metadata")
-        # 如果metadata包含之前输出的token，将这些token添加到input_ids末尾
-        if metadata and metadata.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, metadata["completion_token_ids"])
+        if request.get("completion_token_ids"):
+            self.append_completion_tokens(outputs, request["completion_token_ids"])
         outputs = self.pack_outputs(outputs)
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])

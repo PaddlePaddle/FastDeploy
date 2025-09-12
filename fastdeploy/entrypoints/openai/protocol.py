@@ -441,6 +441,7 @@ class CompletionRequest(BaseModel):
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
+    completion_token_ids: Optional[List[int]] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -588,6 +589,7 @@ class ChatCompletionRequest(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     max_streaming_response_tokens: Optional[int] = None
     disable_chat_template: Optional[bool] = False
+    completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None):

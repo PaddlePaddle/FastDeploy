@@ -245,15 +245,11 @@ class QwenVLProcessor(TextProcessor):
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        metadata = request.get("metadata")
         # Handle continuation of previous generation by appending existing tokens
-        if metadata and metadata.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, metadata["completion_token_ids"])
+        if request.get("completion_token_ids"):
+            self.append_completion_tokens(outputs, request["completion_token_ids"])
 
         enable_thinking = False
-        if metadata:
-            enable_thinking = metadata.get("enable_thinking", False)
-
         if request.get("chat_template_kwargs"):
             chat_template_kwargs = request.get("chat_template_kwargs")
             enable_thinking = chat_template_kwargs.get("enable_thinking", False)
