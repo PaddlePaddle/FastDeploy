@@ -71,12 +71,14 @@ jobs:
           FD_API_PORT=$((42088 + DEVICE_PORT * 100))
           FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
           FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((42098 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
           echo "FD_API_PORT=${FD_API_PORT}"
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -90,7 +92,7 @@ jobs:
             exit 1
           fi
 
-          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT $FD_CACHE_QUEUE_PORT)
           LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
           echo "==== LOG_FILE is ${LOG_FILE} ===="
 
@@ -123,6 +125,7 @@ jobs:
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
           -v "${MODEL_CACHE_DIR}:/MODELDATA" \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
@@ -144,6 +147,7 @@ jobs:
           --skip install
 
           cd PaddleTest/framework/ServeTest
+          ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
           sleep 3
           curl -X POST http://0.0.0.0:${FLASK_PORT}/start \

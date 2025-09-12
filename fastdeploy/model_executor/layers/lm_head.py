@@ -56,7 +56,7 @@ class ParallelLMHead(nn.Layer):
             embedding_dim (int): size of hidden state.
             prefix (str): The name of current layer. Defaults to "".
             with_bias (bool): whether to have bias. Default: False.
-            dtype (str): The dtype of weight. Defalut: None.
+            dtype (str): The dtype of weight. Default: None.
         """
         super(ParallelLMHead, self).__init__()
         self.weight_key: str = prefix + ".weight"

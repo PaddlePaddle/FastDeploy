@@ -44,7 +44,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -397,7 +397,6 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
@@ -547,8 +546,8 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
+        type=json.loads,
+        default=None,
         help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
@@ -643,6 +642,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -710,10 +712,18 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+        # TODO(YuanRisheng) is_checkpoint_bf16 may need to be removed and replaced by is_quantized in future
+        if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
+            quantization_config["is_checkpoint_bf16"] = True
+
+    elif args.quantization is not None:
         quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
         if load_config.load_choices == "default_v1":
             quantization_config["is_checkpoint_bf16"] = True
@@ -747,6 +757,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+
+    if (
+        args.speculative_config is not None
+        and ("method" in args.speculative_config)
+        and (args.speculative_config["method"] is not None)
+    ):
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if args.splitwise_role != "mixed":
+        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if not current_platform.is_cuda():
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if parallel_config.guided_decoding_backend != "off":
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     fd_config = FDConfig(
         model_config=model_config,

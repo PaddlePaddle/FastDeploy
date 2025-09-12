@@ -25,9 +25,9 @@ Verified platform:
 ```bash
 mkdir Work
 cd Work
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.1
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.0
 docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
-    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.1 \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.0 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
 ```
@@ -37,7 +37,7 @@ docker exec -it fastdeploy-xpu /bin/bash
 ### Install PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 Alternatively, you can install the latest version of PaddlePaddle (Not recommended)
@@ -49,7 +49,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### Install FastDeploy (**Do NOT install via PyPI source**)
 
 ```bash
-python -m pip install fastdeploy-xpu==2.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-xpu==2.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 Alternatively, you can install the latest version of FastDeploy (Not recommended)
@@ -63,7 +63,7 @@ python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/pa
 ### Install PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 Alternatively, you can install the latest version of PaddlePaddle (Not recommended)
@@ -83,20 +83,20 @@ cd FastDeploy
 ### Download Kunlunxin Compilation Dependency
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh stable
+bash custom_ops/xpu_ops/download_dependencies.sh stable
 ```
 
 Alternatively, you can download the latest versions of XTDK and XVLLM (Not recommended)
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+bash custom_ops/xpu_ops/download_dependencies.sh develop
 ```
 
 Set environment variables,
 
 ```bash
-export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 ```
 
 ### Compile and Install.
