@@ -276,13 +276,29 @@ class OpenAIServingCompletion:
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
 
-    async def _echo_back_prompt(self, request, res, idx):
-        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
-            if isinstance(request.prompt, list):
+    def _echo_back_prompt(self, request, idx):
+        """
+        The echo pre-process of the smallest unit
+        """
+        if isinstance(request.prompt, str):
+            prompt_text = request.prompt
+        elif isinstance(request.prompt, list):
+            if all(isinstance(item, str) for item in request.prompt):
                 prompt_text = request.prompt[idx]
+            elif all(isinstance(item, int) for item in request.prompt):
+                prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt)
             else:
-                prompt_text = request.prompt
-            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+                prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt[idx])
+        return prompt_text
+
+    async def _process_echo_logic(self, request, idx, res_outputs):
+        """
+        Process the echo logic and return the modified text.
+        """
+        if request.echo and res_outputs.get("send_idx", -1) == 0:
+            prompt_text = self._echo_back_prompt(request, idx)
+            res_outputs["text"] = prompt_text + (res_outputs["text"] or "")
+        return res_outputs
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
@@ -384,7 +400,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
-                    await self._echo_back_prompt(request, res, idx)
+                    await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -486,7 +502,6 @@ class OpenAIServingCompletion:
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
@@ -497,12 +512,9 @@ class OpenAIServingCompletion:
                 aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
             if request.echo:
-                assert prompt_text is not None
+                prompt_text = self._echo_back_prompt(request, idx)
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
-                if isinstance(prompt_text, list):
-                    output_text = prompt_text[idx] + output["text"]
-                else:
-                    output_text = str(prompt_text) + output["text"]
+                output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
