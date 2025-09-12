@@ -398,7 +398,7 @@ class SpeculativeConfig:
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
-        self.quantization: Optional[str] = None
+        self.quantization: Optional[Dict[str, Any]] = None
         # allocate more blocks to prevent mtp from finishing the block earlier than the main model
         # Fixed now
         self.num_gpu_block_expand_ratio: Optional[float] = 1
@@ -894,7 +894,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
+        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() or current_platform.is_maca() else 2
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None

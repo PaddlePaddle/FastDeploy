@@ -105,7 +105,7 @@ class DynamicWeightManager:
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
-        logger.info("start clear paramaters")
+        logger.info("start clear parameters")
         paddle.device.cuda.empty_cache()
         for param in self.model.state_dict().values():
             param._clear_data()

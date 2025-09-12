@@ -204,8 +204,8 @@ class EngineClient:
             f"preprocess time cost {preprocess_cost_time}"
         )
 
-        self.vaild_parameters(task)
-        api_server_logger.debug(f"Recieve task: {task}")
+        self.valid_parameters(task)
+        api_server_logger.debug(f"Receive task: {task}")
         try:
             if not self.enable_mm:
                 self.zmq_client.send_json(task)
@@ -215,7 +215,7 @@ class EngineClient:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
-    def vaild_parameters(self, data):
+    def valid_parameters(self, data):
         """
         Validate stream options
         """
