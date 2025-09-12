@@ -235,7 +235,7 @@ class EngineClient:
                     f"req_id: {data["request_id"]}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
                 )
             if data["reasoning_max_tokens"] < 1:
-                raise ValueError("reasoning_max_tokens must be greater than 0")
+                raise ValueError("reasoning_max_tokens must be greater than 1")
 
         if data.get("top_p") is not None:
             if data["top_p"] > 1 or data["top_p"] < 0:
