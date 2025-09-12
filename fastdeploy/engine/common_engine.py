@@ -42,9 +42,15 @@ from fastdeploy.inter_communicator import (
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
-from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
+
+try:
+    TokenProcessor = load_token_processor_plugins()
+    llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
+except:
+    from fastdeploy.output.token_processor import TokenProcessor
 
 
 class EngineService:
