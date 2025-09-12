@@ -765,6 +765,8 @@ def parse_quantization(value: str):
     try:
         return json.loads(value)
     except ValueError:
+        if value.lower() == "none":
+            return None
         return {"quantization": value}
 
 
