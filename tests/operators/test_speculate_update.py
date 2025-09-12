@@ -20,7 +20,7 @@ import paddle
 from fastdeploy.model_executor.ops.gpu import speculate_update
 
 
-def speculate_update_v3_np(
+def speculate_update_np(
     seq_lens_encoder,
     seq_lens_decoder,
     not_need_stop,
@@ -125,7 +125,7 @@ def gen_inputs(
 
 
 class TestSpeculateUpdateV3(unittest.TestCase):
-    def test_speculate_update_v3(self):
+    def test_speculate_update(self):
         inputs = gen_inputs(max_bsz=512, max_draft_tokens=32, real_bsz=201)
 
         paddle_inputs = {}
@@ -147,7 +147,7 @@ class TestSpeculateUpdateV3(unittest.TestCase):
             paddle_inputs["actual_draft_token_nums"],
         )
 
-        out_np = speculate_update_v3_np(**np_inputs)
+        out_np = speculate_update_np(**np_inputs)
 
         names = [
             "seq_lens_encoder",
