@@ -90,7 +90,11 @@ class TestCollectEnv(unittest.TestCase):
         with patch("fastdeploy.collect_env.TORCH_AVAILABLE", False):
             result = collect_env.get_gpu_info(self.run_lambda)
             self.assertIsNotNone(result)
-        with patch("fastdeploy.collect_env.get_platform", return_value="darwin"):
+        with (
+            patch("fastdeploy.collect_env.get_platform", return_value="darwin"),
+            patch("fastdeploy.collect_env.TORCH_AVAILABLE", True),
+            patch("fastdeploy.collect_env.torch", create=True),
+        ):
             result = collect_env.get_gpu_info(self.run_lambda)
             self.assertIsNotNone(result)
 
@@ -360,7 +364,7 @@ class TestCollectEnv(unittest.TestCase):
             self.assertNotIn("torch", packages)
 
     def test_xnnpack_available_with_torch(self):
-        with patch("fastdeploy.collect_env.TORCH_AVAILABLE", True):
+        with patch("fastdeploy.collect_env.TORCH_AVAILABLE", True), patch("fastdeploy.collect_env.torch", create=True):
             result = collect_env.is_xnnpack_available()
             self.assertIsNotNone(result)
 
@@ -395,7 +399,7 @@ class TestCollectEnv(unittest.TestCase):
                 self.assertNotIn("MY_API_KEY", env_vars_string)
 
     def test_get_cuda_config_with_both_vars_set(self):
-        with patch("fastdeploy.collect_env.TORCH_AVAILABLE", True), patch("torch.cuda"):
+        with patch("fastdeploy.collect_env.TORCH_AVAILABLE", True), patch("fastdeploy.collect_env.torch", create=True):
             mock_env = {
                 "CUDA_MODULE_LOADING": "xxx",
             }
@@ -432,6 +436,7 @@ class TestCollectEnv(unittest.TestCase):
             patch("fastdeploy.collect_env.get_pip_packages", return_value=("pip3", "requests==2.27.1\nscipy==1.8.0")),
             patch("fastdeploy.collect_env.get_env_vars", return_value="CUDA_VISIBLE_DEVICES=0"),
             patch("fastdeploy.collect_env.get_gpu_topo", return_value="GPU-Direct disabled"),
+            patch("fastdeploy.collect_env.torch", create=True, __version__="1.0.0"),
         ):
 
             info_string = collect_env.get_env_info()
@@ -441,7 +446,6 @@ class TestCollectEnv(unittest.TestCase):
     def test_get_env_info_all_na(self):
 
         with (
-            patch("fastdeploy.collect_env.get_os", return_value="N/A"),
             patch("fastdeploy.collect_env.get_python_platform", return_value="N/A"),
             patch("fastdeploy.collect_env.get_cuda_module_loading_config", return_value="N/A"),
             patch("fastdeploy.collect_env.get_libc_version", return_value="N/A"),
@@ -461,6 +465,7 @@ class TestCollectEnv(unittest.TestCase):
             patch("fastdeploy.collect_env.get_gpu_topo", return_value="N/A"),
             patch("fastdeploy.collect_env.TORCH_AVAILABLE", return_value=False),
             patch("fastdeploy.collect_env.PADDLE_AVAILABLE", return_value=False),
+            patch("fastdeploy.collect_env.torch", create=True, __version__="1.0.0"),
         ):
 
             info_string = collect_env.get_env_info()
@@ -469,7 +474,10 @@ class TestCollectEnv(unittest.TestCase):
 
     def test_main_with_collect(self):
         captured_output = io.StringIO()
-        with patch("sys.stdout", new=captured_output):
+        with (
+            patch("sys.stdout", new=captured_output),
+            patch("fastdeploy.collect_env.torch", create=True, __version__="1.0.0"),
+        ):
             collect_env.main()
         output = captured_output.getvalue()
         expected_message = "Collecting environment information"
