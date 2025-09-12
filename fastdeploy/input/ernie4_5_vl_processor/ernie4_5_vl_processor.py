@@ -243,8 +243,8 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         metadata = request.get("metadata")
         # 如果metadata包含之前输出的token，将这些token添加到input_ids末尾
-        if metadata and metadata.get("generated_token_ids"):
-            self.append_generated_tokens(outputs, metadata["generated_token_ids"])
+        if metadata and metadata.get("completion_token_ids"):
+            self.append_generated_tokens(outputs, metadata["completion_token_ids"])
         outputs = self.pack_outputs(outputs)
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
@@ -259,11 +259,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         return request
 
-    def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
+    def append_generated_tokens(self, multimodal_inputs, completion_token_ids):
         "append already generated tokens"
 
-        num_tokens = len(generated_token_ids)
-        multimodal_inputs["input_ids"].extend(generated_token_ids)
+        num_tokens = len(completion_token_ids)
+        multimodal_inputs["input_ids"].extend(completion_token_ids)
         multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
 
         start = multimodal_inputs["cur_position"]

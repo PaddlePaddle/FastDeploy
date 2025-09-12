@@ -247,8 +247,8 @@ class QwenVLProcessor(TextProcessor):
 
         metadata = request.get("metadata")
         # Handle continuation of previous generation by appending existing tokens
-        if metadata and metadata.get("generated_token_ids"):
-            self.append_generated_tokens(outputs, metadata["generated_token_ids"])
+        if metadata and metadata.get("completion_token_ids"):
+            self.append_generated_tokens(outputs, metadata["completion_token_ids"])
 
         enable_thinking = False
         if metadata:
@@ -278,16 +278,16 @@ class QwenVLProcessor(TextProcessor):
 
         return request
 
-    def append_generated_tokens(self, outputs, generated_token_ids):
+    def append_generated_tokens(self, outputs, completion_token_ids):
         """
         Append generated tokens to existing outputs.
 
         Args:
             outputs: Current model outputs
-            generated_token_ids: Generated tokens to append
+            completion_token_ids: Generated tokens to append
         """
         out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
-        self.processor._add_text(generated_token_ids, out)
+        self.processor._add_text(completion_token_ids, out)
 
         outputs["input_ids"] = np.concatenate(
             [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
