@@ -19,22 +19,23 @@ The minimum number of GPUs required to deploy `ERNIE-4.5-0.3B` on the following 
 ### 1.2 Install fastdeploy
 - Installation: For detail, please refer to [Fastdeploy Installation](../get_started/installation/README.md).
 
-- Model Download，For detail, please refer to [Supported Models](../supported_models.md). **Please note that models with Paddle suffix need to be used for Fastdeploy**：
+- Model Download，For detail, please refer to [Supported Models](../supported_models.md).
 
 ## 2.How to Use
 ### 2.1 Basic: Launching the Service
 Start the service by following command:
 ```bash
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-0.3B-Paddle \
        --tensor-parallel-size 1 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --max-num-seqs 128
+       --max-num-seqs 128 \
+       --load_choices "default_v1"
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
 - `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
+- `--load_choices`: indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
 
 For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。
 
@@ -42,17 +43,14 @@ For more parameter meanings and default settings, see [FastDeploy Parameter Docu
 #### 2.2.1 Correctly set parameters that match the application scenario
 Evaluate average input length, average output length, and maximum context length
 - Set max-model-len according to the maximum context length. For example, if the average input length is 1000 and the output length is 30000, then it is recommended to set it to 32768
-- **Enable the service management global block**
-
-```
-export ENABLE_V1_KVCACHE_SCHEDULER=1
-```
 
 #### 2.2.2 Prefix Caching
 **Idea:** The core idea of Prefix Caching is to avoid repeated calculations by caching the intermediate calculation results of the input sequence (KV Cache), thereby speeding up the response speed of multiple requests with the same prefix. For details, refer to [prefix-cache](../features/prefix_caching.md)
 
 **How to enable:**
-Add the following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine.
+Since version 2.2 (including the develop branch), Prefix Caching has been enabled by default.
+
+For versions 2.1 and earlier, you need to enable it manually by adding following lines to the startup parameters, where `--enable-prefix-caching` enables prefix caching, and `--swap-space` enables CPU cache in addition to GPU cache. The size is GB and should be adjusted according to the actual situation of the machine. The recommended value is `(total machine memory - model size) * 20%`. If the service fails to start because other programs are occupying memory, try reducing the `--swap-space` value.
 ```
 --enable-prefix-caching
 --swap-space 50
@@ -61,7 +59,10 @@ Add the following lines to the startup parameters, where `--enable-prefix-cachin
 #### 2.2.3 Chunked Prefill
 **Idea:** This strategy is adopted to split the prefill stage request into small-scale sub-chunks, and execute them in batches mixed with the decode request. This can better balance the computation-intensive (Prefill) and memory-intensive (Decode) operations, optimize GPU resource utilization, reduce the computational workload and memory usage of a single Prefill, thereby reducing the peak memory usage and avoiding the problem of insufficient memory. For details, please refer to [Chunked Prefill](../features/chunked_prefill.md)
 
-**How to enable:** Add the following lines to the startup parameters
+**How to enable:**
+Since version 2.2 (including the develop branch), Chunked Prefill has been enabled by default.
+
+For versions 2.1 and earlier, you need to enable it manually by adding
 ```
 --enable-chunked-prefill
 ```
@@ -79,7 +80,7 @@ Notes:
 
 - Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
-#### 2.2.6 Rejection Sampling
+#### 2.2.5 Rejection Sampling
 **Idea:**
 Rejection sampling is to generate samples from a proposal distribution that is easy to sample, avoiding explicit sorting to increase the sampling speed, which has a significant improvement on small-sized models.
 

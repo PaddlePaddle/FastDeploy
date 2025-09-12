@@ -75,6 +75,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
 #### 前置依赖 Redis
 * 使用`conda`安装
 
+> **⚠️ 注意**  
+> **Redis 版本要求：6.2.0 及以上**  
+> 低于此版本可能不支持所需的命令。
+
 ```bash
 # 安装
 conda install redis
@@ -106,13 +110,17 @@ sudo systemctl start redis
 
 **注意**：
 * `KVCACHE_RDMA_NICS` 指定当前机器的RDMA网卡，多个网卡用逗号隔开。
+* 仓库中提供了自动检测RDMA网卡的脚本 `bash scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
 
 **prefill 实例**
 
 ```bash
+
 export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4.5-300B-A47B-BF16 \
        --port 8180 --metrics-port 8181 \
@@ -127,6 +135,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-name "splitwise" \
        --scheduler-host "127.0.0.1" \
        --scheduler-port 6379 \
+       --scheduler-topic "test" \
        --scheduler-ttl 9000
 ```
 
@@ -135,7 +144,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4.5-300B-A47B-BF16 \
        --port 8184 --metrics-port 8185 \
@@ -150,6 +161,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-host "127.0.0.1" \
        --scheduler-port 6379 \
        --scheduler-ttl 9000
+       --scheduler-topic "test" \
        --splitwise-role "decode"
 ```
 
@@ -168,5 +180,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 * --scheduler-host: 连接的redis地址
 * --scheduler-port: 连接的redis端口
 * --scheduler-ttl: 指定redis的ttl时间，单位为秒
+* --scheduler-topic: 指定redis的topic
 * --pd-comm-port: 指定pd通信的端口
 * --rdma-comm-ports: 指定RDMA通信的端口，多个端口用逗号隔开，数量与卡数一致

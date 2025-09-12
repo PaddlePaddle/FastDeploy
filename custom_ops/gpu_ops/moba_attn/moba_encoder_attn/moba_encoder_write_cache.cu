@@ -40,7 +40,7 @@ __global__ void write_encoder_cachekv_c16(
 
     if (seq_len == 0) return;
 
-    const int ramian_tokens = seq_len - block_idx;
+    const int remain_tokens = seq_len - block_idx;
 
     const int32_t *block_table_now = block_tables + bidb * max_blocks_per_seq;
     const uint32_t physical_block_number = block_table_now[blockIdx.x + seq_len_decoder[bidb] / kBlockSize];
@@ -51,7 +51,7 @@ __global__ void write_encoder_cachekv_c16(
 
         #pragma unroll
         for (int i = row_idx; i < kBlockSize; i += 128 / (kHeadDim / kPackSize)) {
-            if (i < ramian_tokens) {
+            if (i < remain_tokens) {
                 *reinterpret_cast<float4*>(cache + i * kHeadDim) = *reinterpret_cast<const float4*>(k_input + base_load_idx + i * kv_head_num * kHeadDim);
             }
         }
@@ -62,7 +62,7 @@ __global__ void write_encoder_cachekv_c16(
 
         #pragma unroll
         for (int i = row_idx; i < kBlockSize; i += 128 / (kHeadDim / kPackSize)) {
-            if (i < ramian_tokens) {
+            if (i < remain_tokens) {
                 *reinterpret_cast<float4*>(cache + i * kHeadDim) = *reinterpret_cast<const float4*>(v_input + base_load_idx + i * kv_head_num * kHeadDim);
             }
         }

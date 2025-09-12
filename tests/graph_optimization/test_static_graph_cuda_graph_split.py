@@ -90,7 +90,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
         parallel_config = ParallelConfig({"max_num_seqs": 1})
         graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_capture_size=parallel_config.max_num_seqs)
         cache_config = CacheConfig({})
 
         fd_config = FDConfig(

@@ -19,6 +19,7 @@ metrics
 """
 import os
 import shutil
+import uuid
 from typing import Set
 
 from prometheus_client import (
@@ -35,24 +36,20 @@ from fastdeploy.metrics import build_1_2_5_buckets
 from fastdeploy.metrics.work_metrics import work_process_metrics
 
 
-def cleanup_prometheus_files(is_main):
+def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
     """
     Cleans and recreates the Prometheus multiprocess directory.
-
-    Depending on whether it's the main process or a worker, this function removes the corresponding
-    Prometheus multiprocess directory (/tmp/prom_main or /tmp/prom_worker) and recreates it as an empty directory.
-
-    Args:
-        is_main (bool): Indicates whether the current process is the main process.
-
-    Returns:
-        str: The path to the newly created Prometheus multiprocess directory.
     """
-    PROM_DIR = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
-    if os.path.exists(PROM_DIR):
-        shutil.rmtree(PROM_DIR)
-    os.makedirs(PROM_DIR, exist_ok=True)
-    return PROM_DIR
+    base_dir = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
+    if instance_id is None:
+        instance_id = str(uuid.uuid4())
+    prom_dir = f"{base_dir}_{instance_id}"
+
+    if os.path.exists(prom_dir):
+        shutil.rmtree(prom_dir, ignore_errors=True)
+    os.makedirs(prom_dir, exist_ok=True)
+
+    return prom_dir
 
 
 class SimpleCollector(Collector):
@@ -169,7 +166,12 @@ class MetricsManager:
     send_cache_failed_num: "Counter"
     first_token_latency: "Gauge"
     infer_latency: "Gauge"
-
+    cache_config_info: "Gauge"
+    available_batch_size: "Gauge"
+    hit_req_rate: "Gauge"
+    hit_token_rate: "Gauge"
+    cpu_hit_token_rate: "Gauge"
+    gpu_hit_token_rate: "Gauge"
     # 定义所有指标配置
     METRICS = {
         "num_requests_running": {
@@ -359,6 +361,36 @@ class MetricsManager:
             "description": "Latest time to generate one token in seconds",
             "kwargs": {},
         },
+        "available_batch_size": {
+            "type": Gauge,
+            "name": "fastdeploy:available_batch_size",
+            "description": "Number of requests that can still be inserted during the Decode phase",
+            "kwargs": {},
+        },
+        "hit_req_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:hit_req_rate",
+            "description": "Request-level prefix cache hit rate",
+            "kwargs": {},
+        },
+        "hit_token_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:hit_token_rate",
+            "description": "Token-level prefix cache hit rate",
+            "kwargs": {},
+        },
+        "cpu_hit_token_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:cpu_hit_token_rate",
+            "description": "Token-level CPU prefix cache hit rate",
+            "kwargs": {},
+        },
+        "gpu_hit_token_rate": {
+            "type": Gauge,
+            "name": "fastdeploy:gpu_hit_token_rate",
+            "description": "Token-level GPU prefix cache hit rate",
+            "kwargs": {},
+        },
     }
     SPECULATIVE_METRICS = {}
 
@@ -434,6 +466,26 @@ class MetricsManager:
                     ),
                 )
 
+    def set_cache_config_info(self, obj) -> None:
+        if hasattr(self, "cache_config_info") and isinstance(self.cache_config_info, Gauge):
+            metrics_info = obj.metrics_info()
+            if metrics_info:
+                self.cache_config_info.labels(**metrics_info).set(1)
+            return
+
+        metrics_info = obj.metrics_info()
+        if not metrics_info:
+            return
+
+        self.cache_config_info = Gauge(
+            name="fastdeploy:cache_config_info",
+            documentation="Information of the engine's CacheConfig",
+            labelnames=list(metrics_info.keys()),
+            multiprocess_mode="mostrecent",
+        )
+
+        self.cache_config_info.labels(**metrics_info).set(1)
+
     def register_speculative_metrics(self, registry: CollectorRegistry):
         """Register all speculative metrics to the specified registry"""
         for metric_name in self.SPECULATIVE_METRICS:
@@ -447,6 +499,8 @@ class MetricsManager:
         """Register all metrics to the specified registry"""
         for metric_name in self.METRICS:
             registry.register(getattr(self, metric_name))
+        if self.cache_config_info is not None:
+            registry.register(self.cache_config_info)
         if workers == 1:
             registry.register(work_process_metrics.e2e_request_latency)
             registry.register(work_process_metrics.request_params_max_tokens)
