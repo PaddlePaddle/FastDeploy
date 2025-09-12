@@ -146,7 +146,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
         return "Ernie4_5_MoeForCausalLMRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
-        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        """Generate mapping between inference and training parameter for RL(do not delete!)."""
         if self._mappings_built:
             return self.infer_to_train_mapping
 
@@ -225,7 +225,7 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
         return "Ernie4_5_VLMoeForConditionalGenerationRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
-        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        """Generate mapping between inference and training parameter for RL(do not delete!)."""
         if self._mappings_built:
             return self.infer_to_train_mapping
 
@@ -331,7 +331,7 @@ class Qwen2ForCausalLMRL(Qwen2ForCausalLM, BaseRLModel):
         return "Qwen2ForCausalLMRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
-        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        """Generate mapping between inference and training parameter for RL(do not delete!)."""
         if self._mappings_built:
             return self.infer_to_train_mapping
 
@@ -380,7 +380,7 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
         return "Qwen3MoeForCausalLMRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
-        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        """Generate mapping between inference and training parameter for RL(do not delete!)."""
         if self._mappings_built:
             return self.infer_to_train_mapping
 

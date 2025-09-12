@@ -45,6 +45,7 @@ class WeightOnlyConfig(QuantConfigBase):
     def __init__(
         self,
         algo: str,
+        is_checkpoint_bf16: bool = False,
     ) -> None:
         super().__init__()
         self.algo = algo
@@ -56,6 +57,7 @@ class WeightOnlyConfig(QuantConfigBase):
         self.quant_max_bound = 0
         self.quant_min_bound = 0
         self.quant_round_type = 0
+        self.is_checkpoint_bf16 = is_checkpoint_bf16
 
     def name(self) -> str:
         return "weight_only"
@@ -63,7 +65,8 @@ class WeightOnlyConfig(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "WeightOnlyConfig":
         algo = config["algo"]
-        return cls(algo)
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(algo, is_checkpoint_bf16)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
@@ -154,12 +157,13 @@ class WINT8Config(WeightOnlyConfig):
     weight only int8 config
     """
 
-    def __init__(self) -> None:
-        super().__init__("weight_only_int8")
+    def __init__(self, is_checkpoint_bf16: bool = False) -> None:
+        super().__init__("weight_only_int8", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT8Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint8"
@@ -172,12 +176,14 @@ class WINT4Config(WeightOnlyConfig):
 
     def __init__(
         self,
+        is_checkpoint_bf16: bool = False,
     ) -> None:
-        super().__init__("weight_only_int4")
+        super().__init__("weight_only_int4", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT4Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint4"
@@ -196,7 +202,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        if self.quant_config.is_checkpoint_bf16:
             layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
@@ -220,12 +226,19 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 quant_attrs,
             )
         else:
-            # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-            weight_scale_shape = [layer.weight_shape[1]]
-            layer.weight_shape.reverse()
-            if self.quant_config.name() == "wint4":
-                layer.weight_shape[0] //= 2
-            layer.weight_dtype = "int8"
+            if isinstance(self, MacheteWeightOnlyLinearMethod):
+                weight_scale_shape = [1, layer.weight_shape[1]]
+                if self.quant_config.name() == "wint4":
+                    layer.weight_shape[0] //= 8
+                layer.weight_dtype = "int32"
+            else:
+                # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
+                weight_scale_shape = [layer.weight_shape[1]]
+                layer.weight_shape.reverse()
+                if self.quant_config.name() == "wint4":
+                    layer.weight_shape[0] //= 2
+                layer.weight_dtype = "int8"
+
             layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
@@ -259,19 +272,30 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             )
 
     def process_weights_after_loading(self, layer) -> None:
-        if not layer.fd_config.load_config.load_choices == "default_v1":
+        if not self.quant_config.is_checkpoint_bf16:
             return
-        quanted_weight_tensor, weight_scale_tensor = weight_quantize(
-            layer.weight,
-            algo=self.quant_config.algo,
-            arch=self.quant_config.weight_only_linear_arch,
-        )
+        if isinstance(self, MacheteWeightOnlyLinearMethod):
+            from fastdeploy.model_executor.layers.quantization.ops import (
+                machete_quantize_and_pack,
+            )
+
+            quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
+                w=layer.weight,
+                atype=layer._dtype,
+                quant_type="uint4b8",
+            )
+        else:
+            quanted_weight_tensor, weight_scale_tensor = weight_quantize(
+                layer.weight,
+                algo=self.quant_config.algo,
+                arch=self.quant_config.weight_only_linear_arch,
+            )
 
         free_tensor(layer.weight)
 
         layer.weight = layer.create_parameter(
             shape=quanted_weight_tensor.shape,
-            dtype="int8",
+            dtype="int8" if not isinstance(self, MacheteWeightOnlyLinearMethod) else "int32",
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
@@ -362,32 +386,6 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
     ) -> None:
         super().__init__(quant_config)
 
-    def create_weights(self, layer, **extra_weight_attrs):
-
-        assert layer.bias is None, "Machete weight only linear method does not support bias."
-        assert self.quant_config.name() == "wint4", "Machete weight only linear method only supports wint4."
-
-        # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        weight_scale_shape = [1, layer.weight_shape[1]]
-
-        # layer.weight_shape.reverse()
-        if self.quant_config.name() == "wint4":
-            layer.weight_shape[0] //= 8
-        layer.weight_dtype = "int32"
-
-        layer.weight = layer.create_parameter(
-            shape=layer.weight_shape,
-            dtype=layer.weight_dtype,
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-
-        layer.weight_scale = layer.create_parameter(
-            shape=weight_scale_shape,
-            dtype=layer._dtype,
-            is_bias=False,
-        )
-
     def process_prequanted_weights(self, layer, state_dict) -> None:
         pass
 
@@ -406,7 +404,6 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
 
     def apply(self, layer, x):
         assert layer.bias is None, "Machete weight only linear method does not support bias."
-        assert self.quant_config.name() == "wint4", "Machete weight only linear method only supports wint4."
         from fastdeploy.model_executor.layers.quantization.ops import machete_wint_mm
 
         linear_out = machete_wint_mm(

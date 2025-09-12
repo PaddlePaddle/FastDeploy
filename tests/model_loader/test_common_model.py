@@ -56,7 +56,11 @@ model_param_map = {
                 "backend": "triton",
                 "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
-            {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
+            {
+                "quant_type": "block_wise_fp8",
+                "backend": "deepgemm",
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17", "FD_USE_DEEP_GEMM": "1"},
+            },
         ],
     },
     "DeepSeek-V3-0324": {
@@ -68,6 +72,7 @@ model_param_map = {
                     "FD_ATTENTION_BACKEND": "MLA_ATTN",
                     "FLAGS_mla_use_tensorcore": "1",
                     "FLAGS_flash_attn_version": "3",
+                    "FD_USE_MACHETE": "1",
                 },
             },
         ],
