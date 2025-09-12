@@ -151,7 +151,7 @@ for model, cfg in model_param_map.items():
     "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
     params,
 )
-def test_common_model(
+def test_offline_model(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
