@@ -79,6 +79,8 @@ class InputPreprocessor:
 
                 custom_reasoning_parser = load_reasoning_parser_plugins()
                 reasoning_parser_obj = custom_reasoning_parser
+            else:
+                raise
         except:
             if self.reasoning_parser:
                 reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
