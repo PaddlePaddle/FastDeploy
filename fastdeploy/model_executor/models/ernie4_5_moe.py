@@ -339,9 +339,6 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         # 为了计算attn！
         forward_meta.attn_backend.attention_metadata = metadata
 
-        # forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
-        # forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
-
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
@@ -457,17 +454,15 @@ class Ernie4_5_Model(nn.Layer):
         all_hidden_states = [None] * split_num
         forward_metas = [None] * split_num
         all_residual = [None] * split_num
-        bs = self.fd_config.parallel_config.max_num_seqs
+        max_bs = self.fd_config.parallel_config.max_num_seqs
 
-        mc_bs = (bs + split_num - 1) // split_num
+        mc_bs = (max_bs + split_num - 1) // split_num
 
         if IsH20:
 
             hidden_states = None
             residual = None
-            if ids_remove_padding.shape[0] == 0:
-                pass
-            else:
+            if ids_remove_padding.shape[0] > 0:
                 hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
                 residual = None
                 for i in range(3):
@@ -479,7 +474,7 @@ class Ernie4_5_Model(nn.Layer):
                 
                 start_bs = i * mc_bs
                 end_bs = start_bs + mc_bs
-                end_bs = min(end_bs, bs)
+                end_bs = min(end_bs, max_bs)
 
                 start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
                 end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
@@ -487,7 +482,8 @@ class Ernie4_5_Model(nn.Layer):
                 if end_token_id == start_token_id:
                     # 这个microbatch是空的，不需要处理!!
                     continue
-
+                
+                # 注意啦！这里+0是为了返回一个新的tensor哦！
                 forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs] + 0
                 forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs] + 0
                 forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs] + 0
@@ -495,7 +491,8 @@ class Ernie4_5_Model(nn.Layer):
                 forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
                 forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
                 forward_meta_copy.cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs:end_bs+1] - start_token_id
-
+                
+                # 这里千万不能加0 哦！
                 forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
 
                 forward_meta_copy.decoder_batch_ids = forward_meta.decoder_batch_ids + 0
@@ -521,12 +518,14 @@ class Ernie4_5_Model(nn.Layer):
 
             print("decoder_bs", decoder_bs)
 
-            can_replay_graph = (self.cuda_graph is not None and decoder_bs > (bs * 2 // 3))
+            can_replay_graph = (self.cuda_graph is not None and decoder_bs > (max_bs * 2 // 3))
             
             # 利用最大size来捕获图
-            need_capature_graph = (self.cuda_graph is None and decoder_bs == bs)
-
-        print("can_replay_graph", can_replay_graph)
+            need_capature_graph = (self.cuda_graph is None and decoder_bs == max_bs)
+            
+            print("can_replay_graph", can_replay_graph)
+        if need_capature_graph:
+            print("need_capature_graph", need_capature_graph)
 
         IsH20 = self.fd_config.parallel_config.is_H20
         IsH100 = self.fd_config.parallel_config.is_H100
@@ -595,7 +594,7 @@ class Ernie4_5_Model(nn.Layer):
             # 下面俩是动态变化的，每层的时候是会变化的哦！
             attention_in_out[j].hidden_states = all_hidden_states[j]
             attention_in_out[j].residual = all_residual[j]
-            
+
         if IsH20:
             if need_capature_graph:
                 self.cached_attention_in_out = attention_in_out
@@ -605,7 +604,7 @@ class Ernie4_5_Model(nn.Layer):
             
             elif can_replay_graph:
 
-                # 需要把新产生的地址赋予给老的 cached 变量!
+                # 需要把新产生的tensor 数据 拷贝到老的 cached tensor数据!
                 for i in range(split_num):
                     self.cached_hidden_input[i].copy_(attention_in_out[i].hidden_states, False)
                     self.cached_residual_input[i].copy_(attention_in_out[i].residual, False)
@@ -762,16 +761,20 @@ class Ernie4_5_Model(nn.Layer):
                 a = dispatch_events[j].pop()
                 # a.current_stream_wait()
                 tmp = recv_hooks[j].pop()()
-                tmp.current_stream_wait()
+                recv_hooks[j].append(tmp)
+                #tmp.current_stream_wait()
                 
 
-            def combine_wait(j):
+            def combine_wait(j, is_wait=False):
                 #print(f"combine_wait({j})")
                 a = combine_events[j].pop()
                 # a.current_stream_wait()
                 
                 tmp = send_hooks[j].pop()()
-                #tmp.current_stream_wait()
+                if is_wait:
+                    # 这个是为了让通信流回归到主流而采取的措施！
+                    # 只是为了适配cuda graph！
+                    tmp.current_stream_wait()
 
             def dispatch_receive(i):
                 #print(f"dispatch_receive({i})")
@@ -813,40 +816,62 @@ class Ernie4_5_Model(nn.Layer):
                 send_hooks[i].appendleft(e2a_isend_hook)
                 combine_events[i].appendleft(event)
 
-            dispatch_receive(0)
-            dispatch_wait(0)
-            zkk_barrier()
-            haha = 9
-            compute_moe(haha//3,0)
+            def main_code():
+                
+                # 这个必须要，是为了适配cuda graph
+                common_stream = runner.buffer.all2all_buffer.runtime.get_comm_stream()
+
+                dispatch_receive(0)
+                dispatch_wait(0)
+                zkk_barrier()
+                haha = 9
+                tmp = recv_hooks[0].pop()
+                tmp.current_stream_wait()
+                compute_moe(haha//3,0)
+                
+                dispatch_receive(1)
+                dispatch_wait(1)
+
+                for layer_id in range(3, self.num_layers):
+                    tmp_split_num = range(split_num)
+                    if layer_id == 3:
+                        tmp_split_num = [1, 2]
+                    if layer_id == self.num_layers - 1:
+                        tmp_split_num = [0, 1]
+                    for j in tmp_split_num:
+                        
+                        # 上一个batch
+                        combine_send((j-1+split_num)%split_num)
+                        combine_wait((j-1+split_num)%split_num)
+
+                        haha += 1
+                        tmp = recv_hooks[j].pop()
+                        tmp.current_stream_wait()
+                        compute_moe(haha//3,j)
+
+                        # 下一个batch
+                        dispatch_receive((j+1)%split_num)
+                        dispatch_wait((j+1)%split_num)
+                
+                haha += 1
+                tmp = recv_hooks[2].pop()
+                tmp.current_stream_wait()
+                compute_moe(haha//3,2)
+                combine_send(1)
+                combine_wait(1)
+                combine_send(2)
+                combine_wait(2, True)
             
-            dispatch_receive(1)
-            dispatch_wait(1)
 
-            for layer_id in range(3, self.num_layers):
-                tmp_split_num = range(split_num)
-                if layer_id == 3:
-                    tmp_split_num = [1, 2]
-                if layer_id == self.num_layers - 1:
-                    tmp_split_num = [0, 1]
-                for j in tmp_split_num:
-                    
-                    # 上一个batch
-                    combine_send((j-1+split_num)%split_num)
-                    combine_wait((j-1+split_num)%split_num)
-
-                    haha += 1
-                    compute_moe(haha//3,j)
-
-                    # 下一个batch
-                    dispatch_receive((j+1)%split_num)
-                    dispatch_wait((j+1)%split_num)
-            
-            haha += 1
-            compute_moe(haha//3,2)
-            combine_send(1)
-            combine_wait(1)
-            combine_send(2)
-            combine_wait(2)
+            if self.cuda_graph is None:
+                self.cuda_graph = graphs.CUDAGraph()
+                self.cuda_graph.capture_begin()
+                main_code()
+                self.cuda_graph.capture_end()
+                self.cuda_graph.replay()
+                self.dispatch_allocated_memory = dispatch_allocated_memory
+            else:
+                self.cuda_graph.replay()
 
         paddle.distributed.barrier()
 
@@ -916,7 +941,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
-        self.ii = 10
+        self.ii = 3000
 
     @classmethod
     def name(self):
@@ -966,17 +991,18 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     ):  
         self.ii += 1
         
-        if self.ii == 1:
+        if self.ii == 300:
             from paddle.framework import core
             core.nvprof_start()
         
         # if ids_remove_padding is not None:
         #     print(ids_remove_padding.shape)
         #     print(forward_meta.seq_lens_decoder)
-        
+        #     print(forward_meta.seq_lens_this_time)
+
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
-        if self.ii == 5:
+        if self.ii == 310:
             from paddle.framework import core
             core.nvprof_stop()
 
