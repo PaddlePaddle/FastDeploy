@@ -170,3 +170,41 @@ class MoEMethodBase(QuantMethodBase):
                 return self.apply_ep_decode(layer, x, gate_out)
         else:
             return self.apply_tp(layer, x, gate_out)
+
+    def apply_stage0(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate_out: paddle.Tensor,
+    ):
+        return self.apply_ep_prefill_stage0(layer, x, gate_out)
+
+    def apply_stage1(
+        self,
+        x,
+        topk_idx,
+        topk_weights,
+        x_scale_tensor,
+    ):
+        return self.apply_ep_prefill_stage1(x, topk_idx, topk_weights, x_scale_tensor)
+
+    def apply_stage2(
+        self,
+        layer: nn.Layer,
+        recv_x: paddle.Tensor,
+        recv_topk_idx: paddle.Tensor,
+        recv_topk_weights: paddle.Tensor,
+        recv_num_tokens_per_expert_list: paddle.Tensor,
+        event,
+    ):
+        return self.apply_ep_prefill_stage2(
+            layer, recv_x, recv_topk_idx, recv_topk_weights, recv_num_tokens_per_expert_list, event
+        )
+
+    def apply_stage3(
+        self,
+        tmp_ffn_out: paddle.Tensor,
+        handle: paddle.Tensor,
+        recv_topk_weights: paddle.Tensor,
+    ):
+        return self.apply_ep_prefill_stage3(tmp_ffn_out, handle, recv_topk_weights)

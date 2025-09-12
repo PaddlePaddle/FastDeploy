@@ -267,6 +267,7 @@ class EPRunner:
             ep_rank=ep_rank,
             splitwise_role=splitwise_role,
             moe_phase=moe_phase,
+            async_finish=False,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
@@ -391,6 +392,9 @@ class EPPrefillRunner(EPRunner):
         fused_moe_out, _, _ = self.ep_engine.prefill_deepep_engine.combine(**combine_args)
 
         return fused_moe_out
+
+    def get_comm_stream(self):
+        return self.ep_engine.prefill_deepep_engine.runtime.get_comm_stream()
 
 
 class EPDecoderRunner(EPRunner):
