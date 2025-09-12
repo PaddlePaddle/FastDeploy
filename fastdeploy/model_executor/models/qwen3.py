@@ -154,6 +154,7 @@ class Qwen3Model(nn.Layer):
 
         """
         super().__init__()
+        self.fd_config = fd_config
 
         self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.pretrained_config.prefix_name = "model"
@@ -182,6 +183,65 @@ class Qwen3Model(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> set[str]:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+        params_dict = dict(self.named_parameters())
+        loaded_params: set[str] = set()
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            if "rotary_emb.inv_freq" in loaded_weight_name:
+                continue
+
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                loaded_params.add(model_param_name)
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                loaded_params.add(model_param_name)
+                weight_loader(param, loaded_weight)
+
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
+        return loaded_params
+
+        # if self.tie_word_embeddings:
+        #     self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
 
     def load_state_dict(self, state_dict):
         """
@@ -248,53 +308,22 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
-        """
-        Load model parameters from a given weights_iterator object.
+        from fastdeploy.model_executor.utils import AutoWeightsLoader
 
-        Args:
-            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
-        """
-
-        from fastdeploy.model_executor.utils import (
-            default_weight_loader,
-            process_weights_after_loading,
+        is_pooling_model = hasattr(self, "is_pooling_model") and self.is_pooling_model
+        print("is_pooling_model", is_pooling_model)
+        loader = AutoWeightsLoader(
+            self,
+            skip_prefixes=(["lm_head."] if self.tie_word_embeddings else None),
         )
 
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-            ("up_gate_proj", "gate_proj", "gate"),
-            ("up_gate_proj", "up_proj", "up"),
-            ("embed_tokens.embeddings", "embed_tokens", None),
-            ("lm_head.linear", "lm_head", None),
-        ]
-        params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
-        for loaded_weight_name, loaded_weight in weights_iterator:
-            for param_name, weight_name, shard_id in stacked_params_mapping:
-                if weight_name not in loaded_weight_name:
-                    continue
-                model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                if model_param_name not in params_dict:
-                    continue
-                param = params_dict[model_param_name]
-                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                weight_loader(param, loaded_weight, shard_id)
-                break
-            else:
-                model_param_name = loaded_weight_name
-                if model_param_name not in params_dict:
-                    continue
-                param = params_dict[model_param_name]
-                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                weight_loader(param, loaded_weight)
-            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
-            process_weights_after_loading_fn(model_sublayer_name, param)
+        loaded_params = loader.load_weights(weights_iterator)
 
         if self.tie_word_embeddings:
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+            loaded_params.add(f"lm_head.{self.lm_head.weight_key}")
+
+        return loaded_params
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

@@ -14,13 +14,20 @@
 # limitations under the License.
 """
 
+import itertools
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
 import paddle
+import paddle.nn as nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.utils import get_logger
+
+logger = get_logger("utils", "utils.log")
 
 
 class BitMaskTracker:
@@ -214,3 +221,244 @@ def switch_config_context(config_obj, config_attr_name, value):
 
 def is_pin_memory_available() -> bool:
     pass
+
+
+WeightsMapping = Mapping[str, Optional[str]]
+
+
+@dataclass
+class WeightsMapper:
+    """Maps the name of each weight if they match the following patterns."""
+
+    orig_to_new_substr: WeightsMapping = field(default_factory=dict)
+    orig_to_new_prefix: WeightsMapping = field(default_factory=dict)
+    orig_to_new_suffix: WeightsMapping = field(default_factory=dict)
+
+    def _map_name(self, key: str) -> Optional[str]:
+        for substr, new_key in self.orig_to_new_substr.items():
+            if substr in key:
+                if new_key is None:
+                    return None
+
+                key = key.replace(substr, new_key, 1)
+
+        for prefix, new_key in self.orig_to_new_prefix.items():
+            if key.startswith(prefix):
+                if new_key is None:
+                    return None
+
+                key = key.replace(prefix, new_key, 1)
+
+        for suffix, new_key in self.orig_to_new_suffix.items():
+            if key.endswith(suffix):
+                if new_key is None:
+                    return None
+
+                key = key.replace(prefix, new_key, 1)
+
+        return key
+
+    def apply(self, weights: Iterable[tuple[str, paddle.Tensor]]) -> Iterable[tuple[str, paddle.Tensor]]:
+        return ((out_name, data) for name, data in weights if (out_name := self._map_name(name)) is not None)
+
+    def apply_list(self, values: list[str]) -> list[str]:
+        return [out_name for name in values if (out_name := self._map_name(name)) is not None]
+
+    def apply_dict(self, values: dict[str, Any]) -> dict[str, Any]:
+        return {out_name: value for name, value in values.items() if (out_name := self._map_name(name)) is not None}
+
+
+class AutoWeightsLoader:
+    """
+    Helper class to load weights into a [`torch.nn.Module`][]. It is able
+    to automatically detect child modules and parameters while iterating over
+    the weights only once.
+
+    The weight loading logic for individual modules can be overridden
+    by defining a ``load_weights`` method.
+
+    Similarly, the weight loading logic for individual parameters can be
+    overridden by defining a ``weight_loader`` method.
+
+    """
+
+    # Models trained using early version ColossalAI
+    # may include these tensors in checkpoint. Skip them.
+    ROTARY_EMBEDS_UNUSED_WEIGHTS = [
+        "rotary_emb.inv_freq",
+        "rotary_emb.cos_cached",
+        "rotary_emb.sin_cached",
+    ]
+
+    def __init__(
+        self,
+        layers: nn.Layer,
+        *,
+        skip_prefixes: Optional[list[str]] = None,
+        skip_substrs: Optional[list[str]] = None,
+        ignore_unexpected_prefixes: Optional[list[str]] = None,
+    ) -> None:
+        super().__init__()
+
+        self.layers = layers
+        self.skip_prefixes = skip_prefixes or []
+        self.skip_substrs = skip_substrs or []
+        self.ignore_unexpected_prefixes = ignore_unexpected_prefixes or []
+        # update default skip_substrs
+        self.skip_substrs += self.ROTARY_EMBEDS_UNUSED_WEIGHTS
+
+    def _groupby_prefix(
+        self,
+        weights: Iterable[tuple[str, paddle.Tensor]],
+    ) -> Iterable[tuple[str, Iterable[tuple[str, paddle.Tensor]]]]:
+        weights_by_parts = ((weight_name.split(".", 1), weight_data) for weight_name, weight_data in weights)
+
+        for prefix, group in itertools.groupby(weights_by_parts, key=lambda x: x[0][0]):
+            yield (
+                prefix,
+                # Because maxsplit=1 in weight_name.split(...),
+                # the length of `parts` must either be 1 or 2
+                (("" if len(parts) == 1 else parts[1], weights_data) for parts, weights_data in group),
+            )
+
+    def _get_qualname(self, prefix: str, rest: str) -> str:
+        if prefix == "":
+            return rest
+        if rest == "":
+            return prefix
+
+        return ".".join((prefix, rest))
+
+    def _can_skip(self, qualname: str) -> bool:
+        return any(qualname.startswith(p) for p in self.skip_prefixes) or any(
+            substr in qualname for substr in self.skip_substrs
+        )
+
+    def _can_ignore_unexpected(self, qualname: str) -> bool:
+        return any(qualname.startswith(p) for p in self.ignore_unexpected_prefixes)
+
+    def _load_param(
+        self,
+        base_prefix: str,
+        param: paddle.Tensor,
+        weights: Iterable[tuple[str, paddle.Tensor]],
+        fd_config: Optional[FDConfig] = None,
+    ) -> Iterable[str]:
+        for weight_name, weight_data in weights:
+            weight_qualname = self._get_qualname(base_prefix, weight_name)
+
+            if self._can_skip(weight_qualname):
+                logger.debug("Skipping weight %s", weight_qualname)
+
+                continue
+
+            if weight_name != "":
+                if self._can_ignore_unexpected(weight_qualname):
+                    logger.debug("Ignoring weight %s", weight_qualname)
+
+                    continue
+
+                raise ValueError(
+                    f"Attempted to load nested weight '{weight_qualname}' " f"into a single parameter '{base_prefix}'"
+                )
+
+            weight_loader = getattr(param, "weight_loader", default_weight_loader)
+
+            weight_loader(param, weight_data)
+
+            logger.debug("Loaded weight %s with shape %s", weight_qualname, param.shape)
+
+            yield weight_qualname
+
+    def _add_loadable_non_param_tensors(self, layer: nn.Layer, child_params: dict[str, paddle.Tensor]):
+        """
+        Add tensor names that are not in the model params that may be in the
+        safetensors, e.g., batch normalization stats.
+        """
+        if isinstance(
+            layer,
+            (
+                nn.BatchNorm1D,
+                nn.BatchNorm2D,
+                nn.BatchNorm3D,
+                nn.SyncBatchNorm,
+            ),
+        ):
+            layer_state_dict = layer.state_dict()
+            for stat_name in ("_mean", "_variance"):
+                if stat_name in layer_state_dict:
+                    child_params[stat_name.lstrip("_")] = layer_state_dict[stat_name]
+
+    def _load_layer(
+        self,
+        base_prefix: str,
+        layer: nn.Layer,
+        weights: Iterable[tuple[str, paddle.Tensor]],
+        fd_config: Optional[FDConfig] = None,
+    ) -> Iterable[str]:
+        if layer != self.layers:
+            layer_load_weights = getattr(layer, "load_weights", None)
+            if callable(layer_load_weights):
+                loaded_params = layer_load_weights(weights)
+                if loaded_params is None:
+                    logger.warning("Unable to collect loaded parameters " "for layer %s", layer)
+                else:
+                    yield from map(
+                        lambda x: self._get_qualname(base_prefix, x),
+                        loaded_params,
+                    )
+                    return
+
+        child_layers = dict(layer.named_sublayers(include_self=False))
+        child_params = {}
+
+        for name, param in layer.named_parameters(include_sublayers=False):
+            child_params[name] = param
+
+        self._add_loadable_non_param_tensors(layer, child_params)
+
+        for child_prefix, child_weights in self._groupby_prefix(weights):
+            prefix = self._get_qualname(base_prefix, child_prefix)
+
+            if child_prefix in child_layers:
+                if self._can_skip(prefix + "."):
+                    logger.debug("Skipping layer %s", prefix)
+                    continue
+
+                yield from self._load_layer(prefix, child_layers[child_prefix], child_weights, fd_config)
+            elif child_prefix in child_params:
+                if self._can_skip(prefix):
+                    logger.debug("Skipping param %s", prefix)
+                    continue
+
+                yield from self._load_param(prefix, child_params[child_prefix], child_weights, fd_config)
+            else:
+                can_skip_layer = self._can_skip(prefix + ".")
+                can_skip_param = self._can_skip(prefix)
+                if can_skip_layer or can_skip_param:
+                    logger.debug("Skipping missing %s", prefix)
+                    continue
+
+                can_ignore_layer = self._can_ignore_unexpected(prefix + ".")
+                can_ignore_param = self._can_ignore_unexpected(prefix)
+                if can_ignore_layer or can_ignore_param:
+                    logger.debug("Ignoring missing %s", prefix)
+                    continue
+
+                msg = f"There is no module or parameter named '{prefix}' " f"in {type(self.layers).__name__}"
+                raise ValueError(msg)
+
+    def load_weights(
+        self,
+        weights: Iterable[tuple[str, paddle.Tensor]],
+        *,
+        mapper: Optional[WeightsMapper] = None,
+        fd_config: Optional[FDConfig] = None,
+    ) -> set[str]:
+        if mapper is not None:
+            weights = mapper.apply(weights)
+        # Filter out weights with first-prefix/substr to skip in name
+        weights = ((name, weight) for name, weight in weights if not self._can_skip(name))
+
+        autoloaded_weights = set(self._load_layer("", self.layers, weights, fd_config))
+        return autoloaded_weights

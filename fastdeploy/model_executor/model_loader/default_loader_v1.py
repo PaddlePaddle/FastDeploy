@@ -58,7 +58,11 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if enable_cache:
             load_weights_form_cache(model, weights_iterator)
         else:
-            model.load_weights(weights_iterator)
+            if hasattr(model, "use_auto_weights_loader") and model.use_auto_weights_loader:
+                weights_list = list(weights_iterator)
+                model.load_weights(weights_list)
+            else:
+                model.load_weights(weights_iterator)
         self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
@@ -84,8 +88,20 @@ class DefaultModelLoaderV1(BaseModelLoader):
         elif convert_type == "embed":
             logger.info("Converting to embedding model.")
             model_cls = as_embedding_model(model_cls)
+            logger.info(f"model_cls:{model_cls}")
+            logger.info(f"Original model class: {model_cls}")
+            logger.info(f"Model class name: {model_cls.__name__}")
+            logger.info(f"Model class MRO: {model_cls.__mro__}")
         else:
             assert_never(convert_type)
+
+        with context:
+            model = model_cls(fd_config)
+
+        logger.info(f"Model type: {type(model)}")
+        logger.info(f"Has pooler: {hasattr(model, 'pooler')}")
+        logger.info(f"Has lm_head: {hasattr(model, 'lm_head')}")
+        logger.info(f"Is embedding model: {getattr(model, 'is_pooling_model', False)}")
 
         model.eval()
         # RL model not need set_state_dict
