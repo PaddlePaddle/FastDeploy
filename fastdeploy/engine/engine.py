@@ -608,12 +608,6 @@ class LLMEngine:
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
-        max_running_requests = num_gpu_blocks * self.cfg.cache_config.block_size // self.cfg.max_model_len
-        console_logger.info(
-            f"Detected {num_gpu_blocks} available gpu blocks in cache. "
-            f"FastDeploy will be serving {max_running_requests} running requests "
-            f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
-        )
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, self.cfg.splitwise_role != "mixed")

@@ -175,7 +175,7 @@ class PaddleDisWorkerProc:
                 name="launched_expert_service_signal",
                 array=launched_expert_service_signal_data,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
+                suffix=self.parallel_config.engine_worker_queue_port,
                 create=False,
             )
             while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
@@ -192,7 +192,7 @@ class PaddleDisWorkerProc:
             name="worker_ready_signal",
             array=workers_ready,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
@@ -389,7 +389,7 @@ class PaddleDisWorkerProc:
                     name="get_profile_block_num",
                     array=get_profile_block_num,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_pid,
+                    suffix=self.parallel_config.engine_worker_queue_port,
                     create=False,
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
@@ -397,18 +397,7 @@ class PaddleDisWorkerProc:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
 
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
-        # wait engine launch cache_manager
-        # if self.parallel_config.splitwise_role != "mixed":
-        #     launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
-        #     self.launched_cache_manager_signal = IPCSignal(
-        #         name="launched_cache_manager_signal",
-        #         array=launched_cache_manager_signal_data,
-        #         dtype=np.int32,
-        #         suffix=self.parallel_config.engine_pid,
-        #         create=False,
-        #     )
-        #     while np.any(self.launched_cache_manager_signal.value[0] <= 0):
-        #         time.sleep(0.01)
+
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 
@@ -443,7 +432,7 @@ class PaddleDisWorkerProc:
             name="loaded_model_signal",
             array=loaded_model_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
         if self.ranks > 1:
