@@ -25,9 +25,9 @@
 ```bash
 mkdir Work
 cd Work
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.1
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.0
 docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
-    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.1 \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.0 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
 ```
@@ -37,7 +37,7 @@ docker exec -it fastdeploy-xpu /bin/bash
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
@@ -49,7 +49,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### 安装 FastDeploy（**注意不要通过 pypi 源安装**）
 
 ```bash
-python -m pip install fastdeploy-xpu==2.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-xpu==2.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 或者你也可以安装最新版 FastDeploy（不推荐）
@@ -63,7 +63,7 @@ python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/pa
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
@@ -83,20 +83,20 @@ cd FastDeploy
 ### 下载昆仑编译依赖
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh stable
+bash custom_ops/xpu_ops/download_dependencies.sh stable
 ```
 
 或者你也可以下载最新版编译依赖
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+bash custom_ops/xpu_ops/download_dependencies.sh develop
 ```
 
 设置环境变量
 
 ```bash
-export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 ```
 
 ### 开始编译并安装：

@@ -30,6 +30,7 @@ from tests.model_loader.utils import (
 )
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
@@ -55,7 +56,11 @@ model_param_map = {
                 "backend": "triton",
                 "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
-            {"quant_type": "block_wise_fp8", "backend": "deepgemm", "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"}},
+            {
+                "quant_type": "block_wise_fp8",
+                "backend": "deepgemm",
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17", "FD_USE_DEEP_GEMM": "1"},
+            },
         ],
     },
     "DeepSeek-V3-0324": {
@@ -67,6 +72,7 @@ model_param_map = {
                     "FD_ATTENTION_BACKEND": "MLA_ATTN",
                     "FLAGS_mla_use_tensorcore": "1",
                     "FLAGS_flash_attn_version": "3",
+                    "FD_USE_MACHETE": "1",
                 },
             },
         ],
@@ -126,6 +132,7 @@ def test_common_model(
             "default",
             FD_ENGINE_QUEUE_PORT,
             prompts,
+            FD_CACHE_QUEUE_PORT,
         ),
     )
     fd_outputs_v1 = run_with_timeout(
@@ -140,6 +147,7 @@ def test_common_model(
             "default_v1",
             FD_ENGINE_QUEUE_PORT,
             prompts,
+            FD_CACHE_QUEUE_PORT,
         ),
     )
     check_tokens_id_and_text_close(

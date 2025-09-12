@@ -178,7 +178,7 @@ class TokenProcessor:
                                 )
 
                     except Exception as e:
-                        print(f"Recieve message error: {e}")
+                        print(f"Receive message error: {e}")
                         continue
                 else:
                     is_blocking = True
@@ -282,6 +282,7 @@ class TokenProcessor:
         main_process_metrics.batch_size.set(
             self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
         )
+        main_process_metrics.available_batch_size.set(self.resource_manager.available_batch())
 
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
