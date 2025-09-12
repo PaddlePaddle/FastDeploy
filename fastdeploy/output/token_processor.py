@@ -161,24 +161,23 @@ class TokenProcessor:
                         continue
 
                 else:
-                    if (
+                    if self.use_logprobs:
+                        get_output_topk(
+                            self.output_tokens,
+                            self.output_scores,
+                            self.output_ranks,
+                            K,
+                            rank_id,
+                            is_blocking,
+                        )
+                    elif (
                         self.cfg.parallel_config.enable_expert_parallel
                         and self.cfg.parallel_config.data_parallel_size > 1
                     ):
                         get_output_ep(self.output_tokens, rank_id, is_blocking)
 
                     else:
-                        if self.use_logprobs:
-                            get_output_topk(
-                                self.output_tokens,
-                                self.output_scores,
-                                self.output_ranks,
-                                K,
-                                rank_id,
-                                is_blocking,
-                            )
-                        else:
-                            get_output(self.output_tokens, rank_id, is_blocking)
+                        get_output(self.output_tokens, rank_id, is_blocking)
 
                     if self.output_tokens[0, 0] == -2:
                         continue
