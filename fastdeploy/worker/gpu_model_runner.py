@@ -60,7 +60,6 @@ else:
         set_value_by_flags_and_idx,
         share_external_data,
         set_data_ipc,
-        unset_data_ipc,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (

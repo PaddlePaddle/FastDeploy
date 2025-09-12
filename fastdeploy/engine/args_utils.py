@@ -386,7 +386,7 @@ class EngineArgs:
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
-        from fastdeploy.utils import llm_logger
+
         if not self.tokenizer:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":

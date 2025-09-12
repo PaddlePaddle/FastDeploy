@@ -602,7 +602,9 @@ class LLMEngine:
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, self.cfg.splitwise_role != "mixed")
+            self.cache_manager_processes = self.engine.start_cache_service(
+                device_ids, self.ipc_signal_suffix, self.cfg.splitwise_role != "mixed"
+            )
 
     def check_health(self, time_interval_threashold=30):
         """

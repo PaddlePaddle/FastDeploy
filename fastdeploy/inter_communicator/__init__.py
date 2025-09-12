@@ -34,8 +34,8 @@ __all__ = [
     "ZmqTcpServer",
     "ZmqIpcServer",
     "shared_memory_exists",
-    "ExistTaskStatus"
-    "PrefixTreeStatus", 
+    "ExistTaskStatus",
+    "PrefixTreeStatus",
     "ModelWeightsStatus",
     "KVCacheStatus",
 ]
