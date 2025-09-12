@@ -30,7 +30,7 @@ from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 def get_moe_method():
     """
-    return moe method based on device platform
+    return moe method based on device platform .
     """
 
     if current_platform.is_cuda():
