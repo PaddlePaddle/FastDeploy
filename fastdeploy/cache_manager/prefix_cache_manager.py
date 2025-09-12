@@ -230,7 +230,7 @@ class PrefixCacheManager:
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
             time.sleep(1)
 
-        if cache_config.swap_space is not None and cache_config.swap_space > 0:
+        if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
             while np.sum(self.swap_space_ready_signal.value) != tensor_parallel_size:
                 time.sleep(1)
 
