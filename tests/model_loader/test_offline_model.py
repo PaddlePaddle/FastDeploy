@@ -186,5 +186,4 @@ def test_offline_model(
         outputs_1_lst=(expected_output_map[model_name_or_path]),
         name_0="offline_quant_outputs",
         name_1="baseline",
-        threshold=0.05,
     )

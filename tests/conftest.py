@@ -65,7 +65,7 @@ class FDRunner:
     ) -> list[tuple[list[int], str]]:
         from fastdeploy.engine.sampling_params import SamplingParams
 
-        topp_params = SamplingParams(temperature=0.1, top_p=0, max_tokens=max_tokens)
+        topp_params = SamplingParams(temperature=0.0, top_p=0, max_tokens=max_tokens)
         outputs = self.generate(prompts, topp_params, **kwargs)
         return outputs
 
