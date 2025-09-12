@@ -1062,7 +1062,6 @@ class LLMEngine:
 
         if hasattr(self, "cache_manager_processes"):
             self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
@@ -1074,6 +1073,8 @@ class LLMEngine:
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()
         self.exist_prefill_task_signal.clear()
+        self.cache_ready_signal.clear()
+        self.swap_space_ready_signal.clear()
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
         self.model_weights_status_signal.clear()
@@ -1310,7 +1311,7 @@ class LLMEngine:
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
-                create_cache_tensor=False,
+                create_cache_tensor=(self.cfg.splitwise_role != "mixed"),
             )
 
     def check_health(self, time_interval_threashold=30):

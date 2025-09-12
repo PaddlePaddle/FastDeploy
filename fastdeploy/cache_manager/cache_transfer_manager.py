@@ -241,6 +241,10 @@ class CacheTransferManager:
         logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
 
     def _init_cpu_cache(self, args):
+        if args.num_cpu_blocks == 0:
+            logger.info("💡 no swap space (cpu cache) is specified.")
+            self.swap_space_ready_signal.value[self.rank] = 1
+            return
         logger.info("Initializing swap space (cpu cache) for all layers.")
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
@@ -483,7 +487,7 @@ class CacheTransferManager:
 
                     paddle.set_device(f"gpu:{self.device}")
                     for name, tensor in self.gpu_cache_kvs.items():
-                        unset_data_ipc(tensor, name, True, True)
+                        unset_data_ipc(tensor, name, True, False)
                     self.gpu_cache_kvs.clear()
                     self.gpu_cache_k_tensors.clear()
                     self.gpu_cache_v_tensors.clear()

@@ -439,17 +439,17 @@ class PaddleDisWorkerProc:
 
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
-        if self.parallel_config.splitwise_role != "mixed":
-            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
-            self.launched_cache_manager_signal = IPCSignal(
-                name="launched_cache_manager_signal",
-                array=launched_cache_manager_signal_data,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
-                create=False,
-            )
-            while np.any(self.launched_cache_manager_signal.value[0] <= 0):
-                time.sleep(0.01)
+        # if self.parallel_config.splitwise_role != "mixed":
+        #     launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+        #     self.launched_cache_manager_signal = IPCSignal(
+        #         name="launched_cache_manager_signal",
+        #         array=launched_cache_manager_signal_data,
+        #         dtype=np.int32,
+        #         suffix=self.parallel_config.engine_pid,
+        #         create=False,
+        #     )
+        #     while np.any(self.launched_cache_manager_signal.value[0] <= 0):
+        #         time.sleep(0.01)
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 

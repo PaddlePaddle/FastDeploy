@@ -359,7 +359,6 @@ class ExpertService:
 
         if hasattr(self, "cache_manager_processes"):
             self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
@@ -380,9 +379,11 @@ def start_expert_service(cfg, local_data_parallel_id, ipc_signal_suffix):
         if cfg.splitwise_role != "mixed":
             expert_service.split_connector.start_receiver()
         else:
+
             def deamon_thread():
                 while True:
                     time.sleep(10)
+
             t_deamon = threading.Thread(target=deamon_thread, daemon=True)
             t_deamon.start()
     except Exception as e:

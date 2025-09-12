@@ -993,7 +993,7 @@ class GPUModelRunner(ModelRunnerBase):
             cache_kvs_list.extend([key_cache, val_cache])
         self.share_inputs["caches"] = cache_kvs_list
 
-        if create_cache_tensor:
+        if not profile and create_cache_tensor:
             logger.info("✅ kv cache is ready!")
             cache_ready_signal.value[self.local_rank] = 1
 
