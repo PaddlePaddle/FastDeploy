@@ -72,7 +72,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             layer.moe_intermediate_size,
             layer.hidden_size,
         ]
-        if self.quant_config.is_checkpoint_bf16:
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=self.up_gate_proj_weight_shape,
                 dtype=layer.weight_dtype,
@@ -84,6 +85,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
+
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -136,6 +139,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
+            # support cache feature in future
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """

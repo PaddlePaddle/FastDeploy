@@ -210,6 +210,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             quant_attrs = extra_weight_attrs
             if (
                 isinstance(layer, MergedColumnParallelLinear)
@@ -255,6 +256,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 {
                     "weight_loader": weight_loader,
                     "output_dim": output_dim,
+                    "weight_need_transpose": not extra_weight_attrs.get("model_format") == "torch",
                 },
             )
 
