@@ -150,13 +150,16 @@ class XGrammarProcessor(LogitsProcessorBase):
         """
         Validate and accept a generated token against the grammar constraints.
 
+        # When the output token reaches the maximum length,
+        # it will be forced to get an eos_token, the output is not restricted by guided decoding
+
         Args:
             token (int): The token ID to validate
-
-        Raises:
-            AssertionError: If token is not allowed by the grammar
         """
-        assert self.matcher.accept_token(token), f"Failed to accept token {token}"
+        if not self.matcher.accept_token(token):
+            llm_logger.error(f"failed to accept token [{token}]")
+            return False
+        return True
 
     def is_terminated(self) -> bool:
         """

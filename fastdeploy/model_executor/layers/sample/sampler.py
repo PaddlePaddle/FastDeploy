@@ -19,6 +19,7 @@ from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
@@ -68,10 +69,11 @@ class SamplerProcessor:
         self.logits_processor: Dict[int, Optional[Any]] = dict()
         self.executor = ThreadPoolExecutor()
         self.logits_lock = threading.Lock()
-        self.reasoning_parser = None
+        self.reasoning_end_id = None
 
     def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
-        self.reasoning_parser = reasoning_parser
+        if reasoning_parser:
+            self.reasoning_end_id = reasoning_parser.think_end_token_id
 
     def add_logits_processor(
         self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = [], skip: bool = False
@@ -112,13 +114,12 @@ class SamplerProcessor:
         """
         get available logits processor
         """
-        available_processors = None
         with self.logits_lock:
             for processor in self.logits_processor.values():
-                if processor.is_terminated():
+                if processor.is_terminated() or not isinstance(processor, LogitsProcessorBase):
                     continue
-                available_processors = processor
-        return available_processors
+                return processor
+        return None
 
     def update_logits_processor(self):
         """update logits processor"""
@@ -149,7 +150,6 @@ class SamplerProcessor:
         if len(self.logits_processor) == 0:
             return
 
-        self.update_logits_processor()
         available_processors = self.get_available_processors()
         if available_processors is None:
             return
@@ -157,7 +157,9 @@ class SamplerProcessor:
         # allocate token bitmask
         token_bitmask = available_processors.allocate_token_bitmask()
 
+        self.update_logits_processor()
         with self.logits_lock:
+            # TODO: 支持并行 fill token bitmask
             # fill token bitmask
             for idx, processor in self.logits_processor.items():
                 if processor.is_terminated() or idx in skip_idx_list:
@@ -179,15 +181,16 @@ class SamplerProcessor:
         if len(self.logits_processor) == 0:
             return logits
 
-        if self.async_step is not None:
-            self.async_step.result()
-            self.async_step = None
-
         self.update_logits_processor()
         if self.insert_processor:
+            # TODO: 只更新插入位置的processor
             self.update_vocab_mask(skip_idx_list)
             with self.logits_lock:
                 self.insert_processor = False
+
+        if self.async_step is not None:
+            self.async_step.result()
+            self.async_step = None
 
         available_processors = self.get_available_processors()
         if available_processors is None or self.token_bitmask is None:
@@ -195,9 +198,9 @@ class SamplerProcessor:
 
         indices = []
         for idx, processor in self.logits_processor.items():
-            if processor is None or idx in skip_idx_list:
+            if processor is None or processor.is_terminated() or idx in skip_idx_list:
                 continue
-            if self.reasoning_parser is None or not processor.enable_reasoning or processor.reasoning_ended:
+            if self.reasoning_end_id is None or not processor.enable_reasoning or processor.reasoning_ended:
                 indices.append(idx)
 
         return available_processors.apply_token_mask(logits, self.token_bitmask, indices=indices)
@@ -211,12 +214,12 @@ class SamplerProcessor:
             return
 
         if (
-            self.reasoning_parser is not None
+            self.reasoning_end_id is not None
             and self.logits_processor[idx].enable_reasoning
             and not self.logits_processor[idx].reasoning_ended
         ):
-            reasoning_ended = self.reasoning_parser.is_reasoning_end([token])
-            self.logits_processor[idx].reasoning_ended = reasoning_ended
+            # check reasoning end
+            self.logits_processor[idx].reasoning_ended = self.reasoning_end_id == token
             return
 
         self.logits_processor[idx].accept_token(token)
@@ -236,10 +239,9 @@ class SamplerProcessor:
 
         # create async operation for guided decoding
         def async_update(next_tokens, skip_idx_list, skip_list_next):
-            token_ids = next_tokens.numpy().tolist()
             with self.logits_lock:
-                for idx in self.logits_processor.keys():
-                    token = token_ids[idx][0]
+                for idx_tuple, token in np.ndenumerate(next_tokens.numpy()):
+                    idx = idx_tuple[0]
                     if token < 0 or self.logits_processor[idx] is None or idx in skip_idx_list:
                         continue
                     self._accept_token(idx, token)
@@ -418,6 +420,7 @@ class Sampler(SamplerBase):
         skip_idx_list: List[int] = [],
     ) -> SamplerOutput:
         """ """
+        # guided decoding apply token mask for logits
         logits = self.processor.apply_token_mask(logits, skip_idx_list)
 
         num_logprobs = sampling_metadata.max_num_logprobs
