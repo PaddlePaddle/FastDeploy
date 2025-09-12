@@ -179,9 +179,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         num_completion_token_ids = 10
         request = {
             "request_id": "12345",
-            "metadata": {
-                "completion_token_ids": [1] * num_completion_token_ids,
-            },
+            "completion_token_ids": [1] * num_completion_token_ids,
             "stop": ["stop", "eof"],
             "messages": [
                 {

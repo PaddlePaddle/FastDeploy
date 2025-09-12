@@ -23,6 +23,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
+from fastdeploy.utils import api_server_logger
+
 # from openai.types.chat import ChatCompletionMessageParam
 # from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
 
@@ -441,7 +443,6 @@ class CompletionRequest(BaseModel):
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
-    completion_token_ids: Optional[List[int]] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -615,6 +616,7 @@ class ChatCompletionRequest(BaseModel):
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
                 req_dict[key] = value
+            api_server_logger.warning("The parameter metadata is obsolete.")
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
