@@ -146,6 +146,7 @@ class WeightOnlyConfig(QuantConfigBase):
                     and envs.FD_USE_MACHETE == "1"
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
+                    and layer.bias is None
                 ):
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
