@@ -63,6 +63,7 @@ class KvCacheQuantConfig(QuantConfigBase):
 
         if self.quant_type == KvCacheQuantzationTypes.INT8 or self.quant_type == KvCacheQuantzationTypes.INT8_ZP:
             self.max_bound = 127.0
+            self.is_channel_wise = True
         elif (
             self.quant_type == KvCacheQuantzationTypes.FP8
             or self.quant_type == KvCacheQuantzationTypes.FP8_ZP
