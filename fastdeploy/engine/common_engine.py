@@ -43,10 +43,16 @@ from fastdeploy.inter_communicator import (
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
-from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
+
+try:
+    TokenProcessor = load_token_processor_plugins()
+    llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
+except:
+    from fastdeploy.output.token_processor import TokenProcessor
 
 
 class EngineService:
@@ -527,10 +533,13 @@ class EngineService:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+            if self.cfg.model_config.enable_mm:
+                available_blocks = self.resource_manager.available_block_num()
+            else:
+                available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
-            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
-                available_blocks=self.resource_manager.available_block_num(),
+                available_blocks=available_blocks,
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
