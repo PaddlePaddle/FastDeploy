@@ -264,6 +264,8 @@ class GPUModelRunner(ModelRunnerBase):
             self.guided_backend.get_logits_processor(
                 schemata_key=schemata_key,
                 enable_thinking=enable_thinking,
+                override_stop_tokens=request.eos_token_ids,
+                request_id=request.request_id,
             ),
             schemata_key,
         )

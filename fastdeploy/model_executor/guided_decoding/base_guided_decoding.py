@@ -231,7 +231,7 @@ class BackendBase:
     def _init_logits_processor(
         self,
         schemata_key: tuple[str, str],
-        enable_thinking: bool = False,
+        **kwargs,
     ) -> LogitsProcessorBase:
         """
         init logits processor by type and schemata.
@@ -248,13 +248,13 @@ class BackendBase:
         """
         key_type, schemata = schemata_key
         if key_type == "json":
-            return self._json_processor(schemata, enable_thinking)
+            return self._json_processor(schemata, **kwargs)
         elif key_type == "regex":
-            return self._regex_processor(schemata, enable_thinking)
+            return self._regex_processor(schemata, **kwargs)
         elif key_type == "grammar":
-            return self._grammar_processor(schemata, enable_thinking)
+            return self._grammar_processor(schemata, **kwargs)
         elif key_type == "structural_tag":
-            return self._structural_tag_processor(schemata, enable_thinking)
+            return self._structural_tag_processor(schemata, **kwargs)
         else:
             llm_logger.error(f"Unsupported processor type {key_type}.")
             return None
@@ -262,7 +262,7 @@ class BackendBase:
     def get_logits_processor(
         self,
         schemata_key: tuple[str, str],
-        enable_thinking: bool = False,
+        **kwargs,
     ) -> tuple[LogitsProcessorBase, bool]:
         """
         get logits processor by key from cache or create new one.
@@ -278,9 +278,9 @@ class BackendBase:
         value = self.cache.get(schemata_key, None)
         if value:
             value_copy = value.copy()
-            value_copy.enable_reasoning = enable_thinking
+            value_copy.enable_reasoning = kwargs.get("enable_thinking", False)
             return value_copy, True
-        value = self.executor.submit(self._init_logits_processor, schemata_key, enable_thinking)
+        value = self.executor.submit(self._init_logits_processor, schemata_key, **kwargs)
         return value, False
 
     def _get_tokenizer_hf(self):

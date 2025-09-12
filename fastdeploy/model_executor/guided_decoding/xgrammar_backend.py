@@ -72,6 +72,7 @@ class XGrammarProcessor(LogitsProcessorBase):
         vocab_size: Optional[int] = None,
         batch_size: Optional[int] = None,
         enable_thinking: bool = False,
+        request_id: Optional[str] = None,
     ):
         super().__init__(enable_reasoning=enable_thinking)
         self.max_rollback_tokens = 200
@@ -80,6 +81,7 @@ class XGrammarProcessor(LogitsProcessorBase):
         self.compiled_grammar = compiled_grammar
         self.terminate_without_stop_token = terminate_without_stop_token
         self.override_stop_tokens = override_stop_tokens
+        self.request_id = request_id
 
         self.matcher = GrammarMatcher(
             compiled_grammar=compiled_grammar,
@@ -157,7 +159,7 @@ class XGrammarProcessor(LogitsProcessorBase):
             token (int): The token ID to validate
         """
         if not self.matcher.accept_token(token):
-            llm_logger.error(f"failed to accept token [{token}]")
+            llm_logger.error(f"request: {self.request_id} failed to accept token [{token}]")
             return False
         return True
 
@@ -223,6 +225,7 @@ class XGrammarBackend(BackendBase):
         terminate_without_stop_token: bool = False,
         override_stop_tokens: Optional[List[int]] = None,
         enable_thinking: bool = False,
+        request_id: Optional[str] = None,
     ) -> XGrammarProcessor:
         """
         Create a logits processor instance for the given compiled grammar.
@@ -243,9 +246,10 @@ class XGrammarBackend(BackendBase):
             vocab_size=self.vocab_size,
             batch_size=self.batch_size,
             enable_thinking=enable_thinking,
+            request_id=request_id,
         )
 
-    def _json_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
+    def _json_processor(self, schemata: str, **kwargs) -> Optional[XGrammarProcessor]:
         """
         Compile JSON schema into a grammar processor.
 
@@ -261,9 +265,9 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile json schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
+        return self._create_processor(compiled_grammar, **kwargs)
 
-    def _regex_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
+    def _regex_processor(self, schemata: str, **kwargs) -> Optional[XGrammarProcessor]:
         """
         Compile regex pattern into a grammar processor.
 
@@ -279,9 +283,9 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile regex schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
+        return self._create_processor(compiled_grammar, **kwargs)
 
-    def _grammar_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
+    def _grammar_processor(self, schemata: str, **kwargs) -> Optional[XGrammarProcessor]:
         """
         Compile grammar (EBNF) into a grammar processor.
 
@@ -297,9 +301,9 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile ebnf schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
+        return self._create_processor(compiled_grammar, **kwargs)
 
-    def _structural_tag_processor(self, schemata: str, enable_thinking: bool = False) -> Optional[XGrammarProcessor]:
+    def _structural_tag_processor(self, schemata: str, **kwargs) -> Optional[XGrammarProcessor]:
         """
         Compile structural tags into a grammar processor.
 
@@ -324,7 +328,7 @@ class XGrammarBackend(BackendBase):
         except Exception as e:
             llm_logger.error(f"Failed to compile structural tags schema: {e}, {str(traceback.format_exc())}")
             return None
-        return self._create_processor(compiled_grammar, enable_thinking=enable_thinking)
+        return self._create_processor(compiled_grammar, **kwargs)
 
 
 class XGrammarChecker(BaseChecker):
