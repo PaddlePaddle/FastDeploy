@@ -313,24 +313,14 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         raise NotImplementedError
 
     def apply(self, layer, x):
-        if current_platform.is_maca():
-            linear_out = weight_only_linear(
-                x,
-                weight=layer.weight,
-                bias=layer.bias if layer.add_bias else None,
-                weight_scale=layer.weight_scale,
-                weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
-                arch=80,
-            )
-        else:
-            linear_out = weight_only_linear(
-                x,
-                weight=layer.weight,
-                bias=layer.bias if layer.add_bias else None,
-                weight_scale=layer.weight_scale,
-                weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
-                arch=self.quant_config.weight_only_linear_arch,
-            )
+        linear_out = weight_only_linear(
+            x,
+            weight=layer.weight,
+            bias=layer.bias if layer.add_bias else None,
+            weight_scale=layer.weight_scale,
+            weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
+            arch=self.quant_config.weight_only_linear_arch,
+        )
         return linear_out
 
 
