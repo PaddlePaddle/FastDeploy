@@ -147,6 +147,7 @@ jobs:
           --skip install
 
           cd PaddleTest/framework/ServeTest
+          ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
           sleep 3
           curl -X POST http://0.0.0.0:${FLASK_PORT}/start \

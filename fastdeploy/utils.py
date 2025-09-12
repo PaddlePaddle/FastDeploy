@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import codecs
 import importlib
+import json
 import logging
 import os
 import random
@@ -764,6 +765,16 @@ class StatefulSemaphore:
             "max_value": self.max_value,
             "uptime": round(self.uptime, 2),
         }
+
+
+def parse_quantization(value: str):
+    """
+    Parse a JSON string into a dictionary.
+    """
+    try:
+        return json.loads(value)
+    except ValueError:
+        return {"quantization": value}
 
 
 # 日志使用全局访问点（兼容原有使用方式）
