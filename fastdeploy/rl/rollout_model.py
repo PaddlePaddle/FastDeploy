@@ -582,7 +582,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             )
 
             # MoE experts mappings
-            for expert_idx in range(self.fd_config.moe_config.num_experts):
+            for expert_idx in range(self.fd_config.model_config.n_routed_experts):
                 for ph in place_holders:
                     # up_gate_proj (up_gate_proj)
                     up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
