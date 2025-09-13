@@ -188,7 +188,7 @@ class LLM:
         # get output
         outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
         for i in range(len(outputs)):
-            outputs[i].prompt = prompts[i]
+            outputs[i].prompt = prompts[i % sampling_params.n]
         return outputs
 
     def chat(
@@ -272,33 +272,35 @@ class LLM:
         prompts_len = len(prompts)
         req_ids = []
         for i in range(prompts_len):
-            request_id = str(uuid.uuid4())
-            if isinstance(prompts[i], str):
-                tasks = {
-                    "prompt": prompts[i],
-                    "request_id": request_id,
-                }
-            elif isinstance(prompts[i], list) and isinstance(prompts[i][0], int):
-                tasks = {
-                    "prompt_token_ids": prompts[i],
-                    "request_id": request_id,
-                }
-            elif isinstance(prompts[i], dict):
-                tasks = prompts[i]
-                tasks["request_id"] = request_id
-            else:
-                raise TypeError(
-                    f"Invalid type for 'prompt': {type(prompts[i])}, expected one of ['str', 'list', 'dict']."
-                )
-            req_ids.append(request_id)
-            if isinstance(sampling_params, list):
-                current_sampling_params = sampling_params[i]
-            else:
-                current_sampling_params = sampling_params
-            if current_sampling_params.guided_decoding is not None:
-                guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
-                tasks.update(guided_decoding_dict)
-            self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
+            for j in range(sampling_params.n):
+                request_id = str(uuid.uuid4())
+                if isinstance(prompts[i], str):
+                    tasks = {
+                        "prompt": prompts[i],
+                        "request_id": request_id,
+                    }
+                elif isinstance(prompts[i], list) and isinstance(prompts[i][0], int):
+                    tasks = {
+                        "prompt_token_ids": prompts[i],
+                        "request_id": request_id,
+                    }
+                elif isinstance(prompts[i], dict):
+                    tasks = prompts[i]
+                    tasks["request_id"] = request_id
+                else:
+                    raise TypeError(
+                        f"Invalid type for 'prompt': {type(prompts[i])}, expected one of ['str', 'list', 'dict']."
+                    )
+                req_ids.append(request_id)
+                if isinstance(sampling_params, list):
+                    current_sampling_params = sampling_params[i].clone()
+                else:
+                    current_sampling_params = sampling_params.clone()
+                current_sampling_params.n = 1
+                if current_sampling_params.guided_decoding is not None:
+                    guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
+                    tasks.update(guided_decoding_dict)
+                self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 
     def _decode_token(self, token_id: int) -> str:

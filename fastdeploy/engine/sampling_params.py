@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import random
 from dataclasses import dataclass, fields
 from typing import Any, List, Optional, Union
@@ -208,6 +209,9 @@ class SamplingParams:
 
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
+
+    def clone(self) -> SamplingParams:
+        return copy.deepcopy(self)
 
 
 @dataclass
