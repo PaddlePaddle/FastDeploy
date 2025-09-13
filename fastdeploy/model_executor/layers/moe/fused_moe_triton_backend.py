@@ -31,6 +31,7 @@ try:
     from .triton_moe_kernels import fused_moe_kernel_paddle
 except ImportError:
     pass
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
 
 class TritonWeightOnlyMoEMethod(QuantMethodBase):
@@ -71,43 +72,70 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             layer.moe_intermediate_size,
             layer.hidden_size,
         ]
-        setattr(
-            layer,
-            up_gate_proj_weight_name,
-            layer.create_parameter(
+        if self.quant_config.is_checkpoint_bf16:
+            layer.up_gate_proj_weight = layer.create_parameter(
                 shape=self.up_gate_proj_weight_shape,
-                dtype=self.weight_dtype,
+                dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            down_proj_weight_name,
-            layer.create_parameter(
+            )
+
+            layer.down_proj_weight = layer.create_parameter(
                 shape=self.down_proj_weight_shape,
-                dtype=self.weight_dtype,
+                dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        # weight_scale
-        setattr(
-            layer,
-            self.added_scale_attrs[0],
-            layer.create_parameter(
-                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
-                dtype=self.default_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            self.added_scale_attrs[1],
-            layer.create_parameter(
-                shape=[layer.num_local_experts, layer.hidden_size],
-                dtype=self.default_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
+            )
+            set_weight_attrs(
+                layer.up_gate_proj_weight,
+                {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=True),
+                },
+            )
+            set_weight_attrs(
+                layer.down_proj_weight,
+                {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=False),
+                },
+            )
+        else:
+            setattr(
+                layer,
+                up_gate_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.down_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            # weight_scale
+            setattr(
+                layer,
+                self.added_scale_attrs[0],
+                layer.create_parameter(
+                    shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                    dtype=self.default_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                self.added_scale_attrs[1],
+                layer.create_parameter(
+                    shape=[layer.num_local_experts, layer.hidden_size],
+                    dtype=self.default_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -150,6 +178,62 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             getattr(layer, weight_name).set_value(quanted_weight)
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
+    def process_weights_after_loading(self, layer):
+        """ """
+        if not self.quant_config.is_checkpoint_bf16:
+            return
+
+        algo = layer.quant_method.quant_config.name()
+        assert algo == "wint8"
+        max_bound = 127
+        weight_id_map = {"gate_up": 0, "down": 1}
+        if (
+            hasattr(layer.up_gate_proj_weight, "tensor_track")
+            and layer.up_gate_proj_weight.tensor_track is not None
+            and layer.up_gate_proj_weight.tensor_track.is_fully_copied()
+        ):
+            weight_type = "gate_up"
+            layer.up_gate_proj_weight.tensor_track = None
+        else:
+            weight_type = "down"
+            layer.down_proj_weight.tensor_track = None
+
+        # weight
+        weight_name = self.added_weight_attrs[weight_id_map[weight_type]]
+        # scale
+        scale_name = self.added_scale_attrs[weight_id_map[weight_type]]
+
+        weight_tensor = getattr(layer, weight_name)
+        quanted_weight_scale = weight_tensor.abs().max(axis=1)
+        quanted_weight = weight_tensor / quanted_weight_scale[:, None, :] * max_bound
+        quanted_weight = paddle.round(quanted_weight).astype("int8")
+        quanted_weight_scale = quanted_weight_scale / max_bound
+
+        getattr(layer, weight_name).value().get_tensor()._clear()
+
+        # create weight
+        setattr(
+            layer,
+            weight_name,
+            layer.create_parameter(
+                shape=weight_tensor.shape,
+                dtype=quanted_weight.dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # create scale
+        setattr(
+            layer,
+            scale_name,
+            layer.create_parameter(
+                shape=quanted_weight_scale.shape,
+                dtype=quanted_weight_scale.dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        getattr(layer, weight_name).copy_(quanted_weight, False)
+        getattr(layer, scale_name).copy_(quanted_weight_scale, False)
+
     def apply(
         self,
         layer: nn.Layer,
@@ -167,13 +251,24 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            top_k,
-            True,  # apply_norm_weight,
-            False,
-        )
+        if layer.topk_method == "noaux_tc":
+            gate_out, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+            )
+            topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)
+        else:
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                top_k,
+                True,  # apply_norm_weight,
+                False,
+            )
         up_gate_proj_out = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
             dtype=x.dtype,
@@ -290,6 +385,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
+        if layer.reduce_results and layer.tp_size > 1:
+            tensor_model_parallel_all_reduce(out)
+
         return out
 
 
