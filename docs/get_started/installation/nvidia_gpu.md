@@ -13,14 +13,14 @@ The following installation methods are available when your environment meets the
 **Notice**: The pre-built image only supports SM80/90 GPU(e.g. H800/A800)，if you are deploying on SM86/89GPU(L40/4090/L20), please reinstall ```fastdpeloy-gpu``` after you create the container.
 
 ```shell
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.1.1
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.2.0
 ```
 
 ## 2. Pre-built Pip Installation
 
 First install paddlepaddle-gpu. For detailed instructions, refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
 ```shell
-python -m pip install paddlepaddle-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 Then install fastdeploy. **Do not install from PyPI**. Use the following methods instead:
@@ -58,7 +58,7 @@ docker build -f dockerfiles/Dockerfile.gpu -t fastdeploy:gpu .
 
 First install paddlepaddle-gpu. For detailed instructions, refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
 ```shell
-python -m pip install paddlepaddle-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 Then clone the source code and build:

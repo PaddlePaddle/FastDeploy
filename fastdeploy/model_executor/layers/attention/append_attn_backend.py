@@ -49,14 +49,6 @@ class AppendAttentionMetadata(AttentionMetadata):
     AppendAttentionMetadata
     """
 
-    encoder_batch_ids: paddle.Tensor = None
-    encoder_tile_ids_per_batch: paddle.Tensor = None
-    encoder_num_blocks: paddle.Tensor = None
-    kv_batch_ids: paddle.Tensor = None
-    kv_tile_ids_per_batch: paddle.Tensor = None
-    kv_num_blocks: paddle.Tensor = None
-    max_len_kv: paddle.Tensor = None
-
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
@@ -142,22 +134,23 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.rotary_embs = forward_meta.rotary_embs
         metadata.attn_mask = forward_meta.attn_mask
         metadata.pre_caches_length = forward_meta.pre_caches_length
-        (
-            metadata.encoder_batch_ids,
-            metadata.encoder_tile_ids_per_batch,
-            metadata.encoder_num_blocks,
-            metadata.kv_batch_ids,
-            metadata.kv_tile_ids_per_batch,
-            metadata.kv_num_blocks,
-            metadata.max_len_kv,
-        ) = get_block_shape_and_split_kv_block(
+        get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_num_blocks_device,
+            forward_meta.decoder_chunk_size_device,
             forward_meta.max_len_tensor_cpu,
+            forward_meta.encoder_batch_ids,
+            forward_meta.encoder_tile_ids_per_batch,
+            forward_meta.encoder_num_blocks_x_cpu,
+            forward_meta.kv_batch_ids,
+            forward_meta.kv_tile_ids_per_batch,
+            forward_meta.kv_num_blocks_x_cpu,
+            forward_meta.max_len_kv_cpu,
             self.encoder_block_shape_q,
             self.decoder_block_shape_q,
             self.group_size,
@@ -231,6 +224,17 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
             )
+        cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
+        if cache_quant_type_str == "block_wise_fp8":
+            cache_k = forward_meta.caches[4 * layer.layer_id]
+            cache_v = forward_meta.caches[4 * layer.layer_id + 1]
+            cache_k_scales = forward_meta.caches[4 * layer.layer_id + 2]
+            cache_v_scales = forward_meta.caches[4 * layer.layer_id + 3]
+        else:
+            cache_k = forward_meta.caches[2 * layer.layer_id]
+            cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+            cache_k_scales = getattr(layer, "cache_k_scale", None)
+            cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
@@ -269,32 +273,32 @@ class AppendAttentionBackend(AttentionBackend):
 
             append_attention_with_output(
                 qkv,
-                forward_meta.caches[2 * layer.layer_id],
-                forward_meta.caches[2 * layer.layer_id + 1],
+                cache_k,
+                cache_v,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
                 metadata.block_tables,
-                metadata.encoder_batch_ids,
-                metadata.encoder_tile_ids_per_batch,
-                metadata.encoder_num_blocks,
-                metadata.kv_batch_ids,
-                metadata.kv_tile_ids_per_batch,
-                metadata.kv_num_blocks,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
                 forward_meta.decoder_batch_ids,
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                metadata.max_len_kv,
+                forward_meta.max_len_kv_cpu,
                 res,
                 metadata.rotary_embs,
                 metadata.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
-                getattr(layer, "cache_k_scale", None),
-                getattr(layer, "cache_v_scale", None),
+                cache_k_scales,
+                cache_v_scales,
                 getattr(layer, "cache_k_out_scale", None),
                 getattr(layer, "cache_v_out_scale", None),
                 getattr(layer, "cache_k_zp", None),
@@ -325,31 +329,31 @@ class AppendAttentionBackend(AttentionBackend):
         else:
             res = append_attention(
                 qkv,
-                forward_meta.caches[2 * layer.layer_id],
-                forward_meta.caches[2 * layer.layer_id + 1],
+                cache_k,
+                cache_v,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
                 metadata.block_tables,
-                metadata.encoder_batch_ids,
-                metadata.encoder_tile_ids_per_batch,
-                metadata.encoder_num_blocks,
-                metadata.kv_batch_ids,
-                metadata.kv_tile_ids_per_batch,
-                metadata.kv_num_blocks,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
                 forward_meta.decoder_batch_ids,
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                metadata.max_len_kv,
+                forward_meta.max_len_kv_cpu,
                 metadata.rotary_embs,
                 metadata.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
-                getattr(layer, "cache_k_scale", None),
-                getattr(layer, "cache_v_scale", None),
+                cache_k_scales,
+                cache_v_scales,
                 getattr(layer, "cache_k_out_scale", None),
                 getattr(layer, "cache_v_out_scale", None),
                 getattr(layer, "cache_k_zp", None),

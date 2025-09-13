@@ -190,7 +190,7 @@ __device__ void speculate_update_repeat_times_optimized(
           buffer_ptr_pre_ids.toggle();
         }
       }
-      // each core loads all the needed pre_ids into lm without mfence inbetween
+      // each core loads all the needed pre_ids into lm without mfence in between
       // according to the index recorded by previous iteration
       else {
         int cnt = -1;
