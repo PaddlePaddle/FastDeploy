@@ -601,7 +601,10 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
                     )
 
         # Process MoE layers
-        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+        for layer_idx in range(
+            self.fd_config.model_config.first_k_dense_replace,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
             _add_layer_mappings(layer_idx)
 
         self._complete_missing_mappings()
