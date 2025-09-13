@@ -60,6 +60,7 @@ class DynamicWeightManager:
 
     def update_parameters(self, pid: int = 0) -> None:
         """Core method to update model parameters based on strategy."""
+        logger.info(f"start update paramaters: suffix={pid} rank={self.rank}")
         start_time = time.perf_counter()
         paddle.device.cuda.empty_cache()
 
@@ -105,7 +106,7 @@ class DynamicWeightManager:
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
-        logger.info("start clear paramaters")
+        logger.info(f"start clear paramaters: suffix={pid} rank={self.rank}")
         paddle.device.cuda.empty_cache()
         for param in self.model.state_dict().values():
             param._clear_data()
@@ -221,18 +222,15 @@ class DynamicWeightManager:
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
                 model_runner.clear_parameters(pid)
-            elif model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                while True:
-                    if model_weights_status.value[0] == ModelWeightsStatus.NORMAL:
-                        logger.info("finished loading new checkpoint")
-                        break
-                    elif is_stop == 1 or (
-                        model_weights_status.value[0] == ModelWeightsStatus.CLEARED and is_stop == 0
-                    ):
-                        if is_stop == 0:
-                            logger.info("finished clearing checkpoint")
-                            is_stop = 1
-                        time.sleep(0.001)
-                        break
-                    else:
-                        time.sleep(0.001)
+            while True:
+                if model_weights_status.value[0] == ModelWeightsStatus.NORMAL:
+                    logger.info("finished loading new checkpoint")
+                    break
+                elif is_stop == 1 or (model_weights_status.value[0] == ModelWeightsStatus.CLEARED and is_stop == 0):
+                    if is_stop == 0:
+                        logger.info("finished clearing checkpoint")
+                        is_stop = 1
+                    time.sleep(0.001)
+                    break
+                else:
+                    time.sleep(0.001)
