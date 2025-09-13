@@ -566,7 +566,6 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
 
         # Initialize mapping dictionary
         self._update_base_mappings("model")
-        self.infer_to_train_mapping = {}
 
         base_name = "model.layers"
 
