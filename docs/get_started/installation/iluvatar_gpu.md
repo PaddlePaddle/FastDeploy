@@ -33,7 +33,7 @@ docker exec -it paddle_infer bash
 pip3 install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 pip3 install paddle-iluvatar-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
 ```
-For latest paddle verion on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+For latest paddle version on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
 
 ### Install or build FastDeploy
 ```bash
