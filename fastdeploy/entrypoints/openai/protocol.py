@@ -32,9 +32,14 @@ class ErrorResponse(BaseModel):
     Error response from OpenAI API.
     """
 
-    object: str = "error"
+    error: ErrorInfo
+
+
+class ErrorInfo(BaseModel):
     message: str
-    code: int
+    type: Optional[str] = None
+    param: Optional[str] = None
+    code: Optional[str] = None
 
 
 class PromptTokenUsageInfo(BaseModel):
@@ -403,21 +408,21 @@ class CompletionRequest(BaseModel):
     prompt: Union[List[int], List[List[int]], str, List[str]]
     best_of: Optional[int] = None
     echo: Optional[bool] = False
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
     max_tokens: Optional[int] = None
-    n: int = 1
-    presence_penalty: Optional[float] = None
-    seed: Optional[int] = None
+    n: Optional[int] = 1
+    presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
+    seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
     stream_options: Optional[StreamOptions] = None
     suffix: Optional[dict] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
+    temperature: Optional[float] = Field(default=None, ge=0)
+    top_p: Optional[float] = Field(default=None, ge=0, le=1)
     user: Optional[str] = None
 
     # doc: begin-completion-sampling-params
@@ -537,7 +542,7 @@ class ChatCompletionRequest(BaseModel):
     messages: Union[List[Any], List[int]]
     tools: Optional[List[ChatCompletionToolsParam]] = None
     model: Optional[str] = "default"
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
 
@@ -552,13 +557,13 @@ class ChatCompletionRequest(BaseModel):
     )
     max_completion_tokens: Optional[int] = None
     n: Optional[int] = 1
-    presence_penalty: Optional[float] = None
-    seed: Optional[int] = None
+    presence_penalty: Optional[float] = Field(None, le=2, ge=-2)
+    seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
     stream_options: Optional[StreamOptions] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
+    temperature: Optional[float] = Field(None, ge=0)
+    top_p: Optional[float] = Field(None, le=1, ge=0)
     user: Optional[str] = None
     metadata: Optional[dict] = None
     response_format: Optional[AnyResponseFormat] = None

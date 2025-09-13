@@ -31,7 +31,12 @@ from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
+from fastdeploy.utils import (
+    EngineError,
+    ParameterError,
+    StatefulSemaphore,
+    api_server_logger,
+)
 
 
 class EngineClient:
@@ -218,42 +223,21 @@ class EngineClient:
     def valid_parameters(self, data):
         """
         Validate stream options
+        超参数（top_p、seed、frequency_penalty、temperature、presence_penalty）的校验逻辑
+        前置到了ChatCompletionRequest/CompletionRequest中
         """
 
         if data.get("n") is not None:
             if data["n"] != 1:
-                raise ValueError("n only support 1.")
+                raise ParameterError("n", "n only support 1.")
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
-                raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
+                raise ParameterError("max_tokens", f"max_tokens can be defined [1, {self.max_model_len}).")
 
         if data.get("reasoning_max_tokens") is not None:
             if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
-                raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
-
-        if data.get("top_p") is not None:
-            if data["top_p"] > 1 or data["top_p"] < 0:
-                raise ValueError("top_p value can only be defined [0, 1].")
-
-        if data.get("frequency_penalty") is not None:
-            if not -2.0 <= data["frequency_penalty"] <= 2.0:
-                raise ValueError("frequency_penalty must be in [-2, 2]")
-
-        if data.get("temperature") is not None:
-            if data["temperature"] < 0:
-                raise ValueError("temperature must be non-negative")
-
-        if data.get("presence_penalty") is not None:
-            if not -2.0 <= data["presence_penalty"] <= 2.0:
-                raise ValueError("presence_penalty must be in [-2, 2]")
-
-        if data.get("seed") is not None:
-            if not 0 <= data["seed"] <= 922337203685477580:
-                raise ValueError("seed must be in [0, 922337203685477580]")
-
-        if data.get("stream_options") and not data.get("stream"):
-            raise ValueError("Stream options can only be defined when `stream=True`.")
+                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be between max_tokens and 1")
 
         # logprobs
         logprobs = data.get("logprobs")
@@ -263,35 +247,35 @@ class EngineClient:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("logprobs", err_msg)
             top_logprobs = data.get("top_logprobs")
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
         elif logprobs:
-            raise ValueError("Invalid type for 'logprobs'")
+            raise ParameterError("logprobs", "Invalid type for 'logprobs'")
 
         # enable_logprob
         if top_logprobs:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("logprobs", err_msg)
 
             if not isinstance(top_logprobs, int):
                 err_type = type(top_logprobs).__name__
                 err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("top_logprobs", err_msg)
 
             if top_logprobs < 0:
                 err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("top_logprobs", err_msg)
 
             if top_logprobs > 20:
                 err_msg = "Invalid value for 'top_logprobs': must be <= 20."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("top_logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """

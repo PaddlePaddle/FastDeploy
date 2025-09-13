@@ -114,14 +114,14 @@ def cuda_graph_buffers(buffer_meta):
                     cur = getattr(cur, p)
                 return cur
 
-            if not hasattr(self, "_mm_buffers"):
-                self._mm_buffers = {}
+            if not hasattr(self, "_cuda_graph_buffers"):
+                self._cuda_graph_buffers = {}
                 for name, meta in buffer_meta.items():
                     shape = [_resolve_path(fd_config, s) if isinstance(s, str) else s for s in meta["shape"]]
                     dtype = meta["dtype"]
                     if "." in meta["dtype"]:
                         dtype = _resolve_path(fd_config, meta["dtype"])
-                    self._mm_buffers[name] = paddle.full(
+                    self._cuda_graph_buffers[name] = paddle.full(
                         shape=shape,
                         dtype=dtype,
                         fill_value=meta.get("value", 0),
