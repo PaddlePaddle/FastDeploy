@@ -259,19 +259,19 @@ class PaddleDisWorkerProc:
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            model_weights_signal_tensor = paddle.full(
-                shape=[1], fill_value=self.model_weights_signal[0], dtype="int32"
-            )
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
+                    model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
                     paddle.distributed.broadcast(
                         model_weights_signal_tensor, src=0, group=self.parallel_config.ep_group
                     )
+                    self.model_weights_signal[0] = model_weights_signal_tensor.item()
             if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+                model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
                 paddle.distributed.broadcast(model_weights_signal_tensor, src=0, group=self.parallel_config.tp_group)
-            self.model_weights_signal[0] = model_weights_signal_tensor.item()
+                self.model_weights_signal[0] = model_weights_signal_tensor.item()
 
             self.insert_step = False
             req_dicts = None
