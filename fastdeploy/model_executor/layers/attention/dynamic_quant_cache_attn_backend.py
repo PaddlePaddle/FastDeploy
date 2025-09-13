@@ -33,7 +33,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
-from fastdeploy.model_executor.ops.gpu import dynamic_quant_cache_write_encoder, flash_attention_mask, split_qkv_and_rope, dynamic_quant_cache_write_decoder, dynamic_quant_cache_decoder_attention, get_cur_cu_seq_len_k
+from fastdeploy.model_executor.ops.gpu import dynamic_quant_cache_write_encoder, flash_attention_mask, split_qkv_and_rope, dynamic_quant_cache_write_decoder, dynamic_quant_cache_decoder_attention, get_qk_tokens_num, dynamic_quant_get_kv_from_cache
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -51,9 +51,9 @@ class DynamciQuantCacheAttentionMetadata(AttentionMetadata):
     q_input: paddle.Tensor = None
     k_input: paddle.Tensor = None
     v_input: paddle.Tensor = None
-    cu_seq_q_pack: paddle.Tensor = None
     cu_seqlens_k: paddle.Tensor = None
-    q_pack_tokens: paddle.Tensor = None
+    q_tokens_num: int = 0
+    k_tokens_num: int = 0
     max_enc_len_this_time: int = 0
     max_dec_len_this_time: int = 0
 
@@ -111,10 +111,19 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
             )
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = DynamciQuantCacheAttentionMetadata()
-        metadata.max_enc_len_this_time = forward_meta.seq_lens_encoder.max().cpu()
-        metadata.max_dec_len_this_time = forward_meta.seq_lens_decoder.max().cpu()
-        q_token_num = int(forward_meta.cu_seqlens_q[-1])
-        k_token_num = int(forward_meta.cu_seqlens_k[-1])
+
+        metadata.cu_seqlens_k, qk_token_num = get_qk_tokens_num(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_this_time,
+            forward_meta.seq_lens_decoder
+        )
+        metadata.max_enc_len_this_time = qk_token_num[0]
+        metadata.max_dec_len_this_time = qk_token_num[1]
+        q_token_num = qk_token_num[2]
+        k_token_num = qk_token_num[3]
+        metadata.q_tokens_num = q_token_num
+        metadata.k_tokens_num = k_token_num
+
         metadata.q_input = paddle.zeros(
             [q_token_num + self.attn_block_m, self.num_heads * self.head_dim], dtype="float16"
         )
@@ -150,7 +159,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.cu_seqlens_q,
-                forward_meta.cu_seqlens_k,
+                metadata.cu_seqlens_k,
                 layer.qkv_bias,
                 self.num_heads,
                 self.kv_num_heads,
@@ -179,6 +188,27 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 metadata.max_enc_len_this_time,
                 getattr(layer, "cache_quant_type_str", "none")
             )
+
+            if metadata.q_tokens_num < metadata.k_tokens_num:
+                dynamic_quant_get_kv_from_cache(
+                    metadata.k_input,
+                    metadata.v_input,
+                    forward_meta.caches[2 * layer.layer_id],
+                    forward_meta.caches[2 * layer.layer_id + 1],
+                    layer.cache_k_c16,
+                    layer.cache_v_c16,
+                    forward_meta.cu_seqlens_k,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.block_tables,
+                    layer.c16_remain_seq_len,
+                    self.num_heads,
+                    self.kv_num_heads,
+                    layer.head_dim,
+                    metadata.max_enc_len_this_time + metadata.max_dec_len_this_time,
+                    getattr(layer, "cache_quant_type_str", "none")
+                )
+
             flash_attention_mask(
                 metadata.q_input,
                 metadata.k_input,

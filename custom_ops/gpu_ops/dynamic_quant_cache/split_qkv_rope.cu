@@ -204,6 +204,67 @@ void SplitQKVAndRope(
     // auto err = cudaGetLastError();
     // printf("rope err = %d, str = %s\n", err, cudaGetErrorString(err));
 }
+
+__global__ void get_cur_cu_seq_len_k_kernel(
+        const int* __restrict__ seq_lens_encoder,
+        const int* __restrict__ seq_lens_this_time,
+        const int* __restrict__ seq_lens_decoder,
+        int* __restrict__ cu_seqlens_k,
+        int* __restrict__ qk_tokens,
+        const int bsz) {
+
+    cu_seqlens_k[0] = 0;
+    qk_tokens[0] = 0;
+    qk_tokens[1] = 0;
+    qk_tokens[2] = 0;
+    qk_tokens[3] = 0;
+    int total_tokens = 0;
+
+    for (uint32_t bid = 0; bid < bsz; bid++) {
+        int cache_len = seq_lens_decoder[bid];
+        const int q_len = seq_lens_encoder[bid];
+        const int tokens = seq_lens_this_time[bid];
+        
+        qk_tokens[1] = max(qk_tokens[1], cache_len);
+        if (q_len == 0) {
+            cache_len = tokens;
+        }
+        total_tokens += (cache_len + q_len);
+        cu_seqlens_k[bid + 1] = total_tokens;
+        qk_tokens[0] = max(qk_tokens[0], q_len);
+        
+        qk_tokens[2] += tokens;
+        qk_tokens[3] += (cache_len + q_len);
+
+    }
+}
+
+std::vector<paddle::Tensor> GetQKTokenNum(
+        const paddle::Tensor& seq_lens_encoder,
+        const paddle::Tensor& seq_lens_this_time,
+        const paddle::Tensor& seq_lens_decoder) {
+    auto stream = seq_lens_decoder.stream();
+    auto place = seq_lens_decoder.place();
+    int bsz = seq_lens_this_time.shape()[0];
+
+    paddle::Tensor cu_seqlens_k = paddle::empty({bsz + 1}, paddle::DataType::INT32, place);
+    paddle::Tensor qk_tokens = paddle::empty({4}, paddle::DataType::INT32, place);
+
+    get_cur_cu_seq_len_k_kernel<<<1, 1, 0, stream>>>(
+        seq_lens_encoder.data<int>(),
+        seq_lens_this_time.data<int>(),
+        seq_lens_decoder.data<int>(),
+        cu_seqlens_k.data<int>(),
+        qk_tokens.data<int>(),
+        bsz
+    );
+
+    auto qk_tokens_cpu = qk_tokens.copy_to(paddle::CPUPlace(), true);
+    return {cu_seqlens_k, qk_tokens_cpu};
+}
+
+
+
 }
 
 
@@ -231,3 +292,11 @@ PD_BUILD_OP(split_qkv_and_rope)
                     {"k_input", "k_input_out"},
                     {"v_input", "v_input_out"}})
     .SetKernelFn(PD_KERNEL(dynamic_quant_cache::SplitQKVAndRope));
+
+PD_BUILD_OP(get_qk_tokens_num)
+    .Inputs({
+            "seq_lens_encoder",
+            "seq_lens_this_time",
+            "seq_lens_decoder"})
+    .Outputs({"cu_seqlens_k", "qk_tokens"})
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache::GetQKTokenNum));
