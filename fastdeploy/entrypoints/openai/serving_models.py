@@ -18,12 +18,13 @@ from dataclasses import dataclass
 from typing import List, Union
 
 from fastdeploy.entrypoints.openai.protocol import (
+    ErrorInfo,
     ErrorResponse,
     ModelInfo,
     ModelList,
     ModelPermission,
 )
-from fastdeploy.utils import api_server_logger, get_host_ip
+from fastdeploy.utils import ErrorType, api_server_logger, get_host_ip
 
 
 @dataclass
@@ -86,7 +87,7 @@ class OpenAIServingModels:
                 f"Only master node can accept models request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
         model_infos = [
             ModelInfo(
                 id=model.name, max_model_len=self.max_model_len, root=model.model_path, permission=[ModelPermission()]
