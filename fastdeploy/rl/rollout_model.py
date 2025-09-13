@@ -577,7 +577,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
                 f"{base_name}.{layer_idx}.mlp.gate.weight"
             )
 
-            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.experts.gate_correction_bias"] = (
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.e_score_correction_bias"] = (
                 f"{base_name}.{layer_idx}.mlp.gate.e_score_correction_bias"
             )
 
