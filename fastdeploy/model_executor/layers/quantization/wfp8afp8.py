@@ -171,7 +171,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
         weight_tensor = weights.transpose([1, 0]).contiguous()
         qweight, weight_scale = scaled_fp8_quant(
             weight_tensor,
-            use_per_token_if_dynamic=False,
+            use_per_token_if_dynamic=True,
         )
         layer.weight.copy_(qweight, False)
         layer.weight_scale.set_value(weight_scale)

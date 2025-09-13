@@ -716,7 +716,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             quant_config_name = args.quantization["quantization"]
             quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
-        if load_config.load_choices == "default_v1":
+        if load_config.load_choices == "default_v1" and not load_config.dynamic_load_weight:
             quantization_config["is_checkpoint_bf16"] = True
         # Special handling for Ernie models
         is_ernie = ErnieArchitectures.contains_ernie_arch(model_config.architectures)
