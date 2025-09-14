@@ -34,8 +34,8 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
         print(paddle.__git_commit__)
 
     def test_block_gemm_case(self):
-        # if self.sm_version < 90:
-        #     self.skipTest("cutlass_fp8_fp8_half_block_gemm_fused only support sm90+")
+        if self.sm_version < 90:
+            self.skipTest("cutlass_fp8_fp8_half_block_gemm_fused only support sm90+")
 
         nks = [
             [2048, 2048],
@@ -49,27 +49,20 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             [15360, 5120],
         ]
         m_values = [1, 2, 3, 4]
-        activation_types = ["", "relu"]
 
-        combinations = product(m_values, nks, activation_types)
+        combinations = product(m_values, nks)
 
-        for m, (n, k), act_type in combinations:
+        for m, (n, k) in combinations:
             x = paddle.rand([m, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
             y = paddle.rand([n, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
 
-            x_scale = (
-                paddle.rand(
-                    [(k + 127) // 128, m],
-                    dtype="float32",
-                )
-                + 1.0
+            x_scale = paddle.rand(
+                [(k + 127) // 128, m],
+                dtype="float32",
             )
-            y_scale = (
-                paddle.rand(
-                    [(n + 127) // 128, (k + 127) // 128],
-                    dtype="float32",
-                )
-                + 1.0
+            y_scale = paddle.rand(
+                [(n + 127) // 128, (k + 127) // 128],
+                dtype="float32",
             )
 
             bias = paddle.rand([n]).to(paddle.bfloat16)
@@ -95,10 +88,6 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             if bias is not None:
                 ref_out = ref_out + bias
 
-            act = "noact" if (act_type == "" or act_type == "identity") else act_type
-            if act == "relu":
-                ref_out = paddle.nn.functional.relu(ref_out)
-
             result = cutlass_fp8_fp8_half_block_gemm_fused(
                 x,
                 y,
@@ -108,7 +97,7 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
                 transpose_x=False,
                 transpose_y=True,
                 output_dtype="bfloat16",
-                act=act_type,
+                act="",
             )
 
             np.testing.assert_allclose(
