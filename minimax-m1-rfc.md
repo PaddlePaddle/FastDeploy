@@ -172,7 +172,7 @@ class ModelConfig:
 
 ### **Phase 4: 模型集成与测试 (1 周)**
 
-**任务 3.1: 编写 `minimax_m1.py`**
+**任务 4.1: 编写 `minimax_m1.py`**
 *   **文件**: `fastdeploy/model_executor/models/minimax_m1.py`
 *   **核心逻辑**:
     ```python
@@ -214,10 +214,10 @@ class ModelConfig:
     # MiniMaxM1StandardAttention 类似
     ```
 
-**任务 3.2: 编写测试用例**
+**任务 4.2: 编写测试用例**
 *   **单元测试**: 编写一个 Python 测试脚本，直接调用 `ops.mamba_attention_forward`，并与一个纯 Python/Paddle 实现的、功能等价的 Mamba 算法进行对比，验证数值精度。
 *   **端到端测试**: 创建一个完整的 MiniMax-M1 模型实例，加载权重，并运行推理。将输出与 Hugging Face `transformers` 的参考输出进行对比。
 
-**任务 3.3: 性能基准测试**
+**任务 4.3: 性能基准测试**
 *   在与 vLLM 相同的硬件和环境下，测试 FastDeploy 实现的吞吐量和时延，确保性能达标。
 
