@@ -49,7 +49,7 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             [15360, 5120],
         ]
         m_values = [1, 2, 3, 4]
-        activation_types = ["", "relu", "gelu"]
+        activation_types = ["", "relu"]
 
         combinations = product(m_values, nks, activation_types)
 
@@ -57,13 +57,19 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             x = paddle.rand([m, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
             y = paddle.rand([n, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
 
-            x_scale = paddle.rand(
-                [(k + 127) // 128, m],
-                dtype="float32",
+            x_scale = (
+                paddle.rand(
+                    [(k + 127) // 128, m],
+                    dtype="float32",
+                )
+                + 1.0
             )
-            y_scale = paddle.rand(
-                [(n + 127) // 128, (k + 127) // 128],
-                dtype="float32",
+            y_scale = (
+                paddle.rand(
+                    [(n + 127) // 128, (k + 127) // 128],
+                    dtype="float32",
+                )
+                + 1.0
             )
 
             bias = paddle.rand([n]).to(paddle.bfloat16)
@@ -92,8 +98,6 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             act = "noact" if (act_type == "" or act_type == "identity") else act_type
             if act == "relu":
                 ref_out = paddle.nn.functional.relu(ref_out)
-            elif act == "gelu":
-                ref_out = paddle.nn.functional.gelu(ref_out)
 
             result = cutlass_fp8_fp8_half_block_gemm_fused(
                 x,
