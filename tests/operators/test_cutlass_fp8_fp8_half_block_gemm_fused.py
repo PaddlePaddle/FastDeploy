@@ -56,13 +56,19 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             x = paddle.rand([m, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
             y = paddle.rand([n, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
 
-            x_scale = paddle.rand(
-                [(k + 127) // 128, m],
-                dtype="float32",
+            x_scale = (
+                paddle.rand(
+                    [(k + 127) // 128, m],
+                    dtype="float32",
+                )
+                + 1.0
             )
-            y_scale = paddle.rand(
-                [(n + 127) // 128, (k + 127) // 128],
-                dtype="float32",
+            y_scale = (
+                paddle.rand(
+                    [(n + 127) // 128, (k + 127) // 128],
+                    dtype="float32",
+                )
+                + 1.0
             )
 
             bias = paddle.rand([n]).to(paddle.bfloat16)
