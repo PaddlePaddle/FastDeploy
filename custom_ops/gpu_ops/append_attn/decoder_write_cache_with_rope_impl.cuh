@@ -435,10 +435,10 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
     if (hi < num_heads && h_bias >= half_rotary_dim){
       continue;
     }
-    const int start_token_idx = cu_seqlens_q[ori_bi];
-    if (seq_lens_encoder[ori_bi] > 0) return;
+    if (seq_lens_encoder[ori_bi] > 0) continue;
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
+    const int start_token_idx = cu_seqlens_q[ori_bi];
 
     const int* block_table_now = nullptr;
 

@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 from typing import Dict
 
 import paddle
@@ -607,5 +608,9 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             _add_layer_mappings(layer_idx)
 
         self._complete_missing_mappings()
+        infer_to_train_mapping_copy = copy.deepcopy(self.infer_to_train_mapping)
+        for key in infer_to_train_mapping_copy.keys():
+            if "mlp.experts.gate_correction_bias" in key:
+                self.infer_to_train_mapping.pop(key)
 
         return self.infer_to_train_mapping
