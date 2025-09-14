@@ -74,18 +74,15 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             bias = paddle.rand([n]).to(paddle.bfloat16)
 
             x_fp32 = x.astype("float32")
-            K = x_fp32.shape[-1]
-            x_scale_expanded = paddle.repeat_interleave(x_scale, repeats=128, axis=-2)[:K, :]
+            x_scale_expanded = paddle.repeat_interleave(x_scale, repeats=128, axis=-2)[:k, :]
             x_scale_expanded = x_scale_expanded.transpose([1, 0])
             x_dequant = x_fp32 * x_scale_expanded
 
             y_fp32 = y.astype("float32")
-            K_y = y_fp32.shape[-1]
-            N_y = y_fp32.shape[-2]
 
-            y_scale_expanded_k = paddle.repeat_interleave(y_scale, repeats=128, axis=-2)[..., :K_y, :]
-            y_scale_expanded_kn = paddle.repeat_interleave(y_scale_expanded_k, repeats=128, axis=-1)[..., :N_y]
-            y_dequant = y_fp32 * y_scale_expanded_kn
+            y_scale_expanded_n = paddle.repeat_interleave(y_scale, repeats=128, axis=-2)[:n, :]
+            y_scale_expanded_nk = paddle.repeat_interleave(y_scale_expanded_n, repeats=128, axis=-1)[:, :k]
+            y_dequant = y_fp32 * y_scale_expanded_nk
 
             x_bf16 = x_dequant.astype("bfloat16")
             y_bf16 = y_dequant.astype("bfloat16")
