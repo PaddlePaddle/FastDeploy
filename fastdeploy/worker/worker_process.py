@@ -44,7 +44,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -249,32 +249,31 @@ class PaddleDisWorkerProc:
         )
 
     def event_loop_normal(self) -> None:
-        """Main event loop for Paddle Distrubuted Workers.
+        """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
-        mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         num_running_requests = 0
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        while True:
-            if self.local_rank == 0:
-                if self.model_weights_status.value[0] != 0:
-                    self.exist_task_signal.value[0] = 2
-                else:
-                    self.exist_task_signal.value[0] = 0
 
-            if self.parallel_config.tensor_parallel_size > 1:
-                # Synchronize before updating weights
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        while True:
+            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+                if self.model_weights_status.value[0] != 0:
+                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
+                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
+            if self.fd_config.load_config.dynamic_load_weight:
+                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
 
             self.insert_step = False
             req_dicts = None
+            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if self.local_rank % mp_num_per_node == 0:
+            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
@@ -290,16 +289,24 @@ class PaddleDisWorkerProc:
                 paddle.distributed.barrier(self.parallel_config.tp_group)
 
             if self.fd_config.load_config.dynamic_load_weight:
-                if self.exist_task_signal.value[0] == 2:
+                if self.parallel_config.enable_expert_parallel:
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
+                else:
+                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                if self.model_weights_signal[0] != 0:
+                    logger.info(f"Rank: {self.local_rank} has updated parameters.")
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
 
+                    self.model_weights_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
+                        # model_weights_signal
                         self.worker.model_runner,
-                        self.parallel_config.engine_pid,
+                        self.parallel_config.engine_worker_queue_port,
                     )
+                    self.model_weights_signal[0] = 0
 
             if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -390,7 +397,6 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
@@ -493,7 +499,7 @@ def parse_args():
         "--speculative_config",
         type=json.loads,
         default=None,
-        help="Configation of SpeculativeConfig.",
+        help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -540,9 +546,9 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
-        help="Quantization name for the model, currentlly support "
+        type=json.loads,
+        default=None,
+        help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
         "is lower than that of the config file. "
@@ -552,7 +558,7 @@ def parse_args():
         "--graph_optimization_config",
         type=json.loads,
         default=None,
-        help="Configation of Graph optimization backend.",
+        help="Configuration of Graph optimization backend.",
     )
     parser.add_argument(
         "--moba_attention_config",
@@ -589,6 +595,12 @@ def parse_args():
         "--enable_logprob",
         action="store_true",
         help="Enable output of token-level log probabilities.",
+    )
+    parser.add_argument(
+        "--reasoning_parser",
+        type=str,
+        default=None,
+        help="Flag specifies the reasoning parser to use for extracting reasoning content from the model output",
     )
     parser.add_argument(
         "--early_stop_config",
@@ -630,6 +642,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -697,10 +712,18 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+        # TODO(YuanRisheng) is_checkpoint_bf16 may need to be removed and replaced by is_quantized in future
+        if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
+            quantization_config["is_checkpoint_bf16"] = True
+
+    elif args.quantization is not None:
         quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
         if load_config.load_choices == "default_v1":
             quantization_config["is_checkpoint_bf16"] = True
@@ -734,6 +757,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+
+    if (
+        args.speculative_config is not None
+        and ("method" in args.speculative_config)
+        and (args.speculative_config["method"] is not None)
+    ):
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if args.splitwise_role != "mixed":
+        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if not current_platform.is_cuda():
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if parallel_config.guided_decoding_backend != "off":
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     fd_config = FDConfig(
         model_config=model_config,

@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import re
@@ -34,11 +35,12 @@ import paddle
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.common_engine import EngineSevice
+from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -93,13 +95,15 @@ class LLMEngine:
             cfg.model_config.enable_mm,
             cfg.tool_parser,
         )
-        self.engine = EngineSevice(cfg)
+        self.engine = EngineService(cfg)
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = 1
         else:
             self.do_profile = 0
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
+
+        main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
 
     def start(self, api_server_pid=None):
         """
@@ -178,6 +182,22 @@ class LLMEngine:
 
     # _insert_task_to_worker moved to CommonEngine
 
+    def _has_guided_input(self, request):
+        """
+        Check if the request has any guided input.
+        """
+        return any(
+            x is not None
+            for x in (
+                request.guided_json,
+                request.guided_regex,
+                request.guided_choice,
+                request.structural_tag,
+                request.guided_grammar,
+                request.guided_json_object,
+            )
+        )
+
     def add_requests(self, task, sampling_params=None, **kwargs):
         """
         Add a new request to the queue.
@@ -249,8 +269,15 @@ class LLMEngine:
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        if self.engine.guided_decoding_checker is not None:
-            request, err_msg = self.engine.guided_decoding_checker.schema_format(request)
+        if self._has_guided_input(request):
+            err_msg = None
+            if self.guided_decoding_checker is None:
+                err_msg = (
+                    "guided_backend is None, use --guided-decoding-backend to specify the backend at server startup."
+                )
+            else:
+                request, err_msg = self.guided_decoding_checker.schema_format(request)
+
             if err_msg is not None:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
@@ -378,10 +405,6 @@ class LLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
-            "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
-            "FLAGS_hardamard_use_diagonal_block_matrix": int(
-                os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
-            ),
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -462,13 +485,14 @@ class LLMEngine:
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
-            f" --quantization {self.cfg.model_config.quantization}"
+            f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --reasoning_parser {self.cfg.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
@@ -539,7 +563,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
+            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request

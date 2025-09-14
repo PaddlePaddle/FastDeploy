@@ -75,12 +75,8 @@ void DisPatchW4AFp8Gemm(
         const int64_t K,
         cudaStream_t stream) {
 
-    int kBlockN = (max_tokens + 15) / 16 * 16;
+    int kBlockN = 256;
     int TailN = 0;
-    if (kBlockN > 256) {
-        TailN = kBlockN % 256;
-        kBlockN = 256;
-    }
     if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
         GEMM_SWITCH_BF16(
             M, K, batch_size, token_padding_size, kBlockN, TailN,

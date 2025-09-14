@@ -72,5 +72,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_DEEP_GEMM":
     lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
 
+    # Whether to enable model cache feature
+    "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
+
+    # Whether to use Machete for wint4 dense GEMM.
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+
 }
 ```

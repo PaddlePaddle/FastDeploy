@@ -30,6 +30,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionStreamResponse,
     ChatMessage,
     DeltaMessage,
+    ErrorInfo,
     ErrorResponse,
     LogProbEntry,
     LogProbs,
@@ -38,7 +39,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import api_server_logger
+from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -74,12 +75,6 @@ class OpenAIServingChat:
             self.master_ip = "0.0.0.0"
         api_server_logger.info(f"master ip: {self.master_ip}")
 
-    async def _ensure_connection_manager(self):
-        """ensure connection manager initialized"""
-        if not self.engine_client.connection_initialized:
-            await self.engine_client.connection_manager.initialize()
-            self.engine_client.connection_initialized = True
-
     def _check_master(self):
         return self.engine_client.is_master
 
@@ -92,14 +87,16 @@ class OpenAIServingChat:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
-                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
-                return ErrorResponse(message=err_msg, code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                )
 
         try:
             if self.max_waiting_time < 0:
@@ -119,15 +116,21 @@ class OpenAIServingChat:
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
-                prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
+            except ParameterError as e:
+                api_server_logger.error(e.message)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(
+                    error=ErrorInfo(message=str(e.message), type=ErrorType.INVALID_REQUEST_ERROR, param=e.param)
+                )
             except Exception as e:
                 error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
                 self.engine_client.semaphore.release()
-                return ErrorResponse(code=400, message=error_msg)
+                return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR))
             del current_req_dict
 
             if request.stream:
@@ -142,21 +145,20 @@ class OpenAIServingChat:
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(code=408, message=error_msg)
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
         except Exception as e:
             error_msg = (
                 f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
                 f"max waiting time: {self.max_waiting_time}"
             )
             api_server_logger.error(error_msg)
-            return ErrorResponse(code=408, message=error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, type=ErrorType.TIMEOUT_ERROR, code=ErrorCode.TIMEOUT)
+            )
 
     def _create_streaming_error_response(self, message: str) -> str:
         api_server_logger.error(message)
-        error_response = ErrorResponse(
-            code=400,
-            message=message,
-        )
+        error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.SERVER_ERROR))
         return error_response.model_dump_json()
 
     async def chat_completion_stream_generator(
@@ -183,6 +185,8 @@ class OpenAIServingChat:
             else (request.metadata or {}).get("max_streaming_response_tokens", 1)
         )  # dierctly passed & passed in metadata
 
+        max_streaming_response_tokens = max(1, max_streaming_response_tokens)
+
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
@@ -206,7 +210,6 @@ class OpenAIServingChat:
         api_server_logger.info(f"create chat completion request: {request_id}")
 
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
             choices = []
@@ -323,7 +326,9 @@ class OpenAIServingChat:
                             continue
                         delta_message.content = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        delta_message.tool_calls = delta_message_output.tool_calls
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called = True
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
@@ -369,11 +374,6 @@ class OpenAIServingChat:
                         if res["finished"]:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
-
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
 
             if include_usage:
                 completion_tokens = previous_num_tokens
@@ -422,7 +422,6 @@ class OpenAIServingChat:
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
             final_res = None
