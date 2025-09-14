@@ -1087,6 +1087,29 @@ class CommitConfig:
         logger.info("=============================================================")
 
 
+class EPLBConfig:
+    """
+    Configuration for EPLB manager.
+    """
+
+    def __init__(
+        self,
+    ):
+        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
+        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
+        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
+        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
+        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
+        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
+        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
+        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
+        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
+        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
+        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1107,6 +1130,7 @@ class FDConfig:
         graph_opt_config: GraphOptimizationConfig = None,
         moba_attention_config: MobaAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
+        eplb_config: EPLBConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
         max_num_seqs: int = 8,
@@ -1141,6 +1165,7 @@ class FDConfig:
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
+        self.eplb_config: Optional[EPLBConfig] = eplb_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)

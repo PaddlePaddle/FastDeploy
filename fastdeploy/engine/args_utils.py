@@ -25,6 +25,7 @@ from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -987,6 +988,8 @@ class EngineArgs:
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
@@ -1050,6 +1053,7 @@ class EngineArgs:
             max_model_len=self.max_model_len,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
+            eplb_config=eplb_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
             ips=self.ips,
             use_warmup=self.use_warmup,
