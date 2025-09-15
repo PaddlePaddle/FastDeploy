@@ -34,6 +34,7 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         quant_config: WeightOnlyConfig,
     ) -> None:
         super().__init__(quant_config)
+        self.quant_config.weight_only_linear_arch = -1
 
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs) -> None:
         """
@@ -61,6 +62,17 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         loaded_weights using xpu special quantization
         """
-        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(weight, self.quant_config.algo, -1, -1)
+        k, n = weight.shape
+        quanted_weight_tensors = []
+        weight_scale_tensors = []
+        offset = 30720
+        for i in range(0, n, offset):
+            end_n = min(i + offset, n)
+            weight_i = weight[:, i:end_n]
+            quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(weight_i, self.quant_config.algo, -1, -1)
+            quanted_weight_tensors.append(quanted_weight_tensor)
+            weight_scale_tensors.append(weight_scale_tensor)
+        quanted_weight_tensor = paddle.concat(quanted_weight_tensors, axis=1)
+        weight_scale_tensor = paddle.concat(weight_scale_tensors, axis=0)
         layer.weight.set_value(paddle.transpose(quanted_weight_tensor, [1, 0]))
         layer.weight_scale.set_value(weight_scale_tensor)

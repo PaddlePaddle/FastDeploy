@@ -199,6 +199,7 @@ class ModelConfig:
         self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
         self.revision = None
 
+        self.partial_rotary_factor: float = 1.0
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -222,9 +223,7 @@ class ModelConfig:
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
-        self.ori_vocab_size = self.vocab_size
-        if ErnieArchitectures.contains_ernie_arch(self.architectures):
-            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+        self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
 
         architectures = self.architectures[0]
 
@@ -658,7 +657,7 @@ class SpeculativeConfig:
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
-        self.quantization: Optional[str] = None
+        self.quantization: Optional[Dict[str, Any]] = None
         # allocate more blocks to prevent mtp from finishing the block earlier than the main model
         # Fixed now
         self.num_gpu_block_expand_ratio: Optional[float] = 1
@@ -1189,7 +1188,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
+        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() or current_platform.is_maca() else 2
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None

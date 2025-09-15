@@ -59,7 +59,7 @@ __global__ void text_image_scatter_kernel(
     constexpr int HalfVecSize = VecSize / 2;
     using T_Vec = AlignedVector<T, VecSize>;
     T_Vec input_ptr_vec;
-    T_Vec text_imgaes_vec;
+    T_Vec text_images_vec;
 
     int64_t global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
     const int64_t step = blockDim.x * gridDim.x * VecSize;
@@ -76,16 +76,20 @@ __global__ void text_image_scatter_kernel(
         Load<T, VecSize>(input_ptr + input_load_offset, &input_ptr_vec);
         #pragma unroll
         for(int vi = 0; vi < VecSize; ++vi) {
-            text_imgaes_vec[vi] = input_ptr_vec[vi];
+            text_images_vec[vi] = input_ptr_vec[vi];
         }
 
         if (token_type_ids_num == 0) {
           int64_t text_load_offset = text_index[token_idx] * hidden_size + hidden_offset;
-          Store<T,VecSize>(text_imgaes_vec, text_gather_ptr + text_load_offset);
+          Store<T,VecSize>(text_images_vec, text_gather_ptr + text_load_offset);
+
+        } else if(token_type_ids_num == 1){
+          int64_t image_load_offset = image_index[token_idx] * hidden_size + hidden_offset;
+          Store<T,VecSize>(text_images_vec, image_gather_ptr + image_load_offset);
 
         } else {
-          int64_t image_load_offset = image_index[token_idx] * hidden_size + hidden_offset;
-          Store<T,VecSize>(text_imgaes_vec, image_gather_ptr + image_load_offset);
+          // skip cuda graph padding value
+          continue;
         }
     }
 }
@@ -120,9 +124,12 @@ __global__ void text_image_gather_kernel(
           int64_t text_load_offset = text_index[token_idx] * hidden_size + hidden_offset;
           Load<T,VecSize>(text_gather_ptr + text_load_offset, &text_imgaes_vec);
 
-        } else {
+        } else if (token_type_ids_num == 1){
           int64_t image_load_offset = image_index[token_idx] * hidden_size + hidden_offset;
           Load<T,VecSize>(image_gather_ptr + image_load_offset, &text_imgaes_vec);
+        } else {
+          // skip cuda graph padding value
+          continue;
         }
 
         #pragma unroll
@@ -154,7 +161,6 @@ void LaunchTextImageGatherScatter(
     const int64_t token_num = in_dims[0];
     const int64_t hidden_size = in_dims[1];
 
-
     const int VecSize = 16 / sizeof(data_t);
     const int64_t tot_element_num = token_num * hidden_size;
 
@@ -168,7 +174,7 @@ void LaunchTextImageGatherScatter(
     PADDLE_ENFORCE_GPU_SUCCESS(GetGridSize(tot_pack_num, block_size, kNumWaves, &grid_size_x));
     dim3 grid_dim = dim3(grid_size_x, 1, 1);
     if (is_scatter) {
-        text_image_scatter_kernel<DataType_, 8><<<grid_dim, block_size>>>(
+        text_image_scatter_kernel<DataType_, VecSize><<<grid_dim, block_size, 0, stream>>>(
             reinterpret_cast<DataType_*>(input.data<data_t>()),
             reinterpret_cast<DataType_*>(text_input.data<data_t>()),
             reinterpret_cast<DataType_*>(image_input.data<data_t>()),
@@ -179,7 +185,7 @@ void LaunchTextImageGatherScatter(
             tot_element_num
         );
     } else {
-        text_image_gather_kernel<DataType_, 8><<<grid_dim, block_size>>>(
+        text_image_gather_kernel<DataType_, VecSize><<<grid_dim, block_size, 0, stream>>>(
             reinterpret_cast<DataType_*>(input.data<data_t>()),
             reinterpret_cast<DataType_*>(text_input.data<data_t>()),
             reinterpret_cast<DataType_*>(image_input.data<data_t>()),

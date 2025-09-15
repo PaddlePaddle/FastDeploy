@@ -181,7 +181,7 @@ def check_tokens_id_and_text_close(
     outputs_1_lst: TokensIdText,
     name_0: str,
     name_1: str,
-    warn_on_mismatch: bool = True,
+    threshold: float = 0.0,
 ) -> None:
     assert len(outputs_0_lst) == len(outputs_1_lst)
 
@@ -190,21 +190,28 @@ def check_tokens_id_and_text_close(
         output_ids_0, output_str_0 = outputs_0
         output_ids_1, output_str_1 = outputs_1
 
-        # Loop through generated tokens.
-        for idx, (output_id_0, output_id_1) in enumerate(zip(output_ids_0, output_ids_1)):
-            is_tok_mismatch = output_id_0 != output_id_1
-            if is_tok_mismatch and warn_on_mismatch:
+        if threshold > 0:
+            diff_rate = calculate_diff_rate(output_str_0, output_str_1)
+            if diff_rate >= threshold:
                 fail_msg = (
                     f"Test{prompt_idx}:"
-                    f"\nMatched tokens:\t{output_ids_0[:idx]}"
                     f"\n{name_0}:\t{output_str_0!r}"
                     f"\n{name_1}:\t{output_str_1!r}"
+                    f"\nDiff rate: {diff_rate:.4f} >= threshold: {threshold}"
                 )
                 raise AssertionError(fail_msg)
-    else:
-        if output_str_0 != output_str_1 and warn_on_mismatch:
-            fail_msg = f"Test{prompt_idx}:" f"\n{name_0}:\t{output_str_0!r}" f"\n{name_1}:\t{output_str_1!r}"
-            raise AssertionError(fail_msg)
+        else:
+            # Loop through generated tokens.
+            for idx, (output_id_0, output_id_1) in enumerate(zip(output_ids_0, output_ids_1)):
+                is_tok_mismatch = output_id_0 != output_id_1
+                if is_tok_mismatch:
+                    fail_msg = (
+                        f"Test{prompt_idx}:"
+                        f"\nMatched tokens:\t{output_ids_0[:idx]}"
+                        f"\n{name_0}:\t{output_str_0!r}"
+                        f"\n{name_1}:\t{output_str_1!r}"
+                    )
+                    raise AssertionError(fail_msg)
 
 
 def calculate_diff_rate(text1, text2):
