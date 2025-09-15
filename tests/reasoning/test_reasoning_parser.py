@@ -1,93 +1,172 @@
-"""
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""
+# Copyright (c) 2025 PaddlePaddle Authors.
+# Licensed under the Apache License, Version 2.0
 
 import unittest
 
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
+from fastdeploy.reasoning.ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
 
 
+class MockTokenizer:
+    def __init__(self):
+        self.vocab = {
+            "</think>": 1001,
+            "<tool_call>": 1002,
+            "<response>": 1003,
+            "</response>": 1004,
+        }
+
+    def get_vocab(self):
+        return self.vocab
+
+
+class TestErnieX1ReasoningParser(unittest.TestCase):
+    def setUp(self):
+        self.tokenizer = MockTokenizer()
+        self.parser = ErnieX1ReasoningParser(self.tokenizer)
+
+    def test_init_without_tokenizer_raises(self):
+        with self.assertRaises(ValueError):
+            ErnieX1ReasoningParser(None)
+
+    def test_init_without_vocab_token_raises(self):
+        bad_tokenizer = MockTokenizer()
+        del bad_tokenizer.vocab["</think>"]
+        with self.assertRaises(RuntimeError):
+            ErnieX1ReasoningParser(bad_tokenizer)
+
+    def test_streaming_reasoning_normal_text(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="h",
+            delta_text="h",
+            previous_token_ids=[],
+            current_token_ids=[10],
+            delta_token_ids=[10],
+        )
+        self.assertEqual(msg.reasoning_content, "h")
+
+    def test_streaming_reasoning_newline_then_text(self):
+        # First add newline
+        self.parser.extract_reasoning_content_streaming("", "\n", "\n", [], [11], [11])
+        # Then next token (not </think>)
+        msg = self.parser.extract_reasoning_content_streaming("\n", "\na", "a", [11], [11, 12], [12])
+        self.assertEqual(msg.reasoning_content, "\na")
+
+    def test_streaming_drop_newline_before_think(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="\n</think>",
+            delta_text="</think>",
+            previous_token_ids=[],
+            current_token_ids=[1001],
+            delta_token_ids=[1001],
+        )
+        self.assertIsNone(msg)
+
+    def test_streaming_response_handling(self):
+        # Simulate reasoning ended
+        prev_text = "abc</think>"
+        current_text = prev_text + "<response>"
+        msg = self.parser.extract_reasoning_content_streaming(prev_text, current_text, "<response>", [], [], [1003])
+        self.assertIsNone(msg)
+
+        # newline immediately after <response>
+        prev_text = "abc</think><response>"
+        msg = self.parser.extract_reasoning_content_streaming(prev_text, prev_text + "\n", "\n", [], [], [13])
+        self.assertIsNone(msg)
+
+        # real response content
+        prev_text = "abc</think><response>"
+        msg = self.parser.extract_reasoning_content_streaming(prev_text, prev_text + "hello", "hello", [], [], [20])
+        self.assertEqual(msg.content, "hello")
+
+        # buffered newline then text
+        self.parser._pending_newline = True
+        msg = self.parser.extract_reasoning_content_streaming(
+            "abc</think><response>\n", "abc</think><response>\na", "a", [], [], [21]
+        )
+        self.assertEqual(msg.content, "\na")
+
+        # end response tag
+        msg = self.parser.extract_reasoning_content_streaming(
+            "abc</think><response>hi", "abc</think><response>hi</response>", "</response>", [], [], [1004]
+        )
+        self.assertIsNone(msg)
+
+    def test_streaming_tool_call_handling(self):
+        prev_text = "abc</think>"
+        current_text = prev_text + "<tool_call>"
+        msg = self.parser.extract_reasoning_content_streaming(prev_text, current_text, "<tool_call>", [], [], [1002])
+        self.assertIsNone(msg)
+
+    def test_batch_extraction_reasoning_and_response(self):
+        output = "thinking...\n</think>\n<response>\nfinal answer\n</response>"
+        reasoning, response = self.parser.extract_reasoning_content(
+            output, ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}])
+        )
+        self.assertEqual(reasoning, "thinking...")
+        self.assertEqual(response, "final answer")
+
+    def test_batch_extraction_response_without_end(self):
+        output = "abc</think>\n<response>hello world"
+        reasoning, response = self.parser.extract_reasoning_content(
+            output, ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}])
+        )
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(response, "hello world")
+
+    def test_batch_extraction_tool_call(self):
+        output = "abc</think>\n<tool_call>something</tool_call>"
+        reasoning, response = self.parser.extract_reasoning_content(
+            output, ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}])
+        )
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(response, "")
+
+    def test_batch_extraction_only_reasoning(self):
+        output = "just thinking..."
+        reasoning, response = self.parser.extract_reasoning_content(
+            output, ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}])
+        )
+        self.assertEqual(reasoning, "just thinking...")
+        self.assertEqual(response, "")
+
+
+# 保留原有 ReasoningParserManager 测试
 class TestReasoningParser(ReasoningParser):
     def is_reasoning_end(self, input_ids):
-        """
-        Return True to simulate end of reasoning content.
-        """
         return True
 
     def extract_content_ids(self, input_ids):
-        """
-        Return input_ids directly for testing.
-        """
         return input_ids
 
     def extract_reasoning_content(self, model_output, request):
-        """
-        Used for testing non-streaming extraction.
-        """
         return model_output, model_output
 
-    def extract_reasoning_content_streaming(
-        self, previous_text, current_text, delta_text, previous_token_ids, current_token_ids, delta_token_ids
-    ):
-        """
-        Return None for streaming extraction; minimal implementation for testing.
-        """
+    def extract_reasoning_content_streaming(self, *args, **kwargs):
         return None
 
 
 class TestReasoningParserManager(unittest.TestCase):
-    """
-    Unit tests for ReasoningParserManager functionality.
-    """
-
     def setUp(self):
-        """
-        Save original registry to restore after each test.
-        """
         self.original_parsers = ReasoningParserManager.reasoning_parsers.copy()
 
     def tearDown(self):
-        """
-        Restore original registry to avoid test pollution.
-        """
         ReasoningParserManager.reasoning_parsers = self.original_parsers.copy()
 
     def test_register_and_get_parser(self):
-        """
-        Test that a parser can be registered and retrieved successfully.
-        Verifies normal registration and retrieval functionality.
-        """
         ReasoningParserManager.register_module(module=TestReasoningParser, name="test_parser", force=True)
         parser_cls = ReasoningParserManager.get_reasoning_parser("test_parser")
         self.assertIs(parser_cls, TestReasoningParser)
 
     def test_register_duplicate_without_force_raises(self):
-        """
-        Test that registering a parser with an existing name without force raises KeyError.
-        Ensures duplicate registrations are handled correctly.
-        """
         ReasoningParserManager.register_module(module=TestReasoningParser, name="test_parser2", force=True)
         with self.assertRaises(KeyError):
             ReasoningParserManager.register_module(module=TestReasoningParser, name="test_parser2", force=False)
 
     def test_register_non_subclass_raises(self):
-        """
-        Test that registering a class not inheriting from ReasoningParser raises TypeError.
-        Ensures type safety for registered modules.
-        """
-
         class NotParser:
             pass
 
@@ -95,10 +174,6 @@ class TestReasoningParserManager(unittest.TestCase):
             ReasoningParserManager.register_module(module=NotParser, name="not_parser")
 
     def test_get_unregistered_parser_raises(self):
-        """
-        Test that retrieving a parser that was not registered raises KeyError.
-        Ensures get_reasoning_parser handles unknown names correctly.
-        """
         with self.assertRaises(KeyError):
             ReasoningParserManager.get_reasoning_parser("nonexistent_parser")
 
