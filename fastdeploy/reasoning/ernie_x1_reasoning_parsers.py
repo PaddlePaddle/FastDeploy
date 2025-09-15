@@ -1,13 +1,5 @@
+"""
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
-#
-#
-from collections.abc import Sequence
-from typing import Tuple, Union
-
-from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
-from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
-
-#
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
@@ -20,6 +12,13 @@ from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+
+from collections.abc import Sequence
+from typing import Tuple, Union
+
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
+from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 
 @ReasoningParserManager.register_module("ernie_x1")
