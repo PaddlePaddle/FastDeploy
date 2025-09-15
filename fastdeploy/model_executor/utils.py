@@ -15,8 +15,8 @@
 """
 
 import itertools
-from collections.abc import Iterable, Mapping
 import re
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Optional, Union
@@ -466,7 +466,8 @@ class AutoWeightsLoader:
 
         autoloaded_weights = set(self._load_layer("", self.layers, weights, fd_config))
         return autoloaded_weights
-    
+
+
 def rename_offline_ckpt_suffix_to_fd_suffix(
     fd_config, ckpt_weight_suffix: str = "quant_weight", ckpt_scale_suffix="weight_scale"
 ):
