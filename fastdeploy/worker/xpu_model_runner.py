@@ -812,7 +812,7 @@ class XPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -964,7 +964,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
         self._dummy_run(
-            num_tokens=int(self.parallel_config.max_num_batched_tokens),
+            num_tokens=int(self.scheduler_config.max_num_batched_tokens),
             batch_size=min(self.parallel_config.max_num_seqs, 1),
         )
 

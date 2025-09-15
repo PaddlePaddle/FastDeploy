@@ -103,7 +103,7 @@ class EngineService:
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (
-                (self.cfg.max_num_batched_tokens // idx)
+                (self.cfg.scheduler_config.max_num_batched_tokens // idx)
                 // self.cfg.cache_config.block_size
                 * self.cfg.cache_config.block_size
             )
@@ -350,7 +350,7 @@ class EngineService:
         requests_chunk = [[] for _ in range(len(requests))]
         chunk_request_num = len(current_request_size)
         while chunk_request_num >= 1:
-            remain_batched_tokens = self.cfg.max_num_batched_tokens
+            remain_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
             for idx in range(len(current_request_size)):
                 if current_request_size[idx] <= 0:
                     continue
@@ -490,7 +490,7 @@ class EngineService:
                     available_blocks=self.resource_manager.available_block_num(),
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.max_num_batched_tokens,
+                    max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
 

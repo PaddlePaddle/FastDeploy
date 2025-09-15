@@ -1242,7 +1242,7 @@ class MetaxModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
                 in_capturing=True,
                 expected_decode_len=expected_decode_len,
@@ -1257,7 +1257,7 @@ class MetaxModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -1489,7 +1489,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         self._dummy_run(
-            num_tokens=self.parallel_config.max_num_batched_tokens,
+            num_tokens=self.scheduler_config.max_num_batched_tokens,
             batch_size=min(self.parallel_config.max_num_seqs, 3),
         )
 

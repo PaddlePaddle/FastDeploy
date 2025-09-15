@@ -44,6 +44,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
+from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.worker_base import WorkerBase
 
@@ -649,6 +650,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
+    scheduler_config = SchedulerConfig(vars(args))
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
@@ -775,6 +777,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        scheduler_config=scheduler_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,

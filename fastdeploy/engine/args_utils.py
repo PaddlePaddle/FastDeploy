@@ -931,23 +931,15 @@ class EngineArgs:
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)
-        extra_params = [
-            "max_model_len",
-            "enable_chunked_prefill",
-            "max_num_partial_prefills",
-            "max_long_partial_prefills",
-            "long_prefill_token_threshold",
-        ]
 
         all = asdict(self)
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
                 params[k[prefix_len:]] = v
-            elif k in extra_params:
+            else:
                 params[k] = v
-
-        return SchedulerConfig(**params)
+        return SchedulerConfig(params)
 
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
@@ -1049,7 +1041,6 @@ class EngineArgs:
             max_model_len=self.max_model_len,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
-            max_num_batched_tokens=self.max_num_batched_tokens,
             ips=self.ips,
             use_warmup=self.use_warmup,
             engine_worker_queue_port=self.engine_worker_queue_port,
