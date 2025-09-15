@@ -49,8 +49,17 @@ class ErnieX1ReasoningParser(ReasoningParser):
             raise RuntimeError("Could not find think end token id in tokenizer vocabulary")
         self.tool_call_start_token_id = self.vocab.get("<tool_call>")
 
-        # Record whether there is currently a saved \n that needs to be emitted
-        self._pending_newline = False
+        # The number of \n
+        self._pending_newlines = 0
+
+    def _flush_newlines(self, text: str, reasoning: bool) -> DeltaMessage:
+        """Output the accumulated \n"""
+        pending = "\n" * self._pending_newlines
+        self._pending_newlines = 0
+        if reasoning:
+            return DeltaMessage(reasoning_content=pending + text)
+        else:
+            return DeltaMessage(content=pending + text)
 
     def extract_reasoning_content_streaming(
         self,
@@ -61,77 +70,55 @@ class ErnieX1ReasoningParser(ReasoningParser):
         current_token_ids: Sequence[int],
         delta_token_ids: Sequence[int],
     ) -> Union[DeltaMessage, None]:
-        """
-        Streaming version of reasoning parser:
-        1. Treat initial content as reasoning, return delta_text as reasoning_content
-        2. If encountering "\n", buffer it until the next token is known
-        3. If the next token is </think>, drop the buffered newline
-        4. After reasoning ends, check whether the following block is <response> or <tool_call>
-        5. For <response> content, handle boundary conditions precisely
-        """
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
 
         # ----------- Reasoning phase -----------
         if self.think_end_token not in previous_text:
             if delta_text.startswith(self.think_end_token):
-                # Drop the buffered newline before </think>
-                self._pending_newline = False
+                self._pending_newlines = 0
                 return None
 
             if delta_text == "\n":
-                # Buffer newline until the next token confirms its role
-                self._pending_newline = True
+                self._pending_newlines += 1
                 return None
 
-            # If there was a pending newline and this is not </think>, emit it
-            if self._pending_newline:
-                self._pending_newline = False
-                return DeltaMessage(reasoning_content="\n" + delta_text)
+            if self._pending_newlines > 0:
+                return self._flush_newlines(delta_text, reasoning=True)
 
-            # Normal reasoning content
             return DeltaMessage(reasoning_content=delta_text)
 
         # ----------- After reasoning: response/tool_call phase -----------
         after_think = current_text[current_text.find(self.think_end_token) + len(self.think_end_token) :]
         after_think = after_think.lstrip("\n")
 
-        # Handle <tool_call>
         if after_think.startswith(self.tool_call_start_token):
-            self._pending_newline = False
+            self._pending_newlines = 0
             return None
 
-        # Handle <response>
         if after_think.startswith(self.response_start_token):
             if delta_text == self.response_start_token:
-                self._pending_newline = False
+                self._pending_newlines = 0
                 return None
 
             if delta_text == "\n" and previous_text.endswith(self.response_start_token):
-                # Drop the first newline immediately after <response>
-                self._pending_newline = False
+                self._pending_newlines = 0
                 return None
 
             if delta_text == self.response_end_token:
-                # Drop </response> and any pending newline before it
-                self._pending_newline = False
+                self._pending_newlines = 0
                 return None
 
             if delta_text == "\n":
-                # Buffer newline until the next token confirms its role
-                self._pending_newline = True
+                self._pending_newlines += 1
                 return None
 
-            # If there was a pending newline and this is not </response>, emit it
-            if self._pending_newline:
-                self._pending_newline = False
-                return DeltaMessage(content="\n" + delta_text)
+            if self._pending_newlines > 0:
+                return self._flush_newlines(delta_text, reasoning=False)
 
-            # Normal response content
             return DeltaMessage(content=delta_text)
 
-        # Default case: nothing to return
-        self._pending_newline = False
+        self._pending_newlines = 0
         return None
 
     def extract_reasoning_content(self, model_output: str, request: ChatCompletionRequest) -> Tuple[str, str]:

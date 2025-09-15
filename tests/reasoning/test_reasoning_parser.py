@@ -47,12 +47,20 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         )
         self.assertEqual(msg.reasoning_content, "h")
 
-    def test_streaming_reasoning_newline_then_text(self):
+    def test_streaming_reasoning_single_newline_then_text(self):
         # First add newline
         self.parser.extract_reasoning_content_streaming("", "\n", "\n", [], [11], [11])
         # Then next token (not </think>)
         msg = self.parser.extract_reasoning_content_streaming("\n", "\na", "a", [11], [11, 12], [12])
         self.assertEqual(msg.reasoning_content, "\na")
+
+    def test_streaming_reasoning_multiple_newlines_then_text(self):
+        # Two consecutive line breaks
+        self.parser.extract_reasoning_content_streaming("", "\n", "\n", [], [11], [11])
+        self.parser.extract_reasoning_content_streaming("\n", "\n\n", "\n", [11], [11, 11], [11])
+        # Then comes a normal character
+        msg = self.parser.extract_reasoning_content_streaming("\n\n", "\n\nx", "x", [], [], [30])
+        self.assertEqual(msg.reasoning_content, "\n\nx")
 
     def test_streaming_drop_newline_before_think(self):
         msg = self.parser.extract_reasoning_content_streaming(
@@ -83,11 +91,18 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         self.assertEqual(msg.content, "hello")
 
         # buffered newline then text
-        self.parser._pending_newline = True
+        self.parser._pending_newlines = 1
         msg = self.parser.extract_reasoning_content_streaming(
             "abc</think><response>\n", "abc</think><response>\na", "a", [], [], [21]
         )
         self.assertEqual(msg.content, "\na")
+
+        # multiple buffered newlines then text
+        self.parser._pending_newlines = 2
+        msg = self.parser.extract_reasoning_content_streaming(
+            "abc</think><response>\n\n", "abc</think><response>\n\nb", "b", [], [], [22]
+        )
+        self.assertEqual(msg.content, "\n\nb")
 
         # end response tag
         msg = self.parser.extract_reasoning_content_streaming(
