@@ -55,6 +55,9 @@ _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "pooling": ["embed"],
 }
 
+# Some model suffixes are based on auto classes from Transformers:
+# https://huggingface.co/docs/transformers/en/model_doc/auto
+# NOTE: Items higher on this list priority over lower ones
 _SUFFIX_TO_DEFAULTS: list[tuple[str, tuple[RunnerType, ConvertType]]] = [
     ("ForCausalLM", ("generate", "none")),
     ("ForConditionalGeneration", ("generate", "none")),
