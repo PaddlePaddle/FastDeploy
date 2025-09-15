@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import re
@@ -39,6 +40,7 @@ from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -100,6 +102,8 @@ class LLMEngine:
         else:
             self.do_profile = 0
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
+
+        main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
 
     def start(self, api_server_pid=None):
         """
@@ -401,10 +405,6 @@ class LLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
-            "FLAGS_hardamard_moe_block_size": int(os.getenv("FLAGS_hardamard_moe_block_size", 128)),
-            "FLAGS_hardamard_use_diagonal_block_matrix": int(
-                os.getenv("FLAGS_hardamard_use_diagonal_block_matrix", 0)
-            ),
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -485,7 +485,7 @@ class LLMEngine:
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
-            f" --quantization {self.cfg.model_config.quantization}"
+            f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
@@ -563,7 +563,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
+            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request

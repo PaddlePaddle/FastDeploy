@@ -20,9 +20,9 @@ python -m pip uninstall fastdeploy-xpu -y
 python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 # python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.0.0.dev20250901-cp310-cp310-linux_x86_64.whl
 echo "build whl"
-bash custom_ops/xpu_ops/src/download_dependencies.sh develop
-export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+bash custom_ops/xpu_ops/download_dependencies.sh develop
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
 echo "pip others"
 python -m pip install openai -U
@@ -66,6 +66,9 @@ while true; do
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
         cat server.log
         cat log/workerlog.0
+        cat log/workerlog.1
+        cat log/workerlog.2
+        cat log/workerlog.3
         exit 1
     fi
 

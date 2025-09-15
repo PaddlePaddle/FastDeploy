@@ -527,6 +527,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         from fastdeploy.model_executor.utils import (
             default_weight_loader,
             process_weights_after_loading,
+            rename_offline_ckpt_suffix_to_fd_suffix,
         )
 
         general_params_mapping = [
@@ -539,6 +540,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
+            ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
+            ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
+            ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
         ]
 
         expert_params_mapping = []
@@ -560,14 +565,20 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 param_down_proj_name="experts.down_proj_",
                 num_experts_start_offset=num_experts_start_offset,
             )
-        all_param_mapping = general_params_mapping + expert_params_mapping
-
+        all_param_mapping = [
+            (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
+        ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
+        checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
+            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+        )
         params_dict = dict(self.named_parameters())
+
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
-            for param_name, weight_name, exp_id, shard_id in all_param_mapping:
+            for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
+                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
                     continue
@@ -578,6 +589,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 expert_id = None
                 shard_id = None
+                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
                 model_param_name = loaded_weight_name
                 if model_param_name not in params_dict.keys():
                     continue
@@ -591,7 +603,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 weight_loader(param, loaded_weight, shard_id)
 
-            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
@@ -643,6 +657,19 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         Model Architecture Name
         """
         return "Ernie4_5_ForCausalLM"
+
+
+class Ernie4_5ForCausalLM(Ernie4_5_ForCausalLM):
+    """
+    Ernie4_5ForCausalLM 0.3B-PT
+    """
+
+    @classmethod
+    def name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5ForCausalLM"
 
 
 class Ernie4_5_MoePretrainedModel(PretrainedModel):
@@ -796,3 +823,16 @@ class Ernie4_5_PretrainedModel(Ernie4_5_MoePretrainedModel):
         Model Architecture Name
         """
         return "Ernie4_5_ForCausalLM"
+
+
+class Ernie4_5PretrainedModel(Ernie4_5_PretrainedModel):
+    """
+    Ernie4_5PretrainedModel 0.3B-PT
+    """
+
+    @classmethod
+    def arch_name(self):
+        """
+        Model Architecture Name
+        """
+        return "Ernie4_5ForCausalLM"

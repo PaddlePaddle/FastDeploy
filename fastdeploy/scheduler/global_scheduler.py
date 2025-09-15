@@ -648,7 +648,7 @@ class GlobalScheduler:
                 stolen_responses[response_queue_name].append(response.serialize())
                 continue
 
-            scheduler_logger.error(f"Scheduler has recieved a non-existent response from engine: {[response]}")
+            scheduler_logger.error(f"Scheduler has received a non-existent response from engine: {[response]}")
 
         with self.mutex:
             for request_id, responses in local_responses.items():

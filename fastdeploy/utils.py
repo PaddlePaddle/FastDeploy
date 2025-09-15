@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import codecs
 import importlib
+import json
 import logging
 import os
 import random
@@ -27,6 +28,8 @@ import sys
 import tarfile
 import time
 from datetime import datetime
+from enum import Enum
+from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
@@ -37,10 +40,14 @@ import paddle
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
+from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
@@ -56,6 +63,61 @@ class EngineError(Exception):
     def __init__(self, message, error_code=400):
         super().__init__(message)
         self.error_code = error_code
+
+
+class ParameterError(Exception):
+    def __init__(self, param: str, message: str):
+        self.param = param
+        self.message = message
+        super().__init__(message)
+
+
+class ExceptionHandler:
+
+    # 全局异常兜底处理
+    @staticmethod
+    async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
+        error = ErrorResponse(error=ErrorInfo(message=str(exc), type=ErrorType.INTERNAL_ERROR))
+        return JSONResponse(content=error.model_dump(), status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    # 处理请求参数验证异常
+    @staticmethod
+    async def handle_request_validation_exception(_: Request, exc: RequestValidationError) -> JSONResponse:
+        errors = exc.errors()
+        if not errors:
+            message = str(exc)
+            param = None
+        else:
+            first_error = errors[0]
+            loc = first_error.get("loc", [])
+            param = loc[-1] if loc else None
+            message = first_error.get("msg", str(exc))
+        err = ErrorResponse(
+            error=ErrorInfo(
+                message=message,
+                type=ErrorType.INVALID_REQUEST_ERROR,
+                code=ErrorCode.MISSING_REQUIRED_PARAMETER if param == "messages" else ErrorCode.INVALID_VALUE,
+                param=param,
+            )
+        )
+        return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
+
+
+class ErrorType(str, Enum):
+    INVALID_REQUEST_ERROR = "invalid_request_error"
+    TIMEOUT_ERROR = "timeout_error"
+    SERVER_ERROR = "server_error"
+    INTERNAL_ERROR = "internal_error"
+    API_CONNECTION_ERROR = "api_connection_error"
+
+
+class ErrorCode(str, Enum):
+    INVALID_VALUE = "invalid_value"
+    CONTEXT_LENGTH_EXCEEDED = "context_length_exceeded"
+    MODEL_NOT_SUPPORT = "model_not_support"
+    TIMEOUT = "timeout"
+    CONNECTION_ERROR = "connection_error"
+    MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -516,13 +578,13 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
 
     print(
         f"\n{title}:",
-        f"\n\tDevice Total memory: {meminfo.total}",
-        f"\n\tDevice Used memory: {meminfo.used}",
-        f"\n\tDevice Free memory: {meminfo.free}",
-        f"\n\tPaddle max memory Reserved: {paddle_max_reserved}",
-        f"\n\tPaddle max memory Allocated: {paddle_max_allocated}",
-        f"\n\tPaddle memory Reserved: {paddle_reserved}",
-        f"\n\tPaddle memory Allocated: {paddle_allocated}",
+        f"\n\tDevice Total memory(GiB): {meminfo.total / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tDevice Used memory(GiB): {meminfo.used / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tDevice Free memory(GiB): {meminfo.free / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle max memory Reserved(GiB): {paddle_max_reserved / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle max memory Allocated(GiB): {paddle_max_allocated / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Reserved(GiB): {paddle_reserved / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}",
     )
 
 
@@ -764,6 +826,16 @@ class StatefulSemaphore:
             "max_value": self.max_value,
             "uptime": round(self.uptime, 2),
         }
+
+
+def parse_quantization(value: str):
+    """
+    Parse a JSON string into a dictionary.
+    """
+    try:
+        return json.loads(value)
+    except ValueError:
+        return {"quantization": value}
 
 
 # 日志使用全局访问点（兼容原有使用方式）

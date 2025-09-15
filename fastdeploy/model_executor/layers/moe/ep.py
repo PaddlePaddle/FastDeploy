@@ -20,49 +20,21 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-try:
-    from paddle.distributed.communication import deep_ep
-except:
-    logger.warning("import deep_ep Failed!")
+from fastdeploy.platforms import current_platform
 
+if current_platform.is_cuda():
+    try:
+        from paddle.distributed.communication import deep_ep
+    except:
+        logger.warning("import deep_ep Failed!")
 
 import fastdeploy
 from fastdeploy.config import MoEPhase
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.utils import singleton
 
-try:
-    from fastdeploy.model_executor.ops.gpu import noaux_tc
-except:
-    logger.warning("import noaux_tc Failed!")
 
-
-def get_moe_scores(
-    gating_output: paddle.Tensor,
-    n_group,
-    topk_group,
-    top_k,
-    routed_scaling_factor,
-    e_score_correction_bias,
-) -> paddle.Tensor:
-    """
-    compute moe scores using e_score_correction_bias.
-    """
-    scores = paddle.nn.functional.sigmoid(gating_output)
-    assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group if n_group > 0 else 1,
-        topk_group if topk_group > 0 else 1,
-        top_k,
-        routed_scaling_factor,
-    )
-    return scores, topk_values, topk_idx
-
-
-@singleton
-class DeepEPEngine:
+class DeepEPEngineBase:
     """
     A wrapper class for DeepEP engine.
     """
@@ -89,28 +61,76 @@ class DeepEPEngine:
             hidden: The hidden dimension of the model.
             num_experts: The number of experts.
         """
+        self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
+        self.hidden = hidden
+        self.num_experts = num_experts
+        self.ep_size = ep_size
+        self.rank_id = ep_rank
+        self.splitwise_role = splitwise_role
+        self.moe_phase = moe_phase
+        self.async_finish = async_finish
         # TODO(@wufeisheng): Support configurable EP size​
         if group is None:
             group = paddle.distributed.new_group(range(ep_size))
         self.group = group
-        self.ep_size = ep_size
-        self.rank_id = ep_rank
-        self.hidden = hidden
-        self.num_experts = num_experts
         self.num_local_experts = num_experts // ep_size
-        self.async_finish = async_finish
-
         self.deepep_engine = None
+        self.init_deepep_engine()
 
+    @abstractmethod
+    def init_deepep_engine(self):
+        raise NotImplementedError
+
+
+@singleton
+class DeepEPEngine(DeepEPEngineBase):
+    """
+    A wrapper class for DeepEP engine.
+    """
+
+    def __init__(
+        self,
+        num_max_dispatch_tokens_per_rank: int,
+        hidden: int,
+        num_experts: int,
+        ep_size: int,
+        ep_rank: int,
+        splitwise_role: str,
+        moe_phase: MoEPhase,
+        async_finish: bool = False,
+        group=None,
+    ):
+        """
+        Initialize the DeepEP engine.
+        Args:
+            group: The MPI group object.
+            ep_size: The number of ranks.
+            rank_id: The rank id.
+            num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
+            hidden: The hidden dimension of the model.
+            num_experts: The number of experts.
+        """
+        super().__init__(
+            num_max_dispatch_tokens_per_rank,
+            hidden,
+            num_experts,
+            ep_size,
+            ep_rank,
+            splitwise_role,
+            moe_phase,
+            async_finish,
+            group,
+        )
+
+    def init_deepep_engine(self):
         from paddle.base.core import Config
 
         self.ep_config = Config(24, 6, 256)
-        self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
 
         # In mixed EP mode on a single node, we dynamically switch between
         # high throughput and low latency modes.
 
-        if splitwise_role == "mixed":
+        if self.splitwise_role == "mixed":
             self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 int(2e9),
@@ -121,10 +141,10 @@ class DeepEPEngine:
         # In disaggregated mode on multiple nodes, we either use
         # high throughput mode or low latency mode.
         else:
-            if moe_phase.phase == "decode":
+            if self.moe_phase.phase == "decode":
                 logger.info("Initializing Low Latency Buffer")
                 self.get_low_latency_buffer()
-            elif moe_phase.phase == "prefill":
+            elif self.moe_phase.phase == "prefill":
                 self.deepep_engine = deep_ep.Buffer(
                     self.group,
                     int(5e8),
@@ -133,7 +153,7 @@ class DeepEPEngine:
                     num_qps_per_rank=1,
                 )
             else:
-                raise ValueError(f"Unknown generation phase {moe_phase}")
+                raise ValueError(f"Unknown generation phase {self.moe_phase}")
 
     def get_low_latency_buffer(self):
         """
@@ -284,17 +304,27 @@ class EPRunner:
         ep_group=None,
     ):
         self.top_k = top_k
+        self.hidden = hidden
         self.num_experts = num_experts
+        self.splitwise_role = splitwise_role
+        self.moe_phase = moe_phase
+        self.num_max_dispatch_tokens_per_rank = num_max_dispatch_tokens_per_rank
+        self.ep_size = ep_size
+        self.ep_rank = ep_rank
         self.redundant_experts_num = redundant_experts_num
+        self.ep_group = ep_group
+        self.init_ep_engine()
+
+    def init_ep_engine(self):
         self.ep_engine = DeepEPEngine(
-            num_max_dispatch_tokens_per_rank=num_max_dispatch_tokens_per_rank,
-            hidden=hidden,
-            num_experts=num_experts + redundant_experts_num,
-            ep_size=ep_size,
-            ep_rank=ep_rank,
-            splitwise_role=splitwise_role,
-            moe_phase=moe_phase,
-            group=ep_group,
+            num_max_dispatch_tokens_per_rank=self.num_max_dispatch_tokens_per_rank,
+            hidden=self.hidden,
+            num_experts=self.num_experts + self.redundant_experts_num,
+            ep_size=self.ep_size,
+            ep_rank=self.ep_rank,
+            splitwise_role=self.splitwise_role,
+            moe_phase=self.moe_phase,
+            group=self.ep_group,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
