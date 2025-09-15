@@ -62,6 +62,7 @@ class ErnieArchitectures:
     """Helper class for ERNIE architecture check."""
 
     ARCHITECTURES = {
+        "Ernie4_5ForCausalLM",  # 0.3B-PT
         "Ernie4_5_ForCausalLM",
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
@@ -132,6 +133,8 @@ class ModelConfig:
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
+        self.partial_rotary_factor: float = 1.0
+        self.num_nextn_predict_layers = 0
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -155,9 +158,7 @@ class ModelConfig:
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
-        self.ori_vocab_size = self.vocab_size
-        if ErnieArchitectures.contains_ernie_arch(self.architectures):
-            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+        self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
 
         architectures = self.architectures[0]
         if MultimodalRegistry.contains_model(architectures):
@@ -398,7 +399,7 @@ class SpeculativeConfig:
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
-        self.quantization: Optional[str] = None
+        self.quantization: Optional[Dict[str, Any]] = None
         # allocate more blocks to prevent mtp from finishing the block earlier than the main model
         # Fixed now
         self.num_gpu_block_expand_ratio: Optional[float] = 1
@@ -579,6 +580,10 @@ class GraphOptimizationConfig:
         """ Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
+        self.cudagraph_only_prefill: bool = False
+        """When cudagraph_only_prefill is False, only capture decode-only.
+        When cudagraph_only_prefill is True, only capture prefill-only.
+        Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = None
@@ -591,13 +596,13 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
+    def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(
@@ -631,7 +636,7 @@ class GraphOptimizationConfig:
         # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Shape [256, 288, ... 992, 1024]
-        draft_capture_sizes += [32 * i for i in range(17, 33)]
+        draft_capture_sizes += [32 * i for i in range(9, 33)]
 
         draft_capture_sizes.append(max_num_seqs)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
@@ -890,8 +895,8 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() else 2
-        self.prealloc_dec_block_slot_num_threshold = 5
+        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() or current_platform.is_maca() else 2
+        self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
         self.enable_chunked_prefill = False
@@ -1139,7 +1144,11 @@ class FDConfig:
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
-        self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
+
+        if self.graph_opt_config.cudagraph_only_prefill:
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
+        else:
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.parallel_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
@@ -1236,7 +1245,10 @@ class FDConfig:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if paddle.is_compiled_with_xpu():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048
@@ -1292,7 +1304,7 @@ class FDConfig:
         ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
-            if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 assert self.max_num_batched_tokens >= self.max_model_len, (
                     f"max_num_batched_tokens: {self.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"

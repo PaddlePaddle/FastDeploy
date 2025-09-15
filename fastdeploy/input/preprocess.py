@@ -71,6 +71,7 @@ class InputPreprocessor:
         """
         reasoning_parser_obj = None
         tool_parser_obj = None
+
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
         if self.tool_parser:
@@ -85,6 +86,8 @@ class InputPreprocessor:
             Processor = load_input_processor_plugins()
             self.processor = Processor(
                 model_name_or_path=self.model_name_or_path,
+                reasoning_parser_obj=reasoning_parser_obj,
+                tool_parser_obj=tool_parser_obj,
             )
         except:
             if not self.enable_mm:

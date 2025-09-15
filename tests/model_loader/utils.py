@@ -23,6 +23,7 @@ from multiprocessing import Process, Queue
 import pytest
 
 TokensIdText = list[tuple[list[int], str]]
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
 
 
 def clear_logs():
@@ -63,9 +64,14 @@ def run_with_timeout(target, args, timeout=60 * 5):
         print_logs()
         raise RuntimeError("Worker process hung and was terminated")
     try:
-        return result_queue.get(timeout=60)
+        result = result_queue.get(timeout=60)
     except Exception as e:
         raise RuntimeError(f"Failed to get result from worker: {e}")
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
+
+    return result
 
 
 def form_model_get_output_topp0(
@@ -78,6 +84,7 @@ def form_model_get_output_topp0(
     load_choices,
     engine_worker_queue_port,
     prompts,
+    cache_queue_port,
     result_queue,
 ):
     try:
@@ -88,11 +95,12 @@ def form_model_get_output_topp0(
             load_choices=load_choices,
             quantization=quantization,
             engine_worker_queue_port=engine_worker_queue_port,
+            cache_queue_port=cache_queue_port,
         ) as fd_model:
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
             result_queue.put(fd_outputs)
     except Exception:
-        print(f"Failed using {load_choices} laoder to load model from {model_path}.")
+        print(f"Failed using {load_choices} loader to load model from {model_path}.")
         traceback.print_exc()
         pytest.fail(f"Failed to initialize LLM model from {model_path}")
 
@@ -115,6 +123,19 @@ def clean_ports(ports_to_clean: list[int]):
     """
     Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
     """
+    try:
+        result = subprocess.run(
+            f"ps -efww | grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            pid = int(parts[1])
+            print(f"Killing PID: {pid}")
+            os.kill(pid, signal.SIGKILL)
+    except Exception as e:
+        print(f"Failed to kill cache manager process: {e}, {str(traceback.format_exc())}")
     for port in ports_to_clean:
         kill_process_on_port(port)
 
@@ -160,7 +181,7 @@ def check_tokens_id_and_text_close(
     outputs_1_lst: TokensIdText,
     name_0: str,
     name_1: str,
-    warn_on_mismatch: bool = True,
+    threshold: float = 0.0,
 ) -> None:
     assert len(outputs_0_lst) == len(outputs_1_lst)
 
@@ -169,21 +190,28 @@ def check_tokens_id_and_text_close(
         output_ids_0, output_str_0 = outputs_0
         output_ids_1, output_str_1 = outputs_1
 
-        # Loop through generated tokens.
-        for idx, (output_id_0, output_id_1) in enumerate(zip(output_ids_0, output_ids_1)):
-            is_tok_mismatch = output_id_0 != output_id_1
-            if is_tok_mismatch and warn_on_mismatch:
+        if threshold > 0:
+            diff_rate = calculate_diff_rate(output_str_0, output_str_1)
+            if diff_rate >= threshold:
                 fail_msg = (
                     f"Test{prompt_idx}:"
-                    f"\nMatched tokens:\t{output_ids_0[:idx]}"
                     f"\n{name_0}:\t{output_str_0!r}"
                     f"\n{name_1}:\t{output_str_1!r}"
+                    f"\nDiff rate: {diff_rate:.4f} >= threshold: {threshold}"
                 )
                 raise AssertionError(fail_msg)
-    else:
-        if output_str_0 != output_str_1 and warn_on_mismatch:
-            fail_msg = f"Test{prompt_idx}:" f"\n{name_0}:\t{output_str_0!r}" f"\n{name_1}:\t{output_str_1!r}"
-            raise AssertionError(fail_msg)
+        else:
+            # Loop through generated tokens.
+            for idx, (output_id_0, output_id_1) in enumerate(zip(output_ids_0, output_ids_1)):
+                is_tok_mismatch = output_id_0 != output_id_1
+                if is_tok_mismatch:
+                    fail_msg = (
+                        f"Test{prompt_idx}:"
+                        f"\nMatched tokens:\t{output_ids_0[:idx]}"
+                        f"\n{name_0}:\t{output_str_0!r}"
+                        f"\n{name_1}:\t{output_str_1!r}"
+                    )
+                    raise AssertionError(fail_msg)
 
 
 def calculate_diff_rate(text1, text2):

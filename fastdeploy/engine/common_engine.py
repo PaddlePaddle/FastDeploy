@@ -42,12 +42,18 @@ from fastdeploy.inter_communicator import (
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
-from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
+try:
+    TokenProcessor = load_token_processor_plugins()
+    llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
+except:
+    from fastdeploy.output.token_processor import TokenProcessor
 
-class EngineSevice:
+
+class EngineService:
     """
     Base class containing common engine functionality
     """
@@ -508,7 +514,7 @@ class EngineSevice:
                 main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
-                err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
+                err_msg = f"Error happened while insert task to engine: {e}, {traceback.format_exc()!s}."
                 llm_logger.error(err_msg)
 
     def _scheduler_task_to_worker_v1(self):
@@ -525,10 +531,13 @@ class EngineSevice:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+            if self.cfg.model_config.enable_mm:
+                available_blocks = self.resource_manager.available_block_num()
+            else:
+                available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
-            self.resource_manager.check_and_free_block_tables()
             tasks = self.scheduler.get_requests(
-                available_blocks=self.resource_manager.available_block_num(),
+                available_blocks=available_blocks,
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
@@ -552,8 +561,6 @@ class EngineSevice:
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
-                main_process_metrics.num_requests_running.inc(len(tasks))
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
@@ -562,7 +569,7 @@ class EngineSevice:
                     time.sleep(0.005)
 
             except Exception as e:
-                err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
+                err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 llm_logger.error(err_msg)
 
     def start_zmq_service(self, api_server_pid=None):
@@ -644,7 +651,7 @@ class EngineSevice:
                     self.zmq_server.send_multipart(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receiving new request from zmq, details={e}, "
+                    f"Error happened while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
@@ -662,7 +669,7 @@ class EngineSevice:
                     self.zmq_server.send_multipart(request_id, contents)
 
             except Exception as e:
-                llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
+                llm_logger.error(f"Unexcepted error happened: {e}, {traceback.format_exc()!s}")
 
     def split_mode_get_tasks(self):
         """

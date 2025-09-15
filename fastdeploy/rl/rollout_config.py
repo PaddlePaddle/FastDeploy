@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Any, Dict, Optional
+
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 
@@ -52,7 +54,7 @@ class RolloutModelConfig:
         expert_parallel_size: int = 1,
         enable_expert_parallel: bool = False,
         ori_vocab_size: int = None,
-        quantization: str = "None",
+        quantization: Optional[Dict[str, Any]] = None,
         guided_decoding_backend: str = "off",
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
@@ -60,6 +62,8 @@ class RolloutModelConfig:
         early_stop_config: str = None,
         local_rank: int = 0,
         moba_attention_config: str = None,
+        data_parallel_size: int = 1,
+        num_nextn_predict_layers: int = 0,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -95,6 +99,7 @@ class RolloutModelConfig:
         self.splitwise_role = splitwise_role
         self.expert_parallel_size = expert_parallel_size
         self.enable_expert_parallel = enable_expert_parallel
+        self.data_parallel_size = data_parallel_size
         self.ori_vocab_size = ori_vocab_size
         self.quantization = quantization
         self.guided_decoding_backend = guided_decoding_backend
@@ -105,6 +110,7 @@ class RolloutModelConfig:
         self.early_stop_config = early_stop_config
         self.ips = None
         self.moba_attention_config = moba_attention_config
+        self.num_nextn_predict_layers = num_nextn_predict_layers
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())
