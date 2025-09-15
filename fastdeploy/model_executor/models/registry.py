@@ -162,7 +162,7 @@ class ModelRegistry:
         try:
             return self.models[architecture].load_model_cls()
         except Exception as e:
-            print(f"加载模型 {architecture} 失败: {e}")
+            print(f"Failed to load model {architecture}: {e}")
             return None
 
     @lru_cache(maxsize=128)
@@ -172,7 +172,7 @@ class ModelRegistry:
         try:
             return self.models[architecture].inspect_model_cls()
         except Exception as e:
-            print(f"检查模型 {architecture} 失败: {e}")
+            print(f"Failed to inspect model {architecture}: {e}")
             return None
 
     def inspect_model_cls(

@@ -31,7 +31,6 @@ def get_pooling_config_name(pooling_name: str):
 
     if "_" in pooling_name:
         pooling_name = pooling_name.split("_")[0]
-    print("pooling_name", pooling_name)
 
     if "lasttoken" in pooling_name:
         pooling_name = "last"
