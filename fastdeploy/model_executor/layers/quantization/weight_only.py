@@ -44,6 +44,7 @@ class WeightOnlyConfig(QuantConfigBase):
     def __init__(
         self,
         algo: str,
+        is_checkpoint_bf16: bool = False,
     ) -> None:
         super().__init__()
         self.algo = algo
@@ -55,6 +56,7 @@ class WeightOnlyConfig(QuantConfigBase):
         self.quant_max_bound = 0
         self.quant_min_bound = 0
         self.quant_round_type = 0
+        self.is_checkpoint_bf16 = is_checkpoint_bf16
 
     def name(self) -> str:
         return "weight_only"
@@ -62,7 +64,8 @@ class WeightOnlyConfig(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "WeightOnlyConfig":
         algo = config["algo"]
-        return cls(algo)
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(algo, is_checkpoint_bf16=is_checkpoint_bf16)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
@@ -153,12 +156,13 @@ class WINT8Config(WeightOnlyConfig):
     weight only int8 config
     """
 
-    def __init__(self) -> None:
-        super().__init__("weight_only_int8")
+    def __init__(self, is_checkpoint_bf16: bool = False) -> None:
+        super().__init__("weight_only_int8", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT8Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint8"
