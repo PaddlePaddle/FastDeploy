@@ -98,7 +98,7 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
                 f"Loading will prioritize cached models. Users are responsible for ensuring the saved model is correct. If any error occurs, deleting the cache at {weight_cache_dir} may resolve it."
             )
             enable_cache = True
-            weight_cache_context = switch_config_context(fd_config.quant_config, "is_checkpoint_bf16", False)
+            weight_cache_context = switch_config_context(fd_config.quant_config, "is_quantized", True)
 
     return enable_cache, weight_cache_dir, weight_cache_context
 
@@ -150,7 +150,8 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
                 )
                 _save_model(model.state_dict(), os.path.join(tp_weight_cache_dir, "cache.pdparams"))
             else:
-                logger.info("Weights are already cached, skip saving")
+                reason = "weights already cached" if envs.FD_ENABLE_MODEL_LOAD_CACHE else "cache disabled"
+                logger.info(f"Skip saving ,{reason}")
             return result
 
         return wrapper
