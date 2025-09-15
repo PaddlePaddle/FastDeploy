@@ -61,14 +61,14 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
                     [(k + 127) // 128, m],
                     dtype="float32",
                 )
-                + 1.0
+                + 0.5
             )
             y_scale = (
                 paddle.rand(
                     [(n + 127) // 128, (k + 127) // 128],
                     dtype="float32",
                 )
-                + 1.0
+                + 0.5
             )
 
             bias = paddle.rand([n]).to(paddle.bfloat16)
