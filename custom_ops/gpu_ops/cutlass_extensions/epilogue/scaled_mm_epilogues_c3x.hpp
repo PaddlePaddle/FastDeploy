@@ -6,6 +6,8 @@
 // clang-format off
 #include "cutlass_extensions/epilogue/broadcast_load_epilogue_c3x.hpp"
 #include "cutlass_extensions/epilogue/broadcast_load_epilogue_array_c3x.hpp"
+
+#include "helper.h"
 // clang-format on
 
 /*

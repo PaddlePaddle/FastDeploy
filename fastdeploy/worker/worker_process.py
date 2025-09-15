@@ -34,6 +34,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
+    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
     SpeculativeConfig,
@@ -41,9 +42,9 @@ from fastdeploy.config import (
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.model_executor.layers.quantization import get_quantization_config
+from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -105,7 +106,8 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
-    if fd_config.model_config.enable_mm:
+    architectures = fd_config.model_config.architectures
+    if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
             model_max_length=fd_config.parallel_config.max_model_len,
@@ -152,19 +154,7 @@ class PaddleDisWorkerProc:
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
-        # Initialize task queue
-        task_address = (
-            self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
-        )
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.task_queue = TaskQueue(
-            address=task_address,
-            is_server=False,
-            num_client=self.parallel_config.tensor_parallel_size,
-            client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.data_parallel_rank,
-        )
 
     def init_health_status(self) -> None:
         """
@@ -176,12 +166,27 @@ class PaddleDisWorkerProc:
             exist_swapped_task_signal:
             model_weights_status:
         """
-        # init worker_ready_signal
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
+            launched_expert_service_signal_data = np.zeros(
+                shape=[min(self.parallel_config.data_parallel_size, self.max_chips_per_node)], dtype=np.int32
+            )
+            self.launched_expert_service_signal = IPCSignal(
+                name="launched_expert_service_signal",
+                array=launched_expert_service_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_pid,
+                create=False,
+            )
+            while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
+                pass
+
+        # init worker_ready_signal
         array_size = min(
             self.max_chips_per_node,
             self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size,
         )
+
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
             name="worker_ready_signal",
@@ -191,17 +196,17 @@ class PaddleDisWorkerProc:
             create=False,
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
-
         # init worker_healthy_live_signal
-        workers_alive = np.zeros(shape=[array_size], dtype=np.int32)
+        workers_alive = np.zeros(shape=[min(array_size, self.parallel_config.tensor_parallel_size)], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
-        self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
         # init model_weights_status
         workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
@@ -209,27 +214,27 @@ class PaddleDisWorkerProc:
             name="model_weights_status",
             array=workers_model_weights,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
         # init exist_task_signal
-        workers_exist_task = np.zeros([self.parallel_config.data_parallel_size], dtype=np.int32)
+        workers_exist_task = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
             array=workers_exist_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
         # init exist_swapped_task_signal
-        workers_swapped_task = np.zeros(shape=[self.parallel_config.data_parallel_size], dtype=np.int32)
+        workers_swapped_task = np.zeros(shape=[1], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
@@ -239,36 +244,36 @@ class PaddleDisWorkerProc:
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
 
     def event_loop_normal(self) -> None:
-        """Main event loop for Paddle Distrubuted Workers.
+        """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
-        mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         num_running_requests = 0
-        while True:
-            if self.local_rank == 0:
-                if self.model_weights_status.value[0] != 0:
-                    self.exist_task_signal.value[0] = 2
-                else:
-                    self.exist_task_signal.value[0] = 0
 
-            if self.parallel_config.tensor_parallel_size > 1:
-                # Synchronize before updating weights
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        while True:
+            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+                if self.model_weights_status.value[0] != 0:
+                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
+                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
+            if self.fd_config.load_config.dynamic_load_weight:
+                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
 
             self.insert_step = False
             req_dicts = None
-            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
+            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+            self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if self.local_rank % mp_num_per_node == 0:
+            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
@@ -277,35 +282,40 @@ class PaddleDisWorkerProc:
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
-                            self.exist_task_signal.value[self.fd_config.parallel_config.data_parallel_rank] = 1
+                            self.exist_task_signal.value[0] = 1
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
                 paddle.distributed.barrier(self.parallel_config.tp_group)
 
             if self.fd_config.load_config.dynamic_load_weight:
-                if self.exist_task_signal.value[0] == 2:
+                if self.parallel_config.enable_expert_parallel:
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
+                else:
+                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                if self.model_weights_signal[0] != 0:
+                    logger.info(f"Rank: {self.local_rank} has updated parameters.")
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
 
+                    self.model_weights_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
+                        # model_weights_signal
                         self.worker.model_runner,
-                        self.parallel_config.engine_pid,
+                        self.parallel_config.engine_worker_queue_port,
                     )
+                    self.model_weights_signal[0] = 0
 
-            if (
-                self.exist_task_signal.value[self.fd_config.parallel_config.data_parallel_rank] == 1
-                or self.task_queue.read_finish_flag.get() == 1
-            ):
+            if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
 
                 tasks, read_finish = self.task_queue.get_tasks()
                 if read_finish:
                     # Ensure that every worker get the task
-                    self.exist_task_signal.value[self.fd_config.parallel_config.data_parallel_rank] = 0
+                    self.exist_task_signal.value[0] = 0
                     self.task_queue.read_finish_flag.set(0)
 
                 req_dicts = []
@@ -387,7 +397,6 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
@@ -410,6 +419,21 @@ class PaddleDisWorkerProc:
     def init_device(self) -> None:
         """Initialize device and Construct model runner"""
         self.worker.init_device()
+
+    def start_task_queue_service(self):
+        # Initialize task queue
+        task_address = (
+            self.parallel_config.pod_ip,
+            self.parallel_config.engine_worker_queue_port,
+        )
+        logger.info(f"connect task queue address {task_address}")
+        self.task_queue = TaskQueue(
+            address=task_address,
+            is_server=False,
+            num_client=self.parallel_config.tensor_parallel_size,
+            client_id=self.parallel_config.tensor_parallel_rank,
+            local_data_parallel_id=self.parallel_config.data_parallel_rank,
+        )
 
     def load_model(self) -> None:
         """Load weights and create model"""
@@ -444,7 +468,7 @@ def parse_args():
     parser.add_argument("--total_block_num", type=int, default=2000)
     parser.add_argument("--block_size", type=int, default=64)
     parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
-    parser.add_argument("--engine_worker_queue_port", type=int, default=9923)
+    parser.add_argument("--engine_worker_queue_port", type=str, default="9923")
     parser.add_argument("--max_model_len", type=int, default=3072, help="max model len")
     parser.add_argument("--device_ids", type=str, default="0", help="cuda visible devices")
     parser.add_argument("--dtype", type=str, default="bfloat16", help="input dtype")
@@ -475,7 +499,7 @@ def parse_args():
         "--speculative_config",
         type=json.loads,
         default=None,
-        help="Configation of SpeculativeConfig.",
+        help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -522,9 +546,9 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
-        help="Quantization name for the model, currentlly support "
+        type=json.loads,
+        default=None,
+        help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
         "is lower than that of the config file. "
@@ -534,7 +558,13 @@ def parse_args():
         "--graph_optimization_config",
         type=json.loads,
         default=None,
-        help="Configation of Graph optimization backend.",
+        help="Configuration of Graph optimization backend.",
+    )
+    parser.add_argument(
+        "--moba_attention_config",
+        type=json.loads,
+        default=None,
+        help="Configation of moba attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -567,6 +597,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--reasoning_parser",
+        type=str,
+        default=None,
+        help="Flag specifies the reasoning parser to use for extracting reasoning content from the model output",
+    )
+    parser.add_argument(
         "--early_stop_config",
         type=json.loads,
         default=None,
@@ -587,6 +623,12 @@ def parse_args():
         help="The ips of multinode deployment.",
     )
 
+    parser.add_argument(
+        "--lm_head_fp32",
+        action="store_true",
+        help="Flag to specify dtype of lm_head as FP32",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -600,6 +642,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -619,15 +664,23 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
+
+    parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
+        parallel_config.local_data_parallel_id
+    ]
     parallel_config.set_tp_group()
 
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
+
+    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -640,44 +693,17 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
     logger.info(f"parallel_config.tensor_parallel_size {parallel_config.tensor_parallel_size}")
     logger.info(f"parallel_config.tensor_parallel_rank {parallel_config.tensor_parallel_rank}")
+    logger.info(f"parallel_config.engine_worker_queue_port {parallel_config.engine_worker_queue_port}")
 
     if getattr(model_config, "num_hidden_layers", None) is None:
         raise ValueError("num_hidden_layers is None")
 
-    quantization_config = model_config.quantization_config
-    if not model_config.is_quantized:
-        if quantization_config is not None:
-            if "kv_cache_quant_type" not in quantization_config:
-                model_config.is_quantized = True
-
-    quant_config_name = None
-    if quantization_config is not None and quantization_config.get("quantization", None) is None:
-        raise ValueError("quantization_config should have a key named 'quantization' for specify quant config.")
-
-    if quantization_config is not None:
-        quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
-        quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
-        # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
-        if load_config.load_choices == "default_v1":
-            quantization_config["is_checkpoint_bf16"] = True
-        # Special handling for Ernie models
-        is_ernie = ErnieArchitectures.contains_ernie_arch(model_config.architectures)
-        if quant_config_name == "wint4" and is_ernie:
-            quantization_config["dense_quant_type"] = "wint8"
-            quantization_config["moe_quant_type"] = "wint4"
-            quantization_config["quantization"] = "mix_quant"
-            quant_config_name = "mix_quant"
-    else:
-        quant_config_name = None
-
-    if quant_config_name is None:
-        quant_config = None
-    else:
-        quant_cls = get_quantization_config(quant_config_name)
-        quant_config = quant_cls.from_config(quantization_config)
+    quant_config = parse_quant_config(
+        args,
+        model_config,
+        is_ernie=ErnieArchitectures.contains_ernie_arch(model_config.architectures),
+        is_v1_loader=load_config.load_choices == "default_v1",
+    )
 
     # Log quantization info
     logger.info("===========quantization_config==============")
@@ -687,12 +713,29 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         else:
             logger.info("Model Status: Original (will apply online quantization)")
 
-        logger.info(f"{quantization_config}")
+        logger.info(f"{model_config.quantization_config}")
     else:
         logger.info("No quantization config found and use original weight and act dtype.")
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+
+    if (
+        args.speculative_config is not None
+        and ("method" in args.speculative_config)
+        and (args.speculative_config["method"] is not None)
+    ):
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if args.splitwise_role != "mixed":
+        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if not current_platform.is_cuda():
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+    if parallel_config.guided_decoding_backend != "off":
+        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
+        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     fd_config = FDConfig(
         model_config=model_config,
@@ -705,7 +748,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
+        moba_attention_config=moba_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 
@@ -746,12 +791,11 @@ def run_worker_proc() -> None:
     # Initialize health status
     worker_proc.init_health_status()
 
+    worker_proc.start_task_queue_service()
+
     # Start event loop
     worker_proc.event_loop_normal()
 
 
 if __name__ == "__main__":
-    from fastdeploy.plugins.model_register import load_model_register_plugins
-
-    load_model_register_plugins()
     run_worker_proc()

@@ -24,6 +24,7 @@ import pytest
 from fastdeploy import LLM, SamplingParams
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 MAX_WAIT_SECONDS = 60
 
 
@@ -87,6 +88,7 @@ def llm(model_path):
             model=model_path,
             tensor_parallel_size=1,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
+            cache_queue_port=FD_CACHE_QUEUE_PORT,
             max_model_len=32768,
             quantization="wint8",
         )
@@ -189,6 +191,74 @@ def test_chat_completion(llm):
             print(f"[ERROR] Chat Case {i + 1} failed.")
             traceback.print_exc()
             pytest.fail(f"Chat case {i + 1} failed")
+
+
+def test_generate_prompts_stream(llm):
+    """
+    Test basic prompt generation stream outputs
+    """
+
+    prompts = [
+        "请介绍一下中国的四大发明。",
+    ]
+
+    sampling_params = SamplingParams(
+        temperature=0.8,
+        top_p=0.95,
+    )
+
+    try:
+        outputs = llm.generate(prompts, sampling_params, stream=True)
+
+        # Collect streaming output
+        output = []
+        for chunk in outputs:
+            if chunk[0] is not None:
+                output.append(chunk[0].outputs.text)
+        assert len(output) > 0
+
+    except Exception:
+        print("Failed during prompt generation.")
+        traceback.print_exc()
+        pytest.fail("Prompt generation test failed")
+
+
+def test_chat_completion_stream(llm):
+    """
+    Test chat completion stream outputs
+    """
+    chat_cases = [
+        [
+            {"role": "user", "content": "你好，请介绍一下你自己。"},
+        ],
+        [
+            {"role": "user", "content": "你知道地球到月球的距离是多少吗？"},
+            {"role": "assistant", "content": "大约是38万公里左右。"},
+            {"role": "user", "content": "那太阳到地球的距离是多少？"},
+        ],
+    ]
+
+    sampling_params = SamplingParams(
+        temperature=0.8,
+        top_p=0.95,
+    )
+
+    try:
+        outputs = llm.chat(chat_cases, sampling_params, stream=True)
+
+        # Collect streaming output
+        output = [[], []]
+        for chunks in outputs:
+            for req_idx, chunk in enumerate(chunks):
+                if chunk is not None:
+                    output[req_idx].append(chunk.outputs.text)
+        assert len(output[0]) > 0
+        assert len(output[1]) > 0
+
+    except Exception:
+        print("Failed during prompt chat.")
+        traceback.print_exc()
+        pytest.fail("Prompt chat test failed")
 
 
 def test_seed(llm):

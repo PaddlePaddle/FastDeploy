@@ -21,6 +21,8 @@ from pathlib import Path
 
 from paddleformers.transformers import PretrainedModel
 
+from fastdeploy.plugins.model_register import load_model_register_plugins
+
 from .model_base import ModelForCasualLM, ModelRegistry
 
 
@@ -59,3 +61,5 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
 
 
 auto_models_registry(os.path.dirname(__file__))
+
+load_model_register_plugins()
