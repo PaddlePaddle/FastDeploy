@@ -20,6 +20,12 @@ class MockTokenizer:
     def get_vocab(self):
         return self.vocab
 
+    def encode(self, text, add_special_tokens=False):
+        # Simple mock: each char -> ord(char), tags use vocab
+        if text in self.vocab:
+            return [self.vocab[text]]
+        return [ord(c) for c in text]
+
 
 class TestErnieX1ReasoningParser(unittest.TestCase):
     def setUp(self):
@@ -148,8 +154,94 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         self.assertEqual(reasoning, "just thinking...")
         self.assertEqual(response, "")
 
+    def test_batch_extraction_response_strip_edges_keep_middle_newlines(self):
+        # Input: reasoning has trailing \n, response has leading/trailing \n, middle \n preserved
+        output = "absdc\n</think>\n\n<response>\nwo\n\nrld\n\n</response>"
+        reasoning, response = self.parser.extract_reasoning_content(
+            output, ChatCompletionRequest(messages=[{"role": "user", "content": "hi"}])
+        )
+        self.assertEqual(reasoning, "absdc")
+        self.assertEqual(response, "wo\n\nrld\n")
 
-# 保留原有 ReasoningParserManager 测试
+    def test_streaming_response_strip_edges_keep_middle_newlines_with_tokens(self):
+        """
+        Test streaming response content with newlines:
+        - Discard the first \n after <response>
+        - Keep middle newlines
+        - Discard the \n immediately before </response>
+        - Ensure pending newlines token ids are correctly included in completion_token_ids
+        """
+        # Step-by-step simulated streaming input
+        tokens = [
+            ("a", [ord("a")]),
+            ("b", [ord("b")]),
+            ("s", [ord("s")]),
+            ("d", [ord("d")]),
+            ("c", [ord("c")]),
+            ("\n", [ord("\n")]),
+            ("</think>", [1001]),
+            ("\n", [ord("\n")]),
+            ("\n", [ord("\n")]),
+            ("<response>", [1003]),
+            ("\n", [ord("\n")]),
+            ("w", [ord("w")]),
+            ("o", [ord("o")]),
+            ("\n", [ord("\n")]),
+            ("\n", [ord("\n")]),
+            ("r", [ord("r")]),
+            ("l", [ord("l")]),
+            ("d", [ord("d")]),
+            ("\n", [ord("\n")]),
+            ("\n", [ord("\n")]),
+            ("</response>", [1004]),
+        ]
+
+        prev_text, cur_text = "", ""
+        outputs = []
+
+        for delta_text, delta_ids in tokens:
+            cur_text += delta_text
+            msg = self.parser.extract_reasoning_content_streaming(prev_text, cur_text, delta_text, [], [], delta_ids)
+            prev_text = cur_text
+            if msg:
+                if msg.reasoning_content:
+                    outputs.append(("reasoning", msg.reasoning_content, msg.completion_token_ids))
+                if msg.content:
+                    outputs.append(("response", msg.content, msg.completion_token_ids))
+
+        # Join reasoning and response content
+        reasoning_text = "".join(v for k, v, _ in outputs if k == "reasoning")
+        response_text = "".join(v for k, v, _ in outputs if k == "response")
+
+        # Collect all completion_token_ids for reasoning and response
+        reasoning_token_ids = []
+        response_token_ids = []
+        for k, _, ids in outputs:
+            if k == "reasoning" and ids:
+                reasoning_token_ids.extend(ids)
+            if k == "response" and ids:
+                response_token_ids.extend(ids)
+
+        # Assertions
+        self.assertEqual(reasoning_text, "absdc")
+        self.assertEqual(response_text, "wo\n\nrld\n")
+
+        # Check that token ids include buffered \n
+        # The middle newlines should have corresponding ord("\n") token ids
+        expected_response_token_ids = [
+            ord("w"),
+            ord("o"),
+            ord("\n"),
+            ord("\n"),
+            ord("r"),
+            ord("l"),
+            ord("d"),
+            ord("\n"),
+        ]
+        self.assertEqual(response_token_ids, expected_response_token_ids)
+
+
+# Keep ReasoningParserManager tests
 class TestReasoningParser(ReasoningParser):
     def is_reasoning_end(self, input_ids):
         return True
