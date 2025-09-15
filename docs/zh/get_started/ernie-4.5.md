@@ -21,6 +21,7 @@
 执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](../parameters.md)。
 
 ```shell
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \

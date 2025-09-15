@@ -48,3 +48,10 @@ if current_platform.is_dcu():
     if hasattr(dcu, "__all__"):
         globals().update({name: getattr(dcu, name) for name in dcu.__all__})
         __all__.extend(dcu.__all__)
+
+if current_platform.is_maca():
+    from . import metax
+
+    if hasattr(metax, "__all__"):
+        globals().update({name: getattr(metax, name) for name in metax.__all__})
+        __all__.extend(metax.__all__)

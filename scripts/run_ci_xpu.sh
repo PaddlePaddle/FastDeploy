@@ -2,22 +2,27 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
+#安装lsof工具
+apt install -y lsof
 #先kill一遍
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
 export model_path=${MODEL_PATH}/data/eb45t_4_layer
-export CLANG_PATH=${MODEL_PATH}/data/xtdk
-export XVLLM_PATH=${MODEL_PATH}/data/xvllm
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
 echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+# 由于主框架更新存在问题，暂时锁死版本
+python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.0.0.dev20250901-cp310-cp310-linux_x86_64.whl
 echo "build whl"
+bash custom_ops/xpu_ops/download_dependencies.sh develop
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
 echo "pip others"
 python -m pip install openai -U
@@ -61,6 +66,9 @@ while true; do
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
         cat server.log
         cat log/workerlog.0
+        cat log/workerlog.1
+        cat log/workerlog.2
+        cat log/workerlog.3
         exit 1
     fi
 
@@ -77,7 +85,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python test/ci_use/XPU_45T/run_45T.py
+python tests/ci_use/XPU_45T/run_45T.py
 exit_code=$?
 echo exit_code is ${exit_code}
 
@@ -91,6 +99,8 @@ if [ ${exit_code} -ne 0 ]; then
     echo "模型起服务失败，请检查pr代码"
     exit 1
 fi
+
+sleep 5
 
 #0731新增kv block集中式管理相关测试，在起服务时启用对应环境变量 export ENABLE_V1_KVCACHE_SCHEDULER=True
 # 起服务
@@ -143,7 +153,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python test/ci_use/XPU_45T/run_45T.py
+python tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
@@ -152,7 +162,7 @@ ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
-if [ ${exit_code} -ne 0 ]; then
+if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo "kv block相关测试失败，请检查pr代码"

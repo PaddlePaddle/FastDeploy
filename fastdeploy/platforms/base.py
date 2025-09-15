@@ -26,6 +26,7 @@ class _Backend(enum.Enum):
     MLA_ATTN = enum.auto()
     FLASH_ATTN = enum.auto()
     BLOCK_ATTN = enum.auto()
+    MOBA_ATTN = enum.auto()
 
 
 class Platform:
@@ -76,6 +77,12 @@ class Platform:
         whether platform is gcu
         """
         return paddle.is_compiled_with_custom_device("gcu")
+
+    def is_maca(self) -> bool:
+        """
+        whether platform is metax gpu
+        """
+        return paddle.is_compiled_with_custom_device("metax_gpu")
 
     @classmethod
     def get_attention_backend_cls(self, selected_backend):

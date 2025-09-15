@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
 
@@ -39,6 +40,7 @@ class RequestType(Enum):
     PREFILL = 0
     DECODE = 1
     PREEMPTED = 2
+    EXTEND = 3
 
 
 @dataclass
@@ -71,6 +73,16 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
+        chat_template: Optional[str] = None,
+        image_start: int = 0,
+        video_start: int = 0,
+        audio_start: int = 0,
+        image_end: int = 0,
+        video_end: int = 0,
+        audio_end: int = 0,
+        prefill_start_index: int = 0,
+        prefill_end_index: int = 0,
+        num_computed_tokens: int = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -110,15 +122,29 @@ class Request:
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier
 
+        self.chat_template = chat_template
+
         # token num
         self.block_tables = []
         self.output_token_ids = []
-        self.num_computed_tokens = 0
+        self.num_computed_tokens = num_computed_tokens
+        self.prefill_start_index = prefill_start_index
+        self.prefill_end_index = prefill_end_index
+        self.image_start = image_start
+        self.video_start = video_start
+        self.audio_start = audio_start
+
+        self.image_end = image_end
+        self.video_end = video_end
+        self.audio_end = audio_end
         # status
         self.status = RequestStatus.WAITING
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        # extend block tables
+        self.use_extend_tables = False
+        self.extend_block_tables = []
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -151,6 +177,16 @@ class Request:
             guided_json_object=d.get("guided_json_object", None),
             enable_thinking=d.get("enable_thinking", True),
             trace_carrier=d.get("trace_carrier", {}),
+            chat_template=d.get("chat_template", None),
+            num_computed_tokens=d.get("num_computed_tokens", 0),
+            prefill_start_index=d.get("prefill_start_index", 0),
+            prefill_end_index=d.get("prefill_end_index", 0),
+            image_start=d.get("image_start", 0),
+            video_start=d.get("video_start", 0),
+            audio_start=d.get("audio_start", 0),
+            image_end=d.get("image_end", 0),
+            video_end=d.get("video_end", 0),
+            audio_end=d.get("audio_end", 0),
         )
 
     @property
@@ -190,6 +226,16 @@ class Request:
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
             "trace_carrier": self.trace_carrier,
+            "chat_template": self.chat_template,
+            "num_computed_tokens": self.num_computed_tokens,
+            "prefill_start_index": self.prefill_start_index,
+            "prefill_end_index": self.prefill_end_index,
+            "image_start": self.image_start,
+            "video_start": self.video_start,
+            "audio_start": self.audio_start,
+            "image_end": self.image_end,
+            "video_end": self.video_end,
+            "audio_end": self.audio_end,
         }
         add_params = [
             "guided_json",
@@ -221,13 +267,11 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        return (
-            f"Request(request_id={self.request_id}, "
-            f"prompt={self.prompt!r}, "
-            f"prompt_token_ids={self.prompt_token_ids}, "
-            f"draft_token_ids={self.draft_token_ids}, "
-            f"sampling_params={self.sampling_params})"
-        )
+        non_none_fields = []
+        for attr, value in vars(self).items():
+            if value is not None and not attr.startswith("_"):
+                non_none_fields.append(f"{attr}={value!r}")
+        return f"Request({', '.join(non_none_fields)})"
 
 
 @dataclass(slots=True)
@@ -242,13 +286,15 @@ class CompletionOutput:
 
     index: int
     send_idx: int
-    token_ids: list[int]
+    token_ids: list[Any]
+    decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
         """

@@ -94,7 +94,7 @@ class GCUModelRunner(ModelRunnerBase):
             shape=[self.parallel_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
-        )
+        ).cpu()
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -106,9 +106,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            self.local_rank + int(self.parallel_config.engine_worker_queue_port)
-        )
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
 
     def exist_prefill(self):
         """
@@ -239,7 +237,9 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
 
             self.share_inputs["temperature"][idx : idx + 1] = get_attr_from_request(request, "temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = get_attr_from_request(
@@ -295,7 +295,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts)
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
@@ -361,7 +361,9 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["top_k_list"] = [0] * max_num_seqs
         self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
+        self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
         )
@@ -408,7 +410,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["need_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["need_block_len"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -419,7 +421,7 @@ class GCUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
-        self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -428,6 +430,13 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = None
         self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
         self.share_inputs["max_len_tensor_cpu"] = None  # CPU
+        self.share_inputs["encoder_batch_ids"] = None
+        self.share_inputs["encoder_tile_ids_per_batch"] = None
+        self.share_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
+        self.share_inputs["kv_batch_ids"] = None
+        self.share_inputs["kv_tile_ids_per_batch"] = None
+        self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
+        self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -518,7 +527,6 @@ class GCUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -539,7 +547,9 @@ class GCUModelRunner(ModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
+            top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
+            min_p_list=self.share_inputs["min_p_list"],
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
@@ -598,6 +608,13 @@ class GCUModelRunner(ModelRunnerBase):
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
             caches=self.share_inputs["caches"],
+            encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
+            encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
+            encoder_num_blocks_x_cpu=self.share_inputs["encoder_num_blocks_x_cpu"],
+            kv_batch_ids=self.share_inputs["kv_batch_ids"],
+            kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
+            kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
         )
 
         # Update Batch type for cuda graph
@@ -670,13 +687,30 @@ class GCUModelRunner(ModelRunnerBase):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
+        group_size = np.ceil(num_heads / self.model_config.kv_num_heads)
+
         decode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
-            (decoder_step_token_num * np.ceil(num_heads / self.model_config.kv_num_heads)) / decoder_block_shape_q
+            (decoder_step_token_num * group_size) / decoder_block_shape_q
+        )
+        encode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+            (self.model_config.max_model_len * group_size) / encoder_block_shape_q
+        )
+        kv_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+            self.model_config.max_model_len / self.fd_config.cache_config.block_size
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
         self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+
+        self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["encoder_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+
+        self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
+        self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+        self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -736,7 +770,7 @@ class GCUModelRunner(ModelRunnerBase):
 
             hidden_states = rebuild_padding(
                 model_output,
-                self.share_inputs["cum_offsets"],
+                self.share_inputs["cu_seqlens_q"],
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
@@ -961,7 +995,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         hidden_states = rebuild_padding(
             model_output,
-            self.share_inputs["cum_offsets"],
+            self.share_inputs["cu_seqlens_q"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs["seq_lens_decoder"],
             self.share_inputs["seq_lens_encoder"],
@@ -1062,9 +1096,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         self._update_chunked_prefill(model_forward_batch)
         self._add_cache(model_forward_batch)
-        self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
-        )
+        self.seq_lens_this_time_buffer.copy_(self.share_inputs["seq_lens_this_time"], False)
         return None
 
     def _add_cache(self, model_forward_batch) -> None:

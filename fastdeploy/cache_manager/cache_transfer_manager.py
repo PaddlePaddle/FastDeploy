@@ -19,6 +19,7 @@ import concurrent.futures
 import json
 import queue
 import time
+import traceback
 
 import numpy as np
 import paddle
@@ -56,7 +57,7 @@ def parse_args():
         "--protocol",
         type=str,
         default="ipc",
-        help="cache transfer protocol, only surport ipc now",
+        help="cache transfer protocol, only support ipc now",
     )
     parser.add_argument("--enable_splitwise", type=int, default=0, help="enable splitwise ")
     parser.add_argument("--cache_queue_port", type=int, default=9923, help="cache queue port")
@@ -342,7 +343,7 @@ class CacheTransferManager:
                     if self.rank == 0:
                         self.cache_task_queue.barrier3.reset()
             except Exception as e:
-                logger.info(f"do_data_transfer: error: {e}")
+                logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
 
     def _transfer_data(
         self,

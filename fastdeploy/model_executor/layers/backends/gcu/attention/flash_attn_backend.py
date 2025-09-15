@@ -76,6 +76,8 @@ class GCUFlashAttnBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
     ):
         """
         GCUFlashAttnBackend __init__
@@ -94,7 +96,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         self.head_dim = head_dim
         self.scaling = 1.0 / (self.head_dim**0.5)
         self.num_layers = fd_config.model_config.num_hidden_layers
-        self.position_ids_base = paddle.arange(self.max_seq_len)
+        self.position_ids_base = np.arange(self.max_seq_len)
 
         # TODO(zhengjun): Need to adapt the allocation logic and
         # temporarily allocate according to fixed size
@@ -168,7 +170,7 @@ class GCUFlashAttnBackend(AttentionBackend):
                 cache_len = 0
             elif self.seq_lens_decoder_list[seq_idx][0] != 0:  # decode
                 cache_len = self.seq_lens_decoder_list[seq_idx][0]
-            # else:  doesnot have req in this seq_idx
+            # else:  doesn't have req in this seq_idx
 
             if cache_len is not None:
                 lens_this_time = self.seq_lens_this_time_list[seq_idx]
@@ -210,7 +212,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         # [total_tokens, kv_num_heads, head_dim]
         return (

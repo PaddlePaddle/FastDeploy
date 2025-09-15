@@ -1,0 +1,122 @@
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2022 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_simd.h"
+#include "xpu/kernel/xtdk.h"
+
+namespace xpu3 {
+namespace plugin {
+
+template <typename T>
+__global__ void speculate_remove_padding(T* output_data,
+                                         const T* input_data,
+                                         const T* draft_tokens,
+                                         const int* seq_lens,
+                                         const int* seq_lens_encoder,
+                                         const int* cum_offsets,
+                                         int sequence_length,
+                                         int max_draft_tokens,
+                                         int bsz,
+                                         int token_num_data) {
+  int bid = cluster_id();
+  int tid = core_id();
+  int ncores = core_num();
+  int nclusters = cluster_num();
+
+  int seq_lens_now = 0;
+  int seq_lens_encoder_now = 0;
+  int cum_offsets_now = 0;
+  T input_date_now;
+  for (int bi = bid; bi < bsz; bi += nclusters) {
+    GM2LM(seq_lens + bi, &seq_lens_now, sizeof(int));
+    GM2LM(seq_lens_encoder + bi, &seq_lens_encoder_now, sizeof(int));
+    GM2LM(cum_offsets + bi, &cum_offsets_now, sizeof(int));
+
+    for (int i = tid; i < seq_lens_now; i += ncores) {
+      const int tgt_seq_id = bi * sequence_length - cum_offsets_now + i;
+
+      if (seq_lens_encoder_now > 0) {
+        const int src_seq_id = bi * sequence_length + i;
+        GM2LM(input_data + src_seq_id, &input_date_now, sizeof(T));
+        LM2GM(&input_date_now, output_data + tgt_seq_id, sizeof(T));
+      } else {
+        const int src_seq_id = bi * max_draft_tokens + i;
+        GM2LM(draft_tokens + src_seq_id, &input_date_now, sizeof(T));
+        LM2GM(&input_date_now, output_data + tgt_seq_id, sizeof(T));
+      }
+    }
+  }
+}
+
+__global__ void speculate_get_padding_offset(int* padding_offset,
+                                             int* cum_offsets_out,
+                                             int* cu_seqlens_q,
+                                             int* cu_seqlens_k,
+                                             const int* cum_offsets,
+                                             const int* seq_lens,
+                                             const int max_seq_len,
+                                             int bsz) {
+  int bid = cluster_id();
+  int tid = core_id();
+  int ncores = core_num();
+  int nclusters = cluster_num();
+  int seq_lens_now = 0;
+  int cum_offsets_now = 0;
+  int cum_offsets_now_ind = 0;
+  for (int bi = bid; bi < bsz; bi += nclusters) {
+    GM2LM(seq_lens + bi, &seq_lens_now, sizeof(int));
+    if (bi == 0) {
+      cum_offsets_now = 0;
+    } else {
+      GM2LM(cum_offsets + bi - 1, &cum_offsets_now, sizeof(int));
+    }
+    GM2LM(cum_offsets + bi, &cum_offsets_now_ind, sizeof(int));
+
+    for (int i = tid; i < seq_lens_now; i += ncores) {
+      LM2GM(&cum_offsets_now,
+            padding_offset + bi * max_seq_len - cum_offsets_now + i,
+            sizeof(int));
+    }
+    LM2GM(&cum_offsets_now, cum_offsets_out + bi, sizeof(int));
+    int cum_seq_len = (bi + 1) * max_seq_len - cum_offsets_now_ind;
+    LM2GM(&cum_seq_len, cu_seqlens_q + bi + 1, sizeof(int));
+    LM2GM(&cum_seq_len, cu_seqlens_k + bi + 1, sizeof(int));
+  }
+}
+
+#define _XPU_DEF_SPECULATE_KERNELS_(T)                             \
+  template __global__ void speculate_remove_padding<T>(T*,         \
+                                                       const T*,   \
+                                                       const T*,   \
+                                                       const int*, \
+                                                       const int*, \
+                                                       const int*, \
+                                                       int,        \
+                                                       int,        \
+                                                       int,        \
+                                                       int);
+
+_XPU_DEF_SPECULATE_KERNELS_(float);
+_XPU_DEF_SPECULATE_KERNELS_(float16);
+_XPU_DEF_SPECULATE_KERNELS_(bfloat16);
+_XPU_DEF_SPECULATE_KERNELS_(int64_t);
+
+}  // namespace plugin
+}  // namespace xpu3

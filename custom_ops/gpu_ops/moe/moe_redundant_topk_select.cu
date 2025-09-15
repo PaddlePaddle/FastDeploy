@@ -51,7 +51,7 @@ void moe_redundant_topk_select_kernel(const T* input,
   #define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
   case N: {                                                                    \
     topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(                   \
-        input, output, indices, source_row, num_rows, num_experts, k, stream); \
+        input, bias, output, indices, source_row, num_rows, num_experts, k, stream); \
     break;                                                                     \
   }
   int64_t tem_num_experts = num_experts;
@@ -102,7 +102,7 @@ void moe_redundant_topk_select_kernel(const T* input,
       else {
           assert(k<=TPB);
           if (apply_norm_weight) {
-            moe_softmax_top_k_normed_fused<T, TPB>
+            moe_softmax_top_k_fused<T, TPB, true>
                 <<<config_topk.block_per_grid, TPB, k * sizeof(T), stream>>>(input,
                                                                  bias,
                                                                  output,
@@ -112,7 +112,7 @@ void moe_redundant_topk_select_kernel(const T* input,
                                                                  k,
                                                                  num_rows);
           } else {
-            moe_softmax_top_k_fused<T, TPB>
+            moe_softmax_top_k_fused<T, TPB, false>
                 <<<config_topk.block_per_grid, TPB, 0, stream>>>(input,
                                                                   bias,
                                                                   output,

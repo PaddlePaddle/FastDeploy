@@ -148,7 +148,7 @@ class BaseDataProcessor(ABC):
 
 
 class DataProcessor(BaseDataProcessor):
-    def __init__(self, model_name_or_path, reasoning_parser_obj=None):
+    def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
         """
             Initializes the DecodeStatus object.
 
@@ -175,6 +175,7 @@ class DataProcessor(BaseDataProcessor):
             self.generation_config = None
 
         self.decode_status = dict()
+        self.tool_parser_dict = dict()
         self.tokenizer = self._load_tokenizer()
         data_processor_logger.info(
             f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
@@ -187,6 +188,7 @@ class DataProcessor(BaseDataProcessor):
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
+        self.tool_parser_obj = tool_parser_obj
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
         self.tokenizer.pad_token_id = self.pad_token_id
@@ -202,40 +204,69 @@ class DataProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        data_processor_logger.info(f"Start processing request: {request}")
+        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
 
+        # processing stop_sequences
         stop_sequences = request.get("stop", [])
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request.set("stop_token_ids", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
 
+        # processing bad_words
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
+
+        # processing prompt_token_ids
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is not None:
-                request.prompt_token_ids = self.text2ids(request.prompt, max_model_len)
+                prompt = request.prompt
+                assert isinstance(prompt, str) or (
+                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
+                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+                if isinstance(prompt, list):  # if prompt is a token id list
+                    request.prompt_token_ids = prompt
+                else:
+                    request.prompt_token_ids = self.text2ids(request.prompt, max_model_len)
             elif request.messages is not None:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 task = request.to_dict()
-                task["enable_thinking"] = kwargs.get("enable_thinking", True)
+                chat_template_kwargs = kwargs.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in task:
+                                task[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                task.setdefault("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
+
         if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
+
+        # truncate prompts that exceed the length limit
+        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
+            request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
         if request.get("max_tokens") is None:
-            request.set(
-                "max_tokens",
-                max(1, max_model_len - len(request.prompt_token_ids)),
-            )
+            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.set("temperature", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
-        data_processor_logger.info(f"Processed request {request}")
+
+        data_processor_logger.info(f"Processed request: {request}")
         return request
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
@@ -249,6 +280,7 @@ class DataProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        data_processor_logger.info(f"Start processing request dict: {request}")
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -260,19 +292,46 @@ class DataProcessor(BaseDataProcessor):
             request["stop_token_ids"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
 
-        data_processor_logger.info(f"Processing request {request}")
+        # processing bad_words
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
+
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
-            if "prompt" in request:
-                request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len).tolist()
-            elif "messages" in request:
+            if request.get("prompt"):
+                prompt = request.get("prompt")
+                assert isinstance(prompt, str) or (
+                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
+                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+                if isinstance(prompt, list):  # if prompt is a token id list
+                    request["prompt_token_ids"] = prompt
+                else:
+                    request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len).tolist()
+            elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
+                chat_template_kwargs = request.get("chat_template_kwargs")
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in request:
+                                request[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
+
         if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
+
+        # truncate prompts that exceed the length limit
+        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
+            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         if request.get("temperature") < _SAMPLING_EPS:
@@ -280,7 +339,8 @@ class DataProcessor(BaseDataProcessor):
             request["temperature"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
-        data_processor_logger.info(f"Processed request {request}")
+
+        data_processor_logger.info(f"Processed request dict: {request}")
         return request
 
     def process_logprob_response(self, token_ids, **kwargs):
@@ -311,7 +371,13 @@ class DataProcessor(BaseDataProcessor):
         else:
             # 模型不支持思考,并且没单独设置enable_thinking为false
             response_dict.outputs.text = full_text
-        data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
+        if self.tool_parser_obj:
+            tool_parser = self.tool_parser_obj(self.tokenizer)
+            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+            if tool_call_info.tools_called:
+                response_dict.outputs.tool_calls = tool_call_info.tool_calls
+                response_dict.outputs.text = tool_call_info.content
+        data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
         return response_dict
 
@@ -335,12 +401,19 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
+            response_dict["outputs"]["raw_prediction"] = full_text
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:
                 response_dict["outputs"]["text"] = full_text
+            if self.tool_parser_obj:
+                tool_parser = self.tool_parser_obj(self.tokenizer)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+                if tool_call_info.tools_called:
+                    response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
+                    response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
         return response_dict
@@ -364,9 +437,11 @@ class DataProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-
-        if enable_thinking and self.reasoning_parser:
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
+        response_dict["outputs"]["raw_prediction"] = delta_text
+        if self.reasoning_parser and (
+            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+        ):
+            reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
                 delta_text,
@@ -374,13 +449,28 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids + token_ids,
                 token_ids,
             )
-            response_dict["outputs"]["text"] = text
-            response_dict["outputs"]["reasoning_content"] = reasoning_content
-        else:
-            response_dict["outputs"]["text"] = delta_text
+            response_dict["outputs"]["delta_message"] = reasoning_delta_message
+        if self.tool_parser_obj:
+            if req_id not in self.tool_parser_dict:
+                self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
+            tool_parser = self.tool_parser_dict[req_id]
+            tool_call = tool_parser.extract_tool_calls_streaming(
+                previous_texts,
+                previous_texts + delta_text,
+                delta_text,
+                previous_token_ids,
+                previous_token_ids + token_ids,
+                token_ids,
+                response_dict,
+            )
+            if tool_call is None or tool_call.tool_calls:
+                response_dict["outputs"]["delta_message"] = tool_call
+        response_dict["outputs"]["text"] = delta_text
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
+            if req_id in self.tool_parser_dict:
+                del self.tool_parser_dict[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):
@@ -454,7 +544,9 @@ class DataProcessor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
             return_tensors="pd",
+            chat_template=request.get("chat_template", None),
         )
+        request["text_after_process"] = spliced_message
         req_id = None
         tokens = self.tokenizer.tokenize(spliced_message)
         if isinstance(request, dict):
@@ -600,3 +692,42 @@ class DataProcessor(BaseDataProcessor):
         stop_seqs, stop_seqs_len = self.pad_batch_data(stop_seqs, pad_id=-1, return_seq_len=True, return_array=False)
         data_processor_logger.debug(f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
         return stop_seqs, stop_seqs_len
+
+    def update_bad_words(self, bad_words, bad_words_token_ids):
+        """Support bad words"""
+
+        token_ids = bad_words_token_ids
+
+        if token_ids is None:
+            token_ids = []
+        for bad_word in bad_words:
+            # To prohibit words both at the beginning
+            # and in the middle of text
+            # (related to add_prefix_space tokenizer parameter)
+            for add_prefix_space in [False, True]:
+                prefix = " " if add_prefix_space else ""
+                prompt = prefix + bad_word.lstrip()
+                prompt_token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(prompt))
+
+                if len(prompt_token_ids) != 1:
+                    if not add_prefix_space:
+                        data_processor_logger.warning(
+                            f"Skip bad_words: <{prompt}>."
+                            f"Bad words should be a single token."
+                            f"Got tokens: {prompt_token_ids}."
+                        )
+                    continue
+
+                if prompt_token_ids[0] > self.tokenizer.vocab_size:
+                    if not add_prefix_space:
+                        data_processor_logger.warning(
+                            f"Skip bad_words: <{prompt}>."
+                            f"All token id values should be satisfying:"
+                            f" 0 <= token_id < {self.tokenizer.vocab_size}."
+                            f"Got token: {prompt_token_ids}."
+                        )
+                    continue
+
+                if prompt_token_ids not in token_ids:
+                    token_ids.extend(prompt_token_ids)
+        return token_ids

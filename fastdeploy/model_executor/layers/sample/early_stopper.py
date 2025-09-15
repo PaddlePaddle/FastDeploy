@@ -35,7 +35,7 @@ class EarlyStopper:
     @abstractmethod
     def process(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         """
-        processs the stopper and set the stop_flags corresponding to the batch that triggers early stop to True
+        process the stopper and set the stop_flags corresponding to the batch that triggers early stop to True
         args:
             - probs: [batch_size, vocab_size], the probs of every sample
             - next_tokens: [batch_size, 1], the token index of every chosen sample
@@ -67,16 +67,17 @@ class RepetitionEarlyStopper(EarlyStopper):
     def process_normal(self, probs: paddle.Tensor, next_tokens: paddle.Tensor, stop_flags: paddle.Tensor):
         # Get the probability score corresponding to next_tokens in this step
         next_scores = paddle.index_sample(probs, next_tokens)
+        real_bsz = probs.shape[0]
 
         # Sliding window: Move left one grid and insert new score
-        self.trunc_scores[:, :-1] = self.trunc_scores[:, 1:]
-        self.trunc_scores[:, -1:] = next_scores
+        self.trunc_scores[:real_bsz, :-1] = self.trunc_scores[:real_bsz, 1:]
+        self.trunc_scores[:real_bsz, -1:] = next_scores
 
         # Determine which samples need to be terminated: all trunc_scores are greater than threshold
         need_trunc_all = paddle.all(self.trunc_scores > self.threshold, axis=-1).unsqueeze(-1)
 
         # Add the stop flags
-        stop_flags[need_trunc_all] = True
+        stop_flags[need_trunc_all[:real_bsz]] = True
 
         # Reset trunc_scores of truncated samples to 0 to avoid false triggering in the next step
         reset_mask = need_trunc_all.tile([1, self.window_size])
@@ -90,10 +91,10 @@ class RepetitionEarlyStopper(EarlyStopper):
         )
 
         B, W = self.trunc_scores.shape
-        V = probs.shape[1]
+        real_bsz, V = probs.shape
         BLOCK_W = triton.next_power_of_2(W)
 
-        grid = (B,)
+        grid = (real_bsz,)
         repetition_early_stopper_kernel[grid](
             self.trunc_scores,
             probs,

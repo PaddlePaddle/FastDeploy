@@ -15,6 +15,7 @@
 """
 
 from functools import partial
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -32,7 +33,8 @@ from paddle.nn.functional.flash_attention import (
 )
 from paddleformers.transformers.model_utils import PretrainedModel
 
-from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.layers.utils import divide, get_tensor
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 from .activation import ACT2FN
 from .configuration import DFNRopeVisionTransformerConfig
@@ -153,11 +155,18 @@ class VisionFlashAttention2(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self, dim: int, num_heads: int = 16, tensor_parallel_degree: int = 1) -> None:
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int = 16,
+        tensor_parallel_degree: int = 1,
+        tensor_parallel_rank: int = 0,
+        model_format: str = "",
+    ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.tensor_parallel_degree = tensor_parallel_degree
-
+        self.tensor_parallel_rank = tensor_parallel_rank
         if tensor_parallel_degree > 1:
             self.qkv = ColumnParallelLinear(
                 dim,
@@ -175,11 +184,48 @@ class VisionFlashAttention2(nn.Layer):
                 input_is_parallel=True,
                 has_bias=True,
             )
+            set_weight_attrs(self.qkv.weight, {"weight_loader": self.weight_loader})
+            set_weight_attrs(
+                self.qkv.bias, {"weight_loader": self.weight_loader, "load_bias": True, "output_dim": True}
+            )
+            set_weight_attrs(self.proj.weight, {"output_dim": False})
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
             self.proj = nn.Linear(dim, dim)
 
+        set_weight_attrs(self.qkv.weight, {"weight_need_transpose": model_format == "torch"})
+        set_weight_attrs(self.proj.weight, {"weight_need_transpose": model_format == "torch"})
         self.head_dim = dim // num_heads  # must added
+        self.num_heads = num_heads
+        self.hidden_size = dim
+        self.num_heads_per_rank = divide(self.num_heads, self.tensor_parallel_degree)
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        if weight_need_transpose:
+            loaded_weight = loaded_weight.transpose([1, 0])
+        load_bias = getattr(param, "load_bias", None)
+        if load_bias:
+            head_dim = self.hidden_size // self.num_heads
+            shard_weight = loaded_weight[...].reshape([3, self.num_heads, head_dim])
+            shard_weight = np.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
+            shard_weight = shard_weight.reshape([-1])
+        else:
+            shard_weight = loaded_weight[...].reshape(
+                [
+                    self.hidden_size,
+                    3,
+                    self.num_heads,
+                    self.head_dim,
+                ]
+            )
+            shard_weight = np.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
+            shard_weight = shard_weight.reshape([self.hidden_size, -1])
+        shard_weight = get_tensor(shard_weight)
+        assert param.shape == shard_weight.shape, (
+            f" Attempted to load weight ({shard_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(shard_weight, False)
 
     def forward(
         self,
@@ -211,7 +257,6 @@ class VisionFlashAttention2(nn.Layer):
             .transpose(perm=[1, 0, 2, 3])
         )
         q, k, v = qkv.unbind(axis=0)
-
         q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
         k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
 
@@ -233,7 +278,6 @@ class VisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-
         attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
@@ -287,6 +331,7 @@ class VisionMlp(nn.Layer):
         hidden_dim: int,
         hidden_act: str,
         tensor_parallel_degree: int = 1,
+        model_format: str = "",
     ) -> None:
         super().__init__()
         self.tensor_parallel_degree = tensor_parallel_degree
@@ -306,9 +351,16 @@ class VisionMlp(nn.Layer):
                 input_is_parallel=True,
                 has_bias=True,
             )
+            set_weight_attrs(self.fc1.weight, {"output_dim": True})
+            set_weight_attrs(self.fc1.bias, {"output_dim": True})
+            set_weight_attrs(self.fc2.weight, {"output_dim": False})
         else:
             self.fc1 = nn.Linear(dim, hidden_dim)
             self.fc2 = nn.Linear(hidden_dim, dim)
+
+        set_weight_attrs(self.fc1.weight, {"weight_need_transpose": model_format == "torch"})
+        set_weight_attrs(self.fc2.weight, {"weight_need_transpose": model_format == "torch"})
+
         self.act = ACT2FN[hidden_act]
 
     def forward(self, x) -> paddle.Tensor:
@@ -365,7 +417,9 @@ class DFNRopeVisionBlock(nn.Layer):
         self,
         config,
         tensor_parallel_degree: int,
+        tensor_parallel_rank: int,
         attn_implementation: str = "sdpa",
+        model_format: str = "",
     ) -> None:
         """_summary_
 
@@ -382,12 +436,15 @@ class DFNRopeVisionBlock(nn.Layer):
             config.embed_dim,
             num_heads=config.num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
+            tensor_parallel_rank=tensor_parallel_rank,
+            model_format=model_format,
         )
         self.mlp = VisionMlp(
             dim=config.embed_dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=config.hidden_act,
             tensor_parallel_degree=tensor_parallel_degree,
+            model_format=model_format,
         )
         self.config = config
 
@@ -407,7 +464,9 @@ class DFNRopeVisionBlock(nn.Layer):
             cu_seqlens=cu_seqlens,
             rotary_pos_emb=rotary_pos_emb,
         )
+
         hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
+
         return hidden_states
 
 
@@ -470,6 +529,10 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             embed_dim=config.vision_config.embed_dim,
         )
 
+        model_format = getattr(config, "model_format", "")
+
+        set_weight_attrs(self.patch_embed.proj.weight, {"weight_need_transpose": model_format == "torch"})
+
         head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
 
@@ -478,6 +541,8 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
                 DFNRopeVisionBlock(
                     config.vision_config,
                     config.pretrained_config.tensor_parallel_degree,
+                    config.pretrained_config.tensor_parallel_rank,
+                    model_format=model_format,
                 )
                 for _ in range(config.vision_config.depth)
             ]

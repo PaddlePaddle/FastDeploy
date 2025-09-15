@@ -37,6 +37,8 @@ class ForwardMode(IntEnum):
     DECODE = auto()
     # Mixed mode
     MIXED = auto()
+    # Native mode
+    NATIVE = auto()
 
     def is_prefill(self):
         """Is Extend mode"""
@@ -49,6 +51,10 @@ class ForwardMode(IntEnum):
     def is_mixed(self):
         """Is Mixed mode"""
         return self == ForwardMode.MIXED
+
+    def is_native(self):
+        """Is Native mode"""
+        return self == ForwardMode.NATIVE
 
 
 @dataclass
@@ -73,14 +79,48 @@ class ForwardMeta:
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask
     attn_mask: Optional[paddle.Tensor] = None
+    # Attention mask offset
+    attn_mask_offsets: Optional[paddle.Tensor] = None
+
+    # A common pattern for launching CUDA kernels is to set the kernel's grids.x dimension
+    # using a `num_blocks` variable, and then map each thread block to a specific batch and
+    # data tile using `batch_ids` and `tile_ids_per_batch`.
+    #
+    # The variable names below follow this pattern, using a common prefix (e.g., `encoder_`, `decoder_`, `kv_`)
+    # for variables that are logically grouped together. The mapping works as follows:
+    #
+    # Usage: `my_kernel<<<grids, ...>>>(..., batch_ids, tile_ids, ...)`
+    #   `grids.x` = `num_blocks_cpu`
+    #   `batch_id` = `batch_ids[blockIdx.x]`
+    #   `tile_id`  = `tile_ids[blockIdx.x]`
+
+    # Maps the thread block index (blockIdx.x) to the corresponding batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
     # Decoder batch id. Used by attention backend.
     decoder_batch_ids: Optional[paddle.Tensor] = None
-    # Tile ID for each batch of the decoder. Used by attention backend.
+    # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the decoder stage in multi_query_append_attention_warp1_4_kernel.
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
     # The number of blocks that attention backend can use in decode stage
+    decoder_num_blocks_device: Optional[paddle.Tensor] = None
+    # The number of CUDA blocks to launch in the x-dimension for the multi_query_append_attention_warp1_4_kernel, defining its grids.x.
     decoder_num_blocks_cpu: Optional[paddle.Tensor] = None
-    # Recorded multiple lengths related to prefill or decode
+    # A tensor that holds multiple lengths related to prefill or decode stages.
     max_len_tensor_cpu: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the corresponding batch for the encoder stage in multi_query_append_attention_kernel.
+    encoder_batch_ids: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the encoder stage in multi_query_append_attention_kernel.
+    encoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    # The number of CUDA blocks to launch in the x-dimension for the multi_query_append_attention_kernel, defining its grids.x.
+    encoder_num_blocks_x_cpu: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the corresponding batch for the append_write_cache_kv kernel.
+    kv_batch_ids: Optional[paddle.Tensor] = None
+    # Maps the thread block index (blockIdx.x) to the specific data tile being processed within that batch for the append_write_cache_kv kernel.
+    kv_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    # The number of CUDA blocks to launch in the x-dimension for the append_write_cache_kv kernel, defining its grids.x.
+    kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
+    # The maximum sequence length of the KV cache, which may represent the current maximum decoder length.
+    max_len_kv_cpu: Optional[paddle.Tensor] = None
+
+    decoder_chunk_size_device: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None
@@ -107,6 +147,40 @@ class ForwardMeta:
         """Safely clean up the caches"""
         if self.caches:
             del self.caches
+
+    def __str__(self) -> str:
+        """
+        Returns a concise string representation of the ForwardMeta object in a compact format.
+        """
+
+        def format_str(obj):
+            """
+            A helper function to recursively get a concise string representation of objects.
+            """
+            if obj is None:
+                return "None"
+            elif isinstance(obj, paddle.Tensor):
+                tensor_info = {
+                    "data_ptr": obj.data_ptr(),
+                    "shape": obj.shape,
+                    "dtype": str(obj.dtype),
+                    "place": str(obj.place),
+                    # "content": obj if obj.numel()<10 else "Too big to show"
+                }
+                return tensor_info
+            elif isinstance(obj, (list, tuple)):
+                return [format_str(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {key: format_str(value) for key, value in obj.items()}
+            elif not isinstance(obj, (int, float, str, bool)) and hasattr(obj, "__dict__"):
+                info = {key: format_str(value) for key, value in obj.__dict__.items() if not key.startswith("_")}
+                return f"<{obj.__class__.__name__} object info: {info}>"
+            else:
+                return str(obj)
+
+        simplified_info = format_str(self.__dict__)
+        lines = [f"  {key}: {value}" for key, value in simplified_info.items()]
+        return "{\n" + ",\n".join(lines) + "\n}"
 
 
 @dataclass
@@ -156,3 +230,13 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
+
+
+@dataclass
+class DCUForwardMeta(ForwardMeta):
+    """
+    DCUForwardMeta is used to store the global meta information of the forward, and some DCU specific meta info.
+    """
+
+    # Accumulated offset
+    cum_offsets: Optional[paddle.Tensor] = None

@@ -21,7 +21,6 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                               T* value_cache,
                               T* qkv_out,
                               const int* block_tables,
-                              const int* batch_id_per_token,
                               const int* cu_seqlens_q,
                               const int* seq_lens,
                               const int* seq_lens_encoder,
@@ -39,8 +38,8 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                               const cudaStream_t& stream,
                               const bool use_neox_style,
                               const bool rope_3d,
-                              const T* q_norm_weight,
-                              const T* k_norm_weight,
+                              const float* q_norm_weight,
+                              const float* k_norm_weight,
                               const float rms_norm_eps) {
   const uint32_t elem_nums =
       use_neox_style ? bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2
@@ -59,7 +58,6 @@ void append_decode_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                             value_cache,
                                             qkv_out,
                                             block_tables,
-                                            batch_id_per_token,
                                             cu_seqlens_q,
                                             seq_lens,
                                             seq_lens_encoder,
@@ -84,7 +82,6 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                               T* value_cache,
                               T* qkv_out,
                               const int* block_tables,
-                              const int* batch_id_per_token,
                               const int* cu_seqlens_q,
                               const int* seq_lens,
                               const int* seq_lens_encoder,
@@ -97,6 +94,7 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                               const int num_heads,
                               const int kv_num_heads,
                               const int dim_head,
+                              const int rotary_dim,
                               const int block_size,
                               const int bsz,
                               const cudaStream_t& stream,
@@ -120,7 +118,6 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -134,15 +131,37 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               dim_head,
               block_size,
               elem_nums,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
-      append_decode_cache_T_neox_rope_kernel<T, PackSize>
+      if (rotary_dim < dim_head){
+        append_decode_cache_T_neox_partial_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
                                                 key_cache,
                                                 value_cache,
                                                 qkv_out,
                                                 block_tables,
-                                                batch_id_per_token,
+                                                cu_seqlens_q,
+                                                seq_lens,
+                                                seq_lens_encoder,
+                                                cos_emb,
+                                                sin_emb,
+                                                max_seq_len,
+                                                max_blocks_per_seq,
+                                                num_heads,
+                                                dim_head,
+                                                rotary_dim,
+                                                block_size,
+                                                elem_nums,
+                                                kv_num_heads,
+                                                rope_3d);
+      }else{
+        append_decode_cache_T_neox_rope_kernel<T, PackSize>
+          <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
+                                                key_cache,
+                                                value_cache,
+                                                qkv_out,
+                                                block_tables,
                                                 cu_seqlens_q,
                                                 seq_lens,
                                                 seq_lens_encoder,
@@ -154,7 +173,9 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                                 dim_head,
                                                 block_size,
                                                 elem_nums,
-                                                kv_num_heads);
+                                                kv_num_heads,
+                                                rope_3d);
+      }
     }
   } else {
     if (qkv_out_scales) {
@@ -165,7 +186,6 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -188,7 +208,6 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
                                                 value_cache,
                                                 qkv_out,
                                                 block_tables,
-                                                batch_id_per_token,
                                                 cu_seqlens_q,
                                                 seq_lens,
                                                 seq_lens_encoder,
@@ -212,7 +231,6 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
                                    uint8_t* value_cache,
                                    T* qkv_out,
                                    const int* block_tables,
-                                   const int* batch_id_per_token,
                                    const int* cu_seqlens_q,
                                    const int* seq_lens,
                                    const int* seq_lens_encoder,
@@ -245,7 +263,6 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -261,7 +278,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_neox_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -270,7 +288,6 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -284,7 +301,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -295,7 +313,6 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -311,7 +328,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int8_rope_kernel<T, 4, 0, 128, is_scale_channel_wise, IsFP8>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -320,7 +338,6 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -334,7 +351,8 @@ void append_decode_cache_int8_rope(const QKV_TYPE* qkv,
               block_size,
               127.0f,
               -127.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   }
 }
@@ -345,7 +363,6 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
                                    uint8_t* value_cache,
                                    T* qkv_out,
                                    const int* block_tables,
-                                   const int* batch_id_per_token,
                                    const int* cu_seqlens_q,
                                    const int* seq_lens,
                                    const int* seq_lens_encoder,
@@ -380,7 +397,6 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -398,7 +414,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int4_neox_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -407,7 +424,6 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -423,7 +439,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   } else {
     if (qkv_out_scales) {
@@ -434,7 +451,6 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -452,7 +468,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     } else {
       append_decode_cache_int4_rope_kernel<T, 4>
           <<<grids, num_warps * 32, 0, stream>>>(
@@ -461,7 +478,6 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               value_cache,
               qkv_out,
               block_tables,
-              batch_id_per_token,
               cu_seqlens_q,
               seq_lens,
               seq_lens_encoder,
@@ -477,7 +493,8 @@ void append_decode_cache_int4_rope(const QKV_TYPE* qkv,
               block_size,
               7.0f,
               -8.0f,
-              kv_num_heads);
+              kv_num_heads,
+              rope_3d);
     }
   }
 }
@@ -487,7 +504,6 @@ void DecoderWriteCacheWithRoPEKernel(
     const paddle::Tensor& qkv,
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::optional<paddle::Tensor>& rotary_embs,
@@ -524,11 +540,20 @@ void DecoderWriteCacheWithRoPEKernel(
   const float* cos_emb =
       rotary_embs ? rotary_embs.get().data<float>() : nullptr;
   const float* sin_emb;
+  int rotary_dim = dim_head;
   if (rotary_embs) {
     sin_emb =
         use_neox_rotary_style
             ? rotary_embs.get().data<float>() + max_seq_len * dim_head
             : rotary_embs.get().data<float>() + max_seq_len * dim_head / 2;
+    rotary_dim = rotary_embs.get().dims()[rotary_embs.get().dims().size()-1] * 2;
+    if(rotary_dim < dim_head){
+      if (!use_neox_rotary_style || qkv_out_scales || q_norm_weight || k_norm_weight|| cache_quant_type_str != "none"){
+        PADDLE_THROW(phi::errors::Fatal(
+          "partial_rotary_factor < 1.0 only supports neox_rotary_style=True, qkv_out_scales is None, q_norm_weight/k_norm_weight) is None, and cache_quant_type_str is 'none'."));
+      }
+      sin_emb = rotary_embs.get().data<float>() + max_seq_len * rotary_dim / 2;
+    }
   }
 
   if (q_norm_weight && k_norm_weight) {
@@ -539,7 +564,6 @@ void DecoderWriteCacheWithRoPEKernel(
           reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
           reinterpret_cast<DataType_*>(qkv_out->data<T>()),
           block_tables.data<int>(),
-          batch_id_per_token.data<int>(),
           cu_seqlens_q.data<int>(),
           seq_lens.data<int>(),
           seq_lens_encoder.data<int>(),
@@ -559,12 +583,42 @@ void DecoderWriteCacheWithRoPEKernel(
           stream,
           use_neox_rotary_style,
           rope_3d,
-          reinterpret_cast<const DataType_*>(q_norm_weight.get().data<T>()),
-          reinterpret_cast<const DataType_*>(k_norm_weight.get().data<T>()),
+          q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+          k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
           rms_norm_eps);
+    } else if (cache_quant_type_str == "block_wise_fp8") {
+      constexpr int num_warps = 4;
+      const int all_warps =
+          ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
+      dim3 grids(bsz, all_warps / num_warps);
+      append_decode_cache_int8_rope_qk_norm_kernel<DataType_, 4, 0, 128, false, true>
+          <<<grids, num_warps * 32, 0, stream>>>(
+              reinterpret_cast<const DataType_*>(qkv_ptr),
+              key_cache_out->data<uint8_t>(),
+              value_cache_out->data<uint8_t>(),
+              reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+              block_tables.data<int>(),
+              cu_seqlens_q.data<int>(),
+              seq_lens.data<int>(),
+              seq_lens_encoder.data<int>(),
+              cos_emb,
+              sin_emb,
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>((cache_v_scale.get().data<T>()))),
+              q_norm_weight.get().data<float>(),
+              k_norm_weight.get().data<float>(),
+              max_seq_len,
+              max_blocks_per_seq,
+              num_heads,
+              block_size,
+              127.0f,
+              -127.0f,
+              kv_num_heads,
+              rope_3d,
+              rms_norm_eps);
     } else {
       PD_THROW(
-          "append_decode_cache_rope_qk_norm not support cachekv quant yet");
+          "append_decode_cache_rope_qk_norm just supports cache_quant_type none/block_wise_fp8");
     }
   } else {
     if (cache_quant_type_str == "none") {
@@ -574,7 +628,6 @@ void DecoderWriteCacheWithRoPEKernel(
           reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
           reinterpret_cast<DataType_*>(qkv_out->data<T>()),
           block_tables.data<int>(),
-          batch_id_per_token.data<int>(),
           cu_seqlens_q.data<int>(),
           seq_lens.data<int>(),
           seq_lens_encoder.data<int>(),
@@ -589,6 +642,7 @@ void DecoderWriteCacheWithRoPEKernel(
           num_heads,
           kv_num_heads,
           dim_head,
+          rotary_dim,
           block_size,
           bsz,
           stream,
@@ -606,7 +660,6 @@ void DecoderWriteCacheWithRoPEKernel(
           value_cache_out->data<uint8_t>(),
           reinterpret_cast<DataType_*>(qkv_out->data<T>()),
           block_tables.data<int>(),
-          batch_id_per_token.data<int>(),
           cu_seqlens_q.data<int>(),
           seq_lens.data<int>(),
           seq_lens_encoder.data<int>(),
@@ -639,7 +692,6 @@ void DecoderWriteCacheWithRoPEKernel(
             value_cache_out->data<uint8_t>(),
             reinterpret_cast<DataType_*>(qkv_out->data<T>()),
             block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
             cu_seqlens_q.data<int>(),
             seq_lens.data<int>(),
             seq_lens_encoder.data<int>(),
@@ -673,7 +725,6 @@ void DecoderWriteCacheWithRoPEKernel(
             value_cache_out->data<uint8_t>(),
             reinterpret_cast<DataType_*>(qkv_out->data<T>()),
             block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
             cu_seqlens_q.data<int>(),
             seq_lens.data<int>(),
             seq_lens_encoder.data<int>(),
@@ -699,6 +750,36 @@ void DecoderWriteCacheWithRoPEKernel(
             stream,
             use_neox_rotary_style,
             rope_3d);
+    } else if (cache_quant_type_str == "block_wise_fp8") {
+      constexpr int num_warps = 4;
+      const int all_warps =
+          ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
+      dim3 grids(bsz, all_warps / num_warps);
+      append_decode_cache_int8_rope_qk_norm_kernel<DataType_, 4, 0, 128, false, true>
+          <<<grids, num_warps * 32, 0, stream>>>(
+              reinterpret_cast<const DataType_*>(qkv_ptr),
+              key_cache_out->data<uint8_t>(),
+              value_cache_out->data<uint8_t>(),
+              reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+              block_tables.data<int>(),
+              cu_seqlens_q.data<int>(),
+              seq_lens.data<int>(),
+              seq_lens_encoder.data<int>(),
+              cos_emb,
+              sin_emb,
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
+              const_cast<DataType_*>(reinterpret_cast<const DataType_*>((cache_v_scale.get().data<T>()))),
+              nullptr,
+              nullptr,
+              max_seq_len,
+              max_blocks_per_seq,
+              num_heads,
+              block_size,
+              127.0f,
+              -127.0f,
+              kv_num_heads,
+              rope_3d,
+              rms_norm_eps);
     } else if (cache_quant_type_str == "cache_int4_zp") {
       append_decode_cache_int4_rope(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
@@ -706,7 +787,6 @@ void DecoderWriteCacheWithRoPEKernel(
           value_cache_out->data<uint8_t>(),
           reinterpret_cast<DataType_*>(const_cast<T*>(qkv_out->data<T>())),
           block_tables.data<int>(),
-          batch_id_per_token.data<int>(),
           cu_seqlens_q.data<int>(),
           seq_lens.data<int>(),
           seq_lens_encoder.data<int>(),
@@ -754,7 +834,6 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, int>(
               // kv_num_heads, head_dim] if GQA)
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::optional<paddle::Tensor>& rotary_embs,
@@ -784,7 +863,6 @@ DecoderWriteCacheWithRoPEKernel<paddle::bfloat16, paddle::bfloat16>(
               // kv_num_heads, head_dim] if GQA)
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::optional<paddle::Tensor>& rotary_embs,
@@ -813,7 +891,6 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::float16, int>(
               // kv_num_heads, head_dim] if GQA)
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::optional<paddle::Tensor>& rotary_embs,
@@ -842,7 +919,6 @@ template void DecoderWriteCacheWithRoPEKernel<paddle::float16, paddle::float16>(
               // kv_num_heads, head_dim] if GQA)
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::optional<paddle::Tensor>& rotary_embs,

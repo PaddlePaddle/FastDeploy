@@ -50,7 +50,7 @@ class XpuWorker(WorkerBase):
     def init_device(self):
         """Initialize device and Construct model runner"""
         if paddle.is_compiled_with_xpu():
-            # Set evironment variable
+            # Set environment variable
             self.device = f"xpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
@@ -110,7 +110,10 @@ class XpuWorker(WorkerBase):
         )
 
         self.model_runner.prepare_profile()
-        self.model_runner.profile_run()
+        if self.parallel_config.use_ep:
+            logger.warning("EP mode does not support profile run.")
+        else:
+            self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
@@ -118,6 +121,8 @@ class XpuWorker(WorkerBase):
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        if self.parallel_config.use_ep:
+            available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
         self.model_runner.clear_block_table()
 
@@ -147,15 +152,11 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
-        is_dummy_run: bool = False,
         num_running_requests: Optional[int] = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        if is_dummy_run:
-            output = self.model_runner.execute_model(model_forward_batch)
-        else:
-            output = self.model_runner.execute_model(model_forward_batch, num_running_requests)
-        return output
+        return self.model_runner.execute_model(model_forward_batch, num_running_requests, is_dummy_run)
 
     def exist_prefill(self):
         """
@@ -163,15 +164,15 @@ class XpuWorker(WorkerBase):
         """
         return self.model_runner.exist_prefill()
 
-    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
+    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int = -1) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
         else:
-            self.model_runner.process_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
+            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
 
     def check_health(self) -> bool:
         """ """

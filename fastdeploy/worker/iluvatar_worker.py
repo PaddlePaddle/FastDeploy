@@ -51,7 +51,7 @@ class IluvatarWorker(GpuWorker):
         Initialize device and construct model runner
         """
         if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
-            # Set evironment variable
+            # Set environment variable
             self.device = f"iluvatar_gpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
@@ -88,6 +88,7 @@ class IluvatarWorker(GpuWorker):
         return int(float(os.getenv("FD_ILUVATAR_KVCACHE_MEM", "3")) * 1024**3)
 
 
+# TODO (yuzhe.wu): move it int work_process.py after baidu reconstructs the logic of workproc
 class IluvatarPaddleDisWorkerProc(PaddleDisWorkerProc):
     """
     Paddle Distributed wrapper for fastdeploy.worker.Worker,

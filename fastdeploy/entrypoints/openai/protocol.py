@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -31,9 +32,14 @@ class ErrorResponse(BaseModel):
     Error response from OpenAI API.
     """
 
-    object: str = "error"
+    error: ErrorInfo
+
+
+class ErrorInfo(BaseModel):
     message: str
-    code: int
+    type: Optional[str] = None
+    param: Optional[str] = None
+    code: Optional[str] = None
 
 
 class PromptTokenUsageInfo(BaseModel):
@@ -55,6 +61,37 @@ class UsageInfo(BaseModel):
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
 
 
+class ModelPermission(BaseModel):
+    id: str = Field(default_factory=lambda: f"modelperm-{str(uuid.uuid4().hex)}")
+    object: str = "model_permission"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    allow_create_engine: bool = False
+    allow_sampling: bool = True
+    allow_logprobs: bool = True
+    allow_search_indices: bool = False
+    allow_view: bool = True
+    allow_fine_tuning: bool = False
+    organization: str = "*"
+    group: Optional[str] = None
+    is_blocking: bool = False
+
+
+class ModelInfo(BaseModel):
+    id: str
+    object: str = "model"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    owned_by: str = "FastDeploy"
+    root: Optional[str] = None
+    parent: Optional[str] = None
+    max_model_len: Optional[int] = None
+    permission: list[ModelPermission] = Field(default_factory=list)
+
+
+class ModelList(BaseModel):
+    object: str = "list"
+    data: list[ModelInfo] = Field(default_factory=list)
+
+
 class FunctionCall(BaseModel):
     """
     Function call.
@@ -72,7 +109,6 @@ class ToolCall(BaseModel):
     id: str = None
     type: Literal["function"] = "function"
     function: FunctionCall
-    index: int
 
 
 class DeltaFunctionCall(BaseModel):
@@ -94,6 +130,18 @@ class DeltaToolCall(BaseModel):
     type: Optional[Literal["function"]] = None
     index: int
     function: Optional[DeltaFunctionCall] = None
+
+
+class ExtractedToolCallInformation(BaseModel):
+    # indicate if tools were called
+    tools_called: bool
+
+    # extracted tool calls
+    tool_calls: Optional[list[ToolCall]] = None
+
+    # content - per OpenAI spec, content AND tool calls can be returned rarely
+    # But some models will do this intentionally
+    content: Optional[str] = None
 
 
 class FunctionDefinition(BaseModel):
@@ -120,12 +168,17 @@ class ChatMessage(BaseModel):
     Chat message.
     """
 
-    role: str
-    content: str
+    role: Optional[str] = None
+    content: Optional[str] = None
+    multimodal_content: Optional[List[Any]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -179,10 +232,15 @@ class DeltaMessage(BaseModel):
 
     role: Optional[str] = None
     content: Optional[str] = None
+    multimodal_content: Optional[List[Any]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
 
 
 class ChatCompletionResponseStreamChoice(BaseModel):
@@ -219,6 +277,10 @@ class CompletionResponseChoice(BaseModel):
     text: str
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
@@ -261,6 +323,10 @@ class CompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    text_after_process: Optional[str] = None
+    raw_prediction: Optional[str] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
@@ -342,18 +408,21 @@ class CompletionRequest(BaseModel):
     prompt: Union[List[int], List[List[int]], str, List[str]]
     best_of: Optional[int] = None
     echo: Optional[bool] = False
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
     max_tokens: Optional[int] = None
-    n: int = 1
-    presence_penalty: Optional[float] = None
-    seed: Optional[int] = None
+    n: Optional[int] = 1
+    presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
+    seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
     stream_options: Optional[StreamOptions] = None
     suffix: Optional[dict] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
+    temperature: Optional[float] = Field(default=None, ge=0)
+    top_p: Optional[float] = Field(default=None, ge=0, le=1)
     user: Optional[str] = None
 
     # doc: begin-completion-sampling-params
@@ -364,6 +433,7 @@ class CompletionRequest(BaseModel):
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    bad_words_token_ids: Optional[List[int]] = None
     # doc: end-completion-sampling-params
 
     # doc: start-completion-extra-params
@@ -375,7 +445,7 @@ class CompletionRequest(BaseModel):
 
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
-    prompt_token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -400,11 +470,11 @@ class CompletionRequest(BaseModel):
         if prompt is not None:
             req_dict["prompt"] = prompt
 
-        if "prompt_token_ids" in req_dict:
-            if "prompt" in req_dict:
-                del req_dict["prompt"]
-        else:
-            assert len(prompt) > 0
+        # if "prompt_token_ids" in req_dict:
+        #     if "prompt" in req_dict:
+        #         del req_dict["prompt"]
+        # else:
+        #     assert len(prompt) > 0
 
         guided_json_object = None
         if self.response_format is not None:
@@ -472,9 +542,14 @@ class ChatCompletionRequest(BaseModel):
     messages: Union[List[Any], List[int]]
     tools: Optional[List[ChatCompletionToolsParam]] = None
     model: Optional[str] = "default"
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
+
+    # For logits and logprobs post processing
+    temp_scaled_logprobs: bool = False
+    top_p_normalized_logprobs: bool = False
+
     # remove max_tokens when field is removed from OpenAI API
     max_tokens: Optional[int] = Field(
         default=None,
@@ -482,13 +557,13 @@ class ChatCompletionRequest(BaseModel):
     )
     max_completion_tokens: Optional[int] = None
     n: Optional[int] = 1
-    presence_penalty: Optional[float] = None
-    seed: Optional[int] = None
+    presence_penalty: Optional[float] = Field(None, le=2, ge=-2)
+    seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
     stream_options: Optional[StreamOptions] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
+    temperature: Optional[float] = Field(None, ge=0)
+    top_p: Optional[float] = Field(None, le=1, ge=0)
     user: Optional[str] = None
     metadata: Optional[dict] = None
     response_format: Optional[AnyResponseFormat] = None
@@ -499,12 +574,14 @@ class ChatCompletionRequest(BaseModel):
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
+    bad_words_token_ids: Optional[List[int]] = None
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     # doc: end-chat-completion-sampling-params
 
-    # doc: start-completion-extra-params
+    # doc: start-chat-completion-extra-params
     chat_template_kwargs: Optional[dict] = None
+    chat_template: Optional[str] = None
     reasoning_max_tokens: Optional[int] = None
     structural_tag: Optional[str] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -531,6 +608,8 @@ class ChatCompletionRequest(BaseModel):
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
+        req_dict["temp_scaled_logprobs"] = self.temp_scaled_logprobs
+        req_dict["top_p_normalized_logprobs"] = self.top_p_normalized_logprobs
 
         # parse request model into dict, priority: request params > metadata params
         if self.metadata is not None:
@@ -547,12 +626,13 @@ class ChatCompletionRequest(BaseModel):
             if "messages" in req_dict:
                 del req_dict["messages"]
         else:
-            assert len(self.messages) > 0
-
-        # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-        if self.disable_chat_template:
-            req_dict["prompt"] = req_dict["messages"][0]["content"]
-            del req_dict["messages"]
+            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+            assert (
+                len(req_dict["messages"]) > 0
+            ), "messages can not be an empty list, unless prompt_token_ids is passed"
+            if self.disable_chat_template:
+                req_dict["prompt"] = req_dict["messages"][0]["content"]
+                del req_dict["messages"]
 
         guided_json_object = None
         if self.response_format is not None:

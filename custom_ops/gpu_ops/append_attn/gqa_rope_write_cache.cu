@@ -37,7 +37,8 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int q_num_head,
     const int kv_num_head,
     const int seq_len,
-    const int last_dim) {
+    const int last_dim,
+    const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
   using LoadEmbT = AlignedVector<float, HalfVecSize>;
@@ -62,6 +63,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int kv_write_idx = cu_seqlens_k[ori_bi] + ori_seq_id;
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
+    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     const int64_t base_idx =
         token_idx * (q_num_head + 2 * kv_num_head) * last_dim + hi * last_dim +
         h_bias;
@@ -80,8 +82,8 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     Load<T, VecSize>(&qkv[base_idx], &src_vec);
     // do rope
     if (hi < q_num_head + kv_num_head) {
-      Load<float, HalfVecSize>(&cos_emb[emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[emb_idx], &sin_emb_vec);
+      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
       for (int i = 0; i < HalfVecSize; i++) {
         const float input_left = static_cast<float>(src_vec[2 * i]);
@@ -118,6 +120,7 @@ void gqa_rotary_qk_split_variable(
     const int seq_len,
     const int input_output_len,
     const int dim_head,
+    const bool rope_3d,
     const cudaStream_t &stream) {
   int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * dim_head;
   constexpr int PackSize = 16 / sizeof(T);
@@ -146,7 +149,8 @@ void gqa_rotary_qk_split_variable(
             num_heads,
             kv_num_heads,
             seq_len,
-            dim_head);
+            dim_head,
+            rope_3d);
 }
 
 template <typename T,
@@ -213,7 +217,7 @@ __global__ void append_cache_kv_c16(
 
   // load k_smem 64 rows 128 cols
   for (int fz = 0; fz < 4; fz++) { // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 noce, need 2 iter
+    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 once, need 2 iter
       k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             k_smem_offset_w, cur_cache_k + k_read_idx, end_idx > 0);
       k_smem_offset_w =
@@ -231,7 +235,7 @@ __global__ void append_cache_kv_c16(
   // deal k_smem 64 rows 128 cols
   for (int fz = 0; fz < 1; fz++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 noce, need 8 iter
+    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 once, need 8 iter
       uint32_t col_idx = fy * 16 + tid % 4 * 2;
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_frag);
       // layout
@@ -274,7 +278,7 @@ __global__ void append_cache_kv_c16(
 
   // load v_smem 64 rows 128 cols
   for (int fz = 0; fz < 4; fz++) { // // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 noce, need 2 iter
+    for (int fy = 0; fy < 2; fy++) { // 8 * 128b = 64 * bf16 once, need 2 iter
       v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             v_smem_offset_w, cur_cache_v + v_read_idx, end_idx > 0);
       v_smem_offset_w =
@@ -292,7 +296,7 @@ __global__ void append_cache_kv_c16(
   // deal v_smem 64 rows 128 cols
   for (int fz = 0; fz < 1; fz++) { //  16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 noce, need 8 iter
+    for (int fy = 0; fy < 8; fy++) { // 2 * 128b = 16 * bf16 once, need 8 iter
       uint32_t col_idx = fy * 16 + tid % 4 * 2;
       v_smem.ldmatrix_m8n8x4(v_smem_offset_r, kv_frag);
       // layout
@@ -396,7 +400,7 @@ __global__ void append_cache_kv_c8(
 
   // load v_smem 64 rows, 128 cols
   for (int fz = 0; fz < 4; fz++) { // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 1; fy++) { // 8 * 128b = 128 * uint8 noce, need 1 iter
+    for (int fy = 0; fy < 1; fy++) { // 8 * 128b = 128 * uint8 once, need 1 iter
       k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             k_smem_offset_w, cur_cache_k + k_read_idx, end_idx > 0);
       k_smem_offset_w =
@@ -414,7 +418,7 @@ __global__ void append_cache_kv_c8(
   // deal k_smem 64 rows, 128 cols
   for (int fz = 0; fz < 1; fz++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 4; fy++) { // 2 * 128b = 32 * uint8 noce, need 4 iter
+    for (int fy = 0; fy < 4; fy++) { // 2 * 128b = 32 * uint8 once, need 4 iter
       uint32_t col_idx = fy * 32 + tid % 4 * 2;
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, k_frag);
       // layout
@@ -462,7 +466,7 @@ __global__ void append_cache_kv_c8(
                           tid % 4 * num_elems_per_128b<CacheT>();
   // load v_smem 128 rows 64 cols
   for (int fy = 0; fy < 4; fy++) { // 8 rows pre warp once, 32 rows all 4 warps once, need 4 iter
-    for (int fz = 0; fz < 1; fz++) { // 4 * 128b = 64 * uint8 noce, need 1 iter
+    for (int fz = 0; fz < 1; fz++) { // 4 * 128b = 64 * uint8 once, need 1 iter
       v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
               v_smem_offset_w, cur_cache_v + v_read_idx, end_idx > 0);
       v_smem_offset_w =
@@ -481,7 +485,7 @@ __global__ void append_cache_kv_c8(
   // deal v_smem 128 rows 64 cols
   for (int fy = 0; fy < 2; fy++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 2 iter
     uint32_t dim_idx = fy * NUM_WARPS * 16 + wid * 16 + tid / 4;
-    for (int fz = 0; fz < 2; fz++) { // 2 * 128b = 32 * uint8 noce, need 2 iter
+    for (int fz = 0; fz < 2; fz++) { // 2 * 128b = 32 * uint8 once, need 2 iter
       uint32_t kv_idx = fz * 32 + tid % 4 * 2;
       v_smem.ldmatrix_m8n8x4(v_smem_offset_r, v_frag);
       // layout
@@ -610,7 +614,7 @@ __global__ void append_cache_kv_c4(
 
   // load k_smem 64 rows 128 cols
   for (int fz = 0; fz < 2; fz++) { // 4 rows pre warp once, 16 rows all 4 warps once, need 4 iter
-    for (int fy = 0; fy < 1; fy++) { // 4 * 128b = 128 * int4 noce, need 1 iter
+    for (int fy = 0; fy < 1; fy++) { // 4 * 128b = 128 * int4 once, need 1 iter
       k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
             k_smem_offset_w, cur_cache_k + k_read_idx, end_idx > 0);
       k_smem_offset_w =
@@ -628,7 +632,7 @@ __global__ void append_cache_kv_c4(
   // deal k_smem 64 rows 128 cols
   for (int fz = 0; fz < 1; fz++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 1 iter
     uint32_t row_idx = wid * 16 + tid / 4;
-    for (int fy = 0; fy < 2; fy++) { // 2 * 128b = 64 * int4 noce, need 2 iter
+    for (int fy = 0; fy < 2; fy++) { // 2 * 128b = 64 * int4 once, need 2 iter
       uint32_t col_idx = fy * 64 + tid % 4 * 2;
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, k_frag);
 
@@ -681,7 +685,7 @@ __global__ void append_cache_kv_c4(
                           tid % 2 * num_elems_per_128b<CacheT>();
   // load v_smem 128 rows 64 rows
   for (int fy = 0; fy < 2; fy++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 2 iter
-    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 noce, need 1 iter
+    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 once, need 1 iter
       v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
               v_smem_offset_w, cur_cache_v + v_read_idx, end_idx > 0);
       v_smem_offset_w =
@@ -700,7 +704,7 @@ __global__ void append_cache_kv_c4(
   // deal v_smem 128 rows 64 cols
   for (int fy = 0; fy < 2; fy++) { // 16 rows pre warp once, 64 rows all 4 warps once, need 2 iter
     uint32_t dim_idx = fy * NUM_WARPS * 16 + wid * 16 + tid / 4;
-    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 noce, need 1 iter
+    for (int fz = 0; fz < 1; fz++) { // 2 * 128b = 64 * int4 once, need 1 iter
       uint32_t kv_idx = fz * 64 + tid % 4 * 2;
       v_smem.ldmatrix_m8n8x4(v_smem_offset_r, v_frag);
       // layout
@@ -890,7 +894,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const int kv_token_num,
     const int max_seq_len,
-    const std::string& cache_quant_type) {
+    const std::string& cache_quant_type,
+    const bool rope_3d) {
   typedef PDTraits<paddle::DataType::BFLOAT16> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -953,8 +958,9 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         num_heads,
         kv_num_heads,
         max_seq_len,
-        rotary_embs.dims()[2],
+        rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
         head_dim,
+        rope_3d,
         stream);
 
   if (token_num < kv_token_num) {
@@ -994,7 +1000,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       stream,
       const_cast<paddle::Tensor*>(&key_cache),
       const_cast<paddle::Tensor*>(&value_cache));
-  } else if (cache_quant_type == "cache_int8" || cache_quant_type == "cache_fp8") {
+  } else if (cache_quant_type == "cache_int8" || cache_quant_type == "cache_fp8" || cache_quant_type == "block_wise_fp8") {
     CascadeAppendWriteCacheKVC8QKV<data_t, 128, 64>(
         meta_data,
         *const_cast<paddle::Tensor*>(&key_cache),
@@ -1012,7 +1018,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         kv_num_blocks_data,
         max_seq_len,
         false, // is_scale_channel_wise
-        cache_quant_type == "cache_fp8", // is_fp8
+        cache_quant_type,
         stream,
         const_cast<paddle::Tensor*>(&key_cache),
         const_cast<paddle::Tensor*>(&value_cache));

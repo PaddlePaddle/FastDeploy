@@ -45,6 +45,15 @@ elif current_platform.is_dcu():
         step_paddle,
         update_inputs,
     )
+elif current_platform.is_maca():
+    from fastdeploy.model_executor.ops.gpu import (
+        get_padding_offset,
+        save_output,
+        set_stop_value_multi_ends,
+        step_paddle,
+        update_inputs,
+        update_inputs_v1,
+    )
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
@@ -59,7 +68,7 @@ else:
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_system_cache,
-        speculate_update_v3,
+        speculate_update,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -67,6 +76,12 @@ else:
         update_inputs_v1,
     )
 
+from fastdeploy.inter_communicator import ZmqClient
+from fastdeploy.output.stream_transfer_data import (
+    DecoderState,
+    StreamTransferData,
+    TextData,
+)
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
@@ -97,14 +112,13 @@ def pre_process(
     """
     # Remove padding
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
     output_padding_offset = None
     output_cum_offsets = None
     if speculative_decoding:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
@@ -124,7 +138,7 @@ def pre_process(
         if isinstance(seq_lens_output, list):
             seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output)
+        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
         output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
             output_cum_offsets_tmp,
             output_token_num,
@@ -134,14 +148,12 @@ def pre_process(
     else:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
     return (
         ids_remove_padding,
-        cum_offsets,
         batch_id_per_token,
         cu_seqlens_q,
         cu_seqlens_k,
@@ -157,6 +169,7 @@ def post_process_normal(
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
+    zmq_client: ZmqClient = None,
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     # handle vl:
@@ -212,7 +225,20 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar():
+    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
+        set_stop_value_multi_ends(
+            sampler_output.sampled_token_ids,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.eos_token_id,
+            model_output.next_tokens,
+            model_output.pre_ids,
+            model_output.step_idx,
+            model_output.stop_token_ids,
+            model_output.stop_seqs_len,
+            False,
+        )  # multi ends
+    elif current_platform.is_maca():
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
@@ -270,12 +296,30 @@ def post_process_normal(
     #    In the future, we will abandon this approach.
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
-            save_output(
-                sampler_output.sampled_token_ids,
-                model_output.not_need_stop,
-                model_output.mp_rank,
-                save_each_rank,  # save_each_rank
-            )
+            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                # TODO(Wanglongzhi2001): adapt more type of message.
+                stream_transfer_data = StreamTransferData(
+                    decoder_state=DecoderState.TEXT,
+                    data=TextData(
+                        tokens=sampler_output.sampled_token_ids.numpy(),
+                        not_need_stop=model_output.not_need_stop.numpy().item(),
+                        batch=sampler_output.sampled_token_ids.shape[0],
+                        speculaive_decoding=False,
+                    ),
+                )
+
+                if not (not save_each_rank and model_output.mp_rank > 0):
+                    try:
+                        zmq_client.send_pyobj(stream_transfer_data)
+                    except Exception as e:
+                        print(f"Send message error: {e}")
+            else:
+                save_output(
+                    sampler_output.sampled_token_ids,
+                    model_output.not_need_stop,
+                    model_output.mp_rank,
+                    save_each_rank,
+                )
         else:
             save_output_topk(
                 sampler_output.sampled_token_ids,
@@ -287,9 +331,11 @@ def post_process_normal(
             )
 
 
-def post_process_specualate(model_output, save_each_rank: bool = False, skip_save_output: bool = False):
+def post_process_specualate(
+    model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
+):
     """"""
-    speculate_update_v3(
+    speculate_update(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
         model_output.not_need_stop,
@@ -336,12 +382,15 @@ def post_process(
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
     skip_save_output: bool = False,
+    zmq_client: ZmqClient = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
     if speculative_decoding:
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
-        post_process_normal(sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output)
+        post_process_normal(
+            sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output, zmq_client
+        )
 
 
 def step_cuda(
@@ -502,7 +551,7 @@ def step_cuda(
 
 def rebuild_padding(
     tmp_out: paddle.Tensor,
-    cum_offsets: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
     seq_len_this_time: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
     seq_lens_encoder: paddle.Tensor,
@@ -518,7 +567,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -530,7 +579,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -542,7 +591,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -554,7 +603,7 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
@@ -566,7 +615,19 @@ def rebuild_padding(
 
         hidden_states = rebuild_padding_cpu(
             tmp_out,
-            cum_offsets,
+            cu_seqlens_q,
+            seq_len_this_time,
+            seq_lens_decoder,
+            seq_lens_encoder,
+            output_padding_offset,
+            max_input_length,
+        )
+    elif current_platform.is_maca():
+        from fastdeploy.model_executor.ops.gpu import rebuild_padding
+
+        hidden_states = rebuild_padding(
+            tmp_out,
+            cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,

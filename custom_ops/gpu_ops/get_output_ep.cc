@@ -109,11 +109,11 @@ void GetOutputEp(const paddle::Tensor& x,
     return;
 }
 
-void GetOutputStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag) {
+void GetOutputEPStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag) {
     GetOutputEp(x, rank_id, wait_flag, 1);
 }
 
-void GetOutputDynamic(const paddle::Tensor& x,
+void GetOutputEPDynamic(const paddle::Tensor& x,
                       int64_t rank_id,
                       bool wait_flag,
                       int msg_queue_id) {
@@ -125,11 +125,11 @@ PD_BUILD_STATIC_OP(get_output_ep)
     .Attrs({"rank_id: int64_t", "wait_flag: bool"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
-    .SetKernelFn(PD_KERNEL(GetOutputStatic));
+    .SetKernelFn(PD_KERNEL(GetOutputEPStatic));
 
 PD_BUILD_STATIC_OP(get_output_ep_dynamic)
     .Inputs({"x"})
     .Attrs({"rank_id: int64_t", "wait_flag: bool", "msg_queue_id: int"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
-    .SetKernelFn(PD_KERNEL(GetOutputDynamic));
+    .SetKernelFn(PD_KERNEL(GetOutputEPDynamic));

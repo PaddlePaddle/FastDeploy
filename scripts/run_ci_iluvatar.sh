@@ -31,7 +31,7 @@ export INFERENCE_MSG_QUEUE_ID=232132
 export FD_DEBUG=1
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
 export FD_SAMPLING_CLASS=rejection
-python test/ci_use/iluvatar_UT/run_ernie300B_4layer.py
+python tests/ci_use/iluvatar_UT/run_ernie300B_4layer.py
 exit_code=$?
 echo exit_code is ${exit_code}
 

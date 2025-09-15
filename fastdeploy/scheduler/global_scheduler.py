@@ -237,7 +237,7 @@ class GlobalScheduler:
                 )
                 time.sleep(self.keep_alive_duration / 2)
             except Exception as e:
-                scheduler_logger.error(f"Scheduler keep alive failed: {e}")
+                scheduler_logger.error(f"Scheduler keep alive failed: {e}, {str(traceback.format_exc())}")
                 time.sleep(min(3, self.keep_alive_duration / 4))
 
     def _scheduler_name_from_request_queue(self, request_queue: str) -> str:
@@ -648,7 +648,7 @@ class GlobalScheduler:
                 stolen_responses[response_queue_name].append(response.serialize())
                 continue
 
-            scheduler_logger.error(f"Scheduler has recieved a non-existent response from engine: {[response]}")
+            scheduler_logger.error(f"Scheduler has received a non-existent response from engine: {[response]}")
 
         with self.mutex:
             for request_id, responses in local_responses.items():

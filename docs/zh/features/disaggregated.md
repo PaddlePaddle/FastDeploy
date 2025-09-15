@@ -1,6 +1,6 @@
 # 分离式部署
 
-大模型推理分为两个部分Prefill和Decode阶段，分别为计算密集型（Prefill）和计算密集型（Decode）两部分。将Prefill 和 Decode 分开部署在一定场景下可以提高硬件利用率，有效提高吞吐，降低整句时延，
+大模型推理分为两个部分Prefill和Decode阶段，分别为计算密集型（Prefill）和存储密集型（Decode）两部分。将Prefill 和 Decode 分开部署在一定场景下可以提高硬件利用率，有效提高吞吐，降低整句时延，
 
 * Prefill阶段：处理输入的全部Token（如用户输入的Prompt），完成模型的前向传播（Forward），生成首token。
 * Decode阶段：从生成第首token后，采用自回归一次生成一个token，直到生成到stop token结束；设输出N✖️token，Decode阶段需要执行（N-1）次前向传播，只能串行执行，并且在生成过程中，需要关注的token数越来越多，计算量也逐渐增大。
@@ -75,6 +75,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
 #### 前置依赖 Redis
 * 使用`conda`安装
 
+> **⚠️ 注意**  
+> **Redis 版本要求：6.2.0 及以上**  
+> 低于此版本可能不支持所需的命令。
+
 ```bash
 # 安装
 conda install redis
@@ -106,13 +110,17 @@ sudo systemctl start redis
 
 **注意**：
 * `KVCACHE_RDMA_NICS` 指定当前机器的RDMA网卡，多个网卡用逗号隔开。
+* 仓库中提供了自动检测RDMA网卡的脚本 `bash scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
 
 **prefill 实例**
 
 ```bash
+
 export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4.5-300B-A47B-BF16 \
        --port 8180 --metrics-port 8181 \
@@ -127,6 +135,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-name "splitwise" \
        --scheduler-host "127.0.0.1" \
        --scheduler-port 6379 \
+       --scheduler-topic "test" \
        --scheduler-ttl 9000
 ```
 
@@ -135,7 +144,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
-export KVCACHE_RDMA_NICS="mlx5_2,mlx5_3,mlx5_4,mlx5_5"
+echo "set RDMA NICS"
+export $(bash scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ERNIE-4.5-300B-A47B-BF16 \
        --port 8184 --metrics-port 8185 \
@@ -150,6 +161,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-host "127.0.0.1" \
        --scheduler-port 6379 \
        --scheduler-ttl 9000
+       --scheduler-topic "test" \
        --splitwise-role "decode"
 ```
 
@@ -168,5 +180,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 * --scheduler-host: 连接的redis地址
 * --scheduler-port: 连接的redis端口
 * --scheduler-ttl: 指定redis的ttl时间，单位为秒
+* --scheduler-topic: 指定redis的topic
 * --pd-comm-port: 指定pd通信的端口
 * --rdma-comm-ports: 指定RDMA通信的端口，多个端口用逗号隔开，数量与卡数一致

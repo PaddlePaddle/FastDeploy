@@ -16,6 +16,7 @@ For more information about how to install FastDeploy, refer to the [installation
 After installing FastDeploy, execute the following command in the terminal to start the service. For the configuration method of the startup command, refer to [Parameter Description](../parameters.md)
 
 ```
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-0.3B-Paddle \
        --port 8180 \
@@ -59,12 +60,13 @@ curl -i http://0.0.0.0:8180/health
 Send requests to the service with the following command:
 
 ```shell
-curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+curl -X POST "http://0.0.0.0:1822/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
     {"role": "user", "content": "Write me a poem about large language model."}
-  ]
+  ],
+  "stream": true
 }'
 ```
 
