@@ -1,18 +1,15 @@
-"""
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License"
+# Licensed under the Apache License, Version 2.0 (the "License")
 # you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 from collections.abc import Sequence
 from typing import List, Optional, Tuple, Union
@@ -25,17 +22,6 @@ from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 class ErnieX1ReasoningParser(ReasoningParser):
     """
     Reasoning parser for ernie_x1 model with stricter boundary checking.
-
-    This implementation handles streaming in three stages:
-    1. Thinking content (<think>...</think>):
-       - Cache newlines until it is clear they are not the trailing ones before </think>.
-       - Drop the last newline immediately before </think>.
-    2. Response content (<response>...</response>):
-       - Ignore the first newline right after <response>.
-       - Cache newlines and flush them when next token is normal text.
-       - Drop the newline immediately before </response>.
-    3. Tool call content (<tool_call>...</tool_call>):
-       - Ignored in this parser.
     """
 
     def __init__(self, tokenizer):
@@ -118,16 +104,6 @@ class ErnieX1ReasoningParser(ReasoningParser):
     ) -> Union[DeltaMessage, None]:
         """
         Streaming parser for reasoning, response, and tool call stages.
-
-        Key logic:
-        1. Thinking (<think>...</think>):
-           - Cache \n and only flush them when next token is not immediately </think>.
-           - Drop the \n immediately before </think>.
-        2. Response (<response>...</response>):
-           - Ignore first \n after <response>.
-           - Cache \n in middle content.
-           - Drop the \n immediately before </response>.
-        3. Tool call (<tool_call>...</tool_call>) is ignored.
         """
         # ----------- Reasoning phase -----------
         if self.think_end_token not in previous_text:
