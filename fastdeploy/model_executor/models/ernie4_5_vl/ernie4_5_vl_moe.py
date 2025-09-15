@@ -31,6 +31,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     cuda_graph_buffers,
     support_graph_optimization,
@@ -44,24 +45,15 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
+from fastdeploy.model_executor.models.ernie4_5_vl.image_op import (
+    text_image_gather_scatter,
+    text_image_index_out,
+)
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        text_image_gather_scatter,
-        text_image_index_out,
-    )
-elif current_platform.is_xpu():
-    from fastdeploy.model_executor.ops.xpu import (
-        text_image_gather_scatter,
-        text_image_index_out,
-    )
-
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
@@ -79,7 +71,6 @@ class VLMoEMeta:
     text_input: paddle.Tensor
     text_index: paddle.Tensor
     image_index: paddle.Tensor
-    image_mask: paddle.Tensor
     token_type_ids: paddle.Tensor
     image_token_num: paddle.Tensor
 
@@ -90,7 +81,6 @@ class VLMoEMeta:
             f"  text_input: {self.text_input}, pointer: {self.text_input.data_ptr()}\n"
             f"  text_index: {self.text_index}, pointer: {self.text_index.data_ptr()}\n"
             f"  image_index: {self.image_index}, pointer: {self.image_index.data_ptr()}\n"
-            f"  image_mask: {self.image_mask}, pointer: {self.image_mask.data_ptr()}\n"
             f"  token_type_ids: {self.token_type_ids}, pointer: {self.token_type_ids.data_ptr()}\n\n"
             f")"
         )
@@ -422,11 +412,6 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
-        },
-        "image_mask": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
-            "dtype": "bool",
-            "value": False,
         },
         "text_index": {
             "shape": ["parallel_config.max_model_len"],

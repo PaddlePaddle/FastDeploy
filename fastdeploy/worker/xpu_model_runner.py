@@ -608,7 +608,7 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-    def process_prefill_inputs(self, req_dicts: List[Request]):
+    def insert_prefill_inputs(self, req_dicts: List[Request]):
         """Process inputs for prefill tasks and update share_inputs buffer"""
         req_len = len(req_dicts)
         for i in range(req_len):
@@ -705,11 +705,15 @@ class XPUModelRunner(ModelRunnerBase):
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
-                    request.get("stop_token_ids"), dtype="int64"
+                    request.sampling_params.stop_seqs_len.append(0)
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
+                    request.sampling_params.stop_seqs_len, dtype="int32"
                 )
+                self.share_inputs["stop_seqs"][
+                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
+                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            else:
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
         self.share_inputs["not_need_stop"][0] = True
 
@@ -859,7 +863,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
-        """prepare the model inputs"""
+        """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER and not is_dummy_run:
             recover_decode_task(
                 self.share_inputs["stop_flags"],
@@ -883,7 +887,7 @@ class XPUModelRunner(ModelRunnerBase):
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
-        if self.enable_mm:
+        if self.enable_mm:  # pos_emb_type is different in EB and VL
             self.forward_meta.pos_emb_type = "HALF_HEAD_DIM"
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
