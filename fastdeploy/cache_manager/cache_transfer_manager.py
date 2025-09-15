@@ -146,8 +146,8 @@ class CacheTransferManager:
             args.head_dim,
         ]
 
-        for i in range(args.num_hidden_layers + self.num_extra_layers):
-            num_gpu_blocks = args.num_gpu_blocks if i < args.num_hidden_layers else self.num_extra_layer_gpu_blocks
+        for i in range(args.num_layers + self.num_extra_layers):
+            num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
             cache_shape[0] = num_gpu_blocks
             key_name = f"key_caches_{i}_rank{rank}.device{device}"
             value_name = f"value_caches_{i}_rank{rank}.device{device}"
@@ -408,6 +408,7 @@ def main():
 if __name__ == "__main__":
 
     args = parse_args()
-    logger = get_logger("cache_transfer_manager", "cache_transfer_manager.log")
+    rank_id = args.rank + args.local_data_parallel_id * args.mp_num
+    logger = get_logger("cache_transfer_manager", "cache_transfer_manager_rank{rank_id}.log")
     paddle.set_device(f"gpu:{args.device_id}")
     main()

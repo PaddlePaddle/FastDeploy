@@ -85,6 +85,10 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if self.cfg.scheduler_config.name == "dp":
+            assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
+            self.engine.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
+
         if ipc_signal_suffix is not None:
             self.api_server_pid = ipc_signal_suffix
             self.engine.start_zmq_service(ipc_signal_suffix)
@@ -95,10 +99,6 @@ class ExpertService:
         if self.cfg.splitwise_role != "mixed":
             self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix)
             self.engine.split_mode_get_tasks()
-
-        if self.cfg.scheduler_config.name == "dp":
-            assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
-            self.engine.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()

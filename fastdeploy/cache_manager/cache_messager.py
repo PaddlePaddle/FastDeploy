@@ -51,7 +51,7 @@ def parse_args():
     )
     parser.add_argument("--rank", type=int, default=0, help="current rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
-    parser.add_argument("--num_hidden_layers", type=int, default=1, help="model num layers")
+    parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--head_dim", type=int, default=1, help="model head dim")
     parser.add_argument("--kv_num_head", type=int, default=1, help="model kv num head")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
@@ -812,7 +812,7 @@ def main():
             gpu_cache_kvs=gpu_cache_kvs,
             rank=rank,
             nranks=args.mp_num,
-            num_hidden_layers=args.num_hidden_layers + num_extra_layers,
+            num_layers=args.num_layers + num_extra_layers,
             gpu_id=device,
             rdma_port=args.rdma_port,
         )
@@ -826,7 +826,7 @@ def main():
             gpu_cache_kvs=gpu_cache_kvs,
             rank=rank,
             nranks=args.mp_num,
-            num_hidden_layers=args.num_hidden_layers + num_extra_layers,
+            num_layers=args.num_layers + num_extra_layers,
             gpu_id=device,
             rdma_port=args.rdma_port,
         )
