@@ -23,6 +23,7 @@ import paddle.nn as nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
@@ -77,6 +78,13 @@ class QFVLModel(nn.Layer):
                 for i in range(self.num_layers)
             ]
         )
+        for i, layer in enumerate(self.layers):
+            layer.self_attn.attn = Attention(
+                fd_config=fd_config,
+                layer_id=i,
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}.self_attn",
+                use_neox_rotary_style=True,
+            )
 
         self.norm = RMSNorm(
             fd_config,

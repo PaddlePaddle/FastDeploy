@@ -537,6 +537,10 @@ def get_rope_3d(
         rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
             rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
         )
+    elif "qf" in model_type:
+        rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
+            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
+        )
     else:  # default ernie
         rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(
             rotary_dim, base, partial_rotary_factor, max_position, freq_allocation

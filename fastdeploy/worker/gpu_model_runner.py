@@ -321,7 +321,11 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         position_ids = None
 
-                    enable_thinking = request.get("enable_thinking", True)
+                    if "ernie" in self.model_config.model_type:
+                        enable_thinking = request.get("enable_thinking", True)
+                        enable_thinking = enable_thinking if enable_thinking is not None else True
+                    else:
+                        enable_thinking = False
                     enable_thinking = enable_thinking if enable_thinking is not None else True
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
@@ -556,18 +560,9 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
-                    if "qf" in self.model_config.model_type:
-                        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
-                        self.share_inputs["rope_emb"] = get_rope(
-                            rotary_dim=self.model_config.head_dim,
-                            position_ids=tmp_position_ids,
-                            base=self.model_config.rope_theta,
-                            model_config=self.model_config,
-                        )
-                    else:
-                        self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                            position_ids, request.get("max_tokens", 2048)
-                        )
+                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                        position_ids, request.get("max_tokens", 2048)
+                    )
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -945,7 +940,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
-            if "qwen" in self.model_config.model_type:  # neox style = True
+            if "qwen" in self.model_config.model_type or "qf" in self.model_config.model_type:  # neox style = True
                 rope_head_dim = head_dim
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
@@ -2063,14 +2058,19 @@ class GPUModelRunner(ModelRunnerBase):
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
         images = inputs["images"]
-        position_ids = inputs["position_ids"]
 
+        position_ids = []
+        sample_indices = []
         cu_seqlens = [0]
-        numel = np.prod(np.array(grid_thw))
-        cu_seqlens.append(numel)
+        for idx, thw in enumerate(grid_thw):
+            numel = np.prod(np.array(thw))
+            position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+            sample_indices.append(paddle.full((numel,), idx, dtype=paddle.int64))
+            cu_seqlens.append(cu_seqlens[-1] + numel)
 
-        cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32)
-        sample_indices = paddle.full((numel,), 0, dtype=paddle.int64)
+        position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+        cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+        sample_indices = paddle.concat(sample_indices, axis=0).to(images.place)
 
         with paddle.amp.auto_cast(
             True,
