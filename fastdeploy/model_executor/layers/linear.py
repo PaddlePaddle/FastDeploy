@@ -498,6 +498,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
+                # Avoid redundant transpose of fused weights when weight_loader is called iteratively
                 param.weight_need_transpose = False
             # Loaded weight is already fused on disk.
             shard_offsets = [
@@ -638,6 +639,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
+                # Avoid redundant transpose of fused weights when weight_loader is called iteratively
                 param.weight_need_transpose = False
             # Loaded weight is already fused on disk
             shard_offsets = [
