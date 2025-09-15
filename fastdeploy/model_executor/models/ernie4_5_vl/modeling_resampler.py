@@ -181,8 +181,8 @@ class VariableResolutionResamplerModel(nn.Layer):
                 nn.Linear(self.spatial_dim, self.spatial_dim),
                 nn.LayerNorm(self.spatial_dim, epsilon=1e-6),
             )
-            set_weight_attrs(self.spatial_linear[0].weight, {"model_format": config.model_format})
-            set_weight_attrs(self.spatial_linear[2].weight, {"model_format": config.model_format})
+            set_weight_attrs(self.spatial_linear[0].weight, {"weight_need_transpose": config.model_format == "torch"})
+            set_weight_attrs(self.spatial_linear[2].weight, {"weight_need_transpose": config.model_format == "torch"})
 
             if self.use_temporal_conv:
                 self.temporal_linear = nn.Sequential(
@@ -191,12 +191,16 @@ class VariableResolutionResamplerModel(nn.Layer):
                     nn.Linear(self.spatial_dim, self.spatial_dim),
                     nn.LayerNorm(self.spatial_dim, epsilon=1e-6),
                 )
-                set_weight_attrs(self.temporal_linear[0].weight, {"model_format": config.model_format})
-                set_weight_attrs(self.temporal_linear[2].weight, {"model_format": config.model_format})
+                set_weight_attrs(
+                    self.temporal_linear[0].weight, {"weight_need_transpose": config.model_format == "torch"}
+                )
+                set_weight_attrs(
+                    self.temporal_linear[2].weight, {"weight_need_transpose": config.model_format == "torch"}
+                )
 
             self.mlp = nn.Linear(self.spatial_dim, self.out_dim)
 
-            set_weight_attrs(self.mlp.weight, {"model_format": config.model_format})
+            set_weight_attrs(self.mlp.weight, {"weight_need_transpose": config.model_format == "torch"})
 
             out_config = deepcopy(config)
             out_config.hidden_size = out_dim

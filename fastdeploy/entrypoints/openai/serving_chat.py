@@ -30,6 +30,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionStreamResponse,
     ChatMessage,
     DeltaMessage,
+    ErrorInfo,
     ErrorResponse,
     LogProbEntry,
     LogProbs,
@@ -38,7 +39,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import api_server_logger
+from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -86,14 +87,16 @@ class OpenAIServingChat:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
-                return ErrorResponse(message=err_msg, code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                )
 
         try:
             if self.max_waiting_time < 0:
@@ -117,11 +120,17 @@ class OpenAIServingChat:
                 text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
+            except ParameterError as e:
+                api_server_logger.error(e.message)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(
+                    error=ErrorInfo(message=str(e.message), type=ErrorType.INVALID_REQUEST_ERROR, param=e.param)
+                )
             except Exception as e:
                 error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
                 self.engine_client.semaphore.release()
-                return ErrorResponse(code=400, message=error_msg)
+                return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR))
             del current_req_dict
 
             if request.stream:
@@ -136,21 +145,20 @@ class OpenAIServingChat:
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(code=408, message=error_msg)
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
         except Exception as e:
             error_msg = (
                 f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
                 f"max waiting time: {self.max_waiting_time}"
             )
             api_server_logger.error(error_msg)
-            return ErrorResponse(code=408, message=error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, type=ErrorType.TIMEOUT_ERROR, code=ErrorCode.TIMEOUT)
+            )
 
     def _create_streaming_error_response(self, message: str) -> str:
         api_server_logger.error(message)
-        error_response = ErrorResponse(
-            code=400,
-            message=message,
-        )
+        error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.SERVER_ERROR))
         return error_response.model_dump_json()
 
     async def chat_completion_stream_generator(

@@ -49,7 +49,7 @@ class DcuWorker(GpuWorker):
         """
         self.max_chips_per_node = 8
         if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda():
-            # Set evironment variable
+            # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
