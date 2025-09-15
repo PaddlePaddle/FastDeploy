@@ -34,6 +34,72 @@ QUANTIZATION_METHODS: List[str] = [
 ]
 
 
+def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
+    # 1.model_config.is_quantized
+    # TODO(bukejiyu)  model_config.is_quantized is v0 only need to be removed in future
+    if model_config.model_format == "torch":
+        quantization_config = model_config.quantization_config
+        if quantization_config is not None:
+            model_config.is_quantized = True
+    else:
+        quantization_config = model_config.quantization_config
+        if not model_config.is_quantized:
+            if quantization_config is not None:
+                if "is_quantized" in quantization_config:
+                    model_config.is_quantized = quantization_config["is_quantized"]
+                elif "kv_cache_quant_type" not in quantization_config:
+                    model_config.is_quantized = True
+            if quantization_config is not None and quantization_config.get("quantization", None) is None:
+                raise ValueError(
+                    "quantization_config should have a key named 'quantization' for specify quant config."
+                )
+
+    quant_config_name = None
+
+    if quantization_config is not None:
+        quant_config_name = _get_offline_quant_config_name(
+            quantization_config, model_config.model_format == "torch", is_v1_loader
+        )
+    elif args.quantization is not None:
+        quantization_config = {}
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
+        # Special handling for Ernie models
+        if quant_config_name == "wint4" and is_ernie:
+            quantization_config["dense_quant_type"] = "wint8"
+            quantization_config["moe_quant_type"] = "wint4"
+            quantization_config["quantization"] = "mix_quant"
+            quant_config_name = "mix_quant"
+    else:
+        quant_config_name = None
+    if quant_config_name is None:
+        quant_config = None
+    else:
+        if not quantization_config.get("is_quantized"):
+            quantization_config["is_quantized"] = model_config.is_quantized
+        quant_cls = get_quantization_config(quant_config_name)
+        quant_config = quant_cls.from_config(quantization_config)
+    return quant_config
+
+
+def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_loader):
+    if is_torch_weight:
+        # only support block_wise_fp8 now
+        quant_method = quantization_config.get("quant_method")
+        has_block_size = "weight_block_size" in quantization_config
+        if quant_method == "fp8" and has_block_size:
+            quant_config_name = "block_wise_fp8"
+        else:
+            raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
+    else:
+        quant_config_name = quantization_config["quantization"]
+    return quant_config_name
+
+
 def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     """
     Get the quantization config class by the quantization name.

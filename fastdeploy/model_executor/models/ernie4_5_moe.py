@@ -527,6 +527,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         from fastdeploy.model_executor.utils import (
             default_weight_loader,
             process_weights_after_loading,
+            rename_offline_ckpt_suffix_to_fd_suffix,
         )
 
         general_params_mapping = [
@@ -564,15 +565,20 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 param_down_proj_name="experts.down_proj_",
                 num_experts_start_offset=num_experts_start_offset,
             )
-        all_param_mapping = general_params_mapping + expert_params_mapping
-
+        all_param_mapping = [
+            (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
+        ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
+        checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
+            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+        )
         params_dict = dict(self.named_parameters())
 
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
-            for param_name, weight_name, exp_id, shard_id in all_param_mapping:
+            for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
+                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
                     continue
@@ -583,6 +589,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 expert_id = None
                 shard_id = None
+                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
                 model_param_name = loaded_weight_name
                 if model_param_name not in params_dict.keys():
                     continue
