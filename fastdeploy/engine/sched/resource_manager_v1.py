@@ -455,7 +455,7 @@ class ResourceManagerV1(ResourceManager):
             # schedule when extend block tables is needed
             for req in self.running:
                 num_prefill_blocks = req.need_prefill_tokens // self.config.cache_config.block_size
-                # alocate
+                # allocate
                 if req.use_extend_tables and req.request_id not in self.using_extend_tables_req_id:
                     llm_logger.info(
                         f"req {req.request_id} at batch id {req.idx} with num_prefill_blocks {num_prefill_blocks} is going to enable extend tables"
@@ -488,7 +488,7 @@ class ResourceManagerV1(ResourceManager):
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
                     ):
                         llm_logger.info(
-                            f"req {req.request_id} is going to alocate more extend tables because allocated_slots {self.allocated_slots(req)} and prealloc_dec_block_slot_num_threshold {self.config.cache_config.prealloc_dec_block_slot_num_threshold} req.num_total_tokens {req.num_total_tokens}"
+                            f"req {req.request_id} is going to allocate more extend tables because allocated_slots {self.allocated_slots(req)} and prealloc_dec_block_slot_num_threshold {self.config.cache_config.prealloc_dec_block_slot_num_threshold} req.num_total_tokens {req.num_total_tokens}"
                         )
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
                             req.extend_block_tables.extend(
