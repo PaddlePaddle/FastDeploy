@@ -73,10 +73,6 @@ class EngineService:
                 cfg.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
-            if cfg.splitwise_role != "mixed":
-                raise NotImplementedError(
-                    "Currently ENABLE_V1_KVCACHE_SCHEDULER=1 only supported in mixed sampling now."
-                )
         else:
             self.resource_manager = ResourceManager(
                 cfg.max_num_seqs,
