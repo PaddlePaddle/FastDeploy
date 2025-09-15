@@ -20,9 +20,14 @@ def test_missing_messages_field():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
 
-    assert "detail" in resp, "返回中未包含 detail 错误信息字段"
-    assert any("messages" in err.get("loc", []) for err in resp["detail"]), "未检测到 messages 字段缺失的报错"
-    assert any("Field required" in err.get("msg", "") for err in resp["detail"]), "未检测到 'Field required' 错误提示"
+    assert "error" in resp, "返回中未包含 error 错误信息字段"
+    error = resp["error"]
+    assert "Field required" in error.get("message", ""), "未检测到 messages 字段缺失的报错"
+    assert error.get("code") == "missing_required_parameter", "code 字段不正确"
+
+    # assert "detail" in resp, "返回中未包含 detail 错误信息字段"
+    # assert any("messages" in err.get("loc", []) for err in resp["detail"]), "未检测到 messages 字段缺失的报错"
+    # assert any("Field required" in err.get("msg", "") for err in resp["detail"]), "未检测到 'Field required' 错误提示"
 
 
 def test_malformed_messages_format():
@@ -34,11 +39,15 @@ def test_malformed_messages_format():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert "detail" in resp, "非法结构未被识别"
-    assert any("messages" in err.get("loc", []) for err in resp["detail"]), "未检测到 messages 字段结构错误"
-    assert any(
-        "Input should be a valid list" in err.get("msg", "") for err in resp["detail"]
-    ), "未检测到 'Input should be a valid list' 错误提示"
+    assert "error" in resp, "非法结构未被识别"
+    err = resp["error"]
+    assert err.get("param") == "list[any]", f"param 字段错误: {err.get('param')}"
+    assert err.get("message") == "Input should be a valid list", "错误提示不符合预期"
+    # assert "detail" in resp, "非法结构未被识别"
+    # assert any("messages" in err.get("loc", []) for err in resp["detail"]), "未检测到 messages 字段结构错误"
+    # assert any(
+    #     "Input should be a valid list" in err.get("msg", "") for err in resp["detail"]
+    # ), "未检测到 'Input should be a valid list' 错误提示"
 
 
 def test_extremely_large_max_tokens():
@@ -79,8 +88,13 @@ def test_top_p_exceed_1():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("detail").get("object") == "error", "top_p > 1 应触发校验异常"
-    assert "top_p value can only be defined" in resp.get("detail").get("message", ""), "未返回预期的 top_p 错误信息"
+    assert "error" in resp, "未返回 error 字段"
+
+    err = resp["error"]
+    assert err.get("param") == "top_p", f"param 字段错误: {err.get('param')}"
+    assert err.get("message") == "Input should be less than or equal to 1", "错误提示不符合预期"
+    # assert resp.get("detail").get("object") == "error", "top_p > 1 应触发校验异常"
+    # assert "top_p value can only be defined" in resp.get("detail").get("message", ""), "未返回预期的 top_p 错误信息"
 
 
 def test_mixed_valid_invalid_fields():
@@ -106,8 +120,8 @@ def test_stop_seq_exceed_num():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("detail").get("object") == "error", "stop 超出个数应触发异常"
-    assert "exceeds the limit max_stop_seqs_num" in resp.get("detail").get("message", ""), "未返回预期的报错信息"
+    assert resp.get("error").get("type") == "invalid_request_error", "stop 超出个数应触发异常"
+    assert "exceeds the limit max_stop_seqs_num" in resp.get("error").get("message", ""), "未返回预期的报错信息"
 
 
 def test_stop_seq_exceed_length():
@@ -120,8 +134,8 @@ def test_stop_seq_exceed_length():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("detail").get("object") == "error", "stop 超出长度应触发异常"
-    assert "exceeds the limit stop_seqs_max_len" in resp.get("detail").get("message", ""), "未返回预期的报错信息"
+    assert resp.get("error").get("type") == "invalid_request_error", "stop 超出长度应触发异常"
+    assert "exceeds the limit stop_seqs_max_len" in resp.get("error").get("message", ""), "未返回预期的报错信息"
 
 
 def test_multilingual_input():
@@ -154,8 +168,8 @@ def test_too_long_input():
     data = {"messages": [{"role": "user", "content": "a，" * 200000}], "stream": False}  # 超过最大输入长度
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp["detail"].get("object") == "error", "超长输入未被识别为错误"
-    assert "Input text is too long" in resp["detail"].get("message", ""), "未检测到最大长度限制错误"
+    # assert resp["detail"].get("object") == "error", "超长输入未被识别为错误"
+    assert "Input text is too long" in resp["error"].get("message", ""), "未检测到最大长度限制错误"
 
 
 def test_empty_input():
@@ -361,8 +375,8 @@ def test_max_tokens_negative():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("detail").get("object") == "error", "max_tokens < 0 未触发校验异常"
-    assert "max_tokens can be defined [1," in resp.get("detail").get("message"), "未返回预期的 max_tokens 错误信息"
+    # assert resp.get("detail").get("object") == "error", "max_tokens < 0 未触发校验异常"
+    assert "max_tokens can be defined [1," in resp.get("error").get("message"), "未返回预期的 max_tokens 错误信息"
 
 
 def test_max_tokens_min():
@@ -379,7 +393,10 @@ def test_max_tokens_min():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    assert resp.get("detail").get("object") == "error", "max_tokens未0时API未拦截住"
+    # assert resp.get("detail").get("object") == "error", "max_tokens未0时API未拦截住"
+    assert "max_tokens can be defined [1," in resp.get("error").get(
+        "message"
+    ), "max_tokens未0时API未拦截住,未返回预期的 max_tokens 错误信息"
 
 
 def test_max_tokens_non_integer():
@@ -397,5 +414,5 @@ def test_max_tokens_non_integer():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     assert (
-        resp.get("detail")[0].get("msg") == "Input should be a valid integer, got a number with a fractional part"
+        resp.get("error").get("message") == "Input should be a valid integer, got a number with a fractional part"
     ), "未返回预期的 max_tokens 为非整数的错误信息"

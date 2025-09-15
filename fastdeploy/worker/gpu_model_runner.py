@@ -838,6 +838,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_batch_ids"] = None
         self.share_inputs["decoder_tile_ids_per_batch"] = None
         self.share_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
+        self.share_inputs["decoder_num_blocks_device"] = None
+        self.share_inputs["decoder_chunk_size_device"] = None
         self.share_inputs["max_len_tensor_cpu"] = None  # CPU
         self.share_inputs["encoder_batch_ids"] = None
         self.share_inputs["encoder_tile_ids_per_batch"] = None
@@ -857,6 +859,7 @@ class GPUModelRunner(ModelRunnerBase):
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
         # Set block tables
@@ -990,6 +993,8 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
+        # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
+        self.share_inputs["batch_id_per_token"][:] = -1
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
@@ -1069,6 +1074,10 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
             decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
+            # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
+            # adapted to cudagraph.
+            decoder_num_blocks_device=self.share_inputs["decoder_num_blocks_device"],
+            decoder_chunk_size_device=self.share_inputs["decoder_chunk_size_device"],
             max_len_tensor_cpu=self.share_inputs["max_len_tensor_cpu"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
@@ -1195,8 +1204,12 @@ class GPUModelRunner(ModelRunnerBase):
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
         group_size = np.ceil(num_heads / self.model_config.kv_num_heads)
 
-        decode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
-            (decoder_step_token_num * group_size) / decoder_block_shape_q
+        # NOTE: (changwenbin) When using auto_chunk,
+        # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
+        decode_max_tile_size = (
+            1024
+            * self.scheduler_config.max_num_seqs
+            * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
         )
         encode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             (self.model_config.max_model_len * group_size) / encoder_block_shape_q
@@ -1207,6 +1220,10 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+        # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
+        # adapted to cudagraph.
+        self.share_inputs["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
+        self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
         self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
 
         self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
@@ -1281,24 +1298,23 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
-                hidden_states = model_output
             else:
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
 
-                hidden_states = rebuild_padding(
-                    model_output,
-                    self.share_inputs["cu_seqlens_q"],
-                    self.share_inputs["seq_lens_this_time"],
-                    self.share_inputs["seq_lens_decoder"],
-                    self.share_inputs["seq_lens_encoder"],
-                    (
-                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                    ),  # speculative decoding requires
-                    self.parallel_config.max_model_len,
-                )
+            hidden_states = rebuild_padding(
+                model_output,
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["seq_lens_encoder"],
+                (
+                    self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
+                ),  # speculative decoding requires
+                self.parallel_config.max_model_len,
+            )
 
             # 4. Execute spec decode
             logits = self.model.compute_logits(hidden_states)
@@ -1591,21 +1607,20 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
-            hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.parallel_config.max_model_len,
-            )
+        hidden_states = rebuild_padding(
+            model_output,
+            self.share_inputs["cu_seqlens_q"],
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["seq_lens_encoder"],
+            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+            self.parallel_config.max_model_len,
+        )
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
@@ -1885,25 +1900,27 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.clear_caches()
 
     def clear_parameters(self, pid):
-        """ " Dynamic model loader use to clear parameters use for RL"""
+        """Dynamic model loader use to clear parameters use for RL"""
+        # Clear CUDAGraph
+        if self.use_cudagraph:
+            self.model.clear_grpah_opt_backend()
+        # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
-        # Clear CudaGraph
-        if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
-
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
-        """ " Dynamic model loader use to update parameters use for RL"""
+        """Dynamic model loader use to update parameters use for RL"""
+        # Update parameters
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
-
-        # Recapture CudaGraph
+        # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()
+        # Send single
+        self.dynamic_weight_manager.finalize_update(pid)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 

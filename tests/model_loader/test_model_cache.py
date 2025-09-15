@@ -41,7 +41,7 @@ model_param_map = {
         "quantizations": [
             {
                 "quant_type": "wint4",
-                "env": {"FD_ENABLE_MODEL_CACHE": "1"},
+                "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
             }
         ],
     }
@@ -123,6 +123,6 @@ def test_model_cache(
     check_tokens_id_and_text_close(
         outputs_0_lst=fd_outputs_v1,
         outputs_1_lst=fd_outputs_v1_with_cache,
-        name_0="default_v1 laoder",
+        name_0="default_v1 loader",
         name_1="default_v1 loader using cache",
     )

@@ -193,16 +193,16 @@ class VisionFlashAttention2(nn.Layer):
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
             self.proj = nn.Linear(dim, dim)
 
-        set_weight_attrs(self.qkv.weight, {"model_format": model_format})
-        set_weight_attrs(self.proj.weight, {"model_format": model_format})
+        set_weight_attrs(self.qkv.weight, {"weight_need_transpose": model_format == "torch"})
+        set_weight_attrs(self.proj.weight, {"weight_need_transpose": model_format == "torch"})
         self.head_dim = dim // num_heads  # must added
         self.num_heads = num_heads
         self.hidden_size = dim
         self.num_heads_per_rank = divide(self.num_heads, self.tensor_parallel_degree)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        model_format = getattr(param, "model_format", "")
-        if model_format == "torch":
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
         load_bias = getattr(param, "load_bias", None)
         if load_bias:
@@ -358,8 +358,8 @@ class VisionMlp(nn.Layer):
             self.fc1 = nn.Linear(dim, hidden_dim)
             self.fc2 = nn.Linear(hidden_dim, dim)
 
-        set_weight_attrs(self.fc1.weight, {"model_format": model_format})
-        set_weight_attrs(self.fc2.weight, {"model_format": model_format})
+        set_weight_attrs(self.fc1.weight, {"weight_need_transpose": model_format == "torch"})
+        set_weight_attrs(self.fc2.weight, {"weight_need_transpose": model_format == "torch"})
 
         self.act = ACT2FN[hidden_act]
 
@@ -528,8 +528,10 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             in_channels=config.vision_config.in_channels,
             embed_dim=config.vision_config.embed_dim,
         )
+
         model_format = getattr(config, "model_format", "")
-        set_weight_attrs(self.patch_embed.proj.weight, {"model_format": model_format})
+
+        set_weight_attrs(self.patch_embed.proj.weight, {"weight_need_transpose": model_format == "torch"})
 
         head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)

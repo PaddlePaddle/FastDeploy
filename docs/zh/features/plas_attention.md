@@ -34,7 +34,7 @@
 
 为了优化预填充和解码阶段的性能，我们设计了一种特殊的联合策略来适应各自的特点:
 
-* **Prefill Toke Union**: 我们观察到相邻的查询标记倾向于选择相似的关键块。利用这种局部性，我们取连续 128 个查询标记选择的关键块的并集，并联合计算这些标记的稀疏注意力机制。
+* **Prefill Token Union**: 我们观察到相邻的查询标记倾向于选择相似的关键块。利用这种局部性，我们取连续 128 个查询标记选择的关键块的并集，并联合计算这些标记的稀疏注意力机制。
 
 * **Decode Head Union**: 鉴于 GQA 在现代模型中的广泛应用，我们发现同一组内的不同查询头经常选择重叠的关键块。因此，我们将同一组内所有查询头选择的关键块合并为一个统一的集合，并联合计算稀疏注意力机制。这种方式也减少了内存访问开销，并进一步提高了解码效率。
 
@@ -136,7 +136,7 @@
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>QPS</strong></td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>Decode Speed (token/s)</strong></td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>Time to First token(s)</strong></td>
-        <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>Time per Ouput Token(ms)</strong></td>
+        <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>Time per Output Token(ms)</strong></td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>End-to-End Latency(s)</strong></td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>Mean Input<br>Length</strong></td>
         <td style="border: 1px solid #dcdde0; padding: 8px; text-align: center; vertical-align: middle;"><strong>Mean Output Length</strong></td>

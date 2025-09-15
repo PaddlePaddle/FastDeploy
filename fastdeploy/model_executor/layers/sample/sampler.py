@@ -364,7 +364,7 @@ class Sampler(nn.Layer):
         )
         if sampling_metadata.enable_early_stop:
             # will set the stop batch in stop_flags
-            assert sampling_metadata.stop_flags is not None, "need stop_flags for eary stop"
+            assert sampling_metadata.stop_flags is not None, "need stop_flags for early stop"
             self.early_stopper.process(probs, next_tokens, sampling_metadata.stop_flags)
 
         sampler_output = SamplerOutput(

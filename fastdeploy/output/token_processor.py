@@ -146,7 +146,7 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output
+            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
@@ -178,7 +178,7 @@ class TokenProcessor:
                                 )
 
                     except Exception as e:
-                        print(f"Recieve message error: {e}")
+                        print(f"Receive message error: {e}")
                         continue
                 else:
                     is_blocking = True
