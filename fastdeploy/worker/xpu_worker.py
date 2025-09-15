@@ -96,6 +96,11 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory,
         )
 
+        assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
+        assert (
+            len(self.device_ids) > self.local_rank
+        ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
+
         # 1. Record memory state before profile run
         start_time = time.perf_counter()
         Gb = 1024**3
@@ -144,7 +149,7 @@ class XpuWorker(WorkerBase):
             after_run_mem_total * self.cache_config.gpu_memory_utilization - after_run_mem_used - paddle_peak_increase
         )
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
-        
+
         if self.parallel_config.use_ep:
             available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
@@ -194,7 +199,7 @@ class XpuWorker(WorkerBase):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
         else:
-            self.model_runner.process_prefill_inputs(req_dicts=req_dicts)
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
