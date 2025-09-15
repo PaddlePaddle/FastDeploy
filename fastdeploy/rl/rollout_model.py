@@ -28,7 +28,6 @@ from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
     Ernie4_5_VLMoeForConditionalGeneration,
     Ernie4_5_VLPretrainedModel,
 )
-from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import (
     Qwen2ForCausalLM,
     Qwen2PretrainedModel,
@@ -45,6 +44,7 @@ from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3MoeForCausalLM,
     Qwen3MoePretrainedModel,
 )
+from fastdeploy.model_executor.models.registry import model_registry
 from fastdeploy.rl.rollout_config import RolloutModelConfig
 
 
@@ -62,7 +62,7 @@ class RolloutModel(nn.Layer):
         context = paddle.LazyGuard()
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
         with context:
-            model_cls = ModelRegistry.get_class(architectures)
+            model_cls = model_registry.get_class(architectures)
             model = model_cls(self.fd_config)
         model.eval()
         return model

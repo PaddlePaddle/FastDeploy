@@ -95,11 +95,11 @@ def _patch_fastsafetensors():
 _patch_fastsafetensors()
 
 
-MODULE_ATTRS = {"ModelRegistry": ".model_executor.models.model_base:ModelRegistry", "version": ".utils:version"}
+MODULE_ATTRS = {"model_registry": ".model_executor.models.registry:ModelRegistry", "version": ".utils:version"}
 
 
 if typing.TYPE_CHECKING:
-    from fastdeploy.model_executor.models.model_base import ModelRegistry
+    from fastdeploy.model_executor.models.registry import model_registry
 else:
 
     def __getattr__(name: str) -> typing.Any:
@@ -116,4 +116,4 @@ else:
             print(f"module {__package__} has no attribute {name}")
 
 
-__all__ = ["LLM", "SamplingParams", "ModelRegistry", "version"]
+__all__ = ["LLM", "SamplingParams", "model_registry", "version"]
