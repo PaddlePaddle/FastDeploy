@@ -26,6 +26,7 @@ from multiprocessing import current_process
 import uvicorn
 import zmq
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -40,6 +41,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
+    ErrorInfo,
     ErrorResponse,
     ModelList,
 )
@@ -56,6 +58,7 @@ from fastdeploy.metrics.metrics import (
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.utils import (
+    ExceptionHandler,
     FlexibleArgumentParser,
     StatefulSemaphore,
     api_server_logger,
@@ -232,6 +235,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
+app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
 instrument(app)
 
 
@@ -336,7 +341,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
-                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=500)
             elif isinstance(generator, ChatCompletionResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
@@ -365,7 +370,7 @@ async def create_completion(request: CompletionRequest):
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=500)
             elif isinstance(generator, CompletionResponse):
                 connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump())
@@ -388,7 +393,7 @@ async def list_models() -> Response:
 
     models = await app.state.model_handler.list_models()
     if isinstance(models, ErrorResponse):
-        return JSONResponse(content=models.model_dump(), status_code=models.code)
+        return JSONResponse(content=models.model_dump())
     elif isinstance(models, ModelList):
         return JSONResponse(content=models.model_dump())
 
@@ -502,7 +507,8 @@ def control_scheduler(request: ControlSchedulerRequest):
     """
     Control the scheduler behavior with the given parameters.
     """
-    content = ErrorResponse(object="", message="Scheduler updated successfully", code=0)
+
+    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code=0))
 
     global llm_engine
     if llm_engine is None:

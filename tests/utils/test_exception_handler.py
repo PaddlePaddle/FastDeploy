@@ -1,0 +1,54 @@
+import json
+import unittest
+from http import HTTPStatus
+
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+from fastdeploy.utils import ErrorCode, ExceptionHandler, ParameterError
+
+
+class TestParameterError(unittest.TestCase):
+    def test_parameter_error_init(self):
+        exc = ParameterError("param1", "error message")
+        self.assertEqual(exc.param, "param1")
+        self.assertEqual(exc.message, "error message")
+        self.assertEqual(str(exc), "error message")
+
+
+class TestExceptionHandler(unittest.IsolatedAsyncioTestCase):
+
+    async def test_handle_exception(self):
+        """普通异常应返回 500 + internal_error"""
+        exc = RuntimeError("Something went wrong")
+        resp: JSONResponse = await ExceptionHandler.handle_exception(None, exc)
+        body = json.loads(resp.body.decode())
+        self.assertEqual(resp.status_code, HTTPStatus.INTERNAL_SERVER_ERROR)
+        self.assertEqual(body["error"]["type"], "internal_error")
+        self.assertIn("Something went wrong", body["error"]["message"])
+
+    async def test_handle_request_validation_missing_messages(self):
+        """缺少 messages 参数时，应返回 missing_required_parameter"""
+        exc = RequestValidationError([{"loc": ("body", "messages"), "msg": "Field required", "type": "missing"}])
+        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(None, exc)
+        data = json.loads(resp.body.decode())
+        self.assertEqual(resp.status_code, HTTPStatus.BAD_REQUEST)
+        self.assertEqual(data["error"]["param"], "messages")
+        self.assertEqual(data["error"]["code"], ErrorCode.MISSING_REQUIRED_PARAMETER)
+        self.assertIn("Field required", data["error"]["message"])
+
+    async def test_handle_request_validation_invalid_value(self):
+        """参数非法时，应返回 invalid_value"""
+        exc = RequestValidationError(
+            [{"loc": ("body", "top_p"), "msg": "Input should be less than or equal to 1", "type": "value_error"}]
+        )
+        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(None, exc)
+        data = json.loads(resp.body.decode())
+        self.assertEqual(resp.status_code, HTTPStatus.BAD_REQUEST)
+        self.assertEqual(data["error"]["param"], "top_p")
+        self.assertEqual(data["error"]["code"], ErrorCode.INVALID_VALUE)
+        self.assertIn("less than or equal to 1", data["error"]["message"])
+
+
+if __name__ == "__main__":
+    unittest.main()
