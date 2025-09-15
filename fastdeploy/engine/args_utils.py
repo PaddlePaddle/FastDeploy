@@ -1039,7 +1039,6 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             ips=self.ips,
             use_warmup=self.use_warmup,

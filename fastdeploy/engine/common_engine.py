@@ -65,7 +65,7 @@ class EngineService:
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
-                cfg.max_num_seqs,
+                cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
                 cfg.splitwise_role,
@@ -77,7 +77,7 @@ class EngineService:
                 )
         else:
             self.resource_manager = ResourceManager(
-                cfg.max_num_seqs,
+                cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
                 cfg.splitwise_role,

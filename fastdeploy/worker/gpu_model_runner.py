@@ -145,9 +145,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
 
         # Initialize share inputs
-        self._init_share_inputs(self.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
         ).cpu()
@@ -1195,13 +1195,13 @@ class GPUModelRunner(ModelRunnerBase):
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
         group_size = np.ceil(num_heads / self.model_config.kv_num_heads)
 
-        decode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        decode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             (decoder_step_token_num * group_size) / decoder_block_shape_q
         )
-        encode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        encode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             (self.model_config.max_model_len * group_size) / encoder_block_shape_q
         )
-        kv_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        kv_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             self.model_config.max_model_len / self.fd_config.cache_config.block_size
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
@@ -1492,7 +1492,7 @@ class GPUModelRunner(ModelRunnerBase):
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
                     num_tokens=num_tokens,
-                    batch_size=self.parallel_config.max_num_seqs,
+                    batch_size=self.scheduler_config.max_num_seqs,
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
                     capture_prefill=True,
@@ -1801,7 +1801,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Dummy run
         self._dummy_run(
             num_tokens=self.scheduler_config.max_num_batched_tokens,
-            batch_size=min(self.parallel_config.max_num_seqs, 3),
+            batch_size=min(self.scheduler_config.max_num_seqs, 3),
         )
 
         # 3. gc

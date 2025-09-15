@@ -152,7 +152,7 @@ class Attention(nn.Layer):
 
             self.cache_k_block_means = paddle.zeros(
                 [
-                    fd_config.parallel_config.max_num_seqs,
+                    fd_config.scheduler_config.max_num_seqs,
                     moba_max_seq_length // moba_block_size,
                     self.kv_num_heads,
                     self.head_dim,

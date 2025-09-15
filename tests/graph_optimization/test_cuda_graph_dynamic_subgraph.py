@@ -22,7 +22,7 @@ from fastdeploy.config import (
     CacheConfig,
     FDConfig,
     GraphOptimizationConfig,
-    ParallelConfig,
+    SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -152,15 +152,15 @@ class TestCUDAGrpahSubgraph(unittest.TestCase):
         # Set FastDeploy config
         graph_opt_config = GraphOptimizationConfig(args={})
         graph_opt_config.use_cudagraph = True
-        parallel_config = ParallelConfig(args={})
-        parallel_config.max_num_seqs = 8
+        scheduler_config = SchedulerConfig(args={})
+        scheduler_config.max_num_seqs = 8
         cache_config = CacheConfig({})
         # Initialize cuda graph capture list
-        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_capture_size=parallel_config.max_num_seqs)
+        graph_opt_config._set_cudagraph_sizes(max_num_seqs=scheduler_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
+            scheduler_config=scheduler_config,
             cache_config=cache_config,
             test_mode=True,
         )

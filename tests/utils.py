@@ -21,6 +21,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     ParallelConfig,
+    SchedulerConfig,
 )
 
 
@@ -50,8 +51,9 @@ class FakeModelConfig:
 
 def get_default_test_fd_config():
     graph_opt_config = GraphOptimizationConfig(args={})
+    scheduler_config = SchedulerConfig(args={})
+    scheduler_config.max_num_seqs = 1
     parallel_config = ParallelConfig(args={})
-    parallel_config.max_num_seqs = 1
     parallel_config.data_parallel_rank = 1
     cache_config = CacheConfig({})
     fd_config = FDConfig(
