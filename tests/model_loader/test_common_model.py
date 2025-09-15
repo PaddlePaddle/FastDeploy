@@ -35,20 +35,10 @@ FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
 
-model_param_map = {
-    "Qwen3-0.6B": {
-        "quantizations": ["None", "wint8", "wint4"],
-    },
-    "ernie-4_5-21b-a3b-bf16-paddle": {
-        "tensor_parallel_size": 2,
-        "quantizations": [
-            "wint8",
-        ],
-    },
-    "Qwen2-7B-Instruct": {
-        "quantizations": ["wint4"],
-    },
-    "Qwen3-30B-A3B": {
+model_param_list = [
+    {"model": "Qwen3-0.6B", "quantizations": ["None", "wint8", "wint4"]},
+    {
+        "model": "Qwen3-30B-A3B",
         "tensor_parallel_size": 2,
         "quantizations": [
             {
@@ -59,11 +49,22 @@ model_param_map = {
             {
                 "quant_type": "block_wise_fp8",
                 "backend": "deepgemm",
-                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17", "FD_USE_DEEP_GEMM": "1"},
+                "env": {
+                    "DG_NVCC_OVERRIDE_CPP_STANDARD": "17",
+                    "FD_USE_DEEP_GEMM": "1",
+                },
             },
         ],
     },
-    "DeepSeek-V3-0324": {
+    {
+        "model": "ernie-4_5-21b-a3b-bf16-paddle",
+        "tensor_parallel_size": 2,
+        "quantizations": [
+            "wint8",
+        ],
+    },
+    {
+        "model": "DeepSeek-V3-0324",
         "tensor_parallel_size": 2,
         "quantizations": [
             {
@@ -77,11 +78,11 @@ model_param_map = {
             },
         ],
     },
-}
-
+]
 
 params = []
-for model, cfg in model_param_map.items():
+for cfg in model_param_list:
+    model = cfg["model"]
     for q in cfg["quantizations"]:
         if isinstance(q, dict):
             quant, backend, env = q["quant_type"], q.get("backend", "default"), q.get("env", {})
