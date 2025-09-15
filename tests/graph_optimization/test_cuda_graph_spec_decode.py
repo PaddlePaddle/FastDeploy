@@ -22,6 +22,7 @@ from fastdeploy.config import (
     CacheConfig,
     FDConfig,
     GraphOptimizationConfig,
+    ParallelConfig,
     SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -102,6 +103,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         scheduler_config = SchedulerConfig(args={})
         scheduler_config.max_num_seqs = 1
         cache_config = CacheConfig({})
+        parallel_config = ParallelConfig(args={})
         # Initialize cuda graph capture list
         graph_opt_config._set_cudagraph_sizes(max_num_seqs=scheduler_config.max_num_seqs)
         graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
@@ -109,6 +111,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,
             cache_config=cache_config,
+            parallel_config=parallel_config,
             test_mode=True,
         )
 

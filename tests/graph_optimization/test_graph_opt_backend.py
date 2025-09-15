@@ -24,6 +24,7 @@ from fastdeploy.config import (
     CacheConfig,
     FDConfig,
     GraphOptimizationConfig,
+    ParallelConfig,
     SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -89,11 +90,12 @@ class TestGraphOptBackend(unittest.TestCase):
         baseline_scheduler_config.max_num_seqs = self.max_num_seqs
 
         baseline_cache_config = CacheConfig({})
-
+        baseline_parallel_config = ParallelConfig(args={})
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
             scheduler_config=baseline_scheduler_config,
             cache_config=baseline_cache_config,
+            parallel_config=baseline_parallel_config,
             test_mode=True,
         )
 
@@ -134,12 +136,14 @@ class TestGraphOptBackend(unittest.TestCase):
 
         # Setup cache config
         cache_config = CacheConfig({})
+        parallel_config = ParallelConfig(args={})
 
         # Create FD config
         return FDConfig(
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,
             cache_config=cache_config,
+            parallel_config=parallel_config,
             test_mode=True,
         )
 

@@ -202,13 +202,12 @@ class SchedulerConfig:
     Creates appropriate config based on scheduler type (local/global).
     """
 
-    def __init__(self, kwargs):
+    def __init__(self, args):
         """
         Initialize scheduler configuration factory.
 
         Args:
-            name: Scheduler type ("local" for LocalScheduler or "global" for GlobalScheduler)
-            **kwargs: Configuration parameters for the specific scheduler type
+            args: Configuration parameters for the specific scheduler type
 
         Initializes:
             - Appropriate config object based on scheduler type
@@ -222,18 +221,18 @@ class SchedulerConfig:
         self.max_num_seqs = 34
         self.config = None
 
-        for key, value in kwargs.items():
+        for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
         if self.name == "local":
-            self.config = LocalSchedulerConfig(**kwargs)
+            self.config = LocalSchedulerConfig(**args)
 
         if self.name == "global":
-            self.config = GlobalSchedulerConfig(**kwargs)
+            self.config = GlobalSchedulerConfig(**args)
 
         if self.name == "splitwise":
-            self.config = SplitWiseSchedulerConfig(**kwargs)
+            self.config = SplitWiseSchedulerConfig(**args)
 
     def check(self):
         """
