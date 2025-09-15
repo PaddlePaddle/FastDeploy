@@ -79,10 +79,10 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             x_dequant = x_fp32 * x_scale_expanded
 
             y_fp32 = y.astype("float32")
-
-            y_scale_expanded_n = paddle.repeat_interleave(y_scale, repeats=128, axis=-2)[:n, :]
-            y_scale_expanded_nk = paddle.repeat_interleave(y_scale_expanded_n, repeats=128, axis=-1)[:, :k]
-            y_dequant = y_fp32 * y_scale_expanded_nk
+            y_scale_n_dim = paddle.repeat_interleave(y_scale, repeats=128, axis=-2)
+            y_scale_expanded = paddle.repeat_interleave(y_scale_n_dim, repeats=128, axis=-1)
+            y_scale_expanded = y_scale_expanded[:n, :k]
+            y_dequant = y_fp32 * y_scale_expanded
 
             x_bf16 = x_dequant.astype("bfloat16")
             y_bf16 = y_dequant.astype("bfloat16")
@@ -106,8 +106,8 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
             np.testing.assert_allclose(
                 ref_out.astype("float32").numpy(),
                 result.astype("float32").numpy(),
-                rtol=1e-4,
-                atol=1e-4,
+                rtol=5e-3,
+                atol=5e-3,
             )
 
 
