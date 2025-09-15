@@ -19,6 +19,8 @@ from typing import Any, Callable
 from fastdeploy import envs
 from fastdeploy.utils import llm_logger as logger
 
+plugins_loaded = False
+
 
 def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
     import sys
