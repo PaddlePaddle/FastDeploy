@@ -118,7 +118,6 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
 def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
     try:
         modules = get_hf_file_to_dict("modules.json", model_config.model)
-        logger.info(f"modules:{modules}")
         if not modules:
             return None
 
@@ -184,17 +183,12 @@ def _create_pooling_model_cls(orig_cls: _T) -> _T:
 
             # We have deleted this attribute, so don't load it
             weights = ((name, data) for name, data in weights if not name.startswith("lm_head."))
-            print("self.model", self.model)
 
             # If `*ForCausalLM` defines `load_weights` on the inner model
             # and there are no other inner modules with parameters,
             # we support loading from both `*Model` and `*ForCausalLM`
 
             if hasattr(self, "model") and hasattr(self.model, "load_weights"):
-
-                # for name, child in self.named_sublayers(include_self=False):
-                #     param_count = len(list(child.parameters()))
-
                 # Whether only `self.model` contains parameters
                 model_is_only_param = all(
                     name == "model" or len(list(child.parameters())) == 0
@@ -203,15 +197,12 @@ def _create_pooling_model_cls(orig_cls: _T) -> _T:
                 if model_is_only_param:
                     mapper = WeightsMapper(orig_to_new_prefix={"model.": ""})
                     weights = mapper.apply(weights)
-
-                    logger.info(f"Loading weights through self.model: {type(self.model)}")
                     loaded_params = self.model.load_weights(weights)
                     loaded_params = {f"model.{name}" for name in loaded_params}
                     return loaded_params
 
             # For most other models
             if hasattr(orig_cls, "load_weights"):
-                print("orig_cls", orig_cls)
                 return orig_cls.load_weights(self, weights)  # type: ignore
             # Fallback
             else:
@@ -241,7 +232,6 @@ def as_embedding_model(cls: _T) -> _T:
         please implement your own model if this is not the case.
     """
     # Avoid modifying existing embedding models
-    print("cls", cls)
     if is_pooling_model(cls):
         return cls
 
@@ -261,7 +251,5 @@ def as_embedding_model(cls: _T) -> _T:
             )
 
     ModelForEmbedding.__name__ = _get_pooling_model_name(cls.__name__, "ForEmbedding")
-
-    print("ModelForEmbedding", ModelForEmbedding.__name__)
 
     return ModelForEmbedding

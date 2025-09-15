@@ -24,30 +24,53 @@ from paddle import nn
 
 class ModelForCasualLM(nn.Layer, ABC):
     """
-    LM基类
+    Base class for LM
     """
 
     def __init__(self, configs):
+        """
+        Args:
+            configs (dict): Configurations including parameters such as max_dec_len, min_dec_len, decode_strategy,
+                vocab_size, use_topp_sampling, etc.
+        """
         super(ModelForCasualLM, self).__init__()
         self.fd_config = configs
 
     @abstractmethod
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
-        """加载模型参数"""
+        """
+        Load model parameters from a given state dictionary.
+        Args:
+            state_dict (dict[str, np.ndarray | paddle.Tensor]):
+                A dictionary containing model parameters, where keys are parameter names
+                and values are NumPy arrays or PaddlePaddle tensors.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def forward(self, input_ids=None, pos_emb=None, **model_kwargs):
-        """前向传播"""
+    @abstractmethod
+    def forward(
+        self,
+        input_ids=None,
+        pos_emb=None,
+        **model_kwargs,
+    ):
+        """
+        Defines the forward pass of the model for generating text.
+        Args:
+            input_ids (Tensor, optional): The input token ids to the model.
+            pos_emb (Tensor, optional): position Embeddings for model.
+            **model_kwargs: Additional keyword arguments for the model.
+        Returns:
+            Tensor or list of Tensors: Generated tokens or decoded outputs.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def compute_logits(self, hidden_state, **logits_prosessor_kwargs):
-        """计算logits"""
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
-    def name(cls):
-        """返回模型名称"""
+    def name(self):
         raise NotImplementedError

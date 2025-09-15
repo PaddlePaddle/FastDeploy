@@ -17,7 +17,7 @@
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import paddle
 
@@ -32,6 +32,7 @@ from fastdeploy.config import (
     MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PoolerConfig,
     RunnerOption,
     SpeculativeConfig,
     TaskOption,
@@ -104,6 +105,10 @@ class EngineArgs:
     """
     Convert the model using adapters. The most common use case is to
     adapt a text generation model to be used for pooling tasks.
+    """
+    override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
+    """
+    Override configuration for the pooler.
     """
     max_num_seqs: int = 8
     """
@@ -483,6 +488,12 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--convert", type=str, default=EngineArgs.convert, help="Convert the model using adapters"
+        )
+        model_group.add_argument(
+            "--override-pooler-config",
+            type=json.loads,
+            default=EngineArgs.override_pooler_config,
+            help="Override the pooler configuration with a JSON string.",
         )
         model_group.add_argument(
             "--use-warmup",
@@ -1008,10 +1019,6 @@ class EngineArgs:
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
-
-        print("model_cfg", model_cfg)
-        print("model_cfg.runner", model_cfg.runner)
-        print("model_cfg.convert", model_cfg.convert)
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

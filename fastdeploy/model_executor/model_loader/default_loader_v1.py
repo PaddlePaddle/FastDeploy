@@ -67,7 +67,6 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         architectures = fd_config.model_config.architectures[0]
-        logger.info(f"Starting to load model {architectures}")
         context = paddle.LazyGuard()
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
@@ -82,26 +81,16 @@ class DefaultModelLoaderV1(BaseModelLoader):
                 model = model_cls(fd_config)
 
         convert_type = fd_config.model_config.convert_type
-        logger.info(f"convert_type:{convert_type}")
         if convert_type == "none":
             pass
         elif convert_type == "embed":
             logger.info("Converting to embedding model.")
             model_cls = as_embedding_model(model_cls)
-            logger.info(f"model_cls:{model_cls}")
-            logger.info(f"Original model class: {model_cls}")
-            logger.info(f"Model class name: {model_cls.__name__}")
-            logger.info(f"Model class MRO: {model_cls.__mro__}")
         else:
             assert_never(convert_type)
 
         with context:
             model = model_cls(fd_config)
-
-        logger.info(f"Model type: {type(model)}")
-        logger.info(f"Has pooler: {hasattr(model, 'pooler')}")
-        logger.info(f"Has lm_head: {hasattr(model, 'lm_head')}")
-        logger.info(f"Is embedding model: {getattr(model, 'is_pooling_model', False)}")
 
         model.eval()
         # RL model not need set_state_dict

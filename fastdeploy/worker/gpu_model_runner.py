@@ -1301,8 +1301,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.parallel_config.max_model_len,
                 )
 
-            print("self.model.is_pooling_model", self.model.is_pooling_model)
-            print("hasattr", hasattr(self.model, "is_pooling_model"))
             logits = None
             if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
                 pass

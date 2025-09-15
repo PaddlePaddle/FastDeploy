@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import enum
 import json
 import os
 from dataclasses import field
@@ -97,11 +96,6 @@ def try_match_architecture_defaults(
             return suffix, (default_runner_type, default_convert_type)
     logger.info("No match found")
     return None
-
-
-class ModelImpl(str, enum.Enum):
-    AUTO = "auto"
-    TRANSFORMERS = "transformers"
 
 
 class MoEPhase:
@@ -233,8 +227,6 @@ class ModelConfig:
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
 
         architectures = self.architectures[0]
-        logger.info(f"Model architecture: {architectures}")
-        logger.info(f"All architectures: {self.architectures}")
 
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
@@ -246,17 +238,12 @@ class ModelConfig:
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
-        logger.info(f"self.runner:{self.runner}")
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
-        logger.info(f"self.runner_type:{self.runner_type}")
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
-        logger.info(f"self.convert_type:{self.convert_type}")
 
         registry = self.registry
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
-        logger.info(f"is_generative_model:{is_generative_model}")
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
-        logger.info(f"is_pooling_model:{is_pooling_model}")
 
         if self.runner_type == "generate" and not is_generative_model:
             generate_converts = _RUNNER_CONVERTS["generate"]
@@ -276,7 +263,6 @@ class ModelConfig:
         model_info, arch = registry.inspect_model_cls(self.architectures, self)
         self._model_info = model_info
         self._architecture = arch
-        logger.info(f"self._architecuture:{self._architecture}")
 
         self.pooler_config = self._init_pooler_config()
 
@@ -353,18 +339,13 @@ class ModelConfig:
         architectures: list[str],
     ) -> RunnerType:
         registry = self.registry
-        logger.info(f"Registry supported archs: {registry.get_supported_archs()}")
-        logger.info(f"self.model:{self.model}")
         if get_pooling_config(self.model, self.revision):
             return "pooling"
         for arch in architectures:
             if arch in registry.get_supported_archs():
-                logger.info(f"architecutes:{architectures}")
                 if registry.is_pooling_model(architectures, self):
-                    logger.info("Registry determined: pooling model")
                     return "pooling"
                 if registry.is_text_generation_model(architectures, self):
-                    logger.info("Registry determined: text generation model")
                     return "generate"
             match = try_match_architecture_defaults(arch)
             if match:
@@ -405,11 +386,9 @@ class ModelConfig:
         runner: RunnerOption,
     ) -> RunnerType:
         if runner != "auto":
-            logger.info(f"使用显式设置的 runner 类型: {runner}")
             return runner
 
         runner_type = self._get_default_runner_type(architectures)
-        logger.info(f"get_runner_type的runner_type:{runner_type}")
         if runner_type != "generate":
             logger.info(
                 "Resolved `--runner auto` to `--runner %s`. " "Pass the value explicitly to silence this message.",
@@ -425,7 +404,6 @@ class ModelConfig:
         convert: ConvertOption,
     ) -> ConvertType:
         if convert != "auto":
-            logger.info(f"使用显式设置的 convert 类型: {convert}")
             return convert
 
         convert_type = self._get_default_convert_type(architectures, runner_type)
@@ -513,6 +491,7 @@ class ModelConfig:
                 pooler_config.pooling_type = default_pooling_type
 
             return pooler_config
+
         return None
 
     def _get_download_model(self, model_name, model_type="default"):

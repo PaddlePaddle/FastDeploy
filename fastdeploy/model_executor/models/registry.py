@@ -18,17 +18,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
-
-# 避免循环导入
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
 
 from fastdeploy.config import ModelConfig
-
-if TYPE_CHECKING:
-    pass
 
 from .interfaces_base import (
     determine_model_category,
@@ -40,17 +35,15 @@ from .interfaces_base import (
 
 
 class ModelCategory(Enum):
-    """模型类别"""
-
     TEXT_GENERATION = "text_generation"
     MULTIMODAL = "multimodal"
     EMBEDDING = "embedding"
 
 
-# 预定义的模型映射
 _TEXT_GENERATION_MODELS = {
     "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
+    "Qwen2MoeForCausalLM": ("qwen2_moe", "Qwen2MoeForCausalLM"),
     "Qwen3MoeForCausalLM": ("qwen3moe", "Qwen3MoeForCausalLM"),
     "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
     "Ernie4_5_MTPForCausalLM": ("ernie4_5_mtp", "Ernie4_5_MTPForCausalLM"),
@@ -67,9 +60,12 @@ _MULTIMODAL_MODELS = {
 }
 
 _EMBEDDING_MODELS = {
-    # 示例嵌入模型
-    "BertForSequenceClassification": ("bert", "BertForSequenceClassification"),
-    "Qwen2ForSequenceClassification": ("qwen2", "Qwen2ForSequenceClassification"),
+    "BertModel": ("bert", "BertEmbeddingModel"),
+    "Qwen2Model": ("qwen2", "Qwen2ForCausalLM"),
+    "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
+    "Qwen2ForRewardModel": ("qwen2_rm", "Qwen2ForRewardModel"),
+    "Qwen2ForProcessRewardModel": ("qwen2_rm", "Qwen2ForProcessRewardModel"),
+    "Qwen2VLForConditionalGeneration": ("qwen2_vl", "Qwen2VLForConditionalGeneration"),  # noqa: E501
 }
 
 _ALL_MODELS = {
@@ -81,7 +77,6 @@ _ALL_MODELS = {
 
 @dataclass(frozen=True)
 class ModelInfo:
-    """模型信息"""
 
     architecture: str
     category: ModelCategory
@@ -105,7 +100,7 @@ class ModelInfo:
 
 
 class BaseRegisteredModel(ABC):
-    """注册模型基类"""
+    """Base class for registered models"""
 
     @abstractmethod
     def load_model_cls(self) -> Type[nn.Layer]:
@@ -118,7 +113,7 @@ class BaseRegisteredModel(ABC):
 
 @dataclass(frozen=True)
 class LazyRegisteredModel(BaseRegisteredModel):
-    """懒加载模型"""
+    """Lazy loaded model"""
 
     module_name: str
     class_name: str
@@ -150,7 +145,6 @@ class RegisteredModel(BaseRegisteredModel):
 
 
 class ModelRegistry:
-    """模型注册中心"""
 
     def __init__(self):
         self.models: Dict[str, BaseRegisteredModel] = {}
@@ -158,7 +152,6 @@ class ModelRegistry:
         self._register_predefined_models()
 
     def _register_predefined_models(self):
-        """注册预定义模型"""
         for arch, (module_name, class_name) in _ALL_MODELS.items():
             self.models[arch] = LazyRegisteredModel(module_name, class_name)
 
@@ -202,8 +195,7 @@ class ModelRegistry:
         )
 
     def register_model_class(self, model_class):
-        """兼容旧的注册方法"""
-        print(f"注册模型类: {model_class}")
+        """Compatible with old registration method"""
         from .model_base import ModelForCasualLM
 
         if (
@@ -218,7 +210,7 @@ class ModelRegistry:
         return model_class
 
     def register_pretrained_model(self, pretrained_model):
-        """注册预训练模型"""
+        """Register pretrained model"""
         if (
             inspect.isclass(pretrained_model)
             and issubclass(pretrained_model, PretrainedModel)
@@ -229,24 +221,22 @@ class ModelRegistry:
         return pretrained_model
 
     def get_class(self, name):
-        """获取模型类"""
+        """Get model class"""
         model_cls = self._try_load_model_cls(name)
         if model_cls is None:
-            raise ValueError(f"模型 '{name}' 未注册!")
-        print("model_cls", model_cls)
+            raise ValueError(f"Model '{name}' is not registered!")
         return model_cls
 
     def get_pretrain_cls(self, architecture: str):
-        """获取预训练模型类"""
+        """Get pretrained model class"""
         return self.pretrained_models.get(architecture)
 
     def get_supported_archs(self):
-        """获取支持的架构"""
-        # print("支持的架构", list(self.models.keys()))
+        """Get supported architectures"""
         return list(self.models.keys())
 
     def resolve_model_cls(self, architectures: Union[str, List[str]]) -> Tuple[Type[nn.Layer], str]:
-        """解析模型类"""
+        """Resolve model class"""
         if isinstance(architectures, str):
             architectures = [architectures]
 
@@ -255,10 +245,10 @@ class ModelRegistry:
             if model_cls is not None:
                 return model_cls, arch
 
-        raise ValueError(f"找不到支持的模型: {architectures}")
+        raise ValueError(f"Cannot find supported model: {architectures}")
 
     def is_multimodal_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
-        """检查是否为多模态模型"""
+        """Check if it's a multimodal model"""
         if isinstance(architectures, str):
             architectures = [architectures]
 
@@ -269,7 +259,7 @@ class ModelRegistry:
         return False
 
     def is_text_generation_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
-        """检查是否为文本生成模型"""
+        """Check if it's a text generation model"""
         if isinstance(architectures, str):
             architectures = [architectures]
 
@@ -280,6 +270,7 @@ class ModelRegistry:
         return False
 
     def is_pooling_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
+        """Check if it's a pooling model"""
         if isinstance(architectures, str):
             architectures = [architectures]
 

@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import Tuple
+from typing import Callable, Optional, Tuple, TypeVar
 
 import numpy as np
 import paddle
@@ -48,6 +48,8 @@ from fastdeploy.utils import get_logger
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
+
+T = TypeVar("T")
 
 
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
@@ -452,6 +454,27 @@ class PaddleDisWorkerProc:
         self.loaded_model_signal.value[0] = 1
 
 
+def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
+
+    def _parse_type(val: str) -> T:
+        try:
+            return return_type(val)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
+
+    return _parse_type
+
+
+def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
+
+    def _optional_type(val: str) -> Optional[T]:
+        if val == "" or val == "None":
+            return None
+        return parse_type(return_type)(val)
+
+    return _optional_type
+
+
 def parse_args():
     """
     Parse args from command line
@@ -643,6 +666,13 @@ def parse_args():
         help="Convert the model using adapters. The most common use case is to adapt a text generation model to be used for pooling tasks.",
     )
 
+    parser.add_argument(
+        "--override-pooler-config",
+        type=optional_type(json.loads),
+        default=None,
+        help="Override configuration for the pooler.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -657,10 +687,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         FDConfig: Initialized FastDeploy configuration object
     """
     paddle.set_default_dtype(args.dtype)
-    logger.info(f"args {vars(args)}")
     model_config = ModelConfig(vars(args))
-    logger.info(f"model_config.runner:{model_config.runner}")
-    logger.info(f"model_config.convert:{model_config.convert}")
     device_config = DeviceConfig(vars(args))
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(args.speculative_config)

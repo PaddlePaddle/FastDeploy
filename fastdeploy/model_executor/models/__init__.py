@@ -28,7 +28,6 @@ from .registry import model_registry
 
 
 def _find_py_files(root_dir):
-    """查找Python文件"""
     root_path = Path(root_dir)
     py_files = []
     for py_file in root_path.rglob("*.py"):
@@ -41,18 +40,18 @@ def _find_py_files(root_dir):
 
 
 def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.models"):
-    """自动注册模型"""
+    """
+    auto registry all models in this folder
+    """
     for module_file in _find_py_files(dir_path):
         try:
             module = importlib.import_module(f"{register_path}.{module_file}")
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
 
-                # 注册模型类
                 if inspect.isclass(attr) and issubclass(attr, ModelForCasualLM) and attr is not ModelForCasualLM:
                     model_registry.register_model_class(attr)
 
-                # 注册预训练模型
                 if (
                     inspect.isclass(attr)
                     and issubclass(attr, PretrainedModel)
@@ -61,17 +60,14 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
                 ):
                     model_registry.register_pretrained_model(attr)
 
-        except ImportError as e:
-            print(f"导入 {module_file} 失败: {e}")
+        except ImportError:
+            raise ImportError(f"{module_file=} import error")
 
 
-# 自动注册
 auto_models_registry(os.path.dirname(__file__))
 
-# 加载插件
 load_model_register_plugins()
 
-# 为了兼容性，保留旧接口
 ModelRegistry = type(
     "ModelRegistry",
     (),

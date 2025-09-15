@@ -20,12 +20,10 @@ from .model_base import ModelForCasualLM
 
 
 def is_text_generation_model(model_cls: Type[nn.Layer]) -> bool:
-    """检查模型是否为文本生成模型"""
     return issubclass(model_cls, ModelForCasualLM)
 
 
 def is_pooling_model(model_cls: Type[nn.Layer]) -> bool:
-    """检查模型是否为嵌入（池化）模型"""
     class_name = model_cls.__name__
     pooling_indicators = ["Embedding", "ForSequenceClassification"]
     return (
@@ -36,13 +34,11 @@ def is_pooling_model(model_cls: Type[nn.Layer]) -> bool:
 
 
 def is_multimodal_model(class_name: str) -> bool:
-    """判断是否为多模态模型"""
     multimodal_indicators = ["VL", "Vision", "ConditionalGeneration"]
     return any(indicator in class_name for indicator in multimodal_indicators)
 
 
 def determine_model_category(class_name: str):
-    """确定模型类别"""
     from .registry import ModelCategory
 
     if any(pattern in class_name for pattern in ["VL", "Vision", "ConditionalGeneration"]):

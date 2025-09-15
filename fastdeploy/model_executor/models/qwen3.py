@@ -240,9 +240,6 @@ class Qwen3Model(nn.Layer):
 
         return loaded_params
 
-        # if self.tie_word_embeddings:
-        #     self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
-
     def load_state_dict(self, state_dict):
         """
         Load model parameters from a given state dictionary.
