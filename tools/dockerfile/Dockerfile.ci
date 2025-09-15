@@ -5,4 +5,5 @@ COPY ../../requirements.txt ./requirements.txt
 RUN python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 COPY ./unittest_requirement.txt ./unittest_requirement.txt
 RUN python -m pip install -r unittest_requirement.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+COPY ./requirements_paddle_nv.txt ./requirements_paddle_nv.txt
 RUN python -m pip install -r requirements_paddle_nv.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
