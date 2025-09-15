@@ -216,18 +216,17 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             dtype=layer.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-
         set_weight_attrs(
             layer.up_gate_proj_weight,
             {
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                "model_format": extra_weight_attrs.get("model_format", ""),
+                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
             },
         )
         set_weight_attrs(
             layer.down_proj_weight,
             {
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                "model_format": extra_weight_attrs.get("model_format", ""),
+                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
             },
         )
