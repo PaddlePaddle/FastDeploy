@@ -246,7 +246,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
             copy_kv<Gmem_copy_struct, kNThreads>(tidx, data_num_per_block, gV, sV);
         } else {
             if (n > 0) {
-                tVgV.data() = tVgV.data() + (block_table[n] - block_table[n - 1]) * cache_offset_step;
+                tVgV.data() = tVgV.data() + cache_offset_step;
             }
             if (cur_remain_seq_len < kBlockSize) {
                 copy<false, true>(gmem_tiled_copy, tVgV, tVsV, tKcK, cur_remain_seq_len);
@@ -304,7 +304,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
                 gK = gK + (block_table[n + 1] - block_table[n]) * cache_offset_step;
                 copy_kv<Gmem_copy_struct, kNThreads>(tidx, data_num_per_block, gK, sK);
             } else {
-                tKgK.data() = tKgK.data() + (block_table[n + 1] - block_table[n]) * cache_offset_step;
+                tKgK.data() = tKgK.data() + cache_offset_step;
                 copy(gmem_tiled_copy, tKgK, tKsK, tKcK);
             }
             
