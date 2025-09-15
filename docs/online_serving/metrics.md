@@ -34,7 +34,7 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | `fastdeploy:available_gpu_block_num`         | Gauge     | Number of available gpu blocks in cache, including prefix caching blocks that are not officially released               | Count   |
 | `fastdeploy:free_gpu_block_num`              | Gauge     | Number of free blocks in cache                      | Count   |
 | `fastdeploy:max_gpu_block_num`               | Gauge     | Number of total blocks determined when service started| Count   |
-| `available_gpu_resource`                     | Gauge     | Available blocks percentage, i.e. available_gpu_block_num / max_gpu_block_num               | Count   |
+| `fastdeploy:available_gpu_resource`          | Gauge     | Available blocks percentage, i.e. available_gpu_block_num / max_gpu_block_num               | Count   |
 | `fastdeploy:requests_number`                 | Counter   | Total number of requests received                   | Count   |
 | `fastdeploy:send_cache_failed_num`           | Counter   | Total number of failures of sending cache           | Count   |
 | `fastdeploy:first_token_latency`             | Gauge     | Latest time to generate first token in seconds      | Seconds   |

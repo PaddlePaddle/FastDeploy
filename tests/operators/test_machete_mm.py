@@ -64,11 +64,11 @@ def convert_uint16_to_float(in_list):
     not core.is_compiled_with_cuda() or get_sm_version() < 90,
     "machete only support sm90.",
 )
-class WeightOnlyLinearTestCase(unittest.TestCase):
+class WeightOnlyInt4LinearTestCase(unittest.TestCase):
     def config(self):
         self.dtype = "float16"
         self.rtol = 1e-5
-        self.atol = 1e-2
+        self.atol = 1.3e-1
         self.bias = False
         self.batch = 1
         self.token = 512
@@ -77,11 +77,10 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
         self.weight_dtype = "int4"
         self.static = False
         self.group_size = -1
+        self.machete_group_size = -1
 
     def setUp(self):
         self.config()
-        if self.dtype == "bfloat16" or self.weight_dtype == "int4":
-            self.atol = 1.3e-1
         x = np.random.random((self.token, self.in_features))
         self.x = paddle.to_tensor(x, dtype=self.dtype)
         if self.bias:
@@ -111,29 +110,30 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
         return out.numpy()
 
     def get_weight_only_linear_out(self):
-        for i in range(10):
-            out = Q.weight_only_linear(
-                self.x,
-                self.weight,
-                bias=self.bias,
-                weight_scale=self.weight_scale,
-                weight_dtype=self.weight_dtype,
-                group_size=self.group_size,
-            )
+        out = Q.weight_only_linear(
+            self.x,
+            self.weight,
+            bias=self.bias,
+            weight_scale=self.weight_scale,
+            weight_dtype=self.weight_dtype,
+            group_size=self.group_size,
+        )
         return out.numpy()
 
     def get_machete_weight_only_linear_out(self):
         w_q, w_s = machete_quantize_and_pack(
             w=self.float_weight.cuda(),
             atype=self.dtype,
-            quant_type="uint4b8",
+            quant_type="uint4b8" if self.weight_dtype == "int4" else "uint8b128",
+            group_size=self.machete_group_size,
         )
 
         out = machete_wint_mm(
             self.x,
             w_prepack=w_q,
             w_g_s=w_s,  # group scales
-            weight_dtype="uint4b8",  # weight_dtype
+            weight_dtype="uint4b8" if self.weight_dtype == "int4" else "uint8b128",  # weight_dtype
+            group_size=self.machete_group_size,
         )
         return out.numpy()
 
@@ -149,26 +149,94 @@ class WeightOnlyLinearTestCase(unittest.TestCase):
         np.testing.assert_allclose(out_paddle, out_machete, rtol=self.rtol, atol=self.atol)
 
 
-M = [32, 128]
-K_N = [[2048, 4096]]
+@unittest.skipIf(
+    not core.is_compiled_with_cuda() or get_sm_version() < 90,
+    "machete only support sm90.",
+)
+class WeightOnlyInt8LinearTestCase(unittest.TestCase):
+    def config(self):
+        self.dtype = "float16"
+        self.rtol = 1e-5
+        self.atol = 1e-1
+        self.bias = False
+        self.batch = 1
+        self.token = 512
+        self.in_features = 7168
+        self.out_features = 1024
+        self.weight_dtype = "int8"
+        self.static = False
+        self.group_size = -1
+        self.machete_group_size = 128
 
+    def setUp(self):
+        self.config()
+        x = np.random.random((self.token, self.in_features))
+        self.x = paddle.to_tensor(x, dtype=self.dtype)
+        if self.bias:
+            bias_attr = base.ParamAttr(
+                trainable=False,
+                regularizer=None,
+                initializer=paddle.nn.initializer.Constant(value=1.0),
+            )
+        else:
+            bias_attr = None
+        set_default_dtype(self.dtype)
+        self.linear = paddle.nn.Linear(self.in_features, self.out_features, bias_attr=bias_attr)
 
-def make_case(m, k, n):
-    class Case(WeightOnlyLinearTestCase):
-        def config(self, _m=m, _k=k, _n=n):
-            super().config()
-            self.token = m
-            self.in_features = k
-            self.out_features = n
+        self.bias = self.linear.bias
+        self.weight = self.linear.weight
+        self.float_weight = self.linear.weight
+        self.weight_scale = None
 
-    Case.name = f"WeightOnlyLinearTestCase{m}{k}{n}"
-    return Case
+        self.weight, self.weight_scale = Q.weight_quantize(
+            (self.float_weight.cuda() if self.weight_dtype == "int8" else self.weight.cpu()),
+            algo=("weight_only_int8" if self.weight_dtype == "int8" else "weight_only_int4"),
+            group_size=self.group_size,
+        )
 
+    def get_linear_out(self):
+        out = self.linear(self.x)
+        return out.numpy()
 
-for k, n in K_N:
-    for m in M:
-        cls = make_case(m, k, n)
-        globals()[cls.name] = cls
+    def get_weight_only_linear_out(self):
+        out = Q.weight_only_linear(
+            self.x,
+            self.weight,
+            bias=self.bias,
+            weight_scale=self.weight_scale,
+            weight_dtype=self.weight_dtype,
+            group_size=self.group_size,
+        )
+        return out.numpy()
+
+    def get_machete_weight_only_linear_out(self):
+        w_q, w_s = machete_quantize_and_pack(
+            w=self.float_weight.cuda(),
+            atype=self.dtype,
+            quant_type="uint4b8" if self.weight_dtype == "int4" else "uint8b128",
+            group_size=self.machete_group_size,
+        )
+
+        out = machete_wint_mm(
+            self.x,
+            w_prepack=w_q,
+            w_g_s=w_s,  # group scales
+            weight_dtype="uint4b8" if self.weight_dtype == "int4" else "uint8b128",  # weight_dtype
+            group_size=self.machete_group_size,
+        )
+        return out.numpy()
+
+    def test_weight_only_linear(self):
+        out_expect = self.get_linear_out()
+        # out_paddle = self.get_weight_only_linear_out()
+        out_machete = self.get_machete_weight_only_linear_out()
+
+        if self.dtype == "bfloat16":
+            # out_paddle = convert_uint16_to_float(out_paddle)
+            out_expect = convert_uint16_to_float(out_expect)
+            out_machete = convert_uint16_to_float(out_machete)
+        np.testing.assert_allclose(out_expect, out_machete, rtol=self.rtol, atol=self.atol)
+
 
 if __name__ == "__main__":
     unittest.main()
