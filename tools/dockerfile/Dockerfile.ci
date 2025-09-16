@@ -4,3 +4,4 @@ COPY ../../requirements.txt ./requirements.txt
 RUN python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple && python -m pip install pytest
 COPY ./unittest_requirement.txt ./unittest_requirement.txt
 RUN python -m pip install -r unittest_requirement.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+RUN python -m pip install xgrammar==0.1.19 torch==2.6.0 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
