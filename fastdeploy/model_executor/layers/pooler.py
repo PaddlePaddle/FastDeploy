@@ -446,6 +446,7 @@ class SimplePooler(Pooler):
     ) -> PoolerOutput:
         pooled_data = self.pooling(hidden_states, pooling_metadata)
         pooled_data = self.head(pooled_data, pooling_metadata)
+        return build_output(pooled_data)
 
 
 class PoolerNormalize(PoolerActivation):
