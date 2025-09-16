@@ -396,12 +396,6 @@ class CLSPool(PoolingMethod):
         return hidden_states[pooling_cursor.first_token_indices_gpu]
 
 
-class StepPooler(Pooler):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-
 
 class SimplePooler(Pooler):
     """A layer that pools specific information from hidden states.
