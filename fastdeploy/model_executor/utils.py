@@ -240,7 +240,7 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     }
     moe_quant_type = ""
     dense_quant_type = ""
-    if fd_config.quant_config is None:
+    if fd_config.quant_config is not None:
         if fd_config.quant_config.name() == "mix_quant":
             moe_quant_type = fd_config.quant_config.moe_quant_type
             dense_quant_type = fd_config.quant_config.dense_quant_type
