@@ -21,16 +21,16 @@ python -m pip uninstall fastdeploy-xpu -y
 
 python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 
-echo "pip others"
-python -m pip install openai -U
-python -m pip uninstall -y triton
-python -m pip install triton==3.3.0
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
 
+echo "pip others"
+python -m pip install openai -U
+python -m pip uninstall -y triton
+python -m pip install triton==3.3.0
 unset http_proxy
 unset https_proxy
 unset no_proxy
