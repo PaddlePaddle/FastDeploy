@@ -34,6 +34,8 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from tests.model_loader.utils import get_torch_model_path
+
 
 class TestModelLoader:
 
@@ -49,11 +51,12 @@ class TestModelLoader:
 
     @pytest.fixture(scope="session")
     def model_path(self):
-        base_path = os.getenv("MODEL_PATH")
-        if base_path:
-            return os.path.join(base_path, "Qwen3-0.6B")
-        else:
-            return "./Qwen3-0.6B"
+        try:
+            torch_model_path = get_torch_model_path("Qwen3-0.6B")
+            if os.path.exists(torch_model_path):
+                return torch_model_path
+        except Exception as e:
+            print(f"Could not get torch model path: {e}")
 
     @pytest.fixture
     def model_config(self, model_path):
