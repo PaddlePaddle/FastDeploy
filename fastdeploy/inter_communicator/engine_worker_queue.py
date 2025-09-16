@@ -395,7 +395,7 @@ class EngineWorkerQueue:
     def clear_data(self):
         self.lock.acquire()
         self.tasks[:] = list()
-        self.client_read_flag[:] = [0] * self.num_client
+        self.client_read_flag[:] = [1] * self.num_client
         self.lock.release()
         llm_logger.info("clear data for engine worker queue")
 
