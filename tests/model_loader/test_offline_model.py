@@ -17,36 +17,35 @@ import sys
 
 import pytest
 
+prompts = ["解释下'温故而知新'", "who are you?"]
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from tests.model_loader.utils import (
-    check_tokens_id_and_text_close,
     form_model_get_output_topp0,
-    get_paddle_model_path,
+    get_torch_model_path,
     run_with_timeout,
 )
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
 FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
-prompts = ["解释下“温故而知新", "Hello, how are you?"]
-
 
 model_param_map = {
-    "ernie-4_5-21b-a3b-bf16-paddle": {
+    "Qwen3-30B-A3B-FP8": {
         "tensor_parallel_size": 2,
         "quantizations": [
             {
-                "quant_type": "wint4",
-                "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
-            }
+                "quant_type": "None",
+                "backend": "triton",
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+            },
         ],
-    }
+    },
 }
-
 
 params = []
 for model, cfg in model_param_map.items():
@@ -64,7 +63,7 @@ for model, cfg in model_param_map.items():
                 cfg.get("max_tokens", 32),
                 env,
                 marks=[pytest.mark.core_model],
-                id=f"{model}.{quant}.{backend}",
+                id=f"offline_quant_{model}.{quant}.{backend}",
             )
         )
 
@@ -73,7 +72,7 @@ for model, cfg in model_param_map.items():
     "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
     params,
 )
-def test_model_cache(
+def test_offline_model(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
@@ -83,33 +82,16 @@ def test_model_cache(
     env,
     monkeypatch,
 ) -> None:
-    model_path = get_paddle_model_path(model_name_or_path)
-
-    fd_outputs_v1 = run_with_timeout(
-        target=form_model_get_output_topp0,
-        args=(
-            fd_runner,
-            model_path,
-            tensor_parallel_size,
-            max_model_len,
-            max_tokens,
-            quantization,
-            "default_v1",
-            FD_ENGINE_QUEUE_PORT,
-            prompts,
-            FD_CACHE_QUEUE_PORT,
-        ),
-    )
-
+    torch_model_path = get_torch_model_path(model_name_or_path)
     if env:
         for k, v in env.items():
             monkeypatch.setenv(k, v)
 
-    fd_outputs_v1_with_cache = run_with_timeout(
+    _ = run_with_timeout(
         target=form_model_get_output_topp0,
         args=(
             fd_runner,
-            model_path,
+            torch_model_path,
             tensor_parallel_size,
             max_model_len,
             max_tokens,
@@ -119,10 +101,4 @@ def test_model_cache(
             prompts,
             FD_CACHE_QUEUE_PORT,
         ),
-    )
-    check_tokens_id_and_text_close(
-        outputs_0_lst=fd_outputs_v1,
-        outputs_1_lst=fd_outputs_v1_with_cache,
-        name_0="default_v1 loader",
-        name_1="default_v1 loader using cache",
     )

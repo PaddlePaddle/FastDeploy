@@ -36,7 +36,7 @@ class TestCase1SubLayer1(paddle.nn.Layer):
 
 
 class TestModel1(paddle.nn.Layer):
-    """Tast Model"""
+    """Test Model"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
@@ -123,9 +123,9 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         assert (output1 == self.output_correct).all()
 
         # Destroy
-        print_gpu_memory_use(0, "before destory")
+        print_gpu_memory_use(0, "before destroy")
         self.test_model1.clear_grpah_opt_backend()
-        print_gpu_memory_use(0, "after destory")
+        print_gpu_memory_use(0, "after destroy")
 
     def recapture_and_replay(self, input_tensor1, forward_meta1):
         """ """
@@ -139,9 +139,9 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         assert (output2 == self.output_correct).all()
 
         # Destroy
-        print_gpu_memory_use(0, "before destory")
+        print_gpu_memory_use(0, "before destroy")
         self.test_model1.clear_grpah_opt_backend()
-        print_gpu_memory_use(0, "after destory")
+        print_gpu_memory_use(0, "after destroy")
 
 
 if __name__ == "__main__":
