@@ -150,7 +150,7 @@ def test_mm_extra_keys():
 
 def test_mm_prefix_cache():
     block_size = 64
-    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False, num_gpu_blocks_override=100)
+    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True, num_gpu_blocks_override=100)
     req1_dict = {
         "request_id": "req1",
         "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120,

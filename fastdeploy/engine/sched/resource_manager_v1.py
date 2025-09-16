@@ -564,8 +564,30 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
+    def _apply_mm_images_info(self, request: Request):
+        """ """
+        if not self.config.model_config.enable_mm or request.get("images", None) is None:
+            return request
+
+        llm_logger.info(f"request.images: {len(request.images)}, type: {type(request.images)}")
+        llm_logger.info(f"request.grid_thw: {len(request.grid_thw)}")
+
+        if request.mm_hashes is None:
+            request.mm_hashes = []
+
+        if request.mm_positions is None:
+            request.mm_positions = []
+
+        assert len(request.mm_positions) == len(
+            request.mm_hashes
+        ), f"mm_positions {len(request.mm_positions)} != mm_hashes {len(request.mm_hashes)}"
+
+        return request
+
     def add_request(self, request: Request) -> None:
         with self.lock:
+            if self.config.model_config.enable_mm:
+                request = self._apply_mm_images_info(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 

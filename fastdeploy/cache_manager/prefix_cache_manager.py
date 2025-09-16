@@ -1037,7 +1037,11 @@ class PrefixCacheManager:
             hash_keys: A list of additional hash keys
         """
         hash_keys = []
-        if request.mm_positions is None or not isinstance(request.mm_positions, list):
+        if (
+            request.mm_positions is None
+            or not isinstance(request.mm_positions, list)
+            or len(request.mm_positions) == 0
+        ):
             return mm_idx, hash_keys
 
         assert start_idx < end_idx, f"start_idx {start_idx} >= end_idx {end_idx}"
