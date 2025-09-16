@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import codecs
 import importlib
+import json
 import logging
 import os
 import random
@@ -27,7 +28,6 @@ import sys
 import tarfile
 import time
 from datetime import datetime
-from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
@@ -669,14 +669,6 @@ def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
     return module
 
 
-def is_package_installed(package_name):
-    try:
-        distribution(package_name)
-        return True
-    except PackageNotFoundError:
-        return False
-
-
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
@@ -764,6 +756,18 @@ class StatefulSemaphore:
             "max_value": self.max_value,
             "uptime": round(self.uptime, 2),
         }
+
+
+def parse_quantization(value: str):
+    """
+    Parse a JSON string into a dictionary.
+    """
+    try:
+        return json.loads(value)
+    except ValueError:
+        if value is None or value.lower() == "none":
+            return None
+        return {"quantization": value}
 
 
 # 日志使用全局访问点（兼容原有使用方式）

@@ -14,10 +14,13 @@
 # limitations under the License.
 """
 
+import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
+
+import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -26,9 +29,9 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
     TaskOption,
 )
@@ -38,6 +41,7 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     is_port_available,
+    parse_quantization,
 )
 
 
@@ -135,7 +139,7 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
-    quantization: str = None
+    quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
     Guided decoding backend.
@@ -188,7 +192,7 @@ class EngineArgs:
     """
     Flag to indicate whether to use warm-up before inference.
     """
-    enable_prefix_caching: bool = False
+    enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
     """
@@ -341,9 +345,9 @@ class EngineArgs:
     """
     Configuration for graph optimization backend execution.
     """
-    moba_attention_config: Optional[Dict[str, Any]] = None
+    plas_attention_config: Optional[Dict[str, Any]] = None
     """
-    Configuration for moba attention.
+    Configuration for plas attention.
     """
 
     enable_logprob: bool = False
@@ -383,8 +387,19 @@ class EngineArgs:
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
+
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
+        if self.speculative_config is not None:
+            self.enable_prefix_caching = False
+        if self.enable_mm:
+            self.enable_prefix_caching = False
+        if not current_platform.is_cuda():
+            self.enable_prefix_caching = False
+        # if self.dynamic_load_weight:
+        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -537,7 +552,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--quantization",
-            type=str,
+            type=parse_quantization,
             default=EngineArgs.quantization,
             help="Quantization name for the model, currentlly support "
             "'wint8', 'wint4',"
@@ -558,9 +573,9 @@ class EngineArgs:
             help="",
         )
         model_group.add_argument(
-            "--moba-attention-config",
+            "--plas-attention-config",
             type=json.loads,
-            default=EngineArgs.moba_attention_config,
+            default=EngineArgs.plas_attention_config,
             help="",
         )
         model_group.add_argument(
@@ -723,7 +738,7 @@ class EngineArgs:
         perf_group = parser.add_argument_group("Performance Tuning")
         perf_group.add_argument(
             "--enable-prefix-caching",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
         )
@@ -958,17 +973,17 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
-    def create_moba_attention_config(self) -> MobaAttentionConfig:
+    def create_plas_attention_config(self) -> PlasAttentionConfig:
         """
-        Create and retuan a MobaAttentionConfig object based on the current settings.
+        Create and retuan a PlasAttentionConfig object based on the current settings.
         """
         attention_args = asdict(self)
-        if self.moba_attention_config is not None:
-            for k, v in self.moba_attention_config.items():
+        if self.plas_attention_config is not None:
+            for k, v in self.plas_attention_config.items():
                 attention_args[k] = v
-            return MobaAttentionConfig(attention_args)
+            return PlasAttentionConfig(attention_args)
         else:
-            return MobaAttentionConfig(None)
+            return PlasAttentionConfig(None)
 
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
@@ -1006,7 +1021,10 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if paddle.is_compiled_with_xpu():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048
@@ -1021,7 +1039,7 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
-        moba_attention_config = self.create_moba_attention_config()
+        plas_attention_config = self.create_plas_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -1059,7 +1077,7 @@ class EngineArgs:
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
-            moba_attention_config=moba_attention_config,
+            plas_attention_config=plas_attention_config,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,

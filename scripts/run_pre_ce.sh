@@ -27,7 +27,7 @@ for subdir in "$run_path"*/; do
                 timeout 600 python -m pytest --disable-warnings -sv "$file"
                 exit_code=$?
                 set -e
-
+                ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
                 if [ $exit_code -ne 0 ]; then
                     if [ -f "${subdir%/}/log/workerlog.0" ]; then
                         echo "---------------- log/workerlog.0 -------------------"
@@ -44,7 +44,7 @@ for subdir in "$run_path"*/; do
                     if [ "$exit_code" -eq 1 ] || [ "$exit_code" -eq 124 ]; then
                         echo "[ERROR] $file 起服务或执行异常，exit_code=$exit_code"
                         if [ "$exit_code" -eq 124 ]; then
-                            echo "[TIMEOUT] $file 脚本执行超过 6 分钟, 任务超时退出！"
+                            echo "[TIMEOUT] $file 脚本执行超过 10 分钟, 任务超时退出！"
                         fi
                     fi
 

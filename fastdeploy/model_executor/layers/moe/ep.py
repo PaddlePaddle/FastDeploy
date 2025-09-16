@@ -28,37 +28,8 @@ except:
 
 import fastdeploy
 from fastdeploy.config import MoEPhase
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.utils import singleton
-
-try:
-    from fastdeploy.model_executor.ops.gpu import noaux_tc
-except:
-    logger.warning("import noaux_tc Failed!")
-
-
-def get_moe_scores(
-    gating_output: paddle.Tensor,
-    n_group,
-    topk_group,
-    top_k,
-    routed_scaling_factor,
-    e_score_correction_bias,
-) -> paddle.Tensor:
-    """
-    compute moe scores using e_score_correction_bias.
-    """
-    scores = paddle.nn.functional.sigmoid(gating_output)
-    assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group if n_group > 0 else 1,
-        topk_group if topk_group > 0 else 1,
-        top_k,
-        routed_scaling_factor,
-    )
-    return scores, topk_values, topk_idx
 
 
 @singleton

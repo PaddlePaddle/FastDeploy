@@ -37,12 +37,14 @@ from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
     IPCSignal,
-    ZmqClient,
+    ZmqIpcServer,
+    ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
@@ -172,10 +174,46 @@ class EngineSevice:
             create=True,
         )
 
+        cache_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        swap_space_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.swap_space_ready_signal = IPCSignal(
+            name="swap_space_ready_signal",
+            array=swap_space_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
             array=model_weights_status,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -225,7 +263,8 @@ class EngineSevice:
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             local_data_parallel_id=min(
-                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
+                self.cfg.worker_num_per_node // self.cfg.parallel_config.tensor_parallel_size * self.cfg.node_rank
+                + self.cfg.parallel_config.local_data_parallel_id,
                 self.cfg.parallel_config.data_parallel_size - 1,
             ),
         )
@@ -526,9 +565,14 @@ class EngineSevice:
                 self.cfg.max_prefill_batch,
             )
 
-            self.resource_manager.check_and_free_block_tables()
+            if self.cfg.model_config.enable_mm:
+                self.resource_manager.check_and_free_block_tables()
+                available_blocks = self.resource_manager.available_block_num()
+            else:
+                available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
             tasks = self.scheduler.get_requests(
-                available_blocks=self.resource_manager.available_block_num(),
+                available_blocks=available_blocks,
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
@@ -567,9 +611,19 @@ class EngineSevice:
         if api_server_pid is None:
             return
         self.api_server_pid = api_server_pid
-        self.zmq_server = ZmqClient(name=api_server_pid, mode=zmq.PULL)
-        self.zmq_server.start_server()
-        self.zmq_server.create_router()
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
+            self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
+            self.internal_adapter = InternalAdapter(
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+            )
+        else:
+            self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
+            self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
+        self.recv_result_handle_thread = threading.Thread(
+            target=self.send_response_server.recv_result_handle, daemon=True
+        )
+        self.recv_result_handle_thread.start()
         time.sleep(3)
         self.insert_task_to_scheduler_thread = threading.Thread(target=self._insert_zmq_task_to_scheduler, daemon=True)
         self.insert_task_to_scheduler_thread.start()
@@ -583,9 +637,9 @@ class EngineSevice:
             try:
                 block = True if len(added_requests) == 0 else False
                 if not self.cfg.model_config.enable_mm:
-                    err, data = self.zmq_server.receive_json_once(block)
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -639,7 +693,7 @@ class EngineSevice:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, [error_result])
+                    self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
@@ -657,7 +711,7 @@ class EngineSevice:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    self.zmq_server.send_multipart(request_id, contents)
+                    self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
@@ -731,7 +785,7 @@ class EngineSevice:
 
         threading.Thread(target=receiver_loop, daemon=True).start()
 
-    def start_cache_service(self, device_ids, ipc_signal_suffix):
+    def start_cache_service(self, device_ids, ipc_signal_suffix, create_cache_tensor):
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -741,6 +795,7 @@ class EngineSevice:
                 self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             ),
             pid_suffix=ipc_signal_suffix,
+            create_cache_tensor=create_cache_tensor,
         )
 
     def check_and_free_block_tables(self):
@@ -755,7 +810,15 @@ class EngineSevice:
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()
+        self.cache_ready_signal.clear()
+        self.swap_space_ready_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
-        if hasattr(self, "zmq_server") and self.zmq_server is not None:
-            self.zmq_server.close()
+        self.prefix_tree_status_signal.clear()
+        self.kv_cache_status_signal.clear()
+        if hasattr(self, "send_response_server") and self.send_response_server is not None:
+            self.send_response_server.close()
+        if hasattr(self, "recv_request_server") and self.recv_request_server is not None:
+            self.recv_request_server.close()
+        if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
+            self.recv_control_cmd_server.close()

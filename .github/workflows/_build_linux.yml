@@ -134,6 +134,7 @@ jobs:
             fi
 
             git config --global --add safe.directory /workspace/FastDeploy
+            chown -R $(whoami) /workspace/FastDeploy
             cd FastDeploy
             if [[ "${WITH_NIGHTLY_BUILD}" == "ON" ]];then
               GIT_COMMIT_TIME=$(git --no-pager show -s --format=%ci HEAD)
@@ -148,7 +149,7 @@ jobs:
             elif [[ "${PADDLEVERSION}" != "" ]];then
               python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
             else
-              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+              python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
             fi
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
