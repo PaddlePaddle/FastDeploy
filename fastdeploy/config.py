@@ -471,7 +471,7 @@ class ModelConfig:
         if runner_type == "generate":
             return self._get_supported_generation_tasks(architectures, convert_type)
         if runner_type == "pooling":
-            return self._get_supported_generation_tasks(architectures, convert_type)
+            return self._get_supported_pooling_tasks(architectures, convert_type)
 
         assert_never(runner_type)
 

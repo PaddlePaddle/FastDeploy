@@ -148,7 +148,7 @@ class SiluAndMul(nn.Layer):
         return out
 
 
-def get_act_fn(act_fn_name: str) -> nn.Linear:
+def get_act_fn(act_fn_name: str) -> nn.Layer:
     """Get an activation function by name."""
     act_fn_name = act_fn_name.lower()
 
