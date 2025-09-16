@@ -89,7 +89,7 @@ class TestCase1SubLayer3(paddle.nn.Layer):
 
 
 class TestModel1(paddle.nn.Layer):
-    """Tast Model"""
+    """Test Model"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
