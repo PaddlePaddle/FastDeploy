@@ -576,7 +576,7 @@ def parse_args():
         "--moba_attention_config",
         type=json.loads,
         default=None,
-        help="Configation of moba attention.",
+        help="Configuration of moba attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",

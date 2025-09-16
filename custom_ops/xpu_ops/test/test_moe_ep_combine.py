@@ -80,7 +80,7 @@ combined_out_pd = ep_moe_expert_combine(
     moe_index_pd.shape[1],
 )
 
-# comparation
+# comparison
 # print("moe_index:\n", moe_index)
 # print("moe_weights:\n", moe_weights)
 # print("combined_out_np:\n", combined_out_np)
