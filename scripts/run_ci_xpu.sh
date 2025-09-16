@@ -41,11 +41,11 @@ rm -f core*
 # pkill -9 python #流水线不执行这个
 #清空消息队列
 ipcrm --all=msg
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export XPU_VISIBLE_DEVICES="0,1"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
-    --tensor-parallel-size 4 \
+    --tensor-parallel-size 2 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
@@ -112,11 +112,11 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 export ENABLE_V1_KVCACHE_SCHEDULER=1
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export XPU_VISIBLE_DEVICES="0,1"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
-    --tensor-parallel-size 4 \
+    --tensor-parallel-size 2 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
