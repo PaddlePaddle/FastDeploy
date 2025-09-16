@@ -1,0 +1,200 @@
+name: Coverage Combine
+description: "Coverage Combine And Check"
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      GPU_COV_FILE_URL:
+        description: "URL of the compressed GPU Coverage Data archive."
+        required: true
+        type: string
+      XPU_COV_FILE_URL:
+        description: "URL of the compressed GPU Coverage Data archive."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      github-token:
+        required: true
+
+
+jobs:
+  coverage_combine:
+    name: Coverage Combine And Check
+    env:
+      docker_image: ${{ inputs.DOCKER_IMAGE }}
+      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+      gpu_cov_file_url: ${{ inputs.GPU_COV_FILE_URL }}
+      xpu_cov_file_url: ${{ inputs.XPU_COV_FILE_URL }}
+      IS_PR: ${{ github.event_name == 'pull_request' }}
+    runs-on: [self-hosted, CovCombine]
+    outputs:
+      diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
+      diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
+    steps:
+      - name: coverage file download and combine
+        shell: bash
+        run: |
+          set -x
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          docker pull ${docker_image}
+
+          CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+          echo "CACHE_DIR is set to ${CACHE_DIR}"
+          if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+            touch "${CACHE_DIR}/gitconfig"
+          fi
+
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+          -e "REPO_NAME=${REPO_NAME}" \
+          -e "fd_archive_url=${fd_archive_url}" \
+          -e "gpu_cov_file_url=${gpu_cov_file_url}" \
+          -e "xpu_cov_file_url=${xpu_cov_file_url}" \
+          -e "BASE_REF=${BASE_REF}" \
+          -e "IS_PR=${IS_PR}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}*
+            fi
+
+            wget -q ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global --add safe.directory /workspace/FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+
+            git log -n 3 --oneline
+
+            git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+            mkdir coveragedata
+            if [ -z "${gpu_cov_file_url}" ]; then
+              echo "No diff coverage file URL provided."
+            else
+              wget -q ${gpu_cov_file_url}
+              gpu_cov_file=$(basename "$gpu_cov_file_url")
+              tar -xf ${gpu_cov_file} -C coveragedata
+            fi
+
+            if [ -z "${xpu_cov_file_url}" ]; then
+              echo "No diff coverage file URL provided."
+            else
+              wget -q ${xpu_cov_file_url}
+              xpu_cov_file=$(basename "$xpu_cov_file_url")
+              tar -xf ${xpu_cov_file} -C coveragedata
+            fi
+            export COVERAGE_FILE=coveragedata/.coverage
+            coverage combine coveragedata/
+            coverage report --ignore-errors
+            coverage xml -o python_coverage_all.xml --ignore-errors
+            COVERAGE_EXIT_CODE=0
+            if [[ "$IS_PR" == "true" ]]; then
+              diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+              python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+            else
+              echo "Not a PR, skipping diff-cover"
+            fi
+            echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
+          '
+          if [ -f FastDeploy/exit_code.env ]; then
+            cat FastDeploy/exit_code.env >> $GITHUB_ENV
+          fi
+      - name: Upload unit resule and diff coverage to bos
+        id: cov_upload
+        shell: bash
+        run: |
+          cd FastDeploy
+          commit_id=${{ github.event.pull_request.head.sha }}
+          pr_num=${{ github.event.pull_request.number }}
+          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/Combine
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py -O bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          diff_cov_file="diff_coverage.xml"
+          if [ -f ${diff_cov_file} ];then
+            python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
+            target_path_stripped="${target_path#paddle-github-action/}"
+            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
+            echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
+            echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
+            export diff_cov_file_url=${DIFF_COV_FILE_URL}
+          fi
+          diff_cov_result_json="diff_coverage.json"
+          if [ -f ${diff_cov_result_json} ];then
+            python ${push_file} ${diff_cov_result_json} ${target_path}/CoverageData
+            target_path_stripped="${target_path#paddle-github-action/}"
+            DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
+            echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
+            echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
+            export diff_cov_result_json_url=${DIFF_COV_JSON_URL}
+          fi
+
+          if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
+            echo "Coverage generation failed (exit code 9)"
+            filename=$(basename "$diff_cov_result_json_url")
+            if [ -z "${diff_cov_result_json_url}" ]; then
+              echo "No diff cov result file URL provided."
+            else
+              rm -rf "${filename}"
+              wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
+            fi
+            if [ -f "${filename}" ];then
+              echo "Failed test cases:"
+              if command -v jq >/dev/null 2>&1; then
+                  jq . "${filename}"
+              else
+                  cat "${filename}"
+              fi
+            fi
+            exit "$COVERAGE_EXIT_CODE"
+          fi
+          echo "coverage passed"
+          exit 0
+
+  diff_coverage_report:
+    needs: coverage_combine
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+    steps:
+      - name: coverage diff file download
+        shell: bash
+        env:
+          diff_cov_file_url: ${{ needs.coverage_combine.outputs.diff_cov_file_url }}
+        run: |
+          mkdir FastDeploy
+          cd FastDeploy
+          if [ -z "${diff_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+            exit 0
+          fi
+          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+      - name: Upload diff coverage report
+        if: ${{ needs.coverage_combine.outputs.diff_cov_file_url != null && needs.coverage_combine.outputs.diff_cov_file_url != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./FastDeploy/diff_coverage.xml
+          name: python diff coverage
+          verbose: true
+          flags: diff

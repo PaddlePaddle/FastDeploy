@@ -1,7 +1,7 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
-
+export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
 #安装lsof工具
 apt install -y lsof
 
@@ -29,7 +29,11 @@ export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250921/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
 export XVLLM_PATH=${PWD}/xvllm
 bash build.sh || exit 1
+<<<<<<< HEAD
 
+=======
+export PYTHONPATH=./:${PYTHONPATH}
+>>>>>>> b4dd4a8f (debug)
 echo "pip others"
 python -m pip install openai -U
 python -m pip uninstall -y triton
@@ -49,8 +53,7 @@ ipcrm --all=msg
 echo "============================开始V0模式测试!============================"
 export ENABLE_V1_KVCACHE_SCHEDULER=0
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
-
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
     --tensor-parallel-size 8 \
@@ -95,7 +98,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python -m pytest tests/ci_use/XPU_45T/run_45T.py
+python -m coverage run tests/ci_use/XPU_45T/run_45T.py
 exit_code=$?
 echo exit_code is ${exit_code}
 
@@ -122,7 +125,7 @@ ipcrm --all=msg
 echo "============================开始V1模式测试!============================"
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
     --tensor-parallel-size 8 \
@@ -164,7 +167,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python -m pytest tests/ci_use/XPU_45T/run_45T.py
+python -m coverage run tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
