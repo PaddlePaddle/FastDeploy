@@ -34,7 +34,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
 
 def test_normal_case():
     block_size = 64
-    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False)
+    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False, num_gpu_blocks_override=100)
     req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
     req2 = Request.from_dict(
         {"request_id": "req2", "prompt_token_ids": [1] * 1600 + [2] * 1600, "prompt_token_ids_len": 3200}
@@ -82,11 +82,28 @@ def test_mm_extra_keys():
     block_size = 64
     cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True)
 
+    prompt_token_ids = [1] * 100 + [2] * 100
+    req1 = {
+        "request_id": "req1",
+        "prompt_token_ids": prompt_token_ids,
+        "prompt_token_ids_len": len(prompt_token_ids),
+    }
+    for idx in range(0, len(prompt_token_ids), block_size):
+        token_ids_lens = min(block_size, len(prompt_token_ids[idx:]))
+        mm_idx, extra_keys = cache_manager.get_block_hash_extra_keys(
+            request=Request.from_dict(req1),
+            start_idx=idx,
+            end_idx=idx + token_ids_lens,
+            mm_idx=0,
+        )
+        assert extra_keys == [], f"extra_keys {extra_keys} != [], start_idx {idx}, end_idx {idx + token_ids_lens}"
+        assert mm_idx == 0, f"mm_idx {mm_idx} != 0, start_idx {idx}, end_idx {idx + token_ids_lens}"
+
     # block 1
     prompt_token_ids = [1] * 30 + [-1] * 34
     mm_positions = [ImagePosition(offset=30, length=80)]
     mm_hashes = ["image1"]
-    extra_keys_list = [(1, ["image1"])]
+    extra_keys_list = [(0, ["image1"])]
 
     # block 2
     prompt_token_ids += [-1] * 46 + [2] * 18
@@ -96,14 +113,15 @@ def test_mm_extra_keys():
     prompt_token_ids += [-1] * 100
     mm_positions.append(ImagePosition(offset=128, length=100))
     mm_hashes.append("image2")
-    extra_keys_list.append((2, ["image2"]))
+    extra_keys_list.append((1, ["image2"]))
 
     # block 4、5
     prompt_token_ids += [3] * 40
-    extra_keys_list.append((2, ["image2"]))
+    extra_keys_list.append((1, ["image2"]))
+    extra_keys_list.append((1, []))
 
-    req1 = {
-        "request_id": "req1",
+    req2 = {
+        "request_id": "req2",
         "prompt_token_ids": prompt_token_ids,
         "prompt_token_ids_len": len(prompt_token_ids),
         "mm_positions": mm_positions,
@@ -114,14 +132,98 @@ def test_mm_extra_keys():
     for idx in range(0, len(prompt_token_ids), block_size):
         token_ids_lens = min(block_size, len(prompt_token_ids[idx:]))
         mm_idx, extra_keys = cache_manager.get_block_hash_extra_keys(
-            request=Request.from_dict(req1),
+            request=Request.from_dict(req2),
             start_idx=idx,
             end_idx=idx + token_ids_lens,
             mm_idx=mm_idx,
         )
 
         target_idx, target_keys = extra_keys_list[key_idx]
-
-        assert mm_idx == target_idx
-        assert extra_keys == target_keys
+        assert (
+            mm_idx == target_idx
+        ), f"mm_idx {mm_idx} != target_idx {target_idx}, start_idx {idx}, end_idx {idx + token_ids_lens}"
+        assert (
+            extra_keys == target_keys
+        ), f"extra_keys {extra_keys} != target_keys {target_keys}, start_idx {idx}, end_idx {idx + token_ids_lens}"
         key_idx += 1
+
+
+def test_mm_prefix_cache():
+    block_size = 64
+    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False, num_gpu_blocks_override=100)
+    req1_dict = {
+        "request_id": "req1",
+        "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120,
+        "prompt_token_ids_len": 1440,
+        "mm_positions": [ImagePosition(offset=120, length=1200)],
+        "mm_hashes": ["image1"],
+    }
+    req1 = Request.from_dict(req1_dict)
+    req2_dict = {
+        "request_id": "req2",
+        "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [3] * 396 + [-1] * 587,
+        "prompt_token_ids_len": 2423,
+        "mm_positions": [ImagePosition(offset=120, length=1200), ImagePosition(offset=1836, length=587)],
+        "mm_hashes": ["image1", "image2"],
+    }
+    req2 = Request.from_dict(req2_dict)
+    req3_dict = {
+        "request_id": "req3",
+        "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [3] * 396 + [-1] * 587,
+        "prompt_token_ids_len": 2423,
+        "mm_positions": [ImagePosition(offset=120, length=1200), ImagePosition(offset=1836, length=587)],
+        "mm_hashes": ["image3", "image4"],
+    }
+    req3 = Request.from_dict(req3_dict)
+    req4_dict = {
+        "request_id": "req4",
+        "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [3] * 352,
+        "prompt_token_ids_len": 1792,
+        "mm_positions": [ImagePosition(offset=120, length=1200)],
+        "mm_hashes": ["image3"],
+    }
+    req4 = Request.from_dict(req4_dict)
+    (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req1, block_size)
+    assert len(common_block_ids) == 0
+    assert matched_token_num == 0
+    assert len(cache_manager.gpu_free_block_list) == 100
+    req1.block_tables.extend(common_block_ids)
+
+    # allocate for req1 inputs
+    num_new_block = 22
+    req1.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
+    req1.num_computed_tokens += 22 * block_size
+    cache_manager.update_cache_blocks(req1, block_size, req1.num_computed_tokens)
+    assert len(cache_manager.gpu_free_block_list) == 78
+
+    # allocate for req2 inputs
+    (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req2, block_size)
+    assert len(common_block_ids) == 22
+    assert matched_token_num == 22 * block_size
+    req2.num_cached_tokens = matched_token_num
+    req2.num_computed_tokens = matched_token_num
+    num_new_block = 15
+    req2.block_tables.extend(common_block_ids)
+    req2.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
+    req2.num_computed_tokens += 15 * block_size
+    cache_manager.update_cache_blocks(req2, block_size, req2.num_computed_tokens)
+
+    # allocate for req3 input
+    (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req3, block_size)
+    assert len(common_block_ids) == 1
+    assert matched_token_num == 1 * block_size
+    req3.num_cached_tokens = matched_token_num
+    req3.num_computed_tokens = matched_token_num
+    assert len(cache_manager.gpu_free_block_list) == 63
+    req3.block_tables.extend(common_block_ids)
+    num_new_block = 36
+    assert cache_manager.can_allocate_gpu_blocks(num_new_block)
+    req3.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
+    req3.num_computed_tokens += 36 * block_size
+    cache_manager.update_cache_blocks(req3, block_size, req3.num_computed_tokens)
+    assert len(cache_manager.gpu_free_block_list) == 27
+
+    # allocate for req4 input
+    (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req4, block_size)
+    assert len(common_block_ids) == 28
+    assert matched_token_num == 28 * block_size

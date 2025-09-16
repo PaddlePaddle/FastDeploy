@@ -527,7 +527,6 @@ class PrefixCacheManager:
                     gpu_match_token_num,
                     cpu_match_token_num,
                 ) = self.mm_match_block(task, block_size)
-                # self.match_block(req_id, input_ids, block_size)
 
                 #  update matched node info
                 self._update_matched_node_info(req_id, match_block_node, current_time=time.time())
@@ -1042,12 +1041,12 @@ class PrefixCacheManager:
             return mm_idx, hash_keys
 
         assert start_idx < end_idx, f"start_idx {start_idx} >= end_idx {end_idx}"
-        assert start_idx >= 0 and start_idx < len(
-            request.input_ids
-        ), f"start_idx {start_idx} out of range {len(request.input_ids)}"
-        assert end_idx >= 0 and end_idx <= len(
-            request.input_ids
-        ), f"end_idx {end_idx} out of range {len(request.input_ids)}"
+        assert (
+            start_idx >= 0 and start_idx < request.prompt_token_ids_len
+        ), f"start_idx {start_idx} out of range {request.prompt_token_ids_len}"
+        assert (
+            end_idx >= 0 and end_idx <= request.prompt_token_ids_len
+        ), f"end_idx {end_idx} out of range {request.prompt_token_ids_len}"
         assert len(request.mm_positions) == len(
             request.mm_hashes
         ), f"mm_positions {len(request.mm_positions)} != mm_hashes {len(request.mm_hashes)}"
@@ -1066,11 +1065,13 @@ class PrefixCacheManager:
             if image_offset + image_length < start_idx:
                 # image before block
                 continue
-            elif image_offset + image_length >= end_idx:
+            elif image_offset >= end_idx:
                 # image after block
                 return img_idx, hash_keys
+            elif image_offset + image_length > end_idx:
+                hash_keys.append(request.mm_hashes[img_idx])
+                return img_idx, hash_keys
             else:
-                # image in block
                 hash_keys.append(request.mm_hashes[img_idx])
         return len(request.mm_positions) - 1, hash_keys
 
@@ -1302,8 +1303,7 @@ class PrefixCacheManager:
             prompt_token_ids = request.prompt_token_ids
         input_ids = prompt_token_ids + request.output_token_ids
         can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
-        left_input_ids = input_ids[num_cached_tokens:can_cache_computed_tokens]
-        if len(left_input_ids) == 0:
+        if num_cached_tokens == can_cache_computed_tokens:
             return last_node
 
         mm_idx = 0
@@ -1315,8 +1315,8 @@ class PrefixCacheManager:
 
         input_hash_value = self.hash_block_features(input_ids)
         gpu_block_ids = request.block_tables[num_cached_tokens // block_size :].copy()
-        for i in range(0, len(left_input_ids), block_size):
-            current_block = left_input_ids[i : i + block_size]
+        for i in range(num_cached_tokens, can_cache_computed_tokens, block_size):
+            current_block = input_ids[i : i + block_size]
             current_block_size = len(current_block)  # 最后一个block可能没填满
             if current_block_size != block_size:
                 has_unfilled_block = True
