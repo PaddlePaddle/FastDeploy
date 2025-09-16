@@ -57,7 +57,11 @@ def get_default_test_fd_config():
     parallel_config.data_parallel_rank = 1
     cache_config = CacheConfig({})
     fd_config = FDConfig(
-        graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config, test_mode=True
+        graph_opt_config=graph_opt_config,
+        parallel_config=parallel_config,
+        cache_config=cache_config,
+        scheduler_config=scheduler_config,
+        test_mode=True,
     )
     fd_config.model_config = FakeModelConfig()
     return fd_config
