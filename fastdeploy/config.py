@@ -1107,7 +1107,6 @@ class FDConfig:
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
-        max_num_seqs: int = 8,
         ips: str = None,
         use_warmup: bool = False,
         engine_worker_queue_port: str = "8002",
@@ -1173,7 +1172,6 @@ class FDConfig:
                     self.node_rank = idx
 
         self.max_model_len = max_model_len
-        self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
@@ -1254,7 +1252,7 @@ class FDConfig:
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
 
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.max_num_seqs)
+        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
@@ -1268,19 +1266,24 @@ class FDConfig:
         """
         check the legality of config
         """
-        assert self.max_num_seqs <= 256, (
-            "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
+        assert self.scheduler_config.max_num_seqs <= 256, (
+            "The parameter `max_num_seqs` is not allowed to exceed 256, "
+            f"but now it's {self.scheduler_config.max_num_seqs}."
         )
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
-        assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
-        assert self.scheduler_config.max_num_batched_tokens >= self.max_num_seqs, (
+        assert (
+            self.scheduler_config.max_num_seqs >= 1
+        ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
+        assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs, (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
-            f"should be larger than or equal to max_num_seqs: {self.max_num_seqs}"
+            f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
         )
-        assert self.scheduler_config.max_num_batched_tokens <= self.max_model_len * self.max_num_seqs, (
+        assert (
+            self.scheduler_config.max_num_batched_tokens <= self.max_model_len * self.scheduler_config.max_num_seqs
+        ), (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
-            f"than or equal to max_num_seqs: {self.max_num_seqs} * max_model_len: {self.max_model_len}"
+            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.max_model_len}"
         )
         assert (
             self.max_num_partial_prefills >= 1
