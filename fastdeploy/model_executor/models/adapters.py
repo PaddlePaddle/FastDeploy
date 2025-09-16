@@ -43,42 +43,42 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
 
     from fastdeploy.model_executor.utils import default_weight_loader
 
-    for filename in ["model.safetensors", "pytorch_model.bin"]:
-        file_path = f"{folder}/{filename}" if folder else filename
+    filename = "model.safetensors"
+    file_path = f"{folder}/{filename}" if folder else filename
 
-        try:
-            file_bytes = get_hf_file_to_dict(file_path, model_config.model, model_config.revision)
-            if not file_bytes:
-                continue
+    try:
+        file_bytes = get_hf_file_to_dict(file_path, model_config.model, model_config.revision)
+        if not file_bytes:
+            return False
 
-            state_dict = {}
-            if filename.endswith(".safetensors"):
-                import io
+        state_dict = {}
+        if filename.endswith(".safetensors"):
+            import io
 
-                from safetensors.numpy import load as load_safetensors
+            from safetensors.numpy import load as load_safetensors
 
-                numpy_tensors = load_safetensors(io.BytesIO(file_bytes))
-                for key, numpy_array in numpy_tensors.items():
-                    state_dict[key] = paddle.to_tensor(numpy_array)
-            else:
-                import io
+            numpy_tensors = load_safetensors(io.BytesIO(file_bytes))
+            for key, numpy_array in numpy_tensors.items():
+                state_dict[key] = paddle.to_tensor(numpy_array)
+        else:
+            import io
 
-                state_dict = paddle.load(io.BytesIO(file_bytes))
+            state_dict = paddle.load(io.BytesIO(file_bytes))
 
-            weight_keys = ["weight", "linear.weight", "dense.weight"]
+        weight_keys = ["weight", "linear.weight", "dense.weight"]
 
-            for weight_key in weight_keys:
-                if weight_key in state_dict:
-                    weight_loader = getattr(linear.weight, "weight_loader", default_weight_loader)
-                    weight_loader(linear.weight, state_dict[weight_key].astype(paddle.float32))
-                    bias_key = weight_key.replace("weight", "bias")
-                    if linear.bias is not None and bias_key in state_dict:
-                        bias_loader = getattr(linear.bias, "weight_loader", default_weight_loader)
-                        bias_loader(linear.bias, state_dict[bias_key].astype(paddle.float32))
-                    return True
-        except Exception:
-            logger.exception("Failed to load %s", filename)
-            continue
+        for weight_key in weight_keys:
+            if weight_key in state_dict:
+                weight_loader = getattr(linear.weight, "weight_loader", default_weight_loader)
+                weight_loader(linear.weight, state_dict[weight_key].astype(paddle.float32))
+                bias_key = weight_key.replace("weight", "bias")
+                if linear.bias is not None and bias_key in state_dict:
+                    bias_loader = getattr(linear.bias, "weight_loader", default_weight_loader)
+                    bias_loader(linear.bias, state_dict[bias_key].astype(paddle.float32))
+                return True
+    except Exception:
+        logger.exception("Failed to load %s", filename)
+        return False
     return False
 
 

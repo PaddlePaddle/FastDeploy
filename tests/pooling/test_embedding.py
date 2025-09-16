@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import json
+import os
+import sys
+
+import paddle
+import pytest
+
+from fastdeploy.config import (
+    CacheConfig,
+    FDConfig,
+    GraphOptimizationConfig,
+    LoadConfig,
+    ModelConfig,
+    ParallelConfig,
+)
+from fastdeploy.model_executor.utils import initialize_model
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+
+class TestModelLoader:
+
+    @pytest.fixture(scope="session", autouse=True)
+    def setup_paddle(self):
+        if not paddle.is_compiled_with_cuda():
+            print("Warning: CUDA not available, using CPU")
+            paddle.set_device("cpu")
+        else:
+            print("Using CUDA device")
+            paddle.set_device("gpu")
+        yield
+
+    @pytest.fixture(scope="session")
+    def model_path(self):
+        base_path = os.getenv("MODEL_PATH")
+        if base_path:
+            return os.path.join(base_path, "Qwen3-0.6B")
+        else:
+            return "./Qwen3-0.6B"
+
+    @pytest.fixture
+    def model_config(self, model_path):
+        model_args = {
+            "model": model_path,
+            "dtype": "bfloat16",
+            "max_model_len": 8192,
+            "tensor_parallel_size": 1,
+            "runner": "auto",
+            "convert": "auto",
+        }
+
+        try:
+            return ModelConfig(model_args)
+        except Exception as e:
+            print(f"Warning: Could not create ModelConfig: {e}")
+            pytest.skip(f"Cannot create ModelConfig: {e}")
+
+    @pytest.fixture
+    def fd_config(self, model_config):
+        try:
+            cache_args = {
+                "block_size": 64,
+                "gpu_memory_utilization": 0.9,
+                "cache_dtype": "bfloat16",
+                "model_cfg": model_config,
+                "tensor_parallel_size": 1,
+            }
+            cache_config = CacheConfig(cache_args)
+
+            parallel_args = {
+                "tensor_parallel_size": 1,
+                "data_parallel_size": 1,
+            }
+            parallel_config = ParallelConfig(parallel_args)
+
+            load_args = {}
+            load_config = LoadConfig(load_args)
+
+            graph_opt_args = {
+                "enable_cudagraph": False,
+                "cudagraph_capture_sizes": None,
+            }
+            graph_opt_config = GraphOptimizationConfig(graph_opt_args)
+
+            return FDConfig(
+                model_config=model_config,
+                cache_config=cache_config,
+                parallel_config=parallel_config,
+                load_config=load_config,
+                graph_opt_config=graph_opt_config,
+                test_mode=True,
+            )
+        except Exception as e:
+            print(f"Warning: Could not create FDConfig: {e}")
+            import traceback
+
+            traceback.print_exc()
+            pytest.skip(f"Cannot create FDConfig: {e}")
+
+    @pytest.fixture
+    def model_json_config(self, model_path):
+        config_path = os.path.join(model_path, "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return None
+
+    def test_initialize_model_function_exists(self):
+        print("=" * 60)
+        print("Testing initialize_model Function Import")
+        print("=" * 60)
+
+        assert initialize_model is not None, "initialize_model function should be imported"
+        assert callable(initialize_model), "initialize_model should be callable"
+        print(f"Successfully imported initialize_model function: {initialize_model}")
+
+    def test_initialize_model_with_none_convert_type(self, fd_config, model_json_config):
+        if model_json_config is None:
+            pytest.skip("Model config not available")
+
+        print("=" * 60)
+        print("Testing initialize_model with convert_type='none'")
+        print("=" * 60)
+
+        architectures = model_json_config.get("architectures", [])
+        if not architectures:
+            pytest.skip("No architectures found in model config")
+
+        architecture = architectures[0]
+
+        fd_config.model_config.convert_type = "none"
+
+        try:
+            model_cls = initialize_model(architecture, fd_config)
+
+            if hasattr(model_cls, "__name__"):
+                assert (
+                    "ForEmbedding" not in model_cls.__name__
+                ), f"Standard model should not have 'ForEmbedding' in name, but got: {model_cls.__name__}"
+                print(f"Confirmed standard model type (no ForEmbedding): {model_cls.__name__}")
+
+            standard_methods = set(dir(model_cls))
+            assert "_init_pooler" not in standard_methods, "Standard model should not have _init_pooler method"
+
+        except Exception as e:
+            print(f"Error in initialize_model: {e}")
+            import traceback
+
+            traceback.print_exc()
+            pytest.fail(f"initialize_model failed with convert_type='none': {e}")
+
+    def test_initialize_model_with_embed_convert_type(self, fd_config, model_json_config):
+        if model_json_config is None:
+            pytest.skip("Model config not available")
+
+        print("=" * 60)
+        print("Testing initialize_model with convert_type='embed'")
+        print("=" * 60)
+
+        architectures = model_json_config.get("architectures", [])
+        if not architectures:
+            pytest.skip("No architectures found in model config")
+
+        architecture = architectures[0]
+
+        fd_config.model_config.convert_type = "embed"
+
+        try:
+            model_cls = initialize_model(architecture, fd_config)
+            if hasattr(model_cls, "__name__"):
+                assert "ForEmbedding" in model_cls.__name__, "Embedding model should have 'ForEmbedding' in name"
+                print(f"Confirmed embedding model type: {model_cls.__name__}")
+
+            embedding_methods = set(dir(model_cls))
+            assert "_init_pooler" in embedding_methods, "Embedding model should have _init_pooler method"
+
+        except Exception as e:
+            print(f"Error in initialize_model: {e}")
+            import traceback
+
+            traceback.print_exc()
+            pytest.fail(f"initialize_model failed with convert_type='embed': {e}")
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__, "-v", "-s"])

@@ -27,8 +27,6 @@ from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.models.adapters import as_embedding_model
-from fastdeploy.model_executor.models.registry import model_registry
 from fastdeploy.utils import get_logger
 
 logger = get_logger("utils", "utils.log")
@@ -520,6 +518,9 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
 
 
 def initialize_model(architectures: str, fd_config: FDConfig):
+    from fastdeploy.model_executor.models.adapters import as_embedding_model
+    from fastdeploy.model_executor.models.registry import model_registry
+
     model_cls = model_registry.get_class(architectures)
     convert_type = fd_config.model_config.convert_type
     if convert_type == "none":
