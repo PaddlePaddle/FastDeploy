@@ -8,26 +8,26 @@ from fastdeploy.model_executor.ops.gpu import top_p_candidates
 
 def top_p_candidates_dynamic_top_p(probs, top_p_per_bid, candidates_len, output_padding_offset, max_seq_len):
     """
-    模拟 TopPCandidates，支持根据 bid 动态选择 Top-P 值
+    Simulate TopPCandidates, supporting dynamic selection of Top-P values based on bid.
 
     Args:
         probs: numpy.ndarray, shape [token_num, vocab_size]
-               每个 token 的词汇表概率分布
+               Probability distribution over the vocabulary for each token.
         top_p_per_bid: list or numpy.ndarray, shape [num_bid]
-               每个逻辑块（bid）的 Top-P 值，例如 [0.7, 0.9, 0.5]
+               Top-P values for each logical block (bid), e.g., [0.7, 0.9, 0.5].
         candidates_len: int
-               每个 token 最多返回的候选词数量
+               Maximum number of candidate tokens to return for each token.
         output_padding_offset: numpy.ndarray, shape [token_num]
-               每个 token 的偏移量，用于计算 ori_token_id
+               Offset for each token, used to compute the original token ID (ori_token_id).
         max_seq_len: int
-               用于计算 bid = ori_token_id // max_seq_len
+               Used to compute bid = ori_token_id // max_seq_len.
 
     Returns:
-        verify_tokens: List[List[int]], 每个 token 的候选 token id 列表
-        verify_scores: List[List[float]], 每个 token 的候选 token 概率值列表
-        actual_candidate_lens: List[int], 每个 token 实际返回的候选词数量
-        ori_token_ids: List[int], 每个 token 的 ori_token_id
-        bid_list: List[int], 每个 token 的 bid
+        verify_tokens: List[List[int]], list of candidate token IDs for each token.
+        verify_scores: List[List[float]], list of candidate token probability scores for each token.
+        actual_candidate_lens: List[int], actual number of candidate tokens returned for each token.
+        ori_token_ids: List[int], original token ID for each token.
+        bid_list: List[int], bid for each token.
     """
     token_num, vocab_size = probs.shape
     verify_tokens = []
@@ -41,26 +41,28 @@ def top_p_candidates_dynamic_top_p(probs, top_p_per_bid, candidates_len, output_
     num_bid = len(top_p_per_bid)
 
     for token_id in range(token_num):
-        # --- 计算 ori_token_id 和 bid ---
+        # --- Compute ori_token_id and bid ---
         offset = output_padding_offset[token_id]
         ori_token_id = token_id + offset
         bid = ori_token_id // max_seq_len
 
-        # 如果 bid 超出 top_p_per_bid 的范围，可以选择 clamp 到 [0, num_bid-1]
+        # If the bid is out of the range of top_p_per_bid, you can choose to clamp it to [0, num_bid - 1]
         if bid < 0:
             bid = 0
         if bid >= num_bid:
-            bid = num_bid - 1  # 或者可以报错、抛异常，这里简单处理为最后一个 bid
+            bid = (
+                num_bid - 1
+            )  # Or you could raise an error or exception; here, we simply handle it by using the last bid.
 
-        token_top_p = top_p_per_bid[bid]  # 动态获取该 bid 的 top_p
+        token_top_p = top_p_per_bid[bid]  # Dynamically retrieve the top_p value for the given bid.
 
         ori_token_ids.append(ori_token_id)
         bid_list.append(bid)
 
-        # 当前 token 的概率分布
+        # The probability distribution of the current token.
         token_probs = probs[token_id, :]
-        # 按概率从高到低排序
-        sorted_indices = np.argsort(token_probs)[::-1]  # 降序
+        # Sort by probability in descending order.
+        sorted_indices = np.argsort(token_probs)[::-1]
         sorted_probs = token_probs[sorted_indices]
 
         accumulated_prob = 0.0
@@ -69,21 +71,21 @@ def top_p_candidates_dynamic_top_p(probs, top_p_per_bid, candidates_len, output_
 
         for sort_idx, (prob, token_idx) in enumerate(zip(sorted_probs, sorted_indices)):
             if sort_idx >= candidates_len:
-                break  # 最多返回 candidates_len 个
+                break  # Return at most candidates_len.
 
             accumulated_prob += prob
             selected_indices.append(int(token_idx))
             selected_probs.append(float(prob))
 
             if accumulated_prob >= token_top_p:
-                break  # 累积概率满足 Top-P
+                break  # The cumulative probability satisfies the Top-P criterion.
 
-        # 没满足 Top-P，返回已经选出的
+        # If the Top-P threshold is not met, return the tokens that have already been selected.
         actual_len = len(selected_indices)
         actual_candidate_lens.append(actual_len)
-        # token id 不足部分填充 0
+        # Pad the insufficient token_id with 0.
         padded_token_ids = selected_indices + [0] * (candidates_len - actual_len)
-        # score 不足部分填充 0.0
+        # Pad the insufficient score with 0.0.
         padded_scores = selected_probs + [0.0] * (candidates_len - actual_len)
 
         verify_tokens.append(padded_token_ids)
@@ -106,7 +108,7 @@ class TestTopPCandidates(unittest.TestCase):
         max_seq_len = 120
         probs = paddle.randn([token_num, vocab_size])
         top_p = paddle.randn([token_num])
-        output_padding_offset = paddle.randint(0, 20, [token_num]).astype(paddle.int32)
+        output_padding_offset = np.array([2, 2, 1, 1, 1]).astype(paddle.int32)
         ret1 = top_p_candidates(probs, top_p, output_padding_offset, candidates_len, max_seq_len)
         ret2 = top_p_candidates_ref(probs, top_p, output_padding_offset, candidates_len, max_seq_len)
         np.testing.assert_allclose(ret1[0].numpy(), ret2[0])
