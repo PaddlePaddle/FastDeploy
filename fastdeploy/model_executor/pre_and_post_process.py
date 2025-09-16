@@ -163,7 +163,7 @@ def pre_process(
 def _zmq_send_text_outputs(zmq_client: ZmqClient, output_tokens: np.ndarray, save_each_rank: bool, mp_rank: int):
     """Split output_tokens and output"""
     assert zmq_client is not None, "zmq_client should not be None"
-    output_tokens = output_tokens.reshape([-1])
+    output_tokens = output_tokens.reshape([-1]).numpy()
     output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
     stream_transfer_datas = []
