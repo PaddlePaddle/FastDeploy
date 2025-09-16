@@ -22,6 +22,16 @@ from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 class ErnieX1ReasoningParser(ReasoningParser):
     """
     Reasoning parser for ernie_x1 model with stricter boundary checking.
+
+    Streaming rules:
+    1. Thinking content (<think>...</think>):
+       - Cache \n until next normal token arrives.
+       - Drop only the last \n before </think>.
+    2. Response content (<response>...</response>):
+       - Drop the first \n after <response>.
+       - Cache middle \n normally.
+       - Drop only the last \n before </response>.
+    3. Tool call content (<tool_call>...</tool_call>): ignored.
     """
 
     def __init__(self, tokenizer):
@@ -35,51 +45,46 @@ class ErnieX1ReasoningParser(ReasoningParser):
         if not self.model_tokenizer:
             raise ValueError("The model tokenizer must be passed to the ReasoningParser constructor.")
 
+        # special token ids
         self.think_end_token_id = self.vocab.get("</think>")
         if self.think_end_token_id is None:
             raise RuntimeError("Could not find </think> token id in tokenizer vocabulary")
+
+        self.response_end_token_id = self.vocab.get("</response>")
+        if self.response_end_token_id is None:
+            raise RuntimeError("Could not find </response> token id in tokenizer vocabulary")
+
         self.tool_call_start_token_id = self.vocab.get("<tool_call>")
+
+        # The token id of \n
+        self.newline_token_id = self.vocab.get("\n")
+        if self.newline_token_id is None:
+            ids = self.model_tokenizer.encode("\n", add_special_tokens=False)
+            if len(ids) == 1:
+                self.newline_token_id = ids[0]
+            else:
+                raise RuntimeError("Tokenizer does not map '\\n' to a single token.")
 
         # Cached count of newlines waiting to be flushed
         self._pending_newlines = 0
-
-    def _encode_tokens(self, text: str) -> List[int]:
-        """Convert text into token ids using model tokenizer."""
-        tokens = self.model_tokenizer.encode(text, add_special_tokens=False)
-        # If returned object is BatchEncoding, extract input_ids
-        if hasattr(tokens, "input_ids"):
-            return tokens.input_ids
-        return list(tokens)
 
     def _flush_newlines(
         self, text: str, reasoning: bool, delta_token_ids: Optional[List[int]] = None, keep_last: bool = False
     ) -> DeltaMessage:
         """
         Flush cached newlines along with the current delta text.
-
-        Args:
-            text (str): Current text to send.
-            reasoning (bool): Whether this is reasoning content or normal response.
-            delta_token_ids (Optional[List[int]]): Token ids of the current text.
-            keep_last (bool): If True, keep the last pending newline (used when the next token
-                              is a closing tag, so the last newline immediately before the tag is dropped).
-
-        Returns:
-            DeltaMessage: The combined message containing flushed newlines and current text.
+        If keep_last=True, drop only the last cached newline.
         """
         pending_count = self._pending_newlines
         if keep_last and pending_count > 0:
-            # Only flush all but the last newline
             pending_count -= 1
 
         pending_text = "\n" * pending_count
-        print("到达转化为tokens前")
-        pending_token_ids = self._encode_tokens(pending_text) if pending_count > 0 else []
+        pending_token_ids = [self.newline_token_id] * pending_count if pending_count > 0 else []
 
         self._pending_newlines = 0
 
         combined_text = pending_text + text
-        print("到达拼接tokens前")
         combined_token_ids = pending_token_ids + (delta_token_ids or [])
 
         if reasoning:
@@ -109,10 +114,14 @@ class ErnieX1ReasoningParser(ReasoningParser):
         if self.think_end_token not in previous_text:
             # If </think> token is reached, end reasoning phase
             if delta_token_ids and delta_token_ids[-1] == self.think_end_token_id:
+                if self._pending_newlines > 0:
+                    return self._flush_newlines("", reasoning=True, keep_last=True)
                 self._pending_newlines = 0
                 return None
 
             if delta_text.startswith(self.think_end_token):
+                if self._pending_newlines > 0:
+                    return self._flush_newlines("", reasoning=True, keep_last=True)
                 self._pending_newlines = 0
                 return None
 
@@ -147,7 +156,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
                 return None
 
             # If closing response, flush cached newlines except the last one before </response>
-            if delta_text == self.response_end_token:
+            if delta_token_ids and delta_token_ids[-1] == self.response_end_token_id:
                 if self._pending_newlines > 0:
                     return self._flush_newlines("", reasoning=False, keep_last=True)
                 self._pending_newlines = 0
