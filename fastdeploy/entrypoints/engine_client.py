@@ -236,6 +236,8 @@ class EngineClient:
                 raise ParameterError("max_tokens", f"max_tokens can be defined [1, {self.max_model_len}).")
 
         if data.get("reasoning_max_tokens") is not None:
+            if data["reasoning_max_tokens"] < 1:
+                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be between max_tokens and 1")
             if data["reasoning_max_tokens"] > data["max_tokens"]:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
