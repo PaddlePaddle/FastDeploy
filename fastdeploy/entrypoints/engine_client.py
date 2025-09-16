@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import inspect
 import os
 import time
 import traceback
@@ -30,7 +31,12 @@ from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, StatefulSemaphore, api_server_logger
+from fastdeploy.utils import (
+    EngineError,
+    ParameterError,
+    StatefulSemaphore,
+    api_server_logger,
+)
 
 
 class EngineClient:
@@ -45,6 +51,7 @@ class EngineClient:
         max_model_len,
         tensor_parallel_size,
         pid,
+        port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
         # enable_mm=False,
@@ -75,13 +82,19 @@ class EngineClient:
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        array_size = min(max_chips_per_node, tensor_parallel_size * data_parallel_size)
+
+        if tensor_parallel_size <= max_chips_per_node:
+            self.is_master = True
+        else:
+            self.is_master = False
+
+        array_size = min(max_chips_per_node, tensor_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=self.worker_healthy_live_recorded_time_array,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         self.semaphore = StatefulSemaphore((FD_SUPPORT_MAX_CONNECTIONS + workers - 1) // workers)
@@ -90,7 +103,7 @@ class EngineClient:
             name="model_weights_status",
             array=model_weights_status,
             dtype=np.int32,
-            suffix=pid,
+            suffix=port,
             create=False,
         )
         self.connection_manager = DealerConnectionManager(
@@ -105,7 +118,7 @@ class EngineClient:
         self.zmq_client = ZmqClient(model, mode)
         self.zmq_client.connect()
 
-    def format_and_add_data(self, prompts: dict):
+    async def format_and_add_data(self, prompts: dict):
         """
         Format the request data and send the request to the server.
         """
@@ -116,10 +129,10 @@ class EngineClient:
         if "max_tokens" not in prompts:
             prompts["max_tokens"] = self.max_model_len - 1
 
-        self.add_requests(prompts)
+        await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
-    def add_requests(self, task):
+    async def add_requests(self, task):
         """
         Add a new request to the queue.
 
@@ -133,7 +146,10 @@ class EngineClient:
 
         task["preprocess_start_time"] = time.time()
         try:
-            self.data_processor.process_request_dict(task, self.max_model_len)
+            if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
+                await self.data_processor.process_request_dict(task, self.max_model_len)
+            else:
+                self.data_processor.process_request_dict(task, self.max_model_len)
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
@@ -193,8 +209,8 @@ class EngineClient:
             f"preprocess time cost {preprocess_cost_time}"
         )
 
-        self.vaild_parameters(task)
-        api_server_logger.debug(f"Recieve task: {task}")
+        self.valid_parameters(task)
+        api_server_logger.debug(f"Receive task: {task}")
         try:
             if not self.enable_mm:
                 self.zmq_client.send_json(task)
@@ -204,45 +220,24 @@ class EngineClient:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
-    def vaild_parameters(self, data):
+    def valid_parameters(self, data):
         """
         Validate stream options
+        超参数（top_p、seed、frequency_penalty、temperature、presence_penalty）的校验逻辑
+        前置到了ChatCompletionRequest/CompletionRequest中
         """
 
-        if data.get("n"):
+        if data.get("n") is not None:
             if data["n"] != 1:
-                raise ValueError("n only support 1.")
+                raise ParameterError("n", "n only support 1.")
 
-        if data.get("max_tokens"):
+        if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
-                raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
+                raise ParameterError("max_tokens", f"max_tokens can be defined [1, {self.max_model_len}).")
 
-        if data.get("reasoning_max_tokens"):
+        if data.get("reasoning_max_tokens") is not None:
             if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
-                raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
-
-        if data.get("top_p"):
-            if data["top_p"] > 1 or data["top_p"] < 0:
-                raise ValueError("top_p value can only be defined [0, 1].")
-
-        if data.get("frequency_penalty"):
-            if not -2.0 <= data["frequency_penalty"] <= 2.0:
-                raise ValueError("frequency_penalty must be in [-2, 2]")
-
-        if data.get("temperature"):
-            if data["temperature"] < 0:
-                raise ValueError("temperature must be non-negative")
-
-        if data.get("presence_penalty"):
-            if not -2.0 <= data["presence_penalty"] <= 2.0:
-                raise ValueError("presence_penalty must be in [-2, 2]")
-
-        if data.get("seed"):
-            if not 0 <= data["seed"] <= 922337203685477580:
-                raise ValueError("seed must be in [0, 922337203685477580]")
-
-        if data.get("stream_options") and not data.get("stream"):
-            raise ValueError("Stream options can only be defined when `stream=True`.")
+                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be between max_tokens and 1")
 
         # logprobs
         logprobs = data.get("logprobs")
@@ -252,35 +247,35 @@ class EngineClient:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("logprobs", err_msg)
             top_logprobs = data.get("top_logprobs")
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
         elif logprobs:
-            raise ValueError("Invalid type for 'logprobs'")
+            raise ParameterError("logprobs", "Invalid type for 'logprobs'")
 
         # enable_logprob
         if top_logprobs:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("logprobs", err_msg)
 
             if not isinstance(top_logprobs, int):
                 err_type = type(top_logprobs).__name__
                 err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("top_logprobs", err_msg)
 
             if top_logprobs < 0:
                 err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("top_logprobs", err_msg)
 
             if top_logprobs > 20:
                 err_msg = "Invalid value for 'top_logprobs': must be <= 20."
                 api_server_logger.error(err_msg)
-                raise ValueError(err_msg)
+                raise ParameterError("top_logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """

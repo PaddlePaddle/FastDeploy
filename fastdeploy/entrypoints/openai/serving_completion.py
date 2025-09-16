@@ -30,10 +30,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponseChoice,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    ErrorInfo,
     ErrorResponse,
     UsageInfo,
 )
-from fastdeploy.utils import api_server_logger, get_host_ip
+from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -42,76 +43,85 @@ class OpenAIServingCompletion:
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
-        self.master_ip = ips
-        self.host_ip = get_host_ip()
         self.max_waiting_time = max_waiting_time
-        if self.master_ip is not None:
-            if isinstance(self.master_ip, list):
-                self.master_ip = self.master_ip[0]
+        if ips is not None:
+            if isinstance(ips, list):
+                self.master_ip = ips[0]
             else:
-                self.master_ip = self.master_ip.split(",")[0]
-
-    async def _ensure_connection_manager(self):
-        """ensure connection manager initialized"""
-        if not self.engine_client.connection_initialized:
-            await self.engine_client.connection_manager.initialize()
-            self.engine_client.connection_initialized = True
+                self.master_ip = ips.split(",")[0]
+        else:
+            self.master_ip = "0.0.0.0"
 
     def _check_master(self):
-        if self.master_ip is None:
-            return True
-        if self.host_ip == self.master_ip:
-            return True
-        return False
+        return self.engine_client.is_master
 
     async def create_completion(self, request: CompletionRequest):
         """
         Create a completion for the given prompt.
         """
         if not self._check_master():
-            err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
+            err_msg = (
+                f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
+            )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
-                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
-                return ErrorResponse(message=err_msg, code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                )
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
-        api_server_logger.info(f"initialize request {request_id}")
+        api_server_logger.info(f"Initialize request {request_id}: {request}")
         request_prompt_ids = None
         request_prompts = None
+
+        # Handle prompt and prompt_token_ids
         try:
-            if isinstance(request.prompt, str):
-                request_prompts = [request.prompt]
-            elif isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
-                request_prompt_ids = [request.prompt]
-            elif isinstance(request.prompt, list) and all(isinstance(item, str) for item in request.prompt):
-                request_prompts = request.prompt
-            elif isinstance(request.prompt, list):
-                for item in request.prompt:
-                    if isinstance(item, list) and all(isinstance(x, int) for x in item):
-                        continue
-                    else:
-                        raise ValueError("Prompt must be a string, a list of strings or a list of integers.")
-                request_prompt_ids = request.prompt
+            if request.prompt_token_ids is not None:  # let `prompt_token_ids` support batch inference
+                assert len(request.prompt_token_ids) > 0, "prompt_token_ids should not be an empty list"
+                if isinstance(request.prompt_token_ids[0], list):
+                    request_prompt_ids = request.prompt_token_ids
+                elif isinstance(request.prompt_token_ids[0], int):
+                    request_prompt_ids = [request.prompt_token_ids]
+                else:
+                    raise ValueError(
+                        "If prompt_token_ids is provided, its type should be one of: list[int], list[list[int]]"
+                    )
+                # reset `prompt_token_ids` to avoid data processor directly using it; let data processor fill it
+                request.prompt_token_ids = None
             else:
-                raise ValueError("Prompt must be a string, a list of strings or a list of integers.")
+                if isinstance(request.prompt, str):
+                    request_prompts = [request.prompt]
+                elif isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
+                    request_prompt_ids = [request.prompt]
+                elif isinstance(request.prompt, list) and all(isinstance(item, str) for item in request.prompt):
+                    request_prompts = request.prompt
+                elif isinstance(request.prompt, list):
+                    for item in request.prompt:
+                        if isinstance(item, list) and all(isinstance(x, int) for x in item):
+                            continue
+                        else:
+                            raise ValueError("If prompt is a list, each item type must be one of: str, list[int]")
+                    request_prompt_ids = request.prompt
+                else:
+                    raise ValueError("Prompt type must be one of: str, list[str], list[int], list[list[int]]")
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(message=error_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
-        num_choices = len(request_prompts)
 
-        api_server_logger.info(f"start inference for request {num_choices}")
+        num_choices = len(request_prompts)
+        api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
         text_after_process_list = []
         try:
@@ -125,25 +135,33 @@ class OpenAIServingCompletion:
                 f"max waiting time: {self.max_waiting_time}"
             )
             api_server_logger.error(error_msg)
-            return ErrorResponse(code=408, message=error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, code=ErrorCode.TIMEOUT, type=ErrorType.TIMEOUT_ERROR)
+            )
 
         try:
-            for idx, prompt in enumerate(request_prompts):
-                request_id_idx = f"{request_id}-{idx}"
-                current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                try:
+            try:
+                for idx, prompt in enumerate(request_prompts):
+                    request_id_idx = f"{request_id}-{idx}"
+                    current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     text_after_process_list.append(current_req_dict.get("text_after_process"))
                     prompt_batched_token_ids.append(prompt_token_ids)
-                except Exception as e:
-                    error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
-                    api_server_logger.error(error_msg)
-                    return ErrorResponse(message=str(e), code=400)
-
-                del current_req_dict
+                    del current_req_dict
+            except ParameterError as e:
+                api_server_logger.error(e.message)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(code=400, message=str(e.message), type="invalid_request", param=e.param)
+            except Exception as e:
+                error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
+                api_server_logger.error(error_msg)
+                self.engine_client.semaphore.release()
+                return ErrorResponse(
+                    error=ErrorInfo(message=str(e), code=ErrorCode.INVALID_VALUE, type=ErrorType.INVALID_REQUEST_ERROR)
+                )
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -171,12 +189,12 @@ class OpenAIServingCompletion:
                         f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
                     )
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(code=400, message=error_msg)
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
 
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(message=error_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
 
     async def completion_full_generator(
         self,
@@ -195,7 +213,6 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
@@ -205,8 +222,8 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
-            aggregated_top_logprobs = [[[], [], []]] * num_choices
-            aggregated_token_ids = [[]] * num_choices
+            aggregated_top_logprobs = [[[], [], []] for _ in range(num_choices)]
+            aggregated_token_ids = [[] for _ in range(num_choices)]
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
@@ -270,13 +287,29 @@ class OpenAIServingCompletion:
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
 
-    async def _echo_back_prompt(self, request, res, idx):
-        if res["outputs"].get("send_idx", -1) == 0 and request.echo:
-            if isinstance(request.prompt, list):
+    def _echo_back_prompt(self, request, idx):
+        """
+        The echo pre-process of the smallest unit
+        """
+        if isinstance(request.prompt, str):
+            prompt_text = request.prompt
+        elif isinstance(request.prompt, list):
+            if all(isinstance(item, str) for item in request.prompt):
                 prompt_text = request.prompt[idx]
+            elif all(isinstance(item, int) for item in request.prompt):
+                prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt)
             else:
-                prompt_text = request.prompt
-            res["outputs"]["text"] = prompt_text + (res["outputs"]["text"] or "")
+                prompt_text = self.engine_client.data_processor.tokenizer.decode(request.prompt[idx])
+        return prompt_text
+
+    async def _process_echo_logic(self, request, idx, res_outputs):
+        """
+        Process the echo logic and return the modified text.
+        """
+        if request.echo and res_outputs.get("send_idx", -1) == 0:
+            prompt_text = self._echo_back_prompt(request, idx)
+            res_outputs["text"] = prompt_text + (res_outputs["text"] or "")
+        return res_outputs
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
@@ -301,7 +334,6 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
-            await self._ensure_connection_manager()
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
@@ -318,6 +350,7 @@ class OpenAIServingCompletion:
                 if request.max_streaming_response_tokens is not None
                 else (request.suffix or {}).get("max_streaming_response_tokens", 1)
             )  # dierctly passed & passed in suffix
+            max_streaming_response_tokens = max(1, max_streaming_response_tokens)
             choices = []
             chunk = CompletionStreamResponse(
                 id=request_id,
@@ -378,7 +411,7 @@ class OpenAIServingCompletion:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
-                    await self._echo_back_prompt(request, res, idx)
+                    await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
@@ -404,7 +437,9 @@ class OpenAIServingCompletion:
                             continue
                         delta_message.text = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        delta_message.tool_calls = delta_message_output.tool_calls
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called[idx] = True
 
                     choices.append(delta_message)
 
@@ -450,10 +485,6 @@ class OpenAIServingCompletion:
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
-                if choices:
-                    chunk.choices = choices
-                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    choices = []
 
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
@@ -479,35 +510,24 @@ class OpenAIServingCompletion:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
-        aggregated_logprobs: Optional[CompletionLogprobs] = None
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
-            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
             output_top_logprobs = output["top_logprobs"]
 
+            aggregated_logprobs: Optional[CompletionLogprobs] = None
             if output_top_logprobs is not None:
-                logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
-                if aggregated_logprobs is None:
-                    aggregated_logprobs = logprobs_res
-                else:
-                    aggregated_logprobs.tokens.extend(logprobs_res.tokens)
-                    aggregated_logprobs.token_logprobs.extend(logprobs_res.token_logprobs)
-                    aggregated_logprobs.top_logprobs.extend(logprobs_res.top_logprobs)
-                    aggregated_logprobs.text_offset.extend(logprobs_res.text_offset)
+                aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
             if request.echo:
-                assert prompt_text is not None
+                prompt_text = self._echo_back_prompt(request, idx)
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
-                if isinstance(prompt_text, list):
-                    output_text = prompt_text[idx] + output["text"]
-                else:
-                    output_text = str(prompt_text) + output["text"]
+                output_text = prompt_text + output["text"]
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]

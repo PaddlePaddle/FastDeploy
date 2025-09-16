@@ -185,7 +185,7 @@ def get_name():
 
 cmdclass_dict = {"bdist_wheel": CustomBdistWheel}
 cmdclass_dict["build_ext"] = CMakeBuild
-FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.1.0-dev")
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.3.0-dev")
 cmdclass_dict["build_optl"] = PostInstallCommand
 
 setup(
@@ -211,7 +211,7 @@ setup(
             "model_executor/ops/iluvatar/*",
             "model_executor/models/*",
             "model_executor/layers/*",
-            "input/mm_processor/utils/*",
+            "input/ernie4_5_vl_processor/utils/*",
             "model_executor/ops/gcu/*",
             "version.txt",
         ]
@@ -238,4 +238,7 @@ setup(
     license="Apache 2.0",
     python_requires=">=3.7",
     extras_require={"test": ["pytest>=6.0"]},
+    entry_points={
+        "console_scripts": ["fastdeploy=fastdeploy.entrypoints.cli.main:main"],
+    },
 )

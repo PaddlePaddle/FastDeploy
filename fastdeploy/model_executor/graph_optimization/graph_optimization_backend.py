@@ -117,9 +117,9 @@ class GraphOptBackend:
 
         self.max_captre_batch = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
         if self.fd_config.graph_opt_config.graph_opt_level > 0:
-            # 1. Prepare cuda grpah input buffers (contain output of subgraphs)
+            # 1. Prepare cuda graph input buffers (contain output of subgraphs)
 
-            # 2. Convert dynamic grpah to static graph
+            # 2. Convert dynamic graph to static graph
 
             backend = (
                 ToStaticBackend.CINN if self.fd_config.graph_opt_config.graph_opt_level > 1 else ToStaticBackend.PHI
@@ -144,3 +144,7 @@ class GraphOptBackend:
             return self.runnable(**kwargs)
         else:
             return self.cudagraph_piecewise_backend.__call__(**kwargs)
+
+    def clear_cudagraph_piecewise_backend(self):
+        """ """
+        self.cudagraph_piecewise_backend.clear_graph()

@@ -19,6 +19,7 @@ export devices=0
 export CUDA_VISIBLE_DEVICES=${devices}
 model_path=${1:-"/PATH/MODEL_PATH"}
 output_path=${2:-"/PATH/OUTPUT_MODEL"}
+moe_quant_type=${3:-"w4a8"}
 for name in `env | grep -E 'PADDLE|ENDPOINT' | awk -F'=' '{print $1}'`; do
 unset ${name}
 done
@@ -31,4 +32,5 @@ self_ip=`hostname -i`
 python offline_w4a8.py \
        --model_name_or_path ${model_path} \
        --output_dir ${output_path} \
-       --safe_serialization "True"
+       --safe_serialization "True" \
+       --moe_quant_type ${moe_quant_type}

@@ -24,11 +24,14 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+import paddle
+import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
@@ -55,6 +58,11 @@ class TokenProcessor:
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
+
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            self.zmq_server = ZmqClient(name=f"get_save_output_rank{self.cfg.local_device_ids[0]}", mode=zmq.PULL)
+            self.zmq_server.start_server()
+            self.zmq_server.create_router()
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
@@ -138,7 +146,7 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output
+            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
@@ -154,35 +162,54 @@ class TokenProcessor:
 
         while True:
             try:
-                is_blocking = True
-                if self.speculative_decoding:
-                    speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
-                    if self.output_tokens[0] == -2:
-                        continue
+                if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                    try:
+                        receive_data = self.zmq_server.recv_pyobj()
+                        assert isinstance(receive_data, StreamTransferData)
+                        if receive_data is not None:
+                            # TODO(Wanglongzhi2001): adapt more type of message.
+                            if receive_data.decoder_state == DecoderState.TEXT:
+                                self.output_tokens[0, 0] = paddle.to_tensor(
+                                    receive_data.data.not_need_stop, dtype="int64"
+                                )
+                                self.output_tokens[1, 0] = paddle.to_tensor(receive_data.data.batch, dtype="int64")
+                                self.output_tokens[2 : 2 + receive_data.data.batch, 0] = paddle.to_tensor(
+                                    receive_data.data.tokens[:, 0], dtype="int64"
+                                )
 
+                    except Exception as e:
+                        print(f"Receive message error: {e}")
+                        continue
                 else:
-                    if (
-                        self.cfg.parallel_config.enable_expert_parallel
-                        and self.cfg.parallel_config.data_parallel_size > 1
-                    ):
-                        get_output_ep(self.output_tokens, rank_id, is_blocking)
+                    is_blocking = True
+                    if self.speculative_decoding:
+                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                        if self.output_tokens[0] == -2:
+                            continue
 
                     else:
-                        if self.use_logprobs:
-                            get_output_topk(
-                                self.output_tokens,
-                                self.output_scores,
-                                self.output_ranks,
-                                K,
-                                rank_id,
-                                is_blocking,
-                            )
-                        else:
-                            get_output(self.output_tokens, rank_id, is_blocking)
+                        if (
+                            self.cfg.parallel_config.enable_expert_parallel
+                            and self.cfg.parallel_config.data_parallel_size > 1
+                        ):
+                            get_output_ep(self.output_tokens, rank_id, is_blocking)
 
-                    if self.output_tokens[0, 0] == -2:
-                        continue
-                    llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
+                        else:
+                            if self.use_logprobs:
+                                get_output_topk(
+                                    self.output_tokens,
+                                    self.output_scores,
+                                    self.output_ranks,
+                                    K,
+                                    rank_id,
+                                    is_blocking,
+                                )
+                            else:
+                                get_output(self.output_tokens, rank_id, is_blocking)
+
+                        if self.output_tokens[0, 0] == -2:
+                            continue
+                        llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
                 self._process_prefill_metrics()
                 self._process_batch_output()
             except Exception as e:
@@ -247,17 +274,28 @@ class TokenProcessor:
                 self.resource_manager.stop_flags[index] = True
                 self.resource_manager.tasks_list[index] = None
                 self.resource_manager._recycle_block_tables(task)
+
+        task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list])
+        main_process_metrics.available_gpu_block_num.set(
+            self.resource_manager.total_block_number() - task_used_block_num
+        )
+        main_process_metrics.batch_size.set(
+            self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
+        )
+        main_process_metrics.available_batch_size.set(self.resource_manager.available_batch())
+
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
 
     def _compute_speculative_status(self):
         # TODO(liuzichang): Supplement more statistics
-        interval = 50
+        interval = 10
         if self.speculative_stats_step % interval == 0:
             accept_ratio = 1 - self.total_step * 1.0 / self.number_of_output_tokens
             spec_logger.info(
                 f"Speculate global accept ratio(Accept draft_tokens/Generated tokens): {accept_ratio}"
                 f" total step: {self.total_step}. total output token num: {self.number_of_output_tokens}"
+                f" average accept len: {self.number_of_output_tokens / self.total_step}"
             )
 
             if self.cfg.speculative_config.method in ["mtp"]:
@@ -436,6 +474,7 @@ class TokenProcessor:
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         task.first_token_time = current_time
+        main_process_metrics.first_token_latency.set(current_time - task.inference_start_time)
         main_process_metrics.time_to_first_token.observe(current_time - task.inference_start_time)
         main_process_metrics.request_queue_time.observe(task.schedule_start_time - task.preprocess_end_time)
 
@@ -447,6 +486,7 @@ class TokenProcessor:
 
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
+        main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
         main_process_metrics.request_inference_time.observe(current_time - task.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
 

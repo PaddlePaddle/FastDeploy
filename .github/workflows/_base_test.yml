@@ -44,7 +44,7 @@ jobs:
             FULL_REPO="${{ github.repository }}"
             REPO_NAME="${FULL_REPO##*/}"
             BASE_BRANCH="${{ github.base_ref }}"
-
+            docker pull ${docker_image}
             # Clean the repository directory before starting
             docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
             -e "REPO_NAME=${REPO_NAME}" \
@@ -80,12 +80,14 @@ jobs:
           FD_API_PORT=$((42088 + DEVICE_PORT * 100))
           FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
           FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((42098 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
           echo "FD_API_PORT=${FD_API_PORT}"
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -99,7 +101,7 @@ jobs:
             exit 1
           fi
 
-          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT $FD_CACHE_QUEUE_PORT)
           LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
           echo "==== LOG_FILE is ${LOG_FILE} ===="
 
@@ -134,14 +136,14 @@ jobs:
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
+          -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
           -v "${MODEL_CACHE_DIR}:/MODELDATA" \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          #python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-          python -m pip install paddlepaddle-gpu==3.0.0.dev20250818 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -158,6 +160,7 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           pushd tests/ce/deploy
+          ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
           sleep 3
           curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
@@ -183,7 +186,7 @@ jobs:
           export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
           export TEMPLATE=TOKEN_LOGPROB
           TEST_EXIT_CODE=0
-          python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py test_evil_cases.py || TEST_EXIT_CODE=1
+          python -m pytest -sv test_base_chat.py test_compare_top_logprobs.py test_logprobs.py test_params_boundary.py test_seed_usage.py test_stream.py test_evil_cases.py test_completions.py test_return_token_ids.py || TEST_EXIT_CODE=1
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
             -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--early-stop-config\": \"{\\\"enable_early_stop\\\":true, \\\"window_size\\\":6, \\\"threshold\\\":0.93}\"}"
@@ -192,8 +195,27 @@ jobs:
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
+            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5, \"--max-waiting-time\": 1 }"
+          check_service 90
+          python -m pytest -sv test_max_concurrency.py || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5000, \"--max-waiting-time\": 1 }"
+          check_service 90
+          python -m pytest -sv test_max_waiting_time.py || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
             -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"21b_mtp.yaml\", \"--enable-logprob\": \"False\"}"
           check_service 180
+          export TEMPLATE=TOKEN_NORMAL
+          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"21b_sot.yaml\", \"--enable-logprob\": \"False\"}"
+          check_service 360
           export TEMPLATE=TOKEN_NORMAL
           python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
 

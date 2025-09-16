@@ -32,9 +32,10 @@ from jsonschema import validate
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 # List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
 
 def is_port_open(host: str, port: int, timeout=1.0):
@@ -115,6 +116,8 @@ def setup_and_run_server():
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
+        "--cache-queue-port",
+        str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -431,6 +434,12 @@ def test_metrics_endpoint(metrics_url):
     gpu_cache_usage_perc_found = False
     request_params_max_tokens_sum_found = False
     request_success_total_found = False
+    cache_config_info_found = False
+    available_batch_size_found = False
+    hit_req_rate_found = False
+    hit_token_rate_found = False
+    cpu_hit_token_rate_found = False
+    gpu_hit_token_rate_found = False
 
     for line in metric_lines:
         if line.startswith("fastdeploy:num_requests_running"):
@@ -497,7 +506,30 @@ def test_metrics_endpoint(metrics_url):
             _, value = line.rsplit(" ", 1)
             assert float(value) >= 0, "request_success_total 值错误"
             request_success_total_found = True
-
+        elif line.startswith("fastdeploy:cache_config_info"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "cache_config_info 值错误"
+            cache_config_info_found = True
+        elif line.startswith("fastdeploy:available_batch_size"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "available_batch_size 值错误"
+            available_batch_size_found = True
+        elif line.startswith("fastdeploy:hit_req_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "hit_req_rate 值错误"
+            hit_req_rate_found = True
+        elif line.startswith("fastdeploy:hit_token_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "hit_token_rate 值错误"
+            hit_token_rate_found = True
+        elif line.startswith("fastdeploy:cpu_hit_token_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "cpu_hit_token_rate 值错误"
+            cpu_hit_token_rate_found = True
+        elif line.startswith("fastdeploy:gpu_hit_token_rate"):
+            _, value = line.rsplit(" ", 1)
+            assert float(value) >= 0, "gpu_hit_token_rate 值错误"
+            gpu_hit_token_rate_found = True
     assert num_requests_running_found, "缺少 fastdeploy:num_requests_running 指标"
     assert num_requests_waiting_found, "缺少 fastdeploy:num_requests_waiting 指标"
     assert time_to_first_token_seconds_sum_found, "缺少 fastdeploy:time_to_first_token_seconds_sum 指标"
@@ -514,6 +546,12 @@ def test_metrics_endpoint(metrics_url):
     assert gpu_cache_usage_perc_found, "缺少 fastdeploy:gpu_cache_usage_perc 指标"
     assert request_params_max_tokens_sum_found, "缺少 fastdeploy:request_params_max_tokens_sum 指标"
     assert request_success_total_found, "缺少 fastdeploy:request_success_total 指标"
+    assert cache_config_info_found, "缺少 fastdeploy:cache_config_info 指标"
+    assert available_batch_size_found, "缺少 fastdeploy:available_batch_size 指标"
+    assert hit_req_rate_found, "缺少 fastdeploy:hit_req_rate 指标"
+    assert hit_token_rate_found, "缺少 fastdeploy:hit_token_rate 指标"
+    assert cpu_hit_token_rate_found, "缺少 fastdeploy:hit_token_rate 指标"
+    assert gpu_hit_token_rate_found, "缺少 fastdeploy:gpu_hit_token_rate 指标"
 
 
 # ==========================
@@ -652,3 +690,129 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def test_prompt_token_ids_in_non_streaming_completion(openai_client):
+    """
+    Test cases for passing token ids through `prompt`/`prompt_token_ids` in non-streaming completion api
+    """
+    # Test case for passing a token id list in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
+        stream=False,
+    )
+    assert len(response.choices) == 1
+    assert response.usage.prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]]},
+        stream=False,
+    )
+    assert len(response.choices) == 2
+    assert response.usage.prompt_tokens == 9 + 3
+
+    # Test case for passing a token id list in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+    assert len(response.choices) == 1
+    assert response.usage.prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+    assert len(response.choices) == 2
+    assert response.usage.prompt_tokens == 9 + 3
+
+
+def test_prompt_token_ids_in_streaming_completion(openai_client):
+    """
+    Test cases for passing token ids through `prompt`/`prompt_token_ids` in streaming completion api
+    """
+    # Test case for passing a token id list in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt_token_ids`
+    response = openai_client.completions.create(
+        model="default",
+        prompt="",
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]]},
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9 + 3
+
+    # Test case for passing a token id list in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9
+
+    # Test case for passing a batch of token id lists in `prompt`
+    response = openai_client.completions.create(
+        model="default",
+        prompt=[[5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937], [1, 2, 3]],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    sum_prompt_tokens = 0
+    for chunk in response:
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+        else:
+            sum_prompt_tokens += chunk.usage.prompt_tokens
+    assert sum_prompt_tokens == 9 + 3

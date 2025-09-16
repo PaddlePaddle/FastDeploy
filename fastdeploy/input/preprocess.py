@@ -71,6 +71,7 @@ class InputPreprocessor:
         """
         reasoning_parser_obj = None
         tool_parser_obj = None
+
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
         if self.tool_parser:
@@ -79,42 +80,54 @@ class InputPreprocessor:
         config = ModelConfig({"model": self.model_name_or_path})
         architectures = config.architectures[0]
 
-        if not self.enable_mm:
-            if not ErnieArchitectures.contains_ernie_arch(architectures):
-                from fastdeploy.input.text_processor import DataProcessor
+        try:
+            from fastdeploy.plugins.input_processor import load_input_processor_plugins
 
-                self.processor = DataProcessor(
-                    model_name_or_path=self.model_name_or_path,
-                    reasoning_parser_obj=reasoning_parser_obj,
-                    tool_parser_obj=tool_parser_obj,
-                )
+            Processor = load_input_processor_plugins()
+            self.processor = Processor(
+                model_name_or_path=self.model_name_or_path,
+                reasoning_parser_obj=reasoning_parser_obj,
+                tool_parser_obj=tool_parser_obj,
+            )
+        except:
+            if not self.enable_mm:
+                if not ErnieArchitectures.contains_ernie_arch(architectures):
+                    from fastdeploy.input.text_processor import DataProcessor
+
+                    self.processor = DataProcessor(
+                        model_name_or_path=self.model_name_or_path,
+                        reasoning_parser_obj=reasoning_parser_obj,
+                        tool_parser_obj=tool_parser_obj,
+                    )
+                else:
+                    from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
+
+                    self.processor = Ernie4_5Processor(
+                        model_name_or_path=self.model_name_or_path,
+                        reasoning_parser_obj=reasoning_parser_obj,
+                        tool_parser_obj=tool_parser_obj,
+                    )
             else:
-                from fastdeploy.input.ernie_processor import ErnieProcessor
+                if ErnieArchitectures.contains_ernie_arch(architectures):
+                    from fastdeploy.input.ernie4_5_vl_processor import (
+                        Ernie4_5_VLProcessor,
+                    )
 
-                self.processor = ErnieProcessor(
-                    model_name_or_path=self.model_name_or_path,
-                    reasoning_parser_obj=reasoning_parser_obj,
-                    tool_parser_obj=tool_parser_obj,
-                )
-        else:
-            if ErnieArchitectures.contains_ernie_arch(architectures):
-                from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
+                    self.processor = Ernie4_5_VLProcessor(
+                        model_name_or_path=self.model_name_or_path,
+                        limit_mm_per_prompt=self.limit_mm_per_prompt,
+                        mm_processor_kwargs=self.mm_processor_kwargs,
+                        reasoning_parser_obj=reasoning_parser_obj,
+                        tool_parser_obj=tool_parser_obj,
+                    )
+                else:
+                    from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
 
-                self.processor = ErnieMoEVLProcessor(
-                    model_name_or_path=self.model_name_or_path,
-                    limit_mm_per_prompt=self.limit_mm_per_prompt,
-                    mm_processor_kwargs=self.mm_processor_kwargs,
-                    reasoning_parser_obj=reasoning_parser_obj,
-                    tool_parser_obj=tool_parser_obj,
-                )
-            else:
-                from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
-
-                self.processor = QwenVLProcessor(
-                    config=config,
-                    model_name_or_path=self.model_name_or_path,
-                    limit_mm_per_prompt=self.limit_mm_per_prompt,
-                    mm_processor_kwargs=self.mm_processor_kwargs,
-                    reasoning_parser_obj=reasoning_parser_obj,
-                )
+                    self.processor = QwenVLProcessor(
+                        config=config,
+                        model_name_or_path=self.model_name_or_path,
+                        limit_mm_per_prompt=self.limit_mm_per_prompt,
+                        mm_processor_kwargs=self.mm_processor_kwargs,
+                        reasoning_parser_obj=reasoning_parser_obj,
+                    )
         return self.processor
