@@ -25,13 +25,59 @@ class TestFusedRotaryPositionEncoding(unittest.TestCase):
         paddle.set_device("gpu")
         np.random.seed(42)
 
-    def _make_cos_sin_cache(self, num_tokens: int, rot_dim: int) -> np.ndarray:
+    def _make_cos_sin_cache(self, max_position: int, rot_dim: int) -> np.ndarray:
         """Generate cos/sin cache."""
         assert rot_dim % 2 == 0, "rot_dim must be even"
         half_dim = rot_dim // 2
-        cos_np = np.random.rand(num_tokens, half_dim).astype("float32")
-        sin_np = np.random.rand(num_tokens, half_dim).astype("float32")
-        return np.concatenate([cos_np, sin_np], axis=1)
+        inv_freq = 1.0 / (10000 ** (np.arange(0, half_dim).astype("float32") / half_dim))
+        positions = np.arange(max_position, dtype="float32")
+        freqs = np.outer(positions, inv_freq)  # [max_position, half_dim]
+        cos_np = np.cos(freqs)
+        sin_np = np.sin(freqs)
+        return np.concatenate([cos_np, sin_np], axis=1).astype("float32")
+
+    def _ref_rotary(self, query, key, position_ids, cos_sin_cache, head_size, is_neox):
+        """Numpy reference implementation."""
+        num_tokens, num_heads, _ = query.shape
+        num_kv_heads = key.shape[1]
+        rot_dim = cos_sin_cache.shape[1]
+        embed_dim = rot_dim // 2
+
+        query_ref = query.copy()
+        key_ref = key.copy()
+
+        for t in range(num_tokens):
+            pos = position_ids[t]
+            cos_ptr = cos_sin_cache[pos, :embed_dim]
+            sin_ptr = cos_sin_cache[pos, embed_dim:]
+
+            for h in range(num_heads):
+                arr = query_ref[t, h]
+                for i in range(embed_dim):
+                    if is_neox:
+                        x_idx, y_idx = i, embed_dim + i
+                        cos, sin = cos_ptr[i], sin_ptr[i]
+                    else:
+                        x_idx, y_idx = 2 * i, 2 * i + 1
+                        cos, sin = cos_ptr[i], sin_ptr[i]
+                    x, y = arr[x_idx], arr[y_idx]
+                    arr[x_idx] = x * cos - y * sin
+                    arr[y_idx] = y * cos + x * sin
+
+            for h in range(num_kv_heads):
+                arr = key_ref[t, h]
+                for i in range(embed_dim):
+                    if is_neox:
+                        x_idx, y_idx = i, embed_dim + i
+                        cos, sin = cos_ptr[i], sin_ptr[i]
+                    else:
+                        x_idx, y_idx = 2 * i, 2 * i + 1
+                        cos, sin = cos_ptr[i], sin_ptr[i]
+                    x, y = arr[x_idx], arr[y_idx]
+                    arr[x_idx] = x * cos - y * sin
+                    arr[y_idx] = y * cos + x * sin
+
+        return query_ref, key_ref
 
     def _run_op(
         self,
@@ -41,7 +87,7 @@ class TestFusedRotaryPositionEncoding(unittest.TestCase):
         cos_sin_cache_np: np.ndarray,
         head_size: int,
         is_neox: bool,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ):
         """Run fused_rotary_position_encoding operator."""
         query = paddle.to_tensor(query_np, dtype="float32")
         key = paddle.to_tensor(key_np, dtype="float32")
@@ -51,63 +97,30 @@ class TestFusedRotaryPositionEncoding(unittest.TestCase):
         fused_rotary_position_encoding(query, key, position_ids, cos_sin_cache, head_size, is_neox)
         return query.numpy(), key.numpy()
 
-    def test_basic_case(self):
-        num_tokens, num_heads, head_size = 4, 2, 6
-        num_kv_heads, rot_dim = 2, 4
-
+    def _check_correctness(self, num_tokens, num_heads, num_kv_heads, head_size, rot_dim, is_neox):
         query_np = np.random.rand(num_tokens, num_heads, head_size).astype("float32")
         key_np = np.random.rand(num_tokens, num_kv_heads, head_size).astype("float32")
         position_ids_np = np.arange(num_tokens, dtype="int32")
         cos_sin_cache_np = self._make_cos_sin_cache(num_tokens, rot_dim)
 
-        query_out, key_out = self._run_op(
-            query_np, key_np, position_ids_np, cos_sin_cache_np, head_size, is_neox=False
-        )
+        query_out, key_out = self._run_op(query_np, key_np, position_ids_np, cos_sin_cache_np, head_size, is_neox)
+        query_ref, key_ref = self._ref_rotary(query_np, key_np, position_ids_np, cos_sin_cache_np, head_size, is_neox)
 
-        self.assertEqual(query_out.shape, query_np.shape)
-        self.assertEqual(key_out.shape, key_np.shape)
-        self.assertFalse(np.allclose(query_out, query_np))
-        self.assertFalse(np.allclose(key_out, key_np))
+        np.testing.assert_allclose(query_out, query_ref, rtol=1e-5, atol=1e-6)
+        np.testing.assert_allclose(key_out, key_ref, rtol=1e-5, atol=1e-6)
+
+    def test_basic_case(self):
+        self._check_correctness(num_tokens=4, num_heads=2, num_kv_heads=2, head_size=6, rot_dim=4, is_neox=False)
 
     def test_neox_mode(self):
-        """Test NEox mode."""
-        num_tokens, num_heads, head_size = 3, 2, 8
-        num_kv_heads, rot_dim = 2, 8
-
-        query_np = np.random.rand(num_tokens, num_heads, head_size).astype("float32")
-        key_np = np.random.rand(num_tokens, num_kv_heads, head_size).astype("float32")
-        position_ids_np = np.arange(num_tokens, dtype="int32")
-        cos_sin_cache_np = self._make_cos_sin_cache(num_tokens, rot_dim)
-
-        query_out, key_out = self._run_op(query_np, key_np, position_ids_np, cos_sin_cache_np, head_size, is_neox=True)
-
-        self.assertEqual(query_out.shape, query_np.shape)
-        self.assertEqual(key_out.shape, key_np.shape)
-        self.assertFalse(np.allclose(query_out, query_np))
-        self.assertFalse(np.allclose(key_out, key_np))
+        self._check_correctness(num_tokens=3, num_heads=2, num_kv_heads=2, head_size=8, rot_dim=8, is_neox=True)
 
     def test_large_num_tokens(self):
-        """Test with a large number of tokens."""
-        num_tokens, num_heads, head_size = 10, 2, 4
-        num_kv_heads, rot_dim = 2, 4
-
-        query_np = np.random.rand(num_tokens, num_heads, head_size).astype("float32")
-        key_np = np.random.rand(num_tokens, num_kv_heads, head_size).astype("float32")
-        position_ids_np = np.arange(num_tokens, dtype="int32")
-        cos_sin_cache_np = self._make_cos_sin_cache(num_tokens, rot_dim)
-
-        query_out, key_out = self._run_op(
-            query_np, key_np, position_ids_np, cos_sin_cache_np, head_size, is_neox=False
-        )
-
-        self.assertEqual(query_out.shape, query_np.shape)
-        self.assertEqual(key_out.shape, key_np.shape)
+        self._check_correctness(num_tokens=10, num_heads=2, num_kv_heads=2, head_size=4, rot_dim=4, is_neox=False)
 
     def test_exceed_max_tokens(self):
-        """Test exceeding maximum number of tokens."""
         num_tokens, num_heads, head_size = 65537, 1, 4
         num_kv_heads, rot_dim = 1, 4
-
         query_np = np.random.rand(num_tokens, num_heads, head_size).astype("float32")
         key_np = np.random.rand(num_tokens, num_kv_heads, head_size).astype("float32")
         position_ids_np = np.arange(num_tokens, dtype="int32")
