@@ -611,6 +611,7 @@ class ResourceManagerV1(ResourceManager):
             if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
                 request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
                 request.num_computed_tokens = request.need_prefill_tokens
+                request.disaggregate_info["block_tables"] = request.block_tables
                 allocated_position = self.get_available_position()
                 request.idx = allocated_position
                 self.tasks_list[request.idx] = request

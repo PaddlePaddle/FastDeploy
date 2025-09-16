@@ -119,6 +119,10 @@ class LLMEngine:
 
         self.data_processor = self.input_processor.create_processor()
         self.engine.data_processor = self.data_processor
+        # Launch components: scheduler, cache_manager, expert_service et.al.
+        self.launch_components()
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            self.launched_cache_manager_signal.value[0] = 1
 
         self.engine.start()
 
@@ -155,10 +159,6 @@ class LLMEngine:
 
         if self.do_profile:
             self._stop_profile()
-        # Launch components: scheduler, cache_manager, expert_service et.al.
-        self.launch_components()
-        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
-            self.launched_cache_manager_signal.value[0] = 1
 
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")

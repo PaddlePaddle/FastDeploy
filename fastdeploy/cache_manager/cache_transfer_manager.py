@@ -409,6 +409,6 @@ if __name__ == "__main__":
 
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
-    logger = get_logger("cache_transfer_manager", "cache_transfer_manager_rank{rank_id}.log")
+    logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_rank{rank_id}.log")
     paddle.set_device(f"gpu:{args.device_id}")
     main()

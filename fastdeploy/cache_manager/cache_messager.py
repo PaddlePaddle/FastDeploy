@@ -763,8 +763,8 @@ def main():
     gpu_cache_k_tensors = []
     gpu_cache_v_tensors = []
 
-    for i in range(args.num_hidden_layers + num_extra_layers):
-        num_gpu_blocks = args.num_gpu_blocks if i < args.num_hidden_layers else num_extra_layer_gpu_blocks
+    for i in range(args.num_layers + num_extra_layers):
+        num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else num_extra_layer_gpu_blocks
 
         gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"] = paddle.full(
             shape=[

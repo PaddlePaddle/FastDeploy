@@ -86,6 +86,7 @@ class ExpertService:
         start_time = time.time()
         self.engine.start()
         if self.cfg.scheduler_config.name == "dp":
+            self.cfg.init_cache_info()
             assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
             self.engine.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
 
@@ -97,7 +98,8 @@ class ExpertService:
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
         if self.cfg.splitwise_role != "mixed":
-            self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix)
+            ipc_signal_suffix_cache = self.cfg.engine_worker_queue_port[local_data_parallel_id]
+            self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix_cache)
             self.engine.split_mode_get_tasks()
 
         if self.cfg.scheduler_config.name == "splitwise":
