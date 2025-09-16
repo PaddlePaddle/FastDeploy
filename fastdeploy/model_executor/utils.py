@@ -258,7 +258,7 @@ class WeightsMapper:
                 if new_key is None:
                     return None
 
-                key = key.replace(prefix, new_key, 1)
+                key = key.replace(suffix, new_key, 1)
 
         return key
 

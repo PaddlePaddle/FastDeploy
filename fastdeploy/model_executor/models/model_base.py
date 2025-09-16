@@ -48,7 +48,6 @@ class ModelForCasualLM(nn.Layer, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    @abstractmethod
     def forward(
         self,
         input_ids=None,
