@@ -23,9 +23,12 @@ from typing import Any, Optional, Union
 
 import paddle
 import paddle.nn as nn
+from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.models.adapters import as_embedding_model
+from fastdeploy.model_executor.models.registry import model_registry
 from fastdeploy.utils import get_logger
 
 logger = get_logger("utils", "utils.log")
@@ -400,6 +403,7 @@ class AutoWeightsLoader:
         weights: Iterable[tuple[str, paddle.Tensor]],
         fd_config: Optional[FDConfig] = None,
     ) -> Iterable[str]:
+
         if layer != self.layers:
             layer_load_weights = getattr(layer, "load_weights", None)
             if callable(layer_load_weights):
@@ -513,3 +517,16 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
+
+
+def initialize_model(architectures: str, fd_config: FDConfig):
+    model_cls = model_registry.get_class(architectures)
+    convert_type = fd_config.model_config.convert_type
+    if convert_type == "none":
+        pass
+    elif convert_type == "embed":
+        model_cls = as_embedding_model(model_cls)
+    else:
+        assert_never(convert_type)
+
+    return model_cls

@@ -16,9 +16,7 @@
 
 import paddle
 from paddle import nn
-from typing_extensions import assert_never
 
-from fastdeploy.model_executor.models.adapters import as_embedding_model
 from fastdeploy.utils import get_logger
 
 logger = get_logger("default_loader_v1", "default_loader_v1.log")
@@ -32,7 +30,7 @@ from fastdeploy.model_executor.load_weight_utils import (
     save_model,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
-from fastdeploy.model_executor.models.registry import model_registry
+from fastdeploy.model_executor.utils import initialize_model
 from fastdeploy.platforms import current_platform
 
 
@@ -58,11 +56,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if enable_cache:
             load_weights_form_cache(model, weights_iterator)
         else:
-            if hasattr(model, "use_auto_weights_loader") and model.use_auto_weights_loader:
-                weights_list = list(weights_iterator)
-                model.load_weights(weights_list)
-            else:
-                model.load_weights(weights_iterator)
+            model.load_weights(weights_iterator)
+
         self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
@@ -77,16 +72,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
         enable_cache, _, weight_cache_context = is_weight_cache_enabled(fd_config)
         with weight_cache_context:
             with context:
-                model_cls = model_registry.get_class(architectures)
-                convert_type = fd_config.model_config.convert_type
-                if convert_type == "none":
-                    pass
-                elif convert_type == "embedding":
-                    logger.info("Converting to embedding model.")
-                    model_cls = as_embedding_model(model_cls)
-                else:
-                    assert_never(convert_type)
-
+                model_cls = initialize_model(architectures, fd_config)
                 model = model_cls(fd_config)
 
         model.eval()

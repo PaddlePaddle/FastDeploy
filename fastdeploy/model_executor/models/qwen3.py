@@ -312,6 +312,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         if is_pooling_model:
             weights_list = list(weights_iterator)
             filtered_weights = [(name, weight) for name, weight in weights_list if not name.startswith("lm_head.")]
+            logger.info(f"filtered_weights:{filtered_weights}")
             loader = AutoWeightsLoader(self)
             return loader.load_weights(iter(filtered_weights))
         else:

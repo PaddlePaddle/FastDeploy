@@ -41,6 +41,8 @@ _GENERATE_SUFFIXES = [
 def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConfig") -> bool:
     """Load weights using vLLM's weight_loader pattern."""
 
+    from fastdeploy.model_executor.utils import default_weight_loader
+
     for filename in ["model.safetensors", "pytorch_model.bin"]:
         file_path = f"{folder}/{filename}" if folder else filename
 
@@ -64,51 +66,16 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
                 state_dict = paddle.load(io.BytesIO(file_bytes))
 
             weight_keys = ["weight", "linear.weight", "dense.weight"]
-            bias_keys = ["bias", "linear.bias", "dense.bias"]
 
-            loaded_weight = None
             for weight_key in weight_keys:
                 if weight_key in state_dict:
-                    loaded_weight = state_dict[weight_key]
-                    break
-
-            if loaded_weight is None:
-                continue
-
-            if hasattr(model_config, "model_format") and model_config.model_format == "torch":
-                if len(loaded_weight.shape) == 2:
-                    loaded_weight = loaded_weight.transpose([1, 0])
-
-            if linear.weight.dtype != loaded_weight.dtype:
-                loaded_weight = loaded_weight.cast(linear.weight.dtype)
-
-            if linear.weight.shape != loaded_weight.shape:
-                logger.warning(f"Weight shape mismatch: expected {linear.weight.shape}, " f"got {loaded_weight.shape}")
-                try:
-                    loaded_weight = loaded_weight.reshape(linear.weight.shape)
-                except:
-                    continue
-
-            linear.weight.set_value(loaded_weight)
-
-            if linear.bias is not None:
-                loaded_bias = None
-                for bias_key in bias_keys:
-                    if bias_key in state_dict:
-                        loaded_bias = state_dict[bias_key]
-                        break
-
-                if loaded_bias is not None:
-                    if linear.bias.dtype != loaded_bias.dtype:
-                        loaded_bias = loaded_bias.cast(linear.bias.dtype)
-
-                    if linear.bias.shape != loaded_bias.shape:
-                        try:
-                            loaded_bias = loaded_bias.reshape(linear.bias.shape)
-                        except:
-                            pass
-                    linear.bias.set_value(loaded_bias)
-            return True
+                    weight_loader = getattr(linear.weight, "weight_loader", default_weight_loader)
+                    weight_loader(linear.weight, state_dict[weight_key].astype(paddle.float32))
+                    bias_key = weight_key.replace("weight", "bias")
+                    if linear.bias is not None and bias_key in state_dict:
+                        bias_loader = getattr(linear.bias, "weight_loader", default_weight_loader)
+                        bias_loader(linear.bias, state_dict[bias_key].astype(paddle.float32))
+                    return True
         except Exception:
             logger.exception("Failed to load %s", filename)
             continue
@@ -191,8 +158,7 @@ def _create_pooling_model_cls(orig_cls: _T) -> _T:
             if hasattr(self, "model") and hasattr(self.model, "load_weights"):
                 # Whether only `self.model` contains parameters
                 model_is_only_param = all(
-                    name == "model" or len(list(child.parameters())) == 0
-                    for name, child in self.named_sublayers(include_self=False)
+                    name == "model" or not any(child.parameters()) for name, child in self.named_children()
                 )
                 if model_is_only_param:
                     mapper = WeightsMapper(orig_to_new_prefix={"model.": ""})
