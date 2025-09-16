@@ -44,6 +44,12 @@ class RequestType(Enum):
 
 
 @dataclass
+class ImagePosition:
+    offset: int = 0
+    length: int = 0
+
+
+@dataclass
 class Request:
     def __init__(
         self,
@@ -83,6 +89,8 @@ class Request:
         prefill_start_index: int = 0,
         prefill_end_index: int = 0,
         num_computed_tokens: int = 0,
+        mm_hashes: Optional[list] = None,
+        mm_positions: Optional[list[ImagePosition]] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -118,6 +126,8 @@ class Request:
         self.multimodal_inputs = multimodal_inputs
         self.multimodal_data = multimodal_data
         self.multimodal_img_boundaries = None
+        self.mm_hashes = mm_hashes
+        self.mm_positions = mm_positions
 
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier
@@ -187,6 +197,8 @@ class Request:
             image_end=d.get("image_end", 0),
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
+            mm_hashes=d.get("mm_hashes", None),
+            mm_positions=d.get("mm_positions", None),
         )
 
     @property
@@ -244,6 +256,8 @@ class Request:
             "guided_grammar",
             "structural_tag",
             "guided_json_object",
+            "mm_hashes",
+            "mm_positions",
         ]
         for param in add_params:
             if getattr(self, param, None) is not None:

@@ -4,16 +4,18 @@ from types import SimpleNamespace
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import ImagePosition, Request
 
 
-def test_normal_case():
-    max_num_seqs = 3
-    block_size = 64
-    engine_args = EngineArgs(max_num_seqs=max_num_seqs, num_gpu_blocks_override=100, max_num_batched_tokens=3200)
+def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_override=100, max_num_batched_tokens=3200):
+    engine_args = EngineArgs(
+        max_num_seqs=max_num_seqs,
+        num_gpu_blocks_override=num_gpu_blocks_override,
+        max_num_batched_tokens=max_num_batched_tokens,
+    )
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
-    model_cfg = SimpleNamespace(enable_mm=False)
+    model_cfg = SimpleNamespace(enable_mm=enable_mm)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
@@ -27,7 +29,12 @@ def test_normal_case():
         speculative_config=speculative_cfg,
         max_num_batched_tokens=engine_args.max_num_batched_tokens,
     )
-    cache_manager = PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
+    return PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
+
+
+def test_normal_case():
+    block_size = 64
+    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False)
     req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
     req2 = Request.from_dict(
         {"request_id": "req2", "prompt_token_ids": [1] * 1600 + [2] * 1600, "prompt_token_ids_len": 3200}
@@ -69,3 +76,52 @@ def test_normal_case():
     req3.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
     cache_manager.update_cache_blocks(req3, block_size, req3.num_computed_tokens)
     assert len(cache_manager.gpu_free_block_list) == 0
+
+
+def test_mm_extra_keys():
+    block_size = 64
+    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True)
+
+    # block 1
+    prompt_token_ids = [1] * 30 + [-1] * 34
+    mm_positions = [ImagePosition(offset=30, length=80)]
+    mm_hashes = ["image1"]
+    extra_keys_list = [(1, ["image1"])]
+
+    # block 2
+    prompt_token_ids += [-1] * 46 + [2] * 18
+    extra_keys_list.append((1, ["image1"]))
+
+    # block 3
+    prompt_token_ids += [-1] * 100
+    mm_positions.append(ImagePosition(offset=128, length=100))
+    mm_hashes.append("image2")
+    extra_keys_list.append((2, ["image2"]))
+
+    # block 4、5
+    prompt_token_ids += [3] * 40
+    extra_keys_list.append((2, ["image2"]))
+
+    req1 = {
+        "request_id": "req1",
+        "prompt_token_ids": prompt_token_ids,
+        "prompt_token_ids_len": len(prompt_token_ids),
+        "mm_positions": mm_positions,
+        "mm_hashes": mm_hashes,
+    }
+
+    mm_idx, key_idx = 0, 0
+    for idx in range(0, len(prompt_token_ids), block_size):
+        token_ids_lens = min(block_size, len(prompt_token_ids[idx:]))
+        mm_idx, extra_keys = cache_manager.get_block_hash_extra_keys(
+            request=Request.from_dict(req1),
+            start_idx=idx,
+            end_idx=idx + token_ids_lens,
+            mm_idx=mm_idx,
+        )
+
+        target_idx, target_keys = extra_keys_list[key_idx]
+
+        assert mm_idx == target_idx
+        assert extra_keys == target_keys
+        key_idx += 1

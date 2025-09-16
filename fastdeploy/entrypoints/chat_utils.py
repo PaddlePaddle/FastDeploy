@@ -161,7 +161,7 @@ def parse_content_part(mm_parser, part):
 
 # TODO async
 # def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
-def parse_chat_messages(messages):
+def parse_chat_messages(messages, mm_hashes: Optional[list] = None):
     """Parse chat messages to [dict]"""
 
     mm_parser = MultiModalPartParser()
