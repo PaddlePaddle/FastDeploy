@@ -78,19 +78,16 @@ class DefaultModelLoaderV1(BaseModelLoader):
         with weight_cache_context:
             with context:
                 model_cls = model_registry.get_class(architectures)
+                convert_type = fd_config.model_config.convert_type
+                if convert_type == "none":
+                    pass
+                elif convert_type == "embedding":
+                    logger.info("Converting to embedding model.")
+                    model_cls = as_embedding_model(model_cls)
+                else:
+                    assert_never(convert_type)
+
                 model = model_cls(fd_config)
-
-        convert_type = fd_config.model_config.convert_type
-        if convert_type == "none":
-            pass
-        elif convert_type == "embed":
-            logger.info("Converting to embedding model.")
-            model_cls = as_embedding_model(model_cls)
-        else:
-            assert_never(convert_type)
-
-        with context:
-            model = model_cls(fd_config)
 
         model.eval()
         # RL model not need set_state_dict
