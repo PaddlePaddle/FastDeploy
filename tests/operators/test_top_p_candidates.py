@@ -108,7 +108,7 @@ class TestTopPCandidates(unittest.TestCase):
         max_seq_len = 120
         probs = paddle.randn([token_num, vocab_size])
         top_p = paddle.randn([token_num])
-        output_padding_offset = np.array([2, 2, 1, 1, 1]).astype(paddle.int32)
+        output_padding_offset = paddle.to_tensor([2, 2, 1, 1, 1]).astype(paddle.int32)
         ret1 = top_p_candidates(probs, top_p, output_padding_offset, candidates_len, max_seq_len)
         ret2 = top_p_candidates_ref(probs, top_p, output_padding_offset, candidates_len, max_seq_len)
         np.testing.assert_allclose(ret1[0].numpy(), ret2[0])
