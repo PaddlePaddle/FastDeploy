@@ -279,7 +279,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         
         
         
-        if self.fd_config.parallel_config.is_H20:
+        if self.fd_config.parallel_config.is_attention_role:
             pass
         else:
             del self.self_attn
@@ -448,7 +448,7 @@ class Ernie4_5_Model(nn.Layer):
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
 
-        IsH20 = self.fd_config.parallel_config.is_H20
+        IsH20 = self.fd_config.parallel_config.is_attention_role
         # 暂时设置成1!
         split_num = 3
         all_hidden_states = [None] * split_num
@@ -467,6 +467,9 @@ class Ernie4_5_Model(nn.Layer):
                 residual = None
                 for i in range(3):
                     hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
+            else:
+                hidden_states = paddle.empty([0,8192], dtype="bfloat16")
+                residual = paddle.empty([0,8192], dtype="bfloat16")
 
             for i in range(0, split_num):
                 from copy import copy
@@ -481,7 +484,9 @@ class Ernie4_5_Model(nn.Layer):
 
                 if end_token_id == start_token_id:
                     # 这个microbatch是空的，不需要处理!!
-                    continue
+                    # continue
+                    # 一切为了cuda graph
+                    pass
                 
                 # 注意啦！这里+0是为了返回一个新的tensor哦！
                 forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs] + 0
@@ -518,7 +523,7 @@ class Ernie4_5_Model(nn.Layer):
 
             print("decoder_bs", decoder_bs)
 
-            can_replay_graph = (self.cuda_graph is not None and decoder_bs > (max_bs * 2 // 3))
+            can_replay_graph = (self.cuda_graph is not None and decoder_bs > 1)
             
             # 利用最大size来捕获图
             need_capature_graph = (self.cuda_graph is None and decoder_bs == max_bs)
@@ -527,8 +532,8 @@ class Ernie4_5_Model(nn.Layer):
         if need_capature_graph:
             print("need_capature_graph", need_capature_graph)
 
-        IsH20 = self.fd_config.parallel_config.is_H20
-        IsH100 = self.fd_config.parallel_config.is_H100
+        IsH20 = self.fd_config.parallel_config.is_attention_role
+        IsH100 = self.fd_config.parallel_config.is_moe_role
         runner = self.layers[3].mlp.fused_moe.quant_method.ep_decoder_runner
 
         paddle.distributed.barrier()
@@ -873,7 +878,7 @@ class Ernie4_5_Model(nn.Layer):
             else:
                 self.cuda_graph.replay()
 
-        paddle.distributed.barrier()
+        #paddle.distributed.barrier()
 
         if IsH20:
             if ids_remove_padding.shape[0] == 0:
@@ -893,7 +898,7 @@ class Ernie4_5_Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):  
 
-        IsH20 = self.fd_config.parallel_config.is_H20
+        IsH20 = self.fd_config.parallel_config.is_attention_role
         hidden_states = None
         if IsH20:
             hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
@@ -991,18 +996,19 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     ):  
         self.ii += 1
         
-        if self.ii == 300:
+        if self.ii == 80:
             from paddle.framework import core
             core.nvprof_start()
         
         # if ids_remove_padding is not None:
         #     print(ids_remove_padding.shape)
-        #     print(forward_meta.seq_lens_decoder)
-        #     print(forward_meta.seq_lens_this_time)
+        #     print(forward_meta.seq_lens_decoder.reshape([-1]))
+        #     print(forward_meta.seq_lens_this_time.reshape([-1]))
+        #     print(forward_meta.seq_lens_encoder.reshape([-1]))
 
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
-        if self.ii == 310:
+        if self.ii == 90:
             from paddle.framework import core
             core.nvprof_stop()
 
