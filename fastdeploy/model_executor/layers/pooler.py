@@ -86,6 +86,14 @@ def get_tasks(pooling_metadata: PoolingMetadata) -> list[PoolingTask]:
     return tasks
 
 
+def get_prompt_token_ids(pooling_metadata: PoolingMetadata) -> list[paddle.Tensor]:
+    assert (
+        pooling_metadata.prompt_token_ids is not None
+    ), "Please set `requires_token_ids=True` in `get_pooling_updates`"
+
+    return [pooling_metadata.prompt_token_ids[i, :num] for i, num in enumerate(pooling_metadata.prompt_lens)]
+
+
 @dataclass(frozen=True)
 class PoolingParamsUpdate:
     requires_token_ids: bool = False
@@ -395,6 +403,55 @@ class CLSPool(PoolingMethod):
 
         return hidden_states[pooling_cursor.first_token_indices_gpu]
 
+
+class StepPooler(Pooler):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+
+        self.pooling = AllPool()
+        self.head = RewardPoolerHead()
+
+    def extract_states(
+        self,
+        hidden_states: Union[paddle.Tensor, list[paddle.Tensor]],
+        pooling_metadata: PoolingMetadata,
+    ) -> Union[list[paddle.Tensor], paddle.Tensor]:
+        pooled_data_lst = self.pooling(hidden_states, pooling_metadata)
+        prompt_token_ids = get_prompt_token_ids(pooling_metadata)
+
+        pooled_data = list[paddle.Tensor]()
+
+        pooling_params = get_pooling_params(pooling_metadata)
+
+        for data, token_id, pooling_param in zip(pooled_data_lst, prompt_token_ids, pooling_params):
+            step_tag_id = pooling_param.step_tag_id
+            returned_token_ids = pooling_param.returned_token_ids
+
+            if returned_token_ids is not None and len(returned_token_ids) > 0:
+                data = data[:, returned_token_ids]
+
+            if step_tag_id is not None:
+                data = data[token_id == step_tag_id]
+            pooled_data.append(data)
+
+        return pooled_data
+
+    def get_supported_tasks(self) -> Set[PoolingTask]:
+        return {"encode"}
+
+    def get_pooling_updates(self, task: PoolingTask) -> PoolingParamsUpdate:
+        return PoolingParamsUpdate(requires_token_ids=True)
+
+    def forward(
+        self,
+        hidden_states: Union[paddle.Tensor, list[paddle.Tensor]],
+        pooling_metadata: PoolingMetadata,
+    ) -> PoolerOutput:
+        pooled_data = self.extract_states(hidden_states, pooling_metadata)
+        pooled_data = self.head(pooled_data, pooling_metadata)
+        return build_output(pooled_data)
 
 
 class SimplePooler(Pooler):
