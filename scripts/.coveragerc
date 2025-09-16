@@ -18,3 +18,5 @@ omit =
     */site-packages/setuptools/*
     */dist-packages/*
     */site-packages/*/fastdeploy/model_executor/ops/gpu*
+
+ignore_errors = True
