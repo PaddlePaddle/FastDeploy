@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from fastdeploy.plugins.utils import load_plugins_by_group, plugins_loaded
+from fastdeploy.plugins.utils import load_plugins_by_group
 
 # use for modle runner
 PLUGINS_GROUP = "fastdeploy.model_runner_plugins"
@@ -22,11 +22,6 @@ PLUGINS_GROUP = "fastdeploy.model_runner_plugins"
 
 def load_model_runner_plugins():
     """load_model_runner_plugins"""
-    global plugins_loaded
-    if plugins_loaded:
-        return
-    plugins_loaded = True
-
     plugins = load_plugins_by_group(group=PLUGINS_GROUP)
-    assert len(plugins) <= 1, "Most one plugin is allowed to be loaded."
+    assert len(plugins) == 1, "Only one plugin is allowed to be loaded."
     return next(iter(plugins.values()))()
