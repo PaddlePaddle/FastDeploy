@@ -170,7 +170,7 @@ int parse_port_ib_info() {
             strncpy(dev_info.devName, dev_name, MAXNAMESIZE);
 
             if (port_attr.link_layer == IBV_LINK_LAYER_INFINIBAND) {
-                INFO("Adding IB device %s port %d (LID:0x%x Rate:%dGbps)", 
+                INFO("Adding IB device %s port %d (LID:0x%x Rate:%dGbps)",
                     dev_name, port_num, port_attr.lid, port_attr.active_speed/10);
             } else {
                 INFO("Adding RoCE device %s port %d", dev_name, port_num);
@@ -625,7 +625,7 @@ bool client_exchange_destinations(
             ERR("Invalid LID 0x%04x for IB network", my_dest.lid);
             return false;
         }
-        LOGD("IB network detected - LID:0x%04x SL:%d PathBits:%d", 
+        LOGD("IB network detected - LID:0x%04x SL:%d PathBits:%d",
             my_dest.lid, my_dest.sl, my_dest.path_bits);
     }
 
