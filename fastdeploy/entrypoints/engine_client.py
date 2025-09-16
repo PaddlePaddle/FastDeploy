@@ -145,6 +145,9 @@ class EngineClient:
         """
 
         task["preprocess_start_time"] = time.time()
+        if task.get("chat_template_kwargs"):
+            task["chat_template_kwargs"]["chat_template"] = task.get("chat_template")
+            task["chat_template_kwargs"]["tools"] = task.get("tools")
         try:
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
