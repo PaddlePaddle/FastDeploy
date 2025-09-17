@@ -16,10 +16,10 @@ from typing import Type
 
 from paddle import nn
 
-from .model_base import ModelForCasualLM
-
 
 def is_text_generation_model(model_cls: Type[nn.Layer]) -> bool:
+    from .model_base import ModelForCasualLM
+
     return issubclass(model_cls, ModelForCasualLM)
 
 
@@ -39,7 +39,7 @@ def is_multimodal_model(class_name: str) -> bool:
 
 
 def determine_model_category(class_name: str):
-    from .registry import ModelCategory
+    from fastdeploy.model_executor.models.model_base import ModelCategory
 
     if any(pattern in class_name for pattern in ["VL", "Vision", "ConditionalGeneration"]):
         return ModelCategory.MULTIMODAL

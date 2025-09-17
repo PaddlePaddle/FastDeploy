@@ -18,16 +18,16 @@ Assuming you have a custom model class `MyModelForCasualLM` and a pretrained cla
 
 ```python
 # File: fd_add_dummy_model/__init__.py or fd_add_dummy_model/register.py
-from fastdeploy.model_executor.models.registry import model_registry
+from fastdeploy.model_executor.models.model_base import ModelRegistry
 from my_custom_model import MyModelForCasualLM, MyPretrainedModel
 from fastdeploy.config import ErnieArchitectures
 
 def register():
-    if "MyModelForCasualLM" not in model_registry.get_supported_archs():
+    if "MyModelForCasualLM" not in ModelRegistry.get_supported_archs():
         if MyModelForCasualLM.name().startswith("Ernie"):
             ErnieArchitectures.register_ernie_model_arch(MyModelForCasualLM)
-        model_registry.register_model_class(MyModelForCasualLM)
-        model_registry.register_pretrained_model(MyPretrainedModel)
+        ModelRegistry.register_model_class(MyModelForCasualLM)
+        ModelRegistry.register_pretrained_model(MyPretrainedModel)
 ```
 Assuming you have a custom model_runner class `MyModelRunner`, you can write the following registration function:
 ```python

@@ -24,9 +24,6 @@ from fastdeploy.config import ModelConfig
 from fastdeploy.model_executor.layers.activation import get_act_fn
 from fastdeploy.model_executor.models.interfaces_base import is_pooling_model
 from fastdeploy.transformer_utils.config import get_hf_file_to_dict
-from fastdeploy.utils import get_logger
-
-logger = get_logger("adapters", "adapters.log")
 
 _T = TypeVar("_T", bound=type[nn.Layer])
 
@@ -76,15 +73,15 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
                     bias_loader = getattr(linear.bias, "weight_loader", default_weight_loader)
                     bias_loader(linear.bias, state_dict[bias_key].astype(paddle.float32))
                 return True
-    except Exception:
-        logger.exception("Failed to load %s", filename)
+    except Exception as e:
+        print(f"Failed to load :{e}")
         return False
     return False
 
 
 def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
     try:
-        modules = get_hf_file_to_dict("modules.json", model_config.model)
+        modules = get_hf_file_to_dict("modules.json", model_config.model, model_config.revision)
         if not modules:
             return None
 
@@ -116,8 +113,8 @@ def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
             if act_name := layer_config.get("activation_function"):
                 layers.append(get_act_fn(act_name))
         return nn.Sequential(*layers).astype(paddle.float32)
-    except Exception:
-        logger.exception("ST projector loading failed")
+    except Exception as e:
+        print(f"ST projector loading failed:{e}")
 
     return None
 

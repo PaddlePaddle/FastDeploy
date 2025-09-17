@@ -87,17 +87,13 @@ def try_match_architecture_defaults(
     runner_type: Optional[RunnerType] = None,
     convert_type: Optional[ConvertType] = None,
 ):
-    logger.info(f"Trying to match architecture: {architecture}")
     for suffix, (default_runner_type, default_convert_type) in iter_architecture_defaults():
-        logger.info(f"Checking suffix: {suffix}, defaults: {default_runner_type}, {default_convert_type}")
         if (
             (runner_type is None or runner_type == default_runner_type)
             and (convert_type is None or convert_type == default_convert_type)
             and architecture.endswith(suffix)
         ):
-            logger.info(f"Matched! Using suffix: {suffix}")
             return suffix, (default_runner_type, default_convert_type)
-    logger.info("No match found")
     return None
 
 
@@ -270,9 +266,9 @@ class ModelConfig:
 
     @property
     def registry(self):
-        from fastdeploy.model_executor.models.registry import model_registry
+        from fastdeploy.model_executor.models.model_base import ModelRegistry
 
-        return model_registry
+        return ModelRegistry()
 
     def override_name_from_config(self):
         """

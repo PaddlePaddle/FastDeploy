@@ -23,7 +23,6 @@ from typing import Any, Optional, Union
 
 import paddle
 import paddle.nn as nn
-from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -275,7 +274,7 @@ class WeightsMapper:
 
 class AutoWeightsLoader:
     """
-    Helper class to load weights into a [`torch.nn.Module`][]. It is able
+    Helper class to load weights into a [`paddle.nn.Layer`][]. It is able
     to automatically detect child modules and parameters while iterating over
     the weights only once.
 
@@ -515,19 +514,3 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
-
-
-def initialize_model(architectures: str, fd_config: FDConfig):
-    from fastdeploy.model_executor.models.adapters import as_embedding_model
-    from fastdeploy.model_executor.models.registry import model_registry
-
-    model_cls = model_registry.get_class(architectures)
-    convert_type = fd_config.model_config.convert_type
-    if convert_type == "none":
-        pass
-    elif convert_type == "embed":
-        model_cls = as_embedding_model(model_cls)
-    else:
-        assert_never(convert_type)
-
-    return model_cls

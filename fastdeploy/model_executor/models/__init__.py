@@ -23,8 +23,7 @@ from paddleformers.transformers import PretrainedModel
 
 from fastdeploy.plugins.model_register import load_model_register_plugins
 
-from .model_base import ModelForCasualLM
-from .registry import model_registry
+from .model_base import ModelForCasualLM, ModelRegistry
 
 
 def _find_py_files(root_dir):
@@ -50,7 +49,7 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
                 attr = getattr(module, attr_name)
 
                 if inspect.isclass(attr) and issubclass(attr, ModelForCasualLM) and attr is not ModelForCasualLM:
-                    model_registry.register_model_class(attr)
+                    ModelRegistry.register_model_class(attr)
 
                 if (
                     inspect.isclass(attr)
@@ -58,7 +57,7 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
                     and attr is not PretrainedModel
                     and hasattr(attr, "arch_name")
                 ):
-                    model_registry.register_pretrained_model(attr)
+                    ModelRegistry.register_pretrained_model(attr)
 
         except ImportError:
             raise ImportError(f"{module_file=} import error")
@@ -72,12 +71,12 @@ ModelRegistry = type(
     "ModelRegistry",
     (),
     {
-        "register_model_class": model_registry.register_model_class,
-        "register_pretrained_model": model_registry.register_pretrained_model,
-        "get_pretrain_cls": model_registry.get_pretrain_cls,
-        "get_class": model_registry.get_class,
-        "get_supported_archs": model_registry.get_supported_archs,
+        "register_model_class": ModelRegistry.register_model_class,
+        "register_pretrained_model": ModelRegistry.register_pretrained_model,
+        "get_pretrain_cls": ModelRegistry.get_pretrain_cls,
+        "get_class": ModelRegistry.get_class,
+        "get_supported_archs": ModelRegistry.get_supported_archs,
     },
 )
 
-__all__ = ["model_registry", "ModelForCasualLM", "ModelRegistry"]
+__all__ = ["ModelForCasualLM", "ModelRegistry"]

@@ -120,7 +120,7 @@ class Pooler(nn.Layer, ABC):
             task="embed",
             pooler_config=pooler_config,
         )
-        return SimplePooler.from_config(resolved_config)
+        return SimplePooler.from_config(resolved_config, model_config)
 
     @staticmethod
     def for_classify(

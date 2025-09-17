@@ -152,7 +152,7 @@ def get_act_fn(act_fn_name: str) -> nn.Layer:
     """Get an activation function by name."""
     act_fn_name = act_fn_name.lower()
 
-    if act_fn_name.startswith("torch.nn.modules."):
+    if act_fn_name.startswith("paddle.nn.Layer"):
         activation_name = act_fn_name.split(".")[-1]
         if activation_name == "identity":
             return nn.Identity()

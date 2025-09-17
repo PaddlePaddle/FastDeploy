@@ -18,13 +18,13 @@ FastDeploy 利用 Python 的 `entry_points` 机制来发现并加载插件。开
 
 ```python
 # 文件：fd_add_dummy_model/__init__.py
-from fastdeploy.model_executor.models.registry import model_registry
+from fastdeploy.model_executor.models.model_base import ModelRegistry
 from my_custom_model import MyModelForCasualLM, MyPretrainedModel
 
 def register():
-    if "MyModelForCasualLM" not in model_registry.get_supported_archs():
-        model_registry.register_model_class(MyModelForCasualLM)
-        model_registry.register_pretrained_model(MyPretrainedModel)
+    if "MyModelForCasualLM" not in ModelRegistry.get_supported_archs():
+        ModelRegistry.register_model_class(MyModelForCasualLM)
+        ModelRegistry.register_pretrained_model(MyPretrainedModel)
 ```
 
 #### 2. 注册插件到 `setup.py`

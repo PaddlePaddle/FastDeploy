@@ -15,8 +15,7 @@
 from paddleformers.transformers import PretrainedModel
 
 from fastdeploy.config import ErnieArchitectures
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.model_executor.models.registry import model_registry
+from fastdeploy.model_executor.models.model_base import ModelForCasualLM, ModelRegistry
 
 
 class MyPretrainedModel(PretrainedModel):
@@ -45,8 +44,8 @@ class MyModelForCasualLM(ModelForCasualLM):
 
 
 def register():
-    if "MyModelForCasualLM" not in model_registry.get_supported_archs():
+    if "MyModelForCasualLM" not in ModelRegistry.get_supported_archs():
         if MyModelForCasualLM.name().startswith("Ernie"):
             ErnieArchitectures.register_ernie_model_arch(MyModelForCasualLM)
-        model_registry.register_model_class(MyModelForCasualLM)
-        model_registry.register_pretrained_model(MyPretrainedModel)
+        ModelRegistry.register_model_class(MyModelForCasualLM)
+        ModelRegistry.register_pretrained_model(MyPretrainedModel)

@@ -1043,7 +1043,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Load original model
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
-        logger.info(f"self.model:{self.model}")
 
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
