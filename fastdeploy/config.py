@@ -295,6 +295,8 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
+        # Use internode_ll_two_stage or not
+        self.use_internode_ll_two_stage: bool = False
 
         # splitwise role
         self.splitwise_role: str = "mixed"

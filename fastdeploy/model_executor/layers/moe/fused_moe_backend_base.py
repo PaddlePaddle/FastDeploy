@@ -64,6 +64,7 @@ class MoEMethodBase(QuantMethodBase):
             "ep_rank": layer.ep_rank,
             "redundant_experts_num": layer.fd_config.model_config.redundant_experts_num,
             "ep_group": layer.fd_config.parallel_config.ep_group,
+            "use_internode_ll_two_stage": layer.fd_config.parallel_config.use_internode_ll_two_stage,
         }
 
         config = layer.fd_config
