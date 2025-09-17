@@ -19,10 +19,9 @@ import concurrent.futures
 import gc
 import json
 import queue
-import time
-import traceback
 import threading
 import time
+import traceback
 
 import numpy as np
 import paddle
