@@ -54,7 +54,6 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -759,7 +758,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
-        vl_moe_meta: Optional[VLMoEMeta] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
         if image_token_num > 0:
