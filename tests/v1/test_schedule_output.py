@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from types import SimpleNamespace
 
-from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig
+from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig, SchedulerConfig
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.request import Request
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
@@ -17,6 +17,7 @@ def test_normal_schedule():
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
+    scheduler_cfg = SchedulerConfig(args)
     graph_opt_cfg = engine_args.create_graph_optimization_config()
     fd_config = FDConfig(
         model_config=model_cfg,
@@ -24,14 +25,14 @@ def test_normal_schedule():
         parallel_config=parallel_cfg,
         speculative_config=speculative_cfg,
         graph_opt_config=graph_opt_cfg,
-        max_num_batched_tokens=engine_args.max_num_batched_tokens,
+        scheduler_config=scheduler_cfg,
     )
     resource_manager_v1 = ResourceManagerV1(
         max_num_seqs=max_num_seqs, config=fd_config, tensor_parallel_size=8, splitwise_role="mixed"
     )
     req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3199, "prompt_token_ids_len": 3199})
-    req2 = Request.from_dict({"request_id": "req2", "prompt_token_ids": [1] * 3201, "prompt_token_ids_len": 3201})
-    req3 = Request.from_dict({"request_id": "req3", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
+    req2 = Request.from_dict({"request_id": "req2", "prompt_token_ids": [2] * 3201, "prompt_token_ids_len": 3201})
+    req3 = Request.from_dict({"request_id": "req3", "prompt_token_ids": [3] * 3200, "prompt_token_ids_len": 3200})
     resource_manager_v1.add_request(req1)
     resource_manager_v1.add_request(req2)
     resource_manager_v1.add_request(req3)
@@ -80,6 +81,7 @@ def test_preempted_request():
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
+    scheduler_cfg = SchedulerConfig(args)
     graph_opt_cfg = engine_args.create_graph_optimization_config()
     fd_config = FDConfig(
         model_config=model_cfg,
@@ -87,13 +89,13 @@ def test_preempted_request():
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
         speculative_config=speculative_cfg,
-        max_num_batched_tokens=engine_args.max_num_batched_tokens,
+        scheduler_config=scheduler_cfg,
     )
     resource_manager_v1 = ResourceManagerV1(
         max_num_seqs=max_num_seqs, config=fd_config, tensor_parallel_size=8, splitwise_role="mixed"
     )
     req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
-    req2 = Request.from_dict({"request_id": "req2", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
+    req2 = Request.from_dict({"request_id": "req2", "prompt_token_ids": [2] * 3200, "prompt_token_ids_len": 3200})
     resource_manager_v1.add_request(req1)
     resource_manager_v1.add_request(req2)
     # step 1
