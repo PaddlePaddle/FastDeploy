@@ -364,7 +364,6 @@ class ModelConfig:
                     return "none"
                 if runner_type == "pooling" and registry.is_pooling_model(architectures, self):
                     return "none"
-            logger.info(f"arch:{arch}")
             match = try_match_architecture_defaults(arch, runner_type=runner_type)
             if match:
                 _, (_, convert_type) = match
@@ -1421,7 +1420,6 @@ class FDConfig:
         test_mode=False,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
-        logger.info(f"self.model_config.runner_type:{self.model_config.runner_type}")
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.scheduler_config: SchedulerConfig = scheduler_config  # type: ignore
         self.parallel_config = parallel_config  # type: ignore

@@ -154,7 +154,6 @@ def _try_inspect_model_cls(
     model: BaseRegisteredModel,
 ) -> Optional[ModelInfo]:
     try:
-        print("modelxxxxx", model)
         return model.inspect_model_cls()
     except Exception:
         print("Error in inspecting model architecture '%s'", model_arch)
