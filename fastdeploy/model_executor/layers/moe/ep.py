@@ -625,7 +625,7 @@ class EPDecoderRunner(EPRunner):
             )
         else:
             # just supports dispatch_use_fp8 = True now!
-            assert use_fp8 == True
+            assert use_fp8 is True
             recv_hidden_states, recv_expert_count, handle, dispatch_hook = (
                 self.ep_engine.low_latency_dispatch_two_stage(x, topk_idx, topk_weights, expertwise_scale, use_fp8)
             )
