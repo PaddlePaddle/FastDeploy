@@ -22,8 +22,8 @@ import paddle
 
 class PoolingSequenceGroupOutput(
     msgspec.Struct,
-    omit_defaults=True,  # type: ignore[call-arg]
-    array_like=True,  # type: ignore[call-arg]
+    omit_defaults=True,
+    array_like=True,
 ):
     """The model output associated with a pooling sequence group."""
 
@@ -48,9 +48,7 @@ class PoolingSequenceGroupOutput(
         return self.data == other.data
 
 
-class PoolerOutput(
-    msgspec.Struct, omit_defaults=True, array_like=True  # type: ignore[call-arg]
-):  # type: ignore[call-arg]
+class PoolerOutput(msgspec.Struct, omit_defaults=True, array_like=True):
     """The output from a pooling operation in the pooling model."""
 
     outputs: list[PoolingSequenceGroupOutput]

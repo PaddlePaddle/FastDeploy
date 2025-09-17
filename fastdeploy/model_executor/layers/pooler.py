@@ -26,7 +26,6 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from fastdeploy.config import FDConfig, ModelConfig, PoolerConfig
-from fastdeploy.engine.sequence import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingCursor,
@@ -34,6 +33,7 @@ from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingParams,
 )
 from fastdeploy.model_executor.models.adapters import _load_st_projector
+from fastdeploy.output.sequence import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.utils import get_logger
 
 logger = get_logger("pooler", "pooler.log")
