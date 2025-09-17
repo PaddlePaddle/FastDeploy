@@ -60,7 +60,6 @@ else:
         share_external_data,
         speculate_schedule_cache,
         set_data_ipc,
-        unset_data_ipc,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -1179,9 +1178,13 @@ class GPUModelRunner(ModelRunnerBase):
                 set_data_ipc(val_cache, val_cache_name)
                 cache_kvs_list.extend([key_cache, val_cache])
                 if kv_cache_quant_type == "block_wise_fp8":
-                    key_cache_scales = paddle.full(shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype())
-                    val_cache_scales = paddle.full(shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype())
-                cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                    key_cache_scales = paddle.full(
+                        shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                    )
+                    val_cache_scales = paddle.full(
+                        shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                    )
+                    cache_kvs_list.extend([key_cache_scales, val_cache_scales])
             else:
                 logger.info(f"..attaching kv cache for layer {i}: {kv_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
