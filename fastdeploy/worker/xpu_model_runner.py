@@ -353,12 +353,12 @@ class XPUModelRunner(ModelRunnerBase):
         self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = False
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
-        self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs, dtype="int32")
+        self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
-        self._init_share_inputs(self.fd_config.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.fd_config.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
         ).cpu()
@@ -812,7 +812,7 @@ class XPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -987,8 +987,8 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
         self._dummy_run(
-            num_tokens=int(self.parallel_config.max_num_batched_tokens),
-            batch_size=min(self.parallel_config.max_num_seqs, 1),
+            num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+            batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 
     def clear_block_table(self) -> None:

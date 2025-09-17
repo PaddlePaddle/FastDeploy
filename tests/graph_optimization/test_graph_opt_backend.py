@@ -25,6 +25,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     ParallelConfig,
+    SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -85,15 +86,16 @@ class TestGraphOptBackend(unittest.TestCase):
         baseline_graph_opt_config.use_cudagraph = False
         baseline_graph_opt_config.graph_opt_level = 0
 
-        baseline_parallel_config = ParallelConfig(args={})
-        baseline_parallel_config.max_num_seqs = self.max_num_seqs
+        baseline_scheduler_config = SchedulerConfig(args={})
+        baseline_scheduler_config.max_num_seqs = self.max_num_seqs
 
         baseline_cache_config = CacheConfig({})
-
+        baseline_parallel_config = ParallelConfig(args={})
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
-            parallel_config=baseline_parallel_config,
+            scheduler_config=baseline_scheduler_config,
             cache_config=baseline_cache_config,
+            parallel_config=baseline_parallel_config,
             test_mode=True,
         )
 
@@ -129,17 +131,19 @@ class TestGraphOptBackend(unittest.TestCase):
         graph_opt_config.graph_opt_level = graph_opt_level
 
         # Setup parallel config
-        parallel_config = ParallelConfig(args={})
-        parallel_config.max_num_seqs = self.max_num_seqs
+        scheduler_config = SchedulerConfig(args={})
+        scheduler_config.max_num_seqs = self.max_num_seqs
 
         # Setup cache config
         cache_config = CacheConfig({})
+        parallel_config = ParallelConfig(args={})
 
         # Create FD config
         return FDConfig(
             graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
+            scheduler_config=scheduler_config,
             cache_config=cache_config,
+            parallel_config=parallel_config,
             test_mode=True,
         )
 
