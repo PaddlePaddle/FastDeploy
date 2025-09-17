@@ -16,7 +16,7 @@
 
 from fastdeploy.plugins.utils import load_plugins_by_group
 
-# use for modle runner
+# use for model runner
 PLUGINS_GROUP = "fastdeploy.model_runner_plugins"
 
 

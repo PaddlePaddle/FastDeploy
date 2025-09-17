@@ -31,7 +31,6 @@ from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
 from fastdeploy.inter_communicator import IPCSignal, ZmqClient
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
@@ -49,7 +48,6 @@ class TokenProcessor:
     """
 
     def __init__(self, cfg, cached_generated_tokens, engine_worker_queue, split_connector):
-        import paddle
 
         paddle.device.set_device("cpu")
         self.cfg = cfg
@@ -60,7 +58,10 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            self.zmq_server = ZmqClient(name=f"get_save_output_rank{self.cfg.local_device_ids[0]}", mode=zmq.PULL)
+            llm_logger.debug(f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}")
+            self.zmq_server = ZmqClient(
+                name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}", mode=zmq.PULL
+            )
             self.zmq_server.start_server()
             self.zmq_server.create_router()
 
@@ -135,10 +136,144 @@ class TokenProcessor:
         if self.worker is not None:
             raise Exception("Worker is already running!")
 
-        self.worker = threading.Thread(target=self.process_sampling_results)
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            self.worker = threading.Thread(target=self.process_sampling_results_use_zmq)
+        else:
+            self.worker = threading.Thread(target=self.process_sampling_results)
 
         self.worker.daemon = True
         self.worker.start()
+
+    def _reschedule_preempt_task(self, batch_size):
+        """reschedule when real batch size is smaller than the insert position of preemted_task"""
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
+            for request_id in need_to_be_reschedule_req_ids:
+                if self.resource_manager.requests[request_id].idx >= (
+                    batch_size - 1
+                ):  # No more token generated for preempted request
+                    self.resource_manager.reschedule_preempt_task(request_id)
+
+    def _process_per_token(self, task, batch_id: int, token_ids: np.ndarray, result: RequestOutput, is_prefill: bool):
+        """
+        process output token by token
+        """
+        current_time = time.time()
+        task_id = task.request_id
+        token_id_list = token_ids.tolist()
+
+        self._record_metrics(task, current_time, token_id_list)
+        for token_id in token_id_list:
+            recovery_stop = token_id == RECOVERY_STOP_SIGNAL
+            if recovery_stop:
+                llm_logger.info(f"recovery stop signal found at task {task_id}")
+            self.tokens_counter[task_id] += 1
+            if token_id != RECOVERY_STOP_SIGNAL:
+                result.outputs.token_ids.append(token_id)
+                task.output_token_ids.append(token_id)
+
+            if token_id in task.eos_token_ids or is_prefill or recovery_stop:
+                result.finished = True
+                if recovery_stop:
+                    result.error_msg = "Recover is not supported, the result is incomplete!"
+                llm_logger.info(
+                    f"Request: {task_id} finished, number of " f"generated tokens: {self.tokens_counter[task_id]}."
+                )
+                llm_logger.info(
+                    f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
+                )
+                llm_logger.info(f"{self.resource_manager.info()}")
+                if self.cfg.speculative_config.method:
+                    self._compute_speculative_status()
+                if not is_prefill:
+                    self._record_completion_metrics(task, current_time)
+                self._recycle_resources(task_id, batch_id, task, result, is_prefill)
+                break
+        return result
+
+    def _process_batch_output_use_zmq(self, receive_datas):
+        """
+        process output sample by sample
+        """
+        batch_result = list()
+        for _, stream_data in enumerate(receive_datas):
+            i = stream_data.batch_id
+            if self.resource_manager.stop_flags[i]:
+                continue
+
+            task = self.resource_manager.tasks_list[i]
+
+            task_id = task.request_id
+            token_ids = stream_data.tokens  # numpy.array
+
+            current_time = time.time()
+            if self.tokens_counter[task_id] == 0:
+                metrics = RequestMetrics(
+                    arrival_time=task.arrival_time,
+                    inference_start_time=task.inference_start_time,
+                    first_token_time=time.time() - task.inference_start_time,
+                    time_in_queue=task.schedule_start_time - task.preprocess_end_time,
+                    preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
+                    request_start_time=task.arrival_time,
+                )
+                self._record_first_token_metrics(task, current_time)
+
+            else:
+                metrics = RequestMetrics(
+                    arrival_time=time.time(),
+                    request_start_time=task.arrival_time,
+                )
+
+            result = RequestOutput(
+                request_id=task_id,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=self.tokens_counter[task_id],
+                    token_ids=[],
+                    draft_token_ids=[],
+                ),
+                finished=False,
+                metrics=metrics,
+            )
+
+            if self.tokens_counter[task_id] == 0:
+                if task.messages is not None:
+                    result.prompt = task.messages
+                result.num_cached_tokens = task.num_cached_tokens
+
+            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+            result = self._process_per_token(task, i, token_ids, result, is_prefill)
+            if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+                batch_result.append(result)
+
+        return batch_result
+
+    def process_sampling_results_use_zmq(self):
+        """
+        use zmq to receive outputs from worker and process them
+        """
+        if self.speculative_decoding:
+            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
+        if self.use_logprobs:
+            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
+        rank_id = self.cfg.parallel_config.local_data_parallel_id
+        while True:
+            try:
+                if (
+                    self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
+                ) or (rank_id == 0):
+                    receive_datas = self.zmq_server.recv_pyobj()
+                    assert isinstance(receive_datas, list)
+                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
+
+                    batch_size = len(receive_datas)
+                    self._reschedule_preempt_task(batch_size)
+
+                    batch_result = self._process_batch_output_use_zmq(receive_datas)
+                    self.postprocess(batch_result)
+            except Exception as e:
+                llm_logger.error(f"Recieve message error: {e}")
+                continue
 
     def process_sampling_results(self):
         """
@@ -162,54 +297,35 @@ class TokenProcessor:
 
         while True:
             try:
-                if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                    try:
-                        receive_data = self.zmq_server.recv_pyobj()
-                        assert isinstance(receive_data, StreamTransferData)
-                        if receive_data is not None:
-                            # TODO(Wanglongzhi2001): adapt more type of message.
-                            if receive_data.decoder_state == DecoderState.TEXT:
-                                self.output_tokens[0, 0] = paddle.to_tensor(
-                                    receive_data.data.not_need_stop, dtype="int64"
-                                )
-                                self.output_tokens[1, 0] = paddle.to_tensor(receive_data.data.batch, dtype="int64")
-                                self.output_tokens[2 : 2 + receive_data.data.batch, 0] = paddle.to_tensor(
-                                    receive_data.data.tokens[:, 0], dtype="int64"
-                                )
-
-                    except Exception as e:
-                        print(f"Receive message error: {e}")
+                is_blocking = True
+                if self.speculative_decoding:
+                    speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                    if self.output_tokens[0] == -2:
                         continue
+
                 else:
-                    is_blocking = True
-                    if self.speculative_decoding:
-                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
-                        if self.output_tokens[0] == -2:
-                            continue
+                    if (
+                        self.cfg.parallel_config.enable_expert_parallel
+                        and self.cfg.parallel_config.data_parallel_size > 1
+                    ):
+                        get_output_ep(self.output_tokens, rank_id, is_blocking)
 
                     else:
-                        if (
-                            self.cfg.parallel_config.enable_expert_parallel
-                            and self.cfg.parallel_config.data_parallel_size > 1
-                        ):
-                            get_output_ep(self.output_tokens, rank_id, is_blocking)
-
+                        if self.use_logprobs:
+                            get_output_topk(
+                                self.output_tokens,
+                                self.output_scores,
+                                self.output_ranks,
+                                K,
+                                rank_id,
+                                is_blocking,
+                            )
                         else:
-                            if self.use_logprobs:
-                                get_output_topk(
-                                    self.output_tokens,
-                                    self.output_scores,
-                                    self.output_ranks,
-                                    K,
-                                    rank_id,
-                                    is_blocking,
-                                )
-                            else:
-                                get_output(self.output_tokens, rank_id, is_blocking)
+                            get_output(self.output_tokens, rank_id, is_blocking)
 
-                        if self.output_tokens[0, 0] == -2:
-                            continue
-                        llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
+                    if self.output_tokens[0, 0] == -2:
+                        continue
+                    llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
                 self._process_prefill_metrics()
                 self._process_batch_output()
             except Exception as e:
@@ -336,13 +452,8 @@ class TokenProcessor:
             tokens = tokens[2 : batch + 2]
 
         batch_result = list()
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
-            for request_id in need_to_be_reschedule_req_ids:
-                if self.resource_manager.requests[request_id].idx >= (
-                    batch - 1
-                ):  # No more token generated for preempted request
-                    self.resource_manager.reschedule_preempt_task(request_id)
+        # reschedule
+        self._reschedule_preempt_task(batch)
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
                 continue
