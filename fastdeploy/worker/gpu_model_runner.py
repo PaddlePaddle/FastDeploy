@@ -170,6 +170,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.zmq_client = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            logger.info(f"zmq client get_save_output_rank{local_rank}")
             self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
