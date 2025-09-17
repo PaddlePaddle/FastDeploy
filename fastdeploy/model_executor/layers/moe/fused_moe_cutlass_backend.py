@@ -39,7 +39,6 @@ elif current_platform.is_iluvatar():
         moe_expert_reduce,
     )
 
-from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 
 
@@ -127,7 +126,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         # 3. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (
                 permute_input,
                 permute_indices_per_token,
@@ -228,6 +227,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+
             gate_out, _, _ = get_moe_scores(
                 gate_out,
                 layer.n_group,

@@ -49,7 +49,7 @@ class DynamicWeightManager:
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
-            f" rank={self.rank}, ranks={self.nranks}"
+            f" tp rank={self.rank}, dp rank={fd_config.parallel_config.local_data_parallel_id}, ep rank={fd_config.parallel_config.expert_parallel_rank}, ranks={self.nranks}, "
         )
 
     @paddle.no_grad()
@@ -64,11 +64,21 @@ class DynamicWeightManager:
         start_time = time.perf_counter()
         paddle.device.cuda.empty_cache()
 
+        # step1 : restart paddle process group
         if not self.first_load:
             paddle.distributed.restart_process_group(self.parallel_config.tp_group)
             if self.parallel_config.enable_expert_parallel:
                 paddle.distributed.restart_process_group(self.parallel_config.ep_group)
 
+        # step2 : recreat deepep buffer when enable expert parallel
+        if self.parallel_config.enable_expert_parallel and not self.first_load:
+            from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+            DeepEPBufferManager.recreate_buffer()
+            # ep barrier
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+
+        # step3 : update model weight
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
             "ipc": self._update_ipc,
@@ -80,6 +90,11 @@ class DynamicWeightManager:
             raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
+
+        # steps in the runner
+        # step4: reinitialze kv_cache in the runner
+        # step5: recapture cuda_graph
+        # step6: update weight status signal
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
@@ -106,15 +121,30 @@ class DynamicWeightManager:
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
-        logger.info("start clear parameters")
+
+        logger.info("start clear paramaters")
+
+        # step1: release deepep buffer
+        if self.parallel_config.enable_expert_parallel:
+            from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+            DeepEPBufferManager.clear_buffer()
+            # ep barrier
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            # shutdown ep group
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+
         paddle.device.cuda.empty_cache()
+        # step2: release model weight
         for param in self.model.state_dict().values():
             param._clear_data()
 
         self._verify_parameters("clearance")
+
         if self.parallel_config.tensor_parallel_size > 1:
+            # tp barrier
             paddle.distributed.barrier(self.parallel_config.tp_group)
-        paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
             paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
@@ -146,8 +176,13 @@ class DynamicWeightManager:
     def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
         self._verify_parameters("update")
+
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
+
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+
         if not self.first_load:
             self._update_shared_status(pid, ModelWeightsStatus.NORMAL)
         self.first_load = False
