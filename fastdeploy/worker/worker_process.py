@@ -761,7 +761,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         early_stop_config=early_stop_config,
         cache_config=cache_config,
         scheduler_config=scheduler_config,
-        engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,
     )
