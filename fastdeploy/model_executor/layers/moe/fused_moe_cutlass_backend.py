@@ -227,7 +227,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
-            from .moe import get_moe_scores
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
             gate_out, _, _ = get_moe_scores(
                 gate_out,
@@ -1025,8 +1025,8 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             ]
         self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
-
-        if self.quant_config.is_checkpoint_bf16:
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
@@ -1038,7 +1038,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -1098,7 +1098,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
             moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
             set_weight_attrs(layer.up_gate_proj_weight, moe_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight, moe_extra_weight_attrs)

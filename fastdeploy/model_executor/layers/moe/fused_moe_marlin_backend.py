@@ -254,7 +254,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         topk_method = layer.topk_method
 
         if topk_method == "noaux_tc":
-            from .moe import get_moe_scores
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
             gate_out, _, _ = get_moe_scores(
                 gate_out,

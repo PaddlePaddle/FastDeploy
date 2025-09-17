@@ -94,13 +94,14 @@ class DeepEPBuffer:
                 config.get_rdma_buffer_size_hint(hidden_bytes, self.group.world_size), self.num_rdma_bytes
             )
 
-        if self.splitwise_role == "mixed" and self.num_rdma_bytes == 0:
-            self.num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
+        if self.splitwise_role == "mixed" or self.moe_phase.phase == "decode":
+            num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
                 self.num_max_dispatch_tokens_per_rank,
                 self.hidden_size,
                 self.ep_size,
                 self.num_experts,
             )
+            self.num_rdma_bytes = max(self.num_rdma_bytes, num_rdma_bytes)
 
         logger.info(f"DeepEP num nvl bytes : {self.num_nvl_bytes}, num rdma bytes : {self.num_rdma_bytes}")
 
@@ -360,7 +361,7 @@ class EPRunner:
             )
         else:
             if layer.topk_method == "noaux_tc":
-                from .moe import get_moe_scores
+                from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
                 score, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
@@ -413,8 +414,8 @@ class EPPrefillRunner(EPRunner):
         ep_size: int = 1,
         ep_rank: int = 0,
         redundant_experts_num: int = 0,
-        ep_group=None,
         moe_phase: MoEPhase = MoEPhase("prefill"),
+        ep_group=None,
     ):
         super().__init__(
             top_k,

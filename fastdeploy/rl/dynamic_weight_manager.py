@@ -120,6 +120,7 @@ class DynamicWeightManager:
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
+
         logger.info("start clear paramaters")
 
         # step1: release deepep buffer
