@@ -23,6 +23,7 @@ from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
 from .xpu_attn_backend import XPUAttentionBackend
+from .hpu_attn_backend import HPUAttentionBackend   
 
 __all__ = [
     "AttentionBackend",
@@ -36,4 +37,5 @@ __all__ = [
     "BlockAttentionBackend",
     "Attention",
     "PlasAttentionBackend",
+    "HPUAttentionBackend",
 ]

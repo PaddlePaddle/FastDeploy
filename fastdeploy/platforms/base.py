@@ -27,6 +27,7 @@ class _Backend(enum.Enum):
     FLASH_ATTN = enum.auto()
     BLOCK_ATTN = enum.auto()
     PLAS_ATTN = enum.auto()
+    HPU_ATTN = enum.auto()
 
 
 class Platform:
@@ -54,6 +55,12 @@ class Platform:
         """
         return paddle.is_compiled_with_xpu()
 
+    def is_intel_hpu(self) -> bool:
+        """
+        whether platform is intel_hpu
+        """
+        return paddle.is_compiled_with_custom_device("intel_hpu")
+    
     def is_cpu(self) -> bool:
         """
         whether platform is cpu

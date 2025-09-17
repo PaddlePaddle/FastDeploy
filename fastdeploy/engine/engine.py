@@ -511,6 +511,7 @@ class LLMEngine:
 
         worker_append_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
+            "enable_tensor_or_expert_parallel": self.cfg.parallel_config.enable_tensor_or_expert_parallel,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,

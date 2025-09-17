@@ -528,6 +528,7 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
+        self.enable_tensor_or_expert_parallel = False
         self.local_data_parallel_id = 0
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
@@ -1498,6 +1499,8 @@ class FDConfig:
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
             self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.device_ids)
+        if current_platform.is_intel_hpu():
+            self.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.device_ids)
 
         self.read_from_config()
         self.postprocess()

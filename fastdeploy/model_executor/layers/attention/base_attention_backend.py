@@ -26,7 +26,9 @@ from typing import TYPE_CHECKING
 import paddle
 
 if TYPE_CHECKING:
-    from fastdeploy.model_executor.forward_meta import ForwardMeta
+    from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMeta_HPU
+from fastdeploy.model_executor.layers.linear import (
+    QKVParallelLinear, RowParallelLinear)
 
 
 @dataclass
@@ -160,3 +162,86 @@ class AttentionBackend(ABC):
     ) -> paddle.Tensor:
         """Run a forward for native."""
         raise NotImplementedError
+
+
+class AttentionBackend_HPU(AttentionBackend):
+    """The base class of attention backends"""
+
+    @abstractmethod
+    def init_attention_metadata(self, forward_meta: ForwardMeta_HPU):
+        """Initialize the forward metadata."""
+        raise NotImplementedError()
+
+    def forward(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """
+        Run a forward.
+        args:
+            src: the hidden states tensor
+            residual_input: the residual tensor
+            layer: The layer that will be used for the forward.
+            forward_meta: The forward metadata.
+        """
+        if forward_meta.forward_mode.is_mixed():
+            return self.forward_mixed(
+                src,
+                qkv_proj,
+                o_proj,
+                layer,
+                forward_meta,
+            )
+        elif forward_meta.forward_mode.is_decode():
+            return self.forward_decode(
+                src,
+                qkv_proj,
+                o_proj,
+                layer,
+                forward_meta,
+            )
+        else:
+            return self.forward_extend(
+                src,
+                qkv_proj,
+                o_proj,
+                layer,
+                forward_meta,
+            )
+
+    def forward_mixed(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """Run a forward for mix."""
+        raise NotImplementedError()
+
+    def forward_decode(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """Run a forward for decode."""
+        raise NotImplementedError()
+
+    def forward_extend(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """Run a forward for extend."""
+        raise NotImplementedError()

@@ -58,6 +58,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
 - [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
 - [沐曦 GPU](./docs/zh/get_started/installation/metax_gpu.md)
+- [英特尔 HPU](./docs/zh/get_started/installation/intel_hpu.md)
 
 **注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 等其他硬件平台正在开发测试中。敬请关注更新！
 

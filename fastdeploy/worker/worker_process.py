@@ -82,6 +82,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.metax_worker import MetaxWorker
 
         return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_intel_hpu():
+        from fastdeploy.worker.hpu_worker import HpuWorker
+
+        return HpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -89,21 +93,22 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     # Global rank
     ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
+    if ranks > 0:
+        dist_strategy.hybrid_configs = {
+            "dp_degree": 1,
+            "mp_degree": ranks,
+            "pp_degree": 1,
+            "sharding_degree": 1,
+        }
 
-    dist_strategy.hybrid_configs = {
-        "dp_degree": 1,
-        "mp_degree": ranks,
-        "pp_degree": 1,
-        "sharding_degree": 1,
-    }
+        # Set control in tensor parallel
+        dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
+        fleet.init(is_collective=True, strategy=dist_strategy)
 
-    # Set control in tensor parallel
-    dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
-    fleet.init(is_collective=True, strategy=dist_strategy)
-
-    # Local rank
-    local_rank = fleet.worker_index()
-
+        # Local rank
+        local_rank = fleet.worker_index()
+    else:
+        local_rank = 0
     return ranks, local_rank
 
 
@@ -558,6 +563,10 @@ def parse_args():
         action="store_true",
         help="enable expert parallel",
     )
+    parser.add_argument(
+        "--enable_tensor_or_expert_parallel",
+        action='store_true',
+        help="enable tensor or expert parallell")
     parser.add_argument("--ori_vocab_size", type=int, default=None)
 
     parser.add_argument(
@@ -718,6 +727,26 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             parallel_config.local_data_parallel_id
         ]
     parallel_config.set_communicate_group()
+    # config for Attention TP + MoE EP
+    if parallel_config.enable_tensor_or_expert_parallel:
+        expert_parallel_rank = int(local_rank % parallel_config.tensor_parallel_size)
+        if isinstance(model_config.moe_num_experts, list):
+            num_experts = model_config.moe_num_experts[0]
+        else:
+            num_experts = model_config.moe_num_experts
+
+        num_experts_per_rank = num_experts // parallel_config.tensor_parallel_size
+        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+
+        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.num_experts_per_rank = num_experts_per_rank
+        parallel_config.num_experts_start_offset = num_experts_start_offset
+
+    parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
+        parallel_config.local_data_parallel_id
+    ]
+    parallel_config.set_tp_group()
 
     load_config = LoadConfig(vars(args))
 
