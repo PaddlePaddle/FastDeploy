@@ -519,7 +519,6 @@ class TokenProcessor:
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
-        batch_result = []
         for i in range(self.cfg.max_num_seqs):
             if self.resource_manager.stop_flags[i]:
                 continue
@@ -538,12 +537,9 @@ class TokenProcessor:
                     request_start_time=task.arrival_time,
                 ),
             )
-            result.error_msg = "Clear weight, stop all inference!"
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
             self._recycle_resources(task.request_id, i, task, result, is_prefill)
             llm_logger.warning(f"clear data for task {task.request_id}")
-            batch_result.append(result)
-        self.postprocess(batch_result)
 
 
 class WarmUpTokenProcessor(TokenProcessor):
