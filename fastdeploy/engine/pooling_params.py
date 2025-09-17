@@ -36,6 +36,18 @@ class PoolingParams:
         activation: Whether to apply activation function to
                     the classification outputs.
         softmax: Whether to apply softmax to the reward outputs.
+        step_tag_id: Step tag ID for process reward models to identify
+                    specific steps in multi-step reasoning tasks.
+        returned_token_ids: List of token IDs to return rewards for,
+                           used for fine-grained reward calculation.
+        task: Internal use only. Specifies the pooling task type
+              ("embed" for embeddings, "encode" for reward models).
+        requires_token_ids: Internal use only. Whether token ID information
+                           is required for processing.
+        extra_kwargs: Internal use only. Dictionary for storing additional
+                     custom parameters for extended functionality.
+        output_kind: Output type specification, fixed to FINAL_ONLY
+                    (only final outputs are returned).
     """
 
     truncate_prompt_tokens: Optional[Annotated[int, msgspec.Meta(ge=-1)]] = None
@@ -63,9 +75,11 @@ class PoolingParams:
 
     output_kind: RequestOutputKind = RequestOutputKind.FINAL_ONLY
 
+    @property
     def _all_parameters(self) -> list[str]:
         return ["dimensions", "normalize", "softmax", "step_tag_id", "returned_token_ids"]
 
+    @property
     def valid_parameters(self):
         return {
             "embed": ["dimensions", "normalize"],
