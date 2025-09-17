@@ -130,6 +130,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.think_end_id = None
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
         self.partial_rotary_factor: float = 1.0
