@@ -16,12 +16,12 @@
 
 import inspect
 import os
-import threading
 import time
 import traceback
 import uuid
 
 import numpy as np
+from filelock import FileLock
 
 from fastdeploy import envs
 from fastdeploy.config import ModelConfig
@@ -137,7 +137,7 @@ class EngineClient:
             pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
         )
         self.connection_initialized = False
-        self.clear_update_lock = threading.Lock()
+        self.clear_update_lock = FileLock(f"/tmp/fd_weight_clear_update_lock__pid{pid}_port{port}.lock")
 
     def create_zmq_client(self, model, mode):
         """
@@ -337,7 +337,9 @@ class EngineClient:
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
                 return True, ""
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "updating model weight already"
+                return False, "worker is updating model weight already"
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
+                return False, "worker is clearing model weight, cannot update now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
             if self.enable_prefix_caching or self.enable_splitwise:
@@ -381,7 +383,9 @@ class EngineClient:
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
                 return True, ""
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "clearing model weight already"
+                return False, "worker is clearing model weight already"
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
+                return False, "worker is updating model weight, cannot clear now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
             if self.enable_prefix_caching or self.enable_splitwise:

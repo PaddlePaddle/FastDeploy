@@ -217,26 +217,17 @@ class DynamicWeightManager:
         check model weights status
         """
         logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
-        is_stop = 0
         while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
             if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
                 model_runner.update_parameters(pid)
+                while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+                    time.sleep(0.01)
+                logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
                 model_runner.clear_parameters(pid)
-            elif model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                while True:
-                    if model_weights_status.value[0] == ModelWeightsStatus.NORMAL:
-                        logger.info("finished loading new checkpoint")
-                        break
-                    elif is_stop == 1 or (
-                        model_weights_status.value[0] == ModelWeightsStatus.CLEARED and is_stop == 0
-                    ):
-                        if is_stop == 0:
-                            logger.info("finished clearing checkpoint")
-                            is_stop = 1
-                        time.sleep(0.001)
-                        break
-                    else:
-                        time.sleep(0.001)
+                while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
+                    time.sleep(0.01)
+                logger.info("finished clearing checkpoint")
+            time.sleep(0.01)
