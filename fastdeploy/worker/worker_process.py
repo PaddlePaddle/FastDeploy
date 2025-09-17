@@ -42,9 +42,10 @@ from fastdeploy.config import (
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
-from fastdeploy.model_executor.layers.quantization import get_quantization_config
+from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger, parse_quantization
+from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.utils import get_logger
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -248,6 +249,11 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def _broadcast_model_weights_signal(self, src: int, group) -> int:
+        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
+        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
+        return model_weights_signal_tensor.item()
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -257,15 +263,19 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
 
-        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
-            if self.fd_config.load_config.dynamic_load_weight:
-                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                        src=0, group=self.parallel_config.ep_group
+                    )
+            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
 
             self.insert_step = False
             req_dicts = None
@@ -294,7 +304,9 @@ class PaddleDisWorkerProc:
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
-                    logger.info(f"Rank: {self.local_rank} has updated parameters.")
+                    logger.info(
+                        f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
+                    )
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
@@ -307,6 +319,7 @@ class PaddleDisWorkerProc:
                         self.parallel_config.engine_worker_queue_port,
                     )
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
+                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -553,7 +566,7 @@ def parse_args():
         "--moba_attention_config",
         type=json.loads,
         default=None,
-        help="Configation of moba attention.",
+        help="Configuration of moba attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -632,8 +645,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         FDConfig: Initialized FastDeploy configuration object
     """
     # RL rollout
-    if args.quantization is not None and isinstance(args.quantization, str):
-        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -641,6 +652,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
+    scheduler_config = SchedulerConfig(vars(args))
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
@@ -687,50 +699,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if getattr(model_config, "num_hidden_layers", None) is None:
         raise ValueError("num_hidden_layers is None")
 
-    quantization_config = model_config.quantization_config
-    if not model_config.is_quantized:
-        if quantization_config is not None:
-            if "is_quantized" in quantization_config:
-                model_config.is_quantized = quantization_config["is_quantized"]
-            elif "kv_cache_quant_type" not in quantization_config:
-                model_config.is_quantized = True
-
-    quant_config_name = None
-    if quantization_config is not None and quantization_config.get("quantization", None) is None:
-        raise ValueError("quantization_config should have a key named 'quantization' for specify quant config.")
-
-    if quantization_config is not None:
-        quant_config_name = quantization_config["quantization"]
-        # TODO(YuanRisheng) is_checkpoint_bf16 may need to be removed and replaced by is_quantized in future
-        if "kv_cache_quant_type" in quantization_config and load_config.load_choices == "default_v1":
-            quantization_config["is_checkpoint_bf16"] = True
-
-    elif args.quantization is not None:
-        quantization_config = {}
-        try:
-            quantization_config.update(args.quantization)
-            quant_config_name = quantization_config["quantization"]
-        except:
-            quant_config_name = args.quantization["quantization"]
-            quantization_config["quantization"] = quant_config_name
-        # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
-        if load_config.load_choices == "default_v1":
-            quantization_config["is_checkpoint_bf16"] = True
-        # Special handling for Ernie models
-        is_ernie = ErnieArchitectures.contains_ernie_arch(model_config.architectures)
-        if quant_config_name == "wint4" and is_ernie:
-            quantization_config["dense_quant_type"] = "wint8"
-            quantization_config["moe_quant_type"] = "wint4"
-            quantization_config["quantization"] = "mix_quant"
-            quant_config_name = "mix_quant"
-    else:
-        quant_config_name = None
-
-    if quant_config_name is None:
-        quant_config = None
-    else:
-        quant_cls = get_quantization_config(quant_config_name)
-        quant_config = quant_cls.from_config(quantization_config)
+    quant_config = parse_quant_config(
+        args,
+        model_config,
+        is_ernie=ErnieArchitectures.contains_ernie_arch(model_config.architectures),
+        is_v1_loader=load_config.load_choices == "default_v1",
+    )
 
     # Log quantization info
     logger.info("===========quantization_config==============")
@@ -740,7 +714,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         else:
             logger.info("Model Status: Original (will apply online quantization)")
 
-        logger.info(f"{quantization_config}")
+        logger.info(f"{model_config.quantization_config}")
     else:
         logger.info("No quantization config found and use original weight and act dtype.")
 
@@ -775,6 +749,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        scheduler_config=scheduler_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,

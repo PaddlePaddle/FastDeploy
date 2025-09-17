@@ -308,7 +308,7 @@ assert np.allclose(
 ), f"C16 prefix cache != No prefix cache,\n attn_out[hit_prefix_len:]: {attn_out_np},\nattn_out_prefix_cache: {attn_out_prefix_cache_np}"
 
 
-print("\n-- C8 per channle prefix cache test --")
+print("\n-- C8 per channel prefix cache test --")
 print(
     "attn_out_C8[hit_prefix_len:]'s mean:",
     attn_out_C8[hit_prefix_len:].mean().item(),
@@ -318,9 +318,9 @@ attn_out_C8_prefix_cache_np = attn_out_C8_prefix_cache.astype("float32").numpy()
 attn_out_C8_np = attn_out_C8[hit_prefix_len:].astype("float32").numpy()
 assert np.allclose(
     attn_out_C8_prefix_cache_np, attn_out_C8_np, rtol=1e-1, atol=1e-2
-), f"C8 per channle prefix cache != No prefix cache,\n attn_out_C8[hit_prefix_len:]: {attn_out_C8_np},\nattn_out_C8_prefix_cache: {attn_out_C8_prefix_cache_np}"
+), f"C8 per channel prefix cache != No prefix cache,\n attn_out_C8[hit_prefix_len:]: {attn_out_C8_np},\nattn_out_C8_prefix_cache: {attn_out_C8_prefix_cache_np}"
 
-print("\n-- C8 per channle zp prefix cache test --")
+print("\n-- C8 per channel zp prefix cache test --")
 print(
     "attn_out_C8_zp[hit_prefix_len:]'s mean:",
     attn_out_C8_zp[hit_prefix_len:].mean().item(),
@@ -333,4 +333,4 @@ attn_out_C8_zp_prefix_cache_np = attn_out_C8_zp_prefix_cache.astype("float32").n
 attn_out_C8_zp_np = attn_out_C8_zp[hit_prefix_len:].astype("float32").numpy()
 assert np.allclose(
     attn_out_C8_zp_prefix_cache_np, attn_out_C8_zp_np, rtol=1e-1, atol=1e-2
-), f"C8 per channle zp prefix cache != No prefix cache,\n attn_out_C8_zp[hit_prefix_len:]: {attn_out_C8_zp_np},\nattn_out_C8_zp_prefix_cache: {attn_out_C8_zp_prefix_cache_np}"
+), f"C8 per channel zp prefix cache != No prefix cache,\n attn_out_C8_zp[hit_prefix_len:]: {attn_out_C8_zp_np},\nattn_out_C8_zp_prefix_cache: {attn_out_C8_zp_prefix_cache_np}"

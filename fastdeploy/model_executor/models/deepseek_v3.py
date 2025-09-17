@@ -607,9 +607,11 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
-        self.position_ids_buffer = paddle.empty([fd_config.parallel_config.max_num_batched_tokens], dtype=paddle.int32)
+        self.position_ids_buffer = paddle.empty(
+            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
+        )
         self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.parallel_config.max_num_batched_tokens, 1], dtype=paddle.int32
+            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
         )
 
     @classmethod
