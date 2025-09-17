@@ -469,7 +469,7 @@ class LLMEngine:
             ips = ",".join(self.cfg.ips)
         arguments = (
             f" --devices {self.cfg.device_ids} {py_script}"
-            f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
+            f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
             f" --model {self.cfg.model_config.model!s}"
             f" --device_ids {self.cfg.device_ids}"
@@ -482,7 +482,7 @@ class LLMEngine:
             f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
             f" --pad_token_id {self.data_processor.pad_token_id}"
             f" --engine_pid {self.cfg.engine_worker_queue_port[0]}"
-            f" --max_num_batched_tokens {self.cfg.max_num_batched_tokens}"
+            f" --max_num_batched_tokens {self.cfg.scheduler_config.max_num_batched_tokens}"
             f" --splitwise_role {self.cfg.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
