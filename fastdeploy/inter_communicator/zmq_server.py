@@ -46,6 +46,34 @@ class ZmqServerBase(ABC):
         if self.socket is None:
             self.socket = self._create_socket()
 
+    def send_json(self, data):
+        """
+        Send a JSON-serializable object over the socket.
+        """
+        self._ensure_socket()
+        self.socket.send_json(data)
+
+    def recv_json(self):
+        """
+        Receive a JSON-serializable object from the socket.
+        """
+        self._ensure_socket()
+        return self.socket.recv_json()
+
+    def send_pyobj(self, data):
+        """
+        Send a Pickle-serializable object over the socket.
+        """
+        self._ensure_socket()
+        self.socket.send_pyobj(data)
+
+    def recv_pyobj(self):
+        """
+        Receive a Pickle-serializable object from the socket.
+        """
+        self._ensure_socket()
+        return self.socket.recv_pyobj()
+
     def pack_aggregated_data(self, data):
         """
         Aggregate multiple responses into one and send them to the client.
