@@ -733,7 +733,3 @@ class LLMEngine:
         except Exception:
             pass
         return True
-
-    def clear_data(self):
-        self.token_processor.clear_data()
-        self.engine_worker_queue.clear_data()
