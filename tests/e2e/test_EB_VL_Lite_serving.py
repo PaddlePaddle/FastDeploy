@@ -555,6 +555,27 @@ def test_chat_with_thinking(openai_client, capsys):
     assert reasoning_tokens <= reasoning_max_tokens
 
 
+def test_chat_with_completion_token_ids(openai_client):
+    """Test non-streaming chat functionality with the local service"""
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        extra_body={
+            "completion_token_ids": [18900],
+            "return_token_ids": True,
+        },
+        max_tokens=10,
+        stream=False,
+    )
+    for chunk in response:
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "delta")
+        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
+        assert chunk.choices[0].delta.prompt_token_ids is None
+        assert 18900 in chunk.choices[0].delta.prompt_token_ids
+
+
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
     log_file = "./log/config.log"
