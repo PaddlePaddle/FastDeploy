@@ -428,5 +428,6 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             weight_dtype="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
             group_size=128,
         )
-
+        if layer.with_bias:
+            linear_out = paddle.add(linear_out, layer.bias)
         return linear_out
