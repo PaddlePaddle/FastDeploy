@@ -184,7 +184,8 @@ class LLMEngine:
             num_gpu_blocks = self.cfg.cache_config.num_gpu_blocks_override or self.cfg.cache_config.total_block_num
             num_cpu_blocks = self.cfg.cache_config.num_cpu_blocks
             max_running_requests = min(
-                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.max_model_len, self.cfg.max_num_seqs
+                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.max_model_len,
+                self.cfg.scheduler_config.max_num_seqs,
             )
             console_logger.info(
                 f"Detected {num_gpu_blocks} gpu blocks and {num_cpu_blocks} cpu blocks in cache (block size: {block_size})."
