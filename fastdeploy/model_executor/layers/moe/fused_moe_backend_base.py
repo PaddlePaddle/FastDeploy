@@ -53,12 +53,12 @@ class MoEMethodBase(QuantMethodBase):
         """
         self.import_backend_ep_runner()
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.splitwise_role == "mixed":
+            if layer.fd_config.scheduler_config.splitwise_role == "mixed":
                 self.ep_prefill_runner = self.EPPrefillRunner(
                     layer.top_k,
                     layer.hidden_size,
                     layer.num_experts,
-                    layer.fd_config.parallel_config.splitwise_role,
+                    layer.fd_config.scheduler_config.splitwise_role,
                     layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                     layer.ep_size,
                     layer.ep_rank,
@@ -69,7 +69,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer.top_k,
                     layer.hidden_size,
                     layer.num_experts,
-                    layer.fd_config.parallel_config.splitwise_role,
+                    layer.fd_config.scheduler_config.splitwise_role,
                     layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                     layer.ep_size,
                     layer.ep_rank,
@@ -77,12 +77,12 @@ class MoEMethodBase(QuantMethodBase):
                     ep_group=layer.fd_config.parallel_config.ep_group,
                 )
             else:
-                if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
+                if layer.fd_config.model_config.moe_phase.phase == "prefill":
                     self.ep_prefill_runner = self.EPPrefillRunner(
                         layer.top_k,
                         layer.hidden_size,
                         layer.num_experts,
-                        layer.fd_config.parallel_config.splitwise_role,
+                        layer.fd_config.scheduler_config.splitwise_role,
                         layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                         layer.ep_size,
                         layer.ep_rank,
@@ -94,7 +94,7 @@ class MoEMethodBase(QuantMethodBase):
                         layer.top_k,
                         layer.hidden_size,
                         layer.num_experts,
-                        layer.fd_config.parallel_config.splitwise_role,
+                        layer.fd_config.scheduler_config.splitwise_role,
                         layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                         layer.ep_size,
                         layer.ep_rank,
@@ -174,12 +174,12 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                if layer.fd_config.parallel_config.splitwise_role == "mixed":
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
                     self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
             else:
-                if layer.fd_config.parallel_config.splitwise_role == "mixed":
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
                     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:

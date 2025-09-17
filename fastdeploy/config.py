@@ -296,8 +296,6 @@ class ParallelConfig:
         # Do profile or not
         self.do_profile: bool = False
 
-        # splitwise role
-        self.splitwise_role: str = "mixed"
         # guided decoding backend
         self.guided_decoding_backend: str = None
         # disable any whitespace for guided decoding
@@ -319,14 +317,6 @@ class ParallelConfig:
         else:
             self.expert_parallel_size = 1
         self.use_ep = self.expert_parallel_size > 1
-        if self.splitwise_role == "mixed":
-            self.moe_phase = MoEPhase(phase="prefill")
-        elif self.splitwise_role == "prefill":
-            self.moe_phase = MoEPhase(phase="prefill")
-        elif self.splitwise_role == "decode":
-            self.moe_phase = MoEPhase(phase="decode")
-        else:
-            raise NotImplementedError
 
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
@@ -1109,10 +1099,8 @@ class FDConfig:
         max_model_len: int = 8192,
         ips: str = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: str = "8002",
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        splitwise_role: str = "mixed",
         innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
@@ -1175,7 +1163,6 @@ class FDConfig:
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
-        self.splitwise_role = splitwise_role
         self.innode_prefill_ports = innode_prefill_ports
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
@@ -1183,11 +1170,7 @@ class FDConfig:
         self.reasoning_parser = reasoning_parser
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
-        self.engine_worker_queue_port = engine_worker_queue_port
         self._str_to_list("innode_prefill_ports", int)
-        if isinstance(engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(engine_worker_queue_port)
-        self._str_to_list("engine_worker_queue_port", str)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
@@ -1262,6 +1245,15 @@ class FDConfig:
             else:
                 self.guided_decoding_backend = "xgrammar"
 
+        if self.scheduler_config.splitwise_role == "mixed":
+            self.model_config.moe_phase = MoEPhase(phase="prefill")
+        elif self.scheduler_config.splitwise_role == "prefill":
+            self.model_config.moe_phase = MoEPhase(phase="prefill")
+        elif self.scheduler_config.splitwise_role == "decode":
+            self.model_config.moe_phase = MoEPhase(phase="decode")
+        else:
+            raise NotImplementedError
+
     def check(self):
         """
         check the legality of config
@@ -1296,7 +1288,7 @@ class FDConfig:
             f"max_long_partial_prefills: {self.max_long_partial_prefills} should "
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
-        assert self.splitwise_role in ["mixed", "prefill", "decode"]
+        assert self.scheduler_config.splitwise_role in ["mixed", "prefill", "decode"]
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
         assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
             self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
@@ -1377,8 +1369,8 @@ class FDConfig:
         initialize cache info
         """
         disaggregate_info = {}
-        if self.splitwise_role != "mixed":
-            disaggregate_info["role"] = self.splitwise_role
+        if self.scheduler_config.splitwise_role != "mixed":
+            disaggregate_info["role"] = self.scheduler_config.splitwise_role
             disaggregate_info["cache_info"] = dict()
             current_protocol = self.cache_config.cache_transfer_protocol.split(",")
             disaggregate_info["transfer_protocol"] = current_protocol
@@ -1386,7 +1378,9 @@ class FDConfig:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id],
+                        "port": self.parallel_config.engine_worker_queue_port[
+                            self.parallel_config.local_data_parallel_id
+                        ],
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":
