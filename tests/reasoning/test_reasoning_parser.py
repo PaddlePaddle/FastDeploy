@@ -21,10 +21,10 @@ class MockTokenizer:
         return self.vocab
 
     def encode(self, text, add_special_tokens=False):
-        # Simple mock: each char -> ord(char), tags use vocab
+        # Mock actual service behavior: returns dict with 'input_ids'
         if text in self.vocab:
-            return [self.vocab[text]]
-        return [ord(c) for c in text]
+            return {"input_ids": [self.vocab[text]]}
+        return {"input_ids": [ord(c) for c in text]}
 
 
 class TestErnieX1ReasoningParser(unittest.TestCase):

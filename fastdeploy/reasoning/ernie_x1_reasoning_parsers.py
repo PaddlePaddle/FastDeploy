@@ -60,12 +60,8 @@ class ErnieX1ReasoningParser(ReasoningParser):
         self.newline_token_id = self.vocab.get("\n")
         if self.newline_token_id is None:
             ids = self.model_tokenizer.encode("\n", add_special_tokens=False)
-            if len(ids) == 1:
-                self.newline_token_id = ids[0]
-            else:
-                raise RuntimeError("Tokenizer does not map '\\n' to a single token.")
+            self.newline_token_id = ids["input_ids"][0]
 
-        # Cached count of newlines waiting to be flushed
         self._pending_newlines = 0
 
     def _flush_newlines(
