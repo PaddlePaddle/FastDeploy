@@ -567,13 +567,12 @@ def test_chat_with_completion_token_ids(openai_client):
         max_tokens=10,
         stream=False,
     )
-    for chunk in response:
-        assert hasattr(chunk, "choices")
-        assert len(chunk.choices) > 0
-        assert hasattr(chunk.choices[0], "delta")
-        assert hasattr(chunk.choices[0].delta, "prompt_token_ids")
-        assert chunk.choices[0].delta.prompt_token_ids is None
-        assert 18900 in chunk.choices[0].delta.prompt_token_ids
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
+    assert isinstance(response.choices[0].message.prompt_token_ids, list)
+    assert 18900 in response.choices[0].message.prompt_token_ids
 
 
 def test_profile_reset_block_num():
