@@ -1350,6 +1350,11 @@ class FDConfig:
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 
+        if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
+            assert (
+                int(envs.FD_DISABLED_RECOVER) == 0
+            ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
+
     def print(self):
         """
         print all config
