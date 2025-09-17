@@ -31,7 +31,7 @@ __global__ void write_decoder_c16_cache_kernel(
         output_type * cache_k_c16,
         output_type * cache_v_c16,
         const int * block_tables,
-        int *step_idx,
+        const int64_t *step_idx,
         const int head_num,
         const int kv_head_num,
         const int c16_remain_seq_len,
@@ -80,6 +80,7 @@ __global__ void write_decoder_c16_cache_kernel(
             seq_lens_encoder,
             seq_lens_decoder,
             block_tables,
+            nullptr,
             max_num_blocks_per_seq,
             data_num_per_block,
             c16_remain_seq_len,
@@ -96,11 +97,6 @@ __global__ void write_decoder_c16_cache_kernel(
     if (tidx >= 32) {
         return;
     }
-
-    if (tidx == 0 && bidh == 0) {
-        step_idx[bidb] += 1;
-    }
-
 
     const int bias_idx = bidh * kHeadDim + tidx * kPackSize;
 
@@ -159,7 +155,7 @@ void write_decoder_c16_cache(
         output_type * cache_k_c16,
         output_type * cache_v_c16,
         const int * block_tables,
-        int *step_idx,
+        const int64_t *step_idx,
         const int head_num,
         const int kv_head_num,
         const int c16_remain_seq_len,
@@ -244,7 +240,7 @@ std::vector<paddle::Tensor> WriteDecoderCache(
             const_cast<phi::dtype::float16*>(cache_k_c16.data<phi::dtype::float16>()),
             const_cast<phi::dtype::float16*>(cache_v_c16.data<phi::dtype::float16>()),
             block_table.data<int>(),
-            const_cast<int*>(step_idx.data<int>()),
+            step_idx.data<int64_t>(),
             head_num,
             kv_head_num,
             c16_remain_seq_len,

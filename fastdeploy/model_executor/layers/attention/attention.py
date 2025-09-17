@@ -182,12 +182,6 @@ class Attention(nn.Layer):
                     ],
                     dtype="float16",
                 )
-                self.step_idx = paddle.zeros(
-                    [
-                        fd_config.parallel_config.max_num_seqs,
-                    ],
-                    dtype="int32",
-                )
 
     def init_weight(self):
         if self.quant_method is not None:

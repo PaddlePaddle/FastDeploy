@@ -27,6 +27,7 @@ void __global__ write_encoder_c2_cache_kernel(
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
+        const int64_t *prompt_lens,
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int c16_remain_seq_len,
@@ -46,6 +47,7 @@ void __global__ write_encoder_c2_cache_kernel(
         encoder_seqs_len,
         decoder_seqs_len,
         block_tables,
+        prompt_lens,
         max_num_blocks_per_seq,
         data_num_per_block,
         c16_remain_seq_len,
@@ -65,9 +67,9 @@ void __global__ write_encoder_c16_cache_kernel(
         T *cache_v_c16,
         const int *cu_seq_q,
         const int *encoder_seqs_len,
-        const int *decoder_seq_len,
+        const int *decoder_seqs_len,
         const int *block_tables,
-        int * step_idx,
+        const int64_t *prompt_lens,
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int c16_remain_seq_len,
@@ -79,26 +81,25 @@ void __global__ write_encoder_c16_cache_kernel(
     const int block_idx = blockIdx.z;
     const int tidx = threadIdx.x;
     const int seq_len_encoder = encoder_seqs_len[bidb];
-    const int token_idx = block_idx * kBlockSize;
+    const int seq_len_decoder = decoder_seqs_len[bidb];
+    const int prompt_len = prompt_lens[bidb];
 
     if (seq_len_encoder == 0) {
         return;
     }
 
-    if (tidx == 0) {
-        step_idx[bidb] = 0;
-    } 
+    const int c16_cache_max_len = c16_remain_seq_len + kBlockSize;
 
-    const int c16_max_cache_seq_len = c16_remain_seq_len + kBlockSize;
+    const int c16_cache_len = prompt_len < c16_cache_max_len ? prompt_len : c16_remain_seq_len + prompt_len % kBlockSize;
+    const int c2_cache_len = prompt_len - c16_cache_len;
 
-    int c16_cache_seq_len;
-    if (seq_len_encoder < c16_max_cache_seq_len) {
-        c16_cache_seq_len = seq_len_encoder;
-    } else {
-        c16_cache_seq_len = seq_len_encoder % kBlockSize + c16_remain_seq_len;
+    int token_idx = block_idx * kBlockSize + c2_cache_len;
+
+    if (seq_len_decoder > c2_cache_len) {
+        token_idx += seq_len_decoder - c2_cache_len;
     }
 
-    if (block_idx >= c16_cache_seq_len) {
+    if (token_idx >= prompt_len || seq_len_encoder + seq_len_decoder <= c2_cache_len) {
         return;
     }
 
@@ -107,23 +108,23 @@ void __global__ write_encoder_c16_cache_kernel(
     const int row_idx = tidx / data_per_row;
     const int col_idx = tidx % data_per_row * kPackSize;
 
-    int store_idx = (bidb * c16_max_cache_seq_len + token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim;
+    int store_idx = (bidb * c16_cache_max_len + token_idx - c2_cache_len) * kv_head_num * kHeadDim + bidh * kHeadDim;
 
-    int load_idx = (cu_seq_q[bidb] + seq_len_encoder - c16_cache_seq_len + token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim;
+    int load_idx = (cu_seq_q[bidb] + token_idx - seq_len_decoder) * kv_head_num * kHeadDim + bidh * kHeadDim;
 
     if (bidh < kv_head_num) {
-        for (int i = row_idx; i < kBlockSize; i+=(kThreads / data_per_row)) {
+        for (int i = row_idx; i < kBlockSize; i += (kThreads / data_per_row)) {
             const int load_row = token_idx + i;
-            if (load_row < c16_cache_seq_len) {
+            if (load_row < prompt_len) {
                 *reinterpret_cast<int4*>(cache_k_c16 + store_idx + i * kv_head_num * kHeadDim + col_idx) = *reinterpret_cast<const int4*>(k_input + load_idx + i * kv_head_num * kHeadDim + col_idx);
             }
         }
     } else {
         store_idx -= kv_head_num * kHeadDim;
         load_idx -= kv_head_num * kHeadDim;
-        for (int i = row_idx; i < kBlockSize; i+=(kThreads / data_per_row)) {
+        for (int i = row_idx; i < kBlockSize; i += (kThreads / data_per_row)) {
             const int load_row = token_idx + i;
-            if (load_row < c16_cache_seq_len) {
+            if (load_row < prompt_len) {
                 *reinterpret_cast<int4*>(cache_v_c16 + store_idx + i * kv_head_num * kHeadDim + col_idx) = *reinterpret_cast<const int4*>(v_input + load_idx + i * kv_head_num * kHeadDim + col_idx);
             }
         }
@@ -143,7 +144,7 @@ void write_encoder_cache(
         const int *encoder_seqs_len,
         const int *decoder_seq_len,
         const int *block_tables,
-        int *step_idx,
+        const int64_t *prompt_lens,
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int c16_remain_seq_len,
@@ -173,6 +174,7 @@ void write_encoder_cache(
         encoder_seqs_len,
         decoder_seq_len,
         block_tables,
+        prompt_lens,
         max_num_blocks_per_seq,
         data_num_per_block,
         c16_remain_seq_len,
@@ -193,7 +195,7 @@ void write_encoder_cache(
         encoder_seqs_len,
         decoder_seq_len,
         block_tables,
-        step_idx,
+        prompt_lens,
         max_num_blocks_per_seq,
         data_num_per_block,
         c16_remain_seq_len,
@@ -213,7 +215,7 @@ void WriteEncoderCache(
         const paddle::Tensor& encoder_seqs_len,
         const paddle::Tensor& decoder_seqs_len,
         const paddle::Tensor& block_table,
-        const paddle::Tensor& step_idx,
+        const paddle::Tensor& prompt_lens,
         const int c16_remain_seq_len,
         const int head_num,
         const int kv_head_num,
@@ -239,7 +241,7 @@ void WriteEncoderCache(
             encoder_seqs_len.data<int>(),
             decoder_seqs_len.data<int>(),
             block_table.data<int>(),
-            const_cast<int*>(step_idx.data<int>()),
+            prompt_lens.data<int64_t>(),
             max_num_blocks_per_seq,
             data_num_per_block,
             c16_remain_seq_len,
@@ -273,7 +275,7 @@ PD_BUILD_OP(dynamic_quant_cache_write_encoder)
         "encoder_seqs_len",
         "decoder_seqs_len",
         "block_table",
-        "step_idx"})
+        "prompt_lens"})
     .Attrs({
         "c16_remain_seq_len: int",
         "head_num: int",

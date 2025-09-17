@@ -26,6 +26,7 @@ __device__ void write_c2_cache_kernel(
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
+        const int64_t *prompt_lens,
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int c16_remain_seq_len,
@@ -73,25 +74,35 @@ __device__ void write_c2_cache_kernel(
     using pakc_half = typename PackedHalf<T>::Type;
 
     const int tidx = threadIdx.x;
-    const int seq_len_encoder = is_encoder ? encoder_seqs_len[bidb] : decoder_seqs_len[bidb];
+    const int seq_len_encoder = encoder_seqs_len[bidb];
+    const int seq_len_decoder = decoder_seqs_len[bidb];
     const int warp_idx = tidx / 32;
     const int lane_idx = tidx % 32;
 
-    const int token_idx = block_idx * kBlockSize;
+    const int chunk_prefill_token_idx = seq_len_decoder / kBlockSize;
+    const int token_idx = block_idx * kBlockSize + seq_len_decoder;
     
-    if (seq_len_encoder == 0) {
-        return;
+    if constexpr (is_encoder) {
+        if (seq_len_encoder == 0 || token_idx >= seq_len_encoder + seq_len_decoder) {
+            return;
+        }
+    } else {
+        if (seq_len_decoder == 0) {
+            return;
+        }
     }
 
     const int c16_cache_max_len = kBlockSize + c16_remain_seq_len;
     int c16_cache_len;
+    int c2_cache_len;
     if constexpr (is_encoder) {
-        c16_cache_len = seq_len_encoder < c16_cache_max_len ? seq_len_encoder : c16_remain_seq_len + seq_len_encoder % kBlockSize;
+        const int prompt_len = prompt_lens[bidb];
+        c16_cache_len = prompt_len < c16_cache_max_len ? prompt_len : c16_remain_seq_len + prompt_len % kBlockSize;
+        c2_cache_len = prompt_len - c16_cache_len;
     } else {
-        c16_cache_len = seq_len_encoder + 1 < c16_cache_max_len ? seq_len_encoder : c16_remain_seq_len + (seq_len_encoder + 1) % kBlockSize;
+        c16_cache_len = seq_len_decoder + 1 < c16_cache_max_len ? seq_len_decoder : c16_remain_seq_len + (seq_len_decoder + 1) % kBlockSize;
+        c2_cache_len = seq_len_decoder - c16_cache_len;
     }
-
-    const int c2_cache_len = seq_len_encoder - c16_cache_len;
 
     const int remain_token = c2_cache_len - token_idx;
 
@@ -418,7 +429,7 @@ __device__ void write_c2_cache_kernel(
     __syncthreads();
 
     // 将kv写回到全局内存中
-    const int store_block_idx = is_encoder ? block_idx :  c2_cache_len / kBlockSize;
+    const int store_block_idx = is_encoder ? chunk_prefill_token_idx + block_idx :  c2_cache_len / kBlockSize;
     const int* block_table = block_tables + bidb * max_num_blocks_per_seq;
     const int physical_block_number = block_table[store_block_idx];
 

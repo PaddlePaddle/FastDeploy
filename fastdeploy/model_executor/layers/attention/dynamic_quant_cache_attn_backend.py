@@ -180,7 +180,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.block_tables,
-                layer.step_idx,
+                forward_meta.prompt_lens,
                 layer.c16_remain_seq_len,
                 self.num_heads,
                 self.kv_num_heads,
@@ -197,10 +197,11 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                     forward_meta.caches[2 * layer.layer_id + 1],
                     layer.cache_k_c16,
                     layer.cache_v_c16,
-                    forward_meta.cu_seqlens_k,
+                    metadata.cu_seqlens_k,
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_decoder,
                     forward_meta.block_tables,
+                    forward_meta.prompt_lens,
                     layer.c16_remain_seq_len,
                     self.num_heads,
                     self.kv_num_heads,
@@ -208,13 +209,13 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                     metadata.max_enc_len_this_time + metadata.max_dec_len_this_time,
                     getattr(layer, "cache_quant_type_str", "none")
                 )
-
+                
             flash_attention_mask(
                 metadata.q_input,
                 metadata.k_input,
                 metadata.v_input,
                 forward_meta.cu_seqlens_q,
-                forward_meta.cu_seqlens_k,
+                metadata.cu_seqlens_k,
                 forward_meta.seq_lens_encoder,
                 out,
                 None,
@@ -238,7 +239,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.block_tables,
-                layer.step_idx,
+                forward_meta.step_idx,
                 layer.qkv_bias,
                 layer.c16_remain_seq_len,
                 self.num_heads,

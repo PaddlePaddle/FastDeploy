@@ -28,6 +28,7 @@ void __global__ get_kv_from_cache_kernel(
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
+        const int64_t *prompt_lens,
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int c16_remain_seq_len,
@@ -40,23 +41,24 @@ void __global__ get_kv_from_cache_kernel(
     const int tidx = threadIdx.x;
 
     const int seq_len_encoder = encoder_seqs_len[bidb];
+    const int seq_len_decoder = decoder_seqs_len[bidb];
+    const int prompt_len = prompt_lens[bidb];
 
-    if (seq_len_encoder == 0) {
+    const int token_idx = block_idx * kBlockSize;
+
+    const int seq_len = seq_len_encoder + seq_len_decoder;
+
+    if (seq_len_encoder == 0 || seq_len_decoder == 0 || token_idx >= seq_len) {
         return;
     }
 
-    const int seq_len = decoder_seqs_len[bidb] + seq_len_encoder;
-    
     using pakc_half = typename PackedHalf<T>::Type;
 
-    
-
     const int c16_cache_max_len = kBlockSize + c16_remain_seq_len;
-    int c16_cache_len = seq_len < c16_cache_max_len ? seq_len : c16_remain_seq_len + seq_len % kBlockSize;
 
-    const int c2_cache_len = seq_len - c16_cache_len;
+    const int c16_cache_len = prompt_len < c16_cache_max_len ? prompt_len : c16_remain_seq_len + prompt_len % kBlockSize;
 
-    const int token_idx = block_idx * kBlockSize;
+    const int c2_cache_len = prompt_len - c16_cache_len;
 
     constexpr int kPackSize = 16 / sizeof(T);
     constexpr int data_per_row = kHeadDim / kPackSize;
@@ -66,7 +68,7 @@ void __global__ get_kv_from_cache_kernel(
     const int all_rows = kThreads / data_per_row;
 
     if (token_idx >= c2_cache_len) {
-        const int remain_tokens = c16_cache_len - token_idx + c2_cache_len;
+        const int remain_tokens = seq_len - token_idx;
         if (remain_tokens <= 0) {
             return;
         }
@@ -81,7 +83,8 @@ void __global__ get_kv_from_cache_kernel(
             load_idx -= kv_head_num * kHeadDim;
         }
 
-        for (int i = copy_row_idx; i < kBlockSize; i += all_rows) {
+        const int copy_tokens = min(remain_tokens, kBlockSize);
+        for (int i = copy_row_idx; i < copy_tokens; i += all_rows) {
             *reinterpret_cast<int4*>(dst + store_idx + i * kv_head_num * kHeadDim) = *reinterpret_cast<int4*>(src + load_idx + i * kv_head_num * kHeadDim);
         }
         return;
@@ -247,6 +250,7 @@ void  get_kv_from_cache(
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
+        const int64_t *prompt_lens,
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int c16_remain_seq_len,
@@ -278,6 +282,7 @@ void  get_kv_from_cache(
         encoder_seqs_len,
         decoder_seqs_len,
         block_tables,
+        prompt_lens,
         max_num_blocks_per_seq,
         data_num_per_block,
         c16_remain_seq_len,
@@ -298,6 +303,7 @@ void GetKVFromCache(
         const paddle::Tensor& encoder_seqs_len,
         const paddle::Tensor& decoder_seqs_len,
         const paddle::Tensor& block_table,
+        const paddle::Tensor& prompt_lens,
         const int c16_remain_seq_len,
         const int head_num,
         const int kv_head_num,
@@ -323,6 +329,7 @@ void GetKVFromCache(
             encoder_seqs_len.data<int>(),
             decoder_seqs_len.data<int>(),
             block_table.data<int>(),
+            prompt_lens.data<int64_t>(),
             max_num_blocks_per_seq,
             data_num_per_block,
             c16_remain_seq_len,
@@ -350,7 +357,8 @@ PD_BUILD_OP(dynamic_quant_get_kv_from_cache)
         "cu_seq_k",
         "encoder_seqs_len",
         "decoder_seqs_len",
-        "block_table"})
+        "block_table",
+        "prompt_lens"})
     .Attrs({
         "c16_remain_seq_len: int",
         "head_num: int",

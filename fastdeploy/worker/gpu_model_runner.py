@@ -1094,6 +1094,8 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
+            prompt_lens=self.share_inputs["prompt_lens"],
+            step_idx=self.share_inputs["step_idx"],
         )
 
         # Update Batch type for cuda graph for only_decode_batch
