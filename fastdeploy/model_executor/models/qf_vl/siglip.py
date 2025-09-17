@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle.nn.functional.flash_attention import flash_attn_unpadded
 from paddleformers.transformers.activations import ACT2FN
 from paddleformers.transformers.model_utils import PretrainedModel
 
@@ -97,8 +98,6 @@ class SiglipAttention(nn.Layer):
         self.head_dim = self.embed_dim // self.num_heads
         assert self.head_dim * self.num_heads == self.embed_dim
         self.scale = self.head_dim**-0.5
-        self.dropout = getattr(config, "attention_dropout", 0.0)
-        self.is_causal = False
 
         self.k_proj = nn.Linear(self.embed_dim, self.embed_dim)
         self.v_proj = nn.Linear(self.embed_dim, self.embed_dim)
@@ -128,22 +127,22 @@ class SiglipAttention(nn.Layer):
             cos, sin = rope_emb
             q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
 
-        # → [B, H, L, Dh]
-        q = q.transpose([0, 2, 1, 3])
-        k = k.transpose([0, 2, 1, 3])
-        v = v.transpose([0, 2, 1, 3])
+        q = q.squeeze(axis=0)
+        k = k.squeeze(axis=0)
+        v = v.squeeze(axis=0)
+        max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
-        attn_output, attn_weights = eager_attention_forward(
-            self,
+        attn_output, _ = flash_attn_unpadded(
             q,
             k,
             v,
-            attention_mask,
-            is_causal=self.is_causal,
-            scaling=self.scale,
-            dropout=0.0 if not self.training else self.dropout,
+            cu_seqlens,
+            cu_seqlens,
+            max_seqlen,
+            max_seqlen,
+            scale=self.scale,
         )
-        attn_output = attn_output.reshape([B, L, D])
+        attn_output = attn_output.reshape(L, -1)
 
         attn_output = self.out_proj(attn_output)
 
