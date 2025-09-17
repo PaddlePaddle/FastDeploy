@@ -220,6 +220,8 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -353,9 +355,6 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
-                        if res.get("error_msg") is not None and "Clear" in res["error_msg"]:
-                            choice.finish_reason = "clear_data"
-
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
                             choice.delta.multimodal_content[0]["completion_token_ids"] = list(output["token_ids"])
@@ -438,6 +437,14 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while True:
+                if self.engine_client.check_model_weight_status():
+                    return ErrorResponse(
+                        error=ErrorInfo(
+                            message="Model weight cleared",
+                            code=ErrorCode.INVALID_VALUE,
+                            type=ErrorType.INVALID_REQUEST_ERROR,
+                        )
+                    )
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -526,8 +533,7 @@ class OpenAIServingChat:
 
         if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "recover_stop"
-        if final_res.get("error_msg") is not None and "Clear" in final_res["error_msg"]:
-            choice.finish_reason = "clear_data"
+
         choices.append(choice)
 
         num_prompt_tokens = len(prompt_token_ids)
