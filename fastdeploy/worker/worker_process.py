@@ -382,7 +382,7 @@ class PaddleDisWorkerProc:
             if num_blocks_local > 40000:
                 logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
                 num_blocks_local = min(40000, num_blocks_local)
-            logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
+            logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
             if num_blocks_local <= 0:
