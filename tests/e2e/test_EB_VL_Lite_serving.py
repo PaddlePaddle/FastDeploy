@@ -255,6 +255,16 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert content1 == content2
 
 
+def test_with_metadata(api_url, headers, consistent_payload):
+    """
+    Test that result is same as the base result.
+    """
+    # request
+    consistent_payload["metadata"] = {"enable_thinking": True}
+    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
+    assert resp1.status_code == 200
+
+
 # ==========================
 # OpenAI Client Chat Completion Test
 # ==========================
@@ -556,13 +566,15 @@ def test_chat_with_thinking(openai_client, capsys):
 
 
 def test_chat_with_completion_token_ids(openai_client):
-    """Test non-streaming chat functionality with the local service"""
+    """Test completion_token_ids"""
     response = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello"}],
         extra_body={
             "completion_token_ids": [18900],
             "return_token_ids": True,
+            "reasoning_max_tokens": 20,
+            "max_tokens": 10,
         },
         max_tokens=10,
         stream=False,
@@ -573,6 +585,21 @@ def test_chat_with_completion_token_ids(openai_client):
     assert hasattr(response.choices[0].message, "prompt_token_ids")
     assert isinstance(response.choices[0].message.prompt_token_ids, list)
     assert 18900 in response.choices[0].message.prompt_token_ids
+
+
+def test_chat_with_reasoning_max_tokens(openai_client):
+    """Test completion_token_ids"""
+    try:
+        openai_client.chat.completions.create(
+            model="default",
+            messages=[{"role": "user", "content": "Hello"}],
+            extra_body={"completion_token_ids": [18900], "return_token_ids": True, "reasoning_max_tokens": -1},
+            max_tokens=10,
+            stream=False,
+        )
+    except openai.InternalServerError as e:
+        error_message = str(e)
+        assert "reasoning_max_tokens must be greater than 1" in error_message
 
 
 def test_profile_reset_block_num():
