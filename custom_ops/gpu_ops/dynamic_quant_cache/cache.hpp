@@ -22,7 +22,7 @@ __device__ void write_c2_cache_kernel(
         T *v_input,
         uint8_t *cache_k_c2,
         uint8_t *cache_v_c2,
-        const int *cu_seq_q,
+        const int *cu_seq_k,
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
@@ -114,7 +114,7 @@ __device__ void write_c2_cache_kernel(
 
     extern __shared__ char smem_[];
 
-    const int load_idx = is_encoder ? ((cu_seq_q[bidb] + block_idx * kBlockSize) * kv_head_num + bidh) * kHeadDim : bidb * c16_cache_max_len * kv_head_num * kHeadDim + bidh * kHeadDim;
+    const int load_idx = is_encoder ? ((cu_seq_k[bidb] + block_idx * kBlockSize) * kv_head_num + bidh) * kHeadDim : bidb * c16_cache_max_len * kv_head_num * kHeadDim + bidh * kHeadDim;
 
     const int stride_k = kHeadDim * kv_head_num;
 

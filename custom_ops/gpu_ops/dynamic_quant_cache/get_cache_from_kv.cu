@@ -73,7 +73,7 @@ void __global__ get_kv_from_cache_kernel(
             return;
         }
         int store_idx = (cu_seq_k[bidb] + token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim + copy_col_idx;
-        int load_idx = store_idx - c2_cache_len * kv_head_num * kHeadDim;
+        int load_idx = (bidb * c16_cache_max_len + token_idx - c2_cache_len) * kv_head_num * kHeadDim + bidh * kHeadDim + copy_col_idx;
         T * src = cache_k_c16;
         T * dst = k_input;
         if (bidh >= kv_head_num) {

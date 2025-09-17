@@ -176,7 +176,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 forward_meta.caches[2 * layer.layer_id + 1],
                 layer.cache_k_c16,
                 layer.cache_v_c16,
-                forward_meta.cu_seqlens_q,
+                metadata.cu_seqlens_k,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.block_tables,

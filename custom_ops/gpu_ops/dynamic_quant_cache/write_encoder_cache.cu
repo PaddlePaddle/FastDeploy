@@ -23,7 +23,7 @@ void __global__ write_encoder_c2_cache_kernel(
         T *v_input,
         uint8_t *cache_k_c2,
         uint8_t *cache_v_c2,
-        const int *cu_seq_q,
+        const int *cu_seq_k,
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
@@ -43,7 +43,7 @@ void __global__ write_encoder_c2_cache_kernel(
         v_input,
         cache_k_c2,
         cache_v_c2,
-        cu_seq_q,
+        cu_seq_k,
         encoder_seqs_len,
         decoder_seqs_len,
         block_tables,
@@ -65,7 +65,7 @@ void __global__ write_encoder_c16_cache_kernel(
         const T *v_input,
         T *cache_k_c16,
         T *cache_v_c16,
-        const int *cu_seq_q,
+        const int *cu_seq_k,
         const int *encoder_seqs_len,
         const int *decoder_seqs_len,
         const int *block_tables,
@@ -110,7 +110,7 @@ void __global__ write_encoder_c16_cache_kernel(
 
     int store_idx = (bidb * c16_cache_max_len + token_idx - c2_cache_len) * kv_head_num * kHeadDim + bidh * kHeadDim;
 
-    int load_idx = (cu_seq_q[bidb] + token_idx - seq_len_decoder) * kv_head_num * kHeadDim + bidh * kHeadDim;
+    int load_idx = (cu_seq_k[bidb] + token_idx - seq_len_decoder) * kv_head_num * kHeadDim + bidh * kHeadDim;
 
     if (bidh < kv_head_num) {
         for (int i = row_idx; i < kBlockSize; i += (kThreads / data_per_row)) {
@@ -140,7 +140,7 @@ void write_encoder_cache(
         uint8_t *cache_v_c2,
         T *cache_k_c16,
         T *cache_v_c16,
-        const int *cu_seq_q,
+        const int *cu_seq_k,
         const int *encoder_seqs_len,
         const int *decoder_seq_len,
         const int *block_tables,
@@ -170,7 +170,7 @@ void write_encoder_cache(
         v_input,
         cache_k_c2,
         cache_v_c2,
-        cu_seq_q,
+        cu_seq_k,
         encoder_seqs_len,
         decoder_seq_len,
         block_tables,
@@ -191,7 +191,7 @@ void write_encoder_cache(
         v_input,
         cache_k_c16,
         cache_v_c16,
-        cu_seq_q,
+        cu_seq_k,
         encoder_seqs_len,
         decoder_seq_len,
         block_tables,
@@ -211,7 +211,7 @@ void WriteEncoderCache(
         const paddle::Tensor& cache_v_c2,
         const paddle::Tensor& cache_k_c16,
         const paddle::Tensor& cache_v_c16,
-        const paddle::Tensor& cu_seq_q,
+        const paddle::Tensor& cu_seq_k,
         const paddle::Tensor& encoder_seqs_len,
         const paddle::Tensor& decoder_seqs_len,
         const paddle::Tensor& block_table,
@@ -237,7 +237,7 @@ void WriteEncoderCache(
             const_cast<uint8_t*>(cache_v_c2.data<uint8_t>()),
             const_cast<input_type*>(cache_k_c16.data<input_type>()),
             const_cast<input_type*>(cache_v_c16.data<input_type>()),
-            cu_seq_q.data<int>(),
+            cu_seq_k.data<int>(),
             encoder_seqs_len.data<int>(),
             decoder_seqs_len.data<int>(),
             block_table.data<int>(),
@@ -271,7 +271,7 @@ PD_BUILD_OP(dynamic_quant_cache_write_encoder)
         "cache_v_c2",
         "cache_k_c16",
         "cache_v_c16",
-        "cu_seq_q",
+        "cu_seq_k",
         "encoder_seqs_len",
         "decoder_seqs_len",
         "block_table",
