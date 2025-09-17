@@ -1507,6 +1507,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.fd_config.graph_opt_config.cudagraph_only_prefill:
             for num_tokens in sorted(capture_sizes, reverse=True):
+                paddle.device.cuda.empty_cache()
                 self._dummy_run(
                     num_tokens=num_tokens,
                     batch_size=self.scheduler_config.max_num_seqs,
@@ -1514,17 +1515,20 @@ class GPUModelRunner(ModelRunnerBase):
                     expected_decode_len=expected_decode_len,
                     capture_prefill=True,
                 )
+                paddle.device.synchronize()
                 logger.info(
                     f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                 )
         else:
             for batch_size in sorted(capture_sizes, reverse=True):
+                paddle.device.cuda.empty_cache()
                 self._dummy_run(
                     num_tokens=self.scheduler_config.max_num_batched_tokens,
                     batch_size=batch_size,
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
                 )
+                paddle.device.synchronize()
                 logger.info(
                     f"Warm up the model with the num_tokens:{batch_size}, expected_decode_len:{expected_decode_len}"
                 )
