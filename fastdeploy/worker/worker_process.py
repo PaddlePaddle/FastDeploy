@@ -129,6 +129,28 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
         fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
 
 
+def update_think_end_id_for_ernie(fd_config: FDConfig) -> None:
+    """
+    Updates the think_end_id in the model config. Uses the ID of '</think>'
+    if it exists, otherwise defaults to None.
+    """
+    is_ernie = ErnieArchitectures.contains_ernie_arch(fd_config.model_config.architectures)
+    if current_platform.is_cuda() and is_ernie:
+        tokenizer = Ernie4_5Tokenizer.from_pretrained(
+            fd_config.model_config.model,
+            model_max_length=fd_config.parallel_config.max_model_len,
+            padding_side="right",
+            use_fast=False,
+        )
+
+        vocab = tokenizer.get_vocab()
+        fd_config.model_config.think_end_id = vocab.get("</think>", None)
+        if fd_config.model_config.think_end_id is not None:
+            logger.info(f"Get think_end_id {fd_config.model_config.think_end_id} from vocab.")
+        else:
+            logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+
+
 class PaddleDisWorkerProc:
     """
     Paddle Distributed wrapper for fastdeploy.worker.Worker,
@@ -771,6 +793,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
+    update_think_end_id_for_ernie(fd_config)
 
     return fd_config
 

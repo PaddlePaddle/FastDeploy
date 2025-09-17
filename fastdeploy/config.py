@@ -130,6 +130,7 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.think_end_id = None
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
         self.partial_rotary_factor: float = 1.0
@@ -1342,6 +1343,11 @@ class FDConfig:
                     )
         if self.scheduler_config is not None:
             self.scheduler_config.check()
+            
+        if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
+            assert (
+                int(envs.FD_DISABLED_RECOVER) == 0
+            ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
 
     def print(self):
         """
