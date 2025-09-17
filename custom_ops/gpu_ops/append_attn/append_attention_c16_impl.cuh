@@ -435,7 +435,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
     const int speculate_max_draft_token_num = 5,
-    const uint32_t attn_mask_len = -1) {
+    const int32_t attn_mask_len = -1) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   static_assert(NUM_WARP_Q == 1, "NUM_WARP_Q must be 1");
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
@@ -1089,7 +1089,7 @@ void MultiQueryAppendAttention(
       chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     }
 
-    uint32_t attn_mask_len;
+    int32_t attn_mask_len;
     if (attn_mask) {
         attn_mask_len = attn_mask.get().shape()[1];
     } else {

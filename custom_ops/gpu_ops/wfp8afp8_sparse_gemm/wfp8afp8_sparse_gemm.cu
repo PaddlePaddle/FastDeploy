@@ -23,7 +23,7 @@
 template <typename OutputType>
 void DisPatchWFp8AFp8Gemm(
         const cutlass::float_e4m3_t* input,
-        const uint32_t* sparse_idx,
+        const int32_t* sparse_idx,
         const cutlass::float_e4m3_t* weight,
         const int * tokens,
         const float * weight_scale,
@@ -80,7 +80,7 @@ void WFp8AFp8Gemm(
     if (is_bfloat16) {
         DisPatchWFp8AFp8Gemm(
             reinterpret_cast<const cutlass::float_e4m3_t*>(input.data<phi::dtype::float8_e4m3fn>()),
-            reinterpret_cast<const uint32_t*>(sparse_idx.data<int32_t>()),
+            sparse_idx.data<int32_t>(),
             reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<phi::dtype::float8_e4m3fn>()),
             tokens.data<int>(),
             weight_scale.data<float>(),

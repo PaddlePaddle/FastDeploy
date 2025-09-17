@@ -1026,7 +1026,7 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
                                        const uint32_t qo_len,
                                        const uint32_t kv_len,
                                        const uint32_t chunk_end,
-                                       const uint32_t attn_mask_len,
+                                       const int32_t attn_mask_len,
                                        float (*s_frag)[num_frags_z][8],
                                        const int *mask_offset = nullptr) {
   const uint32_t tx = threadIdx.x;
@@ -1050,7 +1050,7 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
                 (causal
                     ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
                     : kv_idx >= chunk_end);
-            if (attn_mask != nullptr && kv_idx > kv_len - qo_len && kv_idx < chunk_end && q_idx < attn_mask_len) {
+            if (attn_mask != nullptr && kv_idx > kv_len - qo_len && kv_idx < chunk_end && attn_mask_len > 0 && q_idx < static_cast<uint32_t>(attn_mask_len)) {
               const int32_t mask_idx = q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
               bool mask = attn_mask[mask_idx];
               out_of_boundary |= mask;
