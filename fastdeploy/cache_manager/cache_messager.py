@@ -519,6 +519,9 @@ class CacheMessagerV1:
             consume_signals_thread = threading.Thread(target=self.consume_signals)
             consume_signals_thread.daemon = True
             consume_signals_thread.start()
+            add_cache_task_thread = threading.Thread(target=self._add_cache_task_thread)
+            add_cache_task_thread.daemon = True
+            add_cache_task_thread.start()
 
         connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
         connect_rdma_thread.daemon = True
@@ -551,7 +554,7 @@ class CacheMessagerV1:
                             current_info["decode_cached_tokens"] // self.cache_cfg.block_size
                         )
                         current_info["status"] = "init"
-                        logger.info(f"current info: {current_info}")
+                        logger.info(f"finish add cache task: {current_info}")
                         self.cache_info[info["request_id"]] = current_info
                         self.idx_cache_task_dict[current_info["current_id"]] = current_info
                     else:
