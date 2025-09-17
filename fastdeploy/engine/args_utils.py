@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
@@ -190,7 +191,7 @@ class EngineArgs:
     """
     Flag to indicate whether to use warm-up before inference.
     """
-    enable_prefix_caching: bool = False
+    enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
     """
@@ -387,6 +388,16 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
+        if self.speculative_config is not None:
+            self.enable_prefix_caching = False
+        if self.enable_mm:
+            self.enable_prefix_caching = False
+        if not current_platform.is_cuda():
+            self.enable_prefix_caching = False
+        if self.dynamic_load_weight:
+            self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -725,7 +736,7 @@ class EngineArgs:
         perf_group = parser.add_argument_group("Performance Tuning")
         perf_group.add_argument(
             "--enable-prefix-caching",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
         )
