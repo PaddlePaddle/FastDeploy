@@ -1103,6 +1103,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Update config about moe for better performance
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
         if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+            self.fd_config.parallel_config.moe_phase.last_phase = self.fd_config.parallel_config.moe_phase.phase
             self.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
