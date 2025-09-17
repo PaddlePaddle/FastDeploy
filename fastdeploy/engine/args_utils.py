@@ -135,7 +135,7 @@ class EngineArgs:
     """
     dynamic load weight
     """
-    load_strategy: str = "ipc_snapshot"
+    load_strategy: str = "normal"
     """
     dynamic load weight strategy
     """
