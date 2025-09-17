@@ -159,6 +159,7 @@ def xpu_setup_ops():
         "./ops/device/get_free_global_memory.cc",
         "./ops/device/get_total_global_memory.cc",
         "./ops/device/get_used_global_memory.cc",
+        "./ops/moe_redundant_topk_select.cc",
     ]
     ops = [os.path.join(base_dir, op) for op in ops]
 
