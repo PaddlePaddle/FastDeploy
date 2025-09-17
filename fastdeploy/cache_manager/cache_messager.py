@@ -550,9 +550,7 @@ class CacheMessagerV1:
                         current_info["dest_block_ids"] = padding_decode_block_ids
                         current_info["decode_cached_tokens"] = decode_cached_block_num * self.block_size
                         current_info["sended_layer_id"] = -1
-                        current_info["sended_block_num"] = (
-                            current_info["decode_cached_tokens"] // self.cache_cfg.block_size
-                        )
+                        current_info["sended_block_num"] = current_info["decode_cached_tokens"] // self.block_size
                         current_info["status"] = "init"
                         logger.info(f"finish add cache task: {current_info}")
                         self.cache_info[info["request_id"]] = current_info
@@ -585,7 +583,7 @@ class CacheMessagerV1:
                         block_id_end = len(self.idx_cache_task_dict[engine_index]["src_block_ids"])
                     else:
                         block_id_end = (
-                            prefilled_token_num // self.cache_cfg.block_size
+                            prefilled_token_num // self.block_size
                         )  # [block_id_start, block_id_end) 前闭后开
                     block_start_end_list.append((block_id_start, block_id_end))
                     current_prefilled_token_num_list.append(prefilled_token_num)
@@ -678,7 +676,7 @@ class CacheMessagerV1:
                                         if task["status"] != "error":
                                             task["status"] = "finished"
                                             logger.info(
-                                                f"finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end} max_block_num {task.max_block_num}"
+                                                f"finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end} need_prefill_tokens {task['need_prefill_tokens']}"
                                             )
                                     else:
                                         task["sended_layer_id"] = -1

@@ -306,6 +306,7 @@ class ResourceManagerV1(ResourceManager):
                 request = self.running[req_index]
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
                     if self.config.splitwise_role == "prefill":  # do not need to schedule for decoding
+                        req_index += 1
                         continue
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
@@ -633,6 +634,8 @@ class ResourceManagerV1(ResourceManager):
                 request.draft_token_ids = copy.deepcopy(request_output_in_p.outputs.draft_token_ids)
             # update request.need_prefill_tokens
             request.need_prefill_tokens = len(request.prompt_token_ids) + 1
+            request.inference_start_time = time.time()
+            request.schedule_start_time = time.time()
             self.running.append(request)
 
     def _free_blocks(self, request: Request):

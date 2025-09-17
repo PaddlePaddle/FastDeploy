@@ -496,8 +496,8 @@ class SplitwiseConnector:
                         draft_token_ids=task["outputs"]["draft_token_ids"],
                     ),
                     finished=True,
-                ),
-                error_code=task["error_code"],
-                error_msg=task["error_msg"],
+                    error_code=task["error_code"],
+                    error_msg=task["error_msg"],
+                )
             )
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))
