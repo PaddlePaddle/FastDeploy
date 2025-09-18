@@ -339,7 +339,8 @@ void GetKVFromCache(
             bsz,
             k_input.stream()
         );
-    } else if (k_input.dtype() == paddle::DataType::BFLOAT16) {
+    } else {
+        PD_THROW("BF16 is not supported\n");
     }
 }
 

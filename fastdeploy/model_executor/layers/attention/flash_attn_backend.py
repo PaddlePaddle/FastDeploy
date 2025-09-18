@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output, flash_attention_mask, split_qkv_and_rope, fused_block_mean_and_rope
+    from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
 else:
     merge_prefill_decode_output = None
 

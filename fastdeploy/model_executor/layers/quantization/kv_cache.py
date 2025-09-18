@@ -183,14 +183,6 @@ class KVCacheMethodBase(QuantMethodBase):
             layer.cache_quant_type_str = "dynamic_int2_zp"
             layer.quant_max_bound = 3.0
             layer.quant_min_bound = 0.0
-        else:
-            raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
-
-        if "dynamic" in self.cache_quant_config.quant_type:
-            return
-        self.load_scale(layer, state_dict)
-        if self.cache_quant_config.has_zero_point:
-            self.load_zp(layer, state_dict)
         elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
             layer.cache_quant_type_str = "block_wise_fp8"
             layer.quant_max_bound = 448.0

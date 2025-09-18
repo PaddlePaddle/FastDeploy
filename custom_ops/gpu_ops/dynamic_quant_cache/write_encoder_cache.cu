@@ -252,13 +252,9 @@ void WriteEncoderCache(
             max_seq_q,
             k_input.stream()
         );
-    } else if (k_input.dtype() == paddle::DataType::BFLOAT16) {
+    } else {
+        PD_THROW("BF16 is not supported\n");
     }
-
-    // cudaDeviceSynchronize();
-    // auto err = cudaGetLastError();
-    // printf("encoder cache err = %d, str = %s\n", err, cudaGetErrorString(err));
-
 }
 }
 

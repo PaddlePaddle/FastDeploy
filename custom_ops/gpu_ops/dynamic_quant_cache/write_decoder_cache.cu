@@ -250,15 +250,11 @@ std::vector<paddle::Tensor> WriteDecoderCache(
             encoder_seqs_len.dims()[0],
             qkv_out.stream()
         );
+    } else {
+        PD_THROW("BF16 is not supported\n");
     }
 
-    // cudaDeviceSynchronize();
-    // auto err = cudaGetLastError();
-    // printf("decoder cache err = %d, str = %s\n", err, cudaGetErrorString(err));
-
     return {q_input};
-
-
 }
 }
 

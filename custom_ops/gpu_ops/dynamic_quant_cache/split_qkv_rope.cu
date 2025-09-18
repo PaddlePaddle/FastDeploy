@@ -178,7 +178,7 @@ void SplitQKVAndRope(
         const std::string &cache_quant_type_str) {
     
     if (qkv_out.dtype() == paddle::DataType::FLOAT16) {
-        
+        PD_THROW("FLOAT16 is not supported\n");
     } else if (qkv_out.dtype() == paddle::DataType::BFLOAT16) {
         using T = phi::dtype::bfloat16;
         split_qkv_and_rope<T>(
@@ -199,10 +199,6 @@ void SplitQKVAndRope(
             seq_len_encoder.dims()[0],
             qkv_out.stream());
     }
-
-    // cudaDeviceSynchronize();
-    // auto err = cudaGetLastError();
-    // printf("rope err = %d, str = %s\n", err, cudaGetErrorString(err));
 }
 
 __global__ void get_cur_cu_seq_len_k_kernel(

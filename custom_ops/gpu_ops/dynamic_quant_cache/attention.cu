@@ -518,18 +518,13 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     }
 }
 
-template<typename input_type, typename output_type, typename scale_type, int stage>
+template<typename input_type, typename output_type, typename scale_type, int stage, int kGqaGroupSize>
 void run_block_attn(Block_attn_params &params, cudaStream_t stream) {
     dim3 grid;
     grid.x = params.max_num_partitions;
     grid.y = params.batch_size;
     grid.z = params.kv_head_num;
 
-    constexpr int kGqaGroupSize = 5;
-
-    if (params.head_num / params.kv_head_num != kGqaGroupSize) {
-        throw std::runtime_error("head_num / kv_head_num != kGqaGroupSize");
-    }
     constexpr int kNWarps = 4;
     constexpr int kTileN = stage;
     constexpr int kHeadDim = 128;
@@ -573,10 +568,6 @@ void run_block_attn(Block_attn_params &params, cudaStream_t stream) {
     auto reduce_kernel = &multi_block_attention_reduce_kernel<Kernel_traits>;
 
     reduce_kernel<<<grid, Kernel_traits::kNReduceThreads, reduce_shared_mem_size, stream>>>(params);  
-
-    // cudaDeviceSynchronize();
-    // auto err = cudaGetLastError();
-    // printf("decoder attn err = %d, str = %s\n", err, cudaGetErrorString(err));
 }
 
 void DecoderAttention(
@@ -642,7 +633,16 @@ void DecoderAttention(
     params.data_num_per_block = data_num_per_block;
     params.c16_remain_seq_len = c16_remain_seq_len;
 
-    run_block_attn<input_type, output_type, scale_type, stage>(params, q_input.stream());
+    const int gqa_group_size = head_num / kv_head_num;
+    if (gqa_group_size == 5) {
+        run_block_attn<input_type, output_type, scale_type, stage, 5>(params, q_input.stream());
+    } else if (gqa_group_size == 8) {
+        run_block_attn<input_type, output_type, scale_type, stage, 8>(params, q_input.stream());
+    } else if (gqa_group_size == 14) {
+        run_block_attn<input_type, output_type, scale_type, stage, 14>(params, q_input.stream());
+    } else {
+        PD_THROW("gqa_group_size is not supported :%d\n", gqa_group_size);
+    } 
 }
 }
 
