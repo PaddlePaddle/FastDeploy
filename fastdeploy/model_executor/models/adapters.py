@@ -120,7 +120,7 @@ def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
 
 
 def _create_pooling_model_cls(orig_cls: _T) -> _T:
-    from fastdeploy.model_executor.utils import AutoWeightsLoader, WeightsMapper
+    from fastdeploy.model_executor.utils import WeightsMapper
 
     class ModelForPooling(orig_cls):
 
@@ -169,8 +169,7 @@ def _create_pooling_model_cls(orig_cls: _T) -> _T:
                 return orig_cls.load_weights(self, weights)  # type: ignore
             # Fallback
             else:
-                loader = AutoWeightsLoader(self)
-                return loader.load_weights(weights)
+                raise ValueError("No load_weights method found in the model.")
 
     return ModelForPooling
 

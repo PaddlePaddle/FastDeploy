@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import Callable, Optional, Tuple, TypeVar
+from typing import Tuple, TypeVar
 
 import numpy as np
 import paddle
@@ -44,7 +44,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger, parse_quantization
+from fastdeploy.utils import get_logger, optional_type, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -464,27 +464,6 @@ class PaddleDisWorkerProc:
         if self.ranks > 1:
             paddle.distributed.barrier()
         self.loaded_model_signal.value[0] = 1
-
-
-def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
-
-    def _parse_type(val: str) -> T:
-        try:
-            return return_type(val)
-        except ValueError as e:
-            raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
-
-    return _parse_type
-
-
-def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
-
-    def _optional_type(val: str) -> Optional[T]:
-        if val == "" or val == "None":
-            return None
-        return parse_type(return_type)(val)
-
-    return _optional_type
 
 
 def parse_args():

@@ -44,7 +44,11 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -548,6 +552,12 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_VLMoeForConditionalGeneration",
+    module_path="ernie4_5_vl_moe",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration

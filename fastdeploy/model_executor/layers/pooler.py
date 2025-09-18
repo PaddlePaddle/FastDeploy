@@ -33,7 +33,7 @@ from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingParams,
 )
 from fastdeploy.model_executor.models.adapters import _load_st_projector
-from fastdeploy.output.sequence import PoolerOutput, PoolingSequenceGroupOutput
+from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.utils import get_logger
 
 logger = get_logger("pooler", "pooler.log")

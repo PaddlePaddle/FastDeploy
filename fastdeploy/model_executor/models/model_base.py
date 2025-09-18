@@ -45,44 +45,8 @@ class ModelCategory(Enum):
     EMBEDDING = "embedding"
 
 
-_TEXT_GENERATION_MODELS = {
-    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
-    "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
-    "Qwen2MoeForCausalLM": ("qwen2_moe", "Qwen2MoeForCausalLM"),
-    "Qwen3MoeForCausalLM": ("qwen3moe", "Qwen3MoeForCausalLM"),
-    "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
-    "Ernie4_5_MTPForCausalLM": ("ernie4_5_mtp", "Ernie4_5_MTPForCausalLM"),
-    "Ernie4_5_ForCausalLM": ("ernie4_5_moe", "Ernie4_5_ForCausalLM"),
-    "Ernie4_5_MoeForCausalLM": ("ernie4_5_moe", "Ernie4_5_MoeForCausalLM"),
-}
-
-_MULTIMODAL_MODELS = {
-    "Qwen2_5_VLForConditionalGeneration": ("qwen2_5_vl.qwen2_5_vl", "Qwen2_5_VLForConditionalGeneration"),
-    "Ernie4_5_VLMoeForConditionalGeneration": (
-        "ernie4_5_vl.ernie4_5_vl_moe",
-        "Ernie4_5_VLMoeForConditionalGeneration",
-    ),
-}
-
-_EMBEDDING_MODELS = {
-    "BertModel": ("bert", "BertEmbeddingModel"),
-    "Qwen2Model": ("qwen2", "Qwen2ForCausalLM"),
-    "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
-    "Qwen2ForRewardModel": ("qwen2_rm", "Qwen2ForRewardModel"),
-    "Qwen2ForProcessRewardModel": ("qwen2_rm", "Qwen2ForProcessRewardModel"),
-    "Qwen2VLForConditionalGeneration": ("qwen2_vl", "Qwen2VLForConditionalGeneration"),  # noqa: E501
-}
-
-_ALL_MODELS = {
-    **_TEXT_GENERATION_MODELS,
-    **_MULTIMODAL_MODELS,
-    **_EMBEDDING_MODELS,
-}
-
-
 @dataclass(frozen=True)
 class ModelInfo:
-
     architecture: str
     category: ModelCategory
     is_text_generation: bool
@@ -161,19 +125,19 @@ def _try_inspect_model_cls(
 
 
 class ModelRegistry:
-
     _arch_to_model_cls = {}
     _arch_to_pretrained_model_cls = {}
+    _enhanced_models: Dict[str, Dict] = {}
 
     def __init__(self):
         self.models: Dict[str, BaseRegisteredModel] = {}
         self.pretrained_models: Dict[str, Type[PretrainedModel]] = {}
         self._registered_models: Dict[str, BaseRegisteredModel] = {}
-        self._register_predefined_models()
+        self._register_enhanced_models()
 
-    def _register_predefined_models(self):
-        for arch, (module_name, class_name) in _ALL_MODELS.items():
-            model = LazyRegisteredModel(module_name, class_name)
+    def _register_enhanced_models(self):
+        for arch, model_info in self._enhanced_models.items():
+            model = LazyRegisteredModel(module_name=model_info["module_path"], class_name=model_info["class_name"])
             self.models[arch] = model
             self._registered_models[arch] = model
 
@@ -197,16 +161,10 @@ class ModelRegistry:
             print(f"Failed to inspect model {model_arch}: {e}")
             return None
 
-    def _normalize_arch(
-        self,
-        architecture: str,
-        model_config: ModelConfig,
-    ) -> str:
+    def _normalize_arch(self, architecture: str, model_config: ModelConfig) -> str:
         if architecture in self.models:
             return architecture
 
-        # This may be called in order to resolve runner_type and convert_type
-        # in the first place, in which case we consider the default match
         match = try_match_architecture_defaults(
             architecture,
             runner_type=getattr(model_config, "runner_type", None),
@@ -214,8 +172,6 @@ class ModelRegistry:
         )
         if match:
             suffix, _ = match
-
-            # Get the name of the base model to convert
             for repl_suffix, _ in iter_architecture_defaults():
                 base_arch = architecture.replace(suffix, repl_suffix)
                 if base_arch in self.models:
@@ -228,8 +184,8 @@ class ModelRegistry:
 
         if any(arch in all_supported_archs for arch in architectures):
             raise ValueError(
-                f"Model architectures {architectures} failedare not supported. "
-                "to be inspected. Please check the logs for more details."
+                f"Model architectures {architectures} failed to be inspected. "
+                "Please check the logs for more details."
             )
 
         raise ValueError(
@@ -255,11 +211,66 @@ class ModelRegistry:
         return self._raise_for_unsupported(architectures)
 
     @classmethod
-    def register_model_class(cls, model_class):
-        """register model class"""
-        if issubclass(model_class, ModelForCasualLM) and model_class is not ModelForCasualLM:
-            cls._arch_to_model_cls[model_class.name()] = model_class
-        return model_class
+    def register_model_class(
+        cls,
+        model_class=None,
+        *,
+        architecture: str = None,
+        module_path: str = None,
+        category: Union[ModelCategory, List[ModelCategory]] = ModelCategory.TEXT_GENERATION,
+        primary_use: ModelCategory = None,
+    ):
+        """
+        Enhanced model class registration supporting both traditional and decorator-style registration.
+
+        Can be used as:
+        1. Traditional decorator: @ModelRegistry.register_model_class
+        2. Enhanced decorator with metadata: @ModelRegistry.register_model_class(architecture="...", module_path="...")
+
+        Args:
+            model_class: The model class (when used as simple decorator)
+            architecture (str): Unique identifier for the model architecture
+            module_path (str): Relative path to the module containing the model
+            category: Model category or list of categories
+            primary_use: Primary category for multi-category models
+        """
+
+        def _register(model_cls):
+            # Traditional registration for ModelForCasualLM subclasses
+            if issubclass(model_cls, ModelForCasualLM) and model_cls is not ModelForCasualLM:
+                cls._arch_to_model_cls[model_cls.name()] = model_cls
+
+            # Enhanced decorator-style registration
+            if architecture and module_path:
+                categories = category if isinstance(category, list) else [category]
+
+                # Register main entry
+                arch_key = architecture
+                cls._enhanced_models[arch_key] = {
+                    "class_name": model_cls.__name__,
+                    "module_path": module_path,
+                    "category": primary_use or categories[0],
+                    "class": model_cls,
+                }
+
+                # Register category-specific entries for multi-category models
+                if len(categories) > 1:
+                    for cat in categories:
+                        key = f"{arch_key}_{cat.value}"
+                        cls._enhanced_models[key] = {
+                            "class_name": model_cls.__name__,
+                            "module_path": module_path,
+                            "category": cat,
+                            "primary_use": primary_use or categories[0],
+                            "class": model_cls,
+                        }
+
+            return model_cls
+
+        if model_class is not None:
+            return _register(model_class)
+        else:
+            return _register
 
     @classmethod
     def register_pretrained_model(cls, pretrained_model):
@@ -287,10 +298,9 @@ class ModelRegistry:
 
     @classmethod
     def get_supported_archs(cls):
-        assert len(cls._arch_to_model_cls) >= len(
-            cls._arch_to_pretrained_model_cls
-        ), "model class num is more than pretrained model registry num"
-        return [key for key in cls._arch_to_model_cls.keys()]
+        traditional_archs = list(cls._arch_to_model_cls.keys())
+        enhanced_archs = list(cls._enhanced_models.keys())
+        return traditional_archs + enhanced_archs
 
     def resolve_model_cls(self, architectures: Union[str, List[str]]) -> Tuple[Type[nn.Layer], str]:
         """Resolve model class"""

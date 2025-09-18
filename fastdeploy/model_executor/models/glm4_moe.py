@@ -39,7 +39,11 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Glm4MoeMLP(nn.Layer):
@@ -363,6 +367,12 @@ class Glm4MoeModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Glm4MoeForCausalLM",
+    module_path="glm4_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Glm4MoeForCausalLM(ModelForCasualLM):
     """
     Glm4MoeForCausalLM
