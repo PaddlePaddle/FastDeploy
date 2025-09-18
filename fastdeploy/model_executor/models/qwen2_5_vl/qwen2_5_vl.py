@@ -142,6 +142,12 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         # -----------  language model -------------
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
+        # Persistent buffers for CUDA graphs.
+        self._input_embeddings = paddle.zeros(
+            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            dtype=fd_config.model_config.dtype,
+        )
+
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = ParallelLMHead(
@@ -213,20 +219,18 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
 
         input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
 
-        if image_features is not None:
-            # 将 image_embeds 替换 input_embeds 里的 image video 占位符
-            image_mask = ids_remove_padding == self.model.image_token_id
-            image_token_num = image_mask.sum()
+        image_mask = ids_remove_padding == self.model.image_token_id
+        image_token_num = image_mask.sum()
 
-            video_mask = ids_remove_padding == self.model.video_token_id
-            video_token_num = video_mask.sum()
+        video_mask = ids_remove_padding == self.model.video_token_id
+        video_token_num = video_mask.sum()
 
-            # 由于框架只有 image_features，所以目前不支持图片和视频混合
-            # TODO(wangyafeng) 后续考虑支持传入 video_features
-            if image_token_num > 0:
-                input_embeddings[image_mask] = image_features.cast(self.model._dtype)
-            if video_token_num > 0:
-                input_embeddings[video_mask] = image_features.cast(self.model._dtype)
+        # 由于框架只有 image_features，所以目前不支持图片和视频混合
+        # TODO(wangyafeng) 后续考虑支持传入 video_features
+        if image_token_num > 0:
+            input_embeddings[image_mask] = image_features.cast(self.model._dtype)
+        if video_token_num > 0:
+            input_embeddings[video_mask] = image_features.cast(self.model._dtype)
 
         return input_embeddings
 
@@ -239,9 +243,10 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding, image_features=image_features
         )
+        self._input_embeddings.copy_(input_embeddings, False)
 
         hidden_states = self.model(
-            input_embeddings=input_embeddings,
+            input_embeddings=self._input_embeddings,
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             forward_meta=forward_meta,
