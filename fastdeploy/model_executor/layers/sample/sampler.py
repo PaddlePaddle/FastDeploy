@@ -221,7 +221,7 @@ class Sampler(nn.Layer):
         ):
             early_stopper_cls = get_early_stopper_cls_from_stragegy(fd_config.early_stop_config.strategy)
             self.early_stopper = early_stopper_cls()
-            self.early_stopper.initialize(fd_config.parallel_config.max_num_seqs, fd_config.early_stop_config)
+            self.early_stopper.initialize(fd_config.scheduler_config.max_num_seqs, fd_config.early_stop_config)
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         """set reasoning parser"""
@@ -364,7 +364,7 @@ class Sampler(nn.Layer):
         )
         if sampling_metadata.enable_early_stop:
             # will set the stop batch in stop_flags
-            assert sampling_metadata.stop_flags is not None, "need stop_flags for eary stop"
+            assert sampling_metadata.stop_flags is not None, "need stop_flags for early stop"
             self.early_stopper.process(probs, next_tokens, sampling_metadata.stop_flags)
 
         sampler_output = SamplerOutput(

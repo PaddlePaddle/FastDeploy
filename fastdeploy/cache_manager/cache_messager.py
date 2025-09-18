@@ -515,7 +515,7 @@ class CacheMessagerV1:
         self.idx_cache_task_dict = {}
 
         if splitwise_role == "prefill":
-            self.cache_prefilled_engine_ids_queue = queue.Queue()  # 保存引擎每轮prefill的batch槽位
+            self.cache_prefilled_engine_ids_queue = queue.Queue()  # keep batch slot index for each prefill step
             consume_signals_thread = threading.Thread(target=self.consume_signals)
             consume_signals_thread.daemon = True
             consume_signals_thread.start()
@@ -579,12 +579,10 @@ class CacheMessagerV1:
                     prefilled_token_num = self.engine_cache_tasks[engine_index]["prefilled_token_num"]
                     if (
                         prefilled_token_num == self.idx_cache_task_dict[engine_index]["need_prefill_tokens"]
-                    ):  # 已经prefill所有chunk
+                    ):  # all chunks have been prefilled
                         block_id_end = len(self.idx_cache_task_dict[engine_index]["src_block_ids"])
                     else:
-                        block_id_end = (
-                            prefilled_token_num // self.block_size
-                        )  # [block_id_start, block_id_end) 前闭后开
+                        block_id_end = prefilled_token_num // self.block_size  # [block_id_start, block_id_end)
                     block_start_end_list.append((block_id_start, block_id_end))
                     current_prefilled_token_num_list.append(prefilled_token_num)
                 while True:  # from layer0 to last layer

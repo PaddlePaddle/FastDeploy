@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import re
@@ -369,7 +370,8 @@ class LLMEngine:
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    os.killpg(p.pid, signal.SIGTERM)
+                    pgid = os.getpgid(p.pid)
+                    os.killpg(pgid, signal.SIGTERM)
                 except Exception as e:
                     console_logger.error(
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
@@ -381,7 +383,8 @@ class LLMEngine:
             self.get_profile_block_num_signal.clear()
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
-                os.killpg(self.worker_proc.pid, signal.SIGTERM)
+                pgid = os.getpgid(self.worker_proc.pid)
+                os.killpg(pgid, signal.SIGTERM)
             except Exception as e:
                 console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
@@ -470,7 +473,7 @@ class LLMEngine:
             ips = ",".join(self.cfg.ips)
         arguments = (
             f" --devices {self.cfg.device_ids} {py_script}"
-            f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
+            f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
             f" --model {self.cfg.model_config.model!s}"
             f" --device_ids {self.cfg.device_ids}"
@@ -483,12 +486,12 @@ class LLMEngine:
             f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
             f" --pad_token_id {self.data_processor.pad_token_id}"
             f" --engine_pid {self.cfg.engine_worker_queue_port[0]}"
-            f" --max_num_batched_tokens {self.cfg.max_num_batched_tokens}"
+            f" --max_num_batched_tokens {self.cfg.scheduler_config.max_num_batched_tokens}"
             f" --splitwise_role {self.cfg.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
-            f" --quantization {self.cfg.model_config.quantization}"
+            f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
@@ -567,7 +570,7 @@ class LLMEngine:
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happend while adding request, details={e}, {str(traceback.format_exc())}")
+            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request

@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
@@ -40,6 +41,7 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     is_port_available,
+    parse_quantization,
 )
 
 
@@ -133,11 +135,11 @@ class EngineArgs:
     """
     dynamic load weight
     """
-    load_strategy: str = "ipc_snapshot"
+    load_strategy: str = "normal"
     """
     dynamic load weight strategy
     """
-    quantization: str = None
+    quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
     Guided decoding backend.
@@ -189,7 +191,7 @@ class EngineArgs:
     """
     Flag to indicate whether to use warm-up before inference.
     """
-    enable_prefix_caching: bool = False
+    enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
     """
@@ -386,6 +388,16 @@ class EngineArgs:
         """
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
+        if self.speculative_config is not None:
+            self.enable_prefix_caching = False
+        if self.enable_mm:
+            self.enable_prefix_caching = False
+        if not current_platform.is_cuda():
+            self.enable_prefix_caching = False
+        if self.dynamic_load_weight:
+            self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -538,7 +550,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--quantization",
-            type=str,
+            type=parse_quantization,
             default=EngineArgs.quantization,
             help="Quantization name for the model, currently support "
             "'wint8', 'wint4',"
@@ -724,7 +736,7 @@ class EngineArgs:
         perf_group = parser.add_argument_group("Performance Tuning")
         perf_group.add_argument(
             "--enable-prefix-caching",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
         )
@@ -931,24 +943,15 @@ class EngineArgs:
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)
-        extra_params = [
-            "max_model_len",
-            "enable_chunked_prefill",
-            "max_num_partial_prefills",
-            "max_long_partial_prefills",
-            "long_prefill_token_threshold",
-            "splitwise_role",
-        ]
 
         all = asdict(self)
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
                 params[k[prefix_len:]] = v
-            elif k in extra_params:
+            else:
                 params[k] = v
-
-        return SchedulerConfig(**params)
+        return SchedulerConfig(params)
 
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
@@ -1048,9 +1051,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
-            max_num_batched_tokens=self.max_num_batched_tokens,
             ips=self.ips,
             use_warmup=self.use_warmup,
             engine_worker_queue_port=self.engine_worker_queue_port,

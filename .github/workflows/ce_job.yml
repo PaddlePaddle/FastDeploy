@@ -9,7 +9,7 @@ on:
 permissions: read-all
 
 concurrency:
-  group: ${{ github.ref }}-${{ github.sha }}
+  group: CE-Job-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:

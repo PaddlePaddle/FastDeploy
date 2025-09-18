@@ -43,10 +43,16 @@ from fastdeploy.inter_communicator import (
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
-from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, get_logger, llm_logger
+
+try:
+    TokenProcessor = load_token_processor_plugins()
+    llm_logger.info(f"TokenProcessor plugin {TokenProcessor} loaded")
+except:
+    from fastdeploy.output.token_processor import TokenProcessor
 
 
 class EngineService:
@@ -74,7 +80,7 @@ class EngineService:
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
-                cfg.max_num_seqs,
+                cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
                 cfg.splitwise_role,
@@ -82,7 +88,7 @@ class EngineService:
             )
         else:
             self.resource_manager = ResourceManager(
-                cfg.max_num_seqs,
+                cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
                 cfg.splitwise_role,
@@ -108,7 +114,7 @@ class EngineService:
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (
-                (self.cfg.max_num_batched_tokens // idx)
+                (self.cfg.scheduler_config.max_num_batched_tokens // idx)
                 // self.cfg.cache_config.block_size
                 * self.cfg.cache_config.block_size
             )
@@ -388,7 +394,7 @@ class EngineService:
         requests_chunk = [[] for _ in range(len(requests))]
         chunk_request_num = len(current_request_size)
         while chunk_request_num >= 1:
-            remain_batched_tokens = self.cfg.max_num_batched_tokens
+            remain_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
             for idx in range(len(current_request_size)):
                 if current_request_size[idx] <= 0:
                     continue
@@ -528,7 +534,7 @@ class EngineService:
                     available_blocks=self.resource_manager.available_block_num(),
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.max_num_batched_tokens,
+                    max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
 
@@ -566,9 +572,13 @@ class EngineService:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
+            if self.cfg.model_config.enable_mm:
+                available_blocks = self.resource_manager.available_block_num()
+            else:
+                available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
             tasks = self.scheduler.get_requests(
-                available_blocks=self.resource_manager.available_block_num(),
+                available_blocks=available_blocks,
                 block_size=self.cfg.cache_config.block_size,
                 reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                 max_num_batched_tokens=self.cfg.max_model_len,
@@ -744,7 +754,7 @@ class EngineService:
                     self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 self.llm_logger.error(
-                    f"Error happend while receiving new request from zmq, details={e}, "
+                    f"Error happened while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
 
