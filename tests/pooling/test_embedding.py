@@ -42,7 +42,7 @@ class TestModelLoader:
     @pytest.fixture(scope="session", autouse=True)
     def setup_paddle(self):
         if not paddle.is_compiled_with_cuda():
-            print("Warning: CUDA not available, using CPU")
+            print("CUDA not available, using CPU")
             paddle.set_device("cpu")
         else:
             print("Using CUDA device")
@@ -72,7 +72,7 @@ class TestModelLoader:
         try:
             return ModelConfig(model_args)
         except Exception as e:
-            print(f"Warning: Could not create ModelConfig: {e}")
+            print(f"Could not create ModelConfig: {e}")
 
     @pytest.fixture
     def fd_config(self, model_config):
@@ -110,7 +110,7 @@ class TestModelLoader:
                 test_mode=True,
             )
         except Exception as e:
-            print(f"Warning: Could not create FDConfig: {e}")
+            print(f"Could not create FDConfig: {e}")
 
     @pytest.fixture
     def model_json_config(self, model_path):
