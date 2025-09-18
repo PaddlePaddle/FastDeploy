@@ -48,9 +48,6 @@ class ErnieX1ReasoningParser(ReasoningParser):
             raise RuntimeError("Could not find think end token id in tokenizer vocabulary")
         self.tool_call_start_token_id = self.vocab.get("<tool_call>")
 
-    def is_reasoning_end(self, input_ids: list[int]) -> bool:
-        return self.tool_call_start_token_id in input_ids
-
     def extract_reasoning_content_streaming(
         self,
         previous_text: str,
@@ -60,62 +57,51 @@ class ErnieX1ReasoningParser(ReasoningParser):
         current_token_ids: Sequence[int],
         delta_token_ids: Sequence[int],
     ) -> Union[DeltaMessage, None]:
-        """
-        根据用户需求实现的流式解析方法:
-        1. 初始内容都视为思考内容，返回delta_text,""
-        2. 当遇到\n时检查后续是否是</think>
-        3. 如果直接遇到</think>也结束思考
-        4. 思考结束后检查是<response>还是<tool_call>
-        5. 对于<response>内容，处理各种边界条件
-        """
+        # Ignore the single </think> token
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        # 思考阶段处理
+
+        # --- Thinking stage handling ---
         if not previous_text.endswith(self.think_end_token) and self.think_end_token not in previous_text:
-            # 如果遇到\n，暂时不返回，等待下一个delta_text
-            if delta_text == "\n":
+            # If the previous text ends with \n and the current delta starts with </think>, stop thinking, do not return
+            if previous_text.endswith("\n") and delta_text.startswith(self.think_end_token):
                 return None
-            # 如果前一个是\n且当前是</think>，结束思考
-            elif previous_text.endswith("\n") and delta_text.startswith(self.think_end_token):
-                return None
-            # 如果直接遇到</think>也结束思考
+            # If </think> appears directly, stop thinking, do not return
             elif delta_text.startswith(self.think_end_token):
                 return None
-            # 否则继续返回思考内容
+            # Otherwise, return thinking content (including \n)
             return DeltaMessage(reasoning_content=delta_text)
 
-        # 思考结束后检查是tool_call还是response
+        # --- After thinking ends, check tool_call or response ---
         remaining_text = previous_text + delta_text
-        after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token) :]
-        after_think = after_think.lstrip("\n")  # 跳过think后的换行
+        after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token):]
+        # Note: keep the newline(s) after </think>, do not strip them
 
-        # 处理tool_call情况
+        # Handle tool_call case: skip it
         if after_think.startswith(self.tool_call_start_token):
             return None
 
-        # 处理response情况
+        # Handle response case
         if after_think.startswith(self.response_start_token):
-            # 遇到<response>标签时不立即返回
+            # Do not return when <response> tag itself appears
             if delta_text == self.response_start_token:
                 return None
-            # 遇到<response>后的换行符也不立即返回
+            # Do not return the newline right after <response>
             elif delta_text == "\n" and previous_text.endswith(self.response_start_token):
                 return None
-            # 处理回复内容中的换行符
-            if delta_text == "\n":
-                return None
-            # 如果前一个是\n且当前是</response>，结束回复
+            # If previous ends with \n and current is </response>, stop response
             elif previous_text.endswith("\n") and delta_text == self.response_end_token:
                 return None
-            # 如果直接遇到</response>也结束回复
+            # If </response> appears directly, stop response
             elif delta_text == self.response_end_token:
                 return None
-            # 其他情况返回实际内容
+            # Otherwise, return response content (including \n)
             else:
                 return DeltaMessage(content=delta_text)
 
-        # 默认情况不返回内容
+        # Default case: return nothing
         return None
+
 
     def extract_reasoning_content(self, model_output: str, request: ChatCompletionRequest) -> Tuple[str, str]:
         """
