@@ -267,6 +267,7 @@ class EngineService:
                         self.llm_logger.warning(f"{task.request_id} need not decode after first token")
                         continue
                 cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
+                cur_task.num_cached_tokens = task.num_cached_tokens
                 if self.cfg.speculative_config.method in ["mtp"] and self.cfg.splitwise_role == "decode":
                     cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
                 if task.error_code != 200:
@@ -566,70 +567,77 @@ class EngineService:
         is_fetching = False
 
         def _fetch_request():
-            nonlocal is_fetching
-            is_fetching = True
-            num_prefill_batch = min(
-                int(self.resource_manager.available_batch()),
-                self.cfg.max_prefill_batch,
-            )
-            if self.cfg.model_config.enable_mm:
-                available_blocks = self.resource_manager.available_block_num()
-            else:
-                available_blocks = self.cfg.cache_config.max_block_num_per_seq
-
-            tasks = self.scheduler.get_requests(
-                available_blocks=available_blocks,
-                block_size=self.cfg.cache_config.block_size,
-                reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                max_num_batched_tokens=self.cfg.max_model_len,
-                batch=num_prefill_batch,
-            )
-            if self.cfg.splitwise_role != "mixed":
-                self.llm_logger.info("Inserting splitwise tasks in sheduler v1")
-                for task in tasks:
-                    # assure can allocate block ids in P
-                    while not self.resource_manager.preallocate_resource_in_p(task):
-                        time.sleep(0.005)
-                    self.split_connector.send_splitwise_tasks([task], task.idx)
-                need_delete_tasks = []
-                for task in tasks:
-                    if self.cfg.splitwise_role != "mixed":
-                        # assure fetch block ids from D
-                        status, msg = self.split_connector.check_decode_allocated(task)
-                        if not status:
-                            self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                            self.scheduler.put_results(
-                                [
-                                    RequestOutput(
-                                        request_id=task.request_id,
-                                        finished=True,
-                                        error_code=500,
-                                        error_msg=msg,
-                                    )
-                                ]
-                            )
-                            need_delete_tasks.append(task)
-                            continue
-                for tmp_task in need_delete_tasks:
-                    tasks.remove(tmp_task)
-                    # release resource in P
-                    self.resource_manager.prerelease_resource(task)
-            if self.cfg.splitwise_role == "prefill":
-                # to send cache info to cache messager
-                self.split_connector.send_cache_infos(tasks, 0)
-            # to do: ensure cache tasks has sent to cache_messager
-            while True:
-                req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                if req_ids:
-                    for task in tasks:
-                        assert task.request_id in req_ids
-                    break
+            try:
+                nonlocal is_fetching
+                is_fetching = True
+                num_prefill_batch = min(
+                    int(self.resource_manager.available_batch()),
+                    self.cfg.max_prefill_batch,
+                )
+                if self.cfg.model_config.enable_mm:
+                    available_blocks = self.resource_manager.available_block_num()
                 else:
-                    time.sleep(0.001)
-            # Fetch requests and add them to the scheduling queue
-            for task in tasks:
-                self.resource_manager.add_request(task)
-            is_fetching = False
+                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
+                tasks = self.scheduler.get_requests(
+                    available_blocks=available_blocks,
+                    block_size=self.cfg.cache_config.block_size,
+                    reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
+                    max_num_batched_tokens=self.cfg.max_model_len,
+                    batch=num_prefill_batch,
+                )
+                if self.cfg.splitwise_role != "mixed":
+                    for task in tasks:
+                        # assure can allocate block ids in P
+                        while not self.resource_manager.preallocate_resource_in_p(task):
+                            time.sleep(0.005)
+                        self.split_connector.send_splitwise_tasks([task], task.idx)
+                    need_delete_tasks = []
+                    for task in tasks:
+                        if self.cfg.splitwise_role != "mixed":
+                            # assure fetch block ids from D
+                            status, msg = self.split_connector.check_decode_allocated(task)
+                            if not status:
+                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                self.scheduler.put_results(
+                                    [
+                                        RequestOutput(
+                                            request_id=task.request_id,
+                                            finished=True,
+                                            error_code=500,
+                                            error_msg=msg,
+                                        )
+                                    ]
+                                )
+                                need_delete_tasks.append(task)
+                                continue
+                    for tmp_task in need_delete_tasks:
+                        tasks.remove(tmp_task)
+                        # release resource in P
+                        self.resource_manager.prerelease_resource(task)
+                if self.cfg.splitwise_role == "prefill":
+                    # to send cache info to cache messager
+                    self.split_connector.send_cache_infos(tasks, 0)
+                # ensure cache tasks has sent to cache_messager
+                while True:
+                    req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
+                    if req_ids:
+                        for task in tasks:
+                            assert task.request_id in req_ids
+                        break
+                    else:
+                        time.sleep(0.001)
+                # Fetch requests and add them to the scheduling queue
+                if tasks:
+                    if self.cfg.splitwise_role == "prefill":
+                        self.resource_manager.add_request_in_p(tasks)
+                    else:
+                        for task in tasks:
+                            self.resource_manager.add_request(task)
+                is_fetching = False
+            except Exception as e:
+                self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
+                is_fetching = False
 
         while self.running:
             try:

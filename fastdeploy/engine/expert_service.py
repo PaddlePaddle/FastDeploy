@@ -173,5 +173,6 @@ def start_data_parallel_service(
 
         t_deamon = threading.Thread(target=deamon_thread, daemon=True)
         t_deamon.start()
+        t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")

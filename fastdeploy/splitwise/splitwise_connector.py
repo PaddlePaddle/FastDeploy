@@ -332,6 +332,7 @@ class SplitwiseConnector:
         )
 
     def check_decode_allocated(self, task):
+        start_time = time.time()
         if task.disaggregate_info is None:
             return True, ""
         if self.enable_decode_cache_task:
@@ -340,6 +341,9 @@ class SplitwiseConnector:
             return True, ""
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
+            if time.time() - start_time > 30:
+                del self.current_request_ids[task.request_id]
+                return False, "timeout"
         msg = self.current_request_ids[task.request_id]
         del self.current_request_ids[task.request_id]
         if msg == "finished":
@@ -496,6 +500,7 @@ class SplitwiseConnector:
                         draft_token_ids=task["outputs"]["draft_token_ids"],
                     ),
                     finished=True,
+                    num_cached_tokens=task["num_cached_tokens"],
                     error_code=task["error_code"],
                     error_msg=task["error_msg"],
                 )

@@ -513,9 +513,8 @@ class CacheMessagerV1:
         self.engine_cache_task_thread_lock = threading.Lock()
         self.engine_cache_tasks = [dict() for _ in range(512)]
         self.idx_cache_task_dict = {}
-
+        self.cache_prefilled_engine_ids_queue = queue.Queue()  # keep batch slot index for each prefill step
         if splitwise_role == "prefill":
-            self.cache_prefilled_engine_ids_queue = queue.Queue()  # keep batch slot index for each prefill step
             consume_signals_thread = threading.Thread(target=self.consume_signals)
             consume_signals_thread.daemon = True
             consume_signals_thread.start()

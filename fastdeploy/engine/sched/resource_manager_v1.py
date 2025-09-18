@@ -283,12 +283,6 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
-    def has_finish_scheduled_prefill(self, request):
-        if request.num_computed_tokens == request.need_prefill_tokens:
-            return True
-        else:
-            return False
-
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -410,11 +404,12 @@ class ResourceManagerV1(ResourceManager):
                             request.status = RequestStatus.RUNNING
                             main_process_metrics.num_requests_waiting.dec(1)
                             main_process_metrics.num_requests_running.inc(1)
-                            allocated_position = self.get_available_position()
-                            request.idx = allocated_position
-                            self.tasks_list[allocated_position] = request
-                            self.stop_flags[allocated_position] = False
-                            self.req_dict[request.request_id] = allocated_position
+                            if self.config.splitwise_role == "mixed":
+                                allocated_position = self.get_available_position()
+                                request.idx = allocated_position
+                                self.tasks_list[allocated_position] = request
+                                self.stop_flags[allocated_position] = False
+                                self.req_dict[request.request_id] = allocated_position
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -588,6 +583,12 @@ class ResourceManagerV1(ResourceManager):
             self.stop_flags[request.idx] = True
             del self.requests[request.request_id]
             del self.req_dict[request.request_id]
+            self._free_blocks(request)
+
+    def add_request_in_p(self, requests: list[Request]):
+        with self.lock:
+            for request in requests:
+                self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
         """
@@ -597,22 +598,50 @@ class ResourceManagerV1(ResourceManager):
         """
         assert self.config.splitwise_role == "prefill", "Only P instance can call this method"
         with self.lock:
-            # todo: consider prompt cache
+            if self.available_batch() == 0:
+                return False
             request.need_prefill_tokens = len(request.prompt_token_ids)
             need_prealloc_prefill_blocks = (
                 request.need_prefill_tokens + self.config.cache_config.block_size - 1
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
-            if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
-                request.num_computed_tokens = 0
-                allocated_position = self.get_available_position()
-                request.idx = allocated_position
-                self.tasks_list[request.idx] = request
-                self.stop_flags[request.idx] = False
-                self.requests[request.request_id] = request
-                self.req_dict[request.request_id] = allocated_position
-                return True
-            return False
+            if self.config.cache_config.enable_prefix_caching:
+                # Enable prefix caching
+                if self.config.cache_config.enable_hierarchical_cache and self.cache_manager.num_cpu_blocks > 0:
+                    if not self.cache_manager.can_allocate_gpu_blocks(
+                        need_prealloc_prefill_blocks
+                    ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                        return False
+                success = self.get_prefix_cached_blocks(request)
+                if not success:
+                    self._free_blocks(request)
+                    return False
+                # consider for mtp, plus enc_dec_block_num
+                need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
+                if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
+                    request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks))
+                    allocated_position = self.get_available_position()
+                    request.idx = allocated_position
+                    self.tasks_list[request.idx] = request
+                    self.stop_flags[request.idx] = False
+                    self.requests[request.request_id] = request
+                    self.req_dict[request.request_id] = allocated_position
+                    return True
+                else:
+                    self._free_blocks(request)
+                    return False
+
+            else:
+                if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+                    request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                    request.num_computed_tokens = 0
+                    allocated_position = self.get_available_position()
+                    request.idx = allocated_position
+                    self.tasks_list[request.idx] = request
+                    self.stop_flags[request.idx] = False
+                    self.requests[request.request_id] = request
+                    self.req_dict[request.request_id] = allocated_position
+                    return True
+                return False
 
     def preallocate_resource_in_d(self, request: Request):
         """
@@ -651,6 +680,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             request = self.requests[request_output_in_p.request_id]
             request.output_token_ids.append(request_output_in_p.outputs.token_ids[0])
+            request.num_cached_tokens = request_output_in_p.num_cached_tokens
             if self.config.speculative_config.method in ["mtp"] and self.config.splitwise_role == "decode":
                 request.draft_token_ids = copy.deepcopy(request_output_in_p.outputs.draft_token_ids)
             # update request.need_prefill_tokens
