@@ -166,7 +166,7 @@ class MoEMethodBase(QuantMethodBase):
             else:
                 if layer.fd_config.parallel_config.splitwise_role == "mixed":
                     self.ep_decoder_runner.clean_low_latency_buffer()
-                return self.apply_ep_prefill(layer, x, gate)
+                return self.apply_ep_decode(layer, x, gate)
         else:
             return self.apply_tp(layer, x, gate)
 
