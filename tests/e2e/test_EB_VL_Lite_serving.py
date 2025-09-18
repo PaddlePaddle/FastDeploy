@@ -571,7 +571,7 @@ def test_chat_with_completion_token_ids(openai_client):
         model="default",
         messages=[{"role": "user", "content": "Hello"}],
         extra_body={
-            "completion_token_ids": [18900],
+            "completion_token_ids": [94936],
             "return_token_ids": True,
             "reasoning_max_tokens": 20,
             "max_tokens": 10,
@@ -584,7 +584,7 @@ def test_chat_with_completion_token_ids(openai_client):
     assert hasattr(response.choices[0], "message")
     assert hasattr(response.choices[0].message, "prompt_token_ids")
     assert isinstance(response.choices[0].message.prompt_token_ids, list)
-    assert 18900 in response.choices[0].message.prompt_token_ids
+    assert 94936 in response.choices[0].message.prompt_token_ids
 
 
 def test_chat_with_reasoning_max_tokens(openai_client):
