@@ -202,6 +202,8 @@ class DeepEPBuffer:
                     self.hidden_size,
                     self.num_experts,
                     self.top_k,
+                    self.ep_size,
+                    True,  # just supports dispatch_use_fp8 = True now!
                 )
 
     def barrier_all(self):
