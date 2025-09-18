@@ -100,7 +100,6 @@ class ExpertService:
         if self.cfg.splitwise_role != "mixed":
             ipc_signal_suffix_cache = self.cfg.engine_worker_queue_port[local_data_parallel_id]
             self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix_cache)
-            self.engine.split_mode_get_tasks()
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()

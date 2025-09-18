@@ -132,6 +132,8 @@ class EngineService:
         self.insert_task_to_worker_thread.start()
         self.token_processor.tasks_queue = self.engine_worker_queue
         self.token_processor.run()
+        if self.cfg.splitwise_role != "mixed":
+            self.split_mode_get_tasks()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id])

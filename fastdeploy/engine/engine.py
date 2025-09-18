@@ -624,7 +624,6 @@ class LLMEngine:
         if self.cfg.splitwise_role != "mixed":
             # 单机逻辑
             self.engine.engine_worker_queue.available_prefill_instances.put(1)
-            self.engine.split_mode_get_tasks()
             if self.cfg.scheduler_config.name == "splitwise":
                 self.splitwise_receive_thread = threading.Thread(
                     target=self.engine.split_connector.start_receiver, args=()
