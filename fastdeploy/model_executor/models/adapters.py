@@ -120,7 +120,6 @@ def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
 
 
 def _create_pooling_model_cls(orig_cls: _T) -> _T:
-    from fastdeploy.model_executor.utils import WeightsMapper
 
     class ModelForPooling(orig_cls):
 
@@ -158,8 +157,7 @@ def _create_pooling_model_cls(orig_cls: _T) -> _T:
                     name == "model" or not any(child.parameters()) for name, child in self.named_children()
                 )
                 if model_is_only_param:
-                    mapper = WeightsMapper(orig_to_new_prefix={"model.": ""})
-                    weights = mapper.apply(weights)
+                    weights = ((name[6:], data) for name, data in weights if name.startswith("model."))
                     loaded_params = self.model.load_weights(weights)
                     loaded_params = {f"model.{name}" for name in loaded_params}
                     return loaded_params

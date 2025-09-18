@@ -552,12 +552,6 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
-@ModelRegistry.register_model_class(
-    architecture="Ernie4_5_VLMoeForConditionalGeneration",
-    module_path="ernie4_5_vl_moe",
-    category=ModelCategory.MULTIMODAL,
-    primary_use=ModelCategory.MULTIMODAL,
-)
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
@@ -802,6 +796,12 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_VLMoeForConditionalGeneration",
+    module_path="ernie4_5_vl.ernie4_5_vl_moe",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
     """
     Ernie4_5_MoePretrainedModel

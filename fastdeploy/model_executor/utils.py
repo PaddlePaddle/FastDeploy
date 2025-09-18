@@ -15,9 +15,7 @@
 """
 
 import re
-from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
 import paddle
@@ -216,51 +214,6 @@ def switch_config_context(config_obj, config_attr_name, value):
         yield
     finally:
         setattr(config_obj, config_attr_name, origin_value)
-
-
-WeightsMapping = Mapping[str, Optional[str]]
-
-
-@dataclass
-class WeightsMapper:
-    """Maps the name of each weight if they match the following patterns."""
-
-    orig_to_new_substr: WeightsMapping = field(default_factory=dict)
-    orig_to_new_prefix: WeightsMapping = field(default_factory=dict)
-    orig_to_new_suffix: WeightsMapping = field(default_factory=dict)
-
-    def _map_name(self, key: str) -> Optional[str]:
-        for substr, new_key in self.orig_to_new_substr.items():
-            if substr in key:
-                if new_key is None:
-                    return None
-
-                key = key.replace(substr, new_key, 1)
-
-        for prefix, new_key in self.orig_to_new_prefix.items():
-            if key.startswith(prefix):
-                if new_key is None:
-                    return None
-
-                key = key.replace(prefix, new_key, 1)
-
-        for suffix, new_key in self.orig_to_new_suffix.items():
-            if key.endswith(suffix):
-                if new_key is None:
-                    return None
-
-                key = key.replace(suffix, new_key, 1)
-
-        return key
-
-    def apply(self, weights: Iterable[tuple[str, paddle.Tensor]]) -> Iterable[tuple[str, paddle.Tensor]]:
-        return ((out_name, data) for name, data in weights if (out_name := self._map_name(name)) is not None)
-
-    def apply_list(self, values: list[str]) -> list[str]:
-        return [out_name for name in values if (out_name := self._map_name(name)) is not None]
-
-    def apply_dict(self, values: dict[str, Any]) -> dict[str, Any]:
-        return {out_name: value for name, value in values.items() if (out_name := self._map_name(name)) is not None}
 
 
 def rename_offline_ckpt_suffix_to_fd_suffix(

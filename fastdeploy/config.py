@@ -243,11 +243,15 @@ class ModelConfig:
         registry = self.registry
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
+        is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
 
         if self.runner_type == "generate" and not is_generative_model:
-            generate_converts = _RUNNER_CONVERTS["generate"]
-            if self.convert_type not in generate_converts:
-                raise ValueError("This model does not support '--runner generate.")
+            if is_multimodal_model:
+                pass
+            else:
+                generate_converts = _RUNNER_CONVERTS["generate"]
+                if self.convert_type not in generate_converts:
+                    raise ValueError("This model does not support '--runner generate.")
         if self.runner_type == "pooling" and not is_pooling_model:
             pooling_converts = _RUNNER_CONVERTS["pooling"]
             if self.convert_type not in pooling_converts:

@@ -264,7 +264,6 @@ class ModelRegistry:
                             "primary_use": primary_use or categories[0],
                             "class": model_cls,
                         }
-
             return model_cls
 
         if model_class is not None:
