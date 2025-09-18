@@ -527,7 +527,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
-                    self.share_inputs["prompt_lens"][idx : idx + 1] = length
+                    self.share_inputs["prompt_lens"][idx : idx + 1] = token_chunk_size
                 else:
                     if self.enable_mm:
                         inputs = self._preprocess_mm_task(request.multimodal_inputs)
@@ -1475,7 +1475,10 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["input_ids"][idx : idx + 1, :token_chunk_size] = inputs["input_ids"]
                     self.share_inputs["prompt_ids"][
                         idx : idx + 1,
-                        task.start_idx : task.start_idx + token_chunk_size,
+                        self.share_inputs["prompt_lens"][idx : idx + 1] : self.share_inputs["prompt_lens"][
+                            idx : idx + 1
+                        ]
+                        + token_chunk_size,
                     ] = inputs["input_ids"]
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = task.start_idx
                     task.start_idx += token_chunk_size
@@ -1486,7 +1489,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
-                # self.share_inputs["prompt_lens"][idx : idx + 1] += token_chunk_size
+                self.share_inputs["prompt_lens"][idx : idx + 1] += token_chunk_size
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
 
             if self.speculative_decoding and self.proposer.is_chunk_prefill_enabled():
@@ -1888,6 +1891,11 @@ class GPUModelRunner(ModelRunnerBase):
             else self.model_config.num_hidden_layers
         )
         required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
+        if cache_quant_dtype is not None and "dynamic" in cache_quant_dtype:
+            if cache_quant_dtype == "dynamic_int2_zp":
+                cache_size = self.cache_config.block_size // 4 * hidden_dim
+                scale_size = self.cache_config.block_size // 32 * hidden_dim * 2
+                required_memory = byte_of_dtype * 2 * (cache_size + scale_size) * num_layers
         return required_memory
 
     def not_need_stop(self) -> bool:
