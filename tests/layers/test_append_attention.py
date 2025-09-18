@@ -379,7 +379,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         self.max_enc_len_this_time = paddle.to_tensor([self.max_enc_len_this_time], "int32", place=paddle.CPUPlace())
         self.max_dec_len_this_time = paddle.to_tensor([self.max_dec_len_this_time], "int32", place=paddle.CPUPlace())
-        self.seq_lens_this_time = self.seq_lens_encoder
+        self.seq_lens_this_time = copy.deepcopy(self.seq_lens_encoder)
         decode_max_tile_size = 1024 * self.batch_size * np.ceil((2 * 10) / 12)
         self.decoder_batch_ids = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.decoder_tile_ids_per_batch = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
@@ -652,7 +652,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         # encoder
         # self.seq_lens_encoder,self.seq_lens_decoder,self.max_enc_len_this_time,self.max_dec_len_this_time=get_encoder_decoder_len(self.batch_size,self.seq_len)
-        self.seq_lens_this_time = self.seq_lens_encoder
+        self.seq_lens_this_time = copy.deepcopy(self.seq_lens_encoder)
         if self.use_mask_offset:
             print("encoder mask_offset: ", self.mask_offset)
         self.cmp_append_attention(attn_mask=self.attention_mask)

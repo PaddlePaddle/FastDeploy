@@ -416,3 +416,27 @@ def test_max_tokens_non_integer():
     assert (
         resp.get("error").get("message") == "Input should be a valid integer, got a number with a fractional part"
     ), "未返回预期的 max_tokens 为非整数的错误信息"
+
+
+def test_error_structure():
+    """校验返回 error 结构，而不关心具体内容"""
+    data = {
+        "stream": False,
+        "messages": "我是一个非法的消息结构",
+        "max_tokens": 10,
+    }
+
+    payload = build_request_payload(TEMPLATE, data)
+    resp = send_request(URL, payload).json()
+
+    # 基本校验：必须有 error
+    assert "error" in resp, "返回结果缺少 error 字段"
+    err = resp["error"]
+    assert isinstance(err, dict), "error 不是字典"
+
+    # 校验结构字段存在
+    for field in ["message", "type", "param", "code"]:
+        assert field in err, f"error 缺少 {field} 字段"
+
+    # message 不为 None
+    assert err["message"] is not None, "error.message 不应为 null"
