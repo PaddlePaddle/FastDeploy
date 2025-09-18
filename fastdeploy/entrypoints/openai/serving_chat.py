@@ -121,7 +121,7 @@ class OpenAIServingChat:
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
-                api_server_logger.error(e.message)
+                api_server_logger.error(f"request[{request_id}] generator error: {str(e)}, {e.message}")
                 self.engine_client.semaphore.release()
                 return ErrorResponse(
                     error=ErrorInfo(message=str(e.message), type=ErrorType.INVALID_REQUEST_ERROR, param=e.param)

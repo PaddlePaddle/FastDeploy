@@ -34,7 +34,7 @@
 | `fastdeploy:available_gpu_block_num`      | Gauge     | 缓存中可用的GPU块数量（包含尚未正式释放的前缀缓存块）| 个   |
 | `fastdeploy:free_gpu_block_num`           | Gauge     | 缓存中的可用块数             | 个   |
 | `fastdeploy:max_gpu_block_num`            | Gauge     | 服务启动时确定的总块数        | 个   |
-| `available_gpu_resource`                  | Gauge     | 可用块占比，即可用GPU块数量 / 最大GPU块数量| 个   |
+| `fastdeploy:available_gpu_resource`       | Gauge     | 可用块占比，即可用GPU块数量 / 最大GPU块数量| 个   |
 | `fastdeploy:requests_number`              | Counter   | 已接收的请求总数             | 个   |
 | `fastdeploy:send_cache_failed_num`        | Counter   | 发送缓存失败的总次数          | 个   |
 | `fastdeploy:first_token_latency`          | Gauge     | 最近一次生成首token耗时       | 秒   |

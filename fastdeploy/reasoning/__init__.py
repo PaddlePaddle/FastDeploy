@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from fastdeploy.plugins import load_reasoning_parser_plugins
+
 from .abs_reasoning_parsers import ReasoningParser, ReasoningParserManager
 from .ernie_vl_reasoning_parsers import ErnieVLReasoningParser
 from .ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
@@ -26,3 +28,5 @@ __all__ = [
     "Qwen3ReasoningParser",
     "ErnieX1ReasoningParser",
 ]
+
+load_reasoning_parser_plugins()
