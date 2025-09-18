@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import Tuple, TypeVar
+from typing import Tuple
 
 import numpy as np
 import paddle
@@ -44,12 +44,11 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger, optional_type, parse_quantization
+from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
-
-T = TypeVar("T")
 
 
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
@@ -263,10 +262,10 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
@@ -284,7 +283,7 @@ class PaddleDisWorkerProc:
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if local_rank == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
@@ -383,7 +382,7 @@ class PaddleDisWorkerProc:
             if num_blocks_local > 40000:
                 logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
                 num_blocks_local = min(40000, num_blocks_local)
-            logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
+            logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
             if num_blocks_local <= 0:
@@ -578,7 +577,7 @@ def parse_args():
         "--moba_attention_config",
         type=json.loads,
         default=None,
-        help="Configation of moba attention.",
+        help="Configuration of moba attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -599,7 +598,7 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=["ipc", "ipc_snapshot"],
+        choices=["ipc", "ipc_snapshot", "meta", "normal"],
         default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
@@ -678,8 +677,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         FDConfig: Initialized FastDeploy configuration object
     """
     # RL rollout
-    if args.quantization is not None and isinstance(args.quantization, str):
-        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -687,6 +684,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
+    scheduler_config = SchedulerConfig(vars(args))
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
@@ -706,10 +704,11 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
-    parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
-        parallel_config.local_data_parallel_id
-    ]
-    parallel_config.set_tp_group()
+    if args.load_strategy != "meta":
+        parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
+            parallel_config.local_data_parallel_id
+        ]
+    parallel_config.set_communicate_group()
 
     load_config = LoadConfig(vars(args))
 
@@ -783,6 +782,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
+        scheduler_config=scheduler_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,

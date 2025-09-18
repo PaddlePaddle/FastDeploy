@@ -24,9 +24,6 @@ import paddle
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.utils import get_logger
-
-logger = get_logger("utils", "utils.log")
 
 
 class BitMaskTracker:
@@ -221,10 +218,6 @@ def switch_config_context(config_obj, config_attr_name, value):
         setattr(config_obj, config_attr_name, origin_value)
 
 
-def is_pin_memory_available() -> bool:
-    pass
-
-
 WeightsMapping = Mapping[str, Optional[str]]
 
 
@@ -294,7 +287,7 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     }
     moe_quant_type = ""
     dense_quant_type = ""
-    if fd_config.quant_config is None:
+    if fd_config.quant_config is not None:
         if fd_config.quant_config.name() == "mix_quant":
             moe_quant_type = fd_config.quant_config.moe_quant_type
             dense_quant_type = fd_config.quant_config.dense_quant_type
