@@ -16,7 +16,7 @@
 
 import unittest
 
-from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 from fastdeploy.reasoning.ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
 
@@ -195,16 +195,18 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
                 delta_token_ids=[self.parser.vocab["<response>"]],
             )
         )
-        self.assertIsNone(
-            self.parser.extract_reasoning_content_streaming(
-                previous_text="</think><response>",
-                current_text="</think><response>\n",
-                delta_text="\n",
-                previous_token_ids=[],
-                current_token_ids=[],
-                delta_token_ids=[204],
-            )
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="</think><response>",
+            current_text="</think><response>\n",
+            delta_text="\n",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[204],
         )
+        self.assertIsInstance(msg, DeltaMessage)
+        self.assertEqual(msg.content, "\n")
+
         self.assertIsNone(
             self.parser.extract_reasoning_content_streaming(
                 previous_text="</think><response>\n",
@@ -231,7 +233,7 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
     def test_batch_reasoning_and_response(self):
         text = "abc\n</think>\n<response>hello\nworld</response>"
         reasoning, response = self.parser.extract_reasoning_content(text, self.request)
-        self.assertEqual(reasoning, "abc")
+        self.assertEqual(reasoning, "abc\n")
         self.assertEqual(response, "hello\nworld")
 
     def test_batch_reasoning_and_tool_call(self):
@@ -252,11 +254,11 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         self.assertEqual(reasoning, "abc")
         self.assertEqual(response, "partial response")
 
-    def test_batch_strip_newline_before_closing_tags(self):
-        text = "abc\n</think><response>line1\n</response>"
+    def test_batch_preserve_all_newlines(self):
+        text = "abc\n</think>\n<response>line1\nline2\n</response>"
         reasoning, response = self.parser.extract_reasoning_content(text, self.request)
-        self.assertEqual(reasoning, "abc")  # trailing \n stripped before </think>
-        self.assertEqual(response, "line1")  # trailing \n stripped before </response>
+        self.assertEqual(reasoning, "abc\n")
+        self.assertEqual(response, "line1\nline2\n")
 
 
 if __name__ == "__main__":
