@@ -15,6 +15,7 @@
 """
 
 import unittest
+from unittest.mock import Mock
 
 import paddle
 
@@ -104,6 +105,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         scheduler_config.max_num_seqs = 1
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
+        model_config = Mock()
         # Initialize cuda graph capture list
         graph_opt_config._set_cudagraph_sizes(max_num_seqs=scheduler_config.max_num_seqs)
         graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
@@ -112,6 +114,7 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
             scheduler_config=scheduler_config,
             cache_config=cache_config,
             parallel_config=parallel_config,
+            model_config=model_config,
             test_mode=True,
         )
 
