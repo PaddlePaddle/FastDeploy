@@ -120,8 +120,6 @@ def get_pooling_config(model: str, revision: Optional[str] = "main"):
     if modules_dict is None:
         return None
 
-    logger.info("Found sentence-transformers modules configuration.")
-
     pooling = next((item for item in modules_dict if item["type"] == "sentence_transformers.models.Pooling"), None)
 
     normalize = bool(
@@ -131,13 +129,11 @@ def get_pooling_config(model: str, revision: Optional[str] = "main"):
     if pooling:
         pooling_file_name = "{}/config.json".format(pooling["path"])
         pooling_dict = get_hf_file_to_dict(pooling_file_name, model)
-        logger.info(f"pooling_dict:{pooling_dict}")
         pooling_type_name = next((item for item, val in pooling_dict.items() if val is True), None)
 
         if pooling_type_name is not None:
             pooling_type_name = get_pooling_config_name(pooling_type_name)
 
-        logger.info("Found pooling configuration.")
         return {"pooling_type": pooling_type_name, "normalize": normalize}
 
     return None
