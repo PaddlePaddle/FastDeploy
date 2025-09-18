@@ -133,7 +133,7 @@ class LLMEngine:
 
         # Start workers
         self.worker_proc = self._start_worker_service()
-        console_logger.info("Waiting worker processes ready...")
+        console_logger.info("Waiting for worker processes to be ready...")
         time.sleep(5)
         self.worker_init_status = dict()
 
@@ -620,6 +620,7 @@ class LLMEngine:
         """
         Stop profiling of the model server and reset variables.
         """
+        llm_logger.info("******************** debug")
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
             time.sleep(1)
@@ -627,6 +628,7 @@ class LLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            llm_logger.info("******************** debug")
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(
                 device_ids, self.ipc_signal_suffix, self.cfg.splitwise_role != "mixed"
