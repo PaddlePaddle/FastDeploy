@@ -72,6 +72,7 @@ class VLMoEMeta:
     image_index: paddle.Tensor
     token_type_ids: paddle.Tensor
     image_token_num: paddle.Tensor
+    _image_token_num: int
 
     def __str__(self):
         return (
@@ -277,26 +278,30 @@ class Ernie4_5_VLMoE(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
             shared_experts_out = self.shared_experts(hidden_states)
-        text_image_gather_scatter(
-            hidden_states,
-            vl_moe_meta.text_input,
-            vl_moe_meta.image_input,
-            vl_moe_meta.token_type_ids,
-            vl_moe_meta.text_index,
-            vl_moe_meta.image_index,
-            True,
-        )
-        text_out = self.text_fused_moe(vl_moe_meta.text_input)
-        image_out = self.image_fused_moe(vl_moe_meta.image_input)
-        text_image_gather_scatter(
-            hidden_states,
-            text_out,
-            image_out,
-            vl_moe_meta.token_type_ids,
-            vl_moe_meta.text_index,
-            vl_moe_meta.image_index,
-            False,
-        )
+        if vl_moe_meta._image_token_num > 0:
+            text_image_gather_scatter(
+                hidden_states,
+                vl_moe_meta.text_input,
+                vl_moe_meta.image_input,
+                vl_moe_meta.token_type_ids,
+                vl_moe_meta.text_index,
+                vl_moe_meta.image_index,
+                True,
+            )
+            text_out = self.text_fused_moe(vl_moe_meta.text_input)
+            image_out = self.image_fused_moe(vl_moe_meta.image_input)
+            text_image_gather_scatter(
+                hidden_states,
+                text_out,
+                image_out,
+                vl_moe_meta.token_type_ids,
+                vl_moe_meta.text_index,
+                vl_moe_meta.image_index,
+                False,
+            )
+        else: 
+            hidden_states = self.text_fused_moe(vl_moe_meta.text_input)
+            self.image_fused_moe(vl_moe_meta.image_input)
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
@@ -505,8 +510,9 @@ class Ernie4_5_VLModel(nn.Layer):
         token_num = ids_remove_padding.shape[0]
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
-        # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
-        self._cuda_graph_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
+        if image_token_num == 0:
+            # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
+            self._cuda_graph_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
         self._cuda_graph_buffers["token_type_ids"].copy_(token_type_ids, False)
         self._cuda_graph_buffers["image_token_num"].copy_(image_token_num, False)
 
@@ -517,6 +523,7 @@ class Ernie4_5_VLModel(nn.Layer):
             image_index=self._cuda_graph_buffers["image_index"][:token_num],
             token_type_ids=self._cuda_graph_buffers["token_type_ids"][:token_num],
             image_token_num=self._cuda_graph_buffers["image_token_num"],
+            _image_token_num=image_token_num.item(),
         )
 
     def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
