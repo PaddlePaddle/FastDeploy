@@ -1,7 +1,7 @@
 """
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License"
+# Licensed under the Apache License, Version 2.0 (the "License")
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -74,7 +74,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
 
         # --- After thinking ends, check tool_call or response ---
         remaining_text = previous_text + delta_text
-        after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token):]
+        after_think = remaining_text[remaining_text.find(self.think_end_token) + len(self.think_end_token) :]
         # Note: keep the newline(s) after </think>, do not strip them
 
         # Handle tool_call case: skip it
@@ -101,7 +101,6 @@ class ErnieX1ReasoningParser(ReasoningParser):
 
         # Default case: return nothing
         return None
-
 
     def extract_reasoning_content(self, model_output: str, request: ChatCompletionRequest) -> Tuple[str, str]:
         """
