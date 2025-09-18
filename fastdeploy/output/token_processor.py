@@ -29,7 +29,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
-from fastdeploy.inter_communicator import IPCSignal, ZmqClient
+from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
@@ -58,12 +58,11 @@ class TokenProcessor:
         self.split_connector = split_connector
 
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+
             llm_logger.debug(f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}")
-            self.zmq_server = ZmqClient(
+            self.zmq_server = ZmqIpcServer(
                 name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}", mode=zmq.PULL
             )
-            self.zmq_server.start_server()
-            self.zmq_server.create_router()
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
@@ -498,6 +497,7 @@ class TokenProcessor:
                 metrics = RequestMetrics(
                     arrival_time=task.arrival_time,
                     inference_start_time=task.inference_start_time,
+                    model_execute_time=time.time() - task.inference_start_time,
                     first_token_time=time.time() - task.inference_start_time,
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
@@ -510,6 +510,7 @@ class TokenProcessor:
                 metrics = RequestMetrics(
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
+                    model_execute_time=time.time() - task.inference_start_time,
                 )
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)

@@ -23,10 +23,13 @@ from .ipc_signal_const import (
     ModelWeightsStatus,
     PrefixTreeStatus,
 )
-from .zmq_client import ZmqClient
+from .zmq_client import ZmqIpcClient
+from .zmq_server import ZmqIpcServer, ZmqTcpServer
 
 __all__ = [
-    "ZmqClient",
+    "ZmqIpcClient",
+    "ZmqIpcServer",
+    "ZmqTcpServer",
     "IPCSignal",
     "EngineWorkerQueue",
     "EngineCacheQueue",
