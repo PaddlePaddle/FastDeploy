@@ -356,6 +356,8 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            if reasoning_delta_message and reasoning_delta_message.completion_token_ids:
+                response_dict["outputs"]["token_ids"] = reasoning_delta_message.completion_token_ids
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
