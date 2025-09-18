@@ -656,6 +656,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_ForCausalLM",
+    module_path="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
     """
     Ernie4_5_ForCausalLM
@@ -669,6 +675,12 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         return "Ernie4_5_ForCausalLM"
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5ForCausalLM",
+    module_path="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5ForCausalLM(Ernie4_5_ForCausalLM):
     """
     Ernie4_5ForCausalLM 0.3B-PT
