@@ -530,36 +530,39 @@ class CacheMessagerV1:
 
     def _add_cache_task_thread(self):
         while True:
-            cache_info = self.engine_worker_queue.get_cache_info()
-            self.engine_worker_queue.finish_add_cache_task_barrier.wait()
-            finished_add_cache_task_req_ids = []
-            if cache_info:
-                for info in cache_info:
-                    if info["request_id"] in self.cache_info:
-                        self.cache_info[info["request_id"]].update(info)
-                        current_info = self.cache_info[info["request_id"]]
-                        assert "dest_block_ids" in current_info and "src_block_ids" in current_info
-                        finished_add_cache_task_req_ids.append(info["request_id"])
-                        decode_cached_block_num = len(current_info["src_block_ids"]) - len(
-                            current_info["dest_block_ids"]
-                        )
-                        padding_decode_block_ids = [-1 for i in range(decode_cached_block_num)] + current_info[
-                            "dest_block_ids"
-                        ]
-                        current_info["dest_block_ids"] = padding_decode_block_ids
-                        current_info["decode_cached_tokens"] = decode_cached_block_num * self.block_size
-                        current_info["sended_layer_id"] = -1
-                        current_info["sended_block_num"] = current_info["decode_cached_tokens"] // self.block_size
-                        current_info["status"] = "init"
-                        logger.info(f"finish add cache task: {current_info}")
-                        self.cache_info[info["request_id"]] = current_info
-                        self.idx_cache_task_dict[current_info["current_id"]] = current_info
-                    else:
-                        self.cache_info[info["request_id"]] = info
-                if self.rank == 0 and finished_add_cache_task_req_ids:
-                    self.engine_worker_queue.put_finished_add_cache_task_req(finished_add_cache_task_req_ids)
-            else:
-                time.sleep(0.001)
+            try:
+                cache_info = self.engine_worker_queue.get_cache_info()
+                self.engine_worker_queue.finish_add_cache_task_barrier.wait()
+                finished_add_cache_task_req_ids = []
+                if cache_info:
+                    for info in cache_info:
+                        if info["request_id"] in self.cache_info:
+                            self.cache_info[info["request_id"]].update(info)
+                            current_info = self.cache_info[info["request_id"]]
+                            assert "dest_block_ids" in current_info and "src_block_ids" in current_info
+                            finished_add_cache_task_req_ids.append(info["request_id"])
+                            decode_cached_block_num = len(current_info["src_block_ids"]) - len(
+                                current_info["dest_block_ids"]
+                            )
+                            padding_decode_block_ids = [-1 for i in range(decode_cached_block_num)] + current_info[
+                                "dest_block_ids"
+                            ]
+                            current_info["dest_block_ids"] = padding_decode_block_ids
+                            current_info["decode_cached_tokens"] = decode_cached_block_num * self.block_size
+                            current_info["sended_layer_id"] = -1
+                            current_info["sended_block_num"] = current_info["decode_cached_tokens"] // self.block_size
+                            current_info["status"] = "init"
+                            logger.info(f"finish add cache task: {current_info}")
+                            self.cache_info[info["request_id"]] = current_info
+                            self.idx_cache_task_dict[current_info["current_id"]] = current_info
+                        else:
+                            self.cache_info[info["request_id"]] = info
+                    if self.rank == 0 and finished_add_cache_task_req_ids:
+                        self.engine_worker_queue.put_finished_add_cache_task_req(finished_add_cache_task_req_ids)
+                else:
+                    time.sleep(0.001)
+            except Exception as e:
+                logger.info(f"add cache task occured error: {e},  {traceback.format_exc()!s}.")
 
     def prefill_layerwise_send_cache_thread(self):
         """

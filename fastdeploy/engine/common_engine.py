@@ -617,16 +617,17 @@ class EngineService:
                         self.resource_manager.prerelease_resource(task)
                 if self.cfg.splitwise_role == "prefill":
                     # to send cache info to cache messager
-                    self.split_connector.send_cache_infos(tasks, 0)
-                # ensure cache tasks has sent to cache_messager
-                while True:
-                    req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                    if req_ids:
-                        for task in tasks:
-                            assert task.request_id in req_ids
-                        break
-                    else:
-                        time.sleep(0.001)
+                    if tasks:
+                        self.split_connector.send_cache_infos(tasks, 0)
+                        # ensure cache tasks has sent to cache_messager
+                        while True:
+                            req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
+                            if req_ids:
+                                for task in tasks:
+                                    assert task.request_id in req_ids
+                                break
+                            else:
+                                time.sleep(0.001)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     if self.cfg.splitwise_role == "prefill":

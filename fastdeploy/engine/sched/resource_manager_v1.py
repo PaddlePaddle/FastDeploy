@@ -641,6 +641,7 @@ class ResourceManagerV1(ResourceManager):
                     self.requests[request.request_id] = request
                     self.req_dict[request.request_id] = allocated_position
                     return True
+
                 return False
 
     def preallocate_resource_in_d(self, request: Request):

@@ -56,6 +56,7 @@ class SplitwiseConnector:
         self.temp_cache_info = dict()
         self.current_request_ids = dict()
         self.idx = self.cfg.parallel_config.local_data_parallel_id
+        self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if self.cfg.cache_config.pd_comm_port is not None:
             self.zmq_ctx = zmq.Context()
