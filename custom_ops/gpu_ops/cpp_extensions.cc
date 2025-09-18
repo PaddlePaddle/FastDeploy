@@ -250,14 +250,17 @@ std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor &topk_ids,
 paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& up_gate_proj_weight, const paddle::Tensor& down_proj_weight,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
-    const std::string& quant_method, const bool used_in_ep_low_latency,
-    const int estimate_total_token_nums);
+    const std::string& quant_method,
+    const bool used_in_ep_low_latency,
+    const int estimate_total_token_nums,
+    const std::string& activation);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,

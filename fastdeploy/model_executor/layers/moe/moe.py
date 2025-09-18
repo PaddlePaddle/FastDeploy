@@ -76,6 +76,8 @@ class FusedMoE(nn.Layer):
         gate_correction_bias=None,
         redundant_table_manger: RedundantExpertManger = None,
         weight_key_map: dict = {},
+        with_bias: bool = False,
+        activation="swiglu",
     ):
         """
         Initialize the Moe layer with given parameters.
@@ -114,6 +116,9 @@ class FusedMoE(nn.Layer):
 
         self.use_method = envs.FD_MOE_BACKEND.lower()
         self.moe_tag = moe_tag
+        self.with_bias = with_bias
+        self.activation = activation
+
         if self.ep_size > 1:
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
 
@@ -163,7 +168,10 @@ class FusedMoE(nn.Layer):
         )
 
     def weight_loader(self, param, loaded_weight, expert_id, shard_id: Optional[str] = None):
-
+        if expert_id is None and shard_id is None:
+            # MoE experts has been fused in disk
+            self._load_fused_experts_weight(param, loaded_weight)
+            return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
         elif current_platform.is_cuda():
@@ -266,6 +274,22 @@ class FusedMoE(nn.Layer):
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
         expert_param.copy_(loaded_weight, False)
+
+    def _load_fused_experts_weight(self, param, loaded_weight):
+        if self.tp_size > 1:
+            dim = -1
+            if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
+                size = loaded_weight.shape[dim]
+            else:
+                size = loaded_weight.get_shape()[dim]
+            block_size = size // self.tp_size
+            shard_offset = self.tp_rank * block_size
+            shard_size = (self.tp_rank + 1) * block_size
+            loaded_weight = slice_fn(loaded_weight, dim, shard_offset, shard_size)
+        assert param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        param.copy_(loaded_weight, False)
 
     def _load_expert_weight(
         self,

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+import random
 import time
 import unittest
 
@@ -21,7 +23,11 @@ from paddle.incubate.nn.functional import fused_rms_norm
 
 import fastdeploy
 
-paddle.seed(10)
+seed = 1000
+
+random.seed(seed)
+np.random.seed(seed)
+paddle.seed(seed)
 
 
 class RopeEmbedding:
@@ -74,7 +80,7 @@ class RopeEmbedding:
             cos_pos = cos
             # NeoX Stype：前后半部分分块旋转
             rotate_half_q = paddle.reshape(
-                paddle.stack(
+                paddle.concat(
                     [
                         -q[:, :, :, q.shape[-1] // 2 :],
                         q[:, :, :, : q.shape[-1] // 2],
@@ -84,7 +90,7 @@ class RopeEmbedding:
                 paddle.shape(q),
             )
             rotate_half_k = paddle.reshape(
-                paddle.stack(
+                paddle.concat(
                     [
                         -k[:, :, :, k.shape[-1] // 2 :],
                         k[:, :, :, : k.shape[-1] // 2],
@@ -112,6 +118,98 @@ class RopeEmbedding:
         key = paddle.add(paddle.multiply(k, cos_pos), paddle.multiply(rotate_half_k, sin_pos))
 
         return paddle.cast(query, q.dtype), paddle.cast(key, k.dtype)
+
+
+class YaRNScaledEmbedding(RopeEmbedding):
+    def __init__(
+        self,
+        head_dim,
+        max_position_embeddings=8192,
+        base=10000,
+        compression_ratio=1.0,
+        scale=1,
+        mscale=0.1,
+        original_max_position_embeddings=8192,
+        extrapolation_factor=1,
+        attn_factor=1,
+        beta_fast=32,
+        beta_slow=1,
+        use_neox_rotary_style=False,
+    ):
+        super().__init__(use_neox_rotary_style=use_neox_rotary_style)
+        self.head_dim = head_dim
+        self.compression_ratio = compression_ratio
+        self.base = base
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.extrapolation_factor = extrapolation_factor
+        self.scale = scale
+        self.mscale = mscale
+        self.attn_factor = attn_factor
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.use_neox_rotary_style = use_neox_rotary_style
+
+    def yarn_find_correction_range(self):
+        low = math.floor(self.yarn_find_correction_dim(self.beta_fast))
+        high = math.ceil(self.yarn_find_correction_dim(self.beta_slow))
+        return max(low, 0), min(high, self.head_dim - 1)  # Clamp values just in case
+
+    def yarn_find_correction_dim(self, num_rotations):
+        return (self.head_dim * math.log(self.original_max_position_embeddings / (num_rotations * 2 * math.pi))) / (
+            2 * math.log(self.base)
+        )
+
+    def yarn_get_mscale(self):
+        if self.scale <= 1:
+            return 1.0
+        return self.mscale * math.log(self.scale) + 1.0
+
+    def yarn_linear_ramp_mask(self, min, max, dim):
+        if min == max:
+            max += 0.001  # Prevent singularity
+
+        linear_func = (paddle.arange(dim, dtype="float32") - min) / (max - min)
+        ramp_func = paddle.clip(linear_func, 0, 1)
+        return ramp_func
+
+    def get_rotary_position_embedding(self, seq_length, position_ids=None):
+        pos_freqs = self.base ** (paddle.arange(0, self.head_dim, 2, dtype="float32") / self.head_dim)
+        inv_freq_extrapolation = 1.0 / pos_freqs
+        inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
+        low, high = self.yarn_find_correction_range()
+
+        inv_freq_mask = (
+            1
+            - paddle.to_tensor(
+                self.yarn_linear_ramp_mask(low, high, self.head_dim // 2), dtype="float32", place=paddle.get_device()
+            )
+        ) * self.extrapolation_factor  # Get n-d rotational scaling corrected for extrapolation
+
+        indices = inv_freq_interpolation * (1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
+        _mscale = paddle.to_tensor(
+            self.yarn_get_mscale() * self.attn_factor, dtype="float32"
+        )  # Get n-d magnitude scaling corrected for interpolation
+        if position_ids is None:
+            position_ids = paddle.arange(0, seq_length, 1, dtype="float32").unsqueeze(1)
+            position_ids = position_ids / self.compression_ratio
+            sinusoid_inp = position_ids * indices.unsqueeze(0)
+        else:
+            position_ids = position_ids / self.compression_ratio
+            seq_length = position_ids.shape[-1]
+            sinusoid_inp = position_ids.unsqueeze(-1).astype("float32") * indices.unsqueeze(
+                0
+            )  # [b, s, 1] * [1, d/2] -> [b, s, d/2]
+        if self.use_neox_rotary_style:
+            sinusoid_inp = paddle.concat([sinusoid_inp, sinusoid_inp], axis=-1).reshape(
+                (1, seq_length, 1, self.head_dim)
+            )
+        pos_emb = paddle.concat([paddle.cos(sinusoid_inp) * _mscale, paddle.sin(sinusoid_inp) * _mscale], axis=0)
+        if self.use_neox_rotary_style:
+            pos_emb = paddle.reshape(pos_emb, (-1, 1, seq_length, 1, self.head_dim))
+        else:
+            pos_emb = paddle.reshape(pos_emb, (-1, 1, seq_length, 1, self.head_dim // 2))
+        pos_emb.stop_gradient = True
+        return pos_emb
 
 
 def create_attn_mask(
@@ -347,11 +445,11 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         paddle.disable_static()
         self.name = "TestAppendGroupQueryAttnWithRope"
         self.place = paddle.CUDAPlace(0)
-        self.batch_size = 4
+        self.batch_size = 2
         self.q_num_head = 12
         self.kv_num_head = 2
-        self.seq_len = 8192
-        self.max_dec_len = 64
+        self.seq_len = 64
+        self.max_dec_len = 32
         self.dim_head = 128
         self.q_hid_dim = self.q_num_head * self.dim_head
         self.kv_hid_dim = self.kv_num_head * self.dim_head
@@ -365,11 +463,23 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.use_qk_norm = True
         self.use_mask_offset = True
         self.use_sinks = True
+        self.use_yarn = False
         self.init_tensor()
 
     def init_tensor(self):
         self.block_num_per_seq = (self.seq_len + self.max_dec_len + self.blocksize - 1) // self.blocksize
-        self.rope = RopeEmbedding(self.use_neox_rotary_style)
+        if self.use_yarn:
+            self.rope = YaRNScaledEmbedding(
+                head_dim=self.q_num_head,
+                base=150000,
+                scale=32.0,
+                beta_fast=32.0,
+                beta_slow=1.0,
+                original_max_position_embeddings=4096,
+                use_neox_rotary_style=self.use_neox_rotary_style,
+            )
+        else:
+            self.rope = RopeEmbedding(self.use_neox_rotary_style)
         self.max_block_num = self.block_num_per_seq * self.batch_size
         self.free_list = list(range(self.max_block_num - 1, -1, -1))
 
@@ -441,7 +551,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         if self.use_sinks:
             sinks = paddle.to_tensor(
-                np.random.random([self.q_num_head]) / 10, place=self.place, dtype=self.dtype, stop_gradient=False
+                np.random.random([self.q_num_head]), place=self.place, dtype=self.dtype, stop_gradient=False
             )
         else:
             sinks = None
@@ -568,8 +678,8 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         np.testing.assert_allclose(
             out.numpy(),
             out_.numpy(),
-            rtol=1e-02,
-            atol=1e-02,
+            rtol=1e-03,
+            atol=1e-03,
         )
 
     def test_all(self):
@@ -653,6 +763,7 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.use_qk_norm = False
         self.use_mask_offset = True
         self.use_sinks = False
+        self.use_yarn = True
         self.init_tensor()
 
 

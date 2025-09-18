@@ -375,8 +375,14 @@ __global__ void multi_query_append_attention_c8_kernel(
 
   if constexpr (!partition_kv) {
     if (sinks) {
-      float current_sink = static_cast<float>(sinks[q_head_idx]);
-      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sink);
+      float current_sinks[num_frags_x][2];
+      for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+        for (uint32_t j = 0; j < 2; ++j) {
+          const uint32_t h_offset = (q_base_seq_id_this_block + fx * 16 + tid / 4 + 8 * j) % GROUP_SIZE;
+          current_sinks[fx][j] = static_cast<float>(sinks[q_head_idx + h_offset]);
+        }
+      }
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sinks);
     } else {
       normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
     }
@@ -818,8 +824,14 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
 
   if (num_chunks_this_seq <= 1) {
     if (sinks) {
-      float current_sink = static_cast<float>(sinks[q_head_idx]);
-      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sink);
+      float current_sinks[num_frags_x][2];
+      for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+        for (uint32_t j = 0; j < 2; ++j) {
+          const uint32_t h_offset = (q_base_seq_id_this_block + fx * 16 + tid / 4 + 8 * j) % GROUP_SIZE;
+          current_sinks[fx][j] = static_cast<float>(sinks[q_head_idx + h_offset]);
+        }
+      }
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sinks);
     } else {
       normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
     }

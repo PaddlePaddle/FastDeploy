@@ -1327,13 +1327,13 @@ template <uint32_t num_frags_x, uint32_t num_frags_y>
 __device__ __forceinline__ void normalize_d(float (*o_frag)[num_frags_y][8],
                                             float (*d)[2],
                                             float (*m)[2],
-                                            float current_sink) {
+                                            float (*current_sinks)[2]) {
   float d_rcp[num_frags_x][2];
 #pragma unroll
   for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
 #pragma unroll
     for (uint32_t j = 0; j < 2; ++j) {
-      d_rcp[fx][j] = 1.f / (d[fx][j] + __expf(current_sink - m[fx][j]));
+      d_rcp[fx][j] = 1.f / (d[fx][j] + __expf(current_sinks[fx][j] - m[fx][j]));
     }
   }
 
@@ -2413,12 +2413,12 @@ __global__ void merge_multi_chunks_v2_kernel(
         st.merge(load_vec, m_tmp, d_tmp);
       }
 
-    if (sinks) {
-      float current_sink = static_cast<float>(sinks[hid]);
-      st.normalize(current_sink);
-    } else {
-      st.normalize();
-    }
+      if (sinks) {
+        float current_sink = static_cast<float>(sinks[hid]);
+        st.normalize(current_sink);
+      } else {
+        st.normalize();
+      }
 
       const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
       AlignedVector<T, vec_size> shift_bias_vec;
