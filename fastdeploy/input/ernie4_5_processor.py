@@ -134,7 +134,6 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
                 request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
