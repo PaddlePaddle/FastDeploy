@@ -115,17 +115,16 @@ def setup_and_run_server():
         "--max-model-len",
         "32768",
         "--max-num-seqs",
-        "32",
+        "1",
         "--graph-optimization-config",
         '{"use_cudagraph":true}',
         "--load_choices",
         "default_v1",
         "--lm_head-fp32",
         "--quantization",
-        '{"quantization":"mix_quant","dense_quant_type":"wfp8afp8","moe_quant_type":"wint8"}',
+        "wfp8afp8",
     ]
     env = os.environ.copy()
-    env["FD_MOE_BACKEND"] = "triton"
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
