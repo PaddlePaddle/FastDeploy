@@ -152,7 +152,7 @@ class OpenAIServingCompletion:
                     prompt_batched_token_ids.append(prompt_token_ids)
                     del current_req_dict
             except ParameterError as e:
-                api_server_logger.error(e.message)
+                api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
                 self.engine_client.semaphore.release()
                 return ErrorResponse(code=400, message=str(e.message), type="invalid_request", param=e.param)
             except Exception as e:
