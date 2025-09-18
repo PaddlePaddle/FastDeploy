@@ -37,12 +37,14 @@ from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
     IPCSignal,
-    ZmqClient,
+    ZmqIpcServer,
+    ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
@@ -576,9 +578,19 @@ class EngineService:
         if api_server_pid is None:
             return
         self.api_server_pid = api_server_pid
-        self.zmq_server = ZmqClient(name=api_server_pid, mode=zmq.PULL)
-        self.zmq_server.start_server()
-        self.zmq_server.create_router()
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
+            self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
+            self.internal_adapter = InternalAdapter(
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+            )
+        else:
+            self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
+            self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
+        self.recv_result_handle_thread = threading.Thread(
+            target=self.send_response_server.recv_result_handle, daemon=True
+        )
+        self.recv_result_handle_thread.start()
         time.sleep(3)
         self.insert_task_to_scheduler_thread = threading.Thread(target=self._insert_zmq_task_to_scheduler, daemon=True)
         self.insert_task_to_scheduler_thread.start()
@@ -592,9 +604,9 @@ class EngineService:
             try:
                 block = True if len(added_requests) == 0 else False
                 if not self.cfg.model_config.enable_mm:
-                    err, data = self.zmq_server.receive_json_once(block)
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -648,7 +660,7 @@ class EngineService:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, [error_result])
+                    self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happened while receiving new request from zmq, details={e}, "
@@ -666,7 +678,7 @@ class EngineService:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    self.zmq_server.send_multipart(request_id, contents)
+                    self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happened: {e}, {traceback.format_exc()!s}")
@@ -766,5 +778,9 @@ class EngineService:
         self.worker_healthy_live_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
-        if hasattr(self, "zmq_server") and self.zmq_server is not None:
-            self.zmq_server.close()
+        if hasattr(self, "send_response_server") and self.send_response_server is not None:
+            self.send_response_server.close()
+        if hasattr(self, "recv_request_server") and self.recv_request_server is not None:
+            self.recv_request_server.close()
+        if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
+            self.recv_control_cmd_server.close()

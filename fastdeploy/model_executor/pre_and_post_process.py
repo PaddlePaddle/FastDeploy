@@ -78,7 +78,8 @@ else:
         update_inputs_v1,
     )
 
-from fastdeploy.inter_communicator import ZmqClient
+
+from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
 
@@ -160,7 +161,7 @@ def pre_process(
     )
 
 
-def _zmq_send_text_outputs(zmq_client: ZmqClient, output_tokens: np.ndarray, save_each_rank: bool, mp_rank: int):
+def _zmq_send_text_outputs(zmq_client: ZmqIpcClient, output_tokens: np.ndarray, save_each_rank: bool, mp_rank: int):
     """Split output_tokens and output"""
     assert zmq_client is not None, "zmq_client should not be None"
     output_tokens = output_tokens.reshape([-1]).numpy()
@@ -187,7 +188,7 @@ def post_process_normal(
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
-    zmq_client: ZmqClient = None,
+    zmq_client: ZmqIpcClient = None,
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     # handle vl:
@@ -389,7 +390,7 @@ def post_process(
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
     skip_save_output: bool = False,
-    zmq_client: ZmqClient = None,
+    zmq_client: ZmqIpcClient = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
     if speculative_decoding:
