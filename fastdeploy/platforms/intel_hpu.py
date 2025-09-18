@@ -22,15 +22,15 @@ class INTEL_HPUPlatform(Platform):
     @classmethod
     def available(self):
         """
-        Check whether CUDA is available.
+        Check whether Intel HPU is available.
         """
         try:
-            # assert len(paddle.static.cuda_places()) > 0
+            assert paddle.base.core.get_custom_device_count("intel_hpu") > 0
             return True
         except Exception as e:
             logger.warning(
-                "You are using GPU version PaddlePaddle, but there is no GPU "
-                "detected on your machine. Maybe CUDA devices is not set properly."
+                "You are using Intel HPU platform, but there is no Intel HPU "
+                "detected on your machine. Maybe Intel HPU devices is not set properly."
                 f"\n Original Error is {e}"
             )
             return False

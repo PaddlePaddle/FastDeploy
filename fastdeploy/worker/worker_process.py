@@ -743,11 +743,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
-    parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
-        parallel_config.local_data_parallel_id
-    ]
-    parallel_config.set_tp_group()
-
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
