@@ -259,8 +259,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                layer.renormalize,
             )
-            topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
@@ -609,8 +609,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                layer.renormalize,
             )
-            topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
@@ -898,6 +898,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                layer.renormalize,
             )
         else:
 
@@ -1321,6 +1322,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                layer.renormalize,
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(

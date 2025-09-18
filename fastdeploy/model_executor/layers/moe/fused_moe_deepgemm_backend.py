@@ -490,6 +490,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                layer.renormalize,
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
