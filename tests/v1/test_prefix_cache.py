@@ -26,7 +26,7 @@ def test_normal_case():
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
         speculative_config=speculative_cfg,
-        scheduler_cfg=scheduler_cfg,
+        scheduler_config=scheduler_cfg,
     )
     cache_manager = PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
     req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
