@@ -1188,7 +1188,9 @@ void MultiQueryAppendC4Attention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
-          nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -1470,7 +1472,9 @@ void MultiQueryAppendC4Attention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
-          nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
