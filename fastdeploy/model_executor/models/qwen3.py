@@ -40,7 +40,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
-from fastdeploy.model_executor.models.utils import prepare_params_dict
+from fastdeploy.transformer_utils.config import get_pooling_config
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -284,9 +284,14 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None),
         ]
 
-        original_params_dict = dict(self.named_parameters())
-
-        params_dict = prepare_params_dict(original_params_dict, is_pooling_model, self.fd_config)
+        params_dict = dict(self.named_parameters())
+        model_path = self.fd_config.model_config.model
+        revision = self.fd_config.model_config.model
+        if is_pooling_model and get_pooling_config(model_path, revision):
+            params_dict = {
+                param_name[6:] if param_name.startswith("model.") else param_name: param
+                for param_name, param in params_dict.items()
+            }
 
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
