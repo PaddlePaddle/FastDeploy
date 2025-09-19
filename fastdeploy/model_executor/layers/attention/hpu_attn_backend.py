@@ -22,7 +22,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
 import paddle
-import paddlenlp_ops
+
+from fastdeploy.model_executor.ops.intel_hpu import (
+    fused_block_attention,
+    fused_qkv_rope,
+    fused_sdpa_proj_t,
+    index_copy_,
+)
 
 if TYPE_CHECKING:
     from paddle._typing.dtype_like import _DTypeLiteral
@@ -228,7 +234,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         """
         # metadata = self.attention_metadata
 
-        query_states, key_value_states = paddlenlp_ops.fused_qkv_rope(
+        query_states, key_value_states = fused_qkv_rope(
             src,
             qkv_proj.weight,
             qkv_proj.bias,
@@ -246,10 +252,10 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         value_states = key_value_states_reshape[1]
         k_cache = forward_meta.caches[2 * layer.layer_id]
         v_cache = forward_meta.caches[2 * layer.layer_id + 1]
-        paddlenlp_ops.index_copy_(k_cache, forward_meta.block_indices, key_states, 0)
-        paddlenlp_ops.index_copy_(v_cache, forward_meta.block_indices, value_states, 0)
+        index_copy_(k_cache, forward_meta.block_indices, key_states, 0)
+        index_copy_(v_cache, forward_meta.block_indices, value_states, 0)
 
-        out_linear_out = paddlenlp_ops.fused_sdpa_proj_t(
+        out_linear_out = fused_sdpa_proj_t(
             query_states,
             key_value_states,
             forward_meta.attn_mask,
@@ -276,7 +282,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         forward_decode
         """
         # metadata = self.attention_metadata
-        res = paddlenlp_ops.fused_block_attention(
+        res = fused_block_attention(
             src,
             forward_meta.rotary_embs,
             forward_meta.caches[2 * layer.layer_id],
