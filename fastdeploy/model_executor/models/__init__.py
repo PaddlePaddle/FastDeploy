@@ -66,17 +66,3 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
 auto_models_registry(os.path.dirname(__file__))
 
 load_model_register_plugins()
-
-ModelRegistry = type(
-    "ModelRegistry",
-    (),
-    {
-        "register_model_class": ModelRegistry.register_model_class,
-        "register_pretrained_model": ModelRegistry.register_pretrained_model,
-        "get_pretrain_cls": ModelRegistry.get_pretrain_cls,
-        "get_class": ModelRegistry.get_class,
-        "get_supported_archs": ModelRegistry.get_supported_archs,
-    },
-)
-
-__all__ = ["ModelForCasualLM", "ModelRegistry"]

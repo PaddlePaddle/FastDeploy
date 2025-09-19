@@ -69,14 +69,13 @@ class VocabParallelEmbedding(nn.Layer):
         self.padding_size = padding_size
 
         self.original_vocab_size = num_embeddings
-        self.org_vocab_size_paded = num_embeddings
 
         if num_embeddings % self.world_size != 0:
-            self.org_vocab_size_paded = pad_vocab_size(num_embeddings, self.padding_size)
+            num_embeddings = pad_vocab_size(num_embeddings, self.padding_size)
 
         if not self.column_cut:
             self.embeddings = fleet.meta_parallel.VocabParallelEmbedding(
-                self.org_vocab_size_paded,
+                num_embeddings,
                 embedding_dim,
                 mp_group=self.tp_group,
                 weight_attr=paddle.ParamAttr(
@@ -88,7 +87,7 @@ class VocabParallelEmbedding(nn.Layer):
         else:
             # column cut embedding
             self.embeddings = nn.Embedding(
-                self.org_vocab_size_paded,
+                num_embeddings,
                 embedding_dim // self.world_size,
             )
 

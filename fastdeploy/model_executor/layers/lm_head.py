@@ -75,9 +75,8 @@ class ParallelLMHead(nn.Layer):
         self.fd_config = fd_config
         self.padding_size = padding_size
 
-        self.org_vocab_size_paded = num_embeddings
         if num_embeddings % self.nranks != 0:
-            self.org_vocab_size_paded = pad_vocab_size(num_embeddings, self.padding_size)
+            num_embeddings = pad_vocab_size(num_embeddings, self.padding_size)
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -90,7 +89,7 @@ class ParallelLMHead(nn.Layer):
                 need_gather = True
                 self.linear = ColumnParallelLinear(
                     embedding_dim,
-                    self.org_vocab_size_paded,
+                    num_embeddings,
                     mp_group=self.tp_group,
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,
@@ -109,7 +108,7 @@ class ParallelLMHead(nn.Layer):
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
-                    self.org_vocab_size_paded,
+                    num_embeddings,
                     mp_group=self.tp_group,
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,

@@ -161,9 +161,6 @@ def default_weight_loader(fd_config: FDConfig) -> None:
 
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
-
-        output_dim = getattr(param, "output_dim", None)
-        weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
