@@ -231,7 +231,6 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         super(Qwen3ForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
         self.model = Qwen3Model(fd_config=fd_config)
-
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
         self.lm_head = ParallelLMHead(
@@ -271,6 +270,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None),
         ]
         params_dict = dict(self.named_parameters())
+        # model
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:

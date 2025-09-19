@@ -540,10 +540,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
-            ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
-            ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
-            ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
-            ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
+            # ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
+            # ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
+            # ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
+            # ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
         ]
 
         expert_params_mapping = []
@@ -569,14 +569,18 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
         ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
         checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
-            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+            fd_config=self.fd_config,
+            ckpt_weight_suffix="quant_weight",
+            ckpt_weight_scale_suffix="weight_scale",
+            ckpt_activation_scale_suffix="activation_scale",
         )
         params_dict = dict(self.named_parameters())
-
+        # self.model.moe.named_parameters()
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
+            print(f"loaded_weight_name: {loaded_weight_name}")
             for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
                 loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)

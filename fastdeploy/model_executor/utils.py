@@ -54,7 +54,7 @@ class BitMaskTracker:
 
 
 class TensorTracker:
-    def __init__(self, shape: tuple, output_dim: int):
+    def __init__(self, shape: tuple, output_dim: int = 0):
         """
         Unified tracker for 2D or 3D tensors.
 
@@ -65,9 +65,10 @@ class TensorTracker:
                 - 3D: True = track columns (dim=2), False = track rows (dim=1)
         """
         self.shape = shape
-        self.output_dim = output_dim
-
-        if len(shape) == 2:
+        if len(shape) == 1:
+            self.track_dim = 0
+            self.trackers = [BitMaskTracker(shape[self.track_dim])]
+        elif len(shape) == 2:
             self.track_dim = 1 if output_dim else 0
             self.trackers = [BitMaskTracker(shape[self.track_dim])]
         elif len(shape) == 3:
@@ -89,7 +90,7 @@ class TensorTracker:
         if end is None:
             end = self.shape[self.track_dim]
 
-        if len(self.shape) == 2:
+        if len(self.shape) == 2 or len(self.shape) == 1:
             self.trackers[0].mark(start, end)
         else:
             if batch_id is None:
@@ -106,6 +107,10 @@ def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
         return
     for key, value in param_attr_map.items():
         setattr(param, key, value)
+
+
+def is_param_fully_copied(param):
+    return hasattr(param, "tensor_track") and param.tensor_track is not None and param.tensor_track.is_fully_copied()
 
 
 def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
@@ -146,9 +151,13 @@ def process_weights_after_loading(sublayers_dict: dict):
     return fn
 
 
-def free_tensor(tensor):
+def free_tensor_tracer(tensor):
     if hasattr(tensor, "tensor_track"):
         tensor.tensor_track = None
+
+
+def free_tensor(tensor):
+    free_tensor_tracer(tensor)
     tensor.value().get_tensor()._clear()
     del tensor
 
@@ -217,7 +226,14 @@ def switch_config_context(config_obj, config_attr_name, value):
 
 
 def rename_offline_ckpt_suffix_to_fd_suffix(
-    fd_config, ckpt_weight_suffix: str = "quant_weight", ckpt_scale_suffix="weight_scale"
+    fd_config,
+    ckpt_weight_suffix: str = "quant_weight",
+    ckpt_weight_scale_suffix="weight_scale",
+    ckpt_activation_scale_suffix="activation_scale",
+    ckpt_cache_k_suffix="cachek_matmul.activation_scale",
+    ckpt_cache_v_suffix="cachev_matmul.activation_scale",
+    ckpt_cache_k_zero_point_suffix="cachek_matmul.activation_zero_point",
+    ckpt_cache_v_zero_point_suffix="cachev_matmul.activation_scale",
 ):
     """
     Create a function to rename checkpoint key suffixes for FastDeploy.
@@ -228,7 +244,7 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     Args:
         fd_config: FastDeploy configuration.
         ckpt_weight_suffix: Original checkpoint key suffix.
-        ckpt_scale_suffix: Target FastDeploy key suffix.
+        ckpt_weight_scale_suffix: Target FastDeploy key suffix.
 
     Returns:
         Callable: Function that renames checkpoint keys.
@@ -236,14 +252,29 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     fd_suffix_map = {}  # noqa: F841
     fp8_suffix_map = {
         ckpt_weight_suffix: "weight",
-        ckpt_scale_suffix: "weight_scale_inv",
+        ckpt_weight_scale_suffix: "weight_scale_inv",
+    }
+    w4afp8_suffix_map = {
+        ckpt_activation_scale_suffix: "in_scale",
+    }
+    cache_suffix_map = {
+        ckpt_cache_k_suffix: "attn.cache_k_scale",
+        ckpt_cache_v_suffix: "attn.cache_v_scale",
+        ckpt_cache_k_zero_point_suffix: "attn.cache_k_zp",
+        ckpt_cache_v_zero_point_suffix: "attn.cache_v_zp",
     }
     moe_quant_type = ""
     dense_quant_type = ""
+    has_cache_kv_quant = False
     if fd_config.quant_config is not None:
         if fd_config.quant_config.name() == "mix_quant":
             moe_quant_type = fd_config.quant_config.moe_quant_type
             dense_quant_type = fd_config.quant_config.dense_quant_type
+            if fd_config.quant_config.kv_cache_quant_type is not None:
+                has_cache_kv_quant = True
+        elif fd_config.quant_config.name() == "kvcache":
+            if fd_config.quant_config.kv_cache_quant_type is not None:
+                has_cache_kv_quant = True
         else:
             moe_quant_type = fd_config.quant_config.name()
             dense_quant_type = fd_config.quant_config.name()
@@ -254,6 +285,21 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         # Can be extended to other offline quantization suffixes if needed.
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
             fd_suffix_map = fp8_suffix_map
+        elif (is_moe and moe_quant_type == "w4a8") or (not is_moe and dense_quant_type == "w4afp8"):
+            fd_suffix_map = w4afp8_suffix_map
+        elif has_cache_kv_quant:
+            fd_suffix_map = {}
+        else:
+            raise ValueError(
+                f"{loaded_weight_name} has an unsupported combination: moe_quant_type:{moe_quant_type},dense_quant_type:{dense_quant_type},has_cache_kv_quant:{has_cache_kv_quant}"
+            )
+
+        if has_cache_kv_quant:
+            for ckpt_suffix, fd_suffix in cache_suffix_map.items():
+                if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
+                    loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
+                    return loaded_weight_name
+
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)

@@ -84,6 +84,23 @@ def get_moe_scores(
     return scores, topk_values, topk_idx
 
 
+def get_local_expert_list(ep_size: int, ep_rank: int, num_experts: int) -> tuple[int, Optional[paddle.Tensor]]:
+    """
+    get_expert_map
+    """
+    if ep_size == 1:
+        return (num_experts, None)
+    assert (
+        num_experts % ep_size == 0
+    ), "FastDeploy currently only supports the number of experts being divisible by ep_size."
+    local_num_experts = num_experts // ep_size
+
+    expert_list = [-1] * num_experts
+    start_idx = ep_rank * local_num_experts
+    expert_list[start_idx : start_idx + local_num_experts] = list(range(local_num_experts))
+    return (local_num_experts, expert_list)
+
+
 class FusedMoE(nn.Layer):
     """
     FusedMoE is a layer that performs MoE (Mixture of Experts) computation.
@@ -146,6 +163,14 @@ class FusedMoE(nn.Layer):
         self.moe_tag = moe_tag
         if self.ep_size > 1:
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
+            self.num_local_experts, self.local_expert_list = get_local_expert_list(
+                self.ep_size, self.ep_rank, num_experts
+            )
+            self.global_expert_list = [i for i in range(self.num_experts)]
+            # v1 support eblp in future
+        else:
+            self.num_local_experts, self.local_expert_list = (num_experts, None)
+            self.global_expert_list = None
 
         self.expert_id_offset = expert_id_offset
 
@@ -192,8 +217,25 @@ class FusedMoE(nn.Layer):
             tp_size={self.tp_size}."
         )
 
+    def _load_in_scale_weight(self, param, expert_id, loaded_weight):
+        # only spport ernie now
+        expert_param = param[expert_id]
+        loaded_weight = get_tensor(loaded_weight)
+        if len(expert_param.shape) != len(loaded_weight.shape):
+            loaded_weight = loaded_weight.reshape(expert_param.shape)
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        if expert_param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(loaded_weight.dtype)
+        param[expert_id].copy_(loaded_weight, False)
+
     def weight_loader(self, param, loaded_weight, expert_id, shard_id: Optional[str] = None):
 
+        expert_id = self._get_local_expert_id_from_physical_expert(expert_id)
+        if expert_id < 0:
+            # for ep
+            return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
         elif current_platform.is_cuda():
@@ -204,10 +246,18 @@ class FusedMoE(nn.Layer):
         if not param._is_initialized():
             param.initialize()
 
+        if SHARD_ID_TO_SHARDED_DIM["gate"] is None and SHARD_ID_TO_SHARDED_DIM["up"] is None:
+            # in scale
+            self._load_in_scale_weight(param, expert_id, loaded_weight)
+            return
+
         if shard_id is None:
             # 1.gate up fused in disk
+            assert (
+                SHARD_ID_TO_SHARDED_DIM["gate"] is not None and SHARD_ID_TO_SHARDED_DIM["up"] is not None
+            ), "Invalid SHARD_ID_TO_SHARDED_DIM"
             weight_need_transpose = getattr(param, "weight_need_transpose", False)
-            output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
+            output_size = param[expert_id].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             per_rank = output_size // 2
             start = self.tp_rank * per_rank
             loaded_weight_shard_gate = slice_fn(
@@ -248,7 +298,7 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         loaded_weight = get_tensor(loaded_weight)
-        expert_param = param[expert_id - self.expert_id_offset]
+        expert_param = param[expert_id]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
         if shard_id == "gate":
@@ -264,7 +314,7 @@ class FusedMoE(nn.Layer):
             param.tensor_track.mark(
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
-                batch_id=expert_id - self.expert_id_offset,
+                batch_id=expert_id,
             )
 
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
@@ -294,10 +344,10 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         loaded_weight = get_tensor(loaded_weight)
-        expert_param = param[expert_id - self.expert_id_offset]
+        expert_param = param[expert_id]
         if hasattr(param, "tensor_track"):
             # for dyn quant
-            param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)
+            param.tensor_track.mark(start=0, batch_id=expert_id)
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU and opensource weight
         if expert_param.shape != loaded_weight.shape:
             loaded_weight = loaded_weight.transpose([1, 0])
@@ -310,6 +360,18 @@ class FusedMoE(nn.Layer):
             else:
                 loaded_weight = loaded_weight.cast(expert_param.dtype)
         expert_param.copy_(loaded_weight, False)
+
+    def _get_local_expert_id_from_physical_expert(self, expert_id: int) -> int:
+        # for ep expert
+        if self.local_expert_list is None:
+            return expert_id
+        return self.local_expert_list[expert_id]
+
+    def _get_global_expert_id_from_physical_expert(self, expert_id: int) -> int:
+        # for ep situation find all local expert id from
+        if self.global_expert_list is None:
+            return expert_id
+        return self.global_expert_list[expert_id]
 
     def _load_expert_weight(
         self,
