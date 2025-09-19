@@ -151,6 +151,7 @@ class PaddleDisWorkerProc:
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
         self.cache_config = fd_config.cache_config
+        self.scheduler_config = fd_config.scheduler_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -412,7 +413,7 @@ class PaddleDisWorkerProc:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
-        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+        if self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
                 name="launched_cache_manager_signal",
@@ -762,7 +763,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         early_stop_config=early_stop_config,
         cache_config=cache_config,
         scheduler_config=scheduler_config,
-        engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,
     )

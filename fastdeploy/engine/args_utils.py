@@ -1019,6 +1019,11 @@ class EngineArgs:
                 else:
                     self.max_num_batched_tokens = self.max_model_len
 
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
+
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
@@ -1031,11 +1036,6 @@ class EngineArgs:
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
-
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
         assert is_port_available(
             "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
@@ -1052,12 +1052,10 @@ class EngineArgs:
             speculative_config=speculative_cfg,
             ips=self.ips,
             use_warmup=self.use_warmup,
-            engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
-            splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
