@@ -905,12 +905,12 @@ class MetaxModelRunner(ModelRunnerBase):
         only_decode_batch = True
         prefill_exists = None
         # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_decode_batch_list = []
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
             only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
 
         self.forward_meta.step_use_cudagraph = (
             self.use_cudagraph
@@ -947,7 +947,9 @@ class MetaxModelRunner(ModelRunnerBase):
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and (
+            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
+        ):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -1407,7 +1409,7 @@ class MetaxModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
-        if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
+        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
