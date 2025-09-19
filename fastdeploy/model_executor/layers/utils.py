@@ -45,14 +45,6 @@ if cache_params != "none":
     c8_state_dict = paddle.load(cache_params, return_numpy=True)
 
 
-DEFAULT_VOCAB_PADDING_SIZE = 64
-
-
-def pad_vocab_size(vocab_size: int, pad_to: int = DEFAULT_VOCAB_PADDING_SIZE) -> int:
-    """Pad the vocab size to the given value."""
-    return ((vocab_size + pad_to - 1) // pad_to) * pad_to
-
-
 def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Tensor, Tensor]:
     """
     Only used in deep_gemm block wise quant weight.
