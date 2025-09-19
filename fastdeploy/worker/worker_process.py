@@ -564,9 +564,8 @@ def parse_args():
         help="enable expert parallel",
     )
     parser.add_argument(
-        "--enable_tensor_or_expert_parallel",
-        action='store_true',
-        help="enable tensor or expert parallell")
+        "--enable_tensor_or_expert_parallel", action="store_true", help="enable tensor or expert parallell"
+    )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
 
     parser.add_argument(

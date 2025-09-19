@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import paddle
-from .base import Platform, _Backend
+
 from fastdeploy.utils import console_logger as logger
+
+from .base import Platform, _Backend
 
 
 class INTEL_HPUPlatform(Platform):
@@ -36,20 +38,15 @@ class INTEL_HPUPlatform(Platform):
             return False
 
     @classmethod
-    def get_attention_backend_cls(
-        cls,
-        selected_backend
-    ):
+    def get_attention_backend_cls(cls, selected_backend):
         """
         get_attention_backend_cls
         """
         if selected_backend == _Backend.NATIVE_ATTN:
             logger.info("Using NATIVE ATTN backend.")
-            return ("fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend")
+            return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
         elif selected_backend == _Backend.HPU_ATTN:
             logger.info("Using HPU ATTN backend.")
-            return ("fastdeploy.model_executor.layers.attention.HPUAttentionBackend")
+            return "fastdeploy.model_executor.layers.attention.HPUAttentionBackend"
         else:
-            logger.warning(
-                "Other backends are not supported for now."
-            )
+            logger.warning("Other backends are not supported for now.")

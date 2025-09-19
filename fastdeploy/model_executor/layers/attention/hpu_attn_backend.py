@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import os
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -29,15 +30,105 @@ if TYPE_CHECKING:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend_HPU, AttentionMetadata)
-from fastdeploy.model_executor.layers.linear import (
-    QKVParallelLinear, RowParallelLinear)
+    AttentionBackend,
+    AttentionMetadata,
+)
+
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta_HPU
+
+from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
+
+
+class AttentionBackend_HPU(AttentionBackend):
+    """The base class of attention backends"""
+
+    @abstractmethod
+    def init_attention_metadata(self, forward_meta: ForwardMeta_HPU):
+        """Initialize the forward metadata."""
+        raise NotImplementedError()
+
+    def forward(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """
+        Run a forward.
+        args:
+            src: the hidden states tensor
+            residual_input: the residual tensor
+            layer: The layer that will be used for the forward.
+            forward_meta: The forward metadata.
+        """
+        if forward_meta.forward_mode.is_mixed():
+            return self.forward_mixed(
+                src,
+                qkv_proj,
+                o_proj,
+                layer,
+                forward_meta,
+            )
+        elif forward_meta.forward_mode.is_decode():
+            return self.forward_decode(
+                src,
+                qkv_proj,
+                o_proj,
+                layer,
+                forward_meta,
+            )
+        else:
+            return self.forward_extend(
+                src,
+                qkv_proj,
+                o_proj,
+                layer,
+                forward_meta,
+            )
+
+    def forward_mixed(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """Run a forward for mix."""
+        raise NotImplementedError()
+
+    def forward_decode(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """Run a forward for decode."""
+        raise NotImplementedError()
+
+    def forward_extend(
+        self,
+        src: paddle.Tensor,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: paddle.nn.Layer,
+        forward_meta: ForwardMeta_HPU,
+    ):
+        """Run a forward for extend."""
+        raise NotImplementedError()
+
 
 @dataclass
 class HPUAttentionMetadata(AttentionMetadata):
     """
     HPUAttentionMetadata
     """
+
     max_len_kv: paddle.Tensor = None
     set_max_lengths: int = -1
     encoder_batch_ids: paddle.Tensor = None
@@ -70,8 +161,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
     HPUAttentionBackend backend implementation.
     """
 
-    def __init__(self, llm_config: FDConfig, kv_num_heads: int,
-                 num_heads: int, head_dim: int):
+    def __init__(self, llm_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
         """
         HPUAttentionBackend __init__
         """
@@ -80,8 +170,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         # TODO(gongshaotian): Use llm_config parameters in the correct location
         self.block_size = llm_config.parallel_config.block_size
         self.max_seq_len = llm_config.parallel_config.max_model_len
-        self.rope_theta = (10000.0 if llm_config.model_config.rope_theta
-                           is None else llm_config.model_config.rope_theta)
+        self.rope_theta = 10000.0 if llm_config.model_config.rope_theta is None else llm_config.model_config.rope_theta
         self.rope_3d = getattr(llm_config.model_config, "rope_3d", False)
         self.causal = getattr(llm_config.model_config, "causal", True)
         self.speculative_method: str = llm_config.speculative_config.method
@@ -97,8 +186,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         self.num_layers = llm_config.model_config.num_hidden_layers
 
         # pd_disaggregation
-        self.use_pd_disaggregation = int(
-            os.getenv("FLAGS_use_pd_disaggregation", 0))
+        self.use_pd_disaggregation = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index = llm_config.model_config.start_layer_index
 
     def init_attention_metadata(self, forward_meta):
@@ -123,7 +211,6 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         metadata.kv_signal_data_list = [None] * self.num_layers
         self.attention_metadata = metadata
 
-
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
@@ -131,21 +218,15 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.block_size,self.kv_num_heads, 
-                self.head_dim)
+        return (max_num_blocks, self.block_size, self.kv_num_heads, self.head_dim)
 
     def forward_extend(
-        self,
-        src,
-        qkv_proj: QKVParallelLinear,
-        o_proj: RowParallelLinear,
-        layer: Attention,
-        forward_meta
+        self, src, qkv_proj: QKVParallelLinear, o_proj: RowParallelLinear, layer: Attention, forward_meta
     ):
         """
         forward_extend
         """
-        metadata = self.attention_metadata
+        # metadata = self.attention_metadata
 
         query_states, key_value_states = paddlenlp_ops.fused_qkv_rope(
             src,
@@ -180,48 +261,47 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         )
 
         if self.nranks > 1:
-            from fastdeploy.distributed.communication import \
-                tensor_model_parallel_all_reduce_custom
+            from fastdeploy.distributed.communication import (
+                tensor_model_parallel_all_reduce_custom,
+            )
+
             tensor_model_parallel_all_reduce_custom(out_linear_out)
 
         return out_linear_out
 
     def forward_decode(
-        self,
-        src,
-        qkv_proj: QKVParallelLinear,
-        o_proj: RowParallelLinear,
-        layer: Attention,
-        forward_meta
+        self, src, qkv_proj: QKVParallelLinear, o_proj: RowParallelLinear, layer: Attention, forward_meta
     ):
         """
         forward_decode
         """
         # metadata = self.attention_metadata
         res = paddlenlp_ops.fused_block_attention(
-                    src,
-                    forward_meta.rotary_embs,
-                    forward_meta.caches[2 * layer.layer_id],
-                    forward_meta.caches[2 * layer.layer_id + 1],
-                    forward_meta.block_groups,
-                    forward_meta.block_list,
-                    forward_meta.block_mapping,
-                    forward_meta.attention_mask,
-                    forward_meta.block_indices,
-                    forward_meta.block_offsets,
-                    qkv_proj.weight,
-                    qkv_proj.bias,
-                    o_proj.weight,
-                    self.head_dim,
-                    self.num_heads,
-                    scaling_factor=self.head_dim**-0.5,
-                    transpose=False,
-                    use_neox_style=layer.use_neox_rotary_style,
-                )
+            src,
+            forward_meta.rotary_embs,
+            forward_meta.caches[2 * layer.layer_id],
+            forward_meta.caches[2 * layer.layer_id + 1],
+            forward_meta.block_groups,
+            forward_meta.block_list,
+            forward_meta.block_mapping,
+            forward_meta.attention_mask,
+            forward_meta.block_indices,
+            forward_meta.block_offsets,
+            qkv_proj.weight,
+            qkv_proj.bias,
+            o_proj.weight,
+            self.head_dim,
+            self.num_heads,
+            scaling_factor=self.head_dim**-0.5,
+            transpose=False,
+            use_neox_style=layer.use_neox_rotary_style,
+        )
 
         # all_reduce
         if self.nranks > 1:
-            from fastdeploy.distributed.communication import \
-                tensor_model_parallel_all_reduce_custom
+            from fastdeploy.distributed.communication import (
+                tensor_model_parallel_all_reduce_custom,
+            )
+
             tensor_model_parallel_all_reduce_custom(res)
         return res

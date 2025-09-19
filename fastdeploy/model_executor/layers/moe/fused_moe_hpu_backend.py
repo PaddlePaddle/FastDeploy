@@ -17,10 +17,10 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication import \
-    tensor_model_parallel_all_reduce_custom
-from ..utils import create_and_set_parameter
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
+
 from .fused_moe_backend_base import MoEMethodBase
+
 
 class HpuMoEMethod(MoEMethodBase):
     """
@@ -46,7 +46,8 @@ class HpuMoEMethod(MoEMethodBase):
                 weight = layer.create_parameter(
                     shape=weight_tensor.shape,
                     dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0))
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                )
                 weight.set_value(weight_tensor)
                 weights_list.append(weight)
             weights_name = self.added_weight_attrs[idx]
@@ -63,7 +64,6 @@ class HpuMoEMethod(MoEMethodBase):
         """
         raise NotImplementedError
 
-
     def apply_ep_decode(
         self,
         layer: nn.Layer,
@@ -74,7 +74,6 @@ class HpuMoEMethod(MoEMethodBase):
         Apply the EP decoder method.
         """
         raise NotImplementedError
-
 
     def apply_tp(
         self,
@@ -89,7 +88,7 @@ class HpuMoEMethod(MoEMethodBase):
             raise NotImplementedError
 
         # norm_topk_prob = False if layer.topk_method == "noaux_tc" else True
-        '''
+        """
         weights = paddle.nn.functional.softmax(gate_out, axis=-1)
         if layer.moe_use_gate_correction_bias:
             scores = weights + layer.gate_correction_bias
@@ -120,22 +119,27 @@ class HpuMoEMethod(MoEMethodBase):
         # if norm_topk_prob:
         #     routing_weights_norm = paddle.sum(routing_weights, axis=-1, keepdim=True).cast("bfloat16")
         #     fused_moe_out = fused_moe_out / routing_weights_norm
-        '''
+        """
         chunk_size = 64
         from fastdeploy.model_executor.ops.intel_hpu import fused_gate_moe
 
         # TODO: fuse matmul to gate_moe
         gate_out = paddle.matmul(x.cast("float32"), gate.weight)
-        fused_moe_out = fused_gate_moe(x, gate_out, layer.gate_correction_bias,
-                                       layer.up_gate_proj_weight,
-                                       layer.down_proj_weight,
-                                       layer.top_k, layer.moe_use_gate_correction_bias,
-                                       norm_topk_prob=True,
-                                       permuted_weights=False,
-                                       activation="silu",
-                                       experts_min=layer.expert_id_offset,
-                                       experts_max=layer.expert_id_offset+layer.num_local_experts-1,
-                                       chunk_size=chunk_size,)
+        fused_moe_out = fused_gate_moe(
+            x,
+            gate_out,
+            layer.gate_correction_bias,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
+            layer.top_k,
+            layer.moe_use_gate_correction_bias,
+            norm_topk_prob=True,
+            permuted_weights=False,
+            activation="silu",
+            experts_min=layer.expert_id_offset,
+            experts_max=layer.expert_id_offset + layer.num_local_experts - 1,
+            chunk_size=chunk_size,
+        )
         if layer.reduce_results and layer.tp_size > 1:
             tensor_model_parallel_all_reduce_custom(fused_moe_out)
 
@@ -159,8 +163,8 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         # bf16
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
 
-
         from fastdeploy.model_executor.ops.intel_hpu import fused_quant
+
         self.quant_fn = fused_quant
         self.moe_quant_type = "tensor_wise_fp8"
 
@@ -191,7 +195,6 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         """
         raise NotImplementedError
 
-
     def apply_ep_decode(
         self,
         layer: nn.Layer,
@@ -202,7 +205,6 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         Apply the EP decoder method.
         """
         raise NotImplementedError
-
 
     def apply_tp(
         self,
@@ -220,21 +222,27 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
 
         chunk_size = 64
         from fastdeploy.model_executor.ops.intel_hpu import fused_gate_moe_fp8
+
         # TODO: fuse matmul to gate_moe
         gate_out = paddle.matmul(x.cast("float32"), gate.weight)
-        fused_moe_out = fused_gate_moe_fp8(x, gate_out, layer.gate_correction_bias,
-                                           layer.up_gate_proj_weight,
-                                           layer.down_proj_weight,
-                                           None, # intermediate_hidden_states_scales
-                                           layer.up_gate_proj_weight_scale,
-                                           layer.down_proj_weight_scale,
-                                           layer.top_k, layer.moe_use_gate_correction_bias,
-                                           norm_topk_prob=True,
-                                           permuted_weights=False,
-                                           activation="silu",
-                                           experts_min=layer.expert_id_offset,
-                                           experts_max=layer.expert_id_offset+layer.num_local_experts-1,
-                                           chunk_size=chunk_size,)
+        fused_moe_out = fused_gate_moe_fp8(
+            x,
+            gate_out,
+            layer.gate_correction_bias,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
+            None,  # intermediate_hidden_states_scales
+            layer.up_gate_proj_weight_scale,
+            layer.down_proj_weight_scale,
+            layer.top_k,
+            layer.moe_use_gate_correction_bias,
+            norm_topk_prob=True,
+            permuted_weights=False,
+            activation="silu",
+            experts_min=layer.expert_id_offset,
+            experts_max=layer.expert_id_offset + layer.num_local_experts - 1,
+            chunk_size=chunk_size,
+        )
 
         if layer.reduce_results and layer.tp_size > 1:
             tensor_model_parallel_all_reduce_custom(fused_moe_out)

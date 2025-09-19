@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import gc
-import time
 import os
+import time
 from typing import List, Optional
 
 import paddle
@@ -31,17 +32,22 @@ from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("hpu_worker", "hpu_worker.log")
 
+
 def max_memory_allocated(device_id: int) -> int:
     return core.device_memory_stat_peak_value("Allocated", device_id)
+
 
 def max_memory_reserved(device_id: int) -> int:
     return core.device_memory_stat_peak_value("Reserved", device_id)
 
+
 def reset_max_memory_allocated(device_id: int) -> None:
     core.device_memory_stat_reset_peak_value("Allocated", device_id)
 
+
 def reset_max_memory_reserved(device_id: int) -> None:
     core.device_memory_stat_reset_peak_value("Reserved", device_id)
+
 
 class HpuWorker(WorkerBase):
     def __init__(
@@ -64,8 +70,10 @@ class HpuWorker(WorkerBase):
         if paddle.is_compiled_with_custom_device("intel_hpu"):
             # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
-            logger.info(f"Using Intel HPU device with local rank => device id: {int(self.device_ids[self.local_rank])} as module id")
-            intel_hpus_module_id = int(self.device_ids[self.local_rank])   
+            logger.info(
+                f"Using Intel HPU device with local rank => device id: {int(self.device_ids[self.local_rank])} as module id"
+            )
+            intel_hpus_module_id = int(self.device_ids[self.local_rank])
             self.device = f"intel_hpu:{intel_hpus_module_id}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
@@ -82,8 +90,9 @@ class HpuWorker(WorkerBase):
             device=self.device,
             device_id=self.device_ids[self.local_rank],
             rank=self.rank,
-            local_rank=self.local_rank)
-    
+            local_rank=self.local_rank,
+        )
+
     def exist_prefill(self):
         """
         check whether prefill stage exist
@@ -108,24 +117,23 @@ class HpuWorker(WorkerBase):
         module_id = int(self.device_ids[self.local_rank])
         reset_max_memory_allocated(module_id)
         reset_max_memory_reserved(module_id)
-        paddle_reserved_mem_before_run = max_memory_reserved(
-            module_id)
-        paddle_allocated_mem_before_run = max_memory_allocated(
-            module_id)  # not reserved
+        paddle_reserved_mem_before_run = max_memory_reserved(module_id)
+        paddle_allocated_mem_before_run = max_memory_allocated(module_id)  # not reserved
 
-        logger.info((
-            "Before running the profile, the memory usage info is as follows:",
-            f"\nPaddle reserved memory: {paddle_reserved_mem_before_run}",
-            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run}"))
+        logger.info(
+            (
+                "Before running the profile, the memory usage info is as follows:",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run}",
+            )
+        )
 
         # 2. Profile run
         self.model_runner.profile_run()
 
         # 3. Statistical memory information
-        paddle_reserved_mem_after_run = max_memory_reserved(
-            module_id)
-        paddle_allocated_mem_after_run = max_memory_allocated(
-            module_id)
+        paddle_reserved_mem_after_run = max_memory_reserved(module_id)
+        paddle_allocated_mem_after_run = max_memory_allocated(module_id)
 
         one_mb = 1024 * 1024
         one_gb = 1024 * one_mb
@@ -134,15 +142,16 @@ class HpuWorker(WorkerBase):
         peak_memory = paddle_allocated_mem_after_run + hpu_reserved_memory
         available_kv_cache_memory = hpu_total_memory * self.cache_config.gpu_memory_utilization - peak_memory
 
-
         end_time = time.perf_counter()
         logger.info(
-            ("After running the profile, the memory usage info is as follows:",
-             f"\nPaddle reserved memory: {paddle_reserved_mem_after_run}",
-             f"\nPaddle allocated memory: {paddle_allocated_mem_after_run}",
-             f"\nAvailable KV Cache meomory: {available_kv_cache_memory}",
-             f"Profile time: {end_time - start_time}"))
-
+            (
+                "After running the profile, the memory usage info is as follows:",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run}",
+                f"\nAvailable KV Cache meomory: {available_kv_cache_memory}",
+                f"Profile time: {end_time - start_time}",
+            )
+        )
 
         return available_kv_cache_memory  # return to caculate the block num in this device
 

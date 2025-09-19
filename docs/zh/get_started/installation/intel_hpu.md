@@ -7,7 +7,7 @@
 - Intel Gaudi software version 1.22.0
 - Linux X86_64
 
-### 1. 运行Docker容器
+## 1. 运行Docker容器
 
 使用下面命令运行Docker容器. 确保更新的版本在如下列表中 [Support Matrix](https://docs.habana.ai/en/latest/Support_Matrix/Support_Matrix.html):
 

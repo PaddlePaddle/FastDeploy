@@ -13,7 +13,7 @@
 # limitations under the License.
 """fastdeploy intel_hpu ops."""
 
-from fastdeploy.import_ops import import_custom_ops, rename_imported_op
+from fastdeploy.import_ops import import_custom_ops
 
 # PACKAGE = "fastdeploy.model_executor.ops.intel_hpu"
 PACKAGE = "paddlenlp_ops"

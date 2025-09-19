@@ -23,10 +23,10 @@ from .cuda import CUDAPlatform
 from .dcu import DCUPlatform
 from .gcu import GCUPlatform
 from .iluvatar import IluvatarPlatform
+from .intel_hpu import INTEL_HPUPlatform
 from .maca import MACAPlatform
 from .npu import NPUPlatform
 from .xpu import XPUPlatform
-from .intel_hpu import INTEL_HPUPlatform
 
 _current_platform = None
 

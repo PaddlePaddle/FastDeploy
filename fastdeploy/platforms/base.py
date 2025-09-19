@@ -60,7 +60,7 @@ class Platform:
         whether platform is intel_hpu
         """
         return paddle.is_compiled_with_custom_device("intel_hpu")
-    
+
     def is_cpu(self) -> bool:
         """
         whether platform is cpu

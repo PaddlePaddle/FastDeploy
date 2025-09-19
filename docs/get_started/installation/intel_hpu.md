@@ -7,7 +7,7 @@ The following installation methods are available when your environment meets the
 - Intel Gaudi software version 1.22.0
 - Linux X86_64
 
-### 1. Run Docker Container
+## 1. Run Docker Container
 
 Use the following commands to run a Docker container. Make sure to update the versions below as listed in the [Support Matrix](https://docs.habana.ai/en/latest/Support_Matrix/Support_Matrix.html):
 

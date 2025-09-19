@@ -70,15 +70,15 @@ except:
 from paddle.distributed.communication import stream
 from paddle.distributed.communication.reduce import ReduceOp
 
+
 def all_reduce(
     tensor,
     op,
     group,
     sync_op: bool = True,
 ):
-    return stream.all_reduce(
-        tensor, op=op, group=group, sync_op=sync_op, use_calc_stream=True
-    )
+    return stream.all_reduce(tensor, op=op, group=group, sync_op=sync_op, use_calc_stream=True)
+
 
 @paddle.jit.marker.unified
 def tensor_model_parallel_all_reduce_custom(input_: paddle.Tensor) -> paddle.Tensor:
