@@ -27,7 +27,7 @@ from fastdeploy.config import (
     ModelConfig,
     ParallelConfig,
 )
-from fastdeploy.model_executor.utils import initialize_model
+from fastdeploy.model_executor.models.model_base import ModelRegistry
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, ".."))
@@ -120,18 +120,12 @@ class TestModelLoader:
                 return json.load(f)
         return None
 
-    def test_initialize_model_function_exists(self):
-        print("=" * 60)
-        print("Testing initialize_model Function Import")
-        print("=" * 60)
-
-        assert initialize_model is not None, "initialize_model function should be imported"
-        assert callable(initialize_model), "initialize_model should be callable"
-        print(f"Successfully imported initialize_model function: {initialize_model}")
-
-    def test_initialize_model_with_none_convert_type(self, fd_config, model_json_config):
+    def test_embedding_with_none_convert_type(self, fd_config, model_json_config):
         if model_json_config is None:
             pytest.skip("Model config not available")
+
+        if fd_config is None:
+            pytest.skip("FDConfig not available")
 
         print("=" * 60)
         print("Testing initialize_model with convert_type='none'")
@@ -141,12 +135,10 @@ class TestModelLoader:
         if not architectures:
             pytest.skip("No architectures found in model config")
 
-        architecture = architectures[0]
-
         fd_config.model_config.convert_type = "none"
 
         try:
-            model_cls = initialize_model(architecture, fd_config)
+            model_cls = ModelRegistry.get_class(architectures)
 
             if hasattr(model_cls, "__name__"):
                 assert (
@@ -158,26 +150,27 @@ class TestModelLoader:
             assert "_init_pooler" not in standard_methods, "Standard model should not have _init_pooler method"
 
         except Exception as e:
-            print(f"Error in initialize_model: {e}")
+            print(f"Error in none: {e}")
 
-    def test_initialize_model_with_embed_convert_type(self, fd_config, model_json_config):
+    def test_embedding_with_embed_convert_type(self, fd_config, model_json_config):
         if model_json_config is None:
             pytest.skip("Model config not available")
 
+        if fd_config is None:
+            pytest.skip("FDConfig not available")
+
         print("=" * 60)
-        print("Testing initialize_model with convert_type='embed'")
+        print("Testing embedding with convert_type='embed'")
         print("=" * 60)
 
         architectures = model_json_config.get("architectures", [])
         if not architectures:
             pytest.skip("No architectures found in model config")
 
-        architecture = architectures[0]
-
         fd_config.model_config.convert_type = "embed"
 
         try:
-            model_cls = initialize_model(architecture, fd_config)
+            model_cls = ModelRegistry.get_class(architectures)
             if hasattr(model_cls, "__name__"):
                 assert "ForEmbedding" in model_cls.__name__, "Embedding model should have 'ForEmbedding' in name"
                 print(f"Confirmed embedding model type: {model_cls.__name__}")
@@ -186,4 +179,4 @@ class TestModelLoader:
             assert "_init_pooler" in embedding_methods, "Embedding model should have _init_pooler method"
 
         except Exception as e:
-            print(f"Error in initialize_model: {e}")
+            print(f"Error in convert embed: {e}")
