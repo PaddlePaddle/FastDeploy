@@ -117,7 +117,7 @@ print(f"cumsum_idx:\n{cumsum_idx}")
     "weight_only_int8",
 )
 
-# comparation
+# comparison
 permute_input_xpu = permute_input_xpu.astype("float32").numpy()
 permute_indices_per_token_xpu = permute_indices_per_token_xpu.numpy()
 recv_num_tokens_per_expert_list_cumsum_xpu = recv_num_tokens_per_expert_list_cumsum_xpu.numpy()
