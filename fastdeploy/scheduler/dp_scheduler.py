@@ -182,6 +182,7 @@ class DPLocalScheduler(LocalScheduler):
                     for request_id in batch_ids:
                         request = self.requests[request_id]
                         requests.append(request.raw)
+                        self.ids_read_cursor += 1
 
         if batch_ids:
             if len(batch_ids) > 0 and len(requests) == 0:
