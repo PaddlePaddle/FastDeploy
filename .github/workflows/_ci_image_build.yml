@@ -29,7 +29,7 @@ jobs:
     outputs:
       docker_name_precheck: ${{ steps.docker_build.outputs.docker_name_precheck }}
     steps:
-      - name: Code Prepare
+      - name: Docker Build
         id: docker_build
         shell: bash
         env:

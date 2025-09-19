@@ -289,7 +289,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
-            token_budget = self.config.max_num_batched_tokens
+            token_budget = self.config.scheduler_config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
             req_index = 0
