@@ -174,7 +174,7 @@ def get_device_type():
         return "gcu"
     elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         return "metax-gpu"
-    elif paddle.is_compiled_with_custom_device('intel_hpu'):
+    elif paddle.is_compiled_with_custom_device("intel_hpu"):
         return "intel-hpu"
     else:
         return "cpu"
