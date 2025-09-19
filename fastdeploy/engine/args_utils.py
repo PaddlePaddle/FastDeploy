@@ -401,8 +401,6 @@ class EngineArgs:
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
-            if self.enable_expert_parallel:
-                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
