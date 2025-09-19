@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import time
 from typing import Tuple
 
@@ -756,6 +757,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if parallel_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+    if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
 
     fd_config = FDConfig(
         model_config=model_config,
