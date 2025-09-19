@@ -286,7 +286,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
         params_dict = dict(self.named_parameters())
         model_path = self.fd_config.model_config.model
-        revision = self.fd_config.model_config.model
+        revision = self.fd_config.model_config.revision
         if is_pooling_model and get_pooling_config(model_path, revision):
             params_dict = {
                 param_name[6:] if param_name.startswith("model.") else param_name: param
