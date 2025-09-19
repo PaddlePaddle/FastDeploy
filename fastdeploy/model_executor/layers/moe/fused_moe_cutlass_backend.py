@@ -39,6 +39,7 @@ elif current_platform.is_iluvatar():
         moe_expert_reduce,
     )
 
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 
 
@@ -227,23 +228,23 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
-            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
-
-            gate_out, _, _ = get_moe_scores(
+            gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
+            topk_idx = topk_idx.astype("int32")
 
             (
                 permute_input,
                 token_nums_per_expert,
                 permute_indices_per_token,
-                topk_weights,
-                topk_idx,
+                topk_weights_,  # computed in get_moe_scores()
+                topk_idx_,  # computed in get_moe_scores()
                 expert_idx_per_token,
             ) = moe_expert_dispatch(
                 x,
