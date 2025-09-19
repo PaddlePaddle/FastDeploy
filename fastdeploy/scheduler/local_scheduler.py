@@ -280,6 +280,7 @@ class LocalScheduler:
             scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
 
         return requests
+
     def get_unhandled_request_num(self):
         return len(self.requests)
 

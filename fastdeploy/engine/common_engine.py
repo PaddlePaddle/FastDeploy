@@ -44,9 +44,9 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
-from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 
 
 class EngineSevice:
