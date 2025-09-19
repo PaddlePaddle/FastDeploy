@@ -1155,10 +1155,10 @@ class FDConfig:
         self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
+            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
         if self.parallel_config.use_tsp_attn:
             self.graph_opt_config.filter_tp_size(tp_size=self.parallel_config.tensor_parallel_size)
-        self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
+        self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.parallel_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
