@@ -64,14 +64,14 @@ class OpenAIServingCompletion:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
                 return ErrorResponse(
-                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                    error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
         created_time = int(time.time())
         if request.user is not None:
@@ -115,7 +115,7 @@ class OpenAIServingCompletion:
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
@@ -189,12 +189,12 @@ class OpenAIServingCompletion:
                         f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
                     )
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
     async def completion_full_generator(
         self,

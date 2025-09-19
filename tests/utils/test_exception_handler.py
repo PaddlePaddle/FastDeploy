@@ -1,12 +1,15 @@
 import json
 import unittest
 from http import HTTPStatus
-from unittest.mock import Mock
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from fastdeploy.utils import ErrorCode, ExceptionHandler, ParameterError
+
+
+class DummyRequest:
+    url = "http://testserver/test"
 
 
 class TestParameterError(unittest.TestCase):
@@ -19,16 +22,10 @@ class TestParameterError(unittest.TestCase):
 
 class TestExceptionHandler(unittest.IsolatedAsyncioTestCase):
 
-    def create_mock_request(self):
-        mock_request = Mock()
-        mock_request.url = "http://testserver/v1/chat/completions"
-        return mock_request
-
     async def test_handle_exception(self):
         """普通异常应返回 500 + internal_error"""
-        mock_request = self.create_mock_request()
         exc = RuntimeError("Something went wrong")
-        resp: JSONResponse = await ExceptionHandler.handle_exception(mock_request, exc)
+        resp: JSONResponse = await ExceptionHandler.handle_exception(None, exc)
         body = json.loads(resp.body.decode())
         self.assertEqual(resp.status_code, HTTPStatus.INTERNAL_SERVER_ERROR)
         self.assertEqual(body["error"]["type"], "internal_error")
@@ -36,9 +33,9 @@ class TestExceptionHandler(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_request_validation_missing_messages(self):
         """缺少 messages 参数时，应返回 missing_required_parameter"""
-        mock_request = self.create_mock_request()
         exc = RequestValidationError([{"loc": ("body", "messages"), "msg": "Field required", "type": "missing"}])
-        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(mock_request, exc)
+        dummy_request = DummyRequest()
+        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(dummy_request, exc)
         data = json.loads(resp.body.decode())
         self.assertEqual(resp.status_code, HTTPStatus.BAD_REQUEST)
         self.assertEqual(data["error"]["param"], "messages")
@@ -47,11 +44,11 @@ class TestExceptionHandler(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_request_validation_invalid_value(self):
         """参数非法时，应返回 invalid_value"""
-        mock_request = self.create_mock_request()
         exc = RequestValidationError(
             [{"loc": ("body", "top_p"), "msg": "Input should be less than or equal to 1", "type": "value_error"}]
         )
-        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(mock_request, exc)
+        dummy_request = DummyRequest()
+        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(dummy_request, exc)
         data = json.loads(resp.body.decode())
         self.assertEqual(resp.status_code, HTTPStatus.BAD_REQUEST)
         self.assertEqual(data["error"]["param"], "top_p")
