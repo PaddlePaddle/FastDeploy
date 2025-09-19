@@ -23,13 +23,6 @@ from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 
-from fastdeploy.model_executor.ops.intel_hpu import (
-    fused_block_attention,
-    fused_qkv_rope,
-    fused_sdpa_proj_t,
-    index_copy_,
-)
-
 if TYPE_CHECKING:
     from paddle._typing.dtype_like import _DTypeLiteral
 
@@ -234,6 +227,12 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         """
         # metadata = self.attention_metadata
 
+        from fastdeploy.model_executor.ops.intel_hpu import (
+            fused_qkv_rope,
+            fused_sdpa_proj_t,
+            index_copy_,
+        )
+
         query_states, key_value_states = fused_qkv_rope(
             src,
             qkv_proj.weight,
@@ -282,6 +281,8 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         forward_decode
         """
         # metadata = self.attention_metadata
+        from fastdeploy.model_executor.ops.intel_hpu import fused_block_attention
+
         res = fused_block_attention(
             src,
             forward_meta.rotary_embs,
