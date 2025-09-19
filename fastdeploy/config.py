@@ -338,6 +338,11 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
+        # TSP Attention
+        self.use_tsp_attn: bool = False
+        if os.getenv("USE_TSP_ATTN", "0") == "1":
+            self.use_tsp_attn = True
+
     def set_communicate_group(self):
         # different tp group id
         # prevent different tp_groups using the same group_id
@@ -644,6 +649,12 @@ class GraphOptimizationConfig:
 
         draft_capture_sizes.append(max_num_seqs)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
+
+    def filter_tp_size(self, tp_size: int = 1):
+        """When TSP is used, capture size must be divisible by tp size."""
+        self.cudagraph_capture_sizes = [
+            draft_size for draft_size in self.cudagraph_capture_sizes if (draft_size % tp_size == 0)
+        ]
 
     def to_json_string(self):
         """
@@ -1147,7 +1158,8 @@ class FDConfig:
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
-
+        if self.parallel_config.use_tsp_attn:
+            self.graph_opt_config.filter_tp_size(tp_size=self.parallel_config.tensor_parallel_size)
         if self.graph_opt_config.cudagraph_only_prefill:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
         else:
