@@ -126,7 +126,6 @@ def _create_pooling_model_cls(orig_cls: _T) -> _T:
         def __init__(self, fd_config, *args, **kwargs):
             super().__init__(fd_config, *args, **kwargs)
             self.fd_config = fd_config
-            self.use_auto_weights_loader = True
             self.is_pooling_model = True
 
             # These are not used in pooling models

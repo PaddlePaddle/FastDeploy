@@ -492,3 +492,29 @@ def parser_quant_type(quant_type):
             quant_type_list.append(default_type)
 
         return quant_type_list[0], quant_type_list[1], quant_type_list[2]
+
+
+def prepare_params_dict(original_params_dict, is_pooling_model):
+    """
+    Prepare parameter dictionary based on model type and conversion type.
+
+    Args:
+        original_params_dict (dict): Original parameter dictionary from self.named_parameters()
+        is_pooling_model (bool): Whether this is a pooling model (embedding model)
+        convert_type (str): Conversion type, such as "none", "embed", etc.
+
+    Returns:
+        dict: Processed parameter dictionary
+    """
+    param_dict = {}
+    if is_pooling_model:
+        # For embedding models with convert_type="none", remove "model." prefix
+        for param_name, param in original_params_dict.items():
+            if param_name.startswith("model."):
+                new_param_name = param_name[6:]
+                param_dict[new_param_name] = param
+            else:
+                param_dict[param_name] = param
+    else:
+        param_dict = original_params_dict
+    return param_dict
