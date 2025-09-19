@@ -234,7 +234,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
-                layer.renormalize,
+                getattr(layer, "renormalize", True),
             )
             topk_idx = topk_idx.astype("int32")
 
