@@ -73,12 +73,13 @@ struct IbDeviceInfo {
     int realPort;
     int maxQp;
 };
-
 /// @brief Queue Pair information for RDMA
 struct QpInfo {
     uint32_t lid;
     uint32_t qpn;
     uint32_t psn;
+    uint8_t sl;  // Service Level for IB networks
+    uint8_t path_bits; // Path Bits for IB networks
     union ibv_gid gid;
     enum ibv_mtu mtu;
 
@@ -88,7 +89,10 @@ struct QpInfo {
         intBuffer[0] = htonl(lid);
         intBuffer[1] = htonl(qpn);
         intBuffer[2] = htonl(psn);
-        memcpy(buffer + 12, gid.raw, sizeof(gid.raw));
+        // Pack SL and Path Bits into the 4th uint32_t
+        uint32_t sl_path = (static_cast<uint32_t>(sl) << 8) | static_cast<uint32_t>(path_bits);
+        intBuffer[3] = htonl(sl_path);
+        memcpy(buffer + 16, gid.raw, sizeof(gid.raw));
         intBuffer[7] = htonl(static_cast<uint32_t>(mtu));
     }
 
@@ -98,11 +102,14 @@ struct QpInfo {
         lid = ntohl(intBuffer[0]);
         qpn = ntohl(intBuffer[1]);
         psn = ntohl(intBuffer[2]);
-        memcpy(gid.raw, buffer + 12, sizeof(gid.raw));
+        uint32_t sl_path = ntohl(intBuffer[3]);
+        sl = static_cast<uint8_t>((sl_path >> 8) & 0xFF);
+        path_bits = static_cast<uint8_t>(sl_path & 0xFF);
+        memcpy(gid.raw, buffer + 16, sizeof(gid.raw));
         mtu = static_cast<ibv_mtu>(ntohl(intBuffer[7]));
     }
 
-    static const size_t size = 12 + sizeof(gid.raw) + 4;
+    static const size_t size = 16 + sizeof(gid.raw) + 4;
 };
 
 /// @brief RDMA connection context
