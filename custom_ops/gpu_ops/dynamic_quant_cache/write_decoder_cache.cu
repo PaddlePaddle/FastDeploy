@@ -38,7 +38,7 @@ __global__ void write_decoder_c16_cache_kernel(
         const int max_num_blocks_per_seq,
         const int data_num_per_block,
         const int max_input_length) {
-    
+
     constexpr int kPackSize = 4;
     using src_type = Vec<input_type, kPackSize>;
     using dst_type = Vec<output_type, kPackSize>;
@@ -49,7 +49,7 @@ __global__ void write_decoder_c16_cache_kernel(
     src_type src, bias;
     rope_type sin, cos;
     dst_type dst;
-    
+
     int bidh = blockIdx.y;
     const int bidb = blockIdx.x;
     const int tidx = threadIdx.x;
@@ -164,7 +164,7 @@ void write_decoder_c16_cache(
         const int max_input_length,
         const int bsz,
         cudaStream_t stream) {
-    
+
     constexpr int kHeadDim = 128;
     constexpr int kThreads = 128;
     constexpr int kBlockSize = 64;
@@ -219,7 +219,7 @@ std::vector<paddle::Tensor> WriteDecoderCache(
         const int head_dim,
         const int max_input_length,
         const std::string& cache_quant_type_str) {
-    
+
     paddle::Tensor q_input = paddle::empty({encoder_seqs_len.dims()[0], head_num, head_dim}, paddle::DataType::FLOAT16, qkv_out.place());
     using scale_type = cutlass::float_e4m3_t;
     constexpr int kBlockSize = 64;

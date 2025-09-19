@@ -16,11 +16,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import paddle
-from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
@@ -33,14 +32,18 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
-from fastdeploy.model_executor.ops.gpu import dynamic_quant_cache_write_encoder, flash_attention_mask, split_qkv_and_rope, dynamic_quant_cache_write_decoder, dynamic_quant_cache_decoder_attention, get_qk_tokens_num, dynamic_quant_get_kv_from_cache
+from fastdeploy.model_executor.ops.gpu import (
+    dynamic_quant_cache_decoder_attention,
+    dynamic_quant_cache_write_decoder,
+    dynamic_quant_cache_write_encoder,
+    dynamic_quant_get_kv_from_cache,
+    flash_attention_mask,
+    get_qk_tokens_num,
+    split_qkv_and_rope,
+)
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
-
-from fastdeploy.platforms import current_platform
-
-import os
 
 
 @dataclass
@@ -48,6 +51,7 @@ class DynamciQuantCacheAttentionMetadata(AttentionMetadata):
     """
     DynamciQuantCacheAttentionMetadata
     """
+
     q_input: paddle.Tensor = None
     k_input: paddle.Tensor = None
     v_input: paddle.Tensor = None
@@ -104,18 +108,17 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
         """
         assert kv_cache_quant_type == "dynamic_int2_zp"
         return (
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size + self.block_size // 32 * 8,
-                self.head_dim // 4,
-            )
+            max_num_blocks,
+            self.kv_num_heads,
+            self.block_size + self.block_size // 32 * 8,
+            self.head_dim // 4,
+        )
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = DynamciQuantCacheAttentionMetadata()
 
         metadata.cu_seqlens_k, qk_token_num = get_qk_tokens_num(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.seq_lens_decoder
+            forward_meta.seq_lens_encoder, forward_meta.seq_lens_this_time, forward_meta.seq_lens_decoder
         )
         metadata.max_enc_len_this_time = qk_token_num[0]
         metadata.max_dec_len_this_time = qk_token_num[1]
@@ -145,8 +148,8 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
-    ):  
-        out = paddle.zeros([qkv.shape[0], self.num_heads * self.head_dim], dtype=qkv.dtype) 
+    ):
+        out = paddle.zeros([qkv.shape[0], self.num_heads * self.head_dim], dtype=qkv.dtype)
 
         metadata = self.attention_metadata
         if metadata.max_enc_len_this_time > 0:
@@ -166,7 +169,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 layer.head_dim,
                 metadata.max_enc_len_this_time,
                 self.max_seq_len,
-                getattr(layer, "cache_quant_type_str", "none")
+                getattr(layer, "cache_quant_type_str", "none"),
             )
 
             dynamic_quant_cache_write_encoder(
@@ -186,7 +189,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 self.kv_num_heads,
                 layer.head_dim,
                 metadata.max_enc_len_this_time,
-                getattr(layer, "cache_quant_type_str", "none")
+                getattr(layer, "cache_quant_type_str", "none"),
             )
 
             if metadata.q_tokens_num < metadata.k_tokens_num:
@@ -207,9 +210,9 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                     self.kv_num_heads,
                     layer.head_dim,
                     metadata.max_enc_len_this_time + metadata.max_dec_len_this_time,
-                    getattr(layer, "cache_quant_type_str", "none")
+                    getattr(layer, "cache_quant_type_str", "none"),
                 )
-                
+
             flash_attention_mask(
                 metadata.q_input,
                 metadata.k_input,
@@ -266,6 +269,6 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
                 layer.head_dim,
                 metadata.max_dec_len_this_time,
                 self.max_seq_len,
-               getattr(layer, "cache_quant_type_str", "none")
+                getattr(layer, "cache_quant_type_str", "none"),
             )
         return out

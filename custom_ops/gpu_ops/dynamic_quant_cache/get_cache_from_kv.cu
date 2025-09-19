@@ -34,7 +34,7 @@ void __global__ get_kv_from_cache_kernel(
         const int c16_remain_seq_len,
         const int head_num,
         const int kv_head_num) {
-    
+
     const int bidb = blockIdx.x;
     const int bidh = blockIdx.y;
     const int block_idx = blockIdx.z;
@@ -139,18 +139,18 @@ void __global__ get_kv_from_cache_kernel(
     const int col = lane_id % 4;
     const int row_offset = row * 4;
     constexpr int all_cols = (kHeadDim + (32 / 4) * 8) / 2;
-    
+
     constexpr uint32_t mask = 0x03030303;
-    
+
     if (bidh < kv_head_num) {
         #pragma unroll
         for (int i = 0; i < 8; i += 2) {
             uint32_t c2_value = reinterpret_cast<uint32_t*>(cache_smem)[tidx + i * 64];
-            
+
             for (int k = 1; k >= 0; --k) {
                 #pragma unroll
                 for (int j = 1; j >= 0; --j) {
-                    
+
                     uint32_t value = c2_value & mask;
                     c2_value = c2_value >> 2;
 
@@ -158,7 +158,7 @@ void __global__ get_kv_from_cache_kernel(
 
                     pakc_half cur_value = reinterpret_cast<pakc_half*>(&half_data)[0];
                     pakc_half next_value = reinterpret_cast<pakc_half*>(&half_data)[1];
-                    
+
                     const int scale_idx = (i + k) * 8 + col + j * 4;
                     const int idx = (row + warp_id * 8) * all_cols + row_offset + scale_idx;
 
@@ -173,7 +173,7 @@ void __global__ get_kv_from_cache_kernel(
                     reinterpret_cast<pakc_half*>(cache_store_smem)[idx] = cur_value;
                     reinterpret_cast<pakc_half*>(cache_store_smem)[idx + (kThreads / 32 * 8 * all_cols)] = next_value;
                 }
-            }   
+            }
         }
 
         __syncthreads();
@@ -181,7 +181,7 @@ void __global__ get_kv_from_cache_kernel(
         const int store_idx = (cu_seq_k[bidb] + token_idx) * kv_head_num * kHeadDim + bidh * kHeadDim + copy_col_idx;
         for (int i = copy_row_idx; i < kBlockSize; i += all_rows) {
             const int offset = i % 8 * 8;
-            *reinterpret_cast<int4*>(k_input + store_idx + i * kv_head_num * kHeadDim) = 
+            *reinterpret_cast<int4*>(k_input + store_idx + i * kv_head_num * kHeadDim) =
             *reinterpret_cast<int4*>(reinterpret_cast<T*>(cache_store_smem) + i * (all_cols * 2) + copy_col_idx + offset);
         }
 
@@ -209,20 +209,20 @@ void __global__ get_kv_from_cache_kernel(
             uint32_t smem_ptr = cast_smem_ptr_to_uint(reinterpret_cast<uint128_t*>(cache_store_smem + i * 16 * 128 * 2) + tidx);
             asm volatile (
                  "stmatrix.sync.aligned.x4.trans.m8n8.shared.b16 [%0], {%1, %2, %3, %4};\n"
-                :: "r"(smem_ptr), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[0]), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[1]), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[2]), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[3]));  
+                :: "r"(smem_ptr),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[0]),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[1]),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[2]),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[3]));
 
             smem_ptr = cast_smem_ptr_to_uint(reinterpret_cast<uint128_t*>(cache_store_smem + 8 * 128 * 2 + i * 16 * 128 * 2) + tidx);
             asm volatile (
                 "stmatrix.sync.aligned.x4.trans.m8n8.shared.b16 [%0], {%1, %2, %3, %4};\n"
-                :: "r"(smem_ptr), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[4]), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[5]), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[6]), 
-                "r"(reinterpret_cast<uint32_t*>(dequant_value)[7]));  
+                :: "r"(smem_ptr),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[4]),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[5]),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[6]),
+                "r"(reinterpret_cast<uint32_t*>(dequant_value)[7]));
         }
 
         __syncthreads();
@@ -259,12 +259,12 @@ void  get_kv_from_cache(
         const int max_seq_k,
         const int bsz,
         cudaStream_t stream) {
-    
+
     constexpr int kBlockSize = 64;
     constexpr int kHeadDim = 128;
     constexpr int kThreads = 128;
     const int smem_size = kBlockSize * (kHeadDim + (32 / 4) * 8) * sizeof(T) + data_num_per_block;
-    
+
     int block_num = (max_seq_k + c16_remain_seq_len + kBlockSize - 1) / kBlockSize;
     dim3 gird_dim;
     gird_dim.x = bsz;

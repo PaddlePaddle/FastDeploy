@@ -35,7 +35,7 @@ __device__ void write_c2_cache_kernel(
         const int bidb,
         const int bidh,
         const int block_idx) {
-    
+
     using SmemLayoutAtomKV = decltype(
         composition(Swizzle<3, 3, 3>{},
         Layout<Shape<_8, _64>,
@@ -81,7 +81,7 @@ __device__ void write_c2_cache_kernel(
 
     const int chunk_prefill_token_idx = seq_len_decoder / kBlockSize;
     const int token_idx = block_idx * kBlockSize + seq_len_decoder;
-    
+
     if constexpr (is_encoder) {
         if (seq_len_encoder == 0 || token_idx >= seq_len_encoder + seq_len_decoder) {
             return;
@@ -119,21 +119,21 @@ __device__ void write_c2_cache_kernel(
     const int stride_k = kHeadDim * kv_head_num;
 
     Tensor gK = make_tensor(
-        make_gmem_ptr(k_input + load_idx), 
+        make_gmem_ptr(k_input + load_idx),
         Shape<Int<kBlockSize>, Int<kHeadDim>>{},
         make_stride(stride_k, _1{}));
 
     Tensor gV = make_tensor(
-        make_gmem_ptr(v_input + load_idx), 
+        make_gmem_ptr(v_input + load_idx),
         Shape<Int<kBlockSize>, Int<kHeadDim>>{},
         make_stride(stride_k, _1{}));
 
     Tensor sK = make_tensor(
-        make_smem_ptr(reinterpret_cast<T *>(smem_)), 
+        make_smem_ptr(reinterpret_cast<T *>(smem_)),
         SmemLayoutKV{});
 
     Tensor sV = make_tensor(
-        sK.data() + kHeadDim * kBlockSize, 
+        sK.data() + kHeadDim * kBlockSize,
         SmemLayoutKV{});
 
     uint32_t *cache_k_smem = reinterpret_cast<uint32_t *>(smem_);
@@ -145,12 +145,12 @@ __device__ void write_c2_cache_kernel(
     GmemTiledCopyKV gmem_tiled_copy_KV;
     auto gmem_thr_copy_KV = gmem_tiled_copy_KV.get_thread_slice(tidx);
 
-    Tensor tKgK = gmem_thr_copy_KV.partition_S(gK); 
+    Tensor tKgK = gmem_thr_copy_KV.partition_S(gK);
     Tensor tKsK = gmem_thr_copy_KV.partition_D(sK);
-    Tensor tVgV = gmem_thr_copy_KV.partition_S(gV); 
+    Tensor tVgV = gmem_thr_copy_KV.partition_S(gV);
     Tensor tVsV = gmem_thr_copy_KV.partition_D(sV);
 
-    Tensor cK = make_identity_tensor(make_shape(size<0>(sK), size<1>(sK))); 
+    Tensor cK = make_identity_tensor(make_shape(size<0>(sK), size<1>(sK)));
     Tensor tKcK = gmem_thr_copy_KV.partition_S(cK);
 
     TiledMma tiled_mma;
@@ -166,10 +166,10 @@ __device__ void write_c2_cache_kernel(
     auto smem_tiles_copy_V = make_tiled_copy_B(SmemCopyAtomTransposed{}, tiled_mma);
     auto smem_thr_copy_V = smem_tiles_copy_V.get_thread_slice(tidx);
 
-    Tensor tSsK = smem_thr_copy_K.partition_S(sK);                    
+    Tensor tSsK = smem_thr_copy_K.partition_S(sK);
     Tensor tSrK  = thr_mma.partition_fragment_B(sK);
     Tensor tOsVt = smem_thr_copy_V.partition_S(sVt);
-    Tensor tOrVt  = thr_mma.partition_fragment_B(sVtNoSwizzle); 
+    Tensor tOrVt  = thr_mma.partition_fragment_B(sVtNoSwizzle);
 
 
     Tensor tSrK_copy_view = smem_thr_copy_K.retile_D(tSrK);
@@ -191,7 +191,7 @@ __device__ void write_c2_cache_kernel(
     constexpr int warp_per_scale = kHeadDim * kBlockSize / 32 / 2;
     __shared__ pakc_half s_max[warp_per_scale * kThreads / 32];
     __shared__ pakc_half s_min[warp_per_scale * kThreads / 32];
-    
+
 
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 4; j+=2) {
@@ -203,7 +203,7 @@ __device__ void write_c2_cache_kernel(
                 pakc_half next_value = reinterpret_cast<pakc_half*>(&value2)[k];
                 pakc_half max_value = HalfMax<T>()(cur_value, next_value);
                 pakc_half min_value = HalfMin<T>()(cur_value, next_value);
-                
+
                 pakc_half neigh_max_value = __shfl_xor_sync(uint32_t(-1), max_value, 8);
                 pakc_half neigh_min_value = __shfl_xor_sync(uint32_t(-1), min_value, 8);
                 max_value = HalfMax<T>()(max_value, neigh_max_value);
@@ -256,7 +256,7 @@ __device__ void write_c2_cache_kernel(
     __syncthreads();
     // 量化k
     const int col = lane_idx % 4;
-    
+
     #pragma unroll
     for (int i = 0; i < scale_k_num / 2; i+=2) {
         uint32_t quant_c2_value = 0;
@@ -367,7 +367,7 @@ __device__ void write_c2_cache_kernel(
     dequant_scale = (max_value - min_value) * dequant_scale_factor;
     quant_scale = __h2div(quant_scale_factor, dequant_scale);
     quant_zp = -min_value * quant_scale;
-    
+
     s_quant[tidx] = quant_scale;
     s_zp[tidx] = quant_zp;
 
@@ -375,7 +375,7 @@ __device__ void write_c2_cache_kernel(
 
     for (int i = 0; i < 4; ++i) {
         uint32_t quant_c2_value = 0;
-        
+
         for (int j = 0; j < 4; ++j) {
             pakc_half *value = reinterpret_cast<pakc_half*>(raw_pointer_cast(tOrVt(_, j, i).data()));
             const int scale_idx = i * 8 + j * 32 + col;
@@ -405,7 +405,7 @@ __device__ void write_c2_cache_kernel(
     // 将反量化scale 写回到共享内存中
     dequant_scale_smem = reinterpret_cast<uint32_t*>(cache_v_smem + scale_k_num / 4 * kThreads);
     neigh_dequant_scale = __shfl_xor_sync(uint32_t(-1), dequant_scale, 1);
-    
+
     fp8_dequant_scale = dynamic_quant_cache::Convert_to_fp8<T, ScaleType>()(
         reinterpret_cast<uint32_t*>(&dequant_scale)[0],
         reinterpret_cast<uint32_t*>(&neigh_dequant_scale)[0]
@@ -421,7 +421,7 @@ __device__ void write_c2_cache_kernel(
         reinterpret_cast<uint32_t*>(&neigh_quant_zp)[0]
     );
     dequant_zp_smem = dequant_scale_smem + kThreads / 2;
-    
+
     if (tidx % 2 == 0) {
         dequant_zp_smem[tidx / 2] = fp8_quant_zp;
     }
@@ -472,4 +472,3 @@ __device__ void write_c2_cache_kernel(
     }
 }
 }
-

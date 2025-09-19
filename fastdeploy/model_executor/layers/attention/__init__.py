@@ -17,13 +17,13 @@ from .attention import Attention
 from .attention_selecter import get_attention_backend
 from .base_attention_backend import AttentionBackend
 from .block_multihead_attn_backend import BlockAttentionBackend
+from .dynamic_quant_cache_attn_backend import DynamciQuantCacheAttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
 from .iluvatar_attn_backend import IluvatarAttnBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import MobaAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
 from .xpu_attn_backend import XPUAttentionBackend
-from .dynamic_quant_cache_attn_backend import DynamciQuantCacheAttentionBackend
 
 __all__ = [
     "AttentionBackend",
@@ -37,5 +37,5 @@ __all__ = [
     "BlockAttentionBackend",
     "Attention",
     "MobaAttentionBackend",
-    "DynamciQuantCacheAttentionBackend"
+    "DynamciQuantCacheAttentionBackend",
 ]

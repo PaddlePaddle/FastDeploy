@@ -135,12 +135,12 @@ struct Convert_from_fp8<cutlass::float_e4m3_t, phi::dtype::bfloat16> {
 
 template<typename T, typename scale_type, typename Tensor0, typename Tensor1, typename Tensor2, typename TiledMma, typename pakc_half>
 __forceinline__ __device__ void gemm_qk(
-        Tensor0 &acc, Tensor1 &tCrA, 
-        Tensor2 &tCrB, uint8_t * smem_b, 
-        TiledMma tiled_mma, 
-        const int tidx, 
+        Tensor0 &acc, Tensor1 &tCrA,
+        Tensor2 &tCrB, uint8_t * smem_b,
+        TiledMma tiled_mma,
+        const int tidx,
         pakc_half * scale_mem, pakc_half * zp_mem) {
-    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc)); 
+    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
     CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
     CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));
 
@@ -160,9 +160,9 @@ __forceinline__ __device__ void gemm_qk(
     __syncthreads();
 
     const int col = tidx % 4;
-    
+
     constexpr uint32_t mask = 0x03030303;
-    
+
     #pragma unroll
     for (int i = 0; i < size<2>(tCrA); i += 2) {
         uint32_t c2_value = reinterpret_cast<uint32_t*>(smem_b)[tidx + i * 64];
@@ -177,7 +177,7 @@ __forceinline__ __device__ void gemm_qk(
 
                 pakc_half cur_value = reinterpret_cast<pakc_half*>(&half_data)[0];
                 pakc_half next_value = reinterpret_cast<pakc_half*>(&half_data)[1];
-                
+
                 const int scale_idx = (i + k) * 8 + col +  j * 4;
                 pakc_half cur_dequant_value = scale_mem[scale_idx];
                 pakc_half cur_quant_zp = zp_mem[scale_idx];
@@ -192,28 +192,28 @@ __forceinline__ __device__ void gemm_qk(
             }
         }
         cute::gemm(tiled_mma, tCrA(_, _, i), tCrB(_, _, i), acc);
-        cute::gemm(tiled_mma, tCrA(_, _, i + 1), tCrB(_, _, i + 1), acc);      
+        cute::gemm(tiled_mma, tCrA(_, _, i + 1), tCrB(_, _, i + 1), acc);
     }
 }
 
 template<typename T, typename scale_type, typename Tensor0, typename Tensor1, typename Tensor2, typename Tensor3, typename TiledMma, typename ThrCopy, typename TiledCopy, typename pakc_half>
 __forceinline__ __device__ void gemm_v(
-        Tensor0 &acc, 
-        Tensor1 &tCrA, 
-        Tensor2 &tCsA, 
-        Tensor3 &tCrB, 
-        uint8_t * smem_b, 
-        TiledMma tiled_mma, 
+        Tensor0 &acc,
+        Tensor1 &tCrA,
+        Tensor2 &tCsA,
+        Tensor3 &tCrB,
+        uint8_t * smem_b,
+        TiledMma tiled_mma,
         ThrCopy thr_copy_A,
         TiledCopy tiled_copy_A,
-        const int tidx, 
+        const int tidx,
         pakc_half * scale_mem, pakc_half * zp_mem) {
-    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc)); 
+    CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
     CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
     CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));
 
     Tensor tCrA_copy_view = thr_copy_A.retile_D(tCrA);
-    copy(tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{})); 
+    copy(tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{}));
 
     constexpr float quant_factor = 512.0f;
     const pakc_half fp8_dequant_factor = pakc_half(quant_factor, quant_factor);
@@ -233,11 +233,11 @@ __forceinline__ __device__ void gemm_v(
     const int col = tidx % 4;
 
     constexpr uint32_t mask = 0x03030303;
-    
+
     #pragma unroll
     for (int i = 0; i < size<2>(tCrA); i++) {
         if (i < size<2>(tCrA) - 1) {
-            copy(tiled_copy_A, tCsA(_, _, i + 1), tCrA_copy_view(_, _, i + 1)); 
+            copy(tiled_copy_A, tCsA(_, _, i + 1), tCrA_copy_view(_, _, i + 1));
         }
         uint32_t c2_value = reinterpret_cast<uint32_t*>(smem_b)[tidx + i * 128];
         for (int j = 3; j >= 0; j--) {

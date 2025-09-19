@@ -33,7 +33,7 @@ void __global__ write_encoder_c2_cache_kernel(
         const int c16_remain_seq_len,
         const int head_num,
         const int kv_head_num) {
-    
+
     const int bidb = blockIdx.x;
     const int bidh = blockIdx.y;
     const int block_idx = blockIdx.z;
@@ -75,7 +75,7 @@ void __global__ write_encoder_c16_cache_kernel(
         const int c16_remain_seq_len,
         const int head_num,
         const int kv_head_num) {
-    
+
     const int bidb = blockIdx.x;
     const int bidh = blockIdx.y;
     const int block_idx = blockIdx.z;
@@ -154,12 +154,12 @@ void write_encoder_cache(
         const int head_dim,
         const int encoder_seq_len,
         cudaStream_t stream) {
-    
+
     constexpr int kBlockSize = 64;
     constexpr int kHeadDim = 128;
     constexpr int kThreads = 128;
     constexpr int smem_size = 2 * kBlockSize * kHeadDim * sizeof(T);
-    
+
     int block_num = (encoder_seq_len + kBlockSize - 1) / kBlockSize;
     dim3 gird_dim;
     gird_dim.x = bsz;
@@ -181,7 +181,7 @@ void write_encoder_cache(
         head_num,
         kv_head_num
     );
-    
+
     gird_dim.x = bsz;
     gird_dim.y = kv_head_num * 2;
     gird_dim.z = (c16_remain_seq_len + kBlockSize) / kBlockSize;

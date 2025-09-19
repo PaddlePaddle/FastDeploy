@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import threading
 import time
 import traceback
@@ -25,7 +26,6 @@ from typing import Union
 
 import numpy as np
 import paddle
-import os
 
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
@@ -165,7 +165,7 @@ class ResourceManagerV1(ResourceManager):
                 return remain_tokens
             else:
                 return self.config.max_num_batched_tokens
-        
+
         num_new_tokens = min(num_new_tokens, token_budget)
 
         if not self.config.model_config.enable_mm:

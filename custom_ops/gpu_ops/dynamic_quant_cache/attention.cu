@@ -26,8 +26,8 @@ inline __device__ void softmax_rescale_o(Tensor0 &scores, Tensor1 &acc_o, const 
             const float scores_scale = expf((scores_max_prev[mi] - scores_max[mi]) * softmax_scale);
             scores_sum[mi] *= scores_scale;
             #pragma unroll
-            for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) { 
-                acc_o_rowcol(mi, ni) *= scores_scale; 
+            for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) {
+                acc_o_rowcol(mi, ni) *= scores_scale;
             }
         }
         scale_apply_exp2<kMiLen>(scores, scores_max, scores_sum, softmax_scale);
@@ -84,16 +84,16 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     const int c16_cache_len = seq_len_decoder < c16_cache_max_len ? seq_len_decoder : c16_remain_seq_len + seq_len_decoder % kBlockSize;
 
     const int c2_cache_len = seq_len_decoder - c16_cache_len;
-    
+
     int partition_num;
 
     if constexpr (cache_bits == 2) {
-        partition_num = (c2_cache_len + kBlockN - 1) / kBlockN; 
+        partition_num = (c2_cache_len + kBlockN - 1) / kBlockN;
         if (seq_len_decoder == 1 || partition_idx >= partition_num) {
             return;
         }
     } else {
-        partition_num = (c16_cache_len + kBlockN - 1) / kBlockN; 
+        partition_num = (c16_cache_len + kBlockN - 1) / kBlockN;
         if (seq_len_decoder == 1 || partition_idx >= partition_num) {
             return;
         }
@@ -102,11 +102,11 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     const int32_t head_num = params.head_num;
     const int32_t kv_head_num = params.kv_head_num;
     const int data_num_per_block = cache_bits == 2 ? params.data_num_per_block : kBlockSize * kHeadDim;
-    
+
     const int32_t q_offset = bidb * head_num * kHeadDim + q_head_idx * kHeadDim;
 
     Tensor gQ = make_tensor(
-        make_gmem_ptr(reinterpret_cast<const input_type *>(params.q_input) + q_offset), 
+        make_gmem_ptr(reinterpret_cast<const input_type *>(params.q_input) + q_offset),
         Shape<Int<kBlockM>, Int<kHeadDim>>{},
         Stride<Int<kHeadDim>, _1>{});
 
@@ -124,12 +124,12 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     uint8_t *gV = params.cache_v_c2 + cache_offset;
 
     Tensor gK_tensor = make_tensor(
-        make_gmem_ptr(reinterpret_cast<const input_type *>(params.cache_k_c16) + cache_offset), 
+        make_gmem_ptr(reinterpret_cast<const input_type *>(params.cache_k_c16) + cache_offset),
         Shape<Int<kBlockSize>, Int<kHeadDim>>{},
         make_stride(kHeadDim * kv_head_num, _1{}));
 
     Tensor gV_tensor = make_tensor(
-        make_gmem_ptr(reinterpret_cast<const input_type *>(params.cache_v_c16) + cache_offset), 
+        make_gmem_ptr(reinterpret_cast<const input_type *>(params.cache_v_c16) + cache_offset),
         Shape<Int<kBlockSize>, Int<kHeadDim>>{},
         make_stride(kHeadDim * kv_head_num, _1{}));
 
@@ -139,29 +139,29 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
 
     __align__(16) __shared__ pakc_half scale_mem[kBlockSize / 32 * kHeadDim];
     __align__(16) __shared__ pakc_half zp_mem[kBlockSize / 32 * kHeadDim];
-    
+
     Tensor sQ = make_tensor(make_smem_ptr(reinterpret_cast<input_type *>(smem_)), SmemLayoutQ{});
     Tensor sQK = make_tensor(make_smem_ptr(reinterpret_cast<input_type *>(smem_)), SmemLayoutQK{});
     Tensor sK_tensor = make_tensor(sQ.data() + size(sQ), SmemLayoutKV{});
     Tensor sV_tensor = make_tensor(sK_tensor.data() + size(sK_tensor), SmemLayoutKV{});
     Tensor sVt = make_tensor(sV_tensor.data(), SmemLayoutVtransposed{});
     Tensor sVtNoSwizzle = make_tensor(sV_tensor.data(), SmemLayoutVtransposedNoSwizzle{});
-    
+
 
     uint8_t *sK = reinterpret_cast<uint8_t *>(smem_) + kShareMemSize;
     uint8_t *sV = sK + data_num_per_block;
-    
+
     GmemTiledCopy gmem_tiled_copy;
     auto gmem_thr_copy = gmem_tiled_copy.get_thread_slice(tidx);
 
-    Tensor tQgQ = gmem_thr_copy.partition_S(gQ); 
+    Tensor tQgQ = gmem_thr_copy.partition_S(gQ);
     Tensor tQsQ = gmem_thr_copy.partition_D(sQ);
-    Tensor tKgK = gmem_thr_copy.partition_S(gK_tensor); 
+    Tensor tKgK = gmem_thr_copy.partition_S(gK_tensor);
     Tensor tKsK = gmem_thr_copy.partition_D(sK_tensor);
-    Tensor tVgV = gmem_thr_copy.partition_S(gV_tensor); 
+    Tensor tVgV = gmem_thr_copy.partition_S(gV_tensor);
     Tensor tVsV = gmem_thr_copy.partition_D(sV_tensor);
 
-    Tensor cK = make_identity_tensor(make_shape(size<0>(sK_tensor), size<1>(sK_tensor))); 
+    Tensor cK = make_identity_tensor(make_shape(size<0>(sK_tensor), size<1>(sK_tensor)));
     Tensor tKcK = gmem_thr_copy.partition_S(cK);
 
     constexpr int32_t copy_size = kGqaGroupSize * 8;
@@ -177,7 +177,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     } else {
         copy(gmem_tiled_copy, tKgK, tKsK, tKcK);
     }
-    
+
     cute::cp_async_fence();
 
     const int cache_offset_step = kv_head_num * data_num_per_block;
@@ -190,7 +190,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
 
     Tensor acc_o = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kHeadDim>>{});
     clear(acc_o);
-    Tensor acc_s = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kBlockSize>>{}); 
+    Tensor acc_s = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kBlockSize>>{});
 
     auto smem_tiled_copy_Q = make_tiled_copy_A(SmemCopyAtom{}, tiled_mma);
     auto smem_tiled_copy_K = make_tiled_copy_B(SmemCopyAtom{}, tiled_mma);
@@ -200,7 +200,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     auto smem_thr_copy_K = smem_tiled_copy_K.get_thread_slice(tidx);
     auto smem_thr_copy_V = smem_tiled_copy_V.get_thread_slice(tidx);
     auto smem_thr_copy_O = smem_tiled_copy_O.get_thread_slice(tidx);
-    Tensor tSsQ = smem_thr_copy_Q.partition_S(sQ); 
+    Tensor tSsQ = smem_thr_copy_Q.partition_S(sQ);
     Tensor tSrQ = thr_mma.partition_fragment_A(sQ);
     Tensor tSsQK = smem_thr_copy_Q.partition_S(sQK);
     Tensor tSrQK = thr_mma.partition_fragment_A(sQK);
@@ -210,7 +210,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     Tensor tOsVt = smem_thr_copy_V.partition_S(sVt);
 
     Tensor tCrQ_copy_view = smem_thr_copy_Q.retile_D(tSrQ);
-    
+
     cp_async_wait<0>();
     __syncthreads();
     copy(smem_tiled_copy_Q, tSsQ, tCrQ_copy_view);
@@ -226,15 +226,15 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
         scores_sum[mi] = 0;
     }
 
-    
+
     #pragma unroll
     for (int n = 0; n < kTileN; ++n) {
         const int cur_remain_seq_len = remain_seq_len - n * kBlockSize;
-        
+
         if (cur_remain_seq_len <= 0) {
             break;
         }
-        
+
         clear(acc_s);
         cp_async_wait<0>();
         __syncthreads();
@@ -254,9 +254,9 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
                 copy(gmem_tiled_copy, tVgV, tVsV, tKcK);
             }
         }
-        
+
         cute::cp_async_fence();
-        
+
         if constexpr (cache_bits == 2) {
             gemm_qk<input_type, scale_type>(acc_s, tSrQ, tSrK, sK, tiled_mma, tidx, scale_mem, zp_mem);
         } else {
@@ -268,7 +268,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
         if (partition_idx == partition_num - 1 && cur_remain_seq_len < kBlockSize) {
             apply_mask<kMiLen>(scores, warp_id, col, cur_remain_seq_len);
         }
-        
+
         #pragma unroll
         for (int mi = 0; mi < kMiLen; ++mi) {
             scores_max_prev[mi] = scores_max[mi];
@@ -307,7 +307,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
                 tKgK.data() = tKgK.data() + cache_offset_step;
                 copy(gmem_tiled_copy, tKgK, tKsK, tKcK);
             }
-            
+
             cute::cp_async_fence();
         }
 
@@ -324,7 +324,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
 
         Tensor rS = convert_type<input_type>(acc_s);
 
-        Tensor trQK = smem_thr_copy_O.retile_S(rS);   
+        Tensor trQK = smem_thr_copy_O.retile_S(rS);
         Tensor tsQK = smem_thr_copy_O.partition_D(sQK);
         cute::copy(smem_tiled_copy_O, trQK, tsQK);
 
@@ -342,7 +342,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     if constexpr (cache_bits == 2) {
         store_partition_idx = partition_idx;
     } else {
-        const int c2_partition_num = (c2_cache_len + kBlockN - 1) / kBlockN; 
+        const int c2_partition_num = (c2_cache_len + kBlockN - 1) / kBlockN;
         store_partition_idx = partition_idx + c2_partition_num;
     }
 
@@ -359,7 +359,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
         scores_sum[mi] = Allreduce<4>::run(scores_sum[mi], sum_op);
     }
     __syncthreads();
-    
+
     if (col == 0) {
         scores_warp[warp_id][row] = scores_sum[0];
         if constexpr (kMiLen > 1) {
@@ -369,7 +369,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
 
 
     Tensor rO = convert_type<output_type>(acc_o);
-    Tensor taccOrO = smem_thr_copy_O.retile_S(rO); 
+    Tensor taccOrO = smem_thr_copy_O.retile_S(rO);
     Tensor taccOsO = smem_thr_copy_O.partition_D(sQ);
 
     cute::copy(smem_tiled_copy_O, taccOrO, taccOsO);
@@ -384,17 +384,17 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
         }
         scores_warp[0][tidx] = cur_sum;
     }
-    
+
     Tensor gO = make_tensor(
-        make_gmem_ptr(reinterpret_cast<output_type *>(params.partition_attn_out) + 
+        make_gmem_ptr(reinterpret_cast<output_type *>(params.partition_attn_out) +
         ((bidb * max_partition_num + store_partition_idx) * head_num  + q_head_idx) * kHeadDim),
         Shape<Int<kBlockM>, Int<kHeadDim>>{},
         Stride<Int<kHeadDim>, _1>{});
-      
+
     GmemTiledCopyO gmem_tiled_copy_o;
     auto gmem_thr_copy_o = gmem_tiled_copy_o.get_thread_slice(tidx);
 
-    Tensor tOgO = gmem_thr_copy_o.partition_S(gO); 
+    Tensor tOgO = gmem_thr_copy_o.partition_S(gO);
     Tensor tOsO = gmem_thr_copy_o.partition_D(sQ);
     __syncthreads();
 
@@ -440,15 +440,15 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
 
     const int c2_cache_len = seq_len_decoder - c16_cache_len;
 
-    const int32_t partition_num = (c2_cache_len + kBlockN - 1) / kBlockN + (c16_cache_len + kBlockN - 1) / kBlockN; 
+    const int32_t partition_num = (c2_cache_len + kBlockN - 1) / kBlockN + (c16_cache_len + kBlockN - 1) / kBlockN;
     const int32_t max_partition_num = params.max_num_partitions;
 
     const int32_t offset = bidb * head_num * max_partition_num + head_idx * max_partition_num;
-    
+
     float* shared_max_logits = reinterpret_cast<float*>(shared_mem);
     const float* max_logits_ptr = params.maxs + offset;
     float global_max_logit = -100000000000.0f;
-    
+
     #pragma unroll
     for (int32_t idx = tidx; idx < partition_num; idx += kNReduceThreads) {
         float cur_max = max_logits_ptr[idx];
@@ -469,7 +469,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
         float exp_sub_max = expf(share_max - global_max_logit);
         float rescaled_exp_sum = exp_sums_ptr[idx] * exp_sub_max;
         global_exp_sum += rescaled_exp_sum;
-        share_sum_scale[idx] = exp_sub_max; 
+        share_sum_scale[idx] = exp_sub_max;
     }
     __syncthreads();
 
@@ -478,7 +478,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     const float inv_global_exp_sum = fdividef(1.0f, global_exp_sum);
 
     output_type* partition_attn_out = reinterpret_cast<output_type*>(params.partition_attn_out) + bidb * head_num * max_partition_num * kHeadDim + head_idx * kHeadDim;
-    
+
     output_type * attn_out = reinterpret_cast<output_type *>(params.attn_out) + params.cu_seq_q[bidb] * head_num * kHeadDim + head_idx * kHeadDim;
 
     static_assert(kNReduceThreads == kHeadDim);
@@ -505,7 +505,7 @@ __global__ void __launch_bounds__(Kernel_traits::kNReduceThreads) multi_block_at
     #pragma unroll
     for (int i = 1; i < kNReduceWarps; ++i) {
         warp_sum += acc_warp[i * kHeadDim + tidx];
-    }  
+    }
 
     warp_sum *= inv_global_exp_sum;
 
@@ -543,7 +543,7 @@ void run_block_attn(Block_attn_params &params, cudaStream_t stream) {
     if (smem_size_c2 >= 48 * 1024) {
         cudaFuncSetAttribute(kernel_c2, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_c2);
     }
-    kernel_c2<<<grid, Kernel_traits::kNThreads, smem_size_c2, stream>>>(params); 
+    kernel_c2<<<grid, Kernel_traits::kNThreads, smem_size_c2, stream>>>(params);
 
 
     const int smem_size_c16 = Kernel_traits::kShareMemSizeC16;
@@ -567,7 +567,7 @@ void run_block_attn(Block_attn_params &params, cudaStream_t stream) {
 
     auto reduce_kernel = &multi_block_attention_reduce_kernel<Kernel_traits>;
 
-    reduce_kernel<<<grid, Kernel_traits::kNReduceThreads, reduce_shared_mem_size, stream>>>(params);  
+    reduce_kernel<<<grid, Kernel_traits::kNReduceThreads, reduce_shared_mem_size, stream>>>(params);
 }
 
 void DecoderAttention(
@@ -642,7 +642,7 @@ void DecoderAttention(
         run_block_attn<input_type, output_type, scale_type, stage, 14>(params, q_input.stream());
     } else {
         PD_THROW("gqa_group_size is not supported :%d\n", gqa_group_size);
-    } 
+    }
 }
 }
 

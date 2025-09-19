@@ -39,8 +39,8 @@ struct Block_attn_params {
     int * seq_lens_encoder;
     int * seq_lens_decoder;
     int * block_table;
-    int max_input_length; 
-    int head_num; 
+    int max_input_length;
+    int head_num;
     int kv_head_num;
     int max_num_blocks_per_seq;
     int batch_size;
@@ -70,7 +70,7 @@ struct Block_attn_kernel_traits {
     static constexpr int32_t kNReduceThreads = kNReduceWarps * 32;
     using SmemLayoutAtomQ = decltype(
         composition(Swizzle<3, 3, 3>{},
-        Layout<Shape<Int<8>, Int<64>>, 
+        Layout<Shape<Int<8>, Int<64>>,
         Stride<Int<64>, _1>>{})
     );
 

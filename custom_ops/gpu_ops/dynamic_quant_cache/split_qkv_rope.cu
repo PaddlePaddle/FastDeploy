@@ -102,7 +102,7 @@ __global__ void split_qkv_and_rope_kernel(
             cos.load_from(cos_rope);
             apply_rotary_embedding<input_type, output_type, kPackSize>(src, dst, cos, sin);
             dst.store_to(k_input + (cu_seq_k[bidb] + cur_token) * kv_head_num * kHeadDim + bias_idx - head_num * kHeadDim);
-        }  
+        }
     } else {
         if (cur_token < seq_len) {
             for (int i = 0; i < kPackSize; i++) {
@@ -176,7 +176,7 @@ void SplitQKVAndRope(
         const int max_seq_q,
         const int max_input_length,
         const std::string &cache_quant_type_str) {
-    
+
     if (qkv_out.dtype() == paddle::DataType::FLOAT16) {
         PD_THROW("FLOAT16 is not supported\n");
     } else if (qkv_out.dtype() == paddle::DataType::BFLOAT16) {
@@ -220,7 +220,7 @@ __global__ void get_cur_cu_seq_len_k_kernel(
         int cache_len = seq_lens_decoder[bid];
         const int q_len = seq_lens_encoder[bid];
         const int tokens = seq_lens_this_time[bid];
-        
+
         qk_tokens[1] = max(qk_tokens[1], cache_len);
         if (q_len == 0) {
             cache_len = tokens;
@@ -228,7 +228,7 @@ __global__ void get_cur_cu_seq_len_k_kernel(
         total_tokens += (cache_len + q_len);
         cu_seqlens_k[bid + 1] = total_tokens;
         qk_tokens[0] = max(qk_tokens[0], q_len);
-        
+
         qk_tokens[2] += tokens;
         qk_tokens[3] += (cache_len + q_len);
 
