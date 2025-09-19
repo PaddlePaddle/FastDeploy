@@ -286,7 +286,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
         original_params_dict = dict(self.named_parameters())
 
-        params_dict = prepare_params_dict(original_params_dict, is_pooling_model)
+        params_dict = prepare_params_dict(original_params_dict, is_pooling_model, self.fd_config)
 
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 

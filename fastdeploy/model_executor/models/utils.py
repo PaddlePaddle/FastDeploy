@@ -42,6 +42,8 @@ from tqdm import tqdm
 
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
+from fastdeploy.config import FDConfig
+from fastdeploy.transformer_utils.config import get_pooling_config
 
 
 class LayerIdPlaceholder(str, enum.Enum):
@@ -494,21 +496,28 @@ def parser_quant_type(quant_type):
         return quant_type_list[0], quant_type_list[1], quant_type_list[2]
 
 
-def prepare_params_dict(original_params_dict, is_pooling_model):
+def prepare_params_dict(original_params_dict, is_pooling_model, fd_config: FDConfig):
     """
     Prepare parameter dictionary based on model type and conversion type.
 
     Args:
         original_params_dict (dict): Original parameter dictionary from self.named_parameters()
         is_pooling_model (bool): Whether this is a pooling model (embedding model)
-        convert_type (str): Conversion type, such as "none", "embed", etc.
+        fd_config (FDConfig): Arguments related to inference, containing
+                attributes such as weight_dtype, act_dtype, mp_size, hidden_size, head_dim,
+                num_attention_heads, and ffn_hidden_size.
 
     Returns:
         dict: Processed parameter dictionary
     """
     param_dict = {}
-    if is_pooling_model:
-        # For embedding models with convert_type="none", remove "model." prefix
+    revision = fd_config.model_config.revision
+    model_path = fd_config.model_config.model
+
+    # Check if this is a dedicated embedding model (like qwen3-embedding-0.6B) being used for pooling
+    # Dedicated embedding models need "model." prefix removed from parameter names
+    # while regular generative models (qwen3-0.6B) used for pooling keep the "model." prefix
+    if is_pooling_model and get_pooling_config(model_path, revision):
         for param_name, param in original_params_dict.items():
             if param_name.startswith("model."):
                 new_param_name = param_name[6:]
