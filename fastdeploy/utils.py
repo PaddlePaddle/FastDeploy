@@ -100,7 +100,9 @@ class ExceptionHandler:
                 param=param,
             )
         )
-        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
+        api_server_logger.error(
+            f"invalid_request_error: {request.url if hasattr(request, "url") else None} {param} {message}"
+        )
         return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
 
