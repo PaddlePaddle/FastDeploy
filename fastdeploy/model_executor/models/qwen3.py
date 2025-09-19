@@ -40,6 +40,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
+from fastdeploy.model_executor.models.utils import prepare_params_dict
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -282,8 +283,15 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]
-        params_dict = dict(self.named_parameters())
+
+        original_params_dict = dict(self.named_parameters())
+
+        params_dict = prepare_params_dict(original_params_dict, is_pooling_model)
+
+        loaded_params: set[str] = set()
+
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -294,6 +302,12 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight, shard_id)
+                original_param_name = (
+                    f"model.{model_param_name}"
+                    if f"model.{model_param_name}" in original_params_dict
+                    else model_param_name
+                )
+                loaded_params.add(original_param_name)
                 break
             else:
                 model_param_name = loaded_weight_name
@@ -302,11 +316,19 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight)
+                original_param_name = (
+                    f"model.{model_param_name}"
+                    if f"model.{model_param_name}" in original_params_dict
+                    else model_param_name
+                )
+                loaded_params.add(original_param_name)
+
             model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings and not is_pooling_model:
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+        return loaded_params
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

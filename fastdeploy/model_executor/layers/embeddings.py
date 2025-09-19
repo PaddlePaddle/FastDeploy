@@ -24,7 +24,7 @@ from paddle.distributed import fleet
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.utils import set_weight_attrs
 
-from .utils import get_tensor
+from .utils import DEFAULT_VOCAB_PADDING_SIZE, get_tensor, pad_vocab_size
 
 
 class VocabParallelEmbedding(nn.Layer):
@@ -39,6 +39,7 @@ class VocabParallelEmbedding(nn.Layer):
         embedding_dim: int = 768,
         params_dtype: str = "bfloat16",
         prefix="",
+        padding_size: int = DEFAULT_VOCAB_PADDING_SIZE,
     ) -> None:
         """
         Initialize the VocabParallelEmbedding layer for the model.
@@ -65,10 +66,17 @@ class VocabParallelEmbedding(nn.Layer):
         self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype
+        self.padding_size = padding_size
+
+        self.original_vocab_size = num_embeddings
+        self.org_vocab_size_paded = num_embeddings
+
+        if num_embeddings % self.world_size != 0:
+            self.org_vocab_size_paded = pad_vocab_size(num_embeddings, self.padding_size)
 
         if not self.column_cut:
             self.embeddings = fleet.meta_parallel.VocabParallelEmbedding(
-                num_embeddings,
+                self.org_vocab_size_paded,
                 embedding_dim,
                 mp_group=self.tp_group,
                 weight_attr=paddle.ParamAttr(
@@ -80,7 +88,7 @@ class VocabParallelEmbedding(nn.Layer):
         else:
             # column cut embedding
             self.embeddings = nn.Embedding(
-                num_embeddings,
+                self.org_vocab_size_paded,
                 embedding_dim // self.world_size,
             )
 
@@ -118,6 +126,7 @@ class VocabParallelEmbedding(nn.Layer):
             Tensor: Embedded tensor representation of the input IDs.
         """
         if self.column_cut:
+
             input_embedings = self.embeddings(ids_remove_padding)
             inputs_embeds_temp = []
             paddle.distributed.all_gather(

@@ -22,6 +22,10 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import (
+    DEFAULT_VOCAB_PADDING_SIZE,
+    pad_vocab_size,
+)
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
     set_weight_attrs,
@@ -44,6 +48,7 @@ class ParallelLMHead(nn.Layer):
         prefix: str = "",
         with_bias: bool = False,
         dtype: str = None,
+        padding_size: int = DEFAULT_VOCAB_PADDING_SIZE,
     ) -> None:
         """
         Parallelized LMhead.
@@ -68,6 +73,11 @@ class ParallelLMHead(nn.Layer):
         self.column_cut = True
         self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.fd_config = fd_config
+        self.padding_size = padding_size
+
+        self.org_vocab_size_paded = num_embeddings
+        if num_embeddings % self.nranks != 0:
+            self.org_vocab_size_paded = pad_vocab_size(num_embeddings, self.padding_size)
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -80,7 +90,7 @@ class ParallelLMHead(nn.Layer):
                 need_gather = True
                 self.linear = ColumnParallelLinear(
                     embedding_dim,
-                    num_embeddings,
+                    self.org_vocab_size_paded,
                     mp_group=self.tp_group,
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,
@@ -99,7 +109,7 @@ class ParallelLMHead(nn.Layer):
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
-                    num_embeddings,
+                    self.org_vocab_size_paded,
                     mp_group=self.tp_group,
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,
