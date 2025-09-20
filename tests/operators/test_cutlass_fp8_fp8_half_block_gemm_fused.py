@@ -61,14 +61,16 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
                     [(k + 127) // 128, m],
                     dtype="float32",
                 )
-                + 0.5
+                * 0.9
+                + 0.1
             )
             y_scale = (
                 paddle.rand(
                     [(n + 127) // 128, (k + 127) // 128],
                     dtype="float32",
                 )
-                + 0.5
+                * 0.9
+                + 0.1
             )
 
             x_scale_expanded = paddle.repeat_interleave(x_scale, repeats=128, axis=-2)[:k, :]
