@@ -206,7 +206,7 @@ class SplitwiseConnector:
                             "cache_info": {
                                 "ipc": {
                                     "ip": "0.0.0.0",
-                                    "port": self.cfg.engine_worker_queue_port[self.idx],
+                                    "port": self.cfg.parallel_config.engine_worker_queue_port[self.idx],
                                     "current_id": current_id,
                                 },
                             },
@@ -289,7 +289,9 @@ class SplitwiseConnector:
         if port not in self.connect_innode_instances:
             self.create_connection(port)
         for task in tasks:
-            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.engine_worker_queue_port[self.idx]
+            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.parallel_config.engine_worker_queue_port[
+                self.idx
+            ]
         self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = port

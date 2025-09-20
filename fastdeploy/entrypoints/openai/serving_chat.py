@@ -87,7 +87,7 @@ class OpenAIServingChat:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
@@ -95,7 +95,7 @@ class OpenAIServingChat:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
                 return ErrorResponse(
-                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                    error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
 
         try:
@@ -145,7 +145,7 @@ class OpenAIServingChat:
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except Exception as e:
             error_msg = (
                 f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
@@ -158,7 +158,7 @@ class OpenAIServingChat:
 
     def _create_streaming_error_response(self, message: str) -> str:
         api_server_logger.error(message)
-        error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.SERVER_ERROR))
+        error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.INTERNAL_ERROR))
         return error_response.model_dump_json()
 
     async def chat_completion_stream_generator(

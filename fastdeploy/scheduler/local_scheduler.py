@@ -306,6 +306,7 @@ class LocalScheduler:
                 if response.request_id not in self.responses:
                     self.responses[response.request_id] = [response]
                     continue
+                scheduler_logger.debug(f"append response {response.raw}")
                 self.responses[response.request_id].append(response)
             self.responses_not_empty.notify_all()
 
