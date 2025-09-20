@@ -135,7 +135,7 @@ class EngineArgs:
     """
     dynamic load weight
     """
-    load_strategy: str = "ipc_snapshot"
+    load_strategy: str = "normal"
     """
     dynamic load weight strategy
     """
@@ -401,8 +401,6 @@ class EngineArgs:
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
-            if self.enable_expert_parallel:
-                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
@@ -706,7 +704,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--prealloc-dec-block-slot-num-threshold",
             type=int,
-            default=12,
+            default=EngineArgs.prealloc_dec_block_slot_num_threshold,
             help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 
@@ -943,23 +941,15 @@ class EngineArgs:
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)
-        extra_params = [
-            "max_model_len",
-            "enable_chunked_prefill",
-            "max_num_partial_prefills",
-            "max_long_partial_prefills",
-            "long_prefill_token_threshold",
-        ]
 
         all = asdict(self)
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
                 params[k[prefix_len:]] = v
-            elif k in extra_params:
+            else:
                 params[k] = v
-
-        return SchedulerConfig(**params)
+        return SchedulerConfig(params)
 
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
@@ -1029,6 +1019,11 @@ class EngineArgs:
                 else:
                     self.max_num_batched_tokens = self.max_model_len
 
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
+
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
@@ -1042,11 +1037,6 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
-
         assert is_port_available(
             "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
@@ -1059,17 +1049,13 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
-            max_num_batched_tokens=self.max_num_batched_tokens,
             ips=self.ips,
             use_warmup=self.use_warmup,
-            engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
-            splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
