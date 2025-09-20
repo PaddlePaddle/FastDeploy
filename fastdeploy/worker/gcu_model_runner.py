@@ -651,7 +651,9 @@ class GCUModelRunner(ModelRunnerBase):
         )
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and (
+            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
+        ):
             raise NotImplementedError("prefix_caching is not support by GCUModelRunner.")
         else:
             for i in range(self.model_config.num_hidden_layers):
@@ -1069,7 +1071,7 @@ class GCUModelRunner(ModelRunnerBase):
             reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
         )
 
-        if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
+        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False

@@ -219,6 +219,7 @@ class SchedulerConfig:
         self.name = "local"  # "local" for LocalScheduler or "global" for GlobalScheduler
         self.max_num_batched_tokens = 2048
         self.max_num_seqs = 34
+        self.splitwise_role = "mixed"
         self.config = None
 
         for key, value in args.items():
