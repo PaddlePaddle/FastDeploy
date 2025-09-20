@@ -66,6 +66,9 @@ while true; do
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
         cat server.log
         cat log/workerlog.0
+        cat log/workerlog.1
+        cat log/workerlog.2
+        cat log/workerlog.3
         exit 1
     fi
 

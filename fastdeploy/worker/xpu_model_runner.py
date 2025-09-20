@@ -353,12 +353,12 @@ class XPUModelRunner(ModelRunnerBase):
         self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = False
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
-        self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs, dtype="int32")
+        self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
-        self._init_share_inputs(self.fd_config.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.fd_config.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
         ).cpu()
@@ -812,7 +812,7 @@ class XPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -872,16 +872,36 @@ class XPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         while True:
-            self.execute_model(None, True)
+            self.execute_model(is_dummy_run=True)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
+    def _set_debug_level(
+        self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
+    ) -> None:
+        """
+        Set debug level for XPU: 0x1, 0xA1, 0x1B1
+        """
+        request_num = 0 if model_forward_batch is None else len(model_forward_batch)
+        if debug_level == 0 or request_num == 0 or is_dummy_run:
+            paddle.device.xpu.set_debug_level(0)
+            return
+
+        if self.parallel_config.use_ep:
+            request_num = paddle.to_tensor(request_num, dtype="int32")
+            paddle.distributed.all_reduce(request_num, group=self.parallel_config.ep_group)
+            logger.info(f"local_rank: {self.local_rank}, request_num: {request_num.item()}")
+            if request_num.item() > 0:
+                paddle.device.xpu.set_debug_level(debug_level)
+        else:
+            paddle.device.xpu.set_debug_level(debug_level)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
-        is_dummy_run: bool = False,
         num_running_requests: int = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -892,6 +912,9 @@ class XPUModelRunner(ModelRunnerBase):
             num_running_requests: batch_size
             intermediate_tensors:
         """
+        # 0. set debug level
+        # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
+
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
 
@@ -964,8 +987,8 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
         self._dummy_run(
-            num_tokens=int(self.parallel_config.max_num_batched_tokens),
-            batch_size=min(self.parallel_config.max_num_seqs, 1),
+            num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+            batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 
     def clear_block_table(self) -> None:

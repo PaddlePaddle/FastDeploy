@@ -43,18 +43,20 @@ std::vector<paddle::Tensor> MoeTopkSelect(
   int32_t* block_statistic = nullptr;
   const float* bias_data =
       bias.get_ptr() != nullptr ? bias.get_ptr()->data<float>() : nullptr;
-  int ret = infer_ops::moe_softmax_topk_norm_fusion(
-      xpu_ctx->x_context(),
-      gating_logits.data<float>(),
-      topk_weights.mutable_data<float>(),
-      topk_ids.mutable_data<int>(),
-      block_statistic,
-      token_num,
-      expert_num,
-      moe_topk,
-      0,
-      bias_data);
-  PD_CHECK(ret == 0);
+  if (token_num > 0) {
+    int ret = infer_ops::moe_softmax_topk_norm_fusion(
+        xpu_ctx->x_context(),
+        gating_logits.data<float>(),
+        topk_weights.mutable_data<float>(),
+        topk_ids.mutable_data<int>(),
+        block_statistic,
+        token_num,
+        expert_num,
+        moe_topk,
+        0,
+        bias_data);
+    PD_CHECK(ret == 0);
+  }
 
   return {topk_ids, topk_weights};
 }
