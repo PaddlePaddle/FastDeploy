@@ -53,8 +53,8 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
         combinations = product(m_values, nks)
 
         for m, (n, k) in combinations:
-            x = paddle.rand([m, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
-            y = paddle.rand([n, k]).clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
+            x_bf16 = paddle.rand([m, k]).to(paddle.bfloat16)
+            y_bf16 = paddle.rand([n, k]).to(paddle.bfloat16)
 
             x_scale = (
                 paddle.rand(
@@ -71,29 +71,26 @@ class TestFp8Fp8HalfBlockGemmFused(unittest.TestCase):
                 + 0.5
             )
 
-            bias = paddle.rand([n]).to(paddle.bfloat16)
-
-            x_fp32 = x.astype("float32")
             x_scale_expanded = paddle.repeat_interleave(x_scale, repeats=128, axis=-2)[:k, :]
             x_scale_expanded = x_scale_expanded.transpose([1, 0])
-            x_dequant = x_fp32 * x_scale_expanded
+            x_quant_fp32 = x_bf16.astype("float32") / x_scale_expanded
+            x_fp8 = x_quant_fp32.clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).astype("float8_e4m3fn")
 
-            y_fp32 = y.astype("float32")
             y_scale_n_dim = paddle.repeat_interleave(y_scale, repeats=128, axis=-2)
             y_scale_expanded = paddle.repeat_interleave(y_scale_n_dim, repeats=128, axis=-1)
             y_scale_expanded = y_scale_expanded[:n, :k]
-            y_dequant = y_fp32 * y_scale_expanded
+            y_quant_fp32 = y_bf16.astype("float32") / y_scale_expanded
+            y_fp8 = y_quant_fp32.clip(min=-self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).astype("float8_e4m3fn")
 
-            x_bf16 = x_dequant.astype("bfloat16")
-            y_bf16 = y_dequant.astype("bfloat16")
             ref_out = paddle.matmul(x_bf16, y_bf16, transpose_y=True)
+            bias = paddle.rand([n]).to(paddle.bfloat16)
 
             if bias is not None:
                 ref_out = ref_out + bias
 
             result = cutlass_fp8_fp8_half_block_gemm_fused(
-                x,
-                y,
+                x_fp8,
+                y_fp8,
                 x_scale,
                 y_scale,
                 bias,
