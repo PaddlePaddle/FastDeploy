@@ -82,7 +82,7 @@ class ExceptionHandler:
 
     # 处理请求参数验证异常
     @staticmethod
-    async def handle_request_validation_exception(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def handle_request_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:
         errors = exc.errors()
         if not errors:
             message = str(exc)
@@ -100,6 +100,7 @@ class ExceptionHandler:
                 param=param,
             )
         )
+        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
         return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
 
