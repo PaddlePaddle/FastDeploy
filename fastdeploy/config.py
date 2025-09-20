@@ -134,6 +134,7 @@ class ModelConfig:
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
         self.partial_rotary_factor: float = 1.0
+        self.num_nextn_predict_layers = 0
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -274,7 +275,6 @@ class ParallelConfig:
         From old wersion worker args
         TODO(gongshaotian): Reclassify
         """
-        self.max_num_seqs: int = 34
         # Set default block num for profile run
         self.total_block_num: int = 2000
         # block size
@@ -296,9 +296,6 @@ class ParallelConfig:
         # Do profile or not
         self.do_profile: bool = False
 
-        self.max_num_batched_tokens: int = 2048
-        # splitwise role
-        self.splitwise_role: str = "mixed"
         # guided decoding backend
         self.guided_decoding_backend: str = None
         # disable any whitespace for guided decoding
@@ -320,14 +317,6 @@ class ParallelConfig:
         else:
             self.expert_parallel_size = 1
         self.use_ep = self.expert_parallel_size > 1
-        if self.splitwise_role == "mixed":
-            self.moe_phase = MoEPhase(phase="prefill")
-        elif self.splitwise_role == "prefill":
-            self.moe_phase = MoEPhase(phase="prefill")
-        elif self.splitwise_role == "decode":
-            self.moe_phase = MoEPhase(phase="decode")
-        else:
-            raise NotImplementedError
 
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
@@ -339,20 +328,26 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
-    def set_tp_group(self):
+    def set_communicate_group(self):
         # different tp group id
         # prevent different tp_groups using the same group_id
         tp_gid_offset = envs.FD_TP_GROUP_GID_OFFSET
         dist.collective._set_custom_gid(self.data_parallel_rank + tp_gid_offset)
+
         self.tp_group = dist.new_group(
             range(
                 self.data_parallel_rank * self.tensor_parallel_size,
                 (self.data_parallel_rank + 1) * self.tensor_parallel_size,
             )
         )
+        dist.collective._set_custom_gid(None)
+
         # same ep group id
-        dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
-        self.ep_group = dist.new_group(range(self.expert_parallel_size))
+        if self.enable_expert_parallel:
+            dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+            self.ep_group = dist.new_group(range(self.expert_parallel_size))
+            dist.collective._set_custom_gid(None)
+
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -834,6 +829,7 @@ class LoadConfig:
         load_strategy: Specifies the weight loading method when enabled:
             - 'ipc': Real-time IPC streaming with automatic resharding
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
+            - 'meta': Only model meta messages
             - None: No dynamic loading
     """
 
@@ -844,7 +840,7 @@ class LoadConfig:
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
+        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal"]] = "normal"
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -894,7 +890,9 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_iluvatar() or current_platform.is_maca() else 2
+        self.enc_dec_block_num = (
+            0 if current_platform.is_iluvatar() or current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
+        )
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -1108,14 +1106,10 @@ class FDConfig:
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
-        max_num_seqs: int = 8,
-        max_num_batched_tokens: Optional[int] = None,
         ips: str = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: str = "8002",
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        splitwise_role: str = "mixed",
         innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
@@ -1142,19 +1136,18 @@ class FDConfig:
         self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
+            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
 
         if self.graph_opt_config.cudagraph_only_prefill:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
         else:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.parallel_config.max_num_seqs)
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
             self.graph_opt_config.graph_opt_level = 1
 
         self.tokenizer = tokenizer
-        self.max_num_batched_tokens = max_num_batched_tokens
         self.ips = ips
         self.tool_parser = tool_parser
 
@@ -1176,11 +1169,9 @@ class FDConfig:
                     self.node_rank = idx
 
         self.max_model_len = max_model_len
-        self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
-        self.splitwise_role = splitwise_role
         self.innode_prefill_ports = innode_prefill_ports
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
@@ -1188,11 +1179,7 @@ class FDConfig:
         self.reasoning_parser = reasoning_parser
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
-        self.engine_worker_queue_port = engine_worker_queue_port
         self._str_to_list("innode_prefill_ports", int)
-        if isinstance(engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(engine_worker_queue_port)
-        self._str_to_list("engine_worker_queue_port", str)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
@@ -1206,12 +1193,10 @@ class FDConfig:
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if num_ranks > self.max_chips_per_node:
+        if num_ranks > self.max_chips_per_node and self.load_config.load_strategy != "meta":
             self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
             assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
-
-            # assert nnode == self.nnode, f"nnode: {nnode}, but got {self.nnode}"
         else:
             self.worker_num_per_node = num_ranks
 
@@ -1242,22 +1227,22 @@ class FDConfig:
 
         self.paddle_commit_id = paddle.version.commit
 
-        if self.max_num_batched_tokens is None:
+        if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
                 if paddle.is_compiled_with_xpu():
-                    self.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
-                    self.max_num_batched_tokens = 2048
+                    self.scheduler_config.max_num_batched_tokens = 2048
                 else:
-                    self.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
 
-        self.cache_config.postprocess(self.max_num_batched_tokens, self.max_num_seqs)
+        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
@@ -1267,23 +1252,37 @@ class FDConfig:
             else:
                 self.guided_decoding_backend = "xgrammar"
 
+        if self.scheduler_config.splitwise_role == "mixed":
+            self.model_config.moe_phase = MoEPhase(phase="prefill")
+        elif self.scheduler_config.splitwise_role == "prefill":
+            self.model_config.moe_phase = MoEPhase(phase="prefill")
+        elif self.scheduler_config.splitwise_role == "decode":
+            self.model_config.moe_phase = MoEPhase(phase="decode")
+        else:
+            raise NotImplementedError
+
     def check(self):
         """
         check the legality of config
         """
-        assert self.max_num_seqs <= 256, (
-            "The parameter `max_num_seqs` is not allowed to exceed 256, " f"but now it's {self.max_num_seqs}."
+        assert self.scheduler_config.max_num_seqs <= 256, (
+            "The parameter `max_num_seqs` is not allowed to exceed 256, "
+            f"but now it's {self.scheduler_config.max_num_seqs}."
         )
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
-        assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
-        assert self.max_num_batched_tokens >= self.max_num_seqs, (
-            f"max_num_batched_tokens: {self.max_num_batched_tokens} "
-            f"should be larger than or equal to max_num_seqs: {self.max_num_seqs}"
+        assert (
+            self.scheduler_config.max_num_seqs >= 1
+        ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
+        assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs, (
+            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
+            f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
         )
-        assert self.max_num_batched_tokens <= self.max_model_len * self.max_num_seqs, (
-            f"max_num_batched_tokens: {self.max_num_batched_tokens} should be larger"
-            f"than or equal to max_num_seqs: {self.max_num_seqs} * max_model_len: {self.max_model_len}"
+        assert (
+            self.scheduler_config.max_num_batched_tokens <= self.max_model_len * self.scheduler_config.max_num_seqs
+        ), (
+            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
+            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.max_model_len}"
         )
         assert (
             self.max_num_partial_prefills >= 1
@@ -1296,7 +1295,7 @@ class FDConfig:
             f"max_long_partial_prefills: {self.max_long_partial_prefills} should "
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
-        assert self.splitwise_role in ["mixed", "prefill", "decode"]
+        assert self.scheduler_config.splitwise_role in ["mixed", "prefill", "decode"]
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
         assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
             self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
@@ -1304,13 +1303,13 @@ class FDConfig:
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                assert self.max_num_batched_tokens >= self.max_model_len, (
-                    f"max_num_batched_tokens: {self.max_num_batched_tokens} "
+                assert self.scheduler_config.max_num_batched_tokens >= self.max_model_len, (
+                    f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
                     f"should be larger than or equal to max_model_len: {self.max_model_len}"
                 )
         else:
-            assert self.max_num_batched_tokens >= self.cache_config.block_size, (
-                f"max_num_batched_tokens: {self.max_num_batched_tokens} "
+            assert self.scheduler_config.max_num_batched_tokens >= self.cache_config.block_size, (
+                f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
                 f"should be larger than or equal to block_size: {self.cache_config.block_size}"
             )
 
@@ -1350,6 +1349,11 @@ class FDConfig:
         if self.scheduler_config is not None:
             self.scheduler_config.check()
 
+        if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
+            assert (
+                int(envs.FD_DISABLED_RECOVER) == 0
+            ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
+
     def print(self):
         """
         print all config
@@ -1377,8 +1381,8 @@ class FDConfig:
         initialize cache info
         """
         disaggregate_info = {}
-        if self.splitwise_role != "mixed":
-            disaggregate_info["role"] = self.splitwise_role
+        if self.scheduler_config.splitwise_role != "mixed":
+            disaggregate_info["role"] = self.scheduler_config.splitwise_role
             disaggregate_info["cache_info"] = dict()
             current_protocol = self.cache_config.cache_transfer_protocol.split(",")
             disaggregate_info["transfer_protocol"] = current_protocol
@@ -1386,7 +1390,9 @@ class FDConfig:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.engine_worker_queue_port[self.parallel_config.local_data_parallel_id],
+                        "port": self.parallel_config.engine_worker_queue_port[
+                            self.parallel_config.local_data_parallel_id
+                        ],
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":

@@ -50,13 +50,13 @@ class ExpertService:
         self.cfg = cfg
         start_pos = (local_data_parallel_id * self.cfg.parallel_config.tensor_parallel_size) % cfg.worker_num_per_node
         end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
-        if cfg.splitwise_role != "mixed":
+        if cfg.scheduler_config.splitwise_role != "mixed":
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
         self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
         self.cfg.disaggregate_info = None
 
-        if cfg.splitwise_role != "mixed":
+        if cfg.scheduler_config.splitwise_role != "mixed":
             if len(self.cfg.cache_config.pd_comm_port) == 1:
                 self.cfg.cache_config.pd_comm_port[0] = (
                     int(self.cfg.cache_config.pd_comm_port[0]) + local_data_parallel_id
@@ -84,21 +84,21 @@ class ExpertService:
             self.api_server_pid = ipc_signal_suffix
             self.engine.start_zmq_service(ipc_signal_suffix)
         else:
-            ipc_signal_suffix = self.cfg.engine_worker_queue_port[0]
+            ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
-        if self.cfg.splitwise_role != "mixed":
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix)
             self.engine.split_mode_get_tasks()
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
-            role = self.cfg.splitwise_role
+            role = self.cfg.scheduler_config.splitwise_role
             host_ip = self.cfg.host_ip
             disaggregate = self.cfg.disaggregate_info
             self.engine.scheduler.start(role, host_ip, disaggregate)
 
-        if self.cfg.splitwise_role != "mixed":
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
