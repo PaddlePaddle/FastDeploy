@@ -98,7 +98,7 @@ class ExpertService:
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
         if self.cfg.splitwise_role != "mixed":
-            ipc_signal_suffix_cache = self.cfg.engine_worker_queue_port[local_data_parallel_id]
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
             self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix_cache)
 
         if self.cfg.scheduler_config.name == "splitwise":
