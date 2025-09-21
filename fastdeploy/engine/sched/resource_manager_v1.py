@@ -29,6 +29,7 @@ import paddle
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import llm_logger
 
 
@@ -226,7 +227,14 @@ class ResourceManagerV1(ResourceManager):
 
                 grid_thw = grid_thw.numpy().reshape([-1, 3])
                 inputs["grid_thw"] = grid_thw
-
+                # videos are split into patches every 2 frames, need to rehash
+                image_st = 0
+                new_mm_hashes = []
+                for t, h, w in grid_thw:
+                    new_mm_hashes.append(MultimodalHasher.hash_features(inputs["images"][image_st:image_st + t * h * w]))
+                    image_st += t * h * w
+                inputs["mm_hashes"] = new_mm_hashes
+                    
             grid_thw = inputs["grid_thw"]
             img_boundaries_idx = request.multimodal_img_boundaries[0]
             img_num_per_boundary = request.multimodal_img_boundaries[1]
