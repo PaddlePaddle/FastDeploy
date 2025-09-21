@@ -283,6 +283,7 @@ class FlashAttentionBackend(AttentionBackend):
             metadata.kv_token_num_cpu[0].item(),
             self.max_seq_len,
             getattr(layer, "cache_quant_type_str", "none"),
+            self.rope_3d,
         )
 
         res = self.flash_attn_func(

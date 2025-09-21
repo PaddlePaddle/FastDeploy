@@ -49,6 +49,7 @@ def gqa_rope_write_cache(
     kv_token_num: int = 1,
     max_seq_len: int = 0,
     cache_quant_type: str = "none",
+    rope_3d: bool = False,
 ):
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import gqa_rope_write_cache
@@ -81,6 +82,7 @@ def gqa_rope_write_cache(
             kv_token_num,
             max_seq_len,
             cache_quant_type,
+            rope_3d,
         )
         return q, k, v, qkv_
     else:
