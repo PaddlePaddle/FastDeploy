@@ -72,7 +72,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             layer.moe_intermediate_size,
             layer.hidden_size,
         ]
-        if self.quant_config.is_checkpoint_bf16:
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=self.up_gate_proj_weight_shape,
                 dtype=layer.weight_dtype,
@@ -84,6 +85,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
+
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -136,6 +139,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
+            # support cache feature in future
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -723,7 +727,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
             ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
         ]
-        if self.quant_config.is_checkpoint_bf16:
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
@@ -735,6 +740,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -792,6 +798,26 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                     dtype="float32",
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
+            )
+
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_weight_name),
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_scale_name),
+                extra_weight_attrs,
+            )
+
+            set_weight_attrs(
+                getattr(layer, down_proj_weight_name),
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, down_proj_scale_name),
+                extra_weight_attrs,
             )
 
     def process_weights_after_loading(self, layer):

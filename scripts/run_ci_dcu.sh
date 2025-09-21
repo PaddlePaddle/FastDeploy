@@ -97,7 +97,7 @@ cat server.log
 echo -e "\n"
 
 echo "Start inference..."
-python test/ci_use/DCU/run_ernie.py
+python tests/ci_use/DCU/run_ernie.py
 exit_code=$?
 echo "exit_code is ${exit_code}.\n"
 
