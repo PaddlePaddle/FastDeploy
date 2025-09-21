@@ -684,17 +684,19 @@ class CacheMessagerV1:
                         with self.engine_cache_task_thread_lock:
                             for engine_idx in engine_indexes:
                                 task = self.idx_cache_task_dict[engine_idx]
-                                assert task["status"] == "finished" or ("error" in task["status"])
-                                target_id = int(task["rdma_ports"][self.rank])
-                                if task["transfer_protocol"] == "ipc":
-                                    self.messager["ipc"].write_block_by_sync(target_id)
-                                if self.rank == 0:
-                                    # to do: robust in TP, here we assume all status in tp are the same. If wrong, all wrong. If ok, all ok.
-                                    self.engine_worker_queue.put_finished_req([(task["request_id"], task["status"])])
-                                    logger.info(f"put write cache {task['request_id']}, status {task['status']}")
-                                self.engine_cache_tasks[task["current_id"]] = dict()
-                                del self.cache_info[req_id]
-                                del self.idx_cache_task_dict[task["current_id"]]
+                                if task["status"] == "finished" or ("error" in task["status"]):
+                                    target_id = int(task["rdma_ports"][self.rank])
+                                    if task["transfer_protocol"] == "ipc":
+                                        self.messager["ipc"].write_block_by_sync(target_id)
+                                    if self.rank == 0:
+                                        # to do: robust in TP, here we assume all status in tp are the same. If wrong, all wrong. If ok, all ok.
+                                        self.engine_worker_queue.put_finished_req(
+                                            [(task["request_id"], task["status"])]
+                                        )
+                                        logger.info(f"put write cache {task['request_id']}, status {task['status']}")
+                                    self.engine_cache_tasks[task["current_id"]] = dict()
+                                    del self.cache_info[task["request_id"]]
+                                    del self.idx_cache_task_dict[task["current_id"]]
                         break
             except Exception as e:
                 logger.error(f"prefill layerwise send cache thread has exception: {e} {traceback.format_exc()!s}")
