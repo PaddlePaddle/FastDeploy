@@ -95,6 +95,13 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FOR_TORCH_MODEL_FORMAT": lambda: bool(int(os.getenv("FD_FOR_TORCH_MODEL_FORMAT", "0"))),
     # force disable default chunked prefill
     "FD_DISABLE_CHUNKED_PREFILL": lambda: bool(int(os.getenv("FD_DISABLE_CHUNKED_PREFILL", "0"))),
+    # For separate setting of sampling parameters for speculative decoding
+    "FD_SPECULATE_SAMPLING_TOP_P": lambda: (
+        None if "FD_SPECULATE_SAMPLING_TOP_P" not in os.environ else float(os.environ["FD_SPECULATE_SAMPLING_TOP_P"])
+    ),
+    "FD_SPECULATE_SAMPLING_TOP_K": lambda: (
+        None if "FD_SPECULATE_SAMPLING_TOP_K" not in os.environ else float(os.environ["FD_SPECULATE_SAMPLING_TOP_K"])
+    ),
 }
 
 
