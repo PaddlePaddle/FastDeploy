@@ -380,7 +380,8 @@ class TokenProcessor:
                         self.resource_manager.stop_flags[index] = True
                         self.resource_manager.tasks_list[index] = None
                         self.resource_manager._recycle_block_tables(task)
-                        del self.resource_manager.req_dict[task_id]
+                        if task_id in self.resource_manager.req_dict:
+                            del self.resource_manager.req_dict[task_id]
                     if self.prefill_result_status[task_id] != "finished":
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
@@ -395,7 +396,8 @@ class TokenProcessor:
                 self.resource_manager.stop_flags[index] = True
                 self.resource_manager.tasks_list[index] = None
                 self.resource_manager._recycle_block_tables(task)
-                del self.resource_manager.req_dict[task_id]
+                if task_id in self.resource_manager.req_dict:
+                    del self.resource_manager.req_dict[task_id]
 
         task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list])
         main_process_metrics.available_gpu_block_num.set(
