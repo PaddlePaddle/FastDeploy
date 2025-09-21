@@ -428,13 +428,7 @@ class OpenAIServingChat:
             )
             while True:
                 if self.engine_client.check_model_weight_status():
-                    return ErrorResponse(
-                        error=ErrorInfo(
-                            message="Model weight cleared",
-                            code=ErrorCode.INVALID_VALUE,
-                            type=ErrorType.INVALID_REQUEST_ERROR,
-                        )
-                    )
+                    return ErrorResponse(code=400, message="Model weight cleared")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0

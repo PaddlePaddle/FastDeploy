@@ -217,13 +217,7 @@ class OpenAIServingCompletion:
             current_waiting_time = 0
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
-                    return ErrorResponse(
-                        error=ErrorInfo(
-                            message="Model weight cleared",
-                            code=ErrorCode.INVALID_VALUE,
-                            type=ErrorType.INVALID_REQUEST_ERROR,
-                        )
-                    )
+                    return ErrorResponse(message="Model weight cleared", code=400)
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
