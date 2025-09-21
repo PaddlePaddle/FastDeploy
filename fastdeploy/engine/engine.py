@@ -122,7 +122,7 @@ class LLMEngine:
         self.engine.data_processor = self.data_processor
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
-        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
 
         self.engine.start()
@@ -427,7 +427,7 @@ class LLMEngine:
             }
         )
 
-        if self.cfg.splitwise_role != "mixed":
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 variables["FLAGS_use_pd_disaggregation_per_chunk"] = 1
             else:

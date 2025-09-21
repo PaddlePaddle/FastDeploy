@@ -138,7 +138,7 @@ class EngineService:
         self.insert_task_to_worker_thread.start()
         self.token_processor.tasks_queue = self.engine_worker_queue
         self.token_processor.run()
-        if self.cfg.splitwise_role != "mixed":
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.split_mode_get_tasks()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
@@ -270,7 +270,10 @@ class EngineService:
                         continue
                 cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
                 cur_task.num_cached_tokens = task.num_cached_tokens
-                if self.cfg.speculative_config.method in ["mtp"] and self.cfg.splitwise_role == "decode":
+                if (
+                    self.cfg.speculative_config.method in ["mtp"]
+                    and self.cfg.scheduler_config.splitwise_role == "decode"
+                ):
                     cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
                 if task.error_code != 200:
                     self.resource_manager.stop_flags[cur_task_idx] = True
@@ -296,7 +299,7 @@ class EngineService:
 
         need_delete_tasks = []
         for task in tasks:
-            if self.cfg.splitwise_role != "mixed":
+            if self.cfg.scheduler_config.splitwise_role != "mixed":
                 status, msg = self.split_connector.check_decode_allocated(task)
                 if not status:
                     self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
@@ -548,7 +551,7 @@ class EngineService:
                     time.sleep(0.001)
                     continue
 
-                if self.cfg.splitwise_role != "mixed":
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
                     self.llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
@@ -591,7 +594,7 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.max_model_len,
                     batch=num_prefill_batch,
                 )
-                if self.cfg.splitwise_role != "mixed":
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
                     for task in tasks:
                         # assure can allocate block ids in P
                         while not self.resource_manager.preallocate_resource_in_p(task):
@@ -600,7 +603,7 @@ class EngineService:
                         self.split_connector.send_splitwise_tasks([task], task.idx)
                     need_delete_tasks = []
                     for task in tasks:
-                        if self.cfg.splitwise_role != "mixed":
+                        if self.cfg.scheduler_config.splitwise_role != "mixed":
                             # assure fetch block ids from D
                             status, msg = self.split_connector.check_decode_allocated(task)
                             if not status:
@@ -621,7 +624,7 @@ class EngineService:
                         tasks.remove(tmp_task)
                         # release resource in P
                         self.resource_manager.prerelease_resource(task)
-                if self.cfg.splitwise_role == "prefill":
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
                         self.split_connector.send_cache_infos(tasks, 0)
@@ -638,7 +641,7 @@ class EngineService:
                                 time.sleep(0.001)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
-                    if self.cfg.splitwise_role == "prefill":
+                    if self.cfg.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
                     else:
                         for task in tasks:
@@ -653,7 +656,7 @@ class EngineService:
                 if self.engine_worker_queue.num_tasks() > 0:
                     time.sleep(0.001)
                     continue
-                if self.cfg.splitwise_role != "mixed":
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if self.scheduler.get_unhandled_request_num() <= envs.FD_EP_MAX_PREFETCH_TASK_NUM and (
                         not is_fetching
                     ):
@@ -706,7 +709,7 @@ class EngineService:
     def _insert_zmq_task_to_scheduler(self):
         added_requests: Dict[str, int] = dict()
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
-            if self.cfg.splitwise_role == "decode":
+            if self.cfg.scheduler_config.splitwise_role == "decode":
                 return
         while self.running:
             try:
