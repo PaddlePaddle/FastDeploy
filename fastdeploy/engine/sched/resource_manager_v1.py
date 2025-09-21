@@ -298,7 +298,9 @@ class ResourceManagerV1(ResourceManager):
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
-                    if self.config.splitwise_role == "prefill":  # do not need to schedule for decoding
+                    if (
+                        self.config.scheduler_config.splitwise_role == "prefill"
+                    ):  # do not need to schedule for decoding
                         req_index += 1
                         continue
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
@@ -404,7 +406,7 @@ class ResourceManagerV1(ResourceManager):
                             request.status = RequestStatus.RUNNING
                             main_process_metrics.num_requests_waiting.dec(1)
                             main_process_metrics.num_requests_running.inc(1)
-                            if self.config.splitwise_role == "mixed":
+                            if self.config.scheduler_config.splitwise_role == "mixed":
                                 allocated_position = self.get_available_position()
                                 request.idx = allocated_position
                                 self.tasks_list[allocated_position] = request
@@ -598,7 +600,7 @@ class ResourceManagerV1(ResourceManager):
         If can allocate, allocate resources and return True
         If can not, return False
         """
-        assert self.config.splitwise_role == "prefill", "Only P instance can call this method"
+        assert self.config.scheduler_config.splitwise_role == "prefill", "Only P instance can call this method"
         with self.lock:
             if self.available_batch() == 0:
                 return False
@@ -652,7 +654,7 @@ class ResourceManagerV1(ResourceManager):
         If can allocate, allocate resources and return True
         If can not, return False
         """
-        assert self.config.splitwise_role == "decode", "Only D instance can call this method"
+        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         with self.lock:
             if len(self.waiting) > 0:
                 return False
@@ -679,12 +681,15 @@ class ResourceManagerV1(ResourceManager):
         """
         In P/D aggregated deployment, D should continue to decode after recieving first token and cache from P.
         """
-        assert self.config.splitwise_role == "decode", "Only D instance can call this method"
+        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         with self.lock:
             request = self.requests[request_output_in_p.request_id]
             request.output_token_ids.append(request_output_in_p.outputs.token_ids[0])
             request.num_cached_tokens = request_output_in_p.num_cached_tokens
-            if self.config.speculative_config.method in ["mtp"] and self.config.splitwise_role == "decode":
+            if (
+                self.config.speculative_config.method in ["mtp"]
+                and self.config.scheduler_config.splitwise_role == "decode"
+            ):
                 request.draft_token_ids = copy.deepcopy(request_output_in_p.outputs.draft_token_ids)
             # update request.need_prefill_tokens
             request.need_prefill_tokens = len(request.prompt_token_ids) + 1

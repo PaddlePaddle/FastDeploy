@@ -127,11 +127,6 @@ class CacheMessager:
         Returns:
             None
         """
-
-        assert splitwise_role in [
-            "prefill",
-            "decode",
-        ], "splitwise_role must be prefill or decode"
         self.splitwise_role = splitwise_role
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
@@ -207,9 +202,10 @@ class CacheMessager:
         self.cache_info = dict()
         self.rank_id = self.rank + local_data_parallel_id * self.nranks
 
-        connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
-        connect_rdma_thread.daemon = True
-        connect_rdma_thread.start()
+        if self.splitwise_role != "mixed":
+            connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
+            connect_rdma_thread.daemon = True
+            connect_rdma_thread.start()
 
         logger.info(f"cache messager init finished, use {transfer_protocol}")
 
@@ -522,9 +518,10 @@ class CacheMessagerV1:
             add_cache_task_thread.daemon = True
             add_cache_task_thread.start()
 
-        connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
-        connect_rdma_thread.daemon = True
-        connect_rdma_thread.start()
+        if self.splitwise_role != "mixed":
+            connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
+            connect_rdma_thread.daemon = True
+            connect_rdma_thread.start()
 
         logger.info(f"cache messager init finished, use {transfer_protocol}")
 
@@ -843,6 +840,9 @@ def main():
         create=False,
     )
     cache_ready_signal.value[rank] = 1
+    if args.splitwise_role == "mixed":
+        while True:
+            time.sleep(1)
     cache_messager.prefill_layerwise_send_cache_thread()
 
 
