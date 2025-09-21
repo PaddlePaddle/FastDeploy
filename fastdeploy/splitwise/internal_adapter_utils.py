@@ -40,7 +40,7 @@ class InternalAdapter:
             target=self._recv_external_module_control_instruct, daemon=True
         )
         self.recv_external_instruct_thread.start()
-        if cfg.splitwise_role != "mixed":
+        if cfg.scheduler_config.splitwise_role != "mixed":
             self.response_external_instruct_thread = threading.Thread(
                 target=self._response_external_module_control_instruct, daemon=True
             )
@@ -54,7 +54,7 @@ class InternalAdapter:
 
         available_block_num = self.engine.resource_manager.available_block_num()
         server_info = {
-            "splitwise_role": self.cfg.splitwise_role,
+            "splitwise_role": self.cfg.scheduler_config.splitwise_role,
             "block_size": int(self.cfg.cache_config.block_size),
             "block_num": int(available_block_num),
             "max_block_num": int(self.cfg.cache_config.total_block_num),

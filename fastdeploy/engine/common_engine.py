@@ -83,7 +83,7 @@ class EngineService:
                 cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
-                cfg.splitwise_role,
+                cfg.scheduler_config.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
         else:
@@ -91,13 +91,13 @@ class EngineService:
                 cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
-                cfg.splitwise_role,
+                cfg.scheduler_config.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
 
         self.start_worker_queue_service(start_queue)
 
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.parallel_config.engine_worker_queue_port[
             self.cfg.parallel_config.local_data_parallel_id
         ]
 
@@ -200,7 +200,7 @@ class EngineService:
         """
         address = (
             self.cfg.master_ip,
-            int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
+            int(self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
         )
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
@@ -214,7 +214,7 @@ class EngineService:
 
             if (
                 self.cfg.cache_config.enable_prefix_caching
-                or self.cfg.splitwise_role != "mixed"
+                or self.cfg.scheduler_config.splitwise_role != "mixed"
                 and self.cfg.parallel_config.local_data_parallel_id == 0
             ):
                 self.cache_task_queue = EngineCacheQueue(
@@ -515,7 +515,10 @@ class EngineService:
                     time.sleep(0.001)
                     continue
                 if hasattr(self, "exist_prefill_task_signal") and self.exist_prefill_task_signal.value[0] > 0:
-                    if self.cfg.splitwise_role == "mixed" or self.split_connector.has_splitwise_tasks():
+                    if (
+                        self.cfg.scheduler_config.splitwise_role == "mixed"
+                        or self.split_connector.has_splitwise_tasks()
+                    ):
                         time.sleep(0.005)
                         continue
                 if self.engine_worker_queue.num_cache_infos() > 0:
@@ -918,7 +921,7 @@ class EngineService:
             device_ids=device_ids,
             pod_ip=self.cfg.master_ip,
             engine_worker_queue_port=int(
-                self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             ),
             pid_suffix=ipc_signal_suffix,
         )
