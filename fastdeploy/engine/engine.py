@@ -120,11 +120,10 @@ class LLMEngine:
 
         self.data_processor = self.input_processor.create_processor()
         self.engine.data_processor = self.data_processor
+        # Launch components: scheduler, cache_manager, expert_service et.al.
+        self.launch_components()
 
         self.engine.start()
-        if api_server_pid is not None:
-            llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
-            self.engine.start_zmq_service(api_server_pid)
 
         if self.do_profile == 0 and (
             self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed"
@@ -159,10 +158,13 @@ class LLMEngine:
 
         if self.do_profile:
             self._stop_profile()
-        # Launch components: scheduler, cache_manager, expert_service et.al.
-        self.launch_components()
+
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
+
+        if api_server_pid is not None:
+            llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
+            self.engine.start_zmq_service(api_server_pid)
 
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
@@ -427,7 +429,10 @@ class LLMEngine:
         )
 
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            variables["FLAGS_use_pd_disaggregation"] = 1
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                variables["FLAGS_use_pd_disaggregation_per_chunk"] = 1
+            else:
+                variables["FLAGS_use_pd_disaggregation"] = 1
             # TODO dynamic load environment variable
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
@@ -498,6 +503,7 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
@@ -625,13 +631,11 @@ class LLMEngine:
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             # 单机逻辑
             self.engine.engine_worker_queue.available_prefill_instances.put(1)
-            self.engine.split_mode_get_tasks()
-            if self.cfg.scheduler_config.name == "splitwise":
-                self.splitwise_receive_thread = threading.Thread(
-                    target=self.engine.split_connector.start_receiver, args=()
-                )
-                self.splitwise_receive_thread.daemon = True
-                self.splitwise_receive_thread.start()
+            self.splitwise_receive_thread = threading.Thread(
+                target=self.engine.split_connector.start_receiver, args=()
+            )
+            self.splitwise_receive_thread.daemon = True
+            self.splitwise_receive_thread.start()
 
         self.cfg.init_cache_info()
 
@@ -640,6 +644,14 @@ class LLMEngine:
         disaggregate = self.cfg.disaggregate_info
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, disaggregate)
+        elif self.cfg.scheduler_config.name == "dp":
+            request_queues_for_dp_ipc = []
+            result_queue_for_dp_ipc = multiprocessing.Queue()
+            for i in range(self.cfg.parallel_config.data_parallel_size):
+                request_queues_for_dp_ipc.append(multiprocessing.Queue())
+            self.engine.scheduler.start(
+                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+            )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
             if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
@@ -669,6 +681,9 @@ class LLMEngine:
                             args=(
                                 self.cfg,
                                 i,
+                                None,
+                                request_queues_for_dp_ipc,
+                                result_queue_for_dp_ipc,
                             ),
                         )
                     )

@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import time
 from typing import Tuple
 
@@ -259,6 +260,7 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
@@ -644,6 +646,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--cache-transfer-protocol",
+        type=str,
+        default="ipc",
+        help="support protocol list, comma separated, default is ipc",
+    )
+    parser.add_argument(
         "--runner",
         type=str,
         default="auto",
@@ -762,8 +770,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if args.splitwise_role != "mixed":
-        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+    if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
@@ -771,6 +778,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if parallel_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+    if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
 
     fd_config = FDConfig(
         model_config=model_config,

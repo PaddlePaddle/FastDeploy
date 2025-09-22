@@ -1481,7 +1481,7 @@ class FDConfig:
             self.model_config.model_format = "torch"
 
         # TODO
-        self.max_prefill_batch = 3
+        self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
         if self.model_config is not None and self.model_config.enable_mm:
