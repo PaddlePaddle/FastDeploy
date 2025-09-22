@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import time
 from typing import Tuple
 
@@ -45,7 +46,7 @@ from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeigh
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -151,6 +152,7 @@ class PaddleDisWorkerProc:
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
         self.cache_config = fd_config.cache_config
+        self.scheduler_config = fd_config.scheduler_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -258,6 +260,7 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
@@ -631,6 +634,33 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--cache-transfer-protocol",
+        type=str,
+        default="ipc",
+        help="support protocol list, comma separated, default is ipc",
+    )
+    parser.add_argument(
+        "--runner",
+        type=str,
+        default="auto",
+        help="The type of model runner to use.Each FD instance only supports one model runner.even if the same model can be used for multiple types.",
+    )
+
+    parser.add_argument(
+        "--convert",
+        type=str,
+        default="auto",
+        help="Convert the model using adapters. The most common use case is to adapt a text generation model to be used for pooling tasks.",
+    )
+
+    parser.add_argument(
+        "--override-pooler-config",
+        type=optional_type(json.loads),
+        default=None,
+        help="Override configuration for the pooler.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -729,8 +759,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if args.splitwise_role != "mixed":
-        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+    if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
@@ -738,6 +767,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if parallel_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+    if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
 
     fd_config = FDConfig(
         model_config=model_config,
@@ -751,7 +783,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         early_stop_config=early_stop_config,
         cache_config=cache_config,
         scheduler_config=scheduler_config,
-        engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,
     )

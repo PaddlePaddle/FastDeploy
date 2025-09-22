@@ -58,7 +58,7 @@ class MoEMethodBase(QuantMethodBase):
             "top_k": layer.top_k,
             "hidden_size": layer.hidden_size,
             "num_experts": layer.num_experts,
-            "splitwise_role": layer.fd_config.parallel_config.splitwise_role,
+            "splitwise_role": layer.fd_config.scheduler_config.splitwise_role,
             "num_max_dispatch_tokens_per_rank": layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
             "ep_size": layer.ep_size,
             "ep_rank": layer.ep_rank,
@@ -67,7 +67,7 @@ class MoEMethodBase(QuantMethodBase):
         }
 
         config = layer.fd_config
-        splitwise_role = config.parallel_config.splitwise_role
+        splitwise_role = config.scheduler_config.splitwise_role
         load_strategy = config.load_config.load_strategy
 
         # For "mixed" splitwise role: conditionally initialize both or none
@@ -81,7 +81,7 @@ class MoEMethodBase(QuantMethodBase):
             return
 
         # For non-mixed ep
-        phase = config.parallel_config.moe_phase.phase
+        phase = config.model_config.moe_phase.phase
         if phase == "prefill":
             self.ep_prefill_runner = EPPrefillRunner(**common_args)
         else:
@@ -159,12 +159,12 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                if layer.fd_config.parallel_config.splitwise_role == "mixed":
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
                     self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
             else:
-                if layer.fd_config.parallel_config.splitwise_role == "mixed":
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
                     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:

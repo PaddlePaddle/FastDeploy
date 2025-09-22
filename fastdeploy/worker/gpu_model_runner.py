@@ -194,7 +194,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if_only_prefill = True
         decode_exists = None
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_prefill_batch_list = []
             decode_exists = self.exist_decode()
             paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
@@ -212,7 +212,7 @@ class GPUModelRunner(ModelRunnerBase):
         if_only_decode = True
         prefill_exists = None
         # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_decode_batch_list = []
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
@@ -1104,8 +1104,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update config about moe for better performance
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
@@ -1332,8 +1332,12 @@ class GPUModelRunner(ModelRunnerBase):
                 self.parallel_config.max_model_len,
             )
 
-            # 4. Execute spec decode
-            logits = self.model.compute_logits(hidden_states)
+            logits = None
+            if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+                pass
+            else:
+                # 4. Execute spec decode
+                logits = self.model.compute_logits(hidden_states)
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -1638,8 +1642,13 @@ class GPUModelRunner(ModelRunnerBase):
             self.parallel_config.max_model_len,
         )
 
+        logits = None
         # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hidden_states)
+        if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+            pass
+        else:
+            # 4. Execute spec decode
+            logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
             set_value_by_flags_and_idx(
@@ -1726,7 +1735,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
-        if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
+        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False

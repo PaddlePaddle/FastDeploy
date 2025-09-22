@@ -165,28 +165,6 @@ class CacheTransferManager:
         self._init_cpu_cache(args)
         self._init_gpu_cache(args)
 
-        paddle.set_device(f"gpu:{device}")
-        if args.enable_splitwise:
-            logger.debug("create cache messager...")
-            logger.info(f"{args}")
-            from fastdeploy.cache_manager.cache_messager import CacheMessager
-
-            self.cache_messager = CacheMessager(
-                splitwise_role=args.splitwise_role,
-                transfer_protocol=args.protocol,
-                pod_ip=args.pod_ip,
-                engine_worker_queue_port=args.engine_worker_queue_port,
-                local_data_parallel_id=args.local_data_parallel_id,
-                gpu_cache_kvs=self.gpu_cache_kvs,
-                rank=self.rank,
-                nranks=args.mp_num,
-                num_layers=args.num_layers + self.num_extra_layers,
-                gpu_id=self.device,
-                rdma_port=args.rdma_port,
-            )
-            logger.info("successfully create cache messager")
-        logger.info(f"done init CacheMessager gmem alloc : {paddle.device.cuda.memory_allocated()}")
-
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
             name="cache_task_broadcast_signal",
@@ -534,5 +512,7 @@ def main():
 if __name__ == "__main__":
 
     args = parse_args()
-    logger = get_logger("cache_transfer_manager", "cache_transfer_manager.log")
+    rank_id = args.rank + args.local_data_parallel_id * args.mp_num
+    logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_rank{rank_id}.log")
+    paddle.set_device(f"gpu:{args.device_id}")
     main()
