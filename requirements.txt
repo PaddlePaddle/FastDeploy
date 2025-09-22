@@ -39,4 +39,4 @@ opentelemetry-distro 
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser
-paddlepaddle>=3.2
+paddlepaddle-gpu>=3.2
