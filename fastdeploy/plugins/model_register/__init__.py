@@ -14,9 +14,10 @@
 # limitations under the License.
 """
 
-from fastdeploy.plugins.utils import load_plugins_by_group, plugins_loaded
+from fastdeploy.plugins.utils import load_plugins_by_group
 
 # make sure one process only loads plugins once
+plugins_loaded = False
 PLUGINS_GROUP = "fastdeploy.model_register_plugins"
 
 
