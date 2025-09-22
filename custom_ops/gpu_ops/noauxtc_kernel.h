@@ -25,6 +25,23 @@ constexpr unsigned FULL_WARP_MASK = 0xffffffff;
 constexpr int32_t BLOCK_SIZE = 512;
 constexpr int32_t NUM_WARPS_PER_BLOCK = BLOCK_SIZE / WARP_SIZE;
 
+template <typename T_OUT, typename T_IN>
+__device__ inline T_OUT cuda_cast(T_IN val) {
+  return val;
+}
+
+template <>
+__device__ inline float cuda_cast<float, __nv_bfloat16>(__nv_bfloat16 val) {
+  return __bfloat162float(val);
+}
+
+template <typename T>
+__device__ inline T neg_inf() {
+  // cuda::std::numeric_limits<T>::infinity() returns `0` for [T=bf16 or fp16]
+  // so we need to cast from fp32
+  return cuda_cast<T, float>(-cuda::std::numeric_limits<float>::infinity());
+}
+
 namespace warp_topk {
 
 template <int size, typename T>
@@ -392,17 +409,6 @@ class WarpSelect : public WarpSort<capacity, greater, T, idxT, is_stable> {
 };  // end class WarpSelect
 }  // namespace warp_topk
 
-
-template <typename T_OUT, typename T_IN>
-__device__ inline T_OUT cuda_cast(T_IN val) {
-  return val;
-}
-
-template <>
-__device__ inline float cuda_cast<float, __nv_bfloat16>(__nv_bfloat16 val) {
-  return __bfloat162float(val);
-}
-
 template <typename T>
 __device__ void topk_with_k2(T* output,
                              T const* input,
@@ -410,8 +416,8 @@ __device__ void topk_with_k2(T* output,
                              int32_t const lane_id,
                              int const num_experts_per_group) {
   // Get the top2 per thread
-  T largest = cuda::std::numeric_limits<T>::min();
-  T second_largest = cuda::std::numeric_limits<T>::min();
+  T largest = neg_inf<T>();
+  T second_largest = neg_inf<T>();
 
   if (num_experts_per_group > WARP_SIZE) {
     for (int i = lane_id; i < num_experts_per_group; i += WARP_SIZE) {
@@ -513,8 +519,8 @@ __global__ void group_idx_and_topk_idx_kernel(
       warp_id * topk;
   s_topk_idx += warp_id * topk;
 
-  T value = cuda::std::numeric_limits<T>::min();
-  T topk_group_value = cuda::std::numeric_limits<T>::min();
+  T value = neg_inf<T>();
+  T topk_group_value = neg_inf<T>();
   int32_t num_equalto_topkth_group;
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
@@ -540,11 +546,11 @@ __global__ void group_idx_and_topk_idx_kernel(
       __syncwarp();  // Ensure all threads have valid data before reduction
       topk_group_value = cg::reduce(tile, value, cg::greater<T>());
       if (value == topk_group_value) {
-        value = cuda::std::numeric_limits<T>::min();
+        value = neg_inf<T>();
       }
       pre_count_equal_to_top_value = count_equal_to_top_value;
       count_equal_to_top_value = __popc(__ballot_sync(
-          FULL_WARP_MASK, (value == cuda::std::numeric_limits<T>::min())));
+          FULL_WARP_MASK, (value == neg_inf<T>())));
     }
     num_equalto_topkth_group = target_num_min - pre_count_equal_to_top_value;
   }
@@ -552,10 +558,10 @@ __global__ void group_idx_and_topk_idx_kernel(
 
   warp_topk::WarpSelect</*capability*/ WARP_SIZE, /*greater*/ true, T, int32_t,
                         /* is_stable */ true>
-      queue((int32_t)topk, cuda::std::numeric_limits<T>::min());
+      queue((int32_t)topk, neg_inf<T>());
 
   int count_equalto_topkth_group = 0;
-  bool if_proceed_next_topk = (topk_group_value != cuda::std::numeric_limits<T>::min());
+  bool if_proceed_next_topk = (topk_group_value != neg_inf<T>());
   if (case_id < num_tokens && if_proceed_next_topk) {
     for (int i_group = 0; i_group < n_group; i_group++) {
       if ((group_scores[i_group] > topk_group_value) ||
@@ -568,7 +574,7 @@ __global__ void group_idx_and_topk_idx_kernel(
               (i < num_experts_per_group) && isfinite(cuda_cast<float, T>(
                                                  scores_with_bias[offset + i]))
                   ? scores_with_bias[offset + i]
-                  : cuda::std::numeric_limits<T>::min();
+                  : neg_inf<T>();
           queue.add(candidates, offset + i);
         }
         if (group_scores[i_group] == topk_group_value) {
@@ -601,6 +607,13 @@ __global__ void group_idx_and_topk_idx_kernel(
 
   __syncthreads();
 
+  if (case_id < num_tokens && if_proceed_next_topk) {
+    for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
+      scores[i] = 0;
+    }
+  }
+  __syncwarp();
+
   if (case_id < num_tokens) {
     if (if_proceed_next_topk) {
       for (int i = lane_id; i < topk; i += WARP_SIZE) {
@@ -611,6 +624,7 @@ __global__ void group_idx_and_topk_idx_kernel(
         } else {
           value = cuda_cast<float, T>(s_topk_value[i]) * routed_scaling_factor;
         }
+        scores[s_topk_idx[i]] = value;
         topk_indices[i] = s_topk_idx[i];
         topk_values[i] = cuda_cast<T, float>(value);
       }
