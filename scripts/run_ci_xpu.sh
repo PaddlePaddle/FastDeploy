@@ -31,6 +31,7 @@ echo "pip others"
 python -m pip install openai -U
 python -m pip uninstall -y triton
 python -m pip install triton==3.3.0
+python -m pip install pytest
 unset http_proxy
 unset https_proxy
 unset no_proxy
