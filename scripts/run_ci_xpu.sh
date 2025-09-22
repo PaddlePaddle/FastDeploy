@@ -10,7 +10,7 @@ ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 #设置模型路径
-export model_path=${MODEL_PATH}/ERNIE-4.5-21B-A3B-Paddle
+export model_path=${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
@@ -41,11 +41,11 @@ rm -f core*
 # pkill -9 python #流水线不执行这个
 #清空消息队列
 ipcrm --all=msg
-export XPU_VISIBLE_DEVICES="0,1"
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
-    --tensor-parallel-size 2 \
+    --tensor-parallel-size 8 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
@@ -112,11 +112,11 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 export ENABLE_V1_KVCACHE_SCHEDULER=1
-export XPU_VISIBLE_DEVICES="0,1"
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
-    --tensor-parallel-size 2 \
+    --tensor-parallel-size 8 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
