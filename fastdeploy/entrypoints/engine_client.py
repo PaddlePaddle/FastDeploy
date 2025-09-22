@@ -27,7 +27,7 @@ from fastdeploy.config import ModelConfig
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqClient
+from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
@@ -115,7 +115,7 @@ class EngineClient:
         """
         Create a ZMQ client.
         """
-        self.zmq_client = ZmqClient(model, mode)
+        self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
     async def format_and_add_data(self, prompts: dict):
@@ -236,8 +236,13 @@ class EngineClient:
                 raise ParameterError("max_tokens", f"max_tokens can be defined [1, {self.max_model_len}).")
 
         if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
-                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be between max_tokens and 1")
+            if data["reasoning_max_tokens"] < 1:
+                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be greater than 1")
+            if data["reasoning_max_tokens"] > data["max_tokens"]:
+                data["reasoning_max_tokens"] = data["max_tokens"]
+                api_server_logger.warning(
+                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
+                )
 
         # logprobs
         logprobs = data.get("logprobs")

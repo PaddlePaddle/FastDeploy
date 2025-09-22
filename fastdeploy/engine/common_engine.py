@@ -37,12 +37,14 @@ from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
     IPCSignal,
-    ZmqClient,
+    ZmqIpcServer,
+    ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
@@ -71,28 +73,28 @@ class EngineService:
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
-                cfg.max_num_seqs,
+                cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
-                cfg.splitwise_role,
+                cfg.scheduler_config.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
-            if cfg.splitwise_role != "mixed":
+            if cfg.scheduler_config.splitwise_role != "mixed":
                 raise NotImplementedError(
                     "Currently ENABLE_V1_KVCACHE_SCHEDULER=1 only supported in mixed sampling now."
                 )
         else:
             self.resource_manager = ResourceManager(
-                cfg.max_num_seqs,
+                cfg.scheduler_config.max_num_seqs,
                 cfg,
                 cfg.parallel_config.tensor_parallel_size,
-                cfg.splitwise_role,
+                cfg.scheduler_config.splitwise_role,
                 cfg.parallel_config.local_data_parallel_id,
             )
 
         self.start_worker_queue_service(start_queue)
 
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.engine_worker_queue_port[
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.parallel_config.engine_worker_queue_port[
             self.cfg.parallel_config.local_data_parallel_id
         ]
 
@@ -109,7 +111,7 @@ class EngineService:
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (
-                (self.cfg.max_num_batched_tokens // idx)
+                (self.cfg.scheduler_config.max_num_batched_tokens // idx)
                 // self.cfg.cache_config.block_size
                 * self.cfg.cache_config.block_size
             )
@@ -135,7 +137,9 @@ class EngineService:
         self.token_processor.run()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
-        current_suffix = int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id])
+        current_suffix = int(
+            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+        )
         llm_logger.info(f"current_suffix: {current_suffix}")
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
@@ -193,7 +197,7 @@ class EngineService:
         """
         address = (
             self.cfg.master_ip,
-            int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
+            int(self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
         )
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
@@ -207,7 +211,7 @@ class EngineService:
 
             if (
                 self.cfg.cache_config.enable_prefix_caching
-                or self.cfg.splitwise_role != "mixed"
+                or self.cfg.scheduler_config.splitwise_role != "mixed"
                 and self.cfg.parallel_config.local_data_parallel_id == 0
             ):
                 self.cache_task_queue = EngineCacheQueue(
@@ -251,7 +255,10 @@ class EngineService:
                 del self.resource_manager.req_dict[task.request_id]
                 cur_task = self.resource_manager.tasks_list[cur_task_idx]
                 cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
-                if self.cfg.speculative_config.method in ["mtp"] and self.cfg.splitwise_role == "decode":
+                if (
+                    self.cfg.speculative_config.method in ["mtp"]
+                    and self.cfg.scheduler_config.splitwise_role == "decode"
+                ):
                     cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
                 if task.error_code != 200:
                     self.resource_manager.stop_flags[cur_task_idx] = True
@@ -356,7 +363,7 @@ class EngineService:
         requests_chunk = [[] for _ in range(len(requests))]
         chunk_request_num = len(current_request_size)
         while chunk_request_num >= 1:
-            remain_batched_tokens = self.cfg.max_num_batched_tokens
+            remain_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
             for idx in range(len(current_request_size)):
                 if current_request_size[idx] <= 0:
                     continue
@@ -476,7 +483,10 @@ class EngineService:
                     time.sleep(0.001)
                     continue
                 if hasattr(self, "exist_prefill_task_signal") and self.exist_prefill_task_signal.value[0] > 0:
-                    if self.cfg.splitwise_role == "mixed" or self.split_connector.has_splitwise_tasks():
+                    if (
+                        self.cfg.scheduler_config.splitwise_role == "mixed"
+                        or self.split_connector.has_splitwise_tasks()
+                    ):
                         time.sleep(0.005)
                         continue
                 if self.engine_worker_queue.num_cache_infos() > 0:
@@ -496,7 +506,7 @@ class EngineService:
                     available_blocks=self.resource_manager.available_block_num(),
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.max_num_batched_tokens,
+                    max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
 
@@ -505,7 +515,7 @@ class EngineService:
                     continue
 
                 current_id = (current_id + 1) % 100003
-                if self.cfg.splitwise_role != "mixed":
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
                     llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
@@ -576,9 +586,19 @@ class EngineService:
         if api_server_pid is None:
             return
         self.api_server_pid = api_server_pid
-        self.zmq_server = ZmqClient(name=api_server_pid, mode=zmq.PULL)
-        self.zmq_server.start_server()
-        self.zmq_server.create_router()
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
+            self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
+            self.internal_adapter = InternalAdapter(
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+            )
+        else:
+            self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
+            self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
+        self.recv_result_handle_thread = threading.Thread(
+            target=self.send_response_server.recv_result_handle, daemon=True
+        )
+        self.recv_result_handle_thread.start()
         time.sleep(3)
         self.insert_task_to_scheduler_thread = threading.Thread(target=self._insert_zmq_task_to_scheduler, daemon=True)
         self.insert_task_to_scheduler_thread.start()
@@ -592,9 +612,9 @@ class EngineService:
             try:
                 block = True if len(added_requests) == 0 else False
                 if not self.cfg.model_config.enable_mm:
-                    err, data = self.zmq_server.receive_json_once(block)
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -648,7 +668,7 @@ class EngineService:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, [error_result])
+                    self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happened while receiving new request from zmq, details={e}, "
@@ -666,7 +686,7 @@ class EngineService:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    self.zmq_server.send_multipart(request_id, contents)
+                    self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happened: {e}, {traceback.format_exc()!s}")
@@ -747,7 +767,7 @@ class EngineService:
             device_ids=device_ids,
             pod_ip=self.cfg.master_ip,
             engine_worker_queue_port=int(
-                self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             ),
             pid_suffix=ipc_signal_suffix,
         )
@@ -778,5 +798,9 @@ class EngineService:
         self.worker_healthy_live_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
-        if hasattr(self, "zmq_server") and self.zmq_server is not None:
-            self.zmq_server.close()
+        if hasattr(self, "send_response_server") and self.send_response_server is not None:
+            self.send_response_server.close()
+        if hasattr(self, "recv_request_server") and self.recv_request_server is not None:
+            self.recv_request_server.close()
+        if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
+            self.recv_control_cmd_server.close()

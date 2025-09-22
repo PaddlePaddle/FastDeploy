@@ -1049,7 +1049,7 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
       local_max = __hmax(local_max, __habs(out_vec2[i]));
     }
 #pragma unroll
-    for (int m_offset = 16; m_offset > 1; m_offset /= 2) {
+    for (int m_offset = 16; m_offset > 0; m_offset /= 2) {
       local_max = __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
     }
 
