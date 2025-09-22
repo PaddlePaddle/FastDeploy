@@ -237,14 +237,13 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
             )
-            topk_idx = topk_idx.astype("int32")
 
             (
                 permute_input,
                 token_nums_per_expert,
                 permute_indices_per_token,
-                topk_weights_,  # computed in get_moe_scores()
-                topk_idx_,  # computed in get_moe_scores()
+                topk_weights,
+                topk_idx,
                 expert_idx_per_token,
             ) = moe_expert_dispatch(
                 x,
