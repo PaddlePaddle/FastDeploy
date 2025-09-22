@@ -17,12 +17,15 @@
 import argparse
 import asyncio
 import codecs
+import contextlib
 import importlib
+import ipaddress
 import json
 import logging
 import os
 import random
 import re
+import signal
 import socket
 import sys
 import tarfile
@@ -37,6 +40,7 @@ from typing import Literal, TypeVar, Union
 
 import numpy as np
 import paddle
+import psutil
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
@@ -853,6 +857,67 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+
+
+class YamlInputAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # 支持从文件路径或直接传递 YAML 字符串
+        if os.path.exists(values):
+            with open(values, "r") as f:
+                yaml_content = f.read()
+        else:
+            yaml_content = values  # 直接处理 YAML 字符串（需用户确保格式正确）
+
+        try:
+            config = yaml.safe_load(yaml_content)
+            if not isinstance(config, dict):
+                raise ValueError("YAML 内容必须为字典格式")
+
+            # 如果目标属性已存在（如通过其他参数设置），则合并或覆盖
+            if hasattr(namespace, self.dest):
+                existing_config = getattr(namespace, self.dest)
+                if isinstance(existing_config, dict):
+                    existing_config.update(config)  # 合并字典
+                    setattr(namespace, self.dest, existing_config)
+                else:
+                    setattr(namespace, self.dest, config)  # 直接覆盖
+            else:
+                setattr(namespace, self.dest, config)
+        except yaml.YAMLError as e:
+            raise argparse.ArgumentError(self, f"YAML 解析错误: {e}")
+
+
+def is_valid_ipv6_address(address: str) -> bool:
+    try:
+        ipaddress.IPv6Address(address)
+        return True
+    except ValueError:
+        return False
+
+
+def kill_process_tree(pid: int) -> None:
+    """
+    Kills all descendant processes of the given pid by sending SIGKILL.
+
+    Args:
+        pid (int): Process ID of the parent process
+    """
+    try:
+        parent = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return
+
+    # Get all children recursively
+    children = parent.children(recursive=True)
+
+    # Send SIGKILL to all children first
+    for child in children:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(child.pid, signal.SIGKILL)
+
+    # Finally kill the parent
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(pid, signal.SIGKILL)
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:

@@ -17,15 +17,17 @@
 # This file is modified from https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/cli/main.py
 from __future__ import annotations
 
-import importlib.metadata
+from fastdeploy import __version__
 
 
 def main():
     import fastdeploy.entrypoints.cli.openai
+    import fastdeploy.entrypoints.cli.serve
     from fastdeploy.utils import FlexibleArgumentParser
 
     CMD_MODULES = [
         fastdeploy.entrypoints.cli.openai,
+        fastdeploy.entrypoints.cli.serve,
     ]
 
     parser = FlexibleArgumentParser(description="FastDeploy CLI")
@@ -33,7 +35,7 @@ def main():
         "-v",
         "--version",
         action="version",
-        version=importlib.metadata.version("fastdeploy"),
+        version=__version__,
     )
     subparsers = parser.add_subparsers(required=False, dest="subparser")
     cmds = {}

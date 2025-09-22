@@ -26,6 +26,8 @@ from setuptools.command.build_ext import build_ext
 from setuptools.command.install import install
 from wheel.bdist_wheel import bdist_wheel
 
+from fastdeploy import __version__
+
 long_description = "FastDeploy: Large Language Model Serving.\n\n"
 long_description += "GitHub: https://github.com/PaddlePaddle/FastDeploy\n"
 long_description += "Email: dltp@baidu.com"
@@ -185,7 +187,7 @@ def get_name():
 
 cmdclass_dict = {"bdist_wheel": CustomBdistWheel}
 cmdclass_dict["build_ext"] = CMakeBuild
-FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.3.0-dev")
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", __version__)
 cmdclass_dict["build_optl"] = PostInstallCommand
 
 setup(

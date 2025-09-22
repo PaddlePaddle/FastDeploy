@@ -44,6 +44,9 @@ except ImportError:
 # TODO(tangbinhan): remove this code
 
 
+__version__ = "2.3.0-dev"
+
+
 def _patch_fastsafetensors():
     try:
         file_path = (

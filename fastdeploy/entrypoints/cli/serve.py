@@ -1,0 +1,51 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+# This file is modified from https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/cli/serve.py
+
+import argparse
+
+import fastdeploy.entrypoints.openai.api_server as api_server
+from fastdeploy.entrypoints.cli.types import CLISubcommand
+from fastdeploy.entrypoints.openai.api_server import make_arg_parser
+from fastdeploy.utils import FlexibleArgumentParser, YamlInputAction
+
+
+class ServeSubcommand(CLISubcommand):
+    """The `serve` subcommand for the fastdeploy CLI."""
+
+    name = "serve"
+
+    @staticmethod
+    def cmd(args: argparse.Namespace) -> None:
+        api_server.main(args)
+
+    def subparser_init(self, subparsers: argparse._SubParsersAction) -> FlexibleArgumentParser:
+        serve_parser = subparsers.add_parser(
+            name=self.name,
+            help="Start the FastDeploy OpenAI Compatible API server.",
+            description="Start the FastDeploy OpenAI Compatible API server.",
+            usage="fastdeploy serve [model_tag] [options]",
+        )
+        serve_parser = make_arg_parser(serve_parser)
+        serve_parser.add_argument(
+            "--config", action=YamlInputAction, help="Read CLI options from a config file. Must be a YAML file"
+        )
+        return serve_parser
+
+
+def cmd_init() -> list[CLISubcommand]:
+    return [ServeSubcommand()]
