@@ -735,6 +735,11 @@ class GPUModelRunner(ModelRunnerBase):
                 model_config=self.model_config,
             )
 
+        if getattr(self.model_config, "sliding_window", None):
+            self.sliding_window_mask_base = self.create_attention_mask(
+                max_len=self.parallel_config.max_model_len, sliding_window_size=self.model_config.sliding_window
+            )
+
         # Set block tables
         pre_max_block_num = (
             self.parallel_config.max_model_len + self.cache_config.block_size - 1
@@ -961,6 +966,11 @@ class GPUModelRunner(ModelRunnerBase):
             and only_decode_batch
             and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
         )
+
+        # Init attention mask
+        if getattr(self.fd_config.model_config, "sliding_window", None) is not None:
+            bsz = self.share_inputs["input_ids"].shape[0]
+            self.forward_meta.attn_mask = paddle.tile(self.sliding_window_mask_base, [bsz, 1, 1])
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -1836,3 +1846,12 @@ class GPUModelRunner(ModelRunnerBase):
             model_type=self.model_config.model_type,
         )
         return rope_emb
+
+    @paddle.no_grad()
+    def create_attention_mask(self, max_len, sliding_window_size=None):
+        ones_tensor = paddle.ones([max_len, max_len])
+        attention_mask = paddle.tril(ones_tensor)
+        if sliding_window_size is not None:
+            window_mask = paddle.triu(ones_tensor, -(sliding_window_size - 1))
+            attention_mask = attention_mask * window_mask
+        return attention_mask.cast("bool")
