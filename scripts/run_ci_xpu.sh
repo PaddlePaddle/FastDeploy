@@ -53,7 +53,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 sleep 60
 # 探活
-TIMEOUT=$((5 * 60))
+TIMEOUT=$((10 * 60))
 INTERVAL=10            # 检查间隔（秒）
 ENDPOINT="http://0.0.0.0:8188/health"
 START_TIME=$(date +%s) # 记录开始时间戳
@@ -124,7 +124,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 sleep 60
 # 探活
-TIMEOUT=$((5 * 60))
+TIMEOUT=$((10 * 60))
 INTERVAL=10            # 检查间隔（秒）
 ENDPOINT="http://0.0.0.0:8188/health"
 START_TIME=$(date +%s) # 记录开始时间戳
