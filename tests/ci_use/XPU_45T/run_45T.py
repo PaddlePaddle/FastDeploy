@@ -14,19 +14,27 @@
 
 import openai
 
-ip = "0.0.0.0"
-service_http_port = "8188"  # 服务配置的
-client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
 
-# 非流式对话
-response = client.chat.completions.create(
-    model="default",
-    messages=[
-        {"role": "user", "content": "你好，你是谁？"},
-    ],
-    temperature=1,
-    top_p=0,
-    max_tokens=64,
-    stream=False,
-)
-print(response)
+def test_45t():
+    ip = "0.0.0.0"
+    service_http_port = "8188"  # 服务配置的
+    client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
+    base_response = "你好！我是百度研发的知识增强大语言模型，能够与人对话互动，回答问题，协助创作，高效便捷地帮助人们获取信息、知识和灵感。无论是解答问题、提供建议，还是陪你聊天解闷，我都在这里随时准备为你服务。有什么我可以帮你的吗？ 😊"
+    # 非流式对话
+    response = client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "user", "content": "你好，你是谁？"},
+        ],
+        temperature=1,
+        top_p=0,
+        max_tokens=64,
+        stream=False,
+    )
+    print(response.choices[0].message.content)
+    print(base_response)
+    assert response.choices[0].message.content == base_response
+
+
+if __name__ == "__main__":
+    test_45t()
