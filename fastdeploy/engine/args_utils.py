@@ -18,13 +18,14 @@ import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
+    ConvertOption,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
@@ -32,6 +33,8 @@ from fastdeploy.config import (
     MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PoolerConfig,
+    RunnerOption,
     SpeculativeConfig,
     TaskOption,
 )
@@ -94,6 +97,20 @@ class EngineArgs:
     task: TaskOption = "generate"
     """
     The task to be executed by the model.
+    """
+    runner: RunnerOption = "auto"
+    """
+    The type of model runner to use.Each FD instance only supports one model runner.
+    even if the same model can be used for multiple types.
+    """
+    convert: ConvertOption = "auto"
+    """
+    Convert the model using adapters. The most common use case is to
+    adapt a text generation model to be used for pooling tasks.
+    """
+    override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
+    """
+    Override configuration for the pooler.
     """
     max_num_seqs: int = 8
     """
@@ -472,6 +489,21 @@ class EngineArgs:
             type=str,
             default=EngineArgs.task,
             help="Task to be executed by the model.",
+        )
+        model_group.add_argument(
+            "--runner",
+            type=str,
+            default=EngineArgs.runner,
+            help="The type of model runner to use",
+        )
+        model_group.add_argument(
+            "--convert", type=str, default=EngineArgs.convert, help="Convert the model using adapters"
+        )
+        model_group.add_argument(
+            "--override-pooler-config",
+            type=json.loads,
+            default=EngineArgs.override_pooler_config,
+            help="Override the pooler configuration with a JSON string.",
         )
         model_group.add_argument(
             "--use-warmup",

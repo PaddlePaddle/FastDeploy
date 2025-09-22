@@ -31,7 +31,11 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
@@ -325,6 +329,12 @@ class Ernie4_5_MTPModel(nn.Layer):
         return hidden_states
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_MTPForCausalLM",
+    module_path="ernie4_5_mtp",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
     """
     Ernie4_5_MTPForCausalLM
