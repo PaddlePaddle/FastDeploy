@@ -48,7 +48,11 @@ from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.rotary_embedding import (
     DeepseekScalingRotaryEmbedding,
 )
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -588,6 +592,12 @@ class DeepSeekV3Model(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="DeepseekV3ForCausalLM",
+    module_path="deepseek_v3",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class DeepseekV3ForCausalLM(ModelForCasualLM):
     """
     DeepseekV3ForCausalLM

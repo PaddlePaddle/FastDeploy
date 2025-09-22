@@ -45,7 +45,7 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -641,6 +641,27 @@ def parse_args():
         "--lm_head_fp32",
         action="store_true",
         help="Flag to specify dtype of lm_head as FP32",
+    )
+
+    parser.add_argument(
+        "--runner",
+        type=str,
+        default="auto",
+        help="The type of model runner to use.Each FD instance only supports one model runner.even if the same model can be used for multiple types.",
+    )
+
+    parser.add_argument(
+        "--convert",
+        type=str,
+        default="auto",
+        help="Convert the model using adapters. The most common use case is to adapt a text generation model to be used for pooling tasks.",
+    )
+
+    parser.add_argument(
+        "--override-pooler-config",
+        type=optional_type(json.loads),
+        default=None,
+        help="Override configuration for the pooler.",
     )
 
     args = parser.parse_args()
