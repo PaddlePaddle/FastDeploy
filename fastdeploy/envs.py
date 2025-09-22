@@ -95,6 +95,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FOR_TORCH_MODEL_FORMAT": lambda: bool(int(os.getenv("FD_FOR_TORCH_MODEL_FORMAT", "0"))),
     # force disable default chunked prefill
     "FD_DISABLE_CHUNKED_PREFILL": lambda: bool(int(os.getenv("FD_DISABLE_CHUNKED_PREFILL", "0"))),
+    # cudagraph shared memory pool id default is 0, disable shared memory if get 0
+    "CUDAGRAPH_POOL_ID": lambda: bool(int(os.getenv("CUDAGRAPH_POOL_ID", "0"))),
 }
 
 
