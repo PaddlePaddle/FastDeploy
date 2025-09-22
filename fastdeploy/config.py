@@ -528,7 +528,6 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
-        self.enable_tensor_or_expert_parallel = False
         self.local_data_parallel_id = 0
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
