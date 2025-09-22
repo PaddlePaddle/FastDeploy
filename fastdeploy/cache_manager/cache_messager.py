@@ -426,11 +426,6 @@ class CacheMessagerV1:
         Returns:
             None
         """
-
-        assert splitwise_role in [
-            "prefill",
-            "decode",
-        ], "splitwise_role must be prefill or decode"
         self.splitwise_role = splitwise_role
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
