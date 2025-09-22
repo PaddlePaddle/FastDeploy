@@ -226,7 +226,8 @@ class PrefixCacheManager:
         if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
             logger.info("Enable hierarchical cache.")
             self._enable_cpu_cache()
-        return cache_manager_processes
+        all_cache_processes = cache_messager_processes + cache_manager_processes
+        return all_cache_processes
 
     def launch_cache_messager(
         self, cache_config, tensor_parallel_size, device_ids, pod_ip, engine_worker_queue_port, pid_suffix
