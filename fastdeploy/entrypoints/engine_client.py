@@ -61,8 +61,6 @@ class EngineClient:
         workers=1,
         tool_parser=None,
     ):
-        import fastdeploy.model_executor.models  # noqa: F401
-
         architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
