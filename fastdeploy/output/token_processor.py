@@ -161,24 +161,23 @@ class TokenProcessor:
                         continue
 
                 else:
-                    if (
+                    if self.use_logprobs:
+                        get_output_topk(
+                            self.output_tokens,
+                            self.output_scores,
+                            self.output_ranks,
+                            K,
+                            rank_id,
+                            is_blocking,
+                        )
+                    elif (
                         self.cfg.parallel_config.enable_expert_parallel
                         and self.cfg.parallel_config.data_parallel_size > 1
                     ):
                         get_output_ep(self.output_tokens, rank_id, is_blocking)
 
                     else:
-                        if self.use_logprobs:
-                            get_output_topk(
-                                self.output_tokens,
-                                self.output_scores,
-                                self.output_ranks,
-                                K,
-                                rank_id,
-                                is_blocking,
-                            )
-                        else:
-                            get_output(self.output_tokens, rank_id, is_blocking)
+                        get_output(self.output_tokens, rank_id, is_blocking)
 
                     if self.output_tokens[0, 0] == -2:
                         continue
@@ -516,6 +515,31 @@ class TokenProcessor:
                 main_process_metrics.spec_decode_draft_single_head_acceptance_rate[head].set(
                     single_head_acceptance_rate
                 )
+
+    def clear_data(self):
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.resource_manager.clear_data()
+        for i in range(self.cfg.max_num_seqs):
+            if self.resource_manager.stop_flags[i]:
+                continue
+            task = self.resource_manager.tasks_list[i]
+            result = RequestOutput(
+                request_id=task.request_id,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=self.tokens_counter[task.request_id],
+                    token_ids=task.eos_token_ids,
+                    draft_token_ids=[],
+                ),
+                finished=True,
+                metrics=RequestMetrics(
+                    arrival_time=time.time(),
+                    request_start_time=task.arrival_time,
+                ),
+            )
+            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+            self._recycle_resources(task.request_id, i, task, result, is_prefill)
+            llm_logger.warning(f"clear data for task {task.request_id}")
 
 
 class WarmUpTokenProcessor(TokenProcessor):

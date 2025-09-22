@@ -248,6 +248,11 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def _broadcast_model_weights_signal(self, src: int, group) -> int:
+        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
+        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
+        return model_weights_signal_tensor.item()
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -257,15 +262,19 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
-            if self.fd_config.load_config.dynamic_load_weight:
-                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                        src=0, group=self.parallel_config.ep_group
+                    )
+            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
 
             self.insert_step = False
             req_dicts = None
@@ -293,7 +302,9 @@ class PaddleDisWorkerProc:
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
                 if self.model_weights_signal[0] != 0:
-                    logger.info(f"Rank: {self.local_rank} has updated parameters.")
+                    logger.info(
+                        f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
+                    )
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
@@ -305,6 +316,7 @@ class PaddleDisWorkerProc:
                         self.parallel_config.engine_worker_queue_port,
                     )
                     self.model_weights_signal[0] = 0
+                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
             if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -493,6 +505,11 @@ def parse_args():
         "--enable_chunked_prefill",
         action="store_true",
         help="enable chunked prefill",
+    )
+    parser.add_argument(
+        "--use_internode_ll_two_stage",
+        action="store_true",
+        help="enable internode_ll_two_stage",
     )
     parser.add_argument(
         "--speculative_config",

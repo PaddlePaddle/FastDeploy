@@ -132,6 +132,7 @@ class ModelConfig:
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
+        self.num_nextn_predict_layers = 0
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -293,6 +294,8 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
+        # Use internode_ll_two_stage or not
+        self.use_internode_ll_two_stage: bool = False
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role

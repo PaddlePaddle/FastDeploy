@@ -64,6 +64,7 @@ class MoEMethodBase(QuantMethodBase):
             "ep_rank": layer.ep_rank,
             "redundant_experts_num": layer.fd_config.model_config.redundant_experts_num,
             "ep_group": layer.fd_config.parallel_config.ep_group,
+            "use_internode_ll_two_stage": layer.fd_config.parallel_config.use_internode_ll_two_stage,
         }
 
         config = layer.fd_config
@@ -166,7 +167,7 @@ class MoEMethodBase(QuantMethodBase):
             else:
                 if layer.fd_config.parallel_config.splitwise_role == "mixed":
                     self.ep_decoder_runner.clean_low_latency_buffer()
-                return self.apply_ep_prefill(layer, x, gate)
+                return self.apply_ep_decode(layer, x, gate)
         else:
             return self.apply_tp(layer, x, gate)
 
