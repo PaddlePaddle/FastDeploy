@@ -64,6 +64,7 @@ def parse_args():
         help="cache transfer protocol, only surport ipc now",
     )
     parser.add_argument("--pod_ip", type=str, default="0.0.0.0", help="pod ip")
+    parser.add_argument("--cache_queue_port", type=int, default=9924, help="cache queue port")
     parser.add_argument(
         "--engine_worker_queue_port",
         type=int,

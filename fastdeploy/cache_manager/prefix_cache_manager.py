@@ -273,6 +273,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --pod_ip {pod_ip}"
+                + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --num_gpu_blocks {cache_config.total_block_num}"
                 + f" --block_size {cache_config.block_size}"
