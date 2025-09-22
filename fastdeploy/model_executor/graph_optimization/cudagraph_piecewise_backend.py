@@ -25,7 +25,6 @@ from paddle.device.cuda import graphs
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import capture_custom_allreduce
-from fastdeploy.envs import CUDAGRAPH_POOL_ID
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
@@ -92,10 +91,8 @@ class CudaGraphPiecewiseBackend:
         self.cudagraph_capture_sizes = fd_config.graph_opt_config.cudagraph_capture_sizes
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
-        if CUDAGRAPH_POOL_ID > 0:
-            self.pool_id = CUDAGRAPH_POOL_ID
-        else:
-            self.pool_id = None
+        if self.fd_config.graph_opt_config.use_memory_pool:
+            self.pool_id = 1024
         self._create_entry_dict()
 
         self.cuda_graph_manager = None
@@ -168,7 +165,11 @@ class CudaGraphPiecewiseBackend:
             input_addresses = [x.data_ptr() for (_, x) in kwargs.items() if isinstance(x, paddle.Tensor)]
             entry.input_addresses = input_addresses
 
-            new_grpah = graphs.CUDAGraph(pool_id=self.pool_id) if self.pool_id is not None else graphs.CUDAGraph()
+            new_grpah = (
+                graphs.CUDAGraph(pool_id=self.pool_id)
+                if self.fd_config.graph_opt_config.use_memory_pool
+                else graphs.CUDAGraph()
+            )
             paddle.device.synchronize()
 
             # Capture
