@@ -134,7 +134,12 @@ std::vector<paddle::Tensor> AppendAttentionKernel(
       PD_THROW("Only supported attr of quant_max_bound in ['127', '448'].");
     }
   } else {
-    fmha_out = GetEmptyTensor(
+    // fmha_out = GetEmptyTensor(
+    //     {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
+    //     D,
+    //     qkv.place());
+
+    fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         D,
         qkv.place());
@@ -393,6 +398,7 @@ std::vector<paddle::Tensor> AppendAttentionKernel(
     }
   }
 
+  // init_kernel<<<1,128,0,main_stream>>>(fmha_out.data<phi::dtype::bfloat16>(), meta_data.token_nums * meta_data.q_num_heads * meta_data.head_dims);
   return {fmha_out, qkv_out};
 }
 
