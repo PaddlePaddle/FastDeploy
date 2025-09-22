@@ -97,6 +97,13 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DISABLE_CHUNKED_PREFILL": lambda: bool(int(os.getenv("FD_DISABLE_CHUNKED_PREFILL", "0"))),
     # cudagraph shared memory pool id default is 0, disable shared memory if get 0
     "CUDAGRAPH_POOL_ID": lambda: bool(int(os.getenv("CUDAGRAPH_POOL_ID", "0"))),
+    "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
+    # LLMEngine recieve requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", "8200"),
+    # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
+    # LLMEngine recieve control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
 }
 
 
