@@ -50,7 +50,7 @@ class LLMReqClient:
                 if self.need_exit:
                     break
             except Exception as e:
-                print(f"zmq client occured error {e} type: {type(e)} frames: {frames}")
+                print(f"zmq client occurred error {e} type: {type(e)} frames: {frames}")
 
     def start(self, result_queue):
         threading.Thread(target=self.consume_results, args=(result_queue,), daemon=True).start()
@@ -118,4 +118,4 @@ class LLMControlClient:
                 self.result[task_id] = result["result"]
                 self.task_event[task_id].set()
             except Exception as e:
-                print(f"zmq client occured error {e} type: {type(e)} frames: {frames}")
+                print(f"zmq client occurred error {e} type: {type(e)} frames: {frames}")
