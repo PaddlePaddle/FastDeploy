@@ -580,3 +580,63 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def test_thinking_logic_flag(openai_client, capsys):
+    """
+    Test the interaction between token calculation logic and conditional thinking.
+    This test covers:
+    1. Default max_tokens calculation when not provided.
+    2. Capping of max_tokens when it exceeds model limits.
+    3. Default reasoning_max_tokens calculation when not provided.
+    4. Activation of thinking based on the final state of reasoning_max_tokens.
+    """
+
+    response_case_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity briefly."}],
+        temperature=1,
+        stream=False,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
+    )
+    assert response_case_1.choices[0].message.reasoning_content is not None
+
+    response_case_2 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": 5,
+        },
+    )
+    assert response_case_2.choices[0].message.reasoning_content is not None
+
+    response_case_3 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": None,
+        },
+    )
+    assert response_case_3.choices[0].message.reasoning_content is not None
+
+    response_case_4 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    assert response_case_4.choices[0].message.reasoning_content is None

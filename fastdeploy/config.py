@@ -130,8 +130,10 @@ class ModelConfig:
         self.quantization = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
+        self.think_end_id = None
         self.lm_head_fp32: bool = False
         self.model_format = "auto"
+        self.partial_rotary_factor: float = 1.0
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -155,9 +157,7 @@ class ModelConfig:
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
-        self.ori_vocab_size = self.vocab_size
-        if ErnieArchitectures.contains_ernie_arch(self.architectures):
-            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+        self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
 
         architectures = self.architectures[0]
         if MultimodalRegistry.contains_model(architectures):
@@ -350,12 +350,18 @@ class ParallelConfig:
                 (self.data_parallel_rank + 1) * self.tensor_parallel_size,
             )
         )
+        dist.collective._set_custom_gid(None)
         # same ep group id
-        dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
-        self.ep_group = dist.new_group(range(self.expert_parallel_size))
+        # dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+        # self.ep_group = dist.new_group(range(self.expert_parallel_size))
+        if self.enable_expert_parallel:
+            dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
+            self.ep_group = dist.new_group(range(self.expert_parallel_size))
+            dist.collective._set_custom_gid(None)
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
+        dist.collective._set_custom_gid(None)
 
     def print(self):
         """
@@ -398,7 +404,7 @@ class SpeculativeConfig:
         # model for mtp/eagle/draft_model
         self.model: Optional[str] = None
         # quantization of model
-        self.quantization: Optional[str] = None
+        self.quantization: Optional[Dict[str, Any]] = None
         # allocate more blocks to prevent mtp from finishing the block earlier than the main model
         # Fixed now
         self.num_gpu_block_expand_ratio: Optional[float] = 1
@@ -685,63 +691,63 @@ class GraphOptimizationConfig:
             argument = self.use_cudagraph
 
 
-class MobaAttentionConfig:
+class PlasAttentionConfig:
     def __init__(
         self,
         args,
     ):
-        self.moba_encoder_top_k_left: int = None
-        self.moba_encoder_top_k_right: int = None
-        "The sparse topk of encoder attention is located at [moba_encoder_top_k_left, moba_encoder top_k_right]"
-        self.moba_decoder_top_k_left: int = None
-        self.moba_decoder_top_k_right: int = None
-        "The sparse topk of decoder attention is located at [moba_decoder_top_k_left, moba_decoder top_k_right]"
-        self.moba_use_encoder_seq_limit: int = None
-        "When the number of encdoer token is less than moba_use_encoder_seq_limit, it is not sparse"
-        self.moba_use_decoder_seq_limit: int = None
-        "When the number of decdoer token is less than moba_use_decoder_seq_limit, it is not sparse"
-        self.moba_block_size: int = 128
-        self.mlp_weight_name: str = "moba_mlp_weight.safetensors"
-        self.moba_max_seq_length: int = 128 * 1024
+        self.plas_encoder_top_k_left: int = None
+        self.plas_encoder_top_k_right: int = None
+        "The sparse topk of encoder attention is located at [plas_encoder_top_k_left, plas_encoder top_k_right]"
+        self.plas_decoder_top_k_left: int = None
+        self.plas_decoder_top_k_right: int = None
+        "The sparse topk of decoder attention is located at [plas_decoder_top_k_left, plas_decoder top_k_right]"
+        self.plas_use_encoder_seq_limit: int = None
+        "When the number of encdoer token is less than plas_use_encoder_seq_limit, it is not sparse"
+        self.plas_use_decoder_seq_limit: int = None
+        "When the number of decdoer token is less than plas_use_decoder_seq_limit, it is not sparse"
+        self.plas_block_size: int = 128
+        self.mlp_weight_name: str = "plas_attention_mlp_weight.safetensors"
+        self.plas_max_seq_length: int = 128 * 1024
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key):
                     setattr(self, key, value)
-            if self.moba_use_encoder_seq_limit is None and self.moba_encoder_top_k_left is not None:
-                self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
-            if self.moba_use_decoder_seq_limit is None and self.moba_decoder_top_k_left is not None:
-                self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
+            if self.plas_use_encoder_seq_limit is None and self.plas_encoder_top_k_left is not None:
+                self.plas_use_encoder_seq_limit = self.plas_encoder_top_k_left * self.plas_block_size
+            if self.plas_use_decoder_seq_limit is None and self.plas_decoder_top_k_left is not None:
+                self.plas_use_decoder_seq_limit = self.plas_decoder_top_k_left * self.plas_block_size
             self.check_legality_parameters()
 
     def check_legality_parameters(
         self,
     ) -> None:
-        if self.moba_encoder_top_k_left is not None:
-            assert self.moba_encoder_top_k_left > 0, "moba_encoder_top_k_left must large than 0"
+        if self.plas_encoder_top_k_left is not None:
+            assert self.plas_encoder_top_k_left > 0, "plas_encoder_top_k_left must large than 0"
 
-        if self.moba_encoder_top_k_right is not None:
-            assert self.moba_encoder_top_k_right > 0, "moba_encoder_top_k_right must large than 0"
+        if self.plas_encoder_top_k_right is not None:
+            assert self.plas_encoder_top_k_right > 0, "plas_encoder_top_k_right must large than 0"
             assert (
-                self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
-            ), "moba_encoder_top_k_right must large than moba_encoder_top_k_left"
+                self.plas_encoder_top_k_right >= self.plas_encoder_top_k_left
+            ), "plas_encoder_top_k_right must large than plas_encoder_top_k_left"
 
-        if self.moba_decoder_top_k_left is not None:
-            assert self.moba_decoder_top_k_left > 0, "moba_decoder_top_k_left must large than 0"
+        if self.plas_decoder_top_k_left is not None:
+            assert self.plas_decoder_top_k_left > 0, "plas_decoder_top_k_left must large than 0"
 
-        if self.moba_decoder_top_k_right is not None:
-            assert self.moba_decoder_top_k_right > 0, "moba_decoder_top_k_right must large than 0"
+        if self.plas_decoder_top_k_right is not None:
+            assert self.plas_decoder_top_k_right > 0, "plas_decoder_top_k_right must large than 0"
             assert (
-                self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
-            ), "moba_decoder_top_k_right must large than moba_decoder_top_k_left"
+                self.plas_decoder_top_k_right >= self.plas_decoder_top_k_left
+            ), "plas_decoder_top_k_right must large than plas_decoder_top_k_left"
 
-        if self.moba_use_encoder_seq_limit is not None and self.moba_encoder_top_k_left is not None:
-            assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
-        if self.moba_use_decoder_seq_limit is not None and self.moba_decoder_top_k_left is not None:
-            assert self.moba_use_decoder_seq_limit >= self.moba_decoder_top_k_left * self.moba_block_size
+        if self.plas_use_encoder_seq_limit is not None and self.plas_encoder_top_k_left is not None:
+            assert self.plas_use_encoder_seq_limit >= self.plas_encoder_top_k_left * self.plas_block_size
+        if self.plas_use_decoder_seq_limit is not None and self.plas_decoder_top_k_left is not None:
+            assert self.plas_use_decoder_seq_limit >= self.plas_decoder_top_k_left * self.plas_block_size
 
     def to_json_string(self):
         """
-        Convert moba_attention_config to json string.
+        Convert plas_attention_config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
@@ -1100,7 +1106,7 @@ class FDConfig:
         decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
-        moba_attention_config: MobaAttentionConfig = None,
+        plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
         max_model_len: int = 8192,
@@ -1135,7 +1141,7 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-        self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
+        self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
@@ -1337,6 +1343,11 @@ class FDConfig:
                     )
         if self.scheduler_config is not None:
             self.scheduler_config.check()
+
+        if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
+            assert (
+                int(envs.FD_DISABLED_RECOVER) == 0
+            ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
 
     def print(self):
         """

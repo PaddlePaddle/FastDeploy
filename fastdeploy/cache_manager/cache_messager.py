@@ -98,8 +98,8 @@ class CacheMessager:
         cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
-            key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
+            key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}.device{gpu_id}"]
+            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}.device{gpu_id}"]
             cache_k.append(key_cache)
             cache_v.append(val_cache)
             cache_k_ptr_list.append(key_cache.data_ptr())
@@ -163,7 +163,7 @@ class CacheMessager:
         try:
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
-            prefilled_layer_name = f"splitwise_complete_prefilled_step_{self.dp_rank_id}.{self.gpu_id}"
+            prefilled_layer_name = f"splitwise_complete_prefilled_layer_{self.dp_rank_id}.{self.gpu_id}"
             prefilled_step_name = f"splitwise_complete_prefilled_step_{self.dp_rank_id}.{self.gpu_id}"
             step_shm_value = IPCSignal(
                 name=f"splitwise_complete_prefilled_step_{self.dp_rank_id}",

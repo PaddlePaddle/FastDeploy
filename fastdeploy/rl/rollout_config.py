@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Any, Dict, Optional
+
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 
@@ -52,14 +54,14 @@ class RolloutModelConfig:
         expert_parallel_size: int = 1,
         enable_expert_parallel: bool = False,
         ori_vocab_size: int = None,
-        quantization: str = "None",
+        quantization: Optional[Dict[str, Any]] = None,
         guided_decoding_backend: str = "off",
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
         graph_optimization_config: str = None,
         early_stop_config: str = None,
         local_rank: int = 0,
-        moba_attention_config: str = None,
+        plas_attention_config: str = None,
         data_parallel_size: int = 1,
     ):
         # Required parameters
@@ -106,7 +108,7 @@ class RolloutModelConfig:
         self.local_rank = local_rank
         self.early_stop_config = early_stop_config
         self.ips = None
-        self.moba_attention_config = moba_attention_config
+        self.plas_attention_config = plas_attention_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

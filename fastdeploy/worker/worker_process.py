@@ -34,17 +34,17 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -129,6 +129,28 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
         fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
 
 
+def update_think_end_id_for_ernie(fd_config: FDConfig) -> None:
+    """
+    Updates the think_end_id in the model config. Uses the ID of '</think>'
+    if it exists, otherwise defaults to None.
+    """
+    is_ernie = ErnieArchitectures.contains_ernie_arch(fd_config.model_config.architectures)
+    if current_platform.is_cuda() and is_ernie:
+        tokenizer = Ernie4_5Tokenizer.from_pretrained(
+            fd_config.model_config.model,
+            model_max_length=fd_config.parallel_config.max_model_len,
+            padding_side="right",
+            use_fast=False,
+        )
+
+        vocab = tokenizer.get_vocab()
+        fd_config.model_config.think_end_id = vocab.get("</think>", None)
+        if fd_config.model_config.think_end_id is not None:
+            logger.info(f"Get think_end_id {fd_config.model_config.think_end_id} from vocab.")
+        else:
+            logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+
+
 class PaddleDisWorkerProc:
     """
     Paddle Distributed wrapper for fastdeploy.worker.Worker,
@@ -175,7 +197,7 @@ class PaddleDisWorkerProc:
                 name="launched_expert_service_signal",
                 array=launched_expert_service_signal_data,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
+                suffix=self.parallel_config.engine_worker_queue_port,
                 create=False,
             )
             while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
@@ -192,7 +214,7 @@ class PaddleDisWorkerProc:
             name="worker_ready_signal",
             array=workers_ready,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
@@ -248,6 +270,11 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def _broadcast_model_weights_signal(self, src: int, group) -> int:
+        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
+        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
+        return model_weights_signal_tensor.item()
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -257,15 +284,19 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
-                if self.model_weights_status.value[0] != 0:
+                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
-            if self.fd_config.load_config.dynamic_load_weight:
-                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                        src=0, group=self.parallel_config.ep_group
+                    )
+            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
 
             self.insert_step = False
             req_dicts = None
@@ -281,7 +312,7 @@ class PaddleDisWorkerProc:
                         if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
-                            self.exist_task_signal.value[0] = 1
+                            self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
@@ -292,8 +323,10 @@ class PaddleDisWorkerProc:
                     paddle.distributed.barrier(self.parallel_config.ep_group)
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
-                if self.model_weights_signal[0] != 0:
-                    logger.info(f"Rank: {self.local_rank} has updated parameters.")
+                if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
+                    logger.info(
+                        f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
+                    )
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
@@ -304,16 +337,17 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
-                    self.model_weights_signal[0] = 0
+                    self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
+                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
-            if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
+            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
 
                 tasks, read_finish = self.task_queue.get_tasks()
                 if read_finish:
                     # Ensure that every worker get the task
-                    self.exist_task_signal.value[0] = 0
+                    self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
                     self.task_queue.read_finish_flag.set(0)
 
                 req_dicts = []
@@ -389,7 +423,7 @@ class PaddleDisWorkerProc:
                     name="get_profile_block_num",
                     array=get_profile_block_num,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_pid,
+                    suffix=self.parallel_config.engine_worker_queue_port,
                     create=False,
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
@@ -397,18 +431,7 @@ class PaddleDisWorkerProc:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
 
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
-        # wait engine launch cache_manager
-        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
-            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
-            self.launched_cache_manager_signal = IPCSignal(
-                name="launched_cache_manager_signal",
-                array=launched_cache_manager_signal_data,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
-                create=False,
-            )
-            while np.any(self.launched_cache_manager_signal.value[0] <= 0):
-                time.sleep(0.01)
+
         # 4. init kv_cache with accurate num_blocks
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
 
@@ -443,7 +466,7 @@ class PaddleDisWorkerProc:
             name="loaded_model_signal",
             array=loaded_model_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.parallel_config.engine_worker_queue_port,
             create=False,
         )
         if self.ranks > 1:
@@ -545,9 +568,9 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
-        help="Quantization name for the model, currentlly support "
+        type=json.loads,
+        default=None,
+        help="Quantization name for the model, currently support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
         "is lower than that of the config file. "
@@ -560,10 +583,10 @@ def parse_args():
         help="Configation of Graph optimization backend.",
     )
     parser.add_argument(
-        "--moba_attention_config",
+        "--plas_attention_config",
         type=json.loads,
         default=None,
-        help="Configation of moba attention.",
+        help="Configation of plas attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -635,6 +658,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -672,7 +698,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
+    plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -704,12 +730,16 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+    elif args.quantization is not None:
         quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
-        if load_config.load_choices == "default_v1":
+        if load_config.load_choices == "default_v1" and not load_config.dynamic_load_weight:
             quantization_config["is_checkpoint_bf16"] = True
         # Special handling for Ernie models
         is_ernie = ErnieArchitectures.contains_ernie_arch(model_config.architectures)
@@ -772,9 +802,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
-        moba_attention_config=moba_attention_config,
+        plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
+    update_think_end_id_for_ernie(fd_config)
 
     return fd_config
 

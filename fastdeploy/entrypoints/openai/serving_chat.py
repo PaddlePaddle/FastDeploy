@@ -91,7 +91,7 @@ class OpenAIServingChat:
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
-                err_msg = f"Unsupported model: {request.model}, support {', '.join([x.name for x in self.models.model_paths])} or default"
+                err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
                 return ErrorResponse(message=err_msg, code=400)
 

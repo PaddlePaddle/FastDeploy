@@ -62,7 +62,7 @@ python -m pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/pac
 python -m pip install paddle-custom-gcu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/gcu/
 # For source compilation, refer to: https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/gcu/README_cn.md
 ```
-For latest paddle verion on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+For latest paddle version on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
 
 6. Install FastDeploy and dependencies
 ```bash
