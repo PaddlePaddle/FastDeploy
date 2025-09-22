@@ -359,3 +359,6 @@ class EngineClient:
             return False, "clear model weight timeout"
         time.sleep(1)
         return True, ""
+
+    def check_model_weight_status(self):
+        return self.model_weights_status_signal.value[0] < 0
