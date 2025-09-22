@@ -489,9 +489,10 @@ class Ernie4_5_Model(nn.Layer):
                     pass
                 
                 # 注意啦！这里+0是为了返回一个新的tensor哦！
-                forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs] + 0
-                forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs] + 0
-                forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs] + 0
+                # 但是这里我不加哦！
+                forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
+                forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
+                forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
 
                 forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
                 forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
@@ -510,7 +511,6 @@ class Ernie4_5_Model(nn.Layer):
             # MoE 机器啥也不需要做！
             pass
 
-        print("microbatch 中非空数量为：", len([a for a in all_hidden_states if a is not None]))
         print("大王啊")
 
         can_replay_graph = False
@@ -619,10 +619,7 @@ class Ernie4_5_Model(nn.Layer):
                     for field in person_fields:
                         name = field.name
                         if name in ["decoder_batch_ids", 
-                                    "decoder_tile_ids_per_batch", 
-                                    "seq_lens_encoder", 
-                                    "seq_lens_decoder", 
-                                    "seq_lens_this_time",
+                                    "decoder_tile_ids_per_batch",
                                     "cu_seqlens_q", 
                                     "cu_seqlens_k"]:
                             cache_tensor = getattr(self.cached_attention_in_out[i].forward_meta, name)
@@ -887,6 +884,8 @@ class Ernie4_5_Model(nn.Layer):
             residuals = paddle.concat([attention_in_out[j].residual for j in range(split_num)], axis=0)
             hidden_states = hidden_states + residuals
             out = self.norm(hidden_states)
+
+            #assert out.isnan().any() == False
             return out
         else:
             # MoE机器返回None
