@@ -116,10 +116,9 @@ class LinearBase(nn.Layer):
             or current_platform.is_gcu()
             or current_platform.is_dcu()
             or current_platform.is_maca()
+            or current_platform.is_intel_hpu()
         ):
             self.forward = self.forward_cuda
-        elif current_platform.is_intel_hpu():
-            self.forward = self.forward_intel_hpu
         else:
             raise NotImplementedError
 
@@ -242,25 +241,6 @@ class LinearBase(nn.Layer):
             NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
         """
         linear_out = self.quant_method.apply(self, x)
-
-        return linear_out
-
-    def forward_intel_hpu(self, x: paddle.Tensor) -> paddle.Tensor:
-        """
-        Forward function for Linear.
-        Args:
-            x (Tensor): Input tensor to the Linear.
-        Returns:
-            Tensor: Output tensor.
-        Raises:
-            NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
-        """
-        if self.fd_config.quant_config:
-            linear_out = self.quant_method.apply(self, x)
-        else:
-            linear_out = paddle.matmul(x, self.weight)
-            if self.with_bias:
-                linear_out = paddle.add(linear_out, self.bias)
 
         return linear_out
 

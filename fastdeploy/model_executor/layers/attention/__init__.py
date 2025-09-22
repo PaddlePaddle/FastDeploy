@@ -18,7 +18,6 @@ from .attention_selecter import get_attention_backend
 from .base_attention_backend import AttentionBackend
 from .block_multihead_attn_backend import BlockAttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
-from .hpu_attn_backend import HPUAttentionBackend
 from .iluvatar_attn_backend import IluvatarAttnBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend

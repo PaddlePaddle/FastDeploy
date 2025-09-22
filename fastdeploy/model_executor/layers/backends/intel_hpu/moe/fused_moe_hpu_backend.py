@@ -18,8 +18,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
-
-from .fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 
 
 class HpuMoEMethod(MoEMethodBase):

@@ -57,7 +57,7 @@ def get_moe_method():
 
         return MetaxTritonWeightOnlyMoEMethod(None)
     elif current_platform.is_intel_hpu():
-        from .fused_moe_hpu_backend import HpuMoEMethod
+        from fastdeploy.model_executor.layers.backends import HpuMoEMethod
 
         return HpuMoEMethod(None)
         # return HpuTensorWiseFP8MoEMethod(None)
