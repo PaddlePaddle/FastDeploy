@@ -211,9 +211,8 @@ class DeepEPEngine:
         self.num_experts = num_experts
         self.num_local_experts = num_experts // ep_size
         self.async_finish = async_finish
-        from paddle.base.core import Config
 
-        self.ep_config = Config(24, 6, 256)
+        self.ep_config = None
 
         # Store phase and role for buffer management
         self._splitwise_role = splitwise_role

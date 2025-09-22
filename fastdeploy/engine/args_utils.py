@@ -18,13 +18,14 @@ import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
+    ConvertOption,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
@@ -32,6 +33,8 @@ from fastdeploy.config import (
     MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PoolerConfig,
+    RunnerOption,
     SpeculativeConfig,
     TaskOption,
 )
@@ -94,6 +97,20 @@ class EngineArgs:
     task: TaskOption = "generate"
     """
     The task to be executed by the model.
+    """
+    runner: RunnerOption = "auto"
+    """
+    The type of model runner to use.Each FD instance only supports one model runner.
+    even if the same model can be used for multiple types.
+    """
+    convert: ConvertOption = "auto"
+    """
+    Convert the model using adapters. The most common use case is to
+    adapt a text generation model to be used for pooling tasks.
+    """
+    override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
+    """
+    Override configuration for the pooler.
     """
     max_num_seqs: int = 8
     """
@@ -401,13 +418,11 @@ class EngineArgs:
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
-            if self.enable_expert_parallel:
-                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-        if self.splitwise_role != "mixed":
+        if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -474,6 +489,21 @@ class EngineArgs:
             type=str,
             default=EngineArgs.task,
             help="Task to be executed by the model.",
+        )
+        model_group.add_argument(
+            "--runner",
+            type=str,
+            default=EngineArgs.runner,
+            help="The type of model runner to use",
+        )
+        model_group.add_argument(
+            "--convert", type=str, default=EngineArgs.convert, help="Convert the model using adapters"
+        )
+        model_group.add_argument(
+            "--override-pooler-config",
+            type=json.loads,
+            default=EngineArgs.override_pooler_config,
+            help="Override the pooler configuration with a JSON string.",
         )
         model_group.add_argument(
             "--use-warmup",
@@ -706,7 +736,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--prealloc-dec-block-slot-num-threshold",
             type=int,
-            default=12,
+            default=EngineArgs.prealloc_dec_block_slot_num_threshold,
             help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 
@@ -1021,6 +1051,11 @@ class EngineArgs:
                 else:
                     self.max_num_batched_tokens = self.max_model_len
 
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
+
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
@@ -1033,11 +1068,6 @@ class EngineArgs:
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
-
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
         assert is_port_available(
             "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
@@ -1054,12 +1084,10 @@ class EngineArgs:
             speculative_config=speculative_cfg,
             ips=self.ips,
             use_warmup=self.use_warmup,
-            engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
-            splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,

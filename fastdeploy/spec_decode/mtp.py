@@ -150,7 +150,7 @@ class MTPProposer(Proposer):
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
         if not self.parallel_config.do_profile and (
-            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
+            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
         ):
             cache_kvs_list = []
             for i in range(
@@ -267,7 +267,7 @@ class MTPProposer(Proposer):
 
         self.main_model_num_gpu_blocks = num_gpu_blocks
         self.num_gpu_blocks = int(num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
-        if not (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not (self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
         # Reset free list
