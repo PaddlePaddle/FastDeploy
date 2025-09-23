@@ -17,9 +17,12 @@
 from __future__ import annotations
 
 import re
+from functools import partial
 
 import paddle
 from paddle import nn
+from paddleformers.transformers import PretrainedModel
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
@@ -504,3 +507,86 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
     def clear_grpah_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
         self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+
+
+class Glm4MoePretrainedModel(PretrainedModel):
+    """
+    Glm4MoePretrainedModel
+    """
+
+    config_class = FDConfig
+
+    def _init_weight(self, layer):
+        """
+        _init_weight
+        """
+        return None
+
+    @classmethod
+    def arch_name(self):
+        return "Glm4MoeForCausalLM"
+
+    @classmethod
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
+
+        logger.info("Glm4Moe inference model _get_tensor_parallel_mappings")
+
+        from fastdeploy.model_executor.models.tp_utils import split_or_merge_func_v1
+
+        fn = split_or_merge_func_v1(
+            is_split=is_split,
+            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_parallel_rank=config.tensor_parallel_rank,
+            num_attention_heads=config.num_attention_heads,
+            num_key_value_heads=config.num_key_value_heads,
+            head_dim=config.head_dim,
+        )
+
+        def get_tensor_parallel_split_mappings(num_layers):
+            final_actions = {}
+
+            base_actions = {
+                "lm_head.weight": partial(fn, is_column=True),
+                "embed_tokens.weight": partial(fn, is_column=False),
+                "layers.0.self_attn.o_proj.weight": partial(fn, is_column=False),
+            }
+
+            # Self Attention Layer which are need TP.
+            base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
+
+            # MLP Layer
+            base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.mlp.down_proj.weight"] = partial(fn, is_column=False)
+
+            # Moe Layer
+            for expert_idx in range(config.n_routed_experts):
+                base_actions[f"layers.0.mlp.experts.{expert_idx}.up_proj.weight"] = partial(fn, is_column=True)
+                base_actions[f"layers.0.mlp.experts.{expert_idx}.gate_proj.weight"] = partial(fn, is_column=True)
+                base_actions[f"layers.0.mlp.experts.{expert_idx}.down_proj.weight"] = partial(fn, is_column=False)
+
+            # Shared Expert Layer
+            base_actions["layers.0.mlp.shared_experts.up_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.mlp.shared_experts.gate_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.mlp.shared_experts.down_proj.weight"] = partial(fn, is_column=False)
+
+            # MTP parts
+            base_actions["layers.46.embed_tokens.weight"] = partial(fn, is_column=False)
+            base_actions["layers.46.eh_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.46.shared_head.head.weight"] = partial(fn, is_column=True)
+
+            for key, action in base_actions.items():
+                if "layers.0." in key:
+                    for i in range(num_layers):
+                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
+                final_actions[key] = action
+
+            return final_actions
+
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
+        return mappings
