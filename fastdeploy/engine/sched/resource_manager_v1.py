@@ -29,6 +29,7 @@ import paddle
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.multimodal.encoder_cache_manager import EncoderCacheManager
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import llm_logger
 
@@ -94,6 +95,10 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.max_batch_size.set(max_num_seqs)
 
         self.using_extend_tables_req_id = set()
+
+        self.encoder_cache = None
+        if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
+            self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -231,10 +236,12 @@ class ResourceManagerV1(ResourceManager):
                 image_st = 0
                 new_mm_hashes = []
                 for t, h, w in grid_thw:
-                    new_mm_hashes.append(MultimodalHasher.hash_features(inputs["images"][image_st:image_st + t * h * w]))
+                    new_mm_hashes.append(
+                        MultimodalHasher.hash_features(inputs["images"][image_st : image_st + t * h * w])
+                    )
                     image_st += t * h * w
                 inputs["mm_hashes"] = new_mm_hashes
-                    
+
             grid_thw = inputs["grid_thw"]
             img_boundaries_idx = request.multimodal_img_boundaries[0]
             img_num_per_boundary = request.multimodal_img_boundaries[1]
@@ -280,6 +287,14 @@ class ResourceManagerV1(ResourceManager):
                 request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
+
+                cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                cur_mm_positions = inputs["cur_mm_positions"][request.num_image_start : request.num_image_end]
+                if self.encoder_cache:
+                    request.evict_mm_hashes = self.encoder_cache.apply_cache(
+                        mm_hashes=cur_mm_hashes,
+                        mm_positions=cur_mm_positions,
+                    )
 
         # Compatible with scenarios without images and videos.
         return num_new_tokens
@@ -572,30 +587,8 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
-    def _apply_mm_images_info(self, request: Request):
-        """ """
-        if not self.config.model_config.enable_mm or request.get("images", None) is None:
-            return request
-
-        llm_logger.info(f"request.images: {len(request.images)}, type: {type(request.images)}")
-        llm_logger.info(f"request.grid_thw: {len(request.grid_thw)}")
-
-        if request.mm_hashes is None:
-            request.mm_hashes = []
-
-        if request.mm_positions is None:
-            request.mm_positions = []
-
-        assert len(request.mm_positions) == len(
-            request.mm_hashes
-        ), f"mm_positions {len(request.mm_positions)} != mm_hashes {len(request.mm_hashes)}"
-
-        return request
-
     def add_request(self, request: Request) -> None:
         with self.lock:
-            if self.config.model_config.enable_mm:
-                request = self._apply_mm_images_info(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 

@@ -496,6 +496,7 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
         )
 
         worker_append_flag = {

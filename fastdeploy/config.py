@@ -886,6 +886,7 @@ class CacheConfig:
             enc_dec_block_num (int): Number of encoder-decoder blocks.
             prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
+            max_encoder_cache(int): Maximum number of tokens in the encoder cache.
         """
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
@@ -906,6 +907,7 @@ class CacheConfig:
         self.enable_ssd_cache = False
         self.cache_queue_port = None
         self.swap_space = None
+        self.max_encoder_cache = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1266,6 +1268,20 @@ class FDConfig:
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
+
+        if self.model_config.enable_mm:
+            if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
+                self.cache_config.max_encoder_cache = self.parallel_config.max_num_batched_tokens
+            elif self.cache_config.max_encoder_cache != 0:
+                if self.cache_config.max_encoder_cache < self.parallel_config.max_num_batched_tokens:
+                    logger.warning(
+                        f"max_encoder_cache{self.cache_config.max_encoder_cache} is less than "
+                        f"max_num_batched_tokens{self.parallel_config.max_num_batched_tokens}, "
+                        f"set to max_num_batched_tokens."
+                    )
+                    self.cache_config.max_encoder_cache = self.parallel_config.max_num_batched_tokens
+        else:
+            self.cache_config.max_encoder_cache = 0
 
     def check(self):
         """

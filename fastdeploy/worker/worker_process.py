@@ -629,6 +629,12 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--max_encoder_cache",
+        type=int,
+        help="Maximum encoder cache tokens(use 0 to disable).",
+    )
+
     args = parser.parse_args()
     return args
 
