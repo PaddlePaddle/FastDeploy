@@ -227,6 +227,14 @@ class OpenAIServingCompletion:
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    return ErrorResponse(
+                        error=ErrorInfo(
+                            message="Model weight cleared",
+                            code=ErrorCode.INVALID_VALUE,
+                            type=ErrorType.INVALID_REQUEST_ERROR,
+                        )
+                    )
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -281,7 +289,6 @@ class OpenAIServingCompletion:
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
-            raise
         finally:
             self.engine_client.semaphore.release()
             if dealer is not None:
@@ -360,6 +367,8 @@ class OpenAIServingCompletion:
             )
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -447,6 +456,7 @@ class OpenAIServingCompletion:
                         choices[-1].finish_reason = self.calc_finish_reason(
                             request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
+
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
                     if send_idx == 0 and not request.return_token_ids:

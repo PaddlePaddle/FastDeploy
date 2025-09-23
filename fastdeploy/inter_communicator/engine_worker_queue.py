@@ -503,6 +503,13 @@ class EngineWorkerQueue:
         llm_logger.debug("get tasks from queue success")
         return item
 
+    def clear_data(self):
+        self.lock.acquire()
+        self.tasks[:] = list()
+        self.client_read_flag[:] = [1] * self.num_client
+        self.lock.release()
+        llm_logger.info("clear data for engine worker queue")
+
     def cleanup(self):
         """
         Exit the worker queue gracefully.
