@@ -1319,8 +1319,12 @@ class GPUModelRunner(ModelRunnerBase):
                 self.parallel_config.max_model_len,
             )
 
-            # 4. Execute spec decode
-            logits = self.model.compute_logits(hidden_states)
+            logits = None
+            if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+                pass
+            else:
+                # 4. Execute spec decode
+                logits = self.model.compute_logits(hidden_states)
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -1625,8 +1629,13 @@ class GPUModelRunner(ModelRunnerBase):
             self.parallel_config.max_model_len,
         )
 
+        logits = None
         # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hidden_states)
+        if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+            pass
+        else:
+            # 4. Execute spec decode
+            logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
             set_value_by_flags_and_idx(
@@ -1913,6 +1922,10 @@ class GPUModelRunner(ModelRunnerBase):
         paddle.device.cuda.empty_cache()
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
+
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""

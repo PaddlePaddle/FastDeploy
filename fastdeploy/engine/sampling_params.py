@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, fields
+from enum import Enum
 from typing import Any, List, Optional, Union
 
 
@@ -268,3 +269,12 @@ class GuidedDecodingParams:
                 "You can only use one kind of guided decoding "
                 "('json', 'json_object', 'regex', 'choice', 'grammar', 'structural_tag')."
             )
+
+
+class RequestOutputKind(Enum):
+    # Return entire output so far in every RequestOutput
+    CUMULATIVE = 0
+    # Return only deltas in each RequestOutput
+    DELTA = 1
+    # Do not return intermediate RequestOutput
+    FINAL_ONLY = 2

@@ -18,20 +18,23 @@ import argparse
 import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
+    ConvertOption,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
+    PoolerConfig,
+    RunnerOption,
     SpeculativeConfig,
     TaskOption,
 )
@@ -94,6 +97,20 @@ class EngineArgs:
     task: TaskOption = "generate"
     """
     The task to be executed by the model.
+    """
+    runner: RunnerOption = "auto"
+    """
+    The type of model runner to use.Each FD instance only supports one model runner.
+    even if the same model can be used for multiple types.
+    """
+    convert: ConvertOption = "auto"
+    """
+    Convert the model using adapters. The most common use case is to
+    adapt a text generation model to be used for pooling tasks.
+    """
+    override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
+    """
+    Override configuration for the pooler.
     """
     max_num_seqs: int = 8
     """
@@ -344,9 +361,9 @@ class EngineArgs:
     """
     Configuration for graph optimization backend execution.
     """
-    moba_attention_config: Optional[Dict[str, Any]] = None
+    plas_attention_config: Optional[Dict[str, Any]] = None
     """
-    Configuration for moba attention.
+    Configuration for plas attention.
     """
 
     enable_logprob: bool = False
@@ -405,7 +422,7 @@ class EngineArgs:
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-        if self.splitwise_role != "mixed":
+        if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -472,6 +489,21 @@ class EngineArgs:
             type=str,
             default=EngineArgs.task,
             help="Task to be executed by the model.",
+        )
+        model_group.add_argument(
+            "--runner",
+            type=str,
+            default=EngineArgs.runner,
+            help="The type of model runner to use",
+        )
+        model_group.add_argument(
+            "--convert", type=str, default=EngineArgs.convert, help="Convert the model using adapters"
+        )
+        model_group.add_argument(
+            "--override-pooler-config",
+            type=json.loads,
+            default=EngineArgs.override_pooler_config,
+            help="Override the pooler configuration with a JSON string.",
         )
         model_group.add_argument(
             "--use-warmup",
@@ -569,9 +601,9 @@ class EngineArgs:
             help="",
         )
         model_group.add_argument(
-            "--moba-attention-config",
+            "--plas-attention-config",
             type=json.loads,
-            default=EngineArgs.moba_attention_config,
+            default=EngineArgs.plas_attention_config,
             help="",
         )
         model_group.add_argument(
@@ -961,17 +993,17 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
-    def create_moba_attention_config(self) -> MobaAttentionConfig:
+    def create_plas_attention_config(self) -> PlasAttentionConfig:
         """
-        Create and retuan a MobaAttentionConfig object based on the current settings.
+        Create and retuan a PlasAttentionConfig object based on the current settings.
         """
         attention_args = asdict(self)
-        if self.moba_attention_config is not None:
-            for k, v in self.moba_attention_config.items():
+        if self.plas_attention_config is not None:
+            for k, v in self.plas_attention_config.items():
                 attention_args[k] = v
-            return MobaAttentionConfig(attention_args)
+            return PlasAttentionConfig(attention_args)
         else:
-            return MobaAttentionConfig(None)
+            return PlasAttentionConfig(None)
 
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
@@ -1032,7 +1064,7 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
-        moba_attention_config = self.create_moba_attention_config()
+        plas_attention_config = self.create_plas_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -1061,7 +1093,7 @@ class EngineArgs:
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
-            moba_attention_config=moba_attention_config,
+            plas_attention_config=plas_attention_config,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,

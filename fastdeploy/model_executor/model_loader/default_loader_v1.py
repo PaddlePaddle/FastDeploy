@@ -16,7 +16,7 @@
 
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
+from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
 from fastdeploy.model_executor.load_weight_utils import (
@@ -27,6 +27,7 @@ from fastdeploy.model_executor.load_weight_utils import (
     save_model,
 )
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
+from fastdeploy.model_executor.models.adapters import as_embedding_model
 from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.platforms import current_platform
 
@@ -54,11 +55,11 @@ class DefaultModelLoaderV1(BaseModelLoader):
             load_weights_form_cache(model, weights_iterator)
         else:
             model.load_weights(weights_iterator)
+
         self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         architectures = fd_config.model_config.architectures[0]
-        logger.info(f"Starting to load model {architectures}")
         context = paddle.LazyGuard()
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
@@ -70,6 +71,14 @@ class DefaultModelLoaderV1(BaseModelLoader):
         with weight_cache_context:
             with context:
                 model_cls = ModelRegistry.get_class(architectures)
+                convert_type = fd_config.model_config.convert_type
+                if convert_type == "none":
+                    pass
+                elif convert_type == "embed":
+                    model_cls = as_embedding_model(model_cls)
+                else:
+                    assert_never(convert_type)
+
                 model = model_cls(fd_config)
 
         model.eval()
