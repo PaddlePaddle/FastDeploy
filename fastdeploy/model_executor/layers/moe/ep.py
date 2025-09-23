@@ -267,7 +267,7 @@ class EPRunner:
             ep_rank=ep_rank,
             splitwise_role=splitwise_role,
             moe_phase=moe_phase,
-            async_finish=False,
+            async_finish=True,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):

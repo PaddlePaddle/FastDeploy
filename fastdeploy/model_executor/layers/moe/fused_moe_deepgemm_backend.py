@@ -272,7 +272,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         recv_num_tokens_per_expert_list: paddle.Tensor,
         event,
     ):
-        # event.current_stream_wait()
+        event.current_stream_wait()
         token_all_num = sum(recv_num_tokens_per_expert_list)
         # 4. Compute ffn
         if token_all_num > 0:
