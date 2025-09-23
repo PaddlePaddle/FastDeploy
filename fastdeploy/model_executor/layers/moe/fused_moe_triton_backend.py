@@ -443,7 +443,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             layer.hidden_size,
             1,
         ]
-        if self.quant_config.is_checkpoint_bf16:
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
@@ -455,6 +455,9 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
+
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -615,7 +618,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
             )
-            topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
