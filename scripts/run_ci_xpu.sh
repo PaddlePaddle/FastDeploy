@@ -29,11 +29,7 @@ export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250921/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
 export XVLLM_PATH=${PWD}/xvllm
 bash build.sh || exit 1
-<<<<<<< HEAD
-
-=======
 export PYTHONPATH=./:${PYTHONPATH}
->>>>>>> b4dd4a8f (debug)
 echo "pip others"
 python -m pip install openai -U
 python -m pip uninstall -y triton
