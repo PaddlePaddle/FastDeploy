@@ -389,9 +389,9 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
         }
-        fused_moe_out, _, _ = self.ep_engine.prefill_deepep_engine.combine(**combine_args)
+        fused_moe_out, _, event = self.ep_engine.prefill_deepep_engine.combine(**combine_args)
 
-        return fused_moe_out
+        return fused_moe_out, event
 
     def get_comm_stream(self):
         return self.ep_engine.prefill_deepep_engine.runtime.get_comm_stream()

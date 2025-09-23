@@ -272,7 +272,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 text_recv_num_tokens_per_expert_list,
                 text_event,
             )
-            text_out = self.text_fused_moe.ep_stage3(
+            text_out, _ = self.text_fused_moe.ep_stage3(
                 text_tmp_ffn_out, text_handle, text_recv_topk_weights
             )  # text combine
             # ===================================
@@ -285,7 +285,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 image_recv_num_tokens_per_expert_list,
                 image_event,
             )
-            image_out = self.image_fused_moe.ep_stage3(
+            image_out, combine_event = self.image_fused_moe.ep_stage3(
                 image_tmp_ffn_out, image_handle, image_recv_topk_weights
             )  # image combine
             # ===================================
@@ -344,7 +344,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                     text_recv_num_tokens_per_expert_list,
                     text_event,
                 )
-                text_out = self.text_fused_moe.ep_stage3(
+                text_out, _ = self.text_fused_moe.ep_stage3(
                     text_tmp_ffn_out, text_handle, text_recv_topk_weights
                 )  # text combine
                 # ===================================
@@ -357,7 +357,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                     image_recv_num_tokens_per_expert_list,
                     image_event,
                 )
-                image_out = self.image_fused_moe.ep_stage3(
+                image_out, combine_event = self.image_fused_moe.ep_stage3(
                     image_tmp_ffn_out, image_handle, image_recv_topk_weights
                 )  # image combine
                 # ===================================
@@ -365,6 +365,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 hidden_states = text_out
             else:
                 hidden_states = self.text_fused_moe(hidden_states)
+        combine_event.current_stream_wait()
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
