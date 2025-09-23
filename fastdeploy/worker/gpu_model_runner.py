@@ -1321,6 +1321,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logits = None
             if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+                # TODO(lizexu123) The preheating the pooling function have not been implemented yet.
                 pass
             else:
                 # 4. Execute spec decode
@@ -1632,9 +1633,9 @@ class GPUModelRunner(ModelRunnerBase):
         logits = None
         # 4. Compute logits, Sample
         if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+            # TODO(lizexu123) The execution of the pooling function have not been implemented yet.
             pass
         else:
-            # 4. Execute spec decode
             logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
