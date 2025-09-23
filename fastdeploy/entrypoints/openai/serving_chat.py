@@ -220,6 +220,8 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -435,6 +437,14 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while True:
+                if self.engine_client.check_model_weight_status():
+                    return ErrorResponse(
+                        error=ErrorInfo(
+                            message="Model weight cleared",
+                            code=ErrorCode.INVALID_VALUE,
+                            type=ErrorType.INVALID_REQUEST_ERROR,
+                        )
+                    )
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -523,6 +533,7 @@ class OpenAIServingChat:
 
         if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "recover_stop"
+
         choices.append(choice)
 
         num_prompt_tokens = len(prompt_token_ids)

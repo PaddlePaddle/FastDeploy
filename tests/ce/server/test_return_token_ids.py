@@ -9,12 +9,7 @@ Checking for /v1/completions parameters
 
 import json
 
-from core import (
-    TEMPLATE,
-    URL,
-    build_request_payload,
-    send_request,
-)
+from core import TEMPLATE, URL, build_request_payload, send_request
 
 COMPLETIONS_URL = URL.replace("/v1/chat/completions", "/v1/completions")
 
@@ -29,9 +24,9 @@ def test_completion_stream_text_after_process_raw_prediction():
         "stream": True,
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "max_tokens": 50,
-        "return_token_ids": True
+        "return_token_ids": True,
     }
-    
+
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
     for line in resp.iter_lines(decode_unicode=True):
@@ -39,7 +34,7 @@ def test_completion_stream_text_after_process_raw_prediction():
             break
         if line.strip() == "" or not line.startswith("data: "):
             continue
-        line = line[len("data: "):]
+        line = line[len("data: ") :]
         response_data = json.loads(line)
 
         choice = response_data["choices"][0]
@@ -51,21 +46,16 @@ def test_completion_stream_text_after_process_raw_prediction():
             reasoning_content = choice["reasoning_content"]
             text = choice["text"]
             assert reasoning_content or text in raw_prediction, "raw_prediction取值结果不正确"
-        if "finish_reason" in line.strip() :
+        if "finish_reason" in line.strip():
             break
 
-    
-def test_completion_text_after_process_raw_predictio_return_tokrn_ids():
+
+def test_completion_text_after_process_raw_predictio_return_token_ids():
     """
     /v1/completions接口,非流式接口
     返回属性"text_after_process"和"reasoning_content"
     """
-    data = {
-        "stream": False,
-        "prompt": "你是谁",
-        "max_tokens": 50,
-        "return_token_ids": True
-    }
+    data = {"stream": False, "prompt": "你是谁", "max_tokens": 50, "return_token_ids": True}
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload).json()
 
@@ -80,14 +70,10 @@ def test_completion_text_after_process_raw_predictio_return_tokrn_ids():
 
 def test_completion_text_after_process_raw_prediction():
     """
-    /v1/completions接口,无return_tokrn_ids参数
+    /v1/completions接口,无return_token_ids参数
     非流式接口中,无return token ids 属性"text_after_process"和"reasoning_content"值为null
     """
-    data = {
-        "stream": False,
-        "prompt": "你是谁",
-        "max_tokens": 50
-    }
+    data = {"stream": False, "prompt": "你是谁", "max_tokens": 50}
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload).json()
 
@@ -108,17 +94,17 @@ def test_stream_text_after_process_raw_prediction():
         "stream": True,
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "max_tokens": 50,
-        "return_token_ids": True
+        "return_token_ids": True,
     }
 
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload, stream=True)
     for line in resp.iter_lines(decode_unicode=True):
-        if line.strip() == "data: [DONE]"  :
+        if line.strip() == "data: [DONE]":
             break
         if line.strip() == "" or not line.startswith("data: "):
             continue
-        line = line[len("data: "):]
+        line = line[len("data: ") :]
         response_data = json.loads(line)
 
         choice = response_data["choices"][0]
@@ -130,11 +116,11 @@ def test_stream_text_after_process_raw_prediction():
             reasoning_content = choice["delta"]["reasoning_content"]
             content = choice["delta"]["content"]
             assert reasoning_content or content in raw_prediction, "raw_prediction取值结果不正确"
-        if "finish_reason" in line.strip() :
+        if "finish_reason" in line.strip():
             break
 
-    
-def test_text_after_process_raw_prediction_return_tokrn_ids():
+
+def test_text_after_process_raw_prediction_return_token_ids():
     """
     /v1/chat/completions接口,非流式接口
     返回属性"text_after_process"和"reasoning_content"
@@ -161,7 +147,7 @@ def test_text_after_process_raw_prediction_return_tokrn_ids():
 
 def test_text_after_process_raw_prediction():
     """
-    /v1/chat/completions接口,无return_tokrn_ids参数
+    /v1/chat/completions接口,无return_token_ids参数
     无return token ids 属性"text_after_process"和"reasoning_content"值为null
     """
     data = {
@@ -179,5 +165,3 @@ def test_text_after_process_raw_prediction():
 
     raw_prediction = resp["choices"][0]["message"]["raw_prediction"]
     assert raw_prediction is None, "raw_prediction取值结果不正确"
- 
-

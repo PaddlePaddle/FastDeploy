@@ -34,8 +34,13 @@ from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
+from fastdeploy.transformer_utils.config import get_pooling_config
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -218,6 +223,12 @@ class Qwen3Model(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen3ForCausalLM",
+    module_path="qwen3",
+    category=[ModelCategory.TEXT_GENERATION],
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Qwen3ForCausalLM(ModelForCasualLM):
     """
     Qwen3ForCausalLM
@@ -260,6 +271,8 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             process_weights_after_loading,
         )
 
+        is_pooling_model = hasattr(self, "is_pooling_model") and self.is_pooling_model
+
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
             ("qkv_proj", "q_proj", "q"),
@@ -270,8 +283,18 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]
+
         params_dict = dict(self.named_parameters())
+        model_path = self.fd_config.model_config.model
+        revision = self.fd_config.model_config.revision
+        if is_pooling_model and get_pooling_config(model_path, revision):
+            params_dict = {
+                param_name[6:] if param_name.startswith("model.") else param_name: param
+                for param_name, param in params_dict.items()
+            }
+
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -282,6 +305,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight, shard_id)
+
                 break
             else:
                 model_param_name = loaded_weight_name
@@ -290,10 +314,11 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight)
+
             model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
 
-        if self.tie_word_embeddings:
+        if self.tie_word_embeddings and not is_pooling_model:
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
 
     @paddle.no_grad()

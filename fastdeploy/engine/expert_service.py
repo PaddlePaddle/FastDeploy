@@ -27,6 +27,7 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.utils import console_logger, envs, llm_logger
 
 
@@ -69,8 +70,12 @@ class ExpertService:
             self.engine.scheduler.reset_nodeid(f"{self.engine.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.internal_adapter = InternalAdapter(cfg=self.cfg, engine=self.engine, dp_rank=local_data_parallel_id)
 
-    def start(self, ipc_signal_suffix, local_data_parallel_id):
+    def start(
+        self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None
+    ):
         """
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
@@ -80,6 +85,11 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if self.cfg.scheduler_config.name == "dp":
+            self.cfg.init_cache_info()
+            assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
+            self.engine.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
+
         if ipc_signal_suffix is not None:
             self.api_server_pid = ipc_signal_suffix
             self.engine.start_zmq_service(ipc_signal_suffix)
@@ -88,8 +98,8 @@ class ExpertService:
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix)
-            self.engine.split_mode_get_tasks()
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
+            self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix_cache)
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
@@ -144,14 +154,18 @@ class ExpertService:
             self.zmq_server.close()
 
 
-def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=None):
+def start_data_parallel_service(
+    cfg, local_data_parallel_id, ipc_signal_suffix=None, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None
+):
     """
     Start expert service
     """
     expert_service = ExpertService(cfg, local_data_parallel_id, start_queue=False)
 
     try:
-        expert_service.start(ipc_signal_suffix, local_data_parallel_id)
+        expert_service.start(
+            ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+        )
 
         def deamon_thread():
             while True:
@@ -159,5 +173,6 @@ def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=N
 
         t_deamon = threading.Thread(target=deamon_thread, daemon=True)
         t_deamon.start()
+        t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
