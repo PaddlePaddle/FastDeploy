@@ -331,6 +331,9 @@ def get_rope_impl(
     if architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
+    elif architecture.startswith("Glm"):
+        rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
     elif architecture.startswith("GptOss"):
         rotary_emb_layer = GptOssScalingRotaryEmbedding(
             rotary_dim=model_config.head_dim,
