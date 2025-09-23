@@ -36,5 +36,4 @@ __all__ = [
     "BlockAttentionBackend",
     "Attention",
     "PlasAttentionBackend",
-    "HPUAttentionBackend",
 ]
