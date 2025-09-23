@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from fastdeploy.cache_manager.encoder_cache_manager import EncoderCacheManager
 from fastdeploy.engine.request import ImagePosition
-from fastdeploy.multimodal.encoder_cache_manager import EncoderCacheManager
 
 
 def test_mm_encoder_cache():

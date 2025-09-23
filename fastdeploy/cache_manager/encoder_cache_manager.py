@@ -44,7 +44,8 @@ class EncoderCacheManager:
                 self.encoder_cache.move_to_end(mm_hashes[idx])
             else:
                 if self.encoder_cache_size + mm_positions[idx].length >= self.max_encoder_cache:
-                    evict_hashes = self.evict_cache(mm_positions[idx].length)
+                    need_lengths = mm_positions[idx].length - (self.max_encoder_cache - self.encoder_cache_size)
+                    evict_hashes = self.evict_cache(need_lengths)
                 self.encoder_cache[mm_hashes[idx]] = mm_positions[idx]
                 self.encoder_cache_size += mm_positions[idx].length
         return evict_hashes

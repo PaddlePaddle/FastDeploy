@@ -26,10 +26,10 @@ from typing import Union
 import numpy as np
 import paddle
 
+from fastdeploy.cache_manager.encoder_cache_manager import EncoderCacheManager
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.multimodal.encoder_cache_manager import EncoderCacheManager
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import llm_logger
 
