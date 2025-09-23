@@ -7,4 +7,4 @@ FastDeploy支持如下硬件平台:
 - [Enflame S60 GCU Installation](Enflame_gcu.md)
 - [Iluvatar GPU Installation](iluvatar_gpu.md)
 - [Hygon DCU Installation](hygon_dcu.md)
-- [Intel HPU Installation](intel_hpu.md)
+- [Intel Gaudi Installation](intel_gaudi.md)
