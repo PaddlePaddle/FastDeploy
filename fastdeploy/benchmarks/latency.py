@@ -135,10 +135,3 @@ def main(args: argparse.Namespace):
         }
         with open(args.output_json, "w") as f:
             json.dump(results, f, indent=4)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    add_cli_args(parser)
-    args = parser.parse_args()
-    main(args)
