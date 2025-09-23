@@ -4,31 +4,34 @@ echo "$DIR"
 
 #安装lsof工具
 apt install -y lsof
+
 #先kill一遍
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
-
-export model_path=${MODEL_PATH}/data/eb45t_4_layer
+#设置模型路径
+export model_path=${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
+
 echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
-# 由于主框架更新存在问题，暂时锁死版本
+
 python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
-# python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.0.0.dev20250901-cp310-cp310-linux_x86_64.whl
+
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
+
 echo "pip others"
 python -m pip install openai -U
 python -m pip uninstall -y triton
 python -m pip install triton==3.3.0
-
+python -m pip install pytest
 unset http_proxy
 unset https_proxy
 unset no_proxy
@@ -39,11 +42,15 @@ rm -f core*
 # pkill -9 python #流水线不执行这个
 #清空消息队列
 ipcrm --all=msg
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+
+echo "============================开始V0模式测试!============================"
+export ENABLE_V1_KVCACHE_SCHEDULER=1
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
-    --tensor-parallel-size 4 \
+    --tensor-parallel-size 8 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
@@ -51,7 +58,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 sleep 60
 # 探活
-TIMEOUT=$((5 * 60))
+TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
 ENDPOINT="http://0.0.0.0:8188/health"
 START_TIME=$(date +%s) # 记录开始时间戳
@@ -85,7 +92,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python tests/ci_use/XPU_45T/run_45T.py
+python -m pytest tests/ci_use/XPU_45T/run_45T.py
 exit_code=$?
 echo exit_code is ${exit_code}
 
@@ -109,12 +116,13 @@ rm -f core*
 # pkill -9 python #流水线不执行这个
 #清空消息队列
 ipcrm --all=msg
+echo "============================开始V1模式测试!============================"
 export ENABLE_V1_KVCACHE_SCHEDULER=1
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
     --port 8188 \
-    --tensor-parallel-size 4 \
+    --tensor-parallel-size 8 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
@@ -122,7 +130,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 sleep 60
 # 探活
-TIMEOUT=$((5 * 60))
+TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
 ENDPOINT="http://0.0.0.0:8188/health"
 START_TIME=$(date +%s) # 记录开始时间戳
@@ -153,7 +161,7 @@ done
 cat server.log
 
 # 执行服务化推理
-python tests/ci_use/XPU_45T/run_45T.py
+python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
