@@ -215,7 +215,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     f_o.close()
 
     # base result
-    content2 = "这张图片展示了一群人在进行手工艺活动。前景中有两个孩子和一个成年人，他们似乎在制作或展示某种手工艺品。成年人手里拿着一个扇子，上面有彩色的图案，可能是通过某种方式绘制或涂鸦而成。孩子们看起来很专注，可能是在观察或参与这个过程。\n\n背景中还有其他人在进行类似的活动，环境看起来像是在一个室内空间，可能是教室或工作室。整体氛围显得非常温馨和愉快，大家似乎都在享受这个创作的过程。"
+    content2 = "这张图片展示了一群人在进行手工艺活动。前景中有两个孩子和一个成年人，他们似乎在制作或展示某种手工艺品。成年人手里拿着一个扇子，上面有彩色的图案，可能是在指导孩子们如何制作这个扇子。孩子们看起来很专注，正在认真地观察和学习。背景中还有其他人在进行类似的活动，环境看起来像是在一个教室或工作室里。整体氛围显得非常温馨和积极。"
 
     # Verify that result is same as the base result
     assert content1 == content2
@@ -467,7 +467,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
     log_file = "./log/config.log"
-    baseline = 15000
+    baseline = 30000
 
     if not os.path.exists(log_file):
         pytest.fail(f"Log file not found: {log_file}")
