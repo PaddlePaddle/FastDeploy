@@ -445,24 +445,17 @@ class Ernie4_5_Model(nn.Layer):
 
         self.dispatch_allocated_memory = None
 
+        
+        split_num = 3
+        self.attn_graph = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
 
-        self.attn_input0 = [None] * self.num_layers
-        self.attn_input1 = [None] * self.num_layers
-
-        self.attn_graph = [None] * self.num_layers
-        self.attn_res0 = [None] * self.num_layers
-        self.attn_res1 = [None] * self.num_layers
-        self.attn_res2 = [None] * self.num_layers
-        self.attn_res3 = [None] * self.num_layers
-
-        for j in range(self.num_layers):
-            self.attn_input0[j] = [None] * 3
-            self.attn_input1[j] = [None] * 3
-            self.attn_graph[j] = [None] * 3
-            self.attn_res0[j] = [None] * 3
-            self.attn_res1[j] = [None] * 3
-            self.attn_res2[j] = [None] * 3
-            self.attn_res3[j] = [None] * 3
+        self.attn_input0 = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
+        self.attn_input1 = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
+        
+        self.attn_res0 = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
+        self.attn_res1 = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
+        self.attn_res2 = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
+        self.attn_res3 = [[None for _ in range(split_num)] for _ in range(self.num_layers)]
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
 
@@ -518,13 +511,14 @@ class Ernie4_5_Model(nn.Layer):
                 
                 # 这里千万不能加0 哦！
                 forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
-
+                
+                # 这里必须要+0！
                 forward_meta_copy.decoder_batch_ids = forward_meta.decoder_batch_ids + 0
                 forward_meta_copy.decoder_tile_ids_per_batch = forward_meta.decoder_tile_ids_per_batch + 0
 
                 forward_metas[i] = forward_meta_copy
-                all_hidden_states[i] = hidden_states[start_token_id:end_token_id] + 0
-                all_residual[i] = residual[start_token_id:end_token_id] + 0
+                all_hidden_states[i] = hidden_states[start_token_id:end_token_id]
+                all_residual[i] = residual[start_token_id:end_token_id]
         else:
             # MoE 机器啥也不需要做！
             pass
@@ -742,10 +736,10 @@ class Ernie4_5_Model(nn.Layer):
                 dispatch_events[i].appendleft(event)
 
 
-            def dispatch_wait(j):
-                #print(f"dispatch_wait({j})")
-                a = dispatch_events[j].pop()
-                tmp = send_hooks[j].pop()()
+            def dispatch_wait(i):
+                #print(f"dispatch_wait({i})")
+                a = dispatch_events[i].pop()
+                tmp = send_hooks[i].pop()()
 
             def combine_receive(i):
                 #print(f"combine_receive({i})")
@@ -761,13 +755,13 @@ class Ernie4_5_Model(nn.Layer):
 
                 combine_events[i].appendleft(event)
                 
-            def combine_wait(j):
-                #print(f"combine_wait({j})")
-                a = combine_events[j].pop()
+            def combine_wait(i):
+                #print(f"combine_wait({i})")
+                a = combine_events[i].pop()
                 # a.current_stream_wait()
                 
-                tmp = recv_hooks[j].pop()()
-                recv_hooks[j].appendleft(tmp)
+                tmp = recv_hooks[i].pop()()
+                recv_hooks[i].appendleft(tmp)
                 #tmp.current_stream_wait()
 
             def capatured_code():
@@ -816,18 +810,8 @@ class Ernie4_5_Model(nn.Layer):
 
         else:
             # 搞一个大槽子放东西！
-            moe_input = [None] * split_num
-            for i in range(split_num):
-                moe_input[i] = [None] * 2
-            moe_out = [None] * split_num
-
-            def dispatch_wait(j):
-                #print(f"dispatch_wait({j})")
-                a = dispatch_events[j].pop()
-                # a.current_stream_wait()
-                tmp = recv_hooks[j].pop()()
-                recv_hooks[j].append(tmp)
-                #tmp.current_stream_wait()
+            moe_input = [[None for _ in range(2)] for _ in range(split_num)]
+            moe_out = [None for _ in range(split_num)]
 
             def dispatch_receive(i):
                 #print(f"dispatch_receive({i})")
@@ -852,6 +836,15 @@ class Ernie4_5_Model(nn.Layer):
                 moe_input[i][0] = packed_recv_x
                 moe_input[i][1] = packed_recv_count
 
+
+            def dispatch_wait(i):
+                #print(f"dispatch_wait({i})")
+                a = dispatch_events[i].pop()
+                # a.current_stream_wait()
+                tmp = recv_hooks[i].pop()()
+                recv_hooks[i].append(tmp)
+                #tmp.current_stream_wait()
+
             def compute_moe(layer_id, i):
                 #print(f"compute_moe({layer_id}, {i})")
                 ffn_out = self.layers[layer_id].compute_moe_ffn(moe_input[i][0], moe_input[i][1])
@@ -869,12 +862,12 @@ class Ernie4_5_Model(nn.Layer):
                 send_hooks[i].appendleft(e2a_isend_hook)
                 combine_events[i].appendleft(event)
 
-            def combine_wait(j, is_wait=False):
-                #print(f"combine_wait({j})")
-                a = combine_events[j].pop()
+            def combine_wait(i, is_wait=False):
+                #print(f"combine_wait({i})")
+                a = combine_events[i].pop()
                 # a.current_stream_wait()
                 
-                tmp = send_hooks[j].pop()()
+                tmp = send_hooks[i].pop()()
                 if is_wait:
                     # 这个是为了让通信流回归到主流而采取的措施！
                     # 只是为了适配cuda graph！
@@ -932,6 +925,7 @@ class Ernie4_5_Model(nn.Layer):
                 main_code()
                 self.cuda_graph.capture_end()
                 self.cuda_graph.replay()
+                # capature住这个输入的变量！
                 self.dispatch_allocated_memory = dispatch_allocated_memory
             else:
                 self.cuda_graph.replay()
