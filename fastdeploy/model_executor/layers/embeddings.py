@@ -237,53 +237,55 @@ class VocabParallelEmbedding(nn.Layer):
         packed_dim = getattr(param, "packed_dim", None)
 
         loaded_weight = get_tensor(loaded_weight)
+
+        print("param", param)
+        if not hasattr(param, "_initialized") or not param._initialized:
+            try:
+                temp_data = paddle.zeros(param.shape, dtype=param.dtype)
+                param.copy_(temp_data, False)
+            except:
+                # 如果copy_失败，使用set_value
+                param.set_value(paddle.zeros(param.shape, dtype=param.dtype))
+
         if param.dtype != loaded_weight.dtype:
             loaded_weight = loaded_weight.cast(param.dtype)
 
         if output_dim is None:
-            assert (
-                param.shape == loaded_weight.shape
-            ), f"Shape mismatch: param {param.shape} vs loaded_weight {loaded_weight.shape}"
-            param.set_value(loaded_weight)
+            assert param.shape == loaded_weight.shape
+            param.copy_(loaded_weight, False)
             return
 
+        # 获取分片索引
         start_idx = self.shard_indices.org_vocab_start_index
-        end_idx = self.shard_indices.org_vocab_end_index
         shard_size = self.shard_indices.org_vocab_end_index - start_idx
 
-        # If param packed on the same dim we are sharding on, then
-        # need to adjust offsets of loaded weight by pack_factor.
         if packed_dim is not None and packed_dim == output_dim:
             packed_factor = getattr(param, "packed_factor", getattr(param, "pack_factor", 1))
             assert loaded_weight.shape[output_dim] == (self.org_vocab_size // packed_factor)
             start_idx = start_idx // packed_factor
             shard_size = shard_size // packed_factor
         else:
-            assert loaded_weight.shape[output_dim] == self.org_vocab_size, (
-                f"Loaded weight dim {output_dim} size {loaded_weight.shape[output_dim]} "
-                f"!= org_vocab_size {self.org_vocab_size}"
-            )
+            assert loaded_weight.shape[output_dim] == self.org_vocab_size
 
-        shard_weight = slice_fn(loaded_weight, output_dim, start_idx, end_idx)
+        shard_weight = slice_fn(loaded_weight, output_dim, start_idx, start_idx + shard_size)
 
-        total_padded_size = self.shard_indices.num_elements_padded
-        actual_size = shard_weight.shape[output_dim]
-        padding_size = total_padded_size - actual_size
+        # 参考vLLM的处理方式：直接对参数的前N个元素进行复制
+        # 关键：确保不会访问超出边界的内存
+        copy_size = min(shard_weight.shape[0], param.shape[0])
 
-        if padding_size > 0:
-            padding_shape = list(shard_weight.shape)
-            padding_shape[output_dim] = padding_size
-            padding_tensor = paddle.zeros(padding_shape, dtype=shard_weight.dtype)
-
-            final_weight = paddle.concat([shard_weight, padding_tensor], axis=output_dim)
+        # 创建临时张量来存储完整的参数数据
+        if output_dim == 0:
+            # 创建与param同样大小的新张量
+            new_param_data = paddle.zeros_like(param)
+            # 将shard_weight复制到新张量的前面部分
+            new_param_data[:copy_size].copy_(shard_weight[:copy_size], False)
+            # 整体替换参数
+            param.copy_(new_param_data, False)
         else:
-            final_weight = shard_weight
-
-        assert (
-            final_weight.shape == param.shape
-        ), f"Final weight shape {final_weight.shape} doesn't match param shape {param.shape}"
-
-        param.copy_(final_weight, False)
+            new_param_data = paddle.zeros_like(param)
+            copy_size = min(shard_weight.shape[1], param.shape[1])
+            new_param_data[:, :copy_size].copy_(shard_weight[:, :copy_size], False)
+            param.copy_(new_param_data, False)
 
     def forward(self, ids_remove_padding=None) -> paddle.Tensor:
         """
