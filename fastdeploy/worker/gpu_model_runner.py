@@ -1028,12 +1028,12 @@ class GPUModelRunner(ModelRunnerBase):
         create_cache_tensor = profile or self.parallel_config.splitwise_role == "mixed"
 
         if not create_cache_tensor:
-            logger.info("Waiting for cache managers to create kv cache..")
+            logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[self.local_rank] != 1:
                 time.sleep(1)
-            logger.info("OK! Stop waiting.")
+            logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
 
-        logger.info("Initializing kv cache for all layers.")
+        logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
         for i in range(self.model_config.num_hidden_layers):
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -1054,8 +1054,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["caches"] = cache_kvs_list
 
         if not profile and create_cache_tensor:
-            logger.info("✅ kv cache is ready!")
             cache_ready_signal.value[self.local_rank] = 1
+            logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
 

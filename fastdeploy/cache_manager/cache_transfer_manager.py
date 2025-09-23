@@ -477,7 +477,9 @@ class CacheTransferManager:
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 try:
-                    logger.info(f"[rank {self.rank}/{self.n_ranks}] Start clearing caches")
+                    logger.info(
+                        f"[rank {self.rank}/{self.n_ranks}] Start clearing caches {self.cache_ready_signal.value}"
+                    )
                     # clear cpu caches
                     if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         paddle.set_device("cpu")
@@ -502,7 +504,9 @@ class CacheTransferManager:
 
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
-                    logger.info(f"[rank {self.rank}/{self.n_ranks}] Finish clearing caches")
+                    logger.info(
+                        f"[rank {self.rank}/{self.n_ranks}] Finish clearing caches {self.cache_ready_signal.value}"
+                    )
 
                     # wait for all ranks caches to be cleared
                     if np.sum(self.cache_ready_signal.value) != 0:
@@ -517,7 +521,9 @@ class CacheTransferManager:
 
             elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 try:
-                    logger.info(f"[rank {self.rank}/{self.n_ranks}] Start restoring caches")
+                    logger.info(
+                        f"[rank {self.rank}/{self.n_ranks}] Start restoring caches {self.cache_ready_signal.value}"
+                    )
                     # restore cpu cache
                     if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
@@ -526,7 +532,9 @@ class CacheTransferManager:
 
                     # restore gpu cache and set cache_ready_signal
                     self._init_gpu_cache(args)
-                    logger.info(f"[rank {self.rank}/{self.n_ranks}] Finish restoring caches")
+                    logger.info(
+                        f"[rank {self.rank}/{self.n_ranks}] Finish restoring caches {self.cache_ready_signal.value}"
+                    )
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
