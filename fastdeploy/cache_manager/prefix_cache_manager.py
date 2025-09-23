@@ -291,7 +291,7 @@ class PrefixCacheManager:
             array=cache_ready_signal_data,
             dtype=np.int32,
             suffix=pid_suffix,
-            create=True,
+            create=False,
         )
 
         py_path = os.path.join(current_dir_path, filename)
@@ -324,6 +324,7 @@ class PrefixCacheManager:
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+
         logger.info("Waiting for cache ready...")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
             time.sleep(1)
