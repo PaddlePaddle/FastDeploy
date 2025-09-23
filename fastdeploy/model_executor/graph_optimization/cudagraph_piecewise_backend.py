@@ -23,6 +23,9 @@ import paddle.jit.dy2static.utils as jit_utils
 import paddle.nn.layer
 from paddle.device.cuda import graphs
 
+if paddle.is_compiled_with_cuda():
+    from paddle.base.core import CUDAGraph
+
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import capture_custom_allreduce
@@ -98,9 +101,7 @@ class CudaGraphPiecewiseBackend:
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
         self.unique_memory_pool_id = None
         if self.fd_config.graph_opt_config.use_unique_memory_pool:
-            if paddle.is_compiled_with_cuda():
-                from paddle.base.core import CUDAGraph
-                self.unique_memory_pool_id = CUDAGraph.gen_new_memory_pool_id()
+            self.unique_memory_pool_id = CUDAGraph.gen_new_memory_pool_id()
 
         self._create_entry_dict()
 
