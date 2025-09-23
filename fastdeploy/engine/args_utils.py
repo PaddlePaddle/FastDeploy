@@ -41,6 +41,7 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     is_port_available,
+    parse_quantization,
 )
 
 
@@ -138,7 +139,7 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
-    quantization: str = None
+    quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
     Guided decoding backend.
@@ -386,6 +387,7 @@ class EngineArgs:
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
+
         if not self.tokenizer:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
@@ -396,8 +398,8 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda():
             self.enable_prefix_caching = False
-        if self.dynamic_load_weight:
-            self.enable_prefix_caching = False
+        # if self.dynamic_load_weight:
+        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -550,7 +552,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--quantization",
-            type=str,
+            type=parse_quantization,
             default=EngineArgs.quantization,
             help="Quantization name for the model, currentlly support "
             "'wint8', 'wint4',"
