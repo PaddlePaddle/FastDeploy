@@ -80,11 +80,7 @@ def setup_and_run_server():
     print("Pre-test port cleanup...")
     clean_ports()
 
-    base_path = os.getenv("MODEL_PATH")
-    if base_path:
-        model_path = os.path.join(base_path, "Qwen2.5-VL-7B-Instruct")
-    else:
-        model_path = "./Qwen2.5-VL-7B-Instruct"
+    model_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
 
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
