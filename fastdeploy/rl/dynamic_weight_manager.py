@@ -261,6 +261,7 @@ class DynamicWeightManager:
                 logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
+                model_runner.clear_requests()
                 model_runner.clear_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
                     time.sleep(0.01)

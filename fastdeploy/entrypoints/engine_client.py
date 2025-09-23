@@ -70,8 +70,6 @@ class EngineClient:
         enable_prefix_caching=None,
         splitwise_role=None,
     ):
-        import fastdeploy.model_executor.models  # noqa: F401
-
         architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
@@ -424,3 +422,6 @@ class EngineClient:
                 return False, "Clear model weight timeout"
             time.sleep(1)
             return True, ""
+
+    def check_model_weight_status(self):
+        return self.model_weights_status_signal.value[0] < 0
