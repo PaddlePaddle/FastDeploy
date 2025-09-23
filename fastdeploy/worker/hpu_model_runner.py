@@ -27,7 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 
 # from fastdeploy.spec_decode import MTPProposer, NgramProposer
-from fastdeploy.model_executor.forward_meta import ForwardMeta_HPU
+from fastdeploy.model_executor.forward_meta import HPUForwardMeta
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
@@ -213,7 +213,7 @@ def fused_attention_forward(
     src: paddle.Tensor = None,
     qkv_proj: QKVParallelLinear = None,
     o_proj: RowParallelLinear = None,
-    forward_meta: ForwardMeta_HPU = None,
+    forward_meta: HPUForwardMeta = None,
 ):
     """
     The forward function of attention layer.
@@ -233,7 +233,7 @@ def fused_attention_forward(
 
 def fused_self_atten_forward(
     self,
-    forward_meta: ForwardMeta_HPU,
+    forward_meta: HPUForwardMeta,
     hidden_states: paddle.Tensor,
 ):
     """ """
@@ -351,7 +351,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
-        self.forward_meta: ForwardMeta_HPU = None
+        self.forward_meta: HPUForwardMeta = None
         self.is_warmuping = False
         self.is_hpu_perf_breakdown_sync_mode = int(os.environ.get("HPU_PERF_BREAKDOWN_SYNC_MODE", 1)) == 1
         # Postprocess Env params
@@ -837,7 +837,7 @@ class HPUModelRunner(ModelRunnerBase):
         Initialize forward meta and attention meta data
         """
         # Initialize forward meta
-        self.forward_meta = ForwardMeta_HPU.init_forward_meta(self.share_inputs, self.attn_backends[0])
+        self.forward_meta = HPUForwardMeta.init_forward_meta(self.share_inputs, self.attn_backends[0])
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:

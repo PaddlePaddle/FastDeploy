@@ -34,7 +34,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 
 if TYPE_CHECKING:
-    from fastdeploy.model_executor.forward_meta import ForwardMeta_HPU
+    from fastdeploy.model_executor.forward_meta import HPUForwardMeta
 
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
 
@@ -43,7 +43,7 @@ class AttentionBackend_HPU(AttentionBackend):
     """The base class of attention backends"""
 
     @abstractmethod
-    def init_attention_metadata(self, forward_meta: ForwardMeta_HPU):
+    def init_attention_metadata(self, forward_meta: HPUForwardMeta):
         """Initialize the forward metadata."""
         raise NotImplementedError()
 
@@ -53,7 +53,7 @@ class AttentionBackend_HPU(AttentionBackend):
         qkv_proj: QKVParallelLinear,
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
-        forward_meta: ForwardMeta_HPU,
+        forward_meta: HPUForwardMeta,
     ):
         """
         Run a forward.
@@ -94,7 +94,7 @@ class AttentionBackend_HPU(AttentionBackend):
         qkv_proj: QKVParallelLinear,
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
-        forward_meta: ForwardMeta_HPU,
+        forward_meta: HPUForwardMeta,
     ):
         """Run a forward for mix."""
         raise NotImplementedError()
@@ -105,7 +105,7 @@ class AttentionBackend_HPU(AttentionBackend):
         qkv_proj: QKVParallelLinear,
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
-        forward_meta: ForwardMeta_HPU,
+        forward_meta: HPUForwardMeta,
     ):
         """Run a forward for decode."""
         raise NotImplementedError()
@@ -116,7 +116,7 @@ class AttentionBackend_HPU(AttentionBackend):
         qkv_proj: QKVParallelLinear,
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
-        forward_meta: ForwardMeta_HPU,
+        forward_meta: HPUForwardMeta,
     ):
         """Run a forward for extend."""
         raise NotImplementedError()
