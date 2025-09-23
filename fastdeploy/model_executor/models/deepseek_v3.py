@@ -48,7 +48,11 @@ from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.rotary_embedding import (
     DeepseekScalingRotaryEmbedding,
 )
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -588,6 +592,12 @@ class DeepSeekV3Model(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="DeepseekV3ForCausalLM",
+    module_path="deepseek_v3",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class DeepseekV3ForCausalLM(ModelForCasualLM):
     """
     DeepseekV3ForCausalLM
@@ -607,9 +617,11 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
-        self.position_ids_buffer = paddle.empty([fd_config.parallel_config.max_num_batched_tokens], dtype=paddle.int32)
+        self.position_ids_buffer = paddle.empty(
+            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
+        )
         self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.parallel_config.max_num_batched_tokens, 1], dtype=paddle.int32
+            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
         )
 
     @classmethod

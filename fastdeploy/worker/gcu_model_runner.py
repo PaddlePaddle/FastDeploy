@@ -89,9 +89,9 @@ class GCUModelRunner(ModelRunnerBase):
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
         # Initialize share inputs
-        self._init_share_inputs(self.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
         ).cpu()
@@ -651,7 +651,9 @@ class GCUModelRunner(ModelRunnerBase):
         )
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and (
+            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
+        ):
             raise NotImplementedError("prefix_caching is not support by GCUModelRunner.")
         else:
             for i in range(self.model_config.num_hidden_layers):
@@ -689,13 +691,13 @@ class GCUModelRunner(ModelRunnerBase):
         decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
         group_size = np.ceil(num_heads / self.model_config.kv_num_heads)
 
-        decode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        decode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             (decoder_step_token_num * group_size) / decoder_block_shape_q
         )
-        encode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        encode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             (self.model_config.max_model_len * group_size) / encoder_block_shape_q
         )
-        kv_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        kv_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             self.model_config.max_model_len / self.fd_config.cache_config.block_size
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
@@ -914,7 +916,7 @@ class GCUModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
                 in_capturing=True,
                 expected_decode_len=expected_decode_len,
@@ -929,7 +931,7 @@ class GCUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -1069,7 +1071,7 @@ class GCUModelRunner(ModelRunnerBase):
             reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
         )
 
-        if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
+        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
@@ -1140,8 +1142,8 @@ class GCUModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         self._dummy_run(
-            num_tokens=self.parallel_config.max_num_batched_tokens,
-            batch_size=min(self.parallel_config.max_num_seqs, 3),
+            num_tokens=self.scheduler_config.max_num_batched_tokens,
+            batch_size=min(self.scheduler_config.max_num_seqs, 3),
         )
 
         # 3. gc
@@ -1229,6 +1231,10 @@ class GCUModelRunner(ModelRunnerBase):
         self.clear_cache()
         paddle.device.cuda.empty_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
+
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
 
     def update_parameters(self, pid):
         """ " Dynamic model loader use to update parameters use for RL"""

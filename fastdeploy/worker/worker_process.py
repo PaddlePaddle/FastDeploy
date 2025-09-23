@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import time
 from typing import Tuple
 
@@ -34,9 +35,9 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
@@ -44,7 +45,8 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -150,6 +152,7 @@ class PaddleDisWorkerProc:
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
         self.cache_config = fd_config.cache_config
+        self.scheduler_config = fd_config.scheduler_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -253,18 +256,25 @@ class PaddleDisWorkerProc:
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
         return model_weights_signal_tensor.item()
 
+    def _tp_barrier_wait(self):
+        if current_platform.is_xpu():
+            self.task_queue.worker_process_tp_barrier.wait()
+        else:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
@@ -282,7 +292,7 @@ class PaddleDisWorkerProc:
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if local_rank == 0:
                 if self.task_queue.num_tasks() > 0:
                     # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
@@ -295,7 +305,7 @@ class PaddleDisWorkerProc:
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+                self._tp_barrier_wait()
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
@@ -346,7 +356,7 @@ class PaddleDisWorkerProc:
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                    self._tp_barrier_wait()
 
                 time.sleep(0.001)
                 continue
@@ -381,7 +391,7 @@ class PaddleDisWorkerProc:
             if num_blocks_local > 40000:
                 logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
                 num_blocks_local = min(40000, num_blocks_local)
-            logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
+            logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
             if num_blocks_local <= 0:
@@ -411,7 +421,7 @@ class PaddleDisWorkerProc:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
-        if self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+        if self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
                 name="launched_cache_manager_signal",
@@ -573,10 +583,10 @@ def parse_args():
         help="Configuration of Graph optimization backend.",
     )
     parser.add_argument(
-        "--moba_attention_config",
+        "--plas_attention_config",
         type=json.loads,
         default=None,
-        help="Configuration of moba attention.",
+        help="Configation of plas attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -597,7 +607,7 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=["ipc", "ipc_snapshot"],
+        choices=["ipc", "ipc_snapshot", "meta", "normal"],
         default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
@@ -641,6 +651,33 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--cache-transfer-protocol",
+        type=str,
+        default="ipc",
+        help="support protocol list, comma separated, default is ipc",
+    )
+    parser.add_argument(
+        "--runner",
+        type=str,
+        default="auto",
+        help="The type of model runner to use.Each FD instance only supports one model runner.even if the same model can be used for multiple types.",
+    )
+
+    parser.add_argument(
+        "--convert",
+        type=str,
+        default="auto",
+        help="Convert the model using adapters. The most common use case is to adapt a text generation model to be used for pooling tasks.",
+    )
+
+    parser.add_argument(
+        "--override-pooler-config",
+        type=optional_type(json.loads),
+        default=None,
+        help="Override configuration for the pooler.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -662,6 +699,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
+    scheduler_config = SchedulerConfig(vars(args))
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
@@ -681,16 +719,17 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
-    parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
-        parallel_config.local_data_parallel_id
-    ]
-    parallel_config.set_tp_group()
+    if args.load_strategy != "meta":
+        parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
+            parallel_config.local_data_parallel_id
+        ]
+    parallel_config.set_communicate_group()
 
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
+    plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -737,8 +776,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if args.splitwise_role != "mixed":
-        logger.info(f"Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported {args.splitwise_role} now.")
+    if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
@@ -746,6 +784,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if parallel_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+    if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
 
     fd_config = FDConfig(
         model_config=model_config,
@@ -758,9 +799,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
         cache_config=cache_config,
-        engine_worker_queue_port=args.engine_worker_queue_port,
+        scheduler_config=scheduler_config,
         ips=args.ips,
-        moba_attention_config=moba_attention_config,
+        plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 

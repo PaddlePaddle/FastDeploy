@@ -33,7 +33,11 @@ from fastdeploy.model_executor.graph_optimization.decorator import (
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer
 from fastdeploy.platforms import current_platform
 
@@ -157,6 +161,12 @@ class Qwen2_5_VLModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen2_5_VLForConditionalGeneration",
+    module_path="qwen2_5_vl.qwen2_5_vl",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     """
     Qwen2_5_VLForConditionalGeneration

@@ -49,7 +49,7 @@ All supported models can be found in the *Supported Models* section above.
 
 #### Send requests
 
-Send requests using either curl or Python
+Send requests using either curl or Python.
 
 ```bash
 curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \

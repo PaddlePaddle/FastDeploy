@@ -39,3 +39,4 @@ opentelemetry-distro 
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser
+msgspec

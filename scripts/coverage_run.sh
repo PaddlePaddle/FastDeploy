@@ -32,6 +32,7 @@ for file in $TEST_FILES; do
     else
         success_pytest=$((success_pytest+1))
     fi
+    ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 done
 
 ##################################

@@ -39,7 +39,11 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
 
 
@@ -316,6 +320,12 @@ class Qwen3MoeModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen3MoeForCausalLM",
+    module_path="qwen3moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Qwen3MoeForCausalLM(ModelForCasualLM):
     """
     Qwen3MoeForCausalLM
