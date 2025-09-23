@@ -110,6 +110,8 @@ class Glm4Moe(nn.Layer):
         self.n_routed_experts: int = fd_config.model_config.n_routed_experts
         self.n_shared_experts: int = fd_config.model_config.n_shared_experts
 
+        self.norm_topk_prob = fd_config.model_config.norm_topk_prob
+
         weight_key_map = {
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
@@ -134,6 +136,7 @@ class Glm4Moe(nn.Layer):
         self.experts = FusedMoE(
             fd_config,
             reduce_results=False,
+            renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
