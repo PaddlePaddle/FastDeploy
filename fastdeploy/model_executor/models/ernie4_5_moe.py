@@ -660,21 +660,6 @@ class Ernie4_5_Model(nn.Layer):
         # 先只搞第三层！
         if IsH20:
 
-            def dispatch_wait(j):
-                #print(f"dispatch_wait({j})")
-                a = dispatch_events[j].pop()
-                tmp = send_hooks[j].pop()()
-                
-            def combine_wait(j):
-                #print(f"combine_wait({j})")
-                a = combine_events[j].pop()
-                # a.current_stream_wait()
-                
-                tmp = recv_hooks[j].pop()()
-                recv_hooks[j].appendleft(tmp)
-                #tmp.current_stream_wait()
-
-
             def compute_atten(layer_id, i):
                 #print(f"compute_atten({layer_id}, {i})")
                 if need_capature_graph:
@@ -692,7 +677,7 @@ class Ernie4_5_Model(nn.Layer):
                     self.attn_graph[layer_id][i].replay()
                     
                     # 记住cuda graph的输入和输出地址！
-                    # 千万不可以加零！
+                    # 千万不可以加零！因为我们要记住cuda graph的输入输出地址！
                     self.attn_input0[layer_id][i] = attention_in_out[i].hidden_states
                     self.attn_input1[layer_id][i] = attention_in_out[i].residual
 
@@ -738,10 +723,9 @@ class Ernie4_5_Model(nn.Layer):
                                                                     attention_in_out[i].residual)
 
                     attention_in_out[i].hidden_states = hidden_states
+                    attention_in_out[i].residual = residual
                     attention_in_out[i].topk_idx = topk_idx
                     attention_in_out[i].topk_weights = topk_weights
-
-                    attention_in_out[i].residual = residual
             
             def dispatch_send(i):
                 #print(f"dispatch_send({i})")
@@ -758,6 +742,12 @@ class Ernie4_5_Model(nn.Layer):
                 send_hooks[i].appendleft(a2e_isend_hook)
                 dispatch_events[i].appendleft(event)
 
+
+            def dispatch_wait(j):
+                #print(f"dispatch_wait({j})")
+                a = dispatch_events[j].pop()
+                tmp = send_hooks[j].pop()()
+
             def combine_receive(i):
                 #print(f"combine_receive({i})")
                 e2a_x, event, e2a_irecv_hook = runner.buffer.e2a_irecv_two_stage_v3(
@@ -771,7 +761,16 @@ class Ernie4_5_Model(nn.Layer):
                 recv_hooks[i].appendleft(e2a_irecv_hook)
 
                 combine_events[i].appendleft(event)
-            
+                
+            def combine_wait(j):
+                #print(f"combine_wait({j})")
+                a = combine_events[j].pop()
+                # a.current_stream_wait()
+                
+                tmp = recv_hooks[j].pop()()
+                recv_hooks[j].appendleft(tmp)
+                #tmp.current_stream_wait()
+
             def capatured_code():
                 compute_atten(3, 0)
                 dispatch_send(0)
@@ -830,18 +829,6 @@ class Ernie4_5_Model(nn.Layer):
                 tmp = recv_hooks[j].pop()()
                 recv_hooks[j].append(tmp)
                 #tmp.current_stream_wait()
-                
-
-            def combine_wait(j, is_wait=False):
-                #print(f"combine_wait({j})")
-                a = combine_events[j].pop()
-                # a.current_stream_wait()
-                
-                tmp = send_hooks[j].pop()()
-                if is_wait:
-                    # 这个是为了让通信流回归到主流而采取的措施！
-                    # 只是为了适配cuda graph！
-                    tmp.current_stream_wait()
 
             def dispatch_receive(i):
                 #print(f"dispatch_receive({i})")
@@ -882,6 +869,17 @@ class Ernie4_5_Model(nn.Layer):
                 )
                 send_hooks[i].appendleft(e2a_isend_hook)
                 combine_events[i].appendleft(event)
+
+            def combine_wait(j, is_wait=False):
+                #print(f"combine_wait({j})")
+                a = combine_events[j].pop()
+                # a.current_stream_wait()
+                
+                tmp = send_hooks[j].pop()()
+                if is_wait:
+                    # 这个是为了让通信流回归到主流而采取的措施！
+                    # 只是为了适配cuda graph！
+                    tmp.current_stream_wait()
 
             def main_code():
                 
@@ -929,17 +927,17 @@ class Ernie4_5_Model(nn.Layer):
                 combine_send(2)
                 combine_wait(2, True)
 
-            # if self.cuda_graph is None:
-            #     self.cuda_graph = graphs.CUDAGraph()
-            #     self.cuda_graph.capture_begin()
-            #     main_code()
-            #     self.cuda_graph.capture_end()
-            #     self.cuda_graph.replay()
-            #     self.dispatch_allocated_memory = dispatch_allocated_memory
-            # else:
-            #     self.cuda_graph.replay()
+            if self.cuda_graph is None:
+                self.cuda_graph = graphs.CUDAGraph()
+                self.cuda_graph.capture_begin()
+                main_code()
+                self.cuda_graph.capture_end()
+                self.cuda_graph.replay()
+                self.dispatch_allocated_memory = dispatch_allocated_memory
+            else:
+                self.cuda_graph.replay()
 
-            main_code()
+            #main_code()
 
         # 让三台机器一起结束！，暂时先注释掉！
         # paddle.distributed.barrier()
@@ -1061,7 +1059,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     ):  
         self.ii += 1
         
-        if self.ii == 100:
+        if self.ii == 80:
             from paddle.framework import core
             core.nvprof_start()
         
@@ -1073,7 +1071,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
-        if self.ii == 105:
+        if self.ii == 85:
             from paddle.framework import core
             core.nvprof_stop()
 
