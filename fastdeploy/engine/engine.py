@@ -501,7 +501,7 @@ class LLMEngine:
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --reasoning_parser {self.cfg.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
-            f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
+            f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
