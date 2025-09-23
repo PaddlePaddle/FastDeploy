@@ -238,10 +238,7 @@ class VocabParallelEmbedding(nn.Layer):
 
         loaded_weight = get_tensor(loaded_weight)
         if param.dtype != loaded_weight.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.cast(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+            loaded_weight = loaded_weight.cast(param.dtype)
 
         if output_dim is None:
             assert (
@@ -269,12 +266,24 @@ class VocabParallelEmbedding(nn.Layer):
 
         shard_weight = slice_fn(loaded_weight, output_dim, start_idx, end_idx)
 
-        if output_dim == 0:
-            param[: shard_weight.shape[0]].copy_(shard_weight, False)
-            param[shard_weight.shape[0] :].fill_(0)
+        total_padded_size = self.shard_indices.num_elements_padded
+        actual_size = shard_weight.shape[output_dim]
+        padding_size = total_padded_size - actual_size
+
+        if padding_size > 0:
+            padding_shape = list(shard_weight.shape)
+            padding_shape[output_dim] = padding_size
+            padding_tensor = paddle.zeros(padding_shape, dtype=shard_weight.dtype)
+
+            final_weight = paddle.concat([shard_weight, padding_tensor], axis=output_dim)
         else:
-            param[:, : shard_weight.shape[1]].copy_(shard_weight, False)
-            param[:, shard_weight.shape[1] :].fill_(0)
+            final_weight = shard_weight
+
+        assert (
+            final_weight.shape == param.shape
+        ), f"Final weight shape {final_weight.shape} doesn't match param shape {param.shape}"
+
+        param.copy_(final_weight, False)
 
     def forward(self, ids_remove_padding=None) -> paddle.Tensor:
         """
