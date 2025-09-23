@@ -21,7 +21,6 @@ from typing import Any, Dict, List
 
 import numpy as np
 import paddle
-from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
@@ -31,7 +30,7 @@ from fastdeploy.inter_communicator import ModelWeightsStatus
 class DynamicWeightManager:
     """Manages model weights loading, updating and shared state across processes."""
 
-    def __init__(self, fd_config: FDConfig, model_list: List[nn.Layer]):
+    def __init__(self, fd_config: FDConfig, models):
         """Initialize with config and model instances."""
         self.fd_config = fd_config
         self.load_config = fd_config.load_config
@@ -42,7 +41,10 @@ class DynamicWeightManager:
         self.meta_src_id = self._get_gpu_id()
         self.first_load = True
         self.ipc_path = f"/shared_ipc_meta/ipc_metas_{self.meta_src_id}"
-        self.model_list = model_list
+        if not isinstance(models, List):
+            self.model_list = [models]
+        else:
+            self.model_list = models
         self._capture_model_state()
         self.update_parameters()
         self.finalize_update()
