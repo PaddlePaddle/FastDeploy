@@ -116,7 +116,10 @@ class OpenAIServingChat:
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
-                prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
+                # preprocess the req_dict
+                self.engine_client.format_request(current_req_dict)
+                for idx in range(current_req_dict.get("n")):
+                     prompt_token_ids = await self.engine_client.add_requests(current_req_dict)
                 text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()

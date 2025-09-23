@@ -124,6 +124,8 @@ class DealerConnectionManager:
                 request_id = response[-1]["request_id"]
                 if "cmpl" == request_id[:4]:
                     request_id = request_id.rsplit("-", 1)[0]
+                elif "chatcmpl" == request_id.rsplit("-", 1)[0]:
+                    request_id = request_id.rsplit("-", 1)[0]
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)

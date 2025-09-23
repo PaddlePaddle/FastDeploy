@@ -118,7 +118,7 @@ class EngineClient:
         self.zmq_client = ZmqClient(model, mode)
         self.zmq_client.connect()
 
-    async def format_and_add_data(self, prompts: dict):
+    def format_request(self, prompts: dict):
         """
         Format the request data and send the request to the server.
         """
@@ -129,38 +129,23 @@ class EngineClient:
         if "max_tokens" not in prompts:
             prompts["max_tokens"] = self.max_model_len - 1
 
-        await self.add_requests(prompts)
-        return prompts["prompt_token_ids"]
-
-    async def add_requests(self, task):
-        """
-        Add a new request to the queue.
-
-        Args:
-            task: Request A dictionary representing the request.
-            sampling_params: A dictionary representing the sampling parameters.
-
-        Returns:
-            None
-        """
-
-        task["preprocess_start_time"] = time.time()
+        prompts["preprocess_start_time"] = time.time()
         try:
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
-                await self.data_processor.process_request_dict(task, self.max_model_len)
+                await self.data_processor.process_request_dict(prompts, self.max_model_len)
             else:
-                self.data_processor.process_request_dict(task, self.max_model_len)
+                self.data_processor.process_request_dict(prompts, self.max_model_len)
 
-            task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
-            input_ids_len = task["prompt_token_ids_len"]
-            task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
-            min_tokens = task.get("min_tokens", 1)
-            if "messages" in task:
-                del task["messages"]
-            api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
-            work_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
+            prompts["prompt_token_ids_len"] = len(prompts["prompt_token_ids"])
+            input_ids_len = prompts["prompt_token_ids_len"]
+            prompts["max_tokens"] = min(self.max_model_len - input_ids_len, prompts.get("max_tokens"))
+            if prompts.get("reasoning_max_tokens", None) is None:
+                prompts["reasoning_max_tokens"] = max(int(prompts["max_tokens"] * 0.8), 1)
+            min_tokens = prompts.get("min_tokens", 1)
+            if "messages" in prompts:
+                del prompts["messages"]
+            api_server_logger.info(f"prompts['max_tokens']:{prompts['max_tokens']}")
+            work_process_metrics.request_params_max_tokens.observe(prompts["max_tokens"])
             work_process_metrics.prompt_tokens_total.inc(input_ids_len)
             work_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
@@ -182,8 +167,8 @@ class EngineClient:
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if "stop_seqs_len" in task:
-            stop_seqs_len = task["stop_seqs_len"]
+        if "stop_seqs_len" in prompts:
+            stop_seqs_len = prompts["stop_seqs_len"]
             max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
@@ -202,15 +187,96 @@ class EngineClient:
                     api_server_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        task["preprocess_end_time"] = time.time()
-        preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
+        prompts["preprocess_end_time"] = time.time()
+        preprocess_cost_time = prompts["preprocess_end_time"] - prompts["preprocess_start_time"]
         api_server_logger.info(
-            f"Cache request with request_id ({task.get('request_id')}), "
+            f"Cache request with request_id ({prompts.get('request_id')}), "
             f"preprocess time cost {preprocess_cost_time}"
         )
 
-        self.valid_parameters(task)
-        api_server_logger.debug(f"Receive task: {task}")
+        self.valid_parameters(prompts)
+        api_server_logger.debug(f"Receive prompts: {prompts}")
+
+    async def add_requests(self, task):
+        """
+        Add a new request to the queue.
+
+        Args:
+            task: Request A dictionary representing the request.
+            sampling_params: A dictionary representing the sampling parameters.
+
+        Returns:
+            None
+        """
+
+        # task["preprocess_start_time"] = time.time()
+        # try:
+        #     if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
+        #         await self.data_processor.process_request_dict(task, self.max_model_len)
+        #     else:
+        #         self.data_processor.process_request_dict(task, self.max_model_len)
+
+        #     task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
+        #     input_ids_len = task["prompt_token_ids_len"]
+        #     task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
+        #     if task.get("reasoning_max_tokens", None) is None:
+        #         task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
+        #     min_tokens = task.get("min_tokens", 1)
+        #     if "messages" in task:
+        #         del task["messages"]
+        #     api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
+        #     work_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
+        #     work_process_metrics.prompt_tokens_total.inc(input_ids_len)
+        #     work_process_metrics.request_prompt_tokens.observe(input_ids_len)
+        # except Exception as e:
+        #     api_server_logger.error(f"add_requests error: {e}, {str(traceback.format_exc())}")
+        #     raise EngineError(str(e), error_code=400)
+
+        # if input_ids_len + min_tokens >= self.max_model_len:
+        #     error_msg = (
+        #         f"Input text is too long, input_ids_len ({input_ids_len}) "
+        #         f"+ min_tokens({min_tokens}) >= max_model_len({self.max_model_len})"
+        #     )
+        #     api_server_logger.error(error_msg)
+        #     raise EngineError(error_msg, error_code=400)
+
+        # if input_ids_len > self.max_model_len:
+        #     error_msg = (
+        #         f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.max_model_len})."
+        #     )
+        #     api_server_logger.error(error_msg)
+        #     raise EngineError(error_msg, error_code=400)
+
+        # if "stop_seqs_len" in task:
+        #     stop_seqs_len = task["stop_seqs_len"]
+        #     max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+        #     if len(stop_seqs_len) > max_stop_seqs_num:
+        #         error_msg = (
+        #             f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
+        #             "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
+        #         )
+        #         api_server_logger.error(error_msg)
+        #         raise EngineError(error_msg, error_code=400)
+        #     stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+        #     for single_stop_seq_len in stop_seqs_len:
+        #         if single_stop_seq_len > stop_seqs_max_len:
+        #             error_msg = (
+        #                 f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
+        #                 "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
+        #             )
+        #             api_server_logger.error(error_msg)
+        #             raise EngineError(error_msg, error_code=400)
+
+        # task["preprocess_end_time"] = time.time()
+        # preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
+        # api_server_logger.info(
+        #     f"Cache request with request_id ({task.get('request_id')}), "
+        #     f"preprocess time cost {preprocess_cost_time}"
+        # )
+
+        # self.valid_parameters(task)
+        # api_server_logger.debug(f"Receive task: {task}")
+
         try:
             if not self.enable_mm:
                 self.zmq_client.send_json(task)
@@ -227,9 +293,9 @@ class EngineClient:
         前置到了ChatCompletionRequest/CompletionRequest中
         """
 
-        if data.get("n") is not None:
-            if data["n"] != 1:
-                raise ParameterError("n", "n only support 1.")
+        # if data.get("n") is not None:
+        #     if data["n"] != 1:
+        #         raise ParameterError("n", "n only support 1.")
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
