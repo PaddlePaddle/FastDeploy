@@ -589,7 +589,7 @@ class GraphOptimizationConfig:
         self.full_cuda_graph: bool = True
 
         """ Whether to use shared memory pool for multi capture_size """
-        self.use_memory_pool: bool = False
+        self.use_unique_memory_pool: bool = False
 
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None

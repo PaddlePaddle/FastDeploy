@@ -91,8 +91,8 @@ class CudaGraphPiecewiseBackend:
         self.cudagraph_capture_sizes = fd_config.graph_opt_config.cudagraph_capture_sizes
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
-        if self.fd_config.graph_opt_config.use_memory_pool:
-            self.pool_id = 1024
+        if self.fd_config.graph_opt_config.use_unique_memory_pool:
+            self.unique_memory_pool_id = graphs.CUDAGraph.gen_new_memory_pool_id()
         self._create_entry_dict()
 
         self.cuda_graph_manager = None
@@ -166,8 +166,8 @@ class CudaGraphPiecewiseBackend:
             entry.input_addresses = input_addresses
 
             new_grpah = (
-                graphs.CUDAGraph(pool_id=self.pool_id)
-                if self.fd_config.graph_opt_config.use_memory_pool
+                graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
+                if self.fd_config.graph_opt_config.use_unique_memory_pool
                 else graphs.CUDAGraph()
             )
             paddle.device.synchronize()
