@@ -30,7 +30,7 @@ import paddle
 import zmq
 from opentelemetry import trace
 
-from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 from fastdeploy.inter_communicator import (
@@ -673,6 +673,22 @@ class EngineService:
                 tasks = self.resource_manager.schedule()
                 # 3. Send to engine
                 if tasks:
+                    if self.cfg.scheduler_config.splitwise_role == "decode":
+                        for task in tasks:
+                            if task.task_type == RequestType.PREEMPTED:
+                                msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
+                                self.llm_logger.error(msg)
+                                self.scheduler.put_results(
+                                    [
+                                        RequestOutput(
+                                            request_id=task.request_id,
+                                            finished=True,
+                                            error_code=500,
+                                            error_msg=msg,
+                                        )
+                                    ]
+                                )
+
                     self.resource_manager.get_real_bsz()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
                 else:
