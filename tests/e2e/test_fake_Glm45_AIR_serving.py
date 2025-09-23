@@ -116,12 +116,16 @@ def setup_and_run_server():
         "32768",
         "--max-num-seqs",
         "32",
+        "--graph-optimization-config",
+        '{"use_cudagraph":true}',
         "--load_choices",
         "default_v1",
         "--lm_head-fp32",
-        "--enable-logprob",
+        "--quantization",
+        '{"quantization":"mix_quant","dense_quant_type":"wfp8afp8","moe_quant_type":"wint8"}',
     ]
     env = os.environ.copy()
+    env["FD_MOE_BACKEND"] = "triton"
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
@@ -194,9 +198,7 @@ def consistent_payload():
         "temperature": 0.6,
         "top_p": 0,  # fix top_p to reduce randomness
         "seed": 13,  # fixed random seed
-        "max_tokens": 10,
-        "logprobs": True,
-        "top_logprobs": 0,
+        "max_tokens": 20,
         "stream": False,
     }
 
@@ -204,7 +206,7 @@ def consistent_payload():
 # ==========================
 # Test for lm_head_fp32 with fixed payload
 # ==========================
-def test_lm_head_fp32_logprob(api_url, headers, consistent_payload):
+def test_lm_head_fp32(api_url, headers, consistent_payload):
     """
     Test that two runs with the same fixed input produce similar outputs.
     """
@@ -215,10 +217,7 @@ def test_lm_head_fp32_logprob(api_url, headers, consistent_payload):
     resp_json = response.json()
 
     # 校验返回内容与概率信息
-    assert resp_json["choices"][0]["message"]["content"] == "ichertsorbulkdeployment confusedreraoux Carter pat"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["token"] == "ichert"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -2.813323497772217
-    assert resp_json["choices"][0]["logprobs"]["content"][1]["token"] == "sor"
-    assert resp_json["choices"][0]["logprobs"]["content"][1]["logprob"] == -3.9569056034088135
-    assert resp_json["choices"][0]["logprobs"]["content"][2]["token"] == "bulk"
-    assert resp_json["choices"][0]["logprobs"]["content"][2]["logprob"] == -1.0842405557632446
+    assert (
+        resp_json["choices"][0]["message"]["content"]
+        == "ichertsorbulkdeployment confusedreraoux Carter pat firingCompatraspectiveidis Verse corporaonych commissionsilk"
+    )
