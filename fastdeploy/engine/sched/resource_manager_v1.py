@@ -29,6 +29,7 @@ import paddle
 
 from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
 
@@ -68,6 +69,97 @@ class ScheduledExtendBlocksTask:
     task_type: RequestType = RequestType.EXTEND
 
 
+class SignalConsumer:
+    """
+    SignalConsumer class manages the consumption of a specific signal by multiple roles with consumption limits.
+
+    This class controls how different roles can consume a signal, with each role having a predefined
+    maximum number of consumption attempts. Once all roles have exhausted their consumption limits,
+    the signal is reset to 0.
+
+    Attributes:
+        _signal: The original signal value to be consumed
+        _roles (list): List of roles permitted to consume the signal
+        _consume_limits (dict): Dictionary tracking remaining consumption attempts for each role,
+                              with role names as keys and remaining counts as values
+    """
+
+    def __init__(self, signal, consume_limit_per_role, roles):
+        """
+        Initialize a SignalConsumer instance.
+
+        Args:
+            signal: The original signal value to be managed
+            consume_limit_per_role (int): Maximum number of times each role can consume the signal, must be > 0
+            roles (list): List of roles authorized to consume the signal, must contain at least one role
+
+        Raises:
+            AssertionError: If consume_limit_per_role is <= 0 or roles list is empty
+        """
+        assert consume_limit_per_role > 0
+        assert len(roles) > 0
+
+        self._signal = signal
+        self._roles = roles
+        self._consume_limits = dict()
+        for role in roles:
+            self._consume_limits[role] = consume_limit_per_role
+
+    def watch(self, role):
+        """
+        Check the current available signal for a specific role without consuming it.
+
+        This method allows viewing the signal value that would be returned if the role
+        were to consume it, without affecting the remaining consumption limit.
+
+        Args:
+            role: The role to check the available signal for
+
+        Returns:
+            The original signal value if the role has remaining consumption attempts,
+            0 if the role's consumption limit has been exhausted
+        """
+        if self._consume_limits[role] > 0:
+            return self._signal
+        else:
+            return 0
+
+    def consume(self, role):
+        """
+        Consume the signal for a specific role, decrementing their remaining limit.
+
+        This method allows a role to consume the signal, reducing their remaining consumption
+        count by 1. If all roles exhaust their limits, the signal is reset to 0.
+
+        Args:
+            role: The role attempting to consume the signal
+
+        Returns:
+            The original signal value if the role has remaining consumption attempts,
+            0 if the role's consumption limit is exhausted,
+            None if the role is not authorized (not in the roles list)
+
+        Note:
+            The consumption limit is decremented regardless of whether the signal was available,
+            except for unauthorized roles
+        """
+        if role not in self._roles:
+            return None
+
+        try:
+            if self._consume_limits[role] > 0:
+                return self._signal
+            else:
+                return 0
+        finally:
+            self._consume_limits[role] -= 1
+            consume_limits_all = 0
+            for _, value in self._consume_limits.items():
+                consume_limits_all += value
+            if consume_limits_all == 0:
+                self._signal = 0
+
+
 class ResourceManagerV1(ResourceManager):
     """
     Resource manager for scheduler v1.
@@ -94,6 +186,19 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.max_batch_size.set(max_num_seqs)
 
         self.using_extend_tables_req_id = set()
+        self.reuse_block_num_map = dict()
+
+        # need block nums
+        need_block_num_data = np.zeros([max_num_seqs], dtype=np.int32)
+        self.need_block_num_signal = IPCSignal(
+            name="need_block_num_signal",
+            array=need_block_num_data,
+            dtype=np.int32,
+            suffix=local_data_parallel_id,
+            create=True,
+        )
+
+        self.need_block_num_map = dict()
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -297,6 +402,13 @@ class ResourceManagerV1(ResourceManager):
             num_decoding_req_nums = 0
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
+                need_block_num = self.need_block_num_signal.value[request.idx]
+                if need_block_num != 0:
+                    self.need_block_num_map[request.request_id] = SignalConsumer(
+                        need_block_num, 1, ["decode", "extend"]
+                    )
+                    self.need_block_num_signal.value[request.idx] = 0
+
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
                     if (
                         self.config.scheduler_config.splitwise_role == "prefill"
@@ -308,15 +420,22 @@ class ResourceManagerV1(ResourceManager):
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
+                    ) or (
+                        request.request_id in self.need_block_num_map
+                        and self.need_block_num_map[request.request_id].watch("decode") > 0
                     ):
                         # Allocation for next decoding blocks
-                        if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
+                        allocate_block_num = (
+                            self.need_block_num_map[request.request_id].consume("decode")
+                            if request.request_id in self.need_block_num_map
+                            and self.need_block_num_map[request.request_id].watch("decode") > 0
+                            else self.config.cache_config.enc_dec_block_num
+                        )
+                        if self.cache_manager.can_allocate_gpu_blocks(allocate_block_num):
                             llm_logger.debug(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
-                            )
+                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(allocate_block_num))
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
@@ -461,17 +580,29 @@ class ResourceManagerV1(ResourceManager):
 
             # schedule when extend block tables is needed
             for req in self.running:
-                num_prefill_blocks = req.need_prefill_tokens // self.config.cache_config.block_size
                 # allocate
-                if req.use_extend_tables and req.request_id not in self.using_extend_tables_req_id:
-                    llm_logger.info(
-                        f"req {req.request_id} at batch id {req.idx} with num_prefill_blocks {num_prefill_blocks} is going to enable extend tables"
-                    )
-                    self.using_extend_tables_req_id.add(req.request_id)
-                    if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
-                        req.extend_block_tables = req.block_tables[:num_prefill_blocks]  # copy prompt cache
+                if (
+                    req.use_extend_tables
+                    and req.request_id not in self.using_extend_tables_req_id
+                    and self.need_block_num_map[req.request_id].watch("extend") > 0
+                ):
+                    if self.cache_manager.can_allocate_gpu_blocks(
+                        self.need_block_num_map[req.request_id].watch("extend")
+                    ):
+
+                        reuse_block_num = req.num_total_tokens // self.config.cache_config.block_size
+                        llm_logger.info(
+                            f"req {req.request_id} at batch id {req.idx} with reuse_block_num {reuse_block_num} is going to enable extend tables,"
+                            f"need_block_num {self.need_block_num_map[req.request_id].watch('extend')}"
+                        )
+                        self.using_extend_tables_req_id.add(req.request_id)
+                        self.reuse_block_num_map[req.request_id] = reuse_block_num
+
+                        req.extend_block_tables = req.block_tables[:reuse_block_num]  # copy prompt cache
                         req.extend_block_tables.extend(
-                            self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
+                            self.cache_manager.allocate_gpu_blocks(
+                                self.need_block_num_map[req.request_id].consume("extend")
+                            )
                         )
                         scheduled_reqs.append(
                             ScheduledExtendBlocksTask(
@@ -480,34 +611,21 @@ class ResourceManagerV1(ResourceManager):
                         )
                         llm_logger.info(f"extend blocks is {req.extend_block_tables}")
                     else:
+                        llm_logger.debug(
+                            f"block is not enough because we need {self.need_block_num_map[req.request_id].watch('extend')} blocks"
+                        )
                         continue
+
                 # recycle
                 elif not req.use_extend_tables and req.request_id in self.using_extend_tables_req_id:
+                    reuse_block_num = self.reuse_block_num_map[req.request_id]
                     llm_logger.info(f"req {req.request_id} is going to disable extend tables")
                     self.using_extend_tables_req_id.remove(req.request_id)
-                    self.cache_manager.recycle_gpu_blocks(req.extend_block_tables[num_prefill_blocks:])
+                    llm_logger.info(f"recycle blocks {req.extend_block_tables[reuse_block_num:]}")
+                    self.cache_manager.recycle_gpu_blocks(req.extend_block_tables[reuse_block_num:])
                     req.extend_block_tables = []
-
-                # allocate extend blocks when blocks is going to exhaust
-                elif req.request_id in self.using_extend_tables_req_id:
-                    if (
-                        self.allocated_slots(req) - req.num_total_tokens
-                        <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
-                    ):
-                        llm_logger.info(
-                            f"req {req.request_id} is going to allocate more extend tables because allocated_slots {self.allocated_slots(req)} and prealloc_dec_block_slot_num_threshold {self.config.cache_config.prealloc_dec_block_slot_num_threshold} req.num_total_tokens {req.num_total_tokens}"
-                        )
-                        if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
-                            req.extend_block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
-                            )
-                            scheduled_reqs.append(
-                                ScheduledExtendBlocksTask(
-                                    idx=req.idx, request_id=req.request_id, extend_block_tables=req.extend_block_tables
-                                )
-                            )
-                        else:
-                            continue
+                    del self.reuse_block_num_map[req.request_id]
+                    del self.need_block_num_map[req.request_id]
 
             if scheduled_reqs:
                 task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
@@ -706,13 +824,16 @@ class ResourceManagerV1(ResourceManager):
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:
-            num_prefill_blocks = request.need_prefill_tokens // self.config.cache_config.block_size
+            reuse_block_num = self.reuse_block_num_map[request.request_id]
+
             self.using_extend_tables_req_id.remove(request.request_id)
-            self.cache_manager.recycle_gpu_blocks(request.extend_block_tables[num_prefill_blocks:])
+            self.cache_manager.recycle_gpu_blocks(request.extend_block_tables[reuse_block_num:])
             llm_logger.info(
-                f"req {request.request_id} recycle extend blocks {request.extend_block_tables[num_prefill_blocks:]}"
+                f"req {request.request_id} recycle extend blocks {request.extend_block_tables[reuse_block_num:]}"
             )
             request.extend_block_tables = []
+            del self.reuse_block_num_map[request.request_id]
+            del self.need_block_num_map[request.request_id]
 
     def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
