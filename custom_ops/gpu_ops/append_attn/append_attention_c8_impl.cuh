@@ -204,16 +204,12 @@ __global__ void multi_query_append_attention_c8_kernel(
   smem_t k_smem(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T)),
       v_smem(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
              num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
-  T* k_smem_scale_ptr = nullptr;
-  T* v_smem_scale_ptr = nullptr;
-  smem_t k_scale_smem;
-  smem_t v_scale_smem;
+  T* k_smem_scale = nullptr;
+  T* v_smem_scale = nullptr;
   if constexpr (IsDynamicC8) {
-    k_smem_scale_ptr = reinterpret_cast<T*>(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+    k_smem_scale = reinterpret_cast<T*>(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
                                          num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
-    v_smem_scale_ptr = k_smem_scale_ptr + num_frags_z * 16;
-    k_scale_smem.base = reinterpret_cast<b128_t*>(k_smem_scale_ptr);
-    v_scale_smem.base = reinterpret_cast<b128_t*>(v_smem_scale_ptr);
+    v_smem_scale = k_smem_scale + num_frags_z * 16;
   }
 
 
@@ -275,20 +271,6 @@ __global__ void multi_query_append_attention_c8_kernel(
                                      kv_idx_base,
                                      chunk_end,
                                      const_k_offset);
-  if constexpr (IsDynamicC8) {
-    produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                             BLOCK_SIZE,
-                                             num_frags_z,
-                                             NUM_WARP_Q>(
-      k_scale_smem,
-      block_table_now,
-      cache_k_scale,
-      kv_idx_base,
-      kv_num_heads,
-      kv_head_idx,
-      chunk_end
-    );
-  }
   commit_group();
   produce_v_blockwise_c8<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
@@ -306,32 +288,24 @@ __global__ void multi_query_append_attention_c8_kernel(
                                      kv_idx_base,
                                      chunk_end,
                                      const_v_offset);
-  if constexpr (IsDynamicC8) {
-    produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                             BLOCK_SIZE,
-                                             num_frags_z,
-                                             NUM_WARP_Q>(
-      v_scale_smem,
-      block_table_now,
-      cache_v_scale,
-      kv_idx_base,
-      kv_num_heads,
-      kv_head_idx,
-      chunk_end
-    );
-  }
   commit_group();
 
 #pragma unroll 1
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
-    wait_group<1>();
-    __syncthreads();
     if constexpr (IsDynamicC8) {
-      produce_k_dynamic_scale_smem2reg<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        k_smem_scale_ptr,
-        cache_k_scale_reg
+      produce_k_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        k_smem_scale,
+        cache_k_scale_reg,
+        block_table_now,
+        cache_k_scale,
+        kv_idx_base,
+        kv_num_heads,
+        kv_head_idx,
+        chunk_end
       );
     }
+    wait_group<1>();
+    __syncthreads();
     // s = qk
     compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8, IsDynamicC8>(
         &qo_smem,
@@ -384,29 +358,21 @@ __global__ void multi_query_append_attention_c8_kernel(
                                        kv_idx_base,
                                        chunk_end,
                                        const_k_offset);
+    commit_group();
     if constexpr (IsDynamicC8) {
-      produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                              BLOCK_SIZE,
-                                              num_frags_z,
-                                              NUM_WARP_Q>(
-        k_scale_smem,
+      produce_v_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        v_smem_scale,
+        cache_v_scale_reg,
         block_table_now,
-        cache_k_scale,
-        kv_idx_base,
+        cache_v_scale,
+        ori_kv_idx_base,
         kv_num_heads,
         kv_head_idx,
         chunk_end
       );
     }
-    commit_group();
     wait_group<1>();
     __syncthreads();
-    if constexpr (IsDynamicC8) {
-      produce_v_dynamic_scale_smem2reg<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        v_smem_scale_ptr,
-        cache_v_scale_reg
-      );
-    }
 
     // compute sfm*v
     compute_sfm_v_c8<num_frags_x,
@@ -437,20 +403,6 @@ __global__ void multi_query_append_attention_c8_kernel(
                                        kv_idx_base,
                                        chunk_end,
                                        const_v_offset);
-    if constexpr (IsDynamicC8) {
-      produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                              BLOCK_SIZE,
-                                              num_frags_z,
-                                              NUM_WARP_Q>(
-        v_scale_smem,
-        block_table_now,
-        cache_v_scale,
-        kv_idx_base,
-        kv_num_heads,
-        kv_head_idx,
-        chunk_end
-      );
-    }
     commit_group();
 
   }
@@ -722,16 +674,12 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
       v_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
              NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
-  T* k_smem_scale_ptr = nullptr;
-  T* v_smem_scale_ptr = nullptr;
-  smem_t k_scale_smem;
-  smem_t v_scale_smem;
+  T* k_smem_scale = nullptr;
+  T* v_smem_scale = nullptr;
   if constexpr (IsDynamicC8) {
-    k_smem_scale_ptr = reinterpret_cast<T*>(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
-                                            NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
-    v_smem_scale_ptr = k_smem_scale_ptr + NUM_WARP_KV * num_frags_z * 16;
-    k_scale_smem.base = reinterpret_cast<b128_t*>(k_smem_scale_ptr);
-    v_scale_smem.base = reinterpret_cast<b128_t*>(v_smem_scale_ptr);
+    k_smem_scale = reinterpret_cast<T*>(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+                                        NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
+    v_smem_scale = k_smem_scale + NUM_WARP_KV * num_frags_z * 16;
   }
 
   const uint32_t num_iterations = div_up(
@@ -795,20 +743,6 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                      kv_idx_base,
                                      chunk_end,
                                      const_k_offset);
-  if constexpr (IsDynamicC8) {
-    produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                             BLOCK_SIZE,
-                                             num_frags_z,
-                                             NUM_WARP_Q>(
-      k_scale_smem,
-      block_table_now,
-      cache_k_scale,
-      kv_idx_base,
-      kv_num_heads,
-      kv_head_idx,
-      chunk_end
-    );
-  }
   commit_group();
   produce_v_blockwise_c8<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
@@ -826,31 +760,23 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                      kv_idx_base,
                                      chunk_end,
                                      const_v_offset);
-  if constexpr (IsDynamicC8) {
-    produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                             BLOCK_SIZE,
-                                             num_frags_z,
-                                             NUM_WARP_Q>(
-      v_scale_smem,
-      block_table_now,
-      cache_v_scale,
-      kv_idx_base,
-      kv_num_heads,
-      kv_head_idx,
-      chunk_end
-    );
-  }
   commit_group();
 #pragma unroll 1
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
-    wait_group<1>();
-    __syncthreads();
     if constexpr (IsDynamicC8) {
-      produce_k_dynamic_scale_smem2reg<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        k_smem_scale_ptr,
-        cache_k_scale_reg
+      produce_k_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        k_smem_scale,
+        cache_k_scale_reg,
+        block_table_now,
+        cache_k_scale,
+        kv_idx_base,
+        kv_num_heads,
+        kv_head_idx,
+        chunk_end
       );
     }
+    wait_group<1>();
+    __syncthreads();
 
     // s = qk
     compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8, IsDynamicC8>(
@@ -904,29 +830,21 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                        kv_idx_base,
                                        chunk_end,
                                        const_k_offset);
+    commit_group();
     if constexpr (IsDynamicC8) {
-      produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                              BLOCK_SIZE,
-                                              num_frags_z,
-                                              NUM_WARP_Q>(
-        k_scale_smem,
+      produce_v_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
+        v_smem_scale,
+        cache_v_scale_reg,
         block_table_now,
-        cache_k_scale,
-        kv_idx_base,
+        cache_v_scale,
+        ori_kv_idx_base,
         kv_num_heads,
         kv_head_idx,
         chunk_end
       );
     }
-    commit_group();
     wait_group<1>();
     __syncthreads();
-    if constexpr (IsDynamicC8) {
-      produce_v_dynamic_scale_smem2reg<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        v_smem_scale_ptr,
-        cache_v_scale_reg
-      );
-    }
 
     // compute sfm * v
     compute_sfm_v_c8_iter_sq_bvec<num_frags_x,
@@ -957,20 +875,6 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                        kv_idx_base,
                                        chunk_end,
                                        const_v_offset);
-    if constexpr (IsDynamicC8) {
-      produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
-                                              BLOCK_SIZE,
-                                              num_frags_z,
-                                              NUM_WARP_Q>(
-        v_scale_smem,
-        block_table_now,
-        cache_v_scale,
-        kv_idx_base,
-        kv_num_heads,
-        kv_head_idx,
-        chunk_end
-      );
-    }
     commit_group();
   }
   wait_group<0>();
