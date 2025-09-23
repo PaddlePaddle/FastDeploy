@@ -437,12 +437,6 @@ class Ernie4_5_Model(nn.Layer):
         self.cached_attention_in_out = None
         self.cuda_graph = None
 
-        self.cached_hidden_input = []
-        self.cached_residual_input = []
-
-        self.cached_hidden_output = []
-        self.cached_residual_output = []
-
         self.dispatch_allocated_memory = None
 
         
@@ -609,24 +603,18 @@ class Ernie4_5_Model(nn.Layer):
             attention_in_out[j].hidden_states = all_hidden_states[j]
             attention_in_out[j].residual = all_residual[j]
         
-        if need_capature_graph:
-            self.dispatch_allocated_memory = dispatch_allocated_memory
-        elif can_replay_graph:
-            dispatch_allocated_memory = self.dispatch_allocated_memory
-        
         if IsH20:
             if need_capature_graph:
                 self.cached_attention_in_out = attention_in_out
                 self.dispatch_allocated_memory = dispatch_allocated_memory
-                self.cached_hidden_input = [attention_in_out[j].hidden_states for j in range(split_num)]
-                self.cached_residual_input = [attention_in_out[j].residual for j in range(split_num)]
             
             elif can_replay_graph:
+                # 是用这个预先分配的大空间哦！
+                # 防止和capture的临时空间时候冲突！
+                dispatch_allocated_memory = self.dispatch_allocated_memory
 
                 # 需要把新产生的tensor 数据 拷贝到老的 cached tensor数据!
                 for i in range(split_num):
-                    self.cached_hidden_input[i].copy_(attention_in_out[i].hidden_states, False)
-                    self.cached_residual_input[i].copy_(attention_in_out[i].residual, False)
 
                     from dataclasses import dataclass, fields
                     person_fields = fields(self.cached_attention_in_out[i].forward_meta)
