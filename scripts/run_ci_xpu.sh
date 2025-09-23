@@ -44,7 +44,7 @@ rm -f core*
 ipcrm --all=msg
 
 echo "============================开始V0模式测试!============================"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
+export ENABLE_V1_KVCACHE_SCHEDULER=0
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 
 python -m fastdeploy.entrypoints.openai.api_server \
