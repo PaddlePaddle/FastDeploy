@@ -163,7 +163,7 @@ class Qwen2_5_VLModel(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Qwen2_5_VLForConditionalGeneration",
-    module_path="qwen2_5_vl.qwen2_5_vl",
+    module_name="qwen2_5_vl.qwen2_5_vl",
     category=ModelCategory.MULTIMODAL,
     primary_use=ModelCategory.MULTIMODAL,
 )
