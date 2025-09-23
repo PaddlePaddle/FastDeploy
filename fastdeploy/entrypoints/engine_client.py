@@ -141,6 +141,9 @@ class EngineClient:
         self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
+    def check_model_weight_status(self):
+        return self.model_weights_status_signal.value[0] < 0
+
     async def format_and_add_data(self, prompts: dict):
         """
         Format the request data and send the request to the server.
