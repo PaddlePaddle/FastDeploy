@@ -63,7 +63,8 @@ __global__ void multi_query_append_attention_c8_kernel(
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
-    const int speculate_max_draft_token_num = 5) {
+    const int speculate_max_draft_token_num = 5,
+    const int sliding_window = 0) {
   constexpr uint32_t num_vecs_per_head =
       HEAD_DIM / num_elems_per_128b<T>();  // 128 / 8 = 16
   constexpr uint32_t num_vecs_per_head_k =
@@ -311,7 +312,8 @@ __global__ void multi_query_append_attention_c8_kernel(
                           chunk_end,
                           -1,
                           s_frag,
-                          mask_offset_this_seq);
+                          mask_offset_this_seq,
+                          sliding_window);
     }
 
     // update m,d
@@ -376,7 +378,9 @@ __global__ void multi_query_append_attention_c8_kernel(
   if constexpr (!partition_kv) {
     if (sinks) {
       float current_sinks[num_frags_x][2];
+      #pragma unroll
       for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+        #pragma unroll
         for (uint32_t j = 0; j < 2; ++j) {
           const uint32_t h_offset = (q_base_seq_id_this_block + fx * 16 + tid / 4 + 8 * j) % GROUP_SIZE;
           current_sinks[fx][j] = static_cast<float>(sinks[q_head_idx + h_offset]);
@@ -508,7 +512,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
     const int speculate_max_draft_token_num = 5,
-    const uint32_t attn_mask_len = -1) {
+    const uint32_t attn_mask_len = -1,
+    const int sliding_window = 0) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   constexpr uint32_t num_vecs_per_head_k =
       HEAD_DIM / num_elems_per_128b<CacheT>();
@@ -757,7 +762,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                           chunk_end,
                           attn_mask_len,
                           s_frag,
-                          mask_offset_this_seq);
+                          mask_offset_this_seq,
+                          sliding_window);
 
     }
 
@@ -825,7 +831,9 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   if (num_chunks_this_seq <= 1) {
     if (sinks) {
       float current_sinks[num_frags_x][2];
+      #pragma unroll
       for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+        #pragma unroll
         for (uint32_t j = 0; j < 2; ++j) {
           const uint32_t h_offset = (q_base_seq_id_this_block + fx * 16 + tid / 4 + 8 * j) % GROUP_SIZE;
           current_sinks[fx][j] = static_cast<float>(sinks[q_head_idx + h_offset]);
@@ -950,7 +958,8 @@ void MultiQueryAppendC8Attention(
     const int speculate_max_draft_token_num,
     const bool is_decoder,
     cudaStream_t &stream,
-    paddle::Tensor *out) {
+    paddle::Tensor *out,
+    const int sliding_window) {
 #if HEAD_DIM != 128
     PADDLE_THROW(phi::errors::Unimplemented(
       "AppendAttention C8 only support head_dim=128 now, but got head_dim=%d", HEAD_DIM));
@@ -1111,7 +1120,8 @@ void MultiQueryAppendC8Attention(
           nullptr,
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+          speculate_max_draft_token_num,
+          sliding_window);
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       if (ENABLE_PREFILL) {
@@ -1172,7 +1182,8 @@ void MultiQueryAppendC8Attention(
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+          speculate_max_draft_token_num,
+          sliding_window);
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
       if (is_decoder) {
@@ -1211,7 +1222,8 @@ void MultiQueryAppendC8Attention(
                 num_chunks,
                 num_heads,
                 chunk_size,
-                HEAD_DIM);
+                HEAD_DIM,
+                sliding_window);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1252,7 +1264,8 @@ void MultiQueryAppendC8Attention(
                 chunk_size,
                 HEAD_DIM,
                 token_num,
-                speculate_max_draft_token_num);
+                speculate_max_draft_token_num,
+                sliding_window);
       }
     }
   } else {
@@ -1399,7 +1412,8 @@ void MultiQueryAppendC8Attention(
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num,
-          attn_mask_len);
+          attn_mask_len,
+          sliding_window);
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       if (is_decoder) {
@@ -1476,7 +1490,8 @@ void MultiQueryAppendC8Attention(
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num,
-          attn_mask_len);
+          attn_mask_len,
+          sliding_window);
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
       if (is_decoder) {
@@ -1510,7 +1525,8 @@ void MultiQueryAppendC8Attention(
                 num_chunks,
                 num_heads,
                 chunk_size,
-                HEAD_DIM);
+                HEAD_DIM,
+                sliding_window);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1551,7 +1567,8 @@ void MultiQueryAppendC8Attention(
                 chunk_size,
                 HEAD_DIM,
                 token_num,
-                speculate_max_draft_token_num);
+                speculate_max_draft_token_num,
+                sliding_window);
       }
     }
   }
@@ -1603,7 +1620,8 @@ void CascadeAppendAttentionC8Kernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out) {
+    paddle::Tensor* out,
+    const int sliding_window) {
   const auto token_num = meta_data.token_nums;
   const auto block_size = meta_data.block_size;
   const auto bsz = meta_data.batch_size;
@@ -1666,6 +1684,7 @@ void CascadeAppendAttentionC8Kernel(
                                 speculate_max_draft_token_num,
                                 is_decoder,
                                 stream,
-                                out);
+                                out,
+                                sliding_window);
                           })})})})})})
 }

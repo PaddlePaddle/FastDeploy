@@ -57,7 +57,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, true>(
     const AppendAttnMetaData& meta_data,
@@ -103,4 +104,5 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);

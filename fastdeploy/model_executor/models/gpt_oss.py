@@ -40,7 +40,6 @@ from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 
-
 class GptOssAttention(nn.Layer):
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):

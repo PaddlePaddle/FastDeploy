@@ -238,7 +238,7 @@ class GptOssScalingRotaryEmbedding:
         base=10000,
         compression_ratio=1.0,
         scale=1,
-        mscale=0.1,
+        mscale=1,
         original_max_position_embeddings=8192,
         extrapolation_factor=1,
         attn_factor=1,
@@ -259,59 +259,35 @@ class GptOssScalingRotaryEmbedding:
         self.beta_slow = beta_slow
         self.use_neox_rotary_style = use_neox_rotary_style
 
-    def yarn_find_correction_range(self):
-        low = math.floor(self.yarn_find_correction_dim(self.beta_fast))
-        high = math.ceil(self.yarn_find_correction_dim(self.beta_slow))
-        return max(low, 0), min(high, self.rotary_dim - 1)  # Clamp values just in case
-
-    def yarn_find_correction_dim(self, num_rotations):
-        return (self.rotary_dim * math.log(self.original_max_position_embeddings / (num_rotations * 2 * math.pi))) / (
-            2 * math.log(self.base)
-        )
-
-    def yarn_get_mscale(self):
-        if self.scale <= 1:
-            return 1.0
-        return self.mscale * math.log(self.scale) + 1.0
-
-    def yarn_linear_ramp_mask(self, min, max, dim):
-        if min == max:
-            max += 0.001  # Prevent singularity
-
-        linear_func = (paddle.arange(dim, dtype="float32") - min) / (max - min)
-        ramp_func = paddle.clip(linear_func, 0, 1)
-        return ramp_func
-
     def __call__(self, position_ids):
         seq_length = position_ids.shape[-1]
         pos_freqs = self.base ** (paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
         inv_freq_extrapolation = 1.0 / pos_freqs
         inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
-        low, high = self.yarn_find_correction_range()
-        inv_freq_mask = (
-            1
-            - paddle.to_tensor(
-                self.yarn_linear_ramp_mask(low, high, self.rotary_dim // 2), dtype="float32", place=paddle.get_device()
-            )
-        ) * self.extrapolation_factor  # Get n-d rotational scaling corrected for extrapolation
 
+        low, high = yarn_find_correction_range(
+            self.beta_fast, self.beta_slow, self.rotary_dim, self.base, self.original_max_position_embeddings
+        )
+        inv_freq_mask = (1 - yarn_linear_ramp_mask(low, high, self.rotary_dim // 2)) * self.extrapolation_factor
         indices = inv_freq_interpolation * (1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
+
         _mscale = paddle.to_tensor(
-            self.yarn_get_mscale() * self.attn_factor, dtype="float32"
-        )  # Get n-d magnitude scaling corrected for interpolation
+            yarn_get_mscale(self.scale, self.mscale) * self.attn_factor, dtype="float32"
+        )
+
         position_ids = position_ids / self.compression_ratio
-        sinusoid_inp = position_ids.unsqueeze(-1).astype("float32") * indices.unsqueeze(
-            0
-        )  # [b, s, 1] * [1, d/2] -> [b, s, d/2]
+        sinusoid_inp = position_ids.unsqueeze(-1).astype("float32") * indices.unsqueeze(0)
+
         if self.use_neox_rotary_style:
-            sinusoid_inp = paddle.concat([sinusoid_inp, sinusoid_inp], axis=-1).reshape(
-                (1, seq_length, 1, self.rotary_dim)
-            )
+            sinusoid_inp = paddle.concat([sinusoid_inp, sinusoid_inp], axis=-1).reshape((1, seq_length, 1, self.rotary_dim))
+
         pos_emb = paddle.concat([paddle.cos(sinusoid_inp) * _mscale, paddle.sin(sinusoid_inp) * _mscale], axis=0)
+
         if self.use_neox_rotary_style:
             pos_emb = paddle.reshape(pos_emb, (-1, 1, seq_length, 1, self.rotary_dim))
         else:
             pos_emb = paddle.reshape(pos_emb, (-1, 1, seq_length, 1, self.rotary_dim // 2))
+
         pos_emb.stop_gradient = True
         return pos_emb
 

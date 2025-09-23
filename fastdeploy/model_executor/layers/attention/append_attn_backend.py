@@ -125,6 +125,7 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
+        self.fd_config = fd_config
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -227,6 +228,11 @@ class AppendAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
+        if self.fd_config.model_config.layer_types[layer.layer_id] == "sliding_attention":
+            sliding_window = self.fd_config.model_config.sliding_window
+        else:
+            sliding_window = 0
+
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
@@ -323,6 +329,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.speculate_max_draft_token_num + 1,
                 self.causal,
                 self.speculative_method is not None,
+                sliding_window,
             )
         else:
             res = append_attention(
@@ -379,5 +386,6 @@ class AppendAttentionBackend(AttentionBackend):
                 self.speculate_max_draft_token_num + 1,
                 self.causal,
                 self.speculative_method is not None,
+                sliding_window,
             )
         return res

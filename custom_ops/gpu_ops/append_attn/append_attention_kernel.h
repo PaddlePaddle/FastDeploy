@@ -61,7 +61,8 @@ void CascadeAppendAttentionC16Kernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template <typename T, typename OutT, bool IsFP8 = false>
 void CascadeAppendAttentionC8Kernel(
@@ -108,7 +109,8 @@ void CascadeAppendAttentionC8Kernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template <typename T, typename OutT>
 void CascadeAppendAttentionC4Kernel(
@@ -155,7 +157,8 @@ void CascadeAppendAttentionC4Kernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template <typename T, typename OutT>
 void CascadeAppendAttentionKernel(
@@ -203,7 +206,8 @@ void CascadeAppendAttentionKernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out) {
+    paddle::Tensor* out,
+    const int sliding_window) {
     if (cache_quant_type_str == "none") {
         CascadeAppendAttentionC16Kernel<T, OutT>(meta_data,
                                                 qkv,
@@ -239,7 +243,8 @@ void CascadeAppendAttentionKernel(
                                                 is_decoder,
                                                 enable_prefill,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else if (cache_quant_type_str == "cache_int8") {
         CascadeAppendAttentionC8Kernel<T, OutT>(meta_data,
                                                 qkv,
@@ -275,7 +280,8 @@ void CascadeAppendAttentionKernel(
                                                 is_decoder,
                                                 enable_prefill,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else if (cache_quant_type_str == "cache_fp8") {
         CascadeAppendAttentionC8Kernel<T, OutT, true>(meta_data,
                                                 qkv,
@@ -311,7 +317,8 @@ void CascadeAppendAttentionKernel(
                                                 is_decoder,
                                                 enable_prefill,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else if (cache_quant_type_str == "cache_int4_zp") {
         CascadeAppendAttentionC4Kernel<T, OutT>(meta_data,
                                                 qkv,
@@ -347,7 +354,8 @@ void CascadeAppendAttentionKernel(
                                                 is_decoder,
                                                 enable_prefill,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else {
         PD_THROW(
             "cache_quant_type_str should be one of [none, cache_int8, "

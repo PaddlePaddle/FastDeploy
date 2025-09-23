@@ -921,7 +921,8 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
                                        const uint32_t chunk_end,
                                        const uint32_t attn_mask_len,
                                        float (*s_frag)[num_frags_z][8],
-                                       const int *mask_offset = nullptr) {
+                                       const int *mask_offset = nullptr,
+                                       const int sliding_window = 0) {
   const uint32_t tx = threadIdx.x;
 #pragma unroll
   for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
@@ -939,10 +940,25 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
           if (mask_offset) {
             out_of_boundary = q_idx < qo_len ? (kv_idx > mask_offset[q_idx]) : true;
           } else {
-            out_of_boundary =
+            const bool sliding_window_flag = static_cast<long long>(kv_idx) < static_cast<long long>(kv_len) + q_idx - qo_len - sliding_window;
+
+            if(sliding_window != 0)
+            {
+              out_of_boundary =
+                (causal
+                    ? (kv_idx > kv_len + q_idx - qo_len 
+                      || kv_idx >= chunk_end
+                      || sliding_window_flag)
+                    : kv_idx >= chunk_end);
+            }
+            else
+            {
+              out_of_boundary =
                 (causal
                     ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
                     : kv_idx >= chunk_end);
+            }
+
             if (attn_mask != nullptr && kv_idx > kv_len - qo_len && kv_idx < chunk_end && q_idx < attn_mask_len) {
               const int32_t mask_idx = q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
               bool mask = attn_mask[mask_idx];
@@ -957,7 +973,7 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
             s_frag[fx][fz][reg_id] =
                 out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
           }
-          // printf("tid: %d. qk[%u,%u] = %f, mask: %d \n ", threadIdx.x, kv_idx, q_idx, static_cast<float>(s_frag[fx][fz][reg_id]), int(out_of_boundary));
+
         } else {
           const uint32_t q_idx = qo_idx_base,
                          kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
@@ -2172,7 +2188,8 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const int num_chunks,
     const int num_heads,
     const int chunk_size,
-    const int head_dim) {
+    const int head_dim,
+    const int sliding_window) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int bid = blockIdx.x, hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
@@ -2310,7 +2327,8 @@ __global__ void merge_multi_chunks_v2_kernel(
     const int chunk_size,
     const int head_dim,
     const int token_num,
-    const int speculate_max_draft_token_num = 5) {
+    const int speculate_max_draft_token_num = 5,
+    const int sliding_window = 0) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];

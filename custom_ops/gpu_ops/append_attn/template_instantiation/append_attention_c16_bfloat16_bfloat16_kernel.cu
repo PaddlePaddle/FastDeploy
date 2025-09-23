@@ -58,4 +58,5 @@ template void CascadeAppendAttentionC16Kernel<paddle::bfloat16, paddle::bfloat16
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);

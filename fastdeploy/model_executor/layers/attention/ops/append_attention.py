@@ -83,6 +83,7 @@ def append_attention(
     speculate_max_draft_token_num: int = 1,
     causal: bool = True,
     speculate_decoder: bool = False,
+    sliding_window: int = 0,
 ) -> paddle.Tensor:
     """
     append_attention
@@ -142,6 +143,7 @@ def append_attention(
             speculate_max_draft_token_num,
             causal,
             speculate_decoder,
+            sliding_window,
         )
         return out
     else:
@@ -206,6 +208,7 @@ def append_attention_with_output(
     speculate_max_draft_token_num: int = 1,
     causal: bool = True,
     speculate_decoder: bool = False,
+    sliding_window: int = 0,
 ) -> None:
     """
     append_attention
@@ -266,6 +269,7 @@ def append_attention_with_output(
             speculate_max_draft_token_num,
             causal,
             speculate_decoder,
+            sliding_window,
         )
     else:
         raise NotImplementedError

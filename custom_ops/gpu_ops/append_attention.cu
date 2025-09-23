@@ -91,7 +91,8 @@ void AppendAttentionKernel(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -170,7 +171,8 @@ void AppendAttentionKernel(
           lambda_is_decoder,
           lambda_enable_prefill,
           lambda_stream,
-          &fmha_out);
+          &fmha_out,
+          sliding_window);
   };
 
   if (max_enc_len_this_time > 0) {
@@ -441,7 +443,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -567,7 +570,8 @@ std::vector<paddle::Tensor> AppendAttention(
           encoder_max_partition_size,
           speculate_max_draft_token_num,
           causal,
-          speculate_decoder);
+          speculate_decoder,
+          sliding_window);
   };
 
 
@@ -646,7 +650,8 @@ void AppendAttentionWithOutput(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -724,7 +729,8 @@ void AppendAttentionWithOutput(
           encoder_max_partition_size,
           speculate_max_draft_token_num,
           causal,
-          speculate_decoder);
+          speculate_decoder,
+          sliding_window);
   };
 
   phi::dtype::float16 fp16_dtype;
@@ -814,7 +820,8 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   const int token_num = qkv_shape[0];
   const int kv_num_heads = key_cache_shape[1];
   int head_dim = key_cache_shape[3];
@@ -879,7 +886,8 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   if (compute_dtype == "bf16") {
     if (out_linear_in_scale > 0.0) {
       if (fabs(quant_max_bound - 127.0f) < 0.000001) {
@@ -963,7 +971,8 @@ std::vector<std::vector<int64_t>> AppendAttentionWithOutputInferShape(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   return {fmha_out_shape};
 }
 
@@ -1021,7 +1030,8 @@ std::vector<paddle::DataType> AppendAttentionWithOutputInferDtype(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   return {fmha_out_dtype};
 }
 
@@ -1084,6 +1094,7 @@ PD_BUILD_STATIC_OP(append_attention)
             "speculate_max_draft_token_num: int",
             "causal: bool",
             "speculate_decoder: bool",
+            "sliding_window: int",
             })
     .SetKernelFn(PD_KERNEL(AppendAttention))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionInferShape))
@@ -1148,6 +1159,7 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
             "speculate_max_draft_token_num: int",
             "causal: bool",
             "speculate_decoder: bool",
+            "sliding_window: int",
             })
     .SetKernelFn(PD_KERNEL(AppendAttentionWithOutput))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionWithOutputInferShape))

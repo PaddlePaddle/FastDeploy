@@ -57,7 +57,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, f
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 
 
@@ -105,4 +106,5 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, t
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);

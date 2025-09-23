@@ -90,7 +90,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int max_partition_size, const int encoder_max_partition_size,
     const int speculate_max_draft_token_num, const bool causal,
-    const bool speculate_decoder);
+    const bool speculate_decoder,
+    const int sliding_window);
 
 void AppendAttentionWithOutput(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
@@ -134,7 +135,8 @@ void AppendAttentionWithOutput(
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int max_partition_size, const int encoder_max_partition_size,
     const int speculate_max_draft_token_num, const bool causal,
-    const bool speculate_decoder);
+    const bool speculate_decoder,
+    const int sliding_window);
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
