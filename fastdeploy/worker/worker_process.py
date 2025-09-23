@@ -256,6 +256,12 @@ class PaddleDisWorkerProc:
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
         return model_weights_signal_tensor.item()
 
+    def _tp_barrier_wait(self):
+        if current_platform.is_xpu():
+            self.task_queue.worker_process_tp_barrier.wait()
+        else:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -299,7 +305,7 @@ class PaddleDisWorkerProc:
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+                self._tp_barrier_wait()
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
@@ -350,7 +356,7 @@ class PaddleDisWorkerProc:
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                    self._tp_barrier_wait()
 
                 time.sleep(0.001)
                 continue
