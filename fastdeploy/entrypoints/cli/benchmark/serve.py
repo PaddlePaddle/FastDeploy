@@ -16,16 +16,15 @@
 
 # This file is modified from https://github.com/vllm-project/vllm/blob/main/benchmarks/benchmark_serving.py
 
-
 import argparse
 import asyncio
 import gc
 import json
+import math
 import os
 import random
 import time
 import warnings
-from argparse import ArgumentParser as FlexibleArgumentParser
 from collections.abc import AsyncGenerator, Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,15 +32,20 @@ from typing import Any, Optional
 
 import numpy as np
 import yaml
-from backend_request_func import (
+from tqdm.asyncio import tqdm
+
+from fastdeploy.entrypoints.cli.benchmark.base import BenchmarkSubcommandBase
+from fastdeploy.entrypoints.cli.benchmark.datasets import (
+    SampleRequest,
+    add_dataset_parser,
+    get_samples,
+)
+from fastdeploy.entrypoints.cli.benchmark.endpoint_request_func import (
     ASYNC_REQUEST_FUNCS,
     OPENAI_COMPATIBLE_BACKENDS,
     RequestFuncInput,
     RequestFuncOutput,
 )
-from benchmark_dataset import EBChatDataset, EBDataset, SampleRequest
-from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
-from tqdm.asyncio import tqdm
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
 
@@ -104,6 +108,306 @@ class BenchmarkMetrics:
     median_output_len: float
     std_output_len: float
     percentiles_output_len: list[tuple[float, float]]
+
+
+def add_cli_args(parser: argparse.ArgumentParser):
+    add_dataset_parser(parser)
+    parser.add_argument(
+        "--label",
+        type=str,
+        default=None,
+        help="The label (prefix) of the benchmark results. If not specified, "
+        "the endpoint type will be used as the label.",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="openai-chat",
+        choices=list(ASYNC_REQUEST_FUNCS.keys()),
+    )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default=None,
+        help="Server or API base url if not using http host and port.",
+    )
+    # Use 127.0.0.1 here instead of localhost to force the use of ipv4
+    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--endpoint",
+        type=str,
+        default="/v1/chat/completions",
+        help="API endpoint.",
+    )
+    parser.add_argument(
+        "--header",
+        metavar="KEY=VALUE",
+        nargs="*",
+        help="Key-value pairs (e.g, --header x-additional-info=0.3.3) "
+        "for headers to be passed with each request. These headers override "
+        "per backend constants and values set via environment variable, and "
+        "will be overriden by other arguments (such as request ids).",
+    )
+    parser.add_argument(
+        "--max-concurrency",
+        type=int,
+        default=None,
+        help="Maximum number of concurrent requests. This can be used "
+        "to help simulate an environment where a higher level component "
+        "is enforcing a maximum number of concurrent requests. While the "
+        "--request-rate argument controls the rate at which requests are "
+        "initiated, this argument will control how many are actually allowed "
+        "to execute at a time. This means that when used in combination, the "
+        "actual request rate may be lower than specified with --request-rate, "
+        "if the server is not processing requests fast enough to keep up.",
+    )
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help="Name of the model.",
+    )
+    parser.add_argument(
+        "--tokenizer",
+        type=str,
+        help="Name or path of the tokenizer, if not using the default tokenizer.",  # noqa: E501
+    )
+    parser.add_argument("--use-beam-search", action="store_true")
+    parser.add_argument(
+        "--logprobs",
+        type=int,
+        default=None,
+        help=(
+            "Number of logprobs-per-token to compute & return as part of "
+            "the request. If unspecified, then either (1) if beam search "
+            "is disabled, no logprobs are computed & a single dummy "
+            "logprob is returned for each token; or (2) if beam search "
+            "is enabled 1 logprob per token is computed"
+        ),
+    )
+    parser.add_argument(
+        "--request-rate",
+        type=float,
+        default=float("inf"),
+        help="Number of requests per second. If this is inf, "
+        "then all the requests are sent at time 0. "
+        "Otherwise, we use Poisson process or gamma distribution "
+        "to synthesize the request arrival times.",
+    )
+    parser.add_argument(
+        "--burstiness",
+        type=float,
+        default=1.0,
+        help="Burstiness factor of the request generation. "
+        "Only take effect when request_rate is not inf. "
+        "Default value is 1, which follows Poisson process. "
+        "Otherwise, the request intervals follow a gamma distribution. "
+        "A lower burstiness value (0 < burstiness < 1) results in more "
+        "bursty requests. A higher burstiness value (burstiness > 1) "
+        "results in a more uniform arrival of requests.",
+    )
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Trust remote code from huggingface",
+    )
+    parser.add_argument(
+        "--disable-tqdm",
+        action="store_true",
+        help="Specify to disable tqdm progress bar.",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Use Torch Profiler. The endpoint must be launched with " "VLLM_TORCH_PROFILER_DIR to enable profiler.",
+    )
+    parser.add_argument(
+        "--save-result",
+        action="store_true",
+        help="Specify to save benchmark results to a json file",
+    )
+    parser.add_argument(
+        "--save-detailed",
+        action="store_true",
+        help="When saving the results, whether to include per request "
+        "information such as response, error, ttfs, tpots, etc.",
+    )
+    parser.add_argument(
+        "--append-result",
+        action="store_true",
+        help="Append the benchmark result to the existing json file.",
+    )
+    parser.add_argument(
+        "--metadata",
+        metavar="KEY=VALUE",
+        nargs="*",
+        help="Key-value pairs (e.g, --metadata version=0.3.3 tp=1) "
+        "for metadata of this run to be saved in the result JSON file "
+        "for record keeping purposes.",
+    )
+    parser.add_argument(
+        "--result-dir",
+        type=str,
+        default=None,
+        help="Specify directory to save benchmark json results."
+        "If not specified, results are saved in the current directory.",
+    )
+    parser.add_argument(
+        "--result-filename",
+        type=str,
+        default=None,
+        help="Specify the filename to save benchmark json results."
+        "If not specified, results will be saved in "
+        "{label}-{args.request_rate}qps-{base_model_id}-{current_dt}.json"  # noqa
+        " format.",
+    )
+    parser.add_argument(
+        "--ignore-eos",
+        action="store_true",
+        help="Set ignore_eos flag when sending the benchmark request."
+        "Warning: ignore_eos is not supported in deepspeed_mii and tgi.",
+    )
+    parser.add_argument(
+        "--percentile-metrics",
+        type=str,
+        default="ttft,tpot,itl",
+        help="Comma-separated list of selected metrics to report percentils. "
+        "This argument specifies the metrics to report percentiles. "
+        'Allowed metric names are "ttft", "tpot", "itl", "e2el". ',
+    )
+    parser.add_argument(
+        "--metric-percentiles",
+        type=str,
+        default="99",
+        help="Comma-separated list of percentiles for selected metrics. "
+        'To report 25-th, 50-th, and 75-th percentiles, use "25,50,75". '
+        'Default value is "99".'
+        'Use "--percentile-metrics" to select metrics.',
+    )
+    parser.add_argument(
+        "--goodput",
+        nargs="+",
+        required=False,
+        help='Specify service level objectives for goodput as "KEY:VALUE" '
+        "pairs, where the key is a metric name, and the value is in "
+        'milliseconds. Multiple "KEY:VALUE" pairs can be provided, '
+        "separated by spaces. Allowed request level metric names are "
+        '"ttft", "tpot", "e2el". For more context on the definition of '
+        "goodput, refer to DistServe paper: https://arxiv.org/pdf/2401.09670 "
+        "and the blog: https://hao-ai-lab.github.io/blogs/distserve",
+    )
+    parser.add_argument(
+        "--request-id-prefix",
+        type=str,
+        required=False,
+        default="benchmark-serving",
+        help="Specify the prefix of request id.",
+    )
+
+    sampling_group = parser.add_argument_group("sampling parameters")
+    sampling_group.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        help="Top-p sampling parameter. Only has effect on " "openai-compatible backends.",
+    )
+    sampling_group.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="Top-k sampling parameter. Only has effect on " "openai-compatible backends.",
+    )
+    sampling_group.add_argument(
+        "--min-p",
+        type=float,
+        default=None,
+        help="Min-p sampling parameter. Only has effect on " "openai-compatible backends.",
+    )
+    sampling_group.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Temperature sampling parameter. Only has effect on "
+        "openai-compatible backends. If not specified, default to greedy "
+        "decoding (i.e. temperature==0.0).",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="print debug information (output)",
+    )
+    parser.add_argument(
+        "--tokenizer-mode",
+        type=str,
+        default="auto",
+        choices=["auto", "slow", "mistral", "custom"],
+        help='The tokenizer mode.\n\n* "auto" will use the '
+        'fast tokenizer if available.\n* "slow" will '
+        "always use the slow tokenizer. \n* "
+        '"mistral" will always use the `mistral_common` tokenizer. \n*'
+        '"custom" will use --tokenizer to select the preregistered tokenizer.',
+    )
+    parser.add_argument(
+        "--shuffle",
+        action="store_true",
+        help="shuffle dataset",
+    )
+    parser.add_argument(
+        "--hyperparameter-path",
+        type=str,
+        default=None,
+        help="Path to the hyperparameter. ",
+    )
+
+    parser.add_argument(
+        "--served-model-name",
+        type=str,
+        default=None,
+        help="The model name used in the API. "
+        "If not specified, the model name will be the "
+        "same as the ``--model`` argument. ",
+    )
+
+    parser.add_argument(
+        "--lora-modules",
+        nargs="+",
+        default=None,
+        help="A subset of LoRA module names passed in when "
+        "launching the server. For each request, the "
+        "script chooses a LoRA module at random.",
+    )
+
+    parser.add_argument(
+        "--ramp-up-strategy",
+        type=str,
+        default=None,
+        choices=["linear", "exponential"],
+        help="The ramp-up strategy. This would be used to "
+        "ramp up the request rate from initial RPS to final "
+        "RPS rate (specified by --ramp-up-start-rps and "
+        "--ramp-up-end-rps.) over the duration of the benchmark.",
+    )
+    parser.add_argument(
+        "--ramp-up-start-rps",
+        type=int,
+        default=None,
+        help="The starting request rate for ramp-up (RPS). " "Needs to be specified when --ramp-up-strategy is used.",
+    )
+    parser.add_argument(
+        "--ramp-up-end-rps",
+        type=int,
+        default=None,
+        help="The ending request rate for ramp-up (RPS). " "Needs to be specified when --ramp-up-strategy is used.",
+    )
+    parser.add_argument(
+        "--ready-check-timeout-sec",
+        type=int,
+        default=600,
+        help="Maximum time to wait for the endpoint to become ready "
+        "in seconds (default: 600 seconds / 10 minutes).",
+    )
 
 
 async def get_request(
@@ -586,150 +890,7 @@ async def benchmark(
     return result
 
 
-def benchmark_metrics(
-    benchmark_duration: float,
-    result_file: str,
-    selected_percentiles: list[float],
-    selected_percentile_metrics: list[str],
-    goodput_config_dict: dict[str, float],
-):
-    """Benchmark metrics statistics，generate benchmark result"""
-    outputs = []
-    with open(result_file) as f:
-        for line in f.readlines():
-            if "RequestFuncOutput" in line:
-                start = line.find("RequestFuncOutput")
-                end = line.rfind(")")
-                para_str = line[start : end + 1]
-
-                output = eval(para_str)
-                outputs.append(output)
-
-    input_requests = [[]] * len(outputs)
-    goodput_config_dict = check_goodput_args(args)
-
-    metrics, actual_output_lens = calculate_metrics(
-        input_requests=input_requests,
-        outputs=outputs,
-        dur_s=benchmark_duration,
-        selected_percentiles=selected_percentiles,
-        goodput_config_dict=goodput_config_dict,
-    )
-
-    print("{s:{c}^{n}}".format(s=" Serving Benchmark Result ", n=50, c="="))
-    print("{:<40} {:<10}".format("Successful requests:", metrics.completed))
-    print("{:<40} {:<10.2f}".format("Benchmark duration (s):", benchmark_duration))
-    print("{:<40} {:<10}".format("Total input tokens:", metrics.total_input))
-    print("{:<40} {:<10}".format("Total generated tokens:", metrics.total_output))
-    print("{:<40} {:<10.2f}".format("Request throughput (req/s):", metrics.request_throughput))
-    if goodput_config_dict:
-        print("{:<40} {:<10.2f}".format("Request goodput (req/s):", metrics.request_goodput))
-    print("{:<40} {:<10.2f}".format("Output token throughput (tok/s):", metrics.output_throughput))
-    print("{:<40} {:<10.2f}".format("Total Token throughput (tok/s):", metrics.total_token_throughput))
-
-    result = {
-        "duration": benchmark_duration,
-        "completed": metrics.completed,
-        "total_input_tokens": metrics.total_input,
-        "total_output_tokens": metrics.total_output,
-        "request_throughput": metrics.request_throughput,
-        "request_goodput:": (metrics.request_goodput if goodput_config_dict else None),
-        "output_throughput": metrics.output_throughput,
-        "total_token_throughput": metrics.total_token_throughput,
-        "input_lens": [output.prompt_len for output in outputs],
-        "output_lens": actual_output_lens,
-        "ttfts": [output.ttft for output in outputs],
-        "itls": [output.itl for output in outputs],
-        "input_texts": ["" for input in input_requests],
-        "generated_texts": [output.generated_text for output in outputs],
-        "errors": [output.error for output in outputs],
-    }
-
-    def process_one_metric(
-        # E.g., "ttft"
-        metric_attribute_name: str,
-        # E.g., "TTFT"
-        metric_name: str,
-        # E.g., "Time to First Token"
-        metric_header: str,
-    ):
-        # This function prints and adds statistics of the specified
-        # metric.
-        if metric_attribute_name not in selected_percentile_metrics:
-            return
-        print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Mean {metric_name} (ms):",
-                getattr(metrics, f"mean_{metric_attribute_name}_ms"),
-            )
-        )
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Median {metric_name} (ms):",
-                getattr(metrics, f"median_{metric_attribute_name}_ms"),
-            )
-        )
-        result[f"mean_{metric_attribute_name}_ms"] = getattr(metrics, f"mean_{metric_attribute_name}_ms")
-        result[f"median_{metric_attribute_name}_ms"] = getattr(metrics, f"median_{metric_attribute_name}_ms")
-        result[f"std_{metric_attribute_name}_ms"] = getattr(metrics, f"std_{metric_attribute_name}_ms")
-        for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}_ms"):
-            p_word = str(int(p)) if int(p) == p else str(p)
-            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
-            result[f"p{p_word}_{metric_attribute_name}_ms"] = value
-
-    def process_one_length(
-        # E.g., "ttft"
-        metric_attribute_name: str,
-        # E.g., "TTFT"
-        metric_name: str,
-        # E.g., "Time to First Token"
-        metric_header: str,
-    ):
-        # This function prints and adds statistics of the specified
-        # metric.
-        if metric_attribute_name not in selected_percentile_metrics:
-            return
-        print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Mean {metric_name}:",
-                getattr(metrics, f"mean_{metric_attribute_name}"),
-            )
-        )
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Median {metric_name}:",
-                getattr(metrics, f"median_{metric_attribute_name}"),
-            )
-        )
-        result[f"mean_{metric_attribute_name}"] = getattr(metrics, f"mean_{metric_attribute_name}")
-        result[f"median_{metric_attribute_name}"] = getattr(metrics, f"median_{metric_attribute_name}")
-        result[f"std_{metric_attribute_name}"] = getattr(metrics, f"std_{metric_attribute_name}")
-        for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}"):
-            p_word = str(int(p)) if int(p) == p else str(p)
-            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
-            result[f"p{p_word}_{metric_attribute_name}"] = value
-
-    process_one_length("s_decode", "Decode", "解码速度(tok/s)")
-    process_one_metric("ttft", "TTFT", "Time to First Token")
-    process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
-    process_one_metric("tpot", "TPOT", "Time per Output Token (excl. 1st token)")
-    process_one_metric("itl", "ITL", "Inter-token Latency")
-    process_one_metric("s_itl", "S_ITL", "Infer Inter-token Latency")
-    process_one_metric("e2el", "E2EL", "End-to-end Latency")
-    process_one_metric("s_e2el", "S_E2EL", "Infer End-to-end Latency")
-    process_one_length("input_len", "Input Length", "Input Length")
-    process_one_length("s_input_len", "Input Length", "Infer Input Length")
-    process_one_length("output_len", "Output Length", "Output Length")
-
-    print("=" * 50)
-
-    return result
-
-
 def check_goodput_args(args):
-    """Check whether the given argument has valid goodput configuration or not"""
     # Check and parse goodput arguments
     goodput_config_dict = {}
     VALID_NAMES = ["ttft", "tpot", "e2el"]
@@ -740,7 +901,7 @@ def check_goodput_args(args):
                 raise ValueError(
                     f"Invalid metric name found, {slo_name}: {slo_val}. "
                     "The service level objective name should be one of "
-                    f"{VALID_NAMES!s}. "
+                    f"{str(VALID_NAMES)}. "
                 )
             if slo_val < 0:
                 raise ValueError(
@@ -751,21 +912,70 @@ def check_goodput_args(args):
     return goodput_config_dict
 
 
-def parse_goodput(slo_pairs):
-    """Parse the string into a dictionary with keys being names of SLOS and values being their corresponding values"""
-    goodput_config_dict = {}
-    try:
-        for slo_pair in slo_pairs:
-            slo_name, slo_val = slo_pair.split(":")
-            goodput_config_dict[slo_name] = float(slo_val)
-    except ValueError as err:
-        raise argparse.ArgumentTypeError(
-            "Invalid format found for service level objectives. "
-            'Specify service level objectives for goodput as "KEY:VALUE" '
-            "pairs, where the key is a metric name, and the value is a "
-            "number in milliseconds."
-        ) from err
-    return goodput_config_dict
+def convert_to_pytorch_benchmark_format(
+    args: argparse.Namespace,
+    metrics: dict[str, list],
+    extra_info: dict[str, Any],
+) -> list:
+    """
+    Save the benchmark results in the format used by PyTorch OSS benchmark with
+    on metric per record
+    https://github.com/pytorch/pytorch/wiki/How-to-integrate-with-PyTorch-OSS-benchmark-database
+    """
+    records = []
+    if not os.environ.get("SAVE_TO_PYTORCH_BENCHMARK_FORMAT", False):
+        return records
+
+    for name, benchmark_values in metrics.items():
+        record = {
+            "benchmark": {
+                "name": "fastdeploy benchmark",
+                "extra_info": {
+                    "args": vars(args),
+                },
+            },
+            "model": {
+                "name": args.model,
+            },
+            "metric": {
+                "name": name,
+                "benchmark_values": benchmark_values,
+                "extra_info": extra_info,
+            },
+        }
+
+        tp = record["benchmark"]["extra_info"]["args"].get("tensor_parallel_size")
+        # Save tensor_parallel_size parameter if it's part of the metadata
+        if not tp and "tensor_parallel_size" in extra_info:
+            record["benchmark"]["extra_info"]["args"]["tensor_parallel_size"] = extra_info["tensor_parallel_size"]
+
+        records.append(record)
+
+    return records
+
+
+class InfEncoder(json.JSONEncoder):
+    """InfEncoder"""
+
+    def clear_inf(self, o: Any):
+        """clear_inf"""
+        if isinstance(o, dict):
+            return {k: self.clear_inf(v) for k, v in o.items()}
+        elif isinstance(o, list):
+            return [self.clear_inf(v) for v in o]
+        elif isinstance(o, float) and math.isinf(o):
+            return "inf"
+        return o
+
+    def iterencode(self, o: Any, *args, **kwargs) -> Any:
+        """iterencode"""
+        return super().iterencode(self.clear_inf(o), *args, **kwargs)
+
+
+def write_to_json(filename: str, records: list) -> None:
+    """write_to_json"""
+    with open(filename, "w") as f:
+        json.dump(records, f, cls=InfEncoder)
 
 
 def save_to_pytorch_benchmark_format(args: argparse.Namespace, results: dict[str, Any], file_name: str) -> None:
@@ -798,13 +1008,49 @@ def save_to_pytorch_benchmark_format(args: argparse.Namespace, results: dict[str
         write_to_json(pt_file, pt_records)
 
 
-def main(args: argparse.Namespace):
-    """Main entry point"""
+def parse_goodput(slo_pairs):
+    goodput_config_dict = {}
+    try:
+        for slo_pair in slo_pairs:
+            slo_name, slo_val = slo_pair.split(":")
+            goodput_config_dict[slo_name] = float(slo_val)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(
+            "Invalid format found for service level objectives. "
+            'Specify service level objectives for goodput as "KEY:VALUE" '
+            "pairs, where the key is a metric name, and the value is a "
+            "number in milliseconds."
+        ) from err
+    return goodput_config_dict
+
+
+async def main_async(args: argparse.Namespace):
     print(args)
     random.seed(args.seed)
     np.random.seed(args.seed)
 
+    # Validate ramp-up arguments
+    if args.ramp_up_strategy is not None:
+        if args.request_rate != float("inf"):
+            raise ValueError(
+                "When using ramp-up, do not specify --request-rate. "
+                "The request rate will be controlled by ramp-up parameters. "
+                "Please remove the --request-rate argument."
+            )
+        if args.ramp_up_start_rps is None or args.ramp_up_end_rps is None:
+            raise ValueError(
+                "When using --ramp-up-strategy, both --ramp-up-start-rps and " "--ramp-up-end-rps must be specified"
+            )
+        if args.ramp_up_start_rps < 0 or args.ramp_up_end_rps < 0:
+            raise ValueError("Ramp-up start and end RPS must be non-negative")
+        if args.ramp_up_start_rps > args.ramp_up_end_rps:
+            raise ValueError("Ramp-up start RPS must be less than end RPS")
+        if args.ramp_up_strategy == "exponential" and args.ramp_up_start_rps == 0:
+            raise ValueError("For exponential ramp-up, the start RPS cannot be 0.")
+
+    endpoint_type = args.backend
     backend = args.backend
+    label = args.label
     model_id = args.model
     model_name = args.served_model_name
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
@@ -815,29 +1061,25 @@ def main(args: argparse.Namespace):
     else:
         api_url = f"http://{args.host}:{args.port}{args.endpoint}"
         base_url = f"http://{args.host}:{args.port}"
+    print(f"API URL: {api_url}")
+    print(f"base URL: {base_url}")
+
+    # Headers
+    headers = None
+    if args.header:
+        headers = {}
+        for item in args.header:
+            if "=" in item:
+                kvstring = item.split("=", 1)
+                headers[kvstring[0].strip()] = kvstring[1].strip()
+            else:
+                raise ValueError("Invalid header format. Please use KEY=VALUE format.")
 
     if args.dataset_name is None:
         raise ValueError("Please specify '--dataset-name' and the corresponding " "'--dataset-path' if required.")
 
-    # For datasets that follow a similar structure, use a mapping.
-    dataset_mapping = {
-        "EB": lambda: EBDataset(random_seed=args.seed, dataset_path=args.dataset_path, shuffle=args.shuffle).sample(
-            num_requests=args.num_prompts,
-            output_len=args.sharegpt_output_len,
-        ),
-        "EBChat": lambda: EBChatDataset(
-            random_seed=args.seed, dataset_path=args.dataset_path, shuffle=args.shuffle
-        ).sample(
-            num_requests=args.num_prompts,
-            output_len=args.sharegpt_output_len,
-        ),
-    }
-
-    try:
-        input_requests = dataset_mapping[args.dataset_name]()
-    except KeyError as err:
-        raise ValueError(f"Unknown dataset: {args.dataset_name}") from err
-
+    # Load the dataset.
+    input_requests = get_samples(args)
     goodput_config_dict = check_goodput_args(args)
 
     # Collect the sampling parameters.
@@ -854,7 +1096,7 @@ def main(args: argparse.Namespace):
 
     # Sampling parameters are only supported by openai-compatible backend.
     if sampling_params and args.backend not in OPENAI_COMPATIBLE_BACKENDS:
-        raise ValueError("Sampling parameters are only supported by openai-compatible " "backends.")
+        raise ValueError("Sampling parameters are only supported by " "openai-compatible backends.")
 
     if "temperature" not in sampling_params:
         sampling_params["temperature"] = 0.0  # Default to greedy decoding.
@@ -870,442 +1112,118 @@ def main(args: argparse.Namespace):
     else:
         hyper_parameters = {}
 
-    benchmark_result = asyncio.run(
-        benchmark(
-            backend=backend,
-            api_url=api_url,
-            base_url=base_url,
-            model_id=model_id,
-            model_name=model_name,
-            input_requests=input_requests,
-            hyper_parameters=hyper_parameters,
-            logprobs=args.logprobs,
-            request_rate=args.request_rate,
-            burstiness=args.burstiness,
-            disable_tqdm=args.disable_tqdm,
-            profile=args.profile,
-            selected_percentile_metrics=args.percentile_metrics.split(","),
-            selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
-            ignore_eos=args.ignore_eos,
-            debug=args.debug,
-            goodput_config_dict=goodput_config_dict,
-            max_concurrency=args.max_concurrency,
-            lora_modules=args.lora_modules,
-            extra_body=sampling_params,
-        )
+    benchmark_result = await benchmark(
+        backend=backend,
+        api_url=api_url,
+        base_url=base_url,
+        model_id=model_id,
+        model_name=model_name,
+        input_requests=input_requests,
+        hyper_parameters=hyper_parameters,
+        logprobs=args.logprobs,
+        request_rate=args.request_rate,
+        burstiness=args.burstiness,
+        disable_tqdm=args.disable_tqdm,
+        profile=args.profile,
+        selected_percentile_metrics=args.percentile_metrics.split(","),
+        selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
+        ignore_eos=args.ignore_eos,
+        debug=args.debug,
+        goodput_config_dict=goodput_config_dict,
+        max_concurrency=args.max_concurrency,
+        lora_modules=args.lora_modules,
+        extra_body=sampling_params,
     )
 
-    # benchmark_result = benchmark_metrics(
-    #     benchmark_duration=3600,
-    #     result_file="your result file",
-    #     selected_percentile_metrics=args.percentile_metrics.split(","),
-    #     selected_percentiles=[
-    #             float(p) for p in args.metric_percentiles.split(",")
-    #         ],
-    #     goodput_config_dict=goodput_config_dict,
-    # )
-
     # Save config and results to json
-    if args.save_result:
-        result_json: dict[str, Any] = {}
+    result_json: dict[str, Any] = {}
 
-        # Setup
-        current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
-        result_json["date"] = current_dt
-        result_json["backend"] = backend
-        result_json["model_id"] = model_id
-        result_json["tokenizer_id"] = tokenizer_id
-        result_json["num_prompts"] = args.num_prompts
+    # Setup
+    current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
+    result_json["date"] = current_dt
+    result_json["endpoint_type"] = args.backend
+    result_json["label"] = label
+    result_json["model_id"] = model_id
+    result_json["tokenizer_id"] = tokenizer_id
+    result_json["num_prompts"] = args.num_prompts
 
-        # Metadata
-        if args.metadata:
-            for item in args.metadata:
-                if "=" in item:
-                    kvstring = item.split("=")
-                    result_json[kvstring[0].strip()] = kvstring[1].strip()
-                else:
-                    raise ValueError("Invalid metadata format. Please use KEY=VALUE format.")
+    # Metadata
+    if args.metadata:
+        for item in args.metadata:
+            if "=" in item:
+                kvstring = item.split("=", 1)
+                result_json[kvstring[0].strip()] = kvstring[1].strip()
+            else:
+                raise ValueError("Invalid metadata format. Please use KEY=VALUE format.")
 
-        if not args.save_detailed:
-            # Remove fields with too many data points
-            for field in [
-                "input_lens",
-                "output_lens",
-                "ttfts",
-                "itls",
-                "generated_texts",
-                "errors",
-            ]:
-                if field in result_json:
-                    del result_json[field]
+    # Traffic
+    result_json["request_rate"] = args.request_rate if args.request_rate < float("inf") else "inf"
+    result_json["burstiness"] = args.burstiness
+    result_json["max_concurrency"] = args.max_concurrency
 
-        # Traffic
-        result_json["request_rate"] = args.request_rate if args.request_rate < float("inf") else "inf"
-        result_json["burstiness"] = args.burstiness
-        result_json["max_concurrency"] = args.max_concurrency
+    if args.ramp_up_strategy is not None:
+        result_json["ramp_up_strategy"] = args.ramp_up_strategy
+        result_json["ramp_up_start_rps"] = args.ramp_up_start_rps
+        result_json["ramp_up_end_rps"] = args.ramp_up_end_rps
 
-        # Merge with benchmark result
-        result_json = {**result_json, **benchmark_result}
+    # Merge with benchmark result
+    result_json = {**result_json, **benchmark_result}
+
+    if not args.save_detailed:
+        # Remove fields with too many data points
+        for field in [
+            "input_lens",
+            "output_lens",
+            "ttfts",
+            "itls",
+            "generated_texts",
+            "errors",
+        ]:
+            if field in result_json:
+                del result_json[field]
+            if field in benchmark_result:
+                del benchmark_result[field]
 
         # Save to file
+    if args.save_result or args.append_result:
         base_model_id = model_id.split("/")[-1]
         max_concurrency_str = f"-concurrency{args.max_concurrency}" if args.max_concurrency is not None else ""
-        file_name = f"{backend}-{args.request_rate}qps{max_concurrency_str}-{base_model_id}-{current_dt}.json"
+        label = label or endpoint_type
+        if args.ramp_up_strategy is not None:
+            file_name = f"{label}-ramp-up-{args.ramp_up_strategy}-{args.ramp_up_start_rps}qps-{args.ramp_up_end_rps}qps{max_concurrency_str}-{base_model_id}-{current_dt}.json"  # noqa
+        else:
+            file_name = (
+                f"{label}-{args.request_rate}qps{max_concurrency_str}-{base_model_id}-{current_dt}.json"  # noqa
+            )
         if args.result_filename:
             file_name = args.result_filename
         if args.result_dir:
+            os.makedirs(args.result_dir, exist_ok=True)
             file_name = os.path.join(args.result_dir, file_name)
-        with open(file_name, "w", encoding="utf-8") as outfile:
+        with open(file_name, mode="a+" if args.append_result else "w", encoding="utf-8") as outfile:
+            # Append a newline.
+            if args.append_result and outfile.tell() != 0:
+                outfile.write("\n")
             json.dump(result_json, outfile)
         save_to_pytorch_benchmark_format(args, result_json, file_name)
 
+    return result_json
 
-if __name__ == "__main__":
-    parser = FlexibleArgumentParser(description="Benchmark the online serving throughput.")
-    parser.add_argument(
-        "--backend",
-        type=str,
-        default="openai-chat",
-        choices=list(ASYNC_REQUEST_FUNCS.keys()),
-    )
-    parser.add_argument(
-        "--base-url",
-        type=str,
-        default=None,
-        help="Server or API base url if not using http host and port.",
-    )
-    # Use 127.0.0.1 here instead of localhost to force the use of ipv4
-    parser.add_argument("--host", type=str, default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument(
-        "--endpoint",
-        type=str,
-        default="/v1/completions",
-        help="API endpoint.",
-    )
-    parser.add_argument(
-        "--dataset-name",
-        type=str,
-        default="sharegpt",
-        choices=[
-            "sharegpt",
-            "burstgpt",
-            "sonnet",
-            "random",
-            "hf",
-            "EB",
-            "EBChat",
-        ],
-        help="Name of the dataset to benchmark on.",
-    )
-    parser.add_argument(
-        "--dataset-path",
-        type=str,
-        default=None,
-        help="Path to the sharegpt/sonnet dataset. " "Or the huggingface dataset ID if using HF dataset.",
-    )
-    parser.add_argument(
-        "--hyperparameter-path",
-        type=str,
-        default=None,
-        help="Path to the hyperparameter. ",
-    )
-    parser.add_argument(
-        "--max-concurrency",
-        type=int,
-        default=None,
-        help="Maximum number of concurrent requests. This can be used "
-        "to help simulate an environment where a higher level component "
-        "is enforcing a maximum number of concurrent requests. While the "
-        "--request-rate argument controls the rate at which requests are "
-        "initiated, this argument will control how many are actually allowed "
-        "to execute at a time. This means that when used in combination, the "
-        "actual request rate may be lower than specified with --request-rate, "
-        "if the server is not processing requests fast enough to keep up.",
-    )
 
-    parser.add_argument(
-        "--model",
-        type=str,
-        required=True,
-        help="Name of the model.",
-    )
-    parser.add_argument(
-        "--tokenizer",
-        type=str,
-        help="Name or path of the tokenizer, if not using the default tokenizer.",
-    )
-    parser.add_argument("--use-beam-search", action="store_true")
-    parser.add_argument(
-        "--num-prompts",
-        type=int,
-        default=1000,
-        help="Number of prompts to process.",
-    )
-    parser.add_argument(
-        "--logprobs",
-        type=int,
-        default=None,
-        help=(
-            "Number of logprobs-per-token to compute & return as part of "
-            "the request. If unspecified, then either (1) if beam search "
-            "is disabled, no logprobs are computed & a single dummy "
-            "logprob is returned for each token; or (2) if beam search "
-            "is enabled 1 logprob per token is computed"
-        ),
-    )
-    parser.add_argument(
-        "--request-rate",
-        type=float,
-        default=float("inf"),
-        help="Number of requests per second. If this is inf, "
-        "then all the requests are sent at time 0. "
-        "Otherwise, we use Poisson process or gamma distribution "
-        "to synthesize the request arrival times.",
-    )
-    parser.add_argument(
-        "--burstiness",
-        type=float,
-        default=1.0,
-        help="Burstiness factor of the request generation. "
-        "Only take effect when request_rate is not inf. "
-        "Default value is 1, which follows Poisson process. "
-        "Otherwise, the request intervals follow a gamma distribution. "
-        "A lower burstiness value (0 < burstiness < 1) results in more "
-        "bursty requests. A higher burstiness value (burstiness > 1) "
-        "results in a more uniform arrival of requests.",
-    )
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--shuffle",
-        action="store_true",
-        help="shuffle dataset",
-    )
-    parser.add_argument(
-        "--trust-remote-code",
-        action="store_true",
-        help="Trust remote code from huggingface",
-    )
-    parser.add_argument(
-        "--disable-tqdm",
-        action="store_true",
-        help="Specify to disable tqdm progress bar.",
-    )
-    parser.add_argument(
-        "--profile",
-        action="store_true",
-        help="Use Torch Profiler. The endpoint must be launched with " "VLLM_TORCH_PROFILER_DIR to enable profiler.",
-    )
-    parser.add_argument(
-        "--save-result",
-        action="store_true",
-        help="Specify to save benchmark results to a json file",
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="print debug information (output)",
-    )
-    parser.add_argument(
-        "--save-detailed",
-        action="store_true",
-        help="When saving the results, whether to include per request "
-        "information such as response, error, ttfs, tpots, etc.",
-    )
-    parser.add_argument(
-        "--metadata",
-        metavar="KEY=VALUE",
-        nargs="*",
-        help="Key-value pairs (e.g, --metadata version=0.3.3 tp=1) "
-        "for metadata of this run to be saved in the result JSON file "
-        "for record keeping purposes.",
-    )
-    parser.add_argument(
-        "--result-dir",
-        type=str,
-        default=None,
-        help="Specify directory to save benchmark json results."
-        "If not specified, results are saved in the current directory.",
-    )
-    parser.add_argument(
-        "--result-filename",
-        type=str,
-        default=None,
-        help="Specify the filename to save benchmark json results."
-        "If not specified, results will be saved in "
-        "{backend}-{args.request_rate}qps-{base_model_id}-{current_dt}.json"
-        " format.",
-    )
-    parser.add_argument(
-        "--ignore-eos",
-        action="store_true",
-        help="Set ignore_eos flag when sending the benchmark request."
-        "Warning: ignore_eos is not supported in deepspeed_mii and tgi.",
-    )
-    parser.add_argument(
-        "--percentile-metrics",
-        type=str,
-        default="ttft,tpot,itl",
-        help="Comma-separated list of selected metrics to report percentils. "
-        "This argument specifies the metrics to report percentiles. "
-        'Allowed metric names are "ttft", "tpot", "itl", "e2el". '
-        'Default value is "ttft,tpot,itl".',
-    )
-    parser.add_argument(
-        "--metric-percentiles",
-        type=str,
-        default="99",
-        help="Comma-separated list of percentiles for selected metrics. "
-        'To report 25-th, 50-th, and 75-th percentiles, use "25,50,75". '
-        'Default value is "99". '
-        'Use "--percentile-metrics" to select metrics.',
-    )
-    parser.add_argument(
-        "--goodput",
-        nargs="+",
-        required=False,
-        help='Specify service level objectives for goodput as "KEY:VALUE" '
-        "pairs, where the key is a metric name, and the value is in "
-        'milliseconds. Multiple "KEY:VALUE" pairs can be provided, '
-        "separated by spaces. Allowed request level metric names are "
-        '"ttft", "tpot", "e2el". For more context on the definition of '
-        "goodput, refer to DistServe paper: https://arxiv.org/pdf/2401.09670 "
-        "and the blog: https://hao-ai-lab.github.io/blogs/distserve",
-    )
+def main(args: argparse.Namespace) -> dict[str, Any]:
+    return asyncio.run(main_async(args))
 
-    # group for dataset specific arguments
-    sonnet_group = parser.add_argument_group("sonnet dataset options")
-    sonnet_group.add_argument(
-        "--sonnet-input-len",
-        type=int,
-        default=550,
-        help="Number of input tokens per request, used only for sonnet dataset.",
-    )
-    sonnet_group.add_argument(
-        "--sonnet-output-len",
-        type=int,
-        default=150,
-        help="Number of output tokens per request, used only for sonnet dataset.",
-    )
-    sonnet_group.add_argument(
-        "--sonnet-prefix-len",
-        type=int,
-        default=200,
-        help="Number of prefix tokens per request, used only for sonnet dataset.",
-    )
 
-    sharegpt_group = parser.add_argument_group("sharegpt dataset options")
-    sharegpt_group.add_argument(
-        "--sharegpt-output-len",
-        type=int,
-        default=None,
-        help="Output length for each request. Overrides the output length " "from the ShareGPT dataset.",
-    )
+class BenchmarkServingSubcommand(BenchmarkSubcommandBase):
+    """The `serve` subcommand for fastdeploy bench."""
 
-    random_group = parser.add_argument_group("random dataset options")
-    random_group.add_argument(
-        "--random-input-len",
-        type=int,
-        default=1024,
-        help="Number of input tokens per request, used only for random sampling.",
-    )
-    random_group.add_argument(
-        "--random-output-len",
-        type=int,
-        default=128,
-        help="Number of output tokens per request, used only for random sampling.",
-    )
-    random_group.add_argument(
-        "--random-range-ratio",
-        type=float,
-        default=0.0,
-        help="Range ratio for sampling input/output length, "
-        "used only for random sampling. Must be in the range [0, 1) to define "
-        "a symmetric sampling range"
-        "[length * (1 - range_ratio), length * (1 + range_ratio)].",
-    )
-    random_group.add_argument(
-        "--random-prefix-len",
-        type=int,
-        default=0,
-        help=(
-            "Number of fixed prefix tokens before the random context "
-            "in a request. "
-            "The total input length is the sum of `random-prefix-len` and "
-            "a random "
-            "context length sampled from [input_len * (1 - range_ratio), "
-            "input_len * (1 + range_ratio)]."
-        ),
-    )
+    name = "serve"
+    help = "Benchmark the online serving throughput."
 
-    hf_group = parser.add_argument_group("hf dataset options")
-    hf_group.add_argument("--hf-subset", type=str, default=None, help="Subset of the HF dataset.")
-    hf_group.add_argument("--hf-split", type=str, default=None, help="Split of the HF dataset.")
-    hf_group.add_argument(
-        "--hf-output-len",
-        type=int,
-        default=None,
-        help="Output length for each request. Overrides the output lengths " "from the sampled HF dataset.",
-    )
+    @classmethod
+    def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        add_cli_args(parser)
 
-    sampling_group = parser.add_argument_group("sampling parameters")
-    sampling_group.add_argument(
-        "--top-p",
-        type=float,
-        default=None,
-        help="Top-p sampling parameter. Only has effect on openai-compatible " "backends.",
-    )
-    sampling_group.add_argument(
-        "--top-k",
-        type=int,
-        default=None,
-        help="Top-k sampling parameter. Only has effect on openai-compatible " "backends.",
-    )
-    sampling_group.add_argument(
-        "--min-p",
-        type=float,
-        default=None,
-        help="Min-p sampling parameter. Only has effect on openai-compatible " "backends.",
-    )
-    sampling_group.add_argument(
-        "--temperature",
-        type=float,
-        default=None,
-        help="Temperature sampling parameter. Only has effect on "
-        "openai-compatible backends. If not specified, default to greedy "
-        "decoding (i.e. temperature==0.0).",
-    )
-
-    parser.add_argument(
-        "--tokenizer-mode",
-        type=str,
-        default="auto",
-        choices=["auto", "slow", "mistral", "custom"],
-        help='The tokenizer mode.\n\n* "auto" will use the '
-        'fast tokenizer if available.\n* "slow" will '
-        "always use the slow tokenizer. \n* "
-        '"mistral" will always use the `mistral_common` tokenizer. \n*'
-        '"custom" will use --tokenizer to select the preregistered tokenizer.',
-    )
-
-    parser.add_argument(
-        "--served-model-name",
-        type=str,
-        default=None,
-        help="The model name used in the API. "
-        "If not specified, the model name will be the "
-        "same as the ``--model`` argument. ",
-    )
-
-    parser.add_argument(
-        "--lora-modules",
-        nargs="+",
-        default=None,
-        help="A subset of LoRA module names passed in when "
-        "launching the server. For each request, the "
-        "script chooses a LoRA module at random.",
-    )
-
-    args = parser.parse_args()
-
-    main(args)
+    @staticmethod
+    def cmd(args: argparse.Namespace) -> None:
+        main(args)

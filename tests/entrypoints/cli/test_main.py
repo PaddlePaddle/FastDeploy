@@ -18,7 +18,7 @@ class TestCliMain(unittest.TestCase):
         cli_main()
 
         # Verify version check
-        mock_metadata.version.assert_called_once_with("fastdeploy")
+        mock_metadata.version.assert_called_once_with("fastdeploy-gpu")
         mock_args.dispatch_function.assert_called_once()
 
 

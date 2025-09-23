@@ -83,7 +83,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
-                estimate_total_token_nums,
             )
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
