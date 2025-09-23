@@ -481,7 +481,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         """
         glm4_moe only support loader_v1.
         """
-        assert False, "glm4_moe only support --load_choices default_v1."
+        assert False, "glm4_moe only support --load-choices default_v1."
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
