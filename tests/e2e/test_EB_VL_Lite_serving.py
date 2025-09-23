@@ -30,9 +30,10 @@ import requests
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 # List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
 
 def is_port_open(host: str, port: int, timeout=1.0):
@@ -114,6 +115,8 @@ def setup_and_run_server():
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
+        "--cache-queue-port",
+        str(FD_CACHE_QUEUE_PORT),
         "--enable-mm",
         "--max-model-len",
         "32768",
@@ -250,6 +253,16 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
 
     # Verify that result is same as the base result
     assert content1 == content2
+
+
+def test_with_metadata(api_url, headers, consistent_payload):
+    """
+    Test that result is same as the base result.
+    """
+    # request
+    consistent_payload["metadata"] = {"enable_thinking": True}
+    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
+    assert resp1.status_code == 200
 
 
 # ==========================
@@ -550,6 +563,46 @@ def test_chat_with_thinking(openai_client, capsys):
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert reasoning_tokens <= reasoning_max_tokens
+
+
+def test_chat_with_completion_token_ids(openai_client):
+    """Test completion_token_ids"""
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        extra_body={
+            "completion_token_ids": [94936],
+            "return_token_ids": True,
+            "reasoning_max_tokens": 20,
+            "max_tokens": 10,
+        },
+        max_tokens=10,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
+    assert isinstance(response.choices[0].message.prompt_token_ids, list)
+    assert 94936 in response.choices[0].message.prompt_token_ids
+
+
+def test_chat_with_reasoning_max_tokens(openai_client):
+    """Test completion_token_ids"""
+    assertion_executed = False
+    try:
+        openai_client.chat.completions.create(
+            model="default",
+            messages=[{"role": "user", "content": "Hello"}],
+            extra_body={"completion_token_ids": [18900], "return_token_ids": True, "reasoning_max_tokens": -1},
+            max_tokens=10,
+            stream=False,
+        )
+    except openai.InternalServerError as e:
+        error_message = str(e)
+        assertion_executed = True
+        assert "reasoning_max_tokens must be greater than 1" in error_message
+    assert assertion_executed, "Assertion was not executed (no exception raised)"
 
 
 def test_profile_reset_block_num():

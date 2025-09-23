@@ -108,6 +108,7 @@ void CascadeAppendAttentionC8Kernel(
     const bool causal,
     const bool is_decoder,
     const bool enable_prefill,
+    const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
     const int sliding_window);
@@ -279,10 +280,11 @@ void CascadeAppendAttentionKernel(
                                                 causal,
                                                 is_decoder,
                                                 enable_prefill,
+                                                cache_quant_type_str,
                                                 stream,
                                                 out,
                                                 sliding_window);
-    } else if (cache_quant_type_str == "cache_fp8") {
+    } else if (cache_quant_type_str == "cache_fp8" or cache_quant_type_str == "block_wise_fp8") {
         CascadeAppendAttentionC8Kernel<T, OutT, true>(meta_data,
                                                 qkv,
                                                 cache_k,
@@ -316,6 +318,7 @@ void CascadeAppendAttentionKernel(
                                                 causal,
                                                 is_decoder,
                                                 enable_prefill,
+                                                cache_quant_type_str,
                                                 stream,
                                                 out,
                                                 sliding_window);

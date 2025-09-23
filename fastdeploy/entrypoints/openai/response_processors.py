@@ -17,6 +17,7 @@
 from typing import Any, List, Optional
 
 from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
+from fastdeploy.utils import api_server_logger
 
 
 class ChatResponseProcessor:
@@ -41,6 +42,8 @@ class ChatResponseProcessor:
         self.eos_token_id = eos_token_id
         if decoder_base_url is not None:
             self.decoder_client = AsyncTokenizerClient(base_url=decoder_base_url)
+        else:
+            self.decoder_client = None
         self._mm_buffer: List[Any] = []  # Buffer for accumulating image token_ids
         self._end_image_code_request_output: Optional[Any] = None
         self._multipart_buffer = []
@@ -74,6 +77,7 @@ class ChatResponseProcessor:
             include_stop_str_in_output: Whether or not to include stop strings in the output.
         """
         for request_output in request_outputs:
+            api_server_logger.debug(f"request_output {request_output}")
             if not self.enable_mm_output:
                 yield self.data_processor.process_response_dict(
                     response_dict=request_output,
@@ -112,7 +116,7 @@ class ChatResponseProcessor:
                     yield request_output
 
                 elif decode_type == 1:
-                    self._mm_buffer.extend(token_ids)
+                    self._mm_buffer.append(token_ids)
                     self._end_image_code_request_output = request_output
             else:
                 self.accumulate_token_ids(request_output)

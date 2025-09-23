@@ -38,7 +38,11 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 class GptOssAttention(nn.Layer):
 
@@ -213,7 +217,12 @@ class GptOssModel(nn.Layer):
         hidden_states = self.norm(hidden_states)
         return hidden_states
 
-
+@ModelRegistry.register_model_class(
+    architecture="GptOssForCausalLM",
+    module_path="gpt_oss",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class GptOssForCausalLM(ModelForCasualLM):
     def __init__(self, fd_config: FDConfig):
         super(GptOssForCausalLM, self).__init__(fd_config)

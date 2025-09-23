@@ -30,6 +30,7 @@ from tests.model_loader.utils import (
 )
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 prompts = ["北京天安门在哪里?"]
 
@@ -128,6 +129,7 @@ def test_model_against_baseline(
             "default_v1",
             FD_ENGINE_QUEUE_PORT,
             prompts,
+            FD_CACHE_QUEUE_PORT,
         ),
     )
 

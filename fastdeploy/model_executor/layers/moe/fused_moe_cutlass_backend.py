@@ -27,11 +27,7 @@ from ..utils import get_tensor
 from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        moe_expert_dispatch,
-        moe_expert_reduce,
-        noaux_tc,
-    )
+    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 
     try:
         from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute
@@ -44,31 +40,6 @@ elif current_platform.is_iluvatar():
     )
 
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
-
-
-# used for deepseek_v3
-def get_moe_scores(
-    gating_output: paddle.Tensor,
-    n_group,
-    topk_group,
-    top_k,
-    routed_scaling_factor,
-    e_score_correction_bias,
-) -> paddle.Tensor:
-    """
-    compute moe scores using e_score_correction_bias.
-    """
-    scores = paddle.nn.functional.sigmoid(gating_output)
-    scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group,
-        topk_group,
-        top_k,
-        routed_scaling_factor,
-    )
-    return scores, topk_values, topk_idx
 
 
 class CutlassMoEMethod(UnquantizedFusedMoEMethod):
@@ -121,7 +92,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
-                estimate_total_token_nums,
             )
         else:
             ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
@@ -138,8 +108,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 self.moe_quant_type,
                 used_in_ep_low_latency,
                 estimate_total_token_nums,
+                getattr(layer.moe_quant_config, "hadamard_block_size", 128),
                 layer.activation,
-            )
+        )
         if layer.with_bias:
             down_proj_bias_expand = paddle.index_select(layer.down_proj_bias, expert_idx_per_token, axis=0)
             ffn_out_without_down_proj_bias = paddle.add(ffn_out_without_down_proj_bias, down_proj_bias_expand)
@@ -170,7 +141,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         # 3. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (
                 permute_input,
                 permute_indices_per_token,
@@ -271,6 +242,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+
             gate_out, _, _ = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -1067,20 +1040,20 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             ]
         self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
-
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -1140,7 +1113,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
             moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
             set_weight_attrs(layer.up_gate_proj_weight, moe_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight, moe_extra_weight_attrs)
@@ -1153,7 +1126,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not layer.fd_config.load_config.load_choices == "default_v1":
+        if not self.quant_config.is_checkpoint_bf16:
             return
         weight_id_map = {"gate_up": 0, "down": 1}
         if (
@@ -1183,7 +1156,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
         # 3.quantize weight
 
-        for expert_id in range(layer.num_experts):
+        for expert_id in range(layer.num_local_experts):
             weight[expert_id], scale[expert_id] = weight_quantize(
                 getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
             )

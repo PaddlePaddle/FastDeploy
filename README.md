@@ -26,6 +26,8 @@ English | [简体中文](README_CN.md)
 # FastDeploy : Inference and Deployment Toolkit for LLMs and VLMs based on PaddlePaddle
 
 ## News
+**[2025-09] 🔥 FastDeploy v2.2 is newly released!** It now offers compatibility with models in the HuggingFace ecosystem, has further optimized performance, and newly adds support for [baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)!
+
 **[2025-08] 🔥 Released FastDeploy v2.1:** A brand-new KV Cache scheduling strategy has been introduced, and expanded support for PD separation and CUDA Graph across more models. Enhanced hardware support has been added for platforms like Kunlun and Hygon, along with comprehensive optimizations to improve the performance of both the service and inference engine.
 
 **[2025-07] The FastDeploy 2.0 Inference Deployment Challenge is now live!** Complete the inference deployment task for the ERNIE 4.5 series open-source models to win official FastDeploy 2.0 merch and generous prizes! 🎁 You're welcome to try it out and share your feedback! 📌[Sign up here](https://www.wjx.top/vm/meSsp3L.aspx#) 📌[Event details](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
@@ -57,8 +59,9 @@ FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**,
 - [Iluvatar GPU](./docs/get_started/installation/iluvatar_gpu.md)
 - [Enflame GCU](./docs/get_started/installation/Enflame_gcu.md)
 - [Hygon DCU](./docs/get_started/installation/hygon_dcu.md)
+- [MetaX GPU](./docs/get_started/installation/metax_gpu.md)
 
-**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU and MetaX GPU are currently under development and testing. Stay tuned for updates!
+**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU are currently under development and testing. Stay tuned for updates!
 
 ## Get Started
 
@@ -68,20 +71,12 @@ Learn how to use FastDeploy through our documentation:
 - [ERNIE-4.5-VL Multimodal Model Deployment](./docs/get_started/ernie-4.5-vl.md)
 - [Offline Inference Development](./docs/offline_inference.md)
 - [Online Service Deployment](./docs/online_serving/README.md)
-- [Full Supported Models List](./docs/supported_models.md)
 - [Best Practices](./docs/best_practices/README.md)
 
 ## Supported Models
 
-| Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
-|:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
-|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅| ✅ | ✅|✅| ✅ |128K |
-|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅| ✅ | ✅|❌| ✅ | 128K |
-|ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
-|ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ✅ | ✅|128K |
-|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌  | ✅|128K |
-|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ✅ |  ✅ |  ✅ | ❌ | ✅| 128K |
+Learn how to download models, enable using the torch format, and more:
+- [Full Supported Models List](./docs/supported_models.md)
 
 ## Advanced Usage
 

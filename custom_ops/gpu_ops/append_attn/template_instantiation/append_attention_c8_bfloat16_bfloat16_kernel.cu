@@ -58,6 +58,7 @@ CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, false>(
     const bool causal,
     const bool is_decoder,
     const bool enable_prefill,
+    const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
     const int sliding_window);
@@ -108,6 +109,7 @@ CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, true>(
     const bool causal,
     const bool is_decoder,
     const bool enable_prefill,
+    const std::string& cache_quant_type_str,
     cudaStream_t& stream,
     paddle::Tensor* out,
     const int sliding_window);

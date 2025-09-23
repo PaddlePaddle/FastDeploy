@@ -40,6 +40,7 @@ class RequestType(Enum):
     PREFILL = 0
     DECODE = 1
     PREEMPTED = 2
+    EXTEND = 3
 
 
 @dataclass
@@ -72,6 +73,7 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
         trace_carrier: dict = dict(),
+        dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
         image_start: int = 0,
         video_start: int = 0,
@@ -141,6 +143,11 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        # extend block tables
+        self.use_extend_tables = False
+        self.extend_block_tables = []
+        # dp
+        self.dp_rank = dp_rank
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -183,6 +190,7 @@ class Request:
             image_end=d.get("image_end", 0),
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
+            dp_rank=d.get("dp_rank", None),
         )
 
     @property
@@ -263,13 +271,11 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        return (
-            f"Request(request_id={self.request_id}, "
-            f"prompt={self.prompt!r}, "
-            f"prompt_token_ids={self.prompt_token_ids}, "
-            f"draft_token_ids={self.draft_token_ids}, "
-            f"sampling_params={self.sampling_params})"
-        )
+        non_none_fields = []
+        for attr, value in vars(self).items():
+            if value is not None and not attr.startswith("_"):
+                non_none_fields.append(f"{attr}={value!r}")
+        return f"Request({', '.join(non_none_fields)})"
 
 
 @dataclass(slots=True)
@@ -284,7 +290,8 @@ class CompletionOutput:
 
     index: int
     send_idx: int
-    token_ids: list[int]
+    token_ids: list[Any]
+    decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
@@ -301,6 +308,7 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "decode_type": self.decode_type,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
             "logprobs": self.logprobs,

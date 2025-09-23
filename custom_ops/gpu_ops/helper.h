@@ -193,11 +193,13 @@ public:
   typedef uint8_t data_t;
 };
 
+#ifndef PADDLE_WITH_COREX
 template <> class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
 public:
   typedef __nv_fp8_e4m3 DataType;
   typedef paddle::float8_e4m3fn data_t;
 };
+#endif
 
 template <typename T, int Size> struct alignas(sizeof(T) * Size) AlignedVector {
   T val[Size];
@@ -562,4 +564,12 @@ inline int GetSMVersion() {
       phi::backends::gpu::GetCurrentDeviceId());
   return sm_version;
 
+}
+
+inline bool GetMlaUseTensorcore() {
+  static const bool flags_mla_use_tensorcore = get_mla_use_tensorcore();
+  static const bool enable_mla_tensorcore = GetSMVersion() >= 90 ? true : false;
+  const bool mla_use_tensorcore =
+      flags_mla_use_tensorcore && enable_mla_tensorcore;
+  return mla_use_tensorcore;
 }
