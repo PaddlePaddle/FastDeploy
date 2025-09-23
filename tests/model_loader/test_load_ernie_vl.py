@@ -124,7 +124,7 @@ def setup_and_run_server():
         "0.71",
         "--reasoning-parser",
         "ernie-45-vl",
-        "--load_choices",
+        "--load-choices",
         "default_v1",
     ]
 
