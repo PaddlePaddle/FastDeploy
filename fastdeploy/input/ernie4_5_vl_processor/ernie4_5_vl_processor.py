@@ -255,6 +255,9 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         data_processor_logger.info(f"Processed request {request}")
 
+        if self.reasoning_parser is not None:
+            request["model_status"] = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

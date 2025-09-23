@@ -232,7 +232,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             request["top_p"] = _SAMPLING_EPS
         if self.reasoning_parser and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser":
             request["enable_thinking"] = True
-
+        if self.reasoning_parser:
+            request["model_status"] = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
 
@@ -246,6 +247,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
+        model_status = kwargs.get("model_status")
         req_id = response_dict.request_id
         token_ids = response_dict.outputs.token_ids
 
@@ -254,7 +256,9 @@ class Ernie4_5Processor(BaseDataProcessor):
             token_ids = token_ids[:-1]
         full_text = self.tokenizer.decode(token_ids)
         if self.reasoning_parser:
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
+            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                full_text, response_dict, model_status
+            )
             response_dict.outputs.text = text
             response_dict.outputs.reasoning_content = reasoning_content
         else:
@@ -296,6 +300,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             Dict: response contain text fields
         """
         enable_thinking = kwargs.get("enable_thinking")
+        model_status = kwargs.get("model_status")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -308,7 +313,9 @@ class Ernie4_5Processor(BaseDataProcessor):
             if self.reasoning_parser and (
                 enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
             ):
-                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
+                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                    full_text, response_dict, model_status
+                )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:
@@ -335,6 +342,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             Dict: response contain text fields
         """
         enable_thinking = kwargs.get("enable_thinking")
+        model_status = kwargs.get("model_status")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -354,6 +362,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
+                model_status,
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
