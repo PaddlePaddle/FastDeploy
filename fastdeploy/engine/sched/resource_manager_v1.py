@@ -548,3 +548,7 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
+
+    def clear_data(self):
+        self.waiting: deque[Request] = deque()
+        self.to_be_rescheduled_request_id_set = set()
