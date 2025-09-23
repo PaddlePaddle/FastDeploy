@@ -764,6 +764,19 @@ class EngineSevice:
     def check_and_free_block_tables(self):
         self.resource_manager.check_and_free_block_tables()
 
+    def clear_data(self):
+        try:
+            llm_logger.info("Clear Data: Start")
+            self.token_processor.clear_data()
+            self.engine_worker_queue.clear_data()
+            self.send_response_server.req_dict.clear()
+            self.recv_request_server.req_dict.clear()
+            llm_logger.info("Clear Data: Successfully")
+            return True
+        except Exception as e:
+            llm_logger.error(f"Clear data error: {e}")
+            return False
+
     def _exit_sub_services(self):
         """
         exit sub services
