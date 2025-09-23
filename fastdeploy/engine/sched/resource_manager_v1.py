@@ -512,6 +512,10 @@ class ResourceManagerV1(ResourceManager):
     def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
 
+    def clear_data(self):
+        self.waiting: deque[Request] = deque()
+        self.to_be_rescheduled_request_id_set = set()
+
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
         try:
