@@ -398,7 +398,6 @@ std::vector<paddle::Tensor> AppendAttentionKernel(
     }
   }
 
-  // init_kernel<<<1,128,0,main_stream>>>(fmha_out.data<phi::dtype::bfloat16>(), meta_data.token_nums * meta_data.q_num_heads * meta_data.head_dims);
   return {fmha_out, qkv_out};
 }
 
