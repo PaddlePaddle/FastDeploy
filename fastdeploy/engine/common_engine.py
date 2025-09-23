@@ -77,6 +77,7 @@ class EngineService:
             self.llm_logger = llm_logger
 
         self.scheduler = cfg.scheduler_config.scheduler()
+        self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
@@ -623,7 +624,7 @@ class EngineService:
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
-                        self.resource_manager.prerelease_resource(task)
+                        self.resource_manager.prerelease_resource(tmp_task)
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
