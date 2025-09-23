@@ -218,7 +218,6 @@ class Ernie4_5_Attention(nn.Layer):
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
-        #attn_out = qkv_out[:,:128*64]
 
         output = self.o_proj(attn_out)
 
