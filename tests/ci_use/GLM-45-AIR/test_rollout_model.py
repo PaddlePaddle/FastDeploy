@@ -28,9 +28,10 @@ def test_rollout_model_with_distributed_launch():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+        model_path = os.path.join(base_path, "GLM-4.5-Air-Fake")
     else:
-        model_path = "./ernie-4_5-vl-28b-a3b-bf16-paddle"
+        model_path = "./GLM-4.5-Air-Fake"
+    print(f"model_path = {model_path}")
 
     command = [
         sys.executable,
@@ -43,9 +44,6 @@ def test_rollout_model_with_distributed_launch():
         model_path,
         "--baseline_path",
         baseline_path,
-        "--enable_mm",
-        "--quantization",
-        "wint8",
     ]
 
     print(f"Executing command: {' '.join(command)}")
