@@ -364,7 +364,7 @@ class Ernie4_5_VLMoE(nn.Layer):
 
                 hidden_states = text_out
             else:
-                hidden_states = self.text_fused_moe(hidden_states)
+                hidden_states, combine_event = self.text_fused_moe(hidden_states)
         combine_event.current_stream_wait()
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
