@@ -13,7 +13,7 @@ export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
 export FD_MODEL_CACHE=/ssd1/download_models
 ```
 
-> ⭐ **Note**: Models marked with an asterisk can directly use **HuggingFace Torch weights** and support **FP8/WINT8/WINT4** as well as **BF16**. When running inference, you need to enable **`--load_choices "default_v1"`**.
+> ⭐ **Note**: Models marked with an asterisk can directly use **HuggingFace Torch weights** and support **FP8/WINT8/WINT4** as well as **BF16**. When running inference, you need to enable **`--load-choices "default_v1"`**.
 
 > Example launch Command using baidu/ERNIE-4.5-21B-A3B-PT:
 ```
@@ -24,7 +24,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
        --max-num-seqs 32 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 
 ## Large Language Models

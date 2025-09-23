@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -18,12 +19,14 @@ class TestConfig(unittest.TestCase):
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
+        model_config = Mock()
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             load_config=load_config,
             cache_config=cache_config,
             scheduler_config=scheduler_config,
+            model_config=model_config,
             ips=["1.1.1.1", "0.0.0.0"],
             test_mode=True,
         )
@@ -36,12 +39,14 @@ class TestConfig(unittest.TestCase):
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
+        model_config = Mock()
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             load_config=load_config,
             cache_config=cache_config,
             scheduler_config=scheduler_config,
+            model_config=model_config,
             ips="0.0.0.0",
             test_mode=True,
         )
@@ -54,12 +59,15 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         cache_config.enable_chunked_prefill = True
         scheduler_config = SchedulerConfig({})
+        model_config = model_config = Mock()
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
             load_config=load_config,
             scheduler_config=scheduler_config,
+            model_config=model_config,
             ips="0.0.0.0",
             test_mode=True,
         )
@@ -73,6 +81,7 @@ class TestConfig(unittest.TestCase):
             cache_config=cache_config,
             load_config=load_config,
             scheduler_config=scheduler_config,
+            model_config=model_config,
             ips="0.0.0.0",
             test_mode=True,
         )
@@ -87,13 +96,16 @@ class TestConfig(unittest.TestCase):
         cache_config.pd_comm_port = "2334"
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
+        scheduler_config.splitwise_role = "prefill"
+        model_config = model_config = Mock()
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
             load_config=load_config,
             scheduler_config=scheduler_config,
-            splitwise_role="prefill",
+            model_config=model_config,
             test_mode=True,
         )
         fd_config.init_cache_info()

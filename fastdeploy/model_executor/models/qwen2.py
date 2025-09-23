@@ -39,7 +39,11 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Qwen2MLP(nn.Layer):
@@ -282,6 +286,12 @@ class Qwen2Model(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen2ForCausalLM",
+    module_path="qwen2",
+    category=[ModelCategory.TEXT_GENERATION, ModelCategory.EMBEDDING],
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Qwen2ForCausalLM(ModelForCasualLM):
     """
     Qwen2ForCausalLM

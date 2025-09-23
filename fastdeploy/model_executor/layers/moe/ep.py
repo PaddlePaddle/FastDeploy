@@ -211,9 +211,8 @@ class DeepEPEngine:
         self.num_experts = num_experts
         self.num_local_experts = num_experts // ep_size
         self.async_finish = async_finish
-        from paddle.base.core import Config
 
-        self.ep_config = Config(24, 6, 256)
+        self.ep_config = None
 
         # Store phase and role for buffer management
         self._splitwise_role = splitwise_role
@@ -370,6 +369,7 @@ class EPRunner:
                     layer.top_k,
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
