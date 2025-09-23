@@ -58,12 +58,8 @@ class FDRunner:
 
         req_outputs = self.llm.generate(prompts, sampling_params=sampling_params, **kwargs)
         outputs: list[tuple[list[list[int]], list[str]]] = []
-        sample_output_ids: list[list[int]] = []
-        sample_output_strs: list[str] = []
         for output in req_outputs:
-            sample_output_ids.append(output.outputs.token_ids)
-            sample_output_strs.append(output.outputs.text)
-            outputs.append((sample_output_ids, sample_output_strs))
+            outputs.append((output.outputs.token_ids, output.outputs.text))
         return outputs
 
     def generate_topp0(
@@ -74,7 +70,7 @@ class FDRunner:
     ) -> list[tuple[list[int], str]]:
         from fastdeploy.engine.sampling_params import SamplingParams
 
-        topp_params = SamplingParams(temperature=1.0, top_p=0, max_tokens=max_tokens)
+        topp_params = SamplingParams(temperature=0.0, top_p=0, max_tokens=max_tokens)
         outputs = self.generate(prompts, topp_params, **kwargs)
         return outputs
 

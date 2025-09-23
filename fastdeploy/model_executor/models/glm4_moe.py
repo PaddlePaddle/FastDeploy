@@ -39,7 +39,11 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Glm4MoeMLP(nn.Layer):
@@ -106,6 +110,8 @@ class Glm4Moe(nn.Layer):
         self.n_routed_experts: int = fd_config.model_config.n_routed_experts
         self.n_shared_experts: int = fd_config.model_config.n_shared_experts
 
+        self.norm_topk_prob = fd_config.model_config.norm_topk_prob
+
         weight_key_map = {
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
@@ -130,6 +136,7 @@ class Glm4Moe(nn.Layer):
         self.experts = FusedMoE(
             fd_config,
             reduce_results=False,
+            renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
@@ -157,7 +164,7 @@ class Glm4Moe(nn.Layer):
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tensor_parallel_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
 
@@ -363,6 +370,12 @@ class Glm4MoeModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Glm4MoeForCausalLM",
+    module_path="glm4_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Glm4MoeForCausalLM(ModelForCasualLM):
     """
     Glm4MoeForCausalLM
@@ -468,7 +481,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         """
         glm4_moe only support loader_v1.
         """
-        assert False, "glm4_moe only support --load_choices default_v1."
+        assert False, "glm4_moe only support --load-choices default_v1."
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """

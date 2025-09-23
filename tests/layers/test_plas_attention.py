@@ -354,7 +354,6 @@ class TestMobaAttention(unittest.TestCase):
             "moba_decoder_top_k_right": 120,
         }
 
-        graph_optimization_config = {"use_cudagraph": False}
         # 加载模型
         llm = LLM(
             model=model_path,
@@ -367,7 +366,6 @@ class TestMobaAttention(unittest.TestCase):
             enable_chunked_prefill=True,
             max_num_batched_tokens=8192,
             moba_attention_config=moba_attention_config,
-            graph_optimization_config=graph_optimization_config,
         )
 
         prompts = ["Hello world!"]

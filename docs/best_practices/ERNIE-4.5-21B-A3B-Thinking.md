@@ -27,7 +27,7 @@ Start the service by following command:
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-21B-A3B-Thinking \
-       --load_choices "default_v1" \
+       --load-choices "default_v1" \
        --tensor-parallel-size 1 \
        --max-model-len 131072 \
        --quantization wint8 \
@@ -37,7 +37,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 - `--quantization`: Indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
 - `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
-- `--load_choices`: Indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
+- `--load-choices`: Indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
 - `--reasoning-parser`, `--tool-call-parser`: Indicates the corresponding reasoning content and tool call parser.
 
 For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。

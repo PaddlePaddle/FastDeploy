@@ -255,6 +255,16 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert content1 == content2
 
 
+def test_with_metadata(api_url, headers, consistent_payload):
+    """
+    Test that result is same as the base result.
+    """
+    # request
+    consistent_payload["metadata"] = {"enable_thinking": True}
+    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
+    assert resp1.status_code == 200
+
+
 # ==========================
 # OpenAI Client Chat Completion Test
 # ==========================
@@ -553,6 +563,46 @@ def test_chat_with_thinking(openai_client, capsys):
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert reasoning_tokens <= reasoning_max_tokens
+
+
+def test_chat_with_completion_token_ids(openai_client):
+    """Test completion_token_ids"""
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        extra_body={
+            "completion_token_ids": [94936],
+            "return_token_ids": True,
+            "reasoning_max_tokens": 20,
+            "max_tokens": 10,
+        },
+        max_tokens=10,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
+    assert isinstance(response.choices[0].message.prompt_token_ids, list)
+    assert 94936 in response.choices[0].message.prompt_token_ids
+
+
+def test_chat_with_reasoning_max_tokens(openai_client):
+    """Test completion_token_ids"""
+    assertion_executed = False
+    try:
+        openai_client.chat.completions.create(
+            model="default",
+            messages=[{"role": "user", "content": "Hello"}],
+            extra_body={"completion_token_ids": [18900], "return_token_ids": True, "reasoning_max_tokens": -1},
+            max_tokens=10,
+            stream=False,
+        )
+    except openai.InternalServerError as e:
+        error_message = str(e)
+        assertion_executed = True
+        assert "reasoning_max_tokens must be greater than 1" in error_message
+    assert assertion_executed, "Assertion was not executed (no exception raised)"
 
 
 def test_profile_reset_block_num():
