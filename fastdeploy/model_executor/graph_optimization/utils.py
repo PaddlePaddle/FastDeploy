@@ -15,6 +15,7 @@
 """
 
 import contextlib
+import gc
 
 
 def create_guard(default_value):
@@ -38,3 +39,20 @@ def create_guard(default_value):
 
 sot_warmup_guard, in_sot_warmup_mode = create_guard(False)
 profile_run_guard, in_profile_run_mode = create_guard(False)
+
+
+@contextlib.contextmanager
+def freeze_gc(enable_cudagraph_gc: bool = False):
+    # Optimize garbage collection during CUDA graph capture.
+    # Clean up, then freeze all remaining objects from being included
+    # in future collections.
+    gc.collect()
+    should_freeze = not enable_cudagraph_gc
+    if should_freeze:
+        gc.freeze()
+    try:
+        yield
+    finally:
+        if should_freeze:
+            gc.unfreeze()
+            gc.collect()

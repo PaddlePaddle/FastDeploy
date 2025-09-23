@@ -1507,7 +1507,7 @@ class GPUModelRunner(ModelRunnerBase):
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
 
-        if self.fd_config.graph_opt_config.cudagraph_only_prefill:
+        if self.graph_opt_config.cudagraph_only_prefill:
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
                     num_tokens=num_tokens,

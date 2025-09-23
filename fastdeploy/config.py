@@ -571,7 +571,7 @@ class GraphOptimizationConfig:
         only to the layer where CUDA graph functionality is required.
         """
         self.cudagraph_splitting_ops: list[str] = []
-        """ Whether to use a full cuda graph for the entire forward pass rather than
+        """ Whether to use a full CUDA graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
         self.cudagraph_only_prefill: bool = False
@@ -579,6 +579,8 @@ class GraphOptimizationConfig:
         When cudagraph_only_prefill is True, only capture prefill-only.
         Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
+        """ Use  garbage collection during CUDA graph capture. """
+        self.enable_cudagraph_gc: bool = False
 
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None

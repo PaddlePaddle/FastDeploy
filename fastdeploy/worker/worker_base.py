@@ -52,6 +52,7 @@ class WorkerBase(ABC):
         self.device_config = fd_config.device_config
         self.cache_config = fd_config.cache_config
         self.scheduler_config = fd_config.scheduler_config
+        self.graph_opt_config = fd_config.graph_opt_config
         # ... config
 
         # Device and Runner

@@ -25,6 +25,7 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.graph_optimization.utils import freeze_gc
 from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.utils import get_logger, set_random_seed
@@ -207,10 +208,11 @@ class GpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        if self.model_runner.graph_opt_level >= 1:
+        if self.graph_opt_config.graph_opt_level >= 1:
             self.model_runner.sot_warmup()
         # Trigger cuda graph capture
-        self.model_runner.capture_model()
+        with freeze_gc(self.graph_opt_config.enable_cudagraph_gc):
+            self.model_runner.capture_model()
 
     def check_health(self) -> bool:
         """ """
