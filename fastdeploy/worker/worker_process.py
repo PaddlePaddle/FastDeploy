@@ -129,6 +129,28 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
         fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
 
 
+def update_think_end_id_for_ernie(fd_config: FDConfig) -> None:
+    """
+    Updates the think_end_id in the model config. Uses the ID of '</think>'
+    if it exists, otherwise defaults to None.
+    """
+    is_ernie = ErnieArchitectures.contains_ernie_arch(fd_config.model_config.architectures)
+    if current_platform.is_cuda() and is_ernie:
+        tokenizer = Ernie4_5Tokenizer.from_pretrained(
+            fd_config.model_config.model,
+            model_max_length=fd_config.parallel_config.max_model_len,
+            padding_side="right",
+            use_fast=False,
+        )
+
+        vocab = tokenizer.get_vocab()
+        fd_config.model_config.think_end_id = vocab.get("</think>", None)
+        if fd_config.model_config.think_end_id is not None:
+            logger.info(f"Get think_end_id {fd_config.model_config.think_end_id} from vocab.")
+        else:
+            logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+
+
 class PaddleDisWorkerProc:
     """
     Paddle Distributed wrapper for fastdeploy.worker.Worker,
@@ -248,6 +270,11 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def _broadcast_model_weights_signal(self, src: int, group) -> int:
+        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
+        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
+        return model_weights_signal_tensor.item()
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -257,15 +284,19 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        self.model_weights_signal = paddle.zeros([1], dtype=paddle.int32)
+        self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.ep_group)
-            if self.fd_config.load_config.dynamic_load_weight:
-                paddle.distributed.broadcast(self.model_weights_signal, src=0, group=self.parallel_config.tp_group)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                        src=0, group=self.parallel_config.ep_group
+                    )
+            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
 
             self.insert_step = False
             req_dicts = None
@@ -293,7 +324,9 @@ class PaddleDisWorkerProc:
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
-                    logger.info(f"Rank: {self.local_rank} has updated parameters.")
+                    logger.info(
+                        f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
+                    )
                     from fastdeploy.rl.dynamic_weight_manager import (
                         DynamicWeightManager,
                     )
@@ -305,6 +338,7 @@ class PaddleDisWorkerProc:
                         self.parallel_config.engine_worker_queue_port,
                     )
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
+                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -771,6 +805,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
+    update_think_end_id_for_ernie(fd_config)
 
     return fd_config
 

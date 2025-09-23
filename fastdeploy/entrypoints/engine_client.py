@@ -16,12 +16,12 @@
 
 import inspect
 import os
-import threading
 import time
 import traceback
 import uuid
 
 import numpy as np
+from filelock import FileLock
 
 from fastdeploy import envs
 from fastdeploy.config import ModelConfig
@@ -132,7 +132,7 @@ class EngineClient:
             pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
         )
         self.connection_initialized = False
-        self.clear_update_lock = threading.Lock()
+        self.clear_update_lock = FileLock(f"/tmp/fd_weight_clear_update_lock__pid{pid}_port{port}.lock")
 
     def create_zmq_client(self, model, mode):
         """
@@ -180,8 +180,6 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
@@ -260,8 +258,13 @@ class EngineClient:
                 raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
 
         if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
-                raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
+            if data["reasoning_max_tokens"] < 1:
+                raise ValueError("reasoning_max_tokens must be greater than 1")
+            if data["reasoning_max_tokens"] > data["max_tokens"]:
+                data["reasoning_max_tokens"] = data["max_tokens"]
+                api_server_logger.warning(
+                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
+                )
 
         if data.get("top_p") is not None:
             if data["top_p"] > 1 or data["top_p"] < 0:
@@ -356,7 +359,9 @@ class EngineClient:
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
                 return True, ""
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "updating model weight already"
+                return False, "worker is updating model weight already"
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
+                return False, "worker is clearing model weight, cannot update now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
             if self.enable_prefix_caching or self.enable_splitwise:
@@ -400,7 +405,9 @@ class EngineClient:
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
                 return True, ""
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "clearing model weight already"
+                return False, "worker is clearing model weight already"
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
+                return False, "worker is updating model weight, cannot clear now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
             if self.enable_prefix_caching or self.enable_splitwise:

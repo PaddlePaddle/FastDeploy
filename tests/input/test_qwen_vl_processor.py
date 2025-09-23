@@ -176,12 +176,10 @@ class TestQwenVLProcessor(unittest.TestCase):
         3. Video processing produces expected output dimensions
         4. Correct counts for images (1) and videos (1)
         """
-        num_generated_token_ids = 10
+        num_completion_token_ids = 10
         request = {
             "request_id": "12345",
-            "metadata": {
-                "generated_token_ids": [1] * num_generated_token_ids,
-            },
+            "completion_token_ids": [1] * num_completion_token_ids,
             "stop": ["stop", "eof"],
             "messages": [
                 {
