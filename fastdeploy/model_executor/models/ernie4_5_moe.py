@@ -694,6 +694,7 @@ class Ernie4_5_Model(nn.Layer):
                         attention_in_out[i].residual = paddle.empty([0,8192], dtype="bfloat16")
                         attention_in_out[i].topk_idx = paddle.empty([0,8], dtype="int64")
                         attention_in_out[i].topk_weights = paddle.empty([0,8], dtype="float32")
+                        return
                     
                     
                     self.attn_input0[layer_id][i].copy_(attention_in_out[i].hidden_states, False)
