@@ -37,3 +37,4 @@ opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser
+lm_eval==0.4.9.1
