@@ -943,10 +943,11 @@ class Ernie4_5_Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
         residual = None
         for i in range(self.num_layers):	
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        
+
         hidden_states = hidden_states + residual
         out = self.norm(hidden_states)
         return out
