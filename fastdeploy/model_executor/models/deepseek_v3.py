@@ -596,7 +596,7 @@ class DeepSeekV3Model(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="DeepseekV3ForCausalLM",
-    module_path="deepseek_v3",
+    module_name="deepseek_v3",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )

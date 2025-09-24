@@ -798,7 +798,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_VLMoeForConditionalGeneration",
-    module_path="ernie4_5_vl.ernie4_5_vl_moe",
+    module_name="ernie4_5_vl.ernie4_5_vl_moe",
     category=ModelCategory.MULTIMODAL,
     primary_use=ModelCategory.MULTIMODAL,
 )
