@@ -1,0 +1,10 @@
+[submodule "custom_ops/third_party/DeepGEMM"]
+	path = custom_ops/third_party/DeepGEMM
+	url = https://github.com/deepseek-ai/DeepGEMM.git
+	ignore = all
+[submodule "custom_ops/third_party/cutlass"]
+	path = custom_ops/third_party/cutlass
+	url = https://github.com/NVIDIA/cutlass.git
+[submodule "custom_ops/third_party/nlohmann_json"]
+	path = custom_ops/third_party/nlohmann_json
+	url = https://github.com/nlohmann/json.git

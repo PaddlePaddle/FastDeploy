@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import codecs
 import importlib
+import json
 import logging
 import os
 import random
@@ -27,6 +28,9 @@ import sys
 import tarfile
 import time
 from datetime import datetime
+from enum import Enum
+from http import HTTPStatus
+from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
@@ -36,13 +40,18 @@ import paddle
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
+from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
+from typing import Callable, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
@@ -55,6 +64,62 @@ class EngineError(Exception):
     def __init__(self, message, error_code=400):
         super().__init__(message)
         self.error_code = error_code
+
+
+class ParameterError(Exception):
+    def __init__(self, param: str, message: str):
+        self.param = param
+        self.message = message
+        super().__init__(message)
+
+
+class ExceptionHandler:
+
+    # 全局异常兜底处理
+    @staticmethod
+    async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
+        error = ErrorResponse(error=ErrorInfo(message=str(exc), type=ErrorType.INTERNAL_ERROR))
+        return JSONResponse(content=error.model_dump(), status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    # 处理请求参数验证异常
+    @staticmethod
+    async def handle_request_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:
+        errors = exc.errors()
+        if not errors:
+            message = str(exc)
+            param = None
+        else:
+            first_error = errors[0]
+            loc = first_error.get("loc", [])
+            param = loc[-1] if loc else None
+            message = first_error.get("msg", str(exc))
+        err = ErrorResponse(
+            error=ErrorInfo(
+                message=message,
+                type=ErrorType.INVALID_REQUEST_ERROR,
+                code=ErrorCode.MISSING_REQUIRED_PARAMETER if param == "messages" else ErrorCode.INVALID_VALUE,
+                param=param,
+            )
+        )
+        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
+        return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
+
+
+class ErrorType(str, Enum):
+    INVALID_REQUEST_ERROR = "invalid_request_error"
+    TIMEOUT_ERROR = "timeout_error"
+    SERVER_ERROR = "server_error"
+    INTERNAL_ERROR = "internal_error"
+    API_CONNECTION_ERROR = "api_connection_error"
+
+
+class ErrorCode(str, Enum):
+    INVALID_VALUE = "invalid_value"
+    CONTEXT_LENGTH_EXCEEDED = "context_length_exceeded"
+    MODEL_NOT_SUPPORT = "model_not_support"
+    TIMEOUT = "timeout"
+    CONNECTION_ERROR = "connection_error"
+    MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -379,13 +444,24 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
                 config = loaded_config
 
         # Get declared parameters
-        defined_dests = {action.dest for action in self._actions}
-        filtered_config = {k: v for k, v in config.items() if k in defined_dests}
+        defined_actions = {action.dest: action for action in self._actions}
+        filtered_config = {k: v for k, v in config.items() if k in defined_actions}
 
         # Set parameters
         if namespace is None:
             namespace = argparse.Namespace()
         for key, value in filtered_config.items():
+            action = defined_actions[key]
+            if action.type is not None and isinstance(value, (str, int, float)):
+                try:
+                    str_value = str(value).strip()
+                    if str_value == "":
+                        converted = None
+                    else:
+                        converted = action.type(str_value)
+                    value = converted
+                except Exception as e:
+                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}")
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
 
@@ -497,11 +573,20 @@ def print_gpu_memory_use(gpu_id: int, title: str) -> None:
     meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
     pynvml.nvmlShutdown()
 
+    paddle_max_reserved = paddle.device.cuda.max_memory_reserved(gpu_id)
+    paddle_max_allocated = paddle.device.cuda.max_memory_allocated(gpu_id)
+    paddle_reserved = paddle.device.cuda.memory_reserved(gpu_id)
+    paddle_allocated = paddle.device.cuda.memory_allocated(gpu_id)
+
     print(
         f"\n{title}:",
-        f"\n\tDevice Total memory: {meminfo.total}",
-        f"\n\tDevice Used memory: {meminfo.used}",
-        f"\n\tDevice Free memory: {meminfo.free}",
+        f"\n\tDevice Total memory(GiB): {meminfo.total / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tDevice Used memory(GiB): {meminfo.used / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tDevice Free memory(GiB): {meminfo.free / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle max memory Reserved(GiB): {paddle_max_reserved / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle max memory Allocated(GiB): {paddle_max_allocated / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Reserved(GiB): {paddle_reserved / 1024.0 / 1024.0 / 1024.0}",
+        f"\n\tPaddle memory Allocated(GiB): {paddle_allocated / 1024.0 / 1024.0 / 1024.0}",
     )
 
 
@@ -648,6 +733,14 @@ def import_from_path(module_name: str, file_path: Union[str, os.PathLike]):
     return module
 
 
+def is_package_installed(package_name):
+    try:
+        distribution(package_name)
+        return True
+    except PackageNotFoundError:
+        return False
+
+
 def version():
     """
     Prints the contents of the version.txt file located in the parent directory of this script.
@@ -662,6 +755,36 @@ def version():
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
     return content
+
+
+def current_package_version():
+    """
+    读取version.txt文件,解析出fastdeploy version对应的版本号
+
+    Args:
+    Returns:
+        str: fastdeploy版本号,如果解析失败返回Unknown
+    """
+    fd_version = "Unknown"
+    try:
+        content = version()
+        if content == "Unknown":
+            return fd_version
+
+        # 按行分割内容
+        lines = content.strip().split("\n")
+        # 查找包含"fastdeploy version:"的行
+        for line in lines:
+            if line.startswith("fastdeploy version:"):
+                # 提取版本号部分
+                fd_version = line.split("fastdeploy version:")[1].strip()
+                return fd_version
+        llm_logger.warning("fastdeploy version not found in version.txt")
+        # 如果没有找到对应的行，返回None
+        return fd_version
+    except Exception as e:
+        llm_logger.error(f"Failed to parse fastdeploy version from version.txt: {e}")
+        return fd_version
 
 
 class DeprecatedOptionWarning(argparse.Action):
@@ -737,6 +860,16 @@ class StatefulSemaphore:
         }
 
 
+def parse_quantization(value: str):
+    """
+    Parse a JSON string into a dictionary.
+    """
+    try:
+        return json.loads(value)
+    except ValueError:
+        return {"quantization": value}
+
+
 # 日志使用全局访问点（兼容原有使用方式）
 def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
     """全局函数包装器，保持向后兼容"""
@@ -749,3 +882,25 @@ scheduler_logger = get_logger("scheduler", "scheduler.log")
 api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
+zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+
+
+def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
+
+    def _parse_type(val: str) -> T:
+        try:
+            return return_type(val)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
+
+    return _parse_type
+
+
+def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
+
+    def _optional_type(val: str) -> Optional[T]:
+        if val == "" or val == "None":
+            return None
+        return parse_type(return_type)(val)
+
+    return _optional_type

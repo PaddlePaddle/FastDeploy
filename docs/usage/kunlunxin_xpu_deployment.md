@@ -49,7 +49,7 @@ All supported models can be found in the *Supported Models* section above.
 
 #### Send requests
 
-Send requests using either curl or Python
+Send requests using either curl or Python.
 
 ```bash
 curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
@@ -89,4 +89,4 @@ for chunk in response:
 print('\n')
 ```
 
-For detailed OpenAI protocol specifications, see [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../online_serving/README.md).
+For detailed OpenAI protocol specifications, see [OpenAI Chat Completion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../online_serving/README.md).

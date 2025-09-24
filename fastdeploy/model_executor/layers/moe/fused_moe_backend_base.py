@@ -19,7 +19,7 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import default_weight_loader, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
@@ -40,62 +40,52 @@ class MoEMethodBase(QuantMethodBase):
             "down_proj_weight_scale",
         ]
         self.pack_num = 1
+        self.ep_prefill_runner = None
+        self.ep_decoder_runner = None
 
     def init_ep(self, layer: nn.Layer) -> None:
         """
-        Init EP related module
+        Initialize EP (Expert Parallel) related modules.
         """
-        if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.splitwise_role == "mixed":
-                from .ep import EPDecoderRunner, EPPrefillRunner
+        if layer.ep_size <= 1:
+            return
 
-                self.ep_prefill_runner = EPPrefillRunner(
-                    layer.top_k,
-                    layer.hidden_size,
-                    layer.num_experts,
-                    layer.fd_config.parallel_config.splitwise_role,
-                    layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-                    layer.ep_size,
-                    layer.ep_rank,
-                    layer.fd_config.model_config.redundant_experts_num,
-                )
-                self.ep_decoder_runner = EPDecoderRunner(
-                    layer.top_k,
-                    layer.hidden_size,
-                    layer.num_experts,
-                    layer.fd_config.parallel_config.splitwise_role,
-                    layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-                    layer.ep_size,
-                    layer.ep_rank,
-                    layer.fd_config.model_config.redundant_experts_num,
-                )
+        # Lazy import to avoid circular dependency or unnecessary loading
+        from .ep import EPDecoderRunner, EPPrefillRunner
+
+        # Common arguments for both runners
+        common_args = {
+            "top_k": layer.top_k,
+            "hidden_size": layer.hidden_size,
+            "num_experts": layer.num_experts,
+            "splitwise_role": layer.fd_config.scheduler_config.splitwise_role,
+            "num_max_dispatch_tokens_per_rank": layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+            "ep_size": layer.ep_size,
+            "ep_rank": layer.ep_rank,
+            "redundant_experts_num": layer.fd_config.model_config.redundant_experts_num,
+            "ep_group": layer.fd_config.parallel_config.ep_group,
+        }
+
+        config = layer.fd_config
+        splitwise_role = config.scheduler_config.splitwise_role
+        load_strategy = config.load_config.load_strategy
+
+        # For "mixed" splitwise role: conditionally initialize both or none
+        if splitwise_role == "mixed":
+            if load_strategy == "meta":
+                # for RL init model without deepep buff
+                return
             else:
-                if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                    from .ep import EPPrefillRunner
+                self.ep_prefill_runner = EPPrefillRunner(**common_args)
+                self.ep_decoder_runner = EPDecoderRunner(**common_args)
+            return
 
-                    self.ep_prefill_runner = EPPrefillRunner(
-                        layer.top_k,
-                        layer.hidden_size,
-                        layer.num_experts,
-                        layer.fd_config.parallel_config.splitwise_role,
-                        layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-                        layer.ep_size,
-                        layer.ep_rank,
-                        layer.fd_config.model_config.redundant_experts_num,
-                    )
-                else:
-                    from .ep import EPDecoderRunner
-
-                    self.ep_decoder_runner = EPDecoderRunner(
-                        layer.top_k,
-                        layer.hidden_size,
-                        layer.num_experts,
-                        layer.fd_config.parallel_config.splitwise_role,
-                        layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-                        layer.ep_size,
-                        layer.ep_rank,
-                        layer.fd_config.model_config.redundant_experts_num,
-                    )
+        # For non-mixed ep
+        phase = config.model_config.moe_phase.phase
+        if phase == "prefill":
+            self.ep_prefill_runner = EPPrefillRunner(**common_args)
+        else:
+            self.ep_decoder_runner = EPDecoderRunner(**common_args)
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
@@ -169,11 +159,13 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                self.ep_prefill_runner.clean_low_latency_buffer()
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
+                    self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
             else:
-                self.ep_decoder_runner.clean_low_latency_buffer()
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
+                    self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:
             return self.apply_tp(layer, x, gate)
@@ -203,5 +195,19 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
-        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+        set_weight_attrs(
+            layer.up_gate_proj_weight,
+            {
+                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
+                "model_format": extra_weight_attrs.get("model_format", ""),
+            },
+        )
+        set_weight_attrs(
+            layer.down_proj_weight,
+            {
+                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
+                "model_format": extra_weight_attrs.get("model_format", ""),
+            },
+        )

@@ -441,6 +441,15 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
     PD_THROW("not support the group_size", group_size);      \
   }
 
+#define DISPATCH_DyCfp8(is_dynamic_cfp8, IsDynamicC8, ...) \
+  if (is_dynamic_cfp8) {                                   \
+    constexpr bool IsDynamicC8 = true;                     \
+    __VA_ARGS__                                            \
+  } else {                                                 \
+    constexpr bool IsDynamicC8 = false;                    \
+    __VA_ARGS__                                            \
+  }
+
 #define DISPATCH_MLA_GROUP_SIZE(group_size, GROUP_SIZE, ...) \
   if (group_size == 8) {                              \
     constexpr size_t GROUP_SIZE = 8;                         \

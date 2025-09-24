@@ -63,7 +63,7 @@ def xpu_pre_process(
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
+    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
 
     (
@@ -353,12 +353,12 @@ class XPUModelRunner(ModelRunnerBase):
         self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = False
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
-        self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs, dtype="int32")
+        self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
-        self._init_share_inputs(self.fd_config.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.fd_config.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
         ).cpu()
@@ -383,6 +383,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         req_len = len(req_dicts)
         has_prefill_task = False
+        has_decode_task = False
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -392,6 +393,9 @@ class XPUModelRunner(ModelRunnerBase):
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
                 input_ids = request.prompt_token_ids + request.output_token_ids
+                logger.debug(
+                    f"Handle prefill request {request} at idx {idx} prefill_start_index {prefill_start_index} prefill_end_index {prefill_end_index} need_prefilled_token_num {len(input_ids)}"
+                )
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
@@ -401,6 +405,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
+                    has_decode_task = True
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
@@ -411,6 +417,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -455,6 +462,16 @@ class XPUModelRunner(ModelRunnerBase):
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
 
+            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
+                bad_words_len = len(request.get("bad_words_token_ids"))
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
+                    request.get("bad_words_token_ids"), dtype="int64"
+                )
+            else:
+                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
+
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
@@ -463,7 +480,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
                     request.get("stop_token_ids"), dtype="int64"
                 )
-        if has_prefill_task:
+        if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
     def process_prefill_inputs(self, req_dicts: List[Request]):
@@ -795,7 +812,7 @@ class XPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -855,16 +872,36 @@ class XPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         while True:
-            self.execute_model(None, True)
+            self.execute_model(is_dummy_run=True)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
+    def _set_debug_level(
+        self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
+    ) -> None:
+        """
+        Set debug level for XPU: 0x1, 0xA1, 0x1B1
+        """
+        request_num = 0 if model_forward_batch is None else len(model_forward_batch)
+        if debug_level == 0 or request_num == 0 or is_dummy_run:
+            paddle.device.xpu.set_debug_level(0)
+            return
+
+        if self.parallel_config.use_ep:
+            request_num = paddle.to_tensor(request_num, dtype="int32")
+            paddle.distributed.all_reduce(request_num, group=self.parallel_config.ep_group)
+            logger.info(f"local_rank: {self.local_rank}, request_num: {request_num.item()}")
+            if request_num.item() > 0:
+                paddle.device.xpu.set_debug_level(debug_level)
+        else:
+            paddle.device.xpu.set_debug_level(debug_level)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
-        is_dummy_run: bool = False,
         num_running_requests: int = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -875,6 +912,9 @@ class XPUModelRunner(ModelRunnerBase):
             num_running_requests: batch_size
             intermediate_tensors:
         """
+        # 0. set debug level
+        # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
+
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
 
@@ -947,8 +987,8 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
         self._dummy_run(
-            num_tokens=int(self.parallel_config.max_num_batched_tokens),
-            batch_size=min(self.parallel_config.max_num_seqs, 1),
+            num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+            batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 
     def clear_block_table(self) -> None:

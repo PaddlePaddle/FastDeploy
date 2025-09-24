@@ -13,114 +13,96 @@
 # limitations under the License.
 
 import os
-import traceback
-import warnings
-from multiprocessing import Process, Queue
+import sys
 
 import pytest
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from tests.model_loader.utils import (
+    check_tokens_id_and_text_close,
+    form_model_get_output_topp0,
+    get_paddle_model_path,
+    run_with_timeout,
+)
+
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-MAX_WAIT_SECONDS = 60 * 5
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 prompts = ["解释下“温故而知新", "Hello, how are you?"]
-TokensIdText = list[tuple[list[int], str]]
-# (token_ids, text)
-
-
-def check_tokens_id_and_text_close(
-    *,
-    outputs_0_lst: TokensIdText,
-    outputs_1_lst: TokensIdText,
-    name_0: str,
-    name_1: str,
-    warn_on_mismatch: bool = True,
-) -> None:
-    assert len(outputs_0_lst) == len(outputs_1_lst)
-
-    for prompt_idx, (outputs_0, outputs_1) in enumerate(zip(outputs_0_lst, outputs_1_lst)):
-        assert len(outputs_0) == len(outputs_1)
-        output_ids_0, output_str_0 = outputs_0
-        output_ids_1, output_str_1 = outputs_1
-
-        # Loop through generated tokens.
-        for idx, (output_id_0, output_id_1) in enumerate(zip(output_ids_0, output_ids_1)):
-            is_tok_mismatch = output_id_0 != output_id_1
-            if is_tok_mismatch and warn_on_mismatch:
-                fail_msg = (
-                    f"Test{prompt_idx}:"
-                    f"\nMatched tokens:\t{output_ids_0[:idx]}"
-                    f"\n{name_0}:\t{output_str_0!r}"
-                    f"\n{name_1}:\t{output_str_1!r}"
-                )
-                with warnings.catch_warnings():
-                    warnings.simplefilter("always")
-                    warnings.warn(fail_msg, stacklevel=2)
-                break
-    else:
-        if output_str_0 != output_str_1 and warn_on_mismatch:
-            fail_msg = f"Test{prompt_idx}:" f"\n{name_0}:\t{output_str_0!r}" f"\n{name_1}:\t{output_str_1!r}"
-            with warnings.catch_warnings():
-                warnings.simplefilter("always")
-                warnings.warn(fail_msg, stacklevel=2)
-
-
-def form_model_get_output(
-    fd_runner,
-    model_path,
-    tensor_parallel_size,
-    max_model_len,
-    max_tokens,
-    quantization,
-    load_choices,
-    result_queue,
-):
-    try:
-        with fd_runner(
-            model_path,
-            tensor_parallel_size=tensor_parallel_size,
-            max_model_len=max_model_len,
-            load_choices=load_choices,
-            quantization=quantization,
-            engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
-        ) as fd_model:
-            fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
-            result_queue.put(fd_outputs)
-    except Exception:
-        print(f"Failed using {load_choices} laoder to load model from {model_path}.")
-        traceback.print_exc()
-        pytest.fail(f"Failed to initialize LLM model from {model_path}")
 
 
 model_param_map = {
     "Qwen3-0.6B": {
-        "quantizations": ["None", "wint4", "wint8"],
+        "quantizations": ["None", "wint8", "wint4"],
     },
     "ernie-4_5-21b-a3b-bf16-paddle": {
         "tensor_parallel_size": 2,
-        "quantizations": ["wint8"],
+        "quantizations": [
+            "wint8",
+        ],
     },
     "Qwen2-7B-Instruct": {
-        "quantizations": ["None", "wint8"],
+        "quantizations": ["wint4"],
+    },
+    "Qwen3-30B-A3B": {
+        "tensor_parallel_size": 2,
+        "quantizations": [
+            {
+                "quant_type": "block_wise_fp8",
+                "backend": "triton",
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
+            },
+            {
+                "quant_type": "block_wise_fp8",
+                "backend": "deepgemm",
+                "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17", "FD_USE_DEEP_GEMM": "1"},
+            },
+        ],
+    },
+    "DeepSeek-V3-0324": {
+        "tensor_parallel_size": 2,
+        "quantizations": [
+            {
+                "quant_type": "wint4",
+                "env": {
+                    "FD_ATTENTION_BACKEND": "MLA_ATTN",
+                    "FLAGS_mla_use_tensorcore": "1",
+                    "FLAGS_flash_attn_version": "3",
+                    "FD_USE_MACHETE": "1",
+                },
+            },
+        ],
     },
 }
+
 
 params = []
 for model, cfg in model_param_map.items():
     for q in cfg["quantizations"]:
+        if isinstance(q, dict):
+            quant, backend, env = q["quant_type"], q.get("backend", "default"), q.get("env", {})
+        else:
+            quant, backend, env = q, "default", {}
         params.append(
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 1),
                 cfg.get("max_model_len", 1024),
-                q,
+                quant,
                 cfg.get("max_tokens", 32),
+                env,
                 marks=[pytest.mark.core_model],
+                id=f"{model}.{quant}.{backend}",
             )
         )
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
     params,
 )
 def test_common_model(
@@ -130,15 +112,16 @@ def test_common_model(
     max_model_len: int,
     max_tokens: int,
     quantization: str,
+    env,
+    monkeypatch,
 ) -> None:
-    base_path = os.getenv("MODEL_PATH")
-    if base_path:
-        model_path = os.path.join(base_path, model_name_or_path)
-    else:
-        model_path = model_name_or_path
-    result_queue = Queue()
-    p = Process(
-        target=form_model_get_output,
+    model_path = get_paddle_model_path(model_name_or_path)
+    if env:
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+
+    fd_outputs_v0 = run_with_timeout(
+        target=form_model_get_output_topp0,
         args=(
             fd_runner,
             model_path,
@@ -147,15 +130,13 @@ def test_common_model(
             max_tokens,
             quantization,
             "default",
-            result_queue,
+            FD_ENGINE_QUEUE_PORT,
+            prompts,
+            FD_CACHE_QUEUE_PORT,
         ),
     )
-    p.start()
-    p.join()
-    fd_outputs_v0 = result_queue.get(timeout=60)
-
-    p = Process(
-        target=form_model_get_output,
+    fd_outputs_v1 = run_with_timeout(
+        target=form_model_get_output_topp0,
         args=(
             fd_runner,
             model_path,
@@ -164,12 +145,11 @@ def test_common_model(
             max_tokens,
             quantization,
             "default_v1",
-            result_queue,
+            FD_ENGINE_QUEUE_PORT,
+            prompts,
+            FD_CACHE_QUEUE_PORT,
         ),
     )
-    p.start()
-    p.join()
-    fd_outputs_v1 = result_queue.get(timeout=60)
     check_tokens_id_and_text_close(
         outputs_0_lst=fd_outputs_v0,
         outputs_1_lst=fd_outputs_v1,

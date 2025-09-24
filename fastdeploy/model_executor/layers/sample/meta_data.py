@@ -15,7 +15,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
 
 import paddle
 
@@ -51,3 +51,9 @@ class SamplingMetadata:
     stop_flags: Optional[paddle.Tensor] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
+    temp_scaled_logprobs: Optional[paddle.Tensor] = None
+    top_p_normalized_logprobs: Optional[paddle.Tensor] = None
+    share_inputs: Optional[Dict[str, paddle.Tensor]] = None
+    # Add for HPU post-processing
+    seq_lens_encoder: Optional[paddle.Tensor] = None
+    seq_lens_decoder: Optional[paddle.Tensor] = None

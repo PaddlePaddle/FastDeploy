@@ -85,7 +85,7 @@ class W8A8LinearMethod(QuantMethodBase):
         if weight_scale is None or in_scale is None:
             self.skip_quant = True
             return
-        layer.wieght = layer.create_parameter(
+        layer.weight = layer.create_parameter(
             shape=layer.weight_shape,
             dtype=layer.weight_dtype,
             is_bias=False,

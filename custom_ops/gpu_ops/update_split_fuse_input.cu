@@ -75,10 +75,10 @@ void UpdateSplitFuseInputes(const paddle::Tensor& split_fuse_seq_lens,
                             const int max_seq_len,
                             const int max_batch_size,
                             const int split_fuse_size) {
-    dim3 girds;
-    girds.x = max_batch_size;
+    dim3 grids;
+    grids.x = max_batch_size;
     const int block_size = 128;
-    update_split_fuse_inputs_kernel<<<girds,
+    update_split_fuse_inputs_kernel<<<grids,
                                       block_size,
                                       0,
                                       input_ids.stream()>>>(

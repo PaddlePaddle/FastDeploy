@@ -14,7 +14,7 @@
 
 #include "paddle/extension.h"
 
-void set_value_by_flag_and_id(const bool *stop_flags,
+void set_value_by_flags_and_idx(const bool *stop_flags,
                               int64_t *pre_ids_all,
                               const int64_t *input_ids,
                               const int *seq_lens_encoder,
@@ -50,7 +50,7 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
     int length = pre_ids_all_shape[1];
     int length_input_ids = input_ids.shape()[1];
 
-    set_value_by_flag_and_id(stop_flags.data<bool>(),
+    set_value_by_flags_and_idx(stop_flags.data<bool>(),
                              const_cast<int64_t *>(pre_ids_all.data<int64_t>()),
                              input_ids.data<int64_t>(),
                              seq_lens_encoder.data<int>(),

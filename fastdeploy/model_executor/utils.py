@@ -14,7 +14,11 @@
 # limitations under the License.
 """
 
+import re
+from contextlib import contextmanager
 from typing import Any, Optional, Union
+
+import paddle
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -154,11 +158,19 @@ def default_weight_loader(fd_config: FDConfig) -> None:
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
+
         output_dim = getattr(param, "output_dim", None)
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        if weight_need_transpose:
+            loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
         if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
             dim = -1 if output_dim else 0
-            size = loaded_weight.get_shape()[dim]
+            if isinstance(loaded_weight, paddle.Tensor):
+                size = loaded_weight.shape[dim]
+            else:
+                size = loaded_weight.get_shape()[dim]
             block_size = size // fd_config.parallel_config.tensor_parallel_size
             shard_offset = fd_config.parallel_config.tensor_parallel_rank * block_size
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
@@ -167,7 +179,10 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         loaded_weight = get_tensor(loaded_weight)
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         if param.dtype != loaded_weight.dtype:
-            loaded_weight = loaded_weight.cast(param.dtype)
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(param.dtype)
         if param.shape != loaded_weight.shape:
             # for e_score_correction_bias
             loaded_weight = loaded_weight.reshape(param.shape)
@@ -175,5 +190,75 @@ def default_weight_loader(fd_config: FDConfig) -> None:
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
         param.copy_(loaded_weight, False)
+
+    return fn
+
+
+@contextmanager
+def temporary_dtype(dtype: str):
+    """Temporarily set Paddle default dtype"""
+    orig_dtype = paddle.get_default_dtype()
+    try:
+        if dtype is not None and dtype == "float32":
+            paddle.set_default_dtype(dtype)
+        yield
+    finally:
+        paddle.set_default_dtype(orig_dtype)
+
+
+@contextmanager
+def switch_config_context(config_obj, config_attr_name, value):
+    """switch_config_context"""
+    origin_value = getattr(config_obj, config_attr_name)
+    setattr(config_obj, config_attr_name, value)
+    try:
+        yield
+    finally:
+        setattr(config_obj, config_attr_name, origin_value)
+
+
+def rename_offline_ckpt_suffix_to_fd_suffix(
+    fd_config, ckpt_weight_suffix: str = "quant_weight", ckpt_scale_suffix="weight_scale"
+):
+    """
+    Create a function to rename checkpoint key suffixes for FastDeploy.
+
+    Replaces the original suffix (default "weight_scale") with the FD target
+    suffix (default "quant_weight"). Only the suffix is changed.
+
+    Args:
+        fd_config: FastDeploy configuration.
+        ckpt_weight_suffix: Original checkpoint key suffix.
+        ckpt_scale_suffix: Target FastDeploy key suffix.
+
+    Returns:
+        Callable: Function that renames checkpoint keys.
+    """
+    fd_suffix_map = {}  # noqa: F841
+    fp8_suffix_map = {
+        ckpt_weight_suffix: "weight",
+        ckpt_scale_suffix: "weight_scale_inv",
+    }
+    moe_quant_type = ""
+    dense_quant_type = ""
+    if fd_config.quant_config is not None:
+        if fd_config.quant_config.name() == "mix_quant":
+            moe_quant_type = fd_config.quant_config.moe_quant_type
+            dense_quant_type = fd_config.quant_config.dense_quant_type
+        else:
+            moe_quant_type = fd_config.quant_config.name()
+            dense_quant_type = fd_config.quant_config.name()
+
+    def fn(loaded_weight_name, is_moe):
+        if fd_config.quant_config is None or fd_config.quant_config.is_checkpoint_bf16:
+            return loaded_weight_name
+        # Can be extended to other offline quantization suffixes if needed.
+        if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
+            fd_suffix_map = fp8_suffix_map
+        for ckpt_suffix, fd_suffix in fd_suffix_map.items():
+            if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
+                loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
+                return loaded_weight_name
+        return loaded_weight_name
 
     return fn

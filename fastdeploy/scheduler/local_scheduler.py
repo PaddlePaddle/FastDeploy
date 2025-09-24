@@ -208,6 +208,9 @@ class LocalScheduler:
         """
         return (token_num + block_size - 1) // block_size
 
+    def get_unhandled_request_num(self):
+        return len(self.ids) - self.ids_read_cursor
+
     def get_requests(
         self,
         available_blocks,
@@ -303,6 +306,7 @@ class LocalScheduler:
                 if response.request_id not in self.responses:
                     self.responses[response.request_id] = [response]
                     continue
+                scheduler_logger.debug(f"append response {response.raw}")
                 self.responses[response.request_id].append(response)
             self.responses_not_empty.notify_all()
 

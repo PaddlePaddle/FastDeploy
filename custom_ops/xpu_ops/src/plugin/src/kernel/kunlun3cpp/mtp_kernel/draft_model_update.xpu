@@ -1,0 +1,114 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_debug.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_primitive_template.h"
+namespace xpu3 {
+namespace plugin {
+inline __device__ bool is_in_end(const int64_t id,
+                                 const __global_ptr__ int64_t* end_ids,
+                                 int length) {
+  bool flag = false;
+  for (int i = 0; i < length; i++) {
+    if (id == end_ids[i]) {
+      return true;
+    }
+  }
+  return flag;
+}
+__global__ void draft_model_update(const int64_t* inter_next_tokens,
+                                   int64_t* draft_tokens,
+                                   int64_t* pre_ids,
+                                   int* seq_lens_this_time,
+                                   int* seq_lens_encoder,
+                                   int* seq_lens_decoder,
+                                   int64_t* step_idx,
+                                   const int* output_cum_offsets,
+                                   bool* stop_flags,
+                                   bool* not_need_stop,
+                                   const int64_t* max_dec_len,
+                                   const int64_t* end_ids,
+                                   int64_t* base_model_draft_tokens,
+                                   const int bsz,
+                                   const int max_draft_token,
+                                   const int pre_id_length,
+                                   const int max_base_model_draft_token,
+                                   const int end_ids_len,
+                                   const int max_seq_len,
+                                   const int substep,
+                                   const bool prefill_one_step_stop) {
+  int cid = core_id();
+  int ncores = core_num();
+  __shared__ float stop_flag_now_int_sm[64];
+  stop_flag_now_int_sm[cid] = 0;
+  for (int tid = cid; tid < bsz; tid += ncores) {
+    auto* draft_token_now = draft_tokens + tid * max_draft_token;
+    auto* pre_ids_now = pre_ids + tid * pre_id_length;
+    auto* base_model_draft_tokens_now =
+        base_model_draft_tokens + tid * max_base_model_draft_token;
+    const int next_tokens_start_id =
+        tid * max_seq_len - output_cum_offsets[tid];
+    auto* next_tokens_start = inter_next_tokens + next_tokens_start_id;
+    auto seq_len_this_time = seq_lens_this_time[tid];
+    auto seq_len_encoder = seq_lens_encoder[tid];
+    auto seq_len_decoder = seq_lens_decoder[tid];
+    if (!stop_flags[tid] /* seq_lens_decoder > 0 or seq_lens_encoder > 0 */) {
+      int64_t token_this_time = -1;
+      // decoder step
+      if (seq_len_decoder > 0 && seq_len_encoder <= 0) {
+        seq_lens_decoder[tid] += seq_len_this_time;
+        token_this_time = next_tokens_start[seq_len_this_time - 1];
+        draft_token_now[0] = next_tokens_start[seq_len_this_time - 1];
+        base_model_draft_tokens_now[substep + 1] = token_this_time;
+        for (int i = 0; i < seq_len_this_time; ++i) {
+          pre_ids_now[step_idx[tid] + 1 + i] = next_tokens_start[i];
+        }
+        step_idx[tid] += seq_len_this_time;
+      } else {
+        token_this_time = next_tokens_start[0];
+        seq_lens_decoder[tid] = seq_len_encoder + seq_len_decoder;
+        // mfence();
+        seq_lens_encoder[tid] = 0;
+        pre_ids_now[1] = token_this_time;
+        step_idx[tid] += 1;
+        draft_token_now[0] = token_this_time;
+        base_model_draft_tokens_now[substep + 1] = token_this_time;
+      }
+      // multi_end
+      if (is_in_end(token_this_time, end_ids, end_ids_len) ||
+          prefill_one_step_stop) {
+        stop_flags[tid] = true;
+        stop_flag_now_int_sm[cid] += 1;
+        // max_dec_len
+      } else if (step_idx[tid] >= max_dec_len[tid]) {
+        stop_flags[tid] = true;
+        draft_token_now[seq_len_this_time - 1] = end_ids[0];
+        base_model_draft_tokens_now[substep + 1] = end_ids[0];
+        stop_flag_now_int_sm[cid] += 1;
+      }
+    } else {
+      draft_token_now[0] = -1;
+      base_model_draft_tokens_now[substep + 1] = -1;
+      stop_flag_now_int_sm[cid] += 1;
+    }
+    // 2. set end
+    if (!stop_flags[tid]) {
+      seq_lens_this_time[tid] = 1;
+    } else {
+      seq_lens_this_time[tid] = 0;
+      seq_lens_encoder[tid] = 0;
+    }
+  }
+  mfence();
+  sync_all();
+  if (cid == 0) {
+    int sum_stop = 0;
+    for (int i = 0; i < 64; i++) {
+      sum_stop += stop_flag_now_int_sm[i];
+    }
+    not_need_stop[0] = sum_stop < bsz;
+  }
+  mfence();
+}
+}  // namespace plugin
+}  // namespace xpu3
