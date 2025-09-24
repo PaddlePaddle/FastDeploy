@@ -638,7 +638,6 @@ class Ernie4_5_Model(nn.Layer):
             # print("到达", self.barrier_id)
             #paddle.device.synchronize()
         
-        # 先只搞第三层！
         if IsH20:
 
             def compute_atten(layer_id, i):
