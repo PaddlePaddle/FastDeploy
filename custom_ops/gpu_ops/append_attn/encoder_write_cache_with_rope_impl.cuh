@@ -1004,7 +1004,8 @@ __global__ void cache_kernel(
     const uint32_t qkv_bias = bias % hidden_size;
     const uint32_t hi = qkv_bias / head_size;
     const uint32_t h_bias = qkv_bias % head_size;
-    const uint32_t ori_bi = batch_id_per_token[token_idx];
+    const int32_t ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;  // skip batch_id_per_token[token_idx]=-1
     if (seq_lens[ori_bi] == 0) continue;
     const uint32_t ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 

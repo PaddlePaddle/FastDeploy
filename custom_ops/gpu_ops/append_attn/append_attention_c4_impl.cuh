@@ -1229,7 +1229,7 @@ void MultiQueryAppendC4Attention(
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
-        dim3 grids_merge(sm_count * 4,
+        dim3 grids_merge(min(sm_count * 4, token_num),
                          num_heads);
         dim3 blocks_merge(blockx, blocky);
         merge_multi_chunks_v2_kernel<NV_TYPE,
@@ -1506,7 +1506,7 @@ void MultiQueryAppendC4Attention(
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
-        dim3 grids_merge(sm_count * 4,
+        dim3 grids_merge(min(sm_count * 4, token_num),
                           num_heads);
         dim3 blocks_merge(blockx, blocky);
         merge_multi_chunks_v2_kernel<NV_TYPE,

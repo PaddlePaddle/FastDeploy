@@ -51,8 +51,9 @@ class Proposer(ABC):
         self.cache_config = self.fd_config.cache_config
         self.quant_config = self.fd_config.quant_config
         self.graph_opt_config = self.fd_config.graph_opt_config
+        self.scheduler_config = self.fd_config.scheduler_config
 
-        self.max_num_seqs = self.parallel_config.max_num_seqs
+        self.max_num_seqs = self.scheduler_config.max_num_seqs
         self.max_model_len = self.parallel_config.max_model_len
         self.speculative_method = self.speculative_config.method
         self.max_draft_token_num = self.speculative_config.num_speculative_tokens

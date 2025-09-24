@@ -102,8 +102,8 @@ __global__ void speculate_verify(
           break;
         }
         if (accept_all_drafts) {
-          // 无条件接受逻辑
-          step_idx[bid]++; // 接受，所以增加步长
+          // accept all draft tokens
+          step_idx[bid]++;
           auto accept_token = draft_tokens_now[i + 1];
           accept_tokens[bid * max_draft_tokens + i] = accept_token;
 

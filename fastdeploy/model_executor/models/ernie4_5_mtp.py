@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 from typing import Dict, Union
 
@@ -33,7 +34,11 @@ from fastdeploy.model_executor.graph_optimization.decorator import (
 from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
@@ -254,7 +259,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.embed_tokens = fd_config.speculative_config.sharing_model.ernie.embed_tokens
         self.norm = fd_config.speculative_config.sharing_model.ernie.norm
 
-        self.layers = nn.LayerList(
+        self.mtp_block = nn.LayerList(
             [
                 Ernie4_5_DecoderLayer(
                     fd_config=fd_config,
@@ -300,7 +305,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.eh_proj.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.layers[i].load_state_dict(state_dict)
+            self.mtp_block[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -319,7 +324,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         hidden_states = self.eh_proj(inputs_embedding)
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
+            hidden_states, residual = self.mtp_block[i](forward_meta, hidden_states, residual)
 
         hidden_states = hidden_states + residual
 
@@ -328,6 +333,12 @@ class Ernie4_5_MTPModel(nn.Layer):
         return hidden_states
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_MTPForCausalLM",
+    module_name="ernie4_5_mtp",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
     """
     Ernie4_5_MTPForCausalLM
@@ -378,17 +389,23 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         all_param_mapping = [
             # (param_name, weight_name, expert_id, shard_id)
             ("embed_tokens.embeddings", "embed_tokens", None, None),
             ("lm_head.linear", "lm_head", None, None),
+            ("enorm", "mtp_emb_norm.0", None, None),
+            ("hnorm", "mtp_hidden_norm.0", None, None),
+            ("eh_proj.linear", "mtp_linear_proj.0", None, None),
         ]
 
         params_dict = dict(self.named_parameters())
         shard_id = None
-
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 if weight_name not in loaded_weight_name:
@@ -400,11 +417,16 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             else:
                 if loaded_weight_name not in params_dict.keys():
                     continue
+                model_param_name = loaded_weight_name
                 param = params_dict[loaded_weight_name]
 
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """
