@@ -499,10 +499,8 @@ class Ernie4_5_Model(nn.Layer):
                 forward_meta_copy.seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
                 forward_meta_copy.seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
                 forward_meta_copy.seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
-
-                forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
+                
                 forward_meta_copy.cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs:end_bs+1] - start_token_id
-                forward_meta_copy.cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs:end_bs+1] - start_token_id
                 
                 # 这里千万不能加0 哦！
                 forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
@@ -570,10 +568,11 @@ class Ernie4_5_Model(nn.Layer):
             handles[j] = deque()
             dispatch_events[j] = deque()
             combine_events[j] = deque()
-
-            token_num = 0
-            if all_hidden_states[j] is not None:
+            
+            if IsH20:
                 token_num = all_hidden_states[j].shape[0]
+            else:
+                token_num = 0
             
             a = paddle.empty([8, runner.num_max_tokens * 24, 8192], dtype="float8_e4m3fn")
             b = paddle.empty([token_num, 3], dtype="bool")
@@ -623,8 +622,7 @@ class Ernie4_5_Model(nn.Layer):
                         name = field.name
                         if name in ["decoder_batch_ids", 
                                     "decoder_tile_ids_per_batch",
-                                    "cu_seqlens_q", 
-                                    "cu_seqlens_k"]:
+                                    "cu_seqlens_q"]:
                             cache_tensor = getattr(self.cached_attention_in_out[i].forward_meta, name)
                             coming_tensor = getattr(attention_in_out[i].forward_meta, name)
                             assert cache_tensor.data_ptr() != coming_tensor.data_ptr()
