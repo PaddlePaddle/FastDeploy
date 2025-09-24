@@ -677,6 +677,7 @@ class Ernie4_5_Model(nn.Layer):
                     valid_token_num = attention_in_out[i].hidden_states.shape[0]
 
                     if valid_token_num == 0:
+                        # 如果是0，那我就干脆别计算了！
                         attention_in_out[i].hidden_states = paddle.empty([0,8192], dtype="bfloat16")
                         attention_in_out[i].residual = paddle.empty([0,8192], dtype="bfloat16")
                         attention_in_out[i].topk_idx = paddle.empty([0,8], dtype="int64")
@@ -1043,12 +1044,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         if self.ii == 80:
             from paddle.framework import core
             core.nvprof_start()
-        
-        # if ids_remove_padding is not None:
-        #     print(ids_remove_padding.shape)
-        #     print(forward_meta.seq_lens_decoder.reshape([-1]))
-        #     print(forward_meta.seq_lens_this_time.reshape([-1]))
-        #     print(forward_meta.seq_lens_encoder.reshape([-1]))
 
         hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         
