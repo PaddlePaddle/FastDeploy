@@ -326,6 +326,7 @@ class SpeculativeSampler(nn.Layer):
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
+        accept_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """ """
 
@@ -382,6 +383,7 @@ class SpeculativeSampler(nn.Layer):
             self.speculative_verify_window,
             True,  # enable_topp
             self.speculative_benchmark_mode,
+            accept_all_drafts,
         )
 
         if hasattr(self.fd_config.model_config, "think_end_id") and self.fd_config.model_config.think_end_id > 0:
