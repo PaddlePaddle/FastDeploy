@@ -1513,30 +1513,46 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-
-        if self.fd_config.graph_opt_config.cudagraph_only_prefill:
-            for num_tokens in sorted(capture_sizes, reverse=True):
-                self._dummy_run(
-                    num_tokens=num_tokens,
-                    batch_size=self.scheduler_config.max_num_seqs,
-                    in_capturing=True,
-                    expected_decode_len=expected_decode_len,
-                    capture_prefill=True,
-                )
-                logger.info(
-                    f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
-                )
-        else:
-            for batch_size in sorted(capture_sizes, reverse=True):
-                self._dummy_run(
-                    num_tokens=self.scheduler_config.max_num_batched_tokens,
-                    batch_size=batch_size,
-                    in_capturing=True,
-                    expected_decode_len=expected_decode_len,
-                )
-                logger.info(
-                    f"Warm up the model with the num_tokens:{batch_size}, expected_decode_len:{expected_decode_len}"
-                )
+        try:
+            if self.fd_config.graph_opt_config.cudagraph_only_prefill:
+                for num_tokens in sorted(capture_sizes, reverse=True):
+                    self._dummy_run(
+                        num_tokens=num_tokens,
+                        batch_size=self.scheduler_config.max_num_seqs,
+                        in_capturing=True,
+                        expected_decode_len=expected_decode_len,
+                        capture_prefill=True,
+                    )
+                    logger.info(
+                        f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
+                    )
+            else:
+                for batch_size in sorted(capture_sizes, reverse=True):
+                    self._dummy_run(
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        batch_size=batch_size,
+                        in_capturing=True,
+                        expected_decode_len=expected_decode_len,
+                    )
+                    logger.info(
+                        f"Warm up the model with the num_tokens:{batch_size}, expected_decode_len:{expected_decode_len}"
+                    )
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                raise RuntimeError(
+                    "CUDA out of memory occurred when warming up CUDAGraph "
+                    f"with the capture sizes {capture_sizes}. Please try "
+                    "lowering `max_num_seqs` or `gpu_memory_utilization` when "
+                    "initializing the engine."
+                ) from e
+            if "CUDA error(700)" in str(e):
+                raise RuntimeError(
+                    "CUDA error(700), an illegal memory access was encountered, "
+                    "when warming up CUDAGraph. Please try to set the startup parameter: "
+                    "--graph-optimization-config '{\"use_cudagraph\": false}' to close CUDAGraph"
+                ) from e
+            else:
+                raise e
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
