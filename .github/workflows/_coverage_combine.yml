@@ -90,6 +90,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./diff_coverage.xml
+          codecov_yml_path: ./scripts/codecov.yml
           name: python diff coverage
           verbose: true
           flags: diff
