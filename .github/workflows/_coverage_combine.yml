@@ -82,8 +82,6 @@ jobs:
           COVERAGE_EXIT_CODE=0
           set -x
           if [[ "$IS_PR" == "true" ]]; then
-            git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-            cat diff.txt
             diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
             python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
             filename=diff_coverage.json
