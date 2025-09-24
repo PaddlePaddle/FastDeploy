@@ -303,7 +303,7 @@ class CustomAllreduce {
   bool full_nvlink_;
 
   RankSignals sg_;
-  // Stores an map from a pointer to its peer pointters from all ranks.
+  // Stores an map from a pointer to its peer pointers from all ranks.
   std::unordered_map<void*, RankData*> buffers_;
   Signal* self_sg_;
 
