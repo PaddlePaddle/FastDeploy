@@ -1533,7 +1533,7 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     assert batch_size % 2 == 0
                     self._dummy_run(
-                        num_tokens=self.parallel_config.max_num_batched_tokens,
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
                         batch_size=int(batch_size / 2),
                         in_capturing=True,
                         expected_decode_len=1,
@@ -1547,7 +1547,7 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     assert batch_size % 2 == 0
                     self._dummy_run(
-                        num_tokens=self.parallel_config.max_num_batched_tokens,
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
                         batch_size=int(batch_size / 2),
                         in_capturing=True,
                         expected_decode_len=3,
@@ -1557,7 +1557,7 @@ class GPUModelRunner(ModelRunnerBase):
             # Capture Draft Model with bsz 1
             if 1 in capture_sizes:
                 self._dummy_run(
-                    num_tokens=self.parallel_config.max_num_batched_tokens,
+                    num_tokens=self.scheduler_config.max_num_batched_tokens,
                     batch_size=int(1),
                     in_capturing=True,
                     expected_decode_len=3,
@@ -1870,8 +1870,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         self._dummy_run(
-            num_tokens=self.parallel_config.max_num_batched_tokens,
-            batch_size=self.parallel_config.max_num_seqs,
+            num_tokens=self.scheduler_config.max_num_batched_tokens,
+            batch_size=self.scheduler_config.max_num_seqs,
         )
 
         # 3. gc

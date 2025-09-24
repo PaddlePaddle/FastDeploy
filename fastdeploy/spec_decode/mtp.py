@@ -162,7 +162,9 @@ class MTPProposer(Proposer):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and (
+            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
+        ):
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -593,7 +595,7 @@ class MTPProposer(Proposer):
         prefill_exists = None
 
         # Mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_decode_batch_list = []
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
