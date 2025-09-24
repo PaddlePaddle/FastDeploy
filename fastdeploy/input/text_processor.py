@@ -208,7 +208,6 @@ class DataProcessor(BaseDataProcessor):
             str: error message
         """
         data_processor_logger.info(f"Start processing request: {request}")
-        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -242,7 +241,7 @@ class DataProcessor(BaseDataProcessor):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 task = request.to_dict()
-                chat_template_kwargs = kwargs.get("chat_template_kwargs")
+                chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
@@ -251,7 +250,7 @@ class DataProcessor(BaseDataProcessor):
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 task.setdefault("enable_thinking", True)
-                request.prompt_token_ids = self.messages2ids(task)
+                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
 
@@ -316,7 +315,7 @@ class DataProcessor(BaseDataProcessor):
             elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
-                chat_template_kwargs = request.get("chat_template_kwargs")
+                chat_template_kwargs = request.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
@@ -325,7 +324,7 @@ class DataProcessor(BaseDataProcessor):
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 request.setdefault("enable_thinking", True)
-                request["prompt_token_ids"] = self.messages2ids(request)
+                request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
 
@@ -530,7 +529,7 @@ class DataProcessor(BaseDataProcessor):
 
         return tokens["input_ids"][0]
 
-    def messages2ids(self, request):
+    def messages2ids(self, request, **kwargs):
         """
         Convert multi-turn messages into ID sequences.
 
@@ -547,7 +546,7 @@ class DataProcessor(BaseDataProcessor):
             split_special_tokens=False,
             add_special_tokens=False,
             return_tensors="pd",
-            chat_template=request.get("chat_template", None),
+            **kwargs,
         )
         request["text_after_process"] = spliced_message
         req_id = None
