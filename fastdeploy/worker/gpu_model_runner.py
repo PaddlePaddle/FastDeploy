@@ -1306,8 +1306,8 @@ class GPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
-                if self.use_cudagraph:
-                    model_output = model_output[: self.real_token_num]
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
 
             hidden_states = rebuild_padding(
                 model_output,
