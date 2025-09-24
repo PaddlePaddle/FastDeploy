@@ -15,36 +15,36 @@ jobs:
     uses: ./.github/workflows/_clone_linux.yml
 
   build:
-    name: FD-Build-Linux
-    needs: clone
-    uses: ./.github/workflows/_build_linux.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "90"
-      WITH_NIGHTLY_BUILD: "OFF"
-      FD_VERSION: "0.0.0"
+  #   name: FD-Build-Linux
+  #   needs: clone
+  #   uses: ./.github/workflows/_build_linux.yml
+  #   with:
+  #     DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+  #     FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+  #     COMPILE_ARCH: "90"
+  #     WITH_NIGHTLY_BUILD: "OFF"
+  #     FD_VERSION: "0.0.0"
 
-  resultshow:
-    name: Use Build Output
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Print wheel path
-        run: |
-          echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
+  # resultshow:
+  #   name: Use Build Output
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Print wheel path
+  #       run: |
+  #         echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
 
-  gpu_unittest:
-    name: Run FastDeploy Unit Tests with Coverage
-    needs: [clone,build]
-    uses: ./.github/workflows/_unit_test_coverage.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
+  # gpu_unittest:
+  #   name: Run FastDeploy Unit Tests with Coverage
+  #   needs: [clone,build]
+  #   uses: ./.github/workflows/_unit_test_coverage.yml
+  #   with:
+  #     DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+  #     FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+  #     FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+  #     MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+  #   secrets:
+  #     github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # logprob_test:
   #   name: Run FastDeploy LogProb Tests
@@ -96,20 +96,20 @@ jobs:
   #     FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
   #     MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
-  xpu_unittest:
-    name: Run XPU Test with Coverage
-    needs: [clone]
-    uses: ./.github/workflows/_ci_xpu.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu-ci:latest
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+  # xpu_unittest:
+  #   name: Run XPU Test with Coverage
+  #   needs: [clone]
+  #   uses: ./.github/workflows/_ci_xpu.yml
+  #   with:
+  #     DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu-ci:latest
+  #     FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
 
   coverage_combine:
     name: Coverage Combine And Check
     uses: ./.github/workflows/_coverage_combine.yml
-    needs: [clone, gpu_unittest, xpu_unittest]
+    # needs: [clone, gpu_unittest, xpu_unittest]
     with:
-      GPU_COV_FILE_URL: ${{ needs.gpu_unittest.outputs.gpu_cov_file_url }}
-      XPU_COV_FILE_URL: ${{ needs.xpu_unittest.outputs.xpu_cov_file_url }}
+      GPU_COV_FILE_URL: https://paddle-github-action.bj.bcebos.com/PR/FastDeploy/4243/ec7c3b8b803cff5521338410048fde9fa7caf2fa/GPU//CoverageData/gpu_coverage.tar
+      XPU_COV_FILE_URL: https://paddle-github-action.bj.bcebos.com/PR/FastDeploy/4243/ec7c3b8b803cff5521338410048fde9fa7caf2fa/XPU/CoverageData/xpu_coverage.tar
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}

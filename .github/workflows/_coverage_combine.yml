@@ -66,6 +66,7 @@ jobs:
             tar -xf ${xpu_cov_file} -C coveragedata
           fi
           export COVERAGE_FILE=coveragedata/.coverage
+          export COVERAGE_RCFILE=./scripts/.coveragerc
           coverage combine coveragedata/
           coverage report --ignore-errors
           coverage xml -o python_coverage_all.xml --ignore-errors
