@@ -32,7 +32,7 @@ def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
 
     discovered_plugins = entry_points(group=group)
     if len(discovered_plugins) == 0:
-        logger.info("No plugins for group %s found.", group)
+        logger.debug("No plugins for group %s found.", group)
         return {}
 
     logger.info("Available plugins for group %s:", group)
