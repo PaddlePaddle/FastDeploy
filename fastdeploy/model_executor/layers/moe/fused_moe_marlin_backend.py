@@ -263,6 +263,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
 
             topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)

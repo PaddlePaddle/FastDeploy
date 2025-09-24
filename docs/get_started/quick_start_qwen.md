@@ -16,7 +16,7 @@ For more information about how to install FastDeploy, refer to the [installation
 After installing FastDeploy, execute the following command in the terminal to start the service. For the configuration method of the startup command, refer to [Parameter Description](../parameters.md)
 
 > ⚠️ **Note:**
-> When using HuggingFace models (torch format), you need to enable `--load_choices "default_v1"`.
+> When using HuggingFace models (torch format), you need to enable `--load-choices "default_v1"`.
 
 ```
 export ENABLE_V1_KVCACHE_SCHEDULER=1
@@ -27,7 +27,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
        --max-num-seqs 32 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 
 > 💡 Note: In the path specified by ```--model```, if the subdirectory corresponding to the path does not exist in the current directory, it will try to query whether AIStudio has a preset model based on the specified model name (such as ```Qwen/QWEN3-0.6b```). If it exists, it will automatically start downloading. The default download path is: ```~/xx```. For instructions and configuration on automatic model download, see [Model Download](../supported_models.md).

@@ -1923,6 +1923,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
+
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
