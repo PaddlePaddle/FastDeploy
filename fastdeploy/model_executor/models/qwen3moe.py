@@ -322,7 +322,7 @@ class Qwen3MoeModel(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Qwen3MoeForCausalLM",
-    module_path="qwen3moe",
+    module_name="qwen3moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
