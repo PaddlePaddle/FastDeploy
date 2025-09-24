@@ -937,35 +937,20 @@ class Ernie4_5_Model(nn.Layer):
             # MoE机器返回None
             return None
 
-    def forward1(
+    def forward_no_afd(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):  
 
-        IsH20 = self.fd_config.parallel_config.is_attention_role
-        hidden_states = None
-        if IsH20:
-            hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-            forward_meta.attn_backend.init_attention_metadata(forward_meta)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         residual = None
-
-        if IsH20:
-            hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-            forward_meta.attn_backend.init_attention_metadata(forward_meta)
-            for i in range(3):
-                hidden_states, residual = self.layers[i].forward_old(forward_meta, hidden_states, residual)
-
-        for i in range(3, self.num_layers):
+        for i in range(self.num_layers):	
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-
-        if IsH20:
-            hidden_states = hidden_states + residual
-            out = self.norm(hidden_states)
-            return out
-        else:
-            return None
-
+        
+        hidden_states = hidden_states + residual
+        out = self.norm(hidden_states)
+        return out
 
 class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     """
