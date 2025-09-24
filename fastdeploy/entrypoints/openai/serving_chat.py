@@ -120,6 +120,7 @@ class OpenAIServingChat:
                 text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
+                model_status = current_req_dict.get("model_status")
             except ParameterError as e:
                 api_server_logger.error(f"request[{request_id}] generator error: {str(e)}, {e.message}")
                 self.engine_client.semaphore.release()
@@ -135,12 +136,12 @@ class OpenAIServingChat:
 
             if request.stream:
                 return self.chat_completion_stream_generator(
-                    request, request_id, request.model, prompt_token_ids, text_after_process
+                    request, request_id, request.model, prompt_token_ids, text_after_process, model_status
                 )
             else:
                 try:
                     return await self.chat_completion_full_generator(
-                        request, request_id, request.model, prompt_token_ids, text_after_process
+                        request, request_id, request.model, prompt_token_ids, text_after_process, model_status
                     )
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
@@ -168,6 +169,7 @@ class OpenAIServingChat:
         model_name: str,
         prompt_token_ids: list(),
         text_after_process: str,
+        model_status: str,
     ):
         """
         Streaming chat completion generator.
@@ -186,10 +188,6 @@ class OpenAIServingChat:
         )  # dierctly passed & passed in metadata
 
         max_streaming_response_tokens = max(1, max_streaming_response_tokens)
-
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
 
         include_stop_str_in_output = request.include_stop_str_in_output
 
@@ -242,7 +240,7 @@ class OpenAIServingChat:
                 generator = response_processor.process_response_chat(
                     response,
                     stream=True,
-                    enable_thinking=enable_thinking,
+                    model_status=model_status,
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
 
@@ -412,15 +410,13 @@ class OpenAIServingChat:
         model_name: str,
         prompt_token_ids: list(),
         text_after_process: str,
+        model_status: str,
     ):
         """
         Full chat completion generator.
         """
         created_time = int(time.time())
         final_res = None
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
@@ -464,7 +460,7 @@ class OpenAIServingChat:
                 generator = response_processor.process_response_chat(
                     response,
                     stream=False,
-                    enable_thinking=enable_thinking,
+                    model_status=model_status,
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
                 async for data in generator:
