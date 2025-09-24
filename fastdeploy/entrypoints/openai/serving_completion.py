@@ -143,16 +143,18 @@ class OpenAIServingCompletion:
         try:
             try:
                 for idx, prompt in enumerate(request_prompts):
-                    request_id_idx = f"{request_id}-{idx}"
+                    request_id_idx = f"{request_id}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
+                    n_param = current_req_dict.get("n", 1)
                     current_req_dict["arrival_time"] = time.time()
                     await self.engine_client.format_request(current_req_dict)  # tokenize
                     prompt_token_ids = current_req_dict["prompt_token_ids"]
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
-                    for i in range(current_req_dict.get("n",1)):
+                    for i in range(idx * n_param, (idx + 1) * n_param):
                         child_req_dict = copy(current_req_dict)
                         child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{i}'
+                        print(f'DEBUG serving_completion: child_req_dict["request_id"]: {child_req_dict["request_id"]}')
                         await self.engine_client.add_requests(child_req_dict)
                         text_after_process_list.append(child_req_dict.get("text_after_process"))
                         prompt_batched_token_ids.append(prompt_token_ids)
@@ -170,6 +172,7 @@ class OpenAIServingCompletion:
                 )
 
             if request.stream:
+                print(f'DEBUG serving_completion: completion_stream_generator request_id: {request_id}')
                 return self.completion_stream_generator(
                     request=request,
                     num_choices=num_choices,
@@ -181,6 +184,7 @@ class OpenAIServingCompletion:
                 )
             else:
                 try:
+                    print(f'DEBUG serving_completion: completion_full_generator request_id: {request_id}')
                     return await self.completion_full_generator(
                         request=request,
                         num_choices=num_choices,
@@ -219,11 +223,13 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
+            print(f'DEBUG completion_full_generator before dealer request_id : {request_id}')
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
 
             for rid in request_ids:
+                print(f'DEBUG completion_full_generator before dealer write rid : {rid}')
                 dealer.write([b"", rid.encode("utf-8")])
 
             valid_results = [dict()] * num_choices
@@ -257,6 +263,7 @@ class OpenAIServingCompletion:
 
                 for data in response:
                     rid = int(data["request_id"].split("-")[-1])
+                    print(f'DEBUG completion_full_generator in response loop rid : {rid}')
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
 
@@ -347,12 +354,14 @@ class OpenAIServingCompletion:
         Process the stream completion request.
         """
         try:
+            print(f'DEBUG completion_stream_generator before dealer request_id: {request_id}')
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"
+                print(f'DEBUG completion_stream_generator before dealer write request_id: {req_id}')
                 dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
@@ -391,6 +400,7 @@ class OpenAIServingCompletion:
 
                 for res in response:
                     idx = int(res["request_id"].split("-")[-1])
+                    print(f'DEBUG completion_stream_generator idx : {idx}')
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
