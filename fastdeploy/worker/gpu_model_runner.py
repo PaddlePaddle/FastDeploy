@@ -1548,14 +1548,15 @@ class GPUModelRunner(ModelRunnerBase):
                     )
                     logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
             # Capture Draft Model with bsz 1
-            self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
-                batch_size=int(1),
-                in_capturing=True,
-                expected_decode_len=3,
-                accept_all_drafts=False,
-            )
-            logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
+            if 1 in capture_sizes:
+                self._dummy_run(
+                    num_tokens=self.parallel_config.max_num_batched_tokens,
+                    batch_size=int(1),
+                    in_capturing=True,
+                    expected_decode_len=3,
+                    accept_all_drafts=False,
+                )
+                logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
 
         else:
             for batch_size in sorted(capture_sizes, reverse=True):
