@@ -518,7 +518,8 @@ class OpenAIServingChat:
                             final_res[idx].get("metrics").get("request_start_time") is not None):
                             latency += time.time() - final_res[idx].get("metrics").get("request_start_time")
                         break
-                output = final_res[idx]["outputs"]
+                print(f'DEBUG idx : {idx}')
+                output = final_res[idx].get("outputs")
                 message = ChatMessage(
                     role="assistant",
                     reasoning_content=output.get("reasoning_content"),
