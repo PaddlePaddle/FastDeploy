@@ -488,8 +488,9 @@ class Ernie4_5_Model(nn.Layer):
                 end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
 
                 if end_token_id == start_token_id:
-                    # 这个microbatch是空的，不需要处理!!
-                    # continue
+                    # 这个microbatch是空的，按道理是不需要处理!!
+                    # 但是为了保证逻辑上始终是三个microbatch，同时也为了全图跑cuda graph
+                    # 所以这里也当成一个batch来处理！只不过shape为0而已！
                     # 一切为了cuda graph
                     pass
                 
