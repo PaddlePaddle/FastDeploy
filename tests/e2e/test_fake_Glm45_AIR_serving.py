@@ -118,7 +118,7 @@ def setup_and_run_server():
         "32",
         "--graph-optimization-config",
         '{"use_cudagraph":true}',
-        "--load_choices",
+        "--load-choices",
         "default_v1",
         "--lm_head-fp32",
         "--quantization",

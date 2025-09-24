@@ -677,6 +677,31 @@ class TokenProcessor:
                     single_head_acceptance_rate
                 )
 
+    def clear_data(self):
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.resource_manager.clear_data()
+        for i in range(self.cfg.max_num_seqs):
+            if self.resource_manager.stop_flags[i]:
+                continue
+            task = self.resource_manager.tasks_list[i]
+            result = RequestOutput(
+                request_id=task.request_id,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=self.tokens_counter[task.request_id],
+                    token_ids=task.eos_token_ids,
+                    draft_token_ids=[],
+                ),
+                finished=True,
+                metrics=RequestMetrics(
+                    arrival_time=time.time(),
+                    request_start_time=task.arrival_time,
+                ),
+            )
+            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+            self._recycle_resources(task.request_id, i, task, result, is_prefill)
+            llm_logger.warning(f"clear data for task {task.request_id}")
+
 
 class WarmUpTokenProcessor(TokenProcessor):
     """

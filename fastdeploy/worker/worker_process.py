@@ -35,9 +35,9 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
@@ -256,6 +256,12 @@ class PaddleDisWorkerProc:
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
         return model_weights_signal_tensor.item()
 
+    def _tp_barrier_wait(self):
+        if current_platform.is_xpu():
+            self.task_queue.worker_process_tp_barrier.wait()
+        else:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -299,7 +305,7 @@ class PaddleDisWorkerProc:
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+                self._tp_barrier_wait()
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
@@ -350,7 +356,7 @@ class PaddleDisWorkerProc:
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                    self._tp_barrier_wait()
 
                 time.sleep(0.001)
                 continue
@@ -577,10 +583,10 @@ def parse_args():
         help="Configuration of Graph optimization backend.",
     )
     parser.add_argument(
-        "--moba_attention_config",
+        "--plas_attention_config",
         type=json.loads,
         default=None,
-        help="Configuration of moba attention.",
+        help="Configation of plas attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -723,7 +729,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
+    plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -772,7 +778,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if not current_platform.is_cuda():
+    if not current_platform.is_cuda() and not current_platform.is_xpu():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if parallel_config.guided_decoding_backend != "off":
@@ -795,7 +801,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         scheduler_config=scheduler_config,
         ips=args.ips,
-        moba_attention_config=moba_attention_config,
+        plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 

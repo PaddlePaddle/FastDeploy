@@ -40,4 +40,3 @@ opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser
 msgspec
-lm_eval==0.4.9.1

@@ -14,7 +14,9 @@
 
 import argparse
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pkg_resources
 
 from fastdeploy.entrypoints.cli.benchmark.eval import (
     BenchmarkEvalSubcommand,
@@ -67,13 +69,18 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
     def setUp(self):
         self.parser = argparse.ArgumentParser()
         BenchmarkEvalSubcommand.add_cli_args(self.parser)
+        self.mock_pkg_resources = MagicMock()
 
     def test_add_cli_args(self):
         args = self.parser.parse_args(["--model", "test_model"])
         self.assertEqual(args.model, "test_model")
 
     @patch("subprocess.run")
-    def test_cmd_basic(self, mock_run):
+    @patch("pkg_resources.get_distribution")
+    def test_cmd_basic(self, mock_get_dist, mock_run):
+        mock_get_dist.return_value.version = "0.4.9.1"
+        mock_run.return_value = MagicMock(returncode=0)
+
         args = argparse.Namespace(
             model="hf",
             tasks="test_task",
@@ -110,7 +117,10 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         mock_run.assert_called_once()
 
     @patch("subprocess.run")
-    def test_cmd_with_complex_args(self, mock_run):
+    @patch("pkg_resources.get_distribution")
+    def test_cmd_with_complex_args(self, mock_get_dist, mock_run):
+        mock_get_dist.return_value.version = "0.4.9.1"
+        mock_run.return_value = MagicMock(returncode=0)
         args = argparse.Namespace(
             model="hf",
             tasks="test_task",
@@ -147,7 +157,84 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         mock_run.assert_called_once()
 
     @patch("subprocess.run", side_effect=FileNotFoundError())
-    def test_cmd_lm_eval_not_found(self, mock_run):
+    @patch("pkg_resources.get_distribution")
+    def test_cmd_lm_eval_not_found(self, mock_get_dist, mock_run):
+        mock_get_dist.return_value.version = "0.4.9.1"
+        args = argparse.Namespace(
+            model="hf",
+            tasks="test_task",
+            model_args="pretrained=test_model",
+            batch_size="1",
+            output_path=None,
+            write_out=False,
+            num_fewshot=None,
+            max_batch_size=None,
+            device=None,
+            limit=None,
+            samples=None,
+            use_cache=None,
+            cache_requests=None,
+            check_integrity=False,
+            log_samples=False,
+            system_instruction=None,
+            apply_chat_template=False,
+            fewshot_as_multiturn=False,
+            show_config=False,
+            include_path=None,
+            verbosity=None,
+            wandb_args="",
+            wandb_config_args="",
+            hf_hub_log_args="",
+            predict_only=False,
+            seed="0,1234,1234,1234",
+            trust_remote_code=False,
+            confirm_run_unsafe_code=False,
+            metadata=None,
+            gen_kwargs=None,
+        )
+        with self.assertRaises(SystemExit):
+            BenchmarkEvalSubcommand.cmd(args)
+
+    @patch("pkg_resources.get_distribution")
+    def test_cmd_wrong_lm_eval_version(self, mock_get_dist):
+        mock_get_dist.return_value.version = "0.4.8"
+        args = argparse.Namespace(
+            model="hf",
+            tasks="test_task",
+            model_args="pretrained=test_model",
+            batch_size="1",
+            output_path=None,
+            write_out=False,
+            num_fewshot=None,
+            max_batch_size=None,
+            device=None,
+            limit=None,
+            samples=None,
+            use_cache=None,
+            cache_requests=None,
+            check_integrity=False,
+            log_samples=False,
+            system_instruction=None,
+            apply_chat_template=False,
+            fewshot_as_multiturn=False,
+            show_config=False,
+            include_path=None,
+            verbosity=None,
+            wandb_args="",
+            wandb_config_args="",
+            hf_hub_log_args="",
+            predict_only=False,
+            seed="0,1234,1234,1234",
+            trust_remote_code=False,
+            confirm_run_unsafe_code=False,
+            metadata=None,
+            gen_kwargs=None,
+        )
+        with self.assertRaises(SystemExit):
+            BenchmarkEvalSubcommand.cmd(args)
+
+    @patch("pkg_resources.get_distribution", side_effect=pkg_resources.DistributionNotFound)
+    def test_cmd_lm_eval_not_installed(self, mock_get_dist):
         args = argparse.Namespace(
             model="hf",
             tasks="test_task",
