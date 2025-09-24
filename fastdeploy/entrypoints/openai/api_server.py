@@ -26,6 +26,7 @@ from multiprocessing import current_process
 import uvicorn
 import zmq
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -40,6 +41,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
+    ErrorInfo,
     ErrorResponse,
     ModelList,
 )
@@ -47,7 +49,7 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -56,6 +58,7 @@ from fastdeploy.metrics.metrics import (
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.utils import (
+    ExceptionHandler,
     FlexibleArgumentParser,
     StatefulSemaphore,
     api_server_logger,
@@ -64,35 +67,8 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-parser = FlexibleArgumentParser()
-parser.add_argument("--port", default=8000, type=int, help="port to the http server")
-parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=None, type=int, help="number of workers")
-parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
-parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
-parser.add_argument(
-    "--max-waiting-time",
-    default=-1,
-    type=int,
-    help="max waiting time for connection, if set value -1 means no waiting time limit",
-)
-parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
-
-parser.add_argument(
-    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
-)
-parser.add_argument(
-    "--timeout-graceful-shutdown",
-    default=0,
-    type=int,
-    help="timeout for graceful shutdown in seconds (used by uvicorn)",
-)
-
-parser = EngineArgs.add_cli_args(parser)
+parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
-
-if args.workers is None:
-    args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
 
 console_logger.info(f"Number of api-server workers: {args.workers}.")
 
@@ -232,6 +208,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
+app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
 instrument(app)
 
 
@@ -336,7 +314,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
-                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=500)
             elif isinstance(generator, ChatCompletionResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
@@ -365,7 +343,7 @@ async def create_completion(request: CompletionRequest):
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=500)
             elif isinstance(generator, CompletionResponse):
                 connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump())
@@ -388,7 +366,7 @@ async def list_models() -> Response:
 
     models = await app.state.model_handler.list_models()
     if isinstance(models, ErrorResponse):
-        return JSONResponse(content=models.model_dump(), status_code=models.code)
+        return JSONResponse(content=models.model_dump())
     elif isinstance(models, ModelList):
         return JSONResponse(content=models.model_dump())
 
@@ -493,6 +471,8 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
+
+    llm_engine.engine.clear_data()
     llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
@@ -502,7 +482,8 @@ def control_scheduler(request: ControlSchedulerRequest):
     """
     Control the scheduler behavior with the given parameters.
     """
-    content = ErrorResponse(object="", message="Scheduler updated successfully", code=0)
+
+    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code=0))
 
     global llm_engine
     if llm_engine is None:

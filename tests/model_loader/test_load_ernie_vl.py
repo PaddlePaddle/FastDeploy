@@ -70,6 +70,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -123,7 +124,7 @@ def setup_and_run_server():
         "0.71",
         "--reasoning-parser",
         "ernie-45-vl",
-        "--load_choices",
+        "--load-choices",
         "default_v1",
     ]
 

@@ -18,6 +18,7 @@ import redis
 
 from fastdeploy.utils import llm_logger
 
+from .dp_scheduler import DPScheduler
 from .global_scheduler import GlobalScheduler
 from .local_scheduler import LocalScheduler
 from .splitwise_scheduler import SplitWiseScheduler, SplitWiseSchedulerConfig
@@ -87,6 +88,54 @@ class LocalSchedulerConfig:
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
         llm_logger.info("=============================================================")
+
+
+class DPLocalSchedulerConfig(LocalSchedulerConfig):
+    """
+    Configuration class for DPLocalScheduler.
+    Attributes:
+        max_size: Maximum number of concurrent requests (-1 for unlimited)
+        ttl: Time-to-live in seconds for request expiration
+    """
+
+    def __init__(
+        self,
+        max_size: int = -1,
+        ttl: int = 900,
+        max_model_len: int = 8192,
+        enable_chunked_prefill: bool = False,
+        max_num_partial_prefills: int = 1,
+        max_long_partial_prefills: int = 1,
+        long_prefill_token_threshold: int = 0,
+        splitwise_role: str = "prefill",
+        **kwargs,
+    ):
+        """
+        Initialize LocalScheduler configuration.
+        Args:
+            max_size: Maximum concurrent requests (-1 for unlimited, 0 for disabled)
+            ttl: Time-to-live in seconds for request expiration (default 900s)
+            max_model_len: Maximum model context length in tokens
+            enable_chunked_prefill: Whether to enable chunked prefill processing
+            max_num_partial_prefills: Max partial prefill operations allowed
+            max_long_partial_prefills: Max long-running partial prefill ops
+            long_prefill_token_threshold: Token count threshold for long prefill
+            **kwargs: Additional unused arguments (for forward compatibility)
+        Note:
+            - If long_prefill_token_threshold is 0, it's auto-calculated as 4% of max_model_len
+            - See LocalScheduler class for implementation details
+        """
+        self.max_size = max_size
+        self.ttl = ttl
+
+        self.max_model_len = max_model_len
+        self.enable_chunked_prefill = enable_chunked_prefill
+        self.max_num_partial_prefills = max_num_partial_prefills
+        self.max_long_partial_prefills = max_long_partial_prefills
+        self.long_prefill_token_threshold = long_prefill_token_threshold
+        if self.long_prefill_token_threshold == 0:
+            self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
+        self.splitwise_role = splitwise_role
 
 
 class GlobalSchedulerConfig:
@@ -202,13 +251,12 @@ class SchedulerConfig:
     Creates appropriate config based on scheduler type (local/global).
     """
 
-    def __init__(self, name="local", **kwargs):
+    def __init__(self, args):
         """
         Initialize scheduler configuration factory.
 
         Args:
-            name: Scheduler type ("local" for LocalScheduler or "global" for GlobalScheduler)
-            **kwargs: Configuration parameters for the specific scheduler type
+            args: Configuration parameters for the specific scheduler type
 
         Initializes:
             - Appropriate config object based on scheduler type
@@ -217,17 +265,27 @@ class SchedulerConfig:
         Raises:
             Exception: If invalid scheduler type is specified
         """
-        self.name = name
+        self.name = "local"  # "local" for LocalScheduler or "global" for GlobalScheduler
+        self.max_num_batched_tokens = 2048
+        self.max_num_seqs = 34
+        self.splitwise_role = "mixed"
         self.config = None
 
-        if name == "local":
-            self.config = LocalSchedulerConfig(**kwargs)
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
-        if name == "global":
-            self.config = GlobalSchedulerConfig(**kwargs)
+        if self.name == "local":
+            self.config = LocalSchedulerConfig(**args)
 
-        if name == "splitwise":
-            self.config = SplitWiseSchedulerConfig(**kwargs)
+        if self.name == "global":
+            self.config = GlobalSchedulerConfig(**args)
+
+        if self.name == "splitwise":
+            self.config = SplitWiseSchedulerConfig(**args)
+
+        if self.name == "dp":
+            self.config = DPLocalSchedulerConfig(**args)
 
     def check(self):
         """
@@ -236,7 +294,7 @@ class SchedulerConfig:
         Raises:
             Exception: If invalid scheduler type is specified
         """
-        if self.name not in ["local", "global", "splitwise"]:
+        if self.name not in ["local", "global", "splitwise", "dp"]:
             raise Exception(f"Unknown scheduler type {self.name}")
 
         self.config.check()
@@ -273,6 +331,17 @@ class SchedulerConfig:
 
         if self.name == "splitwise":
             return SplitWiseScheduler(self.config)
+
+        if self.name == "dp":
+            return DPScheduler(
+                max_size=self.config.max_size,
+                ttl=self.config.ttl,
+                enable_chunked_prefill=self.config.enable_chunked_prefill,
+                max_num_partial_prefills=self.config.max_num_partial_prefills,
+                max_long_partial_prefills=self.config.max_long_partial_prefills,
+                long_prefill_token_threshold=self.config.long_prefill_token_threshold,
+                splitwise_role=self.config.splitwise_role,
+            )
 
         return LocalScheduler(
             max_size=self.config.max_size,
