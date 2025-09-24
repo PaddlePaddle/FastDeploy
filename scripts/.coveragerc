@@ -21,6 +21,3 @@ omit =
     */site-packages/*/fastdeploy/model_executor/ops/gpu*
 
 ignore_errors = True
-
-[xml]
-ignore_errors = True
