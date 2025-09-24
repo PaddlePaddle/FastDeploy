@@ -712,7 +712,7 @@ class EngineArgs:
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
         load_group.add_argument(
-            "--load_choices",
+            "--load-choices",
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
