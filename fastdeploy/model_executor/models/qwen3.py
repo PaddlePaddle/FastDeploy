@@ -303,7 +303,9 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]
+
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+
                 weight_loader(param, loaded_weight, shard_id)
 
                 break
