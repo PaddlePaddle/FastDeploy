@@ -205,7 +205,6 @@ class DataProcessor(BaseDataProcessor):
             str: error message
         """
         data_processor_logger.info(f"Start processing request: {request}")
-        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
