@@ -328,8 +328,8 @@ class ResourceManager:
         Delete cached data from the task's prompt token ids based on the cached length.
         """
         if cached_len == len(task.prompt_token_ids):
-            task.prompt_token_ids = task.prompt_token_ids[cached_len - 1 :]
-            task.seq_lens_decoder = cached_len - 1
+            task.prompt_token_ids = task.prompt_token_ids[cached_len - self.cfg.block_size :]
+            task.seq_lens_decoder = cached_len - self.cfg.block_size
         else:
             task.prompt_token_ids = task.prompt_token_ids[cached_len:]
             task.seq_lens_decoder = cached_len

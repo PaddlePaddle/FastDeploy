@@ -71,15 +71,9 @@ class InputPreprocessor:
         """
         reasoning_parser_obj = None
         tool_parser_obj = None
-        try:
-            from fastdeploy.plugins.reasoning_parser import (
-                load_reasoning_parser_plugins,
-            )
 
-            reasoning_parser_obj = load_reasoning_parser_plugins()
-        except:
-            if self.reasoning_parser:
-                reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
+        if self.reasoning_parser:
+            reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
         if self.tool_parser:
             tool_parser_obj = ToolParserManager.get_tool_parser(self.tool_parser)
 

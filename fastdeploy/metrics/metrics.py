@@ -152,10 +152,10 @@ class MetricsManager:
     spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
     # for YIYAN Adapter
-    prefix_cache_token_num: "Gauge"
-    prefix_gpu_cache_token_num: "Gauge"
-    prefix_cpu_cache_token_num: "Gauge"
-    prefix_ssd_cache_token_num: "Gauge"
+    prefix_cache_token_num: "Counter"
+    prefix_gpu_cache_token_num: "Counter"
+    prefix_cpu_cache_token_num: "Counter"
+    prefix_ssd_cache_token_num: "Counter"
     batch_size: "Gauge"
     max_batch_size: "Gauge"
     available_gpu_block_num: "Gauge"

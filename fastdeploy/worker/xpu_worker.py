@@ -110,7 +110,10 @@ class XpuWorker(WorkerBase):
         )
 
         self.model_runner.prepare_profile()
-        self.model_runner.profile_run()
+        if self.parallel_config.use_ep:
+            logger.warning("EP mode does not support profile run.")
+        else:
+            self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
@@ -118,6 +121,8 @@ class XpuWorker(WorkerBase):
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        if self.parallel_config.use_ep:
+            available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
         self.model_runner.clear_block_table()
 
@@ -147,14 +152,11 @@ class XpuWorker(WorkerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
-        is_dummy_run: bool = False,
         num_running_requests: Optional[int] = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-
-        output = self.model_runner.execute_model(model_forward_batch)
-
-        return output
+        return self.model_runner.execute_model(model_forward_batch, num_running_requests, is_dummy_run)
 
     def exist_prefill(self):
         """

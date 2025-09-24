@@ -52,9 +52,9 @@ class ErnieRotaryEmbedding:
             rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
             return rot_emb
         elif paddle.is_compiled_with_custom_device("metax_gpu"):
-            # shape: [B, S, D]
-            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
-            emb = paddle.stack([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
+            # shape: [B, S, D/2]
+            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
+            emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
         else:
             # shape: [B, S, D/2]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
@@ -64,6 +64,12 @@ class ErnieRotaryEmbedding:
         rot_emb[0] = paddle.cos(emb)
         rot_emb[1] = paddle.sin(emb)
         if paddle.is_compiled_with_custom_device("npu"):
+            return (
+                paddle.concat([rot_emb, rot_emb], axis=3)
+                .transpose([0, 1, 2, 4, 3])
+                .reshape([2, bsz, max_seq_len, 1, self.rotary_dim])
+            )
+        if paddle.is_compiled_with_custom_device("intel_hpu"):
             return (
                 paddle.concat([rot_emb, rot_emb], axis=3)
                 .transpose([0, 1, 2, 4, 3])

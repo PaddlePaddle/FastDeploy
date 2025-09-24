@@ -28,11 +28,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint4 \
        --max-model-len 32768 \
        --max-num-seqs 128 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
 - `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
-- `--load_choices`: indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
+- `--load-choices`: indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
 
 For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。
 
@@ -91,7 +91,7 @@ Just specify the corresponding model name in the startup command, `baidu/ERNIE-4
 ```
 
 Note:
-- W4A8C8 quantized models are not supported when loaded via `--load_choices "default_v1"`.
+- W4A8C8 quantized models are not supported when loaded via `--load-choices "default_v1"`.
 
 #### 2.2.6 Rejection Sampling
 **Idea:**

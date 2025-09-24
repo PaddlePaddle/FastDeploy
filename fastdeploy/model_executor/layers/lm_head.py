@@ -22,6 +22,10 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.utils import (
+    DEFAULT_VOCAB_PADDING_SIZE,
+    pad_vocab_size,
+)
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
     set_weight_attrs,
@@ -44,6 +48,7 @@ class ParallelLMHead(nn.Layer):
         prefix: str = "",
         with_bias: bool = False,
         dtype: str = None,
+        padding_size: int = DEFAULT_VOCAB_PADDING_SIZE,
     ) -> None:
         """
         Parallelized LMhead.
@@ -56,7 +61,7 @@ class ParallelLMHead(nn.Layer):
             embedding_dim (int): size of hidden state.
             prefix (str): The name of current layer. Defaults to "".
             with_bias (bool): whether to have bias. Default: False.
-            dtype (str): The dtype of weight. Defalut: None.
+            dtype (str): The dtype of weight. Default: None.
         """
         super(ParallelLMHead, self).__init__()
         self.weight_key: str = prefix + ".weight"
@@ -68,6 +73,10 @@ class ParallelLMHead(nn.Layer):
         self.column_cut = True
         self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.fd_config = fd_config
+        self.padding_size = padding_size
+
+        if num_embeddings % self.nranks != 0:
+            num_embeddings = pad_vocab_size(num_embeddings, self.padding_size)
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -91,7 +100,7 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "model_format": self.fd_config.model_config.model_format,
+                        "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                     },
                 )
                 if self.nranks > 1:
@@ -110,7 +119,7 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "model_format": self.fd_config.model_config.model_format,
+                        "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                     },
                 )
 

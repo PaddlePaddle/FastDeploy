@@ -69,7 +69,7 @@ class QwenVLProcessor(TextProcessor):
             tokenizer=self.tokenizer,
             **processor_kwargs,
         )
-
+        self.image_patch_id = self.processor.image_token_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
     def process_request(self, request, max_model_len=None, **kwargs):
@@ -245,10 +245,16 @@ class QwenVLProcessor(TextProcessor):
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        metadata = request.get("metadata")
         # Handle continuation of previous generation by appending existing tokens
-        if metadata and metadata.get("generated_token_ids"):
-            self.append_generated_tokens(outputs, metadata["generated_token_ids"])
+        if request.get("completion_token_ids"):
+            self.append_completion_tokens(outputs, request["completion_token_ids"])
+
+        enable_thinking = False
+        if request.get("chat_template_kwargs"):
+            chat_template_kwargs = request.get("chat_template_kwargs")
+            enable_thinking = chat_template_kwargs.get("enable_thinking", False)
+        request["enable_thinking"] = enable_thinking
+
         outputs = self.pack_outputs(outputs)
 
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
@@ -268,16 +274,16 @@ class QwenVLProcessor(TextProcessor):
 
         return request
 
-    def append_generated_tokens(self, outputs, generated_token_ids):
+    def append_completion_tokens(self, outputs, completion_token_ids):
         """
-        Append generated tokens to existing outputs.
+        Append completion tokens to existing outputs.
 
         Args:
             outputs: Current model outputs
-            generated_token_ids: Generated tokens to append
+            completion_token_ids: completion tokens to append
         """
         out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
-        self.processor._add_text(generated_token_ids, out)
+        self.processor._add_text(completion_token_ids, out)
 
         outputs["input_ids"] = np.concatenate(
             [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
