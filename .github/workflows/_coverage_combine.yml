@@ -38,10 +38,10 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Fetch base branch (PR only)
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1000
+      # - name: Fetch base branch (PR only)
+      #   if: ${{ github.event_name == 'pull_request' }}
+      #   run: |
+      #     git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1000
 
       - name: Python Setup
         uses: actions/setup-python@v5
