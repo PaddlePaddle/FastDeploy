@@ -30,8 +30,8 @@ from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingCursor,
     PoolingMetadata,
-    PoolingParams,
 )
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.model_executor.models.adapters import _load_st_projector
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.utils import get_logger

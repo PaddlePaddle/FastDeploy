@@ -16,6 +16,10 @@
 
 from __future__ import annotations
 
+import sys
+
+sys.path.insert(0, "/root/miniconda3/envs/py310-sunlei/lib/python3.10/site-packages")
+print(sys.path)
 import logging
 import threading
 import time
@@ -563,8 +567,9 @@ if __name__ == "__main__":
     # llm = LLM(model="llama_model")
     # output = llm.generate(prompts="who are you？", use_tqdm=True)
     # print(output)
+
     llm = LLM(
-        model="/opt/baidu/paddle_internal/FastDeploy/Qwen2.5-7B",
+        model="/root/paddlejob/sunlei/ernie-4_5-0_3b-bf16-paddle",
         tensor_parallel_size=2,
     )
     sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
