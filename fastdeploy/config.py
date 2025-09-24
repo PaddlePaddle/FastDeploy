@@ -1540,6 +1540,15 @@ class FDConfig:
                 self.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
+        if (
+            (self.speculative_config is not None and self.speculative_config.method is not None)
+            or (self.model_config is not None and self.model_config.enable_mm is True)
+            or (self.model_config is not None and self.load_config.dynamic_load_weight is True)
+        ):
+            self.graph_opt_config.use_cudagraph = False
+            logger.info(
+                "CUDAGraph does not support to be started together with SpeculativeDecode and MultiModel temporarily, but has been automatically closed!"
+            )
         if self.model_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
@@ -1647,7 +1656,16 @@ class FDConfig:
             self.scheduler_config.check()
 
         # Check graph optimization config
-        if self.graph_opt_config.graph_opt_level > 0:
+        if self.graph_opt_config.use_cudagraph:
+            if self.speculative_config is not None:
+                assert (
+                    self.speculative_config.method is None
+                ), "CUDAGraph does not support the simultaneous use of Speculative Decoding"
+            if self.model_config is not None:
+                assert (
+                    self.model_config.enable_mm is False
+                ), "CUDAGraph cannot be applied to multimodal model temporarily"
+        if self.graph_opt_config.graph_opt_level > 0 or self.graph_opt_config.use_cudagraph:
             if self.load_config is not None:
                 assert (
                     self.load_config.dynamic_load_weight is False
