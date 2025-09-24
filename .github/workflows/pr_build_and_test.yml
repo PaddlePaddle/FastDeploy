@@ -10,11 +10,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  clone:
-    name: FD-Clone-Linux
-    uses: ./.github/workflows/_clone_linux.yml
+  # clone:
+  #   name: FD-Clone-Linux
+  #   uses: ./.github/workflows/_clone_linux.yml
 
-  build:
+  # build:
   #   name: FD-Build-Linux
   #   needs: clone
   #   uses: ./.github/workflows/_build_linux.yml
