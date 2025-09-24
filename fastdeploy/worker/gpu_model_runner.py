@@ -135,7 +135,6 @@ class GPUModelRunner(ModelRunnerBase):
         # self.kv_caches: list[paddle.Tensor] = []
 
         # Cuda Graph
-        self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
@@ -155,7 +154,7 @@ class GPUModelRunner(ModelRunnerBase):
         # In the future, we will expand it as a list.
         self.attn_backends: list[AttentionBackend] = []
         # self.attn_metadatas: list[AttentionMetadata] = []
-        self.initialize_attn_backend()
+        self._initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
@@ -876,7 +875,6 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -890,6 +888,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize forward meta data
         self.initialize_forward_meta()
+        self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -992,7 +991,6 @@ class GPUModelRunner(ModelRunnerBase):
         Initialize kv cache
         """
         cache_kvs = {}
-        max_block_num = self.num_gpu_blocks
 
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
@@ -1008,7 +1006,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
+            max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
@@ -1055,7 +1053,7 @@ class GPUModelRunner(ModelRunnerBase):
                 del value
         paddle.device.cuda.empty_cache()
 
-    def initialize_attn_backend(self) -> None:
+    def _initialize_attn_backend(self) -> None:
         """
         Initialize attention backends
         """
@@ -1099,6 +1097,7 @@ class GPUModelRunner(ModelRunnerBase):
         batch_size: paddle.Tensor,
         expected_decode_len: int = 1,
         in_capturing: bool = False,
+        accept_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -1106,6 +1105,7 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens:
             expected_decode_len: Expected number of tokens generated
             in_capturing: Is cuda graph in capturing state
+            accept_all_drafts: Target model will accept all draft tokens
         """
         self._dummy_prefill_inputs(
             num_tokens=num_tokens,
@@ -1134,12 +1134,16 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
+                if self.use_cudagraph:
+                    model_output = model_output[: self.real_token_num]
                 hidden_states = model_output
             else:
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
+                if self.use_cudagraph:
+                    model_output = model_output[: self.real_token_num]
 
                 hidden_states = rebuild_padding(
                     model_output,
@@ -1179,6 +1183,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     self.parallel_config.max_model_len,
                     self.share_inputs,
+                    accept_all_drafts,
                 )
                 sampler_output = None
                 if self.parallel_config.tensor_parallel_size > 1:
@@ -1339,14 +1344,55 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-        for batch_size in sorted(capture_sizes, reverse=True):
-            self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
-                batch_size=batch_size,
-                in_capturing=True,
-                expected_decode_len=expected_decode_len,
-            )
-            logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+
+        if self.speculative_decoding and self.speculative_method == "mtp":
+            # Capture Target Model without bsz 1
+            for batch_size in sorted(capture_sizes, reverse=True):
+                if batch_size == 1:
+                    logger.info("Skip token_num = 1, when capture target model for mtp")
+                else:
+                    assert batch_size % 2 == 0
+                    self._dummy_run(
+                        num_tokens=self.parallel_config.max_num_batched_tokens,
+                        batch_size=int(batch_size / 2),
+                        in_capturing=True,
+                        expected_decode_len=1,
+                    )
+                    logger.info(f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}")
+            # Capture Draft Model without bsz 1
+            # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
+            for batch_size in sorted(capture_sizes, reverse=True):
+                if batch_size == 1:
+                    logger.info("Skip token_num = 1, when capture Draft model for mtp")
+                else:
+                    assert batch_size % 2 == 0
+                    self._dummy_run(
+                        num_tokens=self.parallel_config.max_num_batched_tokens,
+                        batch_size=int(batch_size / 2),
+                        in_capturing=True,
+                        expected_decode_len=3,
+                        accept_all_drafts=True,
+                    )
+                    logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
+            # Capture Draft Model with bsz 1
+            if 1 in capture_sizes:
+                self._dummy_run(
+                    num_tokens=self.parallel_config.max_num_batched_tokens,
+                    batch_size=int(1),
+                    in_capturing=True,
+                    expected_decode_len=3,
+                    accept_all_drafts=False,
+                )
+                logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
+        else:
+            for batch_size in sorted(capture_sizes, reverse=True):
+                self._dummy_run(
+                    num_tokens=self.parallel_config.max_num_batched_tokens,
+                    batch_size=batch_size,
+                    in_capturing=True,
+                    expected_decode_len=expected_decode_len,
+                )
+                logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
@@ -1427,12 +1473,16 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
             hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
             hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cu_seqlens_q"],
@@ -1628,20 +1678,22 @@ class GPUModelRunner(ModelRunnerBase):
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache(profile=True)
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
         self._dummy_run(
             num_tokens=self.parallel_config.max_num_batched_tokens,
-            batch_size=min(self.parallel_config.max_num_seqs, 3),
+            batch_size=self.parallel_config.max_num_seqs,
         )
 
         # 3. gc
         self.clear_cache()
 
         if self.speculative_method in ["mtp"]:
-            self.proposer.clear_dummy_input()
+            self.proposer.clear_mtp_cache()
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -1671,7 +1723,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         if self.speculative_method in ["mtp"]:
-            self.proposer.update_block_num(num_gpu_blocks)
+            self.proposer.update_mtp_block_num(num_gpu_blocks)
 
     def cal_theortical_kvcache(self):
         """
@@ -1756,6 +1808,7 @@ class GPUModelRunner(ModelRunnerBase):
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.use_cudagraph:
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
 
     def _init_image_preprocess(self) -> None:
