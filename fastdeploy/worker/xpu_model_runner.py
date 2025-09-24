@@ -1127,7 +1127,6 @@ class XPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-
         hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta)
 
         # 4. Compute logits, Sample
@@ -1162,8 +1161,8 @@ class XPUModelRunner(ModelRunnerBase):
             accept_num=None,
             enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
             think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
+            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
+            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
