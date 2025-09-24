@@ -48,45 +48,11 @@ def _ensure_cos_sin_dim(cos, sin, dim_needed):
         raise ValueError(f"Unexpected cos/sin last-dim: {last}, expected {dim_needed} or {dim_needed//2}")
 
 
-def apply_rotary_pos_emb_vision(q, k, cos, sin):
-    orig_q_dtype, orig_k_dtype = q.dtype, k.dtype
-    q = q.astype("float32")
-    k = k.astype("float32")
-
-    Dh = q.shape[-1]
-    cos = cos.astype("float32")
-    sin = sin.astype("float32")
-    cos, sin = _ensure_cos_sin_dim(cos, sin, Dh)
-
-    cos = cos.unsqueeze(-2)
-    sin = sin.unsqueeze(-2)
-
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    return q_embed.astype(orig_q_dtype), k_embed.astype(orig_k_dtype)
-
-
-def eager_attention_forward(
-    module,
-    query,
-    key,
-    value,
-    attention_mask,
-    scaling: float,
-    dropout: float = 0.0,
-    **kwargs,
-):
-    attn_weights = paddle.matmul(query, key.transpose((0, 1, 3, 2))) * scaling
-    if attention_mask is not None:
-        attn_weights = attn_weights + attention_mask
-
-    attn_weights = F.softmax(attn_weights, axis=-1, dtype="float32").astype(query.dtype)
-    attn_weights = F.dropout(attn_weights, p=dropout, training=module.training)
-
-    attn_output = paddle.matmul(attn_weights, value)
-    attn_output = attn_output.transpose((0, 2, 1, 3))
-
-    return attn_output, attn_weights
+def apply_rotary_pos_emb_vision(x, cos, sin):
+    orig_dtype = x.dtype
+    x = x.astype("float32")
+    x_embed = (x * cos) + (rotate_half(x) * sin)
+    return x_embed.astype(orig_dtype)
 
 
 class SiglipAttention(nn.Layer):
@@ -99,9 +65,7 @@ class SiglipAttention(nn.Layer):
         assert self.head_dim * self.num_heads == self.embed_dim
         self.scale = self.head_dim**-0.5
 
-        self.k_proj = nn.Linear(self.embed_dim, self.embed_dim)
-        self.v_proj = nn.Linear(self.embed_dim, self.embed_dim)
-        self.q_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.qkv_proj = nn.Linear(self.embed_dim, self.embed_dim * 3, bias_attr=True)
         self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
 
     def forward(
@@ -112,24 +76,27 @@ class SiglipAttention(nn.Layer):
         cu_seqlens: Optional[List[paddle.Tensor]] = None,
         rope_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # (cos, sin)
     ):
-        B, L, D = hidden_states.shape
+        B, seq_length, D = hidden_states.shape
 
-        q = self.q_proj(hidden_states)
-        k = self.k_proj(hidden_states)
-        v = self.v_proj(hidden_states)
+        qkv = (
+            self.qkv_proj(hidden_states)
+            .reshape(
+                [
+                    seq_length,
+                    3,
+                    self.num_heads,
+                    -1,
+                ]
+            )
+            .transpose(perm=[1, 0, 2, 3])
+        )
+        q, k, v = qkv.unbind(axis=0)
+        cos, sin = rope_emb
 
-        # [B, L, H, Dh]
+        # --------
+        q = apply_rotary_pos_emb_vision(q, cos, sin).squeeze(axis=0)
+        k = apply_rotary_pos_emb_vision(k, cos, sin).squeeze(axis=0)
 
-        q = q.reshape([B, L, self.num_heads, self.head_dim])
-        k = k.reshape([B, L, self.num_heads, self.head_dim])
-        v = v.reshape([B, L, self.num_heads, self.head_dim])
-        if rope_emb is not None:
-            cos, sin = rope_emb
-            q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
-
-        q = q.squeeze(axis=0)
-        k = k.squeeze(axis=0)
-        v = v.squeeze(axis=0)
         max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
         attn_output, _ = flash_attn_unpadded(
@@ -142,14 +109,12 @@ class SiglipAttention(nn.Layer):
             max_seqlen,
             scale=self.scale,
         )
-        attn_output = attn_output.reshape(L, -1)
+        # --------
 
+        attn_output = attn_output.reshape(seq_length, -1)
         attn_output = self.out_proj(attn_output)
 
-        if not output_attentions:
-            attn_weights = None
-
-        return attn_output, attn_weights
+        return attn_output
 
 
 class SiglipVisionEmbeddings(nn.Layer):
@@ -324,7 +289,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         ############################
         ln1_out = self.layer_norm1(hidden_states)
 
-        x, attn_w = self.self_attn(
+        x = self.self_attn(
             hidden_states=ln1_out,
             attention_mask=attention_mask,
             output_attentions=output_attentions,
@@ -342,8 +307,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         hidden_states_out = residual + mlp_out
 
         outputs = (hidden_states_out,)
-        if output_attentions:
-            outputs += (attn_w,)
+
         return outputs
 
 
@@ -487,7 +451,11 @@ class SiglipEncoder(nn.Layer):
 
             rope_emb = rope_emb_max_grid[pids].flatten(1)
             rope_emb = rope_emb.tile((1, 2))
-            rope_emb = (rope_emb.cos().astype("bfloat16"), rope_emb.sin().astype("bfloat16"))
+            cos = rope_emb.cos().astype("float32")
+            sin = rope_emb.sin().astype("float32")
+            cos = cos.unsqueeze(-2)
+            sin = sin.unsqueeze(-2)
+            rope_emb = (cos, sin)
         else:
             rope_emb = None
 
@@ -677,8 +645,28 @@ class SiglipVisionModel(PretrainedModel):
         for param_name, param in params_dict.items():
             state_dict_key = f"{self.prefix_name}.{param_name}"
             if state_dict_key not in state_dict:
-                raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            tensor = get_tensor(state_dict.pop(state_dict_key))
+                if "self_attn.qkv_proj.weight" in state_dict_key:
+                    q_weight_key = state_dict_key.replace("qkv_proj", "q_proj")
+                    k_weight_key = state_dict_key.replace("qkv_proj", "k_proj")
+                    v_weight_key = state_dict_key.replace("qkv_proj", "v_proj")
+                    q_tensor = get_tensor(state_dict.pop(q_weight_key))
+                    k_tensor = get_tensor(state_dict.pop(k_weight_key))
+                    v_tensor = get_tensor(state_dict.pop(v_weight_key))
+                    weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor], axis=-1).transpose([1, 0])
+                    tensor = paddle.transpose(weight_tensor, perm=[1, 0])
+                elif "self_attn.qkv_proj.bias" in state_dict_key:
+                    q_bias_key = state_dict_key.replace("qkv_proj", "q_proj")
+                    k_bias_key = state_dict_key.replace("qkv_proj", "k_proj")
+                    v_bias_key = state_dict_key.replace("qkv_proj", "v_proj")
+                    q_bias = get_tensor(state_dict.pop(q_bias_key))
+                    k_bias = get_tensor(state_dict.pop(k_bias_key))
+                    v_bias = get_tensor(state_dict.pop(v_bias_key))
+                    qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
+                    tensor = qkv_bias
+                else:
+                    raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
+            else:
+                tensor = get_tensor(state_dict.pop(state_dict_key))
             if param.shape != tensor.shape:
                 raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
