@@ -121,7 +121,7 @@ class OpenAIServingCompletion:
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
 
-        num_choices = len(request_prompts) * request.get("n", 1)
+        num_choices = len(request_prompts) * request.n
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
         text_after_process_list = []
