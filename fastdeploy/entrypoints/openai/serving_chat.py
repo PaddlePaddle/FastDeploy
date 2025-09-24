@@ -127,7 +127,7 @@ class OpenAIServingChat:
                     print(f'DEBUG child_req_dict request_id: {child_req_dict["request_id"]}')
                     await self.engine_client.add_requests(child_req_dict)
                     text_after_process_list.append(child_req_dict.get("text_after_process"))
-                    del child_req_dict
+                    # del child_req_dict
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
