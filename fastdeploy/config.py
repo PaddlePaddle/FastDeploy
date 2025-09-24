@@ -846,7 +846,7 @@ class GraphOptimizationConfig:
         """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
         """ Whether to use shared memory pool for multi capture_size """
-        self.use_unique_memory_pool: bool = False
+        self.use_unique_memory_pool: bool = True
 
         # CINN Config ...
         if args is not None:
