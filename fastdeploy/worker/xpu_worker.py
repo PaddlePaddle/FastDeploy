@@ -15,7 +15,6 @@
 """
 
 import gc
-import time
 from typing import List, Optional
 
 import paddle
@@ -101,30 +100,15 @@ class XpuWorker(WorkerBase):
             len(self.device_ids) > self.local_rank
         ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
 
-        # 1. Record memory state before profile run
-        start_time = time.perf_counter()
-        Gb = 1024**3
-        local_rank = self.local_rank % 8
-        paddle.device.xpu.reset_max_memory_reserved(local_rank)
-        paddle.device.xpu.reset_max_memory_allocated(local_rank)
-        paddle_reserved_mem_before_run = paddle.device.xpu.max_memory_reserved(local_rank)
-        paddle_allocated_mem_before_run = paddle.device.xpu.max_memory_allocated(local_rank)
-        before_run_mem_total = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
-        before_run_mem_used = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
-        before_run_mem_free = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
+        total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
+        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
 
         logger.info(
-            (
-                "Before running the profile, the memory usage info is as follows:",
-                f"\nDevice Total memory: {before_run_mem_total / Gb}",
-                f"\nDevice used memory: {before_run_mem_used / Gb}",
-                f"\nDevice free memory: {before_run_mem_free / Gb}",
-                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
-                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
-            )
+            f"Before warm up, total_memory: {total_memory}, \
+                    used_memory: {used_memory}, free_memory: {free_memory}"
         )
 
-        # 2. Profile run
         self.model_runner.prepare_profile()
         if self.parallel_config.use_ep:
             logger.warning("EP mode does not support profile run.")
@@ -132,42 +116,22 @@ class XpuWorker(WorkerBase):
             self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
-        # 3. Statistical memory information
-        paddle_reserved_mem_after_run = paddle.device.xpu.max_memory_reserved(local_rank)
-        paddle_allocated_mem_after_run = paddle.device.xpu.max_memory_allocated(local_rank)
-
+        total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
+        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
-        paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
-
-        paddle.device.xpu.empty_cache()
-
-        after_run_mem_total = xpu_get_total_global_memory(int(self.device_ids[self.local_rank])).item()
-        after_run_mem_used = xpu_get_used_global_memory(int(self.device_ids[self.local_rank])).item()
-        after_run_mem_free = xpu_get_free_global_memory(int(self.device_ids[self.local_rank])).item()
-
-        available_kv_cache_memory = (
-            after_run_mem_total * self.cache_config.gpu_memory_utilization - after_run_mem_used - paddle_peak_increase
-        )
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
-
         if self.parallel_config.use_ep:
             available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
-        end_time = time.perf_counter()
-        logger.info(
-            (
-                "After running the profile, the memory usage info is as follows:",
-                f"\nDevice Total memory: {after_run_mem_total / Gb}",
-                f"\nDevice used memory: {after_run_mem_used / Gb}",
-                f"\nDevice free memory: {after_run_mem_free / Gb}",
-                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
-                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
-                f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
-                f"Profile time: {end_time - start_time}",
-            )
-        )
+        self.model_runner.clear_block_table()
 
-        return available_kv_cache_memory  # return to calculate the block num in this device
+        logger.info(
+            f"After warm up, total_available_memory: {total_available_memory}, \
+                    used_memory: {used_memory}, available_kv_cache_memory: {available_kv_cache_memory}"
+        )
+        paddle.device.xpu.empty_cache()
+        return available_kv_cache_memory  # approximate value
 
     def load_model(self) -> None:
         """Load model"""

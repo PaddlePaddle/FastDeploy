@@ -184,7 +184,6 @@ def xpu_process_output(
         xpu_forward_meta.enc_batch,
         xpu_forward_meta.dec_batch,
         None,  # output_padding_offset
-        xpu_forward_meta.token_type_ids,  # token_type_ids
         -1,  # max_input_length
     )
     return hiddden_states
@@ -1230,6 +1229,15 @@ class XPUModelRunner(ModelRunnerBase):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
+
+    def clear_block_table(self) -> None:
+        """
+        Clear the block tables and kv cache after profiling.
+        """
+        del self.share_inputs["caches"]
+        if self.forward_meta is not None:
+            del self.forward_meta.caches
+        paddle.device.xpu.empty_cache()
 
     def cal_theortical_kvcache(self):
         """
