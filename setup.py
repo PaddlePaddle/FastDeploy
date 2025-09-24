@@ -190,6 +190,16 @@ cmdclass_dict["build_ext"] = CMakeBuild
 FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.3.0-dev")
 cmdclass_dict["build_optl"] = PostInstallCommand
 
+
+def write_version_to_file():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    version_file_path = os.path.join(current_dir, "fastdeploy/version.txt")
+    with open(version_file_path, "a") as f:
+        f.write(f"fastdeploy version: {FASTDEPLOY_VERSION}\n")
+
+
+write_version_to_file()
+
 setup(
     name=get_name(),
     version=FASTDEPLOY_VERSION,
