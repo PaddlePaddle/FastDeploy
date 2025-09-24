@@ -21,6 +21,7 @@ import uuid
 from typing import List, Optional
 from copy import copy
 
+from fastdeploy import metrics
 import numpy as np
 
 from fastdeploy.entrypoints.openai.protocol import (
@@ -148,7 +149,7 @@ class OpenAIServingChat:
             else:
                 try:
                     return await self.chat_completion_full_generator(
-                        request, request_id, request.model, prompt_token_ids, text_after_process_list
+                        request, request_id, request.model, prompt_token_ids, text_after_process_list, request.n
                     )
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
@@ -458,6 +459,7 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             choices = []
+            latency = 0.0
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
                     return ErrorResponse(
@@ -509,6 +511,10 @@ class OpenAIServingChat:
                     if data["finished"]:
                         final_res[idx] = data
                         task_is_finished = True
+                        if (final_res[idx] is not None and
+                            final_res[idx].get("metrics") is not None and
+                            final_res[idx].get("metrics").get("request_start_time") is not None):
+                            latency += time.time() - final_res[idx].get("metrics").get("request_start_time")
                         break
                 output = final_res[idx]["outputs"]
                 message = ChatMessage(
@@ -559,16 +565,14 @@ class OpenAIServingChat:
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
 
         num_prompt_tokens = len(prompt_token_ids)
-        # TODO sum ?
-        num_generated_tokens = previous_num_tokens
-        # TODO 针对final_res的统计信息逻辑处理
+        num_generated_tokens = sum(previous_num_tokens)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
-            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0)),
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum([res.get("num_cached_tokens", 0) for res in final_res if res is not None])),
         )
-        work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
+        work_process_metrics.e2e_request_latency.observe(latency)
         res = ChatCompletionResponse(
             id=request_id,
             created=created_time,

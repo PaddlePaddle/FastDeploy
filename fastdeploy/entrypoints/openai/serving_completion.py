@@ -229,7 +229,6 @@ class OpenAIServingCompletion:
             )
 
             for rid in request_ids:
-                print(f'DEBUG completion_full_generator before dealer write rid : {rid}')
                 dealer.write([b"", rid.encode("utf-8")])
 
             valid_results = [dict()] * num_choices
@@ -263,7 +262,6 @@ class OpenAIServingCompletion:
 
                 for data in response:
                     rid = int(data["request_id"].split("-")[-1])
-                    print(f'DEBUG completion_full_generator in response loop rid : {rid}')
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
 
