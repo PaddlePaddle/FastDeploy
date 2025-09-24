@@ -110,8 +110,8 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
         return (
             max_num_blocks,
             self.kv_num_heads,
-            self.block_size + self.block_size // 32 * 8,
-            self.head_dim // 4,
+            self.block_size // 4 + self.block_size // 32 * 4,
+            self.head_dim,
         )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):

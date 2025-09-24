@@ -95,9 +95,6 @@ void __global__ get_kv_from_cache_kernel(
     uint8_t *cache_smem = reinterpret_cast<uint8_t *>(smem_);
     uint8_t *cache_store_smem = cache_smem + data_num_per_block;
 
-    __align__(16) __shared__ pakc_half scale_mem[kBlockSize / 32 * kHeadDim];
-    __align__(16) __shared__ pakc_half zp_mem[kBlockSize / 32 * kHeadDim];
-
     const int* block_table = block_tables + bidb * max_num_blocks_per_seq;
     const int physical_block_number = block_table[block_idx];
 
@@ -118,20 +115,8 @@ void __global__ get_kv_from_cache_kernel(
 
     __syncthreads();
 
-    constexpr float quant_factor = 512.0f;
-    const pakc_half fp8_dequant_factor = pakc_half(quant_factor, quant_factor);
-
-    uint32_t * s_dequant = reinterpret_cast<uint32_t*>(cache_smem) + 512;
-    uint32_t * s_zp = s_dequant + 64;
-
-    if (tidx < 64) {
-        int2 half_data = Convert_from_fp8<ScaleType, T>()(s_dequant[tidx]);
-        reinterpret_cast<int2*>(scale_mem)[tidx] = reinterpret_cast<int2*>(&half_data)[tidx];
-        half_data = Convert_from_fp8<ScaleType, T>()(s_zp[tidx]);
-        reinterpret_cast<int2*>(zp_mem)[tidx] = reinterpret_cast<int2*>(&half_data)[tidx];
-    }
-
-    __syncthreads();
+    pakc_half * scale_mem = reinterpret_cast<pakc_half*>(cache_smem) + 512;
+    pakc_half * zp_mem = scale_mem + 128;
 
     const int warp_id = tidx / 32;
     const int lane_id = tidx % 32;
@@ -167,8 +152,8 @@ void __global__ get_kv_from_cache_kernel(
                     pakc_half next_dequant_value = scale_mem[scale_idx + 64];
                     pakc_half next_quant_zp = zp_mem[scale_idx + 64];
 
-                    cur_value = (cur_value * fp8_dequant_factor - cur_quant_zp) * cur_dequant_value;
-                    next_value = (next_value * fp8_dequant_factor - next_quant_zp) * next_dequant_value;
+                    cur_value = cur_value * cur_dequant_value - cur_quant_zp;
+                    next_value = next_value * next_dequant_value - next_quant_zp;
 
                     reinterpret_cast<pakc_half*>(cache_store_smem)[idx] = cur_value;
                     reinterpret_cast<pakc_half*>(cache_store_smem)[idx + (kThreads / 32 * 8 * all_cols)] = next_value;
@@ -200,8 +185,8 @@ void __global__ get_kv_from_cache_kernel(
                 pakc_half value1 = *reinterpret_cast<pakc_half*>(&half_data.x);
                 pakc_half value2 = *reinterpret_cast<pakc_half*>(&half_data.y);
 
-                value1 = (value1 * fp8_dequant_factor - zp_mem[scale_idx]) * scale_mem[scale_idx];
-                value2 = (value2 * fp8_dequant_factor - zp_mem[scale_idx + 4]) * scale_mem[scale_idx + 4];
+                value1 = value1 * scale_mem[scale_idx] - zp_mem[scale_idx];
+                value2 = value2 * scale_mem[scale_idx + 4] - zp_mem[scale_idx + 4];
 
                 dequant_value[2 * j] = value1;
                 dequant_value[2 * j + 1]  = value2;
@@ -313,7 +298,7 @@ void GetKVFromCache(
     using scale_type = cutlass::float_e4m3_t;
     constexpr int kBlockSize = 64;
     const int max_num_blocks_per_seq = block_table.dims()[1];
-    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 2;
+    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 4;
     const int bsz = encoder_seqs_len.dims()[0];
 
     if (k_input.dtype() == paddle::DataType::FLOAT16) {

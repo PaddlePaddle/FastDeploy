@@ -223,7 +223,7 @@ std::vector<paddle::Tensor> WriteDecoderCache(
     paddle::Tensor q_input = paddle::empty({encoder_seqs_len.dims()[0], head_num, head_dim}, paddle::DataType::FLOAT16, qkv_out.place());
     using scale_type = cutlass::float_e4m3_t;
     constexpr int kBlockSize = 64;
-    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 2;
+    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 4;
 
     if (qkv_out.dtype() == paddle::DataType::BFLOAT16) {
         using input_type = phi::dtype::bfloat16;

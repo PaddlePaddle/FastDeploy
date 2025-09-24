@@ -133,31 +133,19 @@ struct Convert_from_fp8<cutlass::float_e4m3_t, phi::dtype::bfloat16> {
     }
 };
 
-template<typename T, typename scale_type, typename Tensor0, typename Tensor1, typename Tensor2, typename TiledMma, typename pakc_half>
+template<typename T, typename scale_type, typename Tensor0, typename Tensor1, typename Tensor2, typename TiledMma>
 __forceinline__ __device__ void gemm_qk(
         Tensor0 &acc, Tensor1 &tCrA,
         Tensor2 &tCrB, uint8_t * smem_b,
         TiledMma tiled_mma,
-        const int tidx,
-        pakc_half * scale_mem, pakc_half * zp_mem) {
+        const int tidx) {
     CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
     CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
     CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));
 
-    constexpr float quant_factor = 512.0f;
-    const pakc_half fp8_dequant_factor = pakc_half(quant_factor, quant_factor);
-
-    uint32_t * s_dequant = reinterpret_cast<uint32_t*>(smem_b) + 512;
-    uint32_t * s_zp = s_dequant + 64;
-
-    if (tidx < 64) {
-        int2 half_data = Convert_from_fp8<scale_type, T>()(s_dequant[tidx]);
-        reinterpret_cast<int2*>(scale_mem)[tidx] = reinterpret_cast<int2*>(&half_data)[tidx];
-        half_data = Convert_from_fp8<scale_type, T>()(s_zp[tidx]);
-        reinterpret_cast<int2*>(zp_mem)[tidx] = reinterpret_cast<int2*>(&half_data)[tidx];
-    }
-
-    __syncthreads();
+    using pakc_half = __half2;
+    pakc_half * scale_mem = reinterpret_cast<pakc_half*>(smem_b) + 512;
+    pakc_half * zp_mem = scale_mem + 128;
 
     const int col = tidx % 4;
 
@@ -184,8 +172,8 @@ __forceinline__ __device__ void gemm_qk(
                 pakc_half next_dequant_value = scale_mem[scale_idx + 64];
                 pakc_half next_quant_zp = zp_mem[scale_idx + 64];
 
-                cur_value = (cur_value * fp8_dequant_factor - cur_quant_zp) * cur_dequant_value;
-                next_value = (next_value * fp8_dequant_factor - next_quant_zp) * next_dequant_value;
+                cur_value = cur_value * cur_dequant_value - cur_quant_zp;
+                next_value = next_value * next_dequant_value - next_quant_zp;
 
                 reinterpret_cast<pakc_half*>(tCrB(_, _, i + k).data())[j] = cur_value;
                 reinterpret_cast<pakc_half*>(tCrB(_, _, i + k).data())[j + 2] = next_value;
@@ -196,7 +184,7 @@ __forceinline__ __device__ void gemm_qk(
     }
 }
 
-template<typename T, typename scale_type, typename Tensor0, typename Tensor1, typename Tensor2, typename Tensor3, typename TiledMma, typename ThrCopy, typename TiledCopy, typename pakc_half>
+template<typename T, typename scale_type, typename Tensor0, typename Tensor1, typename Tensor2, typename Tensor3, typename TiledMma, typename ThrCopy, typename TiledCopy>
 __forceinline__ __device__ void gemm_v(
         Tensor0 &acc,
         Tensor1 &tCrA,
@@ -206,29 +194,16 @@ __forceinline__ __device__ void gemm_v(
         TiledMma tiled_mma,
         ThrCopy thr_copy_A,
         TiledCopy tiled_copy_A,
-        const int tidx,
-        pakc_half * scale_mem, pakc_half * zp_mem) {
+        const int tidx) {
     CUTE_STATIC_ASSERT_V(size<1>(tCrA) == size<1>(acc));
     CUTE_STATIC_ASSERT_V(size<1>(tCrB) == size<2>(acc));
     CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));
-
+    using pakc_half = __half2;
     Tensor tCrA_copy_view = thr_copy_A.retile_D(tCrA);
     copy(tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{}));
 
-    constexpr float quant_factor = 512.0f;
-    const pakc_half fp8_dequant_factor = pakc_half(quant_factor, quant_factor);
-
-    uint32_t * s_dequant = reinterpret_cast<uint32_t*>(smem_b) + 512;
-    uint32_t * s_zp = s_dequant + 64;
-
-    if (tidx < 64) {
-        int2 half_data = Convert_from_fp8<scale_type, T>()(s_dequant[tidx]);
-        reinterpret_cast<int2*>(scale_mem)[tidx] = reinterpret_cast<int2*>(&half_data)[tidx];
-        half_data = Convert_from_fp8<scale_type, T>()(s_zp[tidx]);
-        reinterpret_cast<int2*>(zp_mem)[tidx] = reinterpret_cast<int2*>(&half_data)[tidx];
-    }
-
-    __syncthreads();
+    pakc_half * scale_mem = reinterpret_cast<pakc_half*>(smem_b) + 512;
+    pakc_half * zp_mem = scale_mem + 128;
 
     const int col = tidx % 4;
 
@@ -250,8 +225,8 @@ __forceinline__ __device__ void gemm_v(
             pakc_half value1 = *reinterpret_cast<pakc_half*>(&half_data.x);
             pakc_half value2 = *reinterpret_cast<pakc_half*>(&half_data.y);
 
-            value1 = (value1 * fp8_dequant_factor - zp_mem[scale_idx]) * scale_mem[scale_idx];
-            value2 = (value2 * fp8_dequant_factor - zp_mem[scale_idx + 4]) * scale_mem[scale_idx + 4];
+            value1 = value1 * scale_mem[scale_idx] - zp_mem[scale_idx];
+            value2 = value2 * scale_mem[scale_idx + 4] - zp_mem[scale_idx + 4];
 
             reinterpret_cast<pakc_half*>(raw_pointer_cast(tCrB(_, j, i).data()))[0] = value1;
             reinterpret_cast<pakc_half*>(raw_pointer_cast(tCrB(_, j, i).data()))[1] = value2;

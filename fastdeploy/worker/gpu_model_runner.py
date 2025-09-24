@@ -1894,7 +1894,7 @@ class GPUModelRunner(ModelRunnerBase):
         if cache_quant_dtype is not None and "dynamic" in cache_quant_dtype:
             if cache_quant_dtype == "dynamic_int2_zp":
                 cache_size = self.cache_config.block_size // 4 * hidden_dim
-                scale_size = self.cache_config.block_size // 32 * hidden_dim * 2
+                scale_size = self.cache_config.block_size // 32 * hidden_dim * 4
                 required_memory = byte_of_dtype * 2 * (cache_size + scale_size) * num_layers
         return required_memory
 

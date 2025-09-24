@@ -225,7 +225,7 @@ void WriteEncoderCache(
     using scale_type = cutlass::float_e4m3_t;
     constexpr int kBlockSize = 64;
     const int max_num_blocks_per_seq = block_table.dims()[1];
-    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 2;
+    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 4;
     const int bsz = encoder_seqs_len.dims()[0];
 
     if (k_input.dtype() == paddle::DataType::FLOAT16) {

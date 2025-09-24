@@ -181,9 +181,11 @@ __device__ void write_c2_cache_kernel(
     copy(gmem_tiled_copy_KV, tVgV, tVsV, tKcK);
     cute::cp_async_fence();
 
+    constexpr float dequant_factor = 512.0f;
+    const pakc_half fp8_dequant_factor = pakc_half(dequant_factor, dequant_factor);
     const pakc_half dequant_scale_factor = pakc_half(0.3333333333333f, 0.3333333333333f);
-    constexpr float quant_factor = 1.0f / 512.0f;
-    constexpr float max_factor = 3.0f / 512.0f;
+    constexpr float quant_factor = 1.0f / dequant_factor;
+    constexpr float max_factor = 3.0f / dequant_factor;
     const pakc_half fp8_quant_factor = pakc_half(quant_factor, quant_factor);
     const pakc_half max_blound = pakc_half(max_factor, max_factor);
 
@@ -238,8 +240,11 @@ __device__ void write_c2_cache_kernel(
 
     pakc_half dequant_scale = (max_value - min_value) * dequant_scale_factor;
 
-    const pakc_half quant_scale_factor = pakc_half(1.0f, 1.0f);
-    pakc_half quant_scale = __h2div(quant_scale_factor, dequant_scale);
+    float quant_scale_x = fdividef(1.0f, float(dequant_scale.x) + 0.0000001f);
+    float quant_scale_y = fdividef(1.0f, float(dequant_scale.y) + 0.0000001f);
+    quant_scale_x = min(quant_scale_x, 65504.0f);
+    quant_scale_y = min(quant_scale_y, 65504.0f);
+    pakc_half quant_scale = pakc_half(quant_scale_x, quant_scale_y);
 
     pakc_half quant_zp = -min_value * quant_scale;
 
@@ -297,30 +302,15 @@ __device__ void write_c2_cache_kernel(
     __syncthreads();
 
     // 将k的反量化scale 写回到全局内存中
-    uint32_t * dequant_scale_smem = reinterpret_cast<uint32_t*>(cache_k_smem + scale_k_num / 4 * kThreads);
-    pakc_half neigh_dequant_scale = __shfl_xor_sync(uint32_t(-1), dequant_scale, 1);
+    pakc_half * dequant_scale_smem = reinterpret_cast<pakc_half*>(cache_k_smem + scale_k_num / 4 * kThreads);
 
-    uint32_t fp8_dequant_scale = dynamic_quant_cache::Convert_to_fp8<T, ScaleType>()(
-        reinterpret_cast<uint32_t*>(&dequant_scale)[0],
-        reinterpret_cast<uint32_t*>(&neigh_dequant_scale)[0]
-    );
+    dequant_scale_smem[tidx] = dequant_scale * fp8_dequant_factor;
 
-    if (tidx % 2 == 0) {
-        dequant_scale_smem[tidx / 2] = fp8_dequant_scale;
-    }
+    pakc_half * dequant_zp_smem = dequant_scale_smem + kThreads;
 
-    pakc_half neigh_quant_zp = __shfl_xor_sync(uint32_t(-1), quant_zp, 1);
+    dequant_zp_smem[tidx] = quant_zp * dequant_scale;
+    pakc_half zp_temp = quant_zp * dequant_scale;
 
-    uint32_t fp8_quant_zp = dynamic_quant_cache::Convert_to_fp8<T, ScaleType>()(
-        reinterpret_cast<uint32_t*>(&quant_zp)[0],
-        reinterpret_cast<uint32_t*>(&neigh_quant_zp)[0]
-    );
-
-    uint32_t * dequant_zp_smem = dequant_scale_smem + kThreads / 2;
-
-    if (tidx % 2 == 0) {
-        dequant_zp_smem[tidx / 2] = fp8_quant_zp;
-    }
 
     cute::cp_async_wait<0>();
     __syncthreads();
@@ -365,7 +355,12 @@ __device__ void write_c2_cache_kernel(
     min_value = s_min[tidx];
 
     dequant_scale = (max_value - min_value) * dequant_scale_factor;
-    quant_scale = __h2div(quant_scale_factor, dequant_scale);
+    quant_scale_x = fdividef(1.0f, float(dequant_scale.x) + 0.0000001f);
+    quant_scale_y = fdividef(1.0f, float(dequant_scale.y) + 0.0000001f);
+    quant_scale_x = min(quant_scale_x, 65504.0f);
+    quant_scale_y = min(quant_scale_y, 65504.0f);
+    quant_scale = pakc_half(quant_scale_x, quant_scale_y);
+
     quant_zp = -min_value * quant_scale;
 
     s_quant[tidx] = quant_scale;
@@ -403,28 +398,13 @@ __device__ void write_c2_cache_kernel(
     __syncthreads();
 
     // 将反量化scale 写回到共享内存中
-    dequant_scale_smem = reinterpret_cast<uint32_t*>(cache_v_smem + scale_k_num / 4 * kThreads);
-    neigh_dequant_scale = __shfl_xor_sync(uint32_t(-1), dequant_scale, 1);
+    dequant_scale_smem = reinterpret_cast<pakc_half*>(cache_v_smem + scale_k_num / 4 * kThreads);
 
-    fp8_dequant_scale = dynamic_quant_cache::Convert_to_fp8<T, ScaleType>()(
-        reinterpret_cast<uint32_t*>(&dequant_scale)[0],
-        reinterpret_cast<uint32_t*>(&neigh_dequant_scale)[0]
-    );
+    dequant_scale_smem[tidx] = dequant_scale * fp8_dequant_factor;
 
-    if (tidx % 2 == 0) {
-        dequant_scale_smem[tidx / 2] = fp8_dequant_scale;
-    }
+    dequant_zp_smem = dequant_scale_smem + kThreads;
 
-    neigh_quant_zp = __shfl_xor_sync(uint32_t(-1), quant_zp, 1);
-    fp8_quant_zp = dynamic_quant_cache::Convert_to_fp8<T, ScaleType>()(
-        reinterpret_cast<uint32_t*>(&quant_zp)[0],
-        reinterpret_cast<uint32_t*>(&neigh_quant_zp)[0]
-    );
-    dequant_zp_smem = dequant_scale_smem + kThreads / 2;
-
-    if (tidx % 2 == 0) {
-        dequant_zp_smem[tidx / 2] = fp8_quant_zp;
-    }
+    dequant_zp_smem[tidx] = quant_zp * dequant_scale;
 
     __syncthreads();
 

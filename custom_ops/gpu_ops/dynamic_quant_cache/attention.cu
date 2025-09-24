@@ -136,10 +136,6 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
     extern __shared__ char smem_[];
     __shared__ ElementAccum scores_warp[kNWarps][kMiLen * kBlockM];
 
-
-    __align__(16) __shared__ pakc_half scale_mem[kBlockSize / 32 * kHeadDim];
-    __align__(16) __shared__ pakc_half zp_mem[kBlockSize / 32 * kHeadDim];
-
     Tensor sQ = make_tensor(make_smem_ptr(reinterpret_cast<input_type *>(smem_)), SmemLayoutQ{});
     Tensor sQK = make_tensor(make_smem_ptr(reinterpret_cast<input_type *>(smem_)), SmemLayoutQK{});
     Tensor sK_tensor = make_tensor(sQ.data() + size(sQ), SmemLayoutKV{});
@@ -258,7 +254,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
         cute::cp_async_fence();
 
         if constexpr (cache_bits == 2) {
-            gemm_qk<input_type, scale_type>(acc_s, tSrQ, tSrK, sK, tiled_mma, tidx, scale_mem, zp_mem);
+            gemm_qk<input_type, scale_type>(acc_s, tSrQ, tSrK, sK, tiled_mma, tidx);
         } else {
             gemm<true>(acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_thr_copy_Q, smem_thr_copy_K, smem_tiled_copy_Q, smem_tiled_copy_K);
         }
@@ -331,7 +327,7 @@ void __global__ multi_block_gqa_attention_kernel(Block_attn_params params) {
         __syncthreads();
 
         if constexpr (cache_bits == 2) {
-            gemm_v<input_type, scale_type>(acc_o, tSrQK, tSsQK, tOrVt, sV, tiled_mma, smem_thr_copy_Q, smem_tiled_copy_Q, tidx, scale_mem, zp_mem);
+            gemm_v<input_type, scale_type>(acc_o, tSrQK, tSsQK, tOrVt, sV, tiled_mma, smem_thr_copy_Q, smem_tiled_copy_Q, tidx);
         } else {
             gemm(acc_o, tSrQK, tOrVt, tSsQK, tOsVt, tiled_mma, smem_thr_copy_Q, smem_thr_copy_V, smem_tiled_copy_Q, smem_tiled_copy_V);
         }
@@ -596,7 +592,7 @@ void DecoderAttention(
     constexpr int stage = 8;
     constexpr int max_seq_per_block = stage * kBlockSize;
 
-    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 2;
+    const int data_num_per_block = kBlockSize * head_dim / 4 + kBlockSize / 32 * head_dim * 4;
     const int c16_cache_max_len = c16_remain_seq_len + kBlockSize;
     const int cache_seq_len = max_seq_k + 1;
     const int c16_cache_len = cache_seq_len < c16_cache_max_len ? cache_seq_len : c16_remain_seq_len + cache_seq_len % kBlockSize;
