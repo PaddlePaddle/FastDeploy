@@ -185,6 +185,9 @@ class DataProcessor(BaseDataProcessor):
         from paddleformers.trl.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
+        data_processor_logger.info(
+            f"The eos_token_ids obtained by merging tokenizer and generation_config is {self.eos_token_ids}"
+        )
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
@@ -396,7 +399,7 @@ class DataProcessor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
-            if token_ids[-1] == self.tokenizer.eos_token_id:
+            if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
@@ -434,7 +437,7 @@ class DataProcessor(BaseDataProcessor):
         token_ids = response_dict["outputs"]["token_ids"]
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
-            if token_ids[-1] == self.tokenizer.eos_token_id:
+            if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["raw_prediction"] = delta_text

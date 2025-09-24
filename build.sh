@@ -128,6 +128,12 @@ function copy_ops(){
       echo -e "MACA ops have been copy to fastdeploy"
       return
     fi
+    is_intel_hpu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('intel_hpu'))"`
+    if [ "$is_intel_hpu" = "True" ]; then
+      DEVICE_TYPE="intel-hpu"
+      echo -e "intel_hpu ops have been copy to fastdeploy"
+      return
+    fi
 
     DEVICE_TYPE="cpu"
     cd ../../../../
@@ -159,7 +165,9 @@ function build_and_install_ops() {
     else
       FD_BUILDING_ARCS=${FD_BUILDING_ARCS} ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
     fi
-    find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
+    if [ -d "${OPS_TMP_DIR}" ]; then
+      find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
+    fi
   else
       echo "Error: Invalid parameter '$FD_CPU_USE_BF16'. Please use true or false."
       exit 1
