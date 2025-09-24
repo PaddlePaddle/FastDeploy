@@ -37,14 +37,15 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 0
-      # - name: Clone FastDeploy
-      #   uses: actions/checkout@v4
-      #   with:
-      #     ref: ${{ github.event_name == 'pull_request'
-      #           && github.event.pull_request.base.ref
-      #           || github.ref_name }}
-      #     submodules: 'recursive'
-      #     fetch-depth: 1000
+      - name: Fetch base branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1000
+          # 找到最后共同节点
+          MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} ${{ github.event.pull_request.head.sha }})
+          # 生成 diff 文件
+          git diff ${MERGE_BASE} ${{ github.event.pull_request.head.sha }} --unified=0 > diff.txt
+          cat diff.txt
       - name: Python Setup
         uses: actions/setup-python@v5
         with:
