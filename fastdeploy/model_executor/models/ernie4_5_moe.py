@@ -954,6 +954,7 @@ class Ernie4_5_Model(nn.Layer):
 
         return out
 
+
 class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     """
     Ernie4_5_MoeForCausalLM
@@ -1025,7 +1026,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-    ):  
+    ):
         self.ii += 1
         
         if self.ii == 80:
