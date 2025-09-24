@@ -132,8 +132,8 @@ class QFVLModel(nn.Layer):
 
 
 @ModelRegistry.register_model_class(
-    architecture="Qwen2_5_VLForConditionalGeneration",
-    module_name="qwen2_5_vl.qwen2_5_vl",
+    architecture="QFVLForConditionalGeneration",
+    module_name="qf_vl.qf_vl",
     category=ModelCategory.MULTIMODAL,
     primary_use=ModelCategory.MULTIMODAL,
 )
