@@ -48,6 +48,7 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
+          git log -n 3
           python -m pip install coverage diff-cover
           mkdir coveragedata
           if [ -z "${gpu_cov_file_url}" ]; then
